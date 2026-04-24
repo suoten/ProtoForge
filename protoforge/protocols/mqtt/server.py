@@ -1,0 +1,185 @@
+import asyncio
+import logging
+import time
+from typing import Any
+
+from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+
+logger = logging.getLogger(__name__)
+
+try:
+    from amqtt.broker import Broker
+    from amqtt.contexts import Action
+    from amqtt.session import Session
+    ASYNC_MQTT_AVAILABLE = True
+except ImportError:
+    ASYNC_MQTT_AVAILABLE = False
+    logger.warning("amqtt not installed, MQTT Broker will not be available. Install with: pip install protoforge[mqtt]")
+
+
+class MqttDeviceBehavior(DeviceBehavior):
+    def __init__(self, points: list[PointConfig]):
+        self._points = {p.name: p for p in points}
+        self._values: dict[str, Any] = {}
+        for p in points:
+            self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
+
+    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+        name = point_config.get("name", "")
+        return self._values.get(name, 0)
+
+    async def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+
+    def get_value(self, point_name: str) -> Any:
+        return self._values.get(point_name, 0)
+
+
+class MqttBroker(ProtocolServer):
+    protocol_name = "mqtt"
+    protocol_display_name = "MQTT Broker"
+
+    def __init__(self):
+        super().__init__()
+        self._broker: Any = None
+        self._behaviors: dict[str, MqttDeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._host = "0.0.0.0"
+        self._port = 1883
+        self._publish_task: asyncio.Task | None = None
+
+    async def start(self, config: dict[str, Any]) -> None:
+        if not ASYNC_MQTT_AVAILABLE:
+            raise RuntimeError("amqtt is not installed. Install with: pip install protoforge[mqtt]")
+
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 1883)
+        publish_interval = config.get("publish_interval", 5)
+
+        try:
+            broker_config = {
+                "listeners": {
+                    "default": {
+                        "type": "tcp",
+                        "bind": f"{self._host}:{self._port}",
+                    }
+                },
+                "sys_interval": 10,
+                "auth": {
+                    "allow-anonymous": True,
+                },
+            }
+            self._broker = Broker(broker_config)
+            await self._broker.start()
+
+            self._status = ProtocolStatus.RUNNING
+            self._publish_task = asyncio.create_task(self._publish_loop(publish_interval))
+            logger.info("MQTT Broker starting on %s:%d", self._host, self._port)
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start MQTT Broker: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        if self._publish_task:
+            self._publish_task.cancel()
+            try:
+                await self._publish_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.warning("MQTT publish task error: %s", e)
+        if self._broker:
+            await self._broker.shutdown()
+        self._status = ProtocolStatus.STOPPED
+        logger.info("MQTT Broker stopped")
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = MqttDeviceBehavior(device_config.points)
+        self._behaviors[device_config.id] = behavior
+        self._device_configs[device_config.id] = device_config
+        logger.info("MQTT device created: %s", device_config.id)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        self._behaviors.pop(device_id, None)
+        self._device_configs.pop(device_id, None)
+        logger.info("MQTT device removed: %s", device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return []
+        config = self._device_configs.get(device_id)
+        if not config:
+            return []
+        now = time.time()
+        result = []
+        for point in config.points:
+            value = behavior.get_value(point.name)
+            result.append(PointValue(name=point.name, value=value, timestamp=now))
+        return result
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return await behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "default": "0.0.0.0",
+                    "description": "监听地址",
+                },
+                "port": {
+                    "type": "integer",
+                    "default": 1883,
+                    "description": "监听端口",
+                },
+                "publish_interval": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "数据发布间隔（秒）",
+                },
+            },
+        }
+
+    async def _publish_loop(self, interval: int) -> None:
+        import json as json_lib
+
+        while self._status == ProtocolStatus.RUNNING:
+            for device_id, config in self._device_configs.items():
+                behavior = self._behaviors.get(device_id)
+                if not behavior:
+                    continue
+                for point in config.points:
+                    value = behavior.get_value(point.name)
+                    topic = f"protoforge/{device_id}/{point.name}"
+                    payload = json_lib.dumps({
+                        "device_id": device_id,
+                        "point": point.name,
+                        "value": value,
+                        "timestamp": time.time(),
+                        "unit": point.unit,
+                    })
+                    try:
+                        if self._broker and hasattr(self._broker, 'internal_publish'):
+                            await self._broker.internal_publish(
+                                topic=topic,
+                                data=payload.encode("utf-8"),
+                            )
+                    except Exception as e:
+                        logger.debug("MQTT publish failed for %s: %s", topic, e)
+            await asyncio.sleep(interval)

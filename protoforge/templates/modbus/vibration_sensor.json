@@ -1,0 +1,97 @@
+{
+    "id": "modbus_vibration_sensor",
+    "name": "振动传感器",
+    "protocol": "modbus_tcp",
+    "description": "工业振动监测传感器，支持Modbus TCP，用于旋转机械状态监测与故障预警",
+    "manufacturer": "Generic",
+    "model": "VS-400",
+    "points": [
+        {
+            "name": "vibration_x",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "X方向振动速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "vibration_y",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "Y方向振动速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "vibration_z",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "Z方向振动速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "peak_acceleration",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "g",
+            "description": "峰值加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "temperature",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "轴承温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 90.0
+        },
+        {
+            "name": "kurtosis",
+            "address": "10",
+            "data_type": "float32",
+            "description": "峭度指标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 3.0,
+            "max_value": 8.0
+        },
+        {
+            "name": "alarm_vibration",
+            "address": "12",
+            "data_type": "bool",
+            "description": "振动报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_temp",
+            "address": "13",
+            "data_type": "bool",
+            "description": "温度报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 10
+    },
+    "tags": ["振动", "传感器", "预测性维护", "旋转机械"]
+}

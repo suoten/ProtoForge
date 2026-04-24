@@ -1,0 +1,118 @@
+{
+    "id": "opcua_robot_controller",
+    "name": "工业机器人控制器",
+    "protocol": "opcua",
+    "description": "六轴工业机器人OPC UA接口，支持关节角度、末端位姿、运行状态监控",
+    "manufacturer": "Generic",
+    "model": "RB-600",
+    "points": [
+        {
+            "name": "joint1_angle",
+            "address": "ns=2;s=Robot.Joint1",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节1角度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -180.0,
+            "max_value": 180.0
+        },
+        {
+            "name": "joint2_angle",
+            "address": "ns=2;s=Robot.Joint2",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节2角度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -135.0,
+            "max_value": 135.0
+        },
+        {
+            "name": "joint3_angle",
+            "address": "ns=2;s=Robot.Joint3",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节3角度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -150.0,
+            "max_value": 150.0
+        },
+        {
+            "name": "tcp_x",
+            "address": "ns=2;s=Robot.TCP_X",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端X坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -1000.0,
+            "max_value": 1000.0
+        },
+        {
+            "name": "tcp_y",
+            "address": "ns=2;s=Robot.TCP_Y",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端Y坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -1000.0,
+            "max_value": 1000.0
+        },
+        {
+            "name": "tcp_z",
+            "address": "ns=2;s=Robot.TCP_Z",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端Z坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 1500.0
+        },
+        {
+            "name": "speed_override",
+            "address": "ns=2;s=Robot.SpeedOverride",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "速度倍率",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "run_state",
+            "address": "ns=2;s=Robot.RunState",
+            "data_type": "uint16",
+            "description": "运行状态(0=停止 1=运行 2=暂停 3=急停 4=报警)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cycle_count",
+            "address": "ns=2;s=Robot.CycleCount",
+            "data_type": "uint16",
+            "description": "循环计数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 99999
+        },
+        {
+            "name": "motor_temp",
+            "address": "ns=2;s=Robot.MotorTemp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "电机温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 75.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["机器人", "工业机器人", "六轴", "OPC-UA"]
+}

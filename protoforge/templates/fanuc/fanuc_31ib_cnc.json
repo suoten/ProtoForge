@@ -1,0 +1,98 @@
+{
+    "id": "fanuc_31ib",
+    "name": "FANUC 31i-B CNC",
+    "protocol": "fanuc",
+    "description": "FANUC 31i-B高端数控系统，FOCAS2协议通信，5轴加工中心",
+    "manufacturer": "FANUC",
+    "model": "31i-B",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "cnc_mode",
+            "data_type": "uint16",
+            "description": "运行模式",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 3
+        },
+        {
+            "name": "x_absolute",
+            "address": "abs_x",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴绝对坐标",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -500,
+            "max_value": 500
+        },
+        {
+            "name": "y_absolute",
+            "address": "abs_y",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴绝对坐标",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -400,
+            "max_value": 400
+        },
+        {
+            "name": "z_absolute",
+            "address": "abs_z",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴绝对坐标",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -200,
+            "max_value": 600
+        },
+        {
+            "name": "b_absolute",
+            "address": "abs_b",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "B轴旋转坐标",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 360
+        },
+        {
+            "name": "spindle_speed",
+            "address": "spindle_speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2000,
+            "max_value": 15000
+        },
+        {
+            "name": "feed_override",
+            "address": "feed_override",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "进给倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "tool_number",
+            "address": "tool_number",
+            "data_type": "uint16",
+            "description": "当前刀号",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {
+        "cnc_type": "31i-B",
+        "focas_version": 2
+    },
+    "tags": ["CNC", "FANUC", "数控", "FOCAS", "5轴", "加工中心"]
+}

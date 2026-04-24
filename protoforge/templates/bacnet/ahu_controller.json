@@ -1,0 +1,97 @@
+{
+    "id": "bacnet_ahu",
+    "name": "BACnet空调机组",
+    "protocol": "bacnet",
+    "description": "BACnet空调机组控制器，支持温度、湿度、风量、阀门控制等楼宇自控功能",
+    "manufacturer": "Generic",
+    "model": "AHU-200",
+    "points": [
+        {
+            "name": "supply_temp",
+            "address": "analogInput,1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "送风温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15.0,
+            "max_value": 28.0
+        },
+        {
+            "name": "return_temp",
+            "address": "analogInput,2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "回风温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 22.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "setpoint_temp",
+            "address": "analogOutput,1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 24.0
+        },
+        {
+            "name": "supply_humidity",
+            "address": "analogInput,3",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "送风湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 70.0
+        },
+        {
+            "name": "fan_speed",
+            "address": "analogOutput,2",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "风机转速",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "fan_running",
+            "address": "binaryOutput,1",
+            "data_type": "bool",
+            "description": "风机运行状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "valve_position",
+            "address": "analogOutput,3",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "冷水阀门开度",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "filter_alarm",
+            "address": "binaryInput,1",
+            "data_type": "bool",
+            "description": "滤网报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "device_id_base": 100
+    },
+    "tags": ["空调机组", "AHU", "BACnet", "楼宇自控", "暖通"]
+}

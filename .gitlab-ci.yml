@@ -1,0 +1,35 @@
+stages:
+  - test
+
+integration-test:
+  stage: test
+  image: python:3.12-slim
+  services:
+    - name: protoforge:latest
+      alias: protoforge
+  before_script:
+    - pip install protoforge
+    - |
+      for i in $(seq 1 30); do
+        if curl -sf http://protoforge:8000/health; then
+          echo "ProtoForge is ready"
+          break
+        fi
+        echo "Waiting... ($i/30)"
+        sleep 2
+      done
+  script:
+    - |
+      python -c "
+      from protoforge.sdk import ProtoForgeClient
+      client = ProtoForgeClient('http://protoforge:8000')
+      client.start_protocol('modbus_tcp', {'host': '0.0.0.0', 'port': 5020})
+      config = client.instantiate_template('modbus_temperature_sensor', 'ci-test-001', 'CI Test')
+      device = client.create_device(**config)
+      assert device['id'] == 'ci-test-001'
+      points = client.read_points('ci-test-001')
+      assert len(points) > 0
+      client.delete_device('ci-test-001')
+      client.stop_protocol('modbus_tcp')
+      print('CI integration test passed!')
+      "

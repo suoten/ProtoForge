@@ -1,0 +1,77 @@
+{
+    "id": "gb28181_ptz_camera",
+    "name": "GB28181球机摄像头",
+    "protocol": "gb28181",
+    "description": "GB28181云台球机，支持PTZ控制、预置位、巡航、SDP视频流协商",
+    "manufacturer": "Generic",
+    "model": "PTZ-400",
+    "points": [
+        {
+            "name": "online",
+            "address": "status",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "ptz_pan",
+            "address": "ptz_pan",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "水平转角",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 360.0
+        },
+        {
+            "name": "ptz_tilt",
+            "address": "ptz_tilt",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "垂直转角",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": -15.0,
+            "max_value": 90.0
+        },
+        {
+            "name": "ptz_zoom",
+            "address": "ptz_zoom",
+            "data_type": "float32",
+            "unit": "x",
+            "description": "变倍",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "recording",
+            "address": "recording",
+            "data_type": "bool",
+            "description": "录像状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "preset_id",
+            "address": "preset_id",
+            "data_type": "uint16",
+            "description": "当前预置位编号",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {
+        "server_id": "34020000001320000001",
+        "username": "34020000001320000001",
+        "password": "12345678",
+        "realm": "3402000000"
+    },
+    "tags": ["球机", "PTZ", "GB28181", "摄像头", "云台"]
+}

@@ -1,0 +1,87 @@
+{
+    "id": "modbus_level_sensor",
+    "name": "雷达液位计",
+    "protocol": "modbus_tcp",
+    "description": "非接触式雷达液位传感器，支持Modbus RTU/TCP，适用于储罐、水池液位监测",
+    "manufacturer": "Generic",
+    "model": "RL-300",
+    "points": [
+        {
+            "name": "level",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "m",
+            "description": "当前液位",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 15.0
+        },
+        {
+            "name": "level_percent",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "液位百分比",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "volume",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "m³",
+            "description": "储罐体积",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 5000.0
+        },
+        {
+            "name": "temperature",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "介质温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -10.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "signal_quality",
+            "address": "8",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "信号质量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 60,
+            "max_value": 100
+        },
+        {
+            "name": "alarm_high",
+            "address": "9",
+            "data_type": "bool",
+            "description": "高液位报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_low",
+            "address": "10",
+            "data_type": "bool",
+            "description": "低液位报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 8
+    },
+    "tags": ["液位", "雷达", "储罐", "仪表"]
+}

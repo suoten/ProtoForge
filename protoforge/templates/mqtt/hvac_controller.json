@@ -1,0 +1,71 @@
+{
+    "id": "mqtt_hvac_controller",
+    "name": "空调控制器",
+    "protocol": "mqtt",
+    "description": "中央空调MQTT控制器，支持温度设定、模式切换、风速调节",
+    "manufacturer": "Generic",
+    "model": "HVAC-300",
+    "points": [
+        {
+            "name": "current_temp",
+            "address": "protoforge/{device_id}/hvac/current_temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "当前温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "set_temp",
+            "address": "protoforge/{device_id}/hvac/set_temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "设定温度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 24.0
+        },
+        {
+            "name": "mode",
+            "address": "protoforge/{device_id}/hvac/mode",
+            "data_type": "uint16",
+            "description": "运行模式(0=制冷 1=制热 2=除湿 3=送风 4=自动)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "fan_speed",
+            "address": "protoforge/{device_id}/hvac/fan",
+            "data_type": "uint16",
+            "description": "风速(0=自动 1=低 2=中 3=高)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "power_on",
+            "address": "protoforge/{device_id}/hvac/power",
+            "data_type": "bool",
+            "description": "开关机",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "humidity",
+            "address": "protoforge/{device_id}/hvac/humidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "当前湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 70.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["空调", "HVAC", "楼宇自控", "暖通"]
+}

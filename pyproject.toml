@@ -1,0 +1,84 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "protoforge"
+version = "0.1.0"
+description = "物联网协议仿真与测试平台 - Postman for IoT"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "suoten", email = "suoten@163.com" },
+]
+keywords = ["iot", "modbus", "opc-ua", "mqtt", "simulation", "testing", "gb28181", "bacnet", "s7", "mc", "fins", "ab", "opc-da", "fanuc", "mtconnect", "toledo"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Networking",
+]
+
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "pymodbus>=3.6.0",
+    "aiosqlite>=0.19.0",
+    "websockets>=12.0",
+    "httpx>=0.27.0",
+    "PyJWT>=2.8.0",
+]
+
+[project.optional-dependencies]
+opcua = ["asyncua>=1.0.0"]
+mqtt = ["amqtt>=0.11.0"]
+bacnet = ["bacpypes>=0.18.0"]
+s7 = ["python-snap7>=1.3.0"]
+gb28181 = []
+mc = []
+fins = []
+ab = []
+opcda = []
+fanuc = []
+mtconnect = []
+toledo = []
+all = [
+    "asyncua>=1.0.0",
+    "amqtt>=0.11.0",
+    "bacpypes>=0.18.0",
+    "python-snap7>=1.3.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.3.0",
+]
+
+[project.scripts]
+protoforge = "protoforge.cli:main"
+
+[project.urls]
+Homepage = "https://gitee.com/suoten/protoforge"
+Repository = "https://gitee.com/suoten/protoforge"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pytest.PytestCollectionWarning",
+]

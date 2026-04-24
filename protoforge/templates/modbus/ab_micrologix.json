@@ -1,0 +1,91 @@
+{
+    "id": "modbus_ab_micrologix",
+    "name": "AB MicroLogix 1400",
+    "protocol": "modbus_tcp",
+    "description": "罗克韦尔Allen-Bradley MicroLogix 1400可编程控制器，支持Modbus TCP，适用于小型工业控制系统",
+    "manufacturer": "Allen-Bradley",
+    "model": "MicroLogix-1400",
+    "points": [
+        {
+            "name": "prog_mode",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "运行模式(0=PROG 1=RUN 2=TEST)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "i0_0",
+            "address": "1",
+            "data_type": "bool",
+            "description": "输入I:0/0",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "i0_1",
+            "address": "2",
+            "data_type": "bool",
+            "description": "输入I:0/1",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "o0_0",
+            "address": "3",
+            "data_type": "bool",
+            "description": "输出O:0/0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "n7_0",
+            "address": "4",
+            "data_type": "int32",
+            "description": "整数文件N7:0",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 32767
+        },
+        {
+            "name": "f8_0",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "GPM",
+            "description": "浮点文件F8:0(流量)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "s2_1",
+            "address": "8",
+            "data_type": "uint16",
+            "unit": "ms",
+            "description": "扫描时间S:1",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2,
+            "max_value": 20
+        },
+        {
+            "name": "s2_6",
+            "address": "9",
+            "data_type": "uint16",
+            "description": "主要错误代码S:6",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 4
+    },
+    "tags": ["PLC", "AB", "Allen-Bradley", "罗克韦尔", "工业控制", "MicroLogix"]
+}

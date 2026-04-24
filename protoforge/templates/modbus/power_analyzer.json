@@ -1,0 +1,145 @@
+{
+    "id": "modbus_power_analyzer",
+    "name": "电能质量分析仪",
+    "protocol": "modbus_tcp",
+    "description": "三相电能质量分析仪，支持Modbus TCP，可监测电压、电流、功率、功率因数、谐波等",
+    "manufacturer": "Generic",
+    "model": "PQA-800",
+    "points": [
+        {
+            "name": "voltage_a",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "A相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "voltage_b",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "B相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "voltage_c",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "C相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "current_a",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "A相电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "current_b",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "B相电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "current_c",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "C相电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "active_power",
+            "address": "12",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 150.0
+        },
+        {
+            "name": "reactive_power",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "kVar",
+            "description": "无功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "power_factor",
+            "address": "16",
+            "data_type": "float32",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.99
+        },
+        {
+            "name": "frequency",
+            "address": "18",
+            "data_type": "float32",
+            "unit": "Hz",
+            "description": "电网频率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 49.9,
+            "max_value": 50.1
+        },
+        {
+            "name": "thd_voltage",
+            "address": "20",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "电压总谐波畸变率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 8.0
+        },
+        {
+            "name": "total_energy",
+            "address": "22",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "总有功电能",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 999999.0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 9
+    },
+    "tags": ["电力", "电能质量", "仪表", "能耗"]
+}
