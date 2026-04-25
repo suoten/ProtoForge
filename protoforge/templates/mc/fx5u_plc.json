@@ -1,0 +1,78 @@
+{
+    "id": "mc_fx5u",
+    "name": "三菱FX5U PLC",
+    "protocol": "mc",
+    "description": "三菱FX5U系列PLC，MC协议(SLMP)二进制通信，支持D寄存器读写",
+    "manufacturer": "Mitsubishi",
+    "model": "FX5U-32M",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "D0",
+            "data_type": "uint16",
+            "description": "运行状态(0=STOP 1=RUN)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "D1",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 75
+        },
+        {
+            "name": "temperature",
+            "address": "D2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "模块温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 25.0,
+            "max_value": 55.0
+        },
+        {
+            "name": "speed_rpm",
+            "address": "D4",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "电机转速",
+            "access": "rw",
+            "generator_type": "sine",
+            "min_value": 500,
+            "max_value": 3000
+        },
+        {
+            "name": "pressure",
+            "address": "D6",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "系统压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.3,
+            "max_value": 2.5
+        },
+        {
+            "name": "error_code",
+            "address": "D8",
+            "data_type": "uint16",
+            "description": "错误代码(0=正常)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "network": 0,
+        "station": 0,
+        "pc": 255
+    },
+    "tags": ["PLC", "三菱", "Mitsubishi", "FX5U", "MC协议", "工业控制"]
+}

@@ -1,0 +1,65 @@
+{
+    "id": "toledo_scale",
+    "name": "梅特勒-托利多电子秤",
+    "protocol": "toledo",
+    "description": "梅特勒-托利多工业电子秤，支持稳定称重/去皮/清零/连续输出",
+    "manufacturer": "Mettler-Toledo",
+    "model": "IND570",
+    "points": [
+        {
+            "name": "weight",
+            "address": "net_weight",
+            "data_type": "float32",
+            "unit": "kg",
+            "description": "净重",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 50.0
+        },
+        {
+            "name": "tare",
+            "address": "tare_weight",
+            "data_type": "float32",
+            "unit": "kg",
+            "description": "皮重",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 2.5
+        },
+        {
+            "name": "gross",
+            "address": "gross_weight",
+            "data_type": "float32",
+            "unit": "kg",
+            "description": "毛重",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 3.0,
+            "max_value": 52.5
+        },
+        {
+            "name": "stable",
+            "address": "stable_flag",
+            "data_type": "bool",
+            "description": "稳定标志",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "zero_flag",
+            "address": "zero_flag",
+            "data_type": "bool",
+            "description": "零点标志",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "unit": "kg",
+        "decimal_places": 3
+    },
+    "tags": ["称重", "梅特勒-托利多", "Mettler-Toledo", "电子秤", "衡器"]
+}

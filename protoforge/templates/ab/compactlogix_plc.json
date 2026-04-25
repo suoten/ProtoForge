@@ -1,0 +1,65 @@
+{
+    "id": "ab_compactlogix",
+    "name": "罗克韦尔CompactLogix PLC",
+    "protocol": "ab",
+    "description": "罗克韦尔CompactLogix系列PLC，EtherNet/IP CIP协议通信，紧凑型控制器",
+    "manufacturer": "Rockwell",
+    "model": "1769-L33ER",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "Program:Main.RunMode",
+            "data_type": "uint16",
+            "description": "运行模式",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "motor_speed",
+            "address": "Program:Main.MotorSpeed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "电机转速",
+            "access": "rw",
+            "generator_type": "sine",
+            "min_value": 200,
+            "max_value": 1800
+        },
+        {
+            "name": "motor_current",
+            "address": "Program:Main.MotorCurrent",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电机电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2.0,
+            "max_value": 15.0
+        },
+        {
+            "name": "conveyor_count",
+            "address": "Program:Main.ConveyorCount",
+            "data_type": "int32",
+            "unit": "个",
+            "description": "传送带计数",
+            "access": "r",
+            "generator_type": "sawtooth",
+            "min_value": 0,
+            "max_value": 9999
+        },
+        {
+            "name": "alarm_status",
+            "address": "Program:Main.AlarmStatus",
+            "data_type": "uint16",
+            "description": "报警状态(位图)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slot": 0
+    },
+    "tags": ["PLC", "罗克韦尔", "Rockwell", "CompactLogix", "EtherNet/IP", "工业控制"]
+}

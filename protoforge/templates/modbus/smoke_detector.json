@@ -1,0 +1,64 @@
+{
+    "id": "modbus_smoke_detector",
+    "name": "烟感探测器",
+    "protocol": "modbus_tcp",
+    "description": "智能光电烟感探测器，支持Modbus TCP，适用于消防火灾预警",
+    "manufacturer": "Generic",
+    "model": "SD-100",
+    "points": [
+        {
+            "name": "smoke_density",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "dB/m",
+            "description": "烟雾浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 5.0
+        },
+        {
+            "name": "alarm_fire",
+            "address": "2",
+            "data_type": "bool",
+            "description": "火灾报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_fault",
+            "address": "3",
+            "data_type": "bool",
+            "description": "故障报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "battery_level",
+            "address": "4",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "电池电量",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 95
+        },
+        {
+            "name": "temperature",
+            "address": "5",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "环境温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15.0,
+            "max_value": 40.0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 11
+    },
+    "tags": ["烟感", "消防", "安全", "探测器"]
+}

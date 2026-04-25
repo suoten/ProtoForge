@@ -1,0 +1,65 @@
+{
+    "id": "gb28181_nvr",
+    "name": "NVR网络录像机",
+    "protocol": "gb28181",
+    "description": "GB28181 NVR网络录像机，支持多路视频接入、录像回放、云台控制",
+    "manufacturer": "Generic",
+    "model": "NVR-16CH",
+    "points": [
+        {
+            "name": "online",
+            "address": "status",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "channel_count",
+            "address": "channel_count",
+            "data_type": "uint16",
+            "description": "接入通道数",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 16
+        },
+        {
+            "name": "recording",
+            "address": "recording",
+            "data_type": "bool",
+            "description": "录像状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "storage_used",
+            "address": "storage_used",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "存储使用率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10.0,
+            "max_value": 90.0
+        },
+        {
+            "name": "alarm_count",
+            "address": "alarm_count",
+            "data_type": "uint16",
+            "description": "告警数量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 5
+        }
+    ],
+    "protocol_config": {
+        "server_id": "34020000002000000001",
+        "username": "34020000002000000001",
+        "password": "12345678",
+        "realm": "3402000000"
+    },
+    "tags": ["NVR", "录像机", "GB28181", "视频监控"]
+}

@@ -1,0 +1,54 @@
+{
+    "id": "modbus_temperature_sensor",
+    "name": "温湿度传感器",
+    "protocol": "modbus_tcp",
+    "description": "标准温湿度传感器，支持温度和湿度数据采集",
+    "manufacturer": "Generic",
+    "model": "TH-100",
+    "points": [
+        {
+            "name": "temperature",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "环境温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15.0,
+            "max_value": 35.0
+        },
+        {
+            "name": "humidity",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "环境湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "alarm_temp_high",
+            "address": "2",
+            "data_type": "bool",
+            "description": "高温报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_humidity_high",
+            "address": "3",
+            "data_type": "bool",
+            "description": "高湿报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": ["环境监控", "温度", "湿度"]
+}

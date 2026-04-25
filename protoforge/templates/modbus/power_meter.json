@@ -1,0 +1,106 @@
+{
+    "id": "modbus_power_meter",
+    "name": "三相电表",
+    "protocol": "modbus_tcp",
+    "description": "三相电表，支持电压、电流、功率、电能等参数采集",
+    "manufacturer": "Generic",
+    "model": "PM-300",
+    "points": [
+        {
+            "name": "voltage_a",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "A相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "voltage_b",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "B相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "voltage_c",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "C相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 215.0,
+            "max_value": 225.0
+        },
+        {
+            "name": "current_a",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "A相电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 50.0,
+            "generator_config": {"period": 60.0}
+        },
+        {
+            "name": "current_b",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "B相电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 50.0,
+            "generator_config": {"period": 60.0, "phase": 2.094}
+        },
+        {
+            "name": "current_c",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "C相电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 50.0,
+            "generator_config": {"period": 60.0, "phase": 4.189}
+        },
+        {
+            "name": "active_power",
+            "address": "12",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "total_energy",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "总有功电能",
+            "access": "r",
+            "generator_type": "sawtooth",
+            "min_value": 0.0,
+            "max_value": 99999.0,
+            "generator_config": {"period": 86400.0}
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": ["能耗监测", "电表", "电力"]
+}

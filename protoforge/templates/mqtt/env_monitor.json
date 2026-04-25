@@ -1,0 +1,67 @@
+{
+    "id": "mqtt_env_monitor",
+    "name": "环境监测站",
+    "protocol": "mqtt",
+    "description": "环境监测站，支持PM2.5、CO2、噪音等环境参数采集",
+    "manufacturer": "Generic",
+    "model": "EM-500",
+    "points": [
+        {
+            "name": "pm25",
+            "address": "protoforge/{device_id}/pm25",
+            "data_type": "float32",
+            "unit": "ug/m3",
+            "description": "PM2.5浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 150.0
+        },
+        {
+            "name": "co2",
+            "address": "protoforge/{device_id}/co2",
+            "data_type": "float32",
+            "unit": "ppm",
+            "description": "CO2浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 400.0,
+            "max_value": 2000.0
+        },
+        {
+            "name": "noise",
+            "address": "protoforge/{device_id}/noise",
+            "data_type": "float32",
+            "unit": "dB",
+            "description": "噪音水平",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 85.0
+        },
+        {
+            "name": "temperature",
+            "address": "protoforge/{device_id}/temperature",
+            "data_type": "float32",
+            "unit": "C",
+            "description": "环境温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10.0,
+            "max_value": 40.0
+        },
+        {
+            "name": "humidity",
+            "address": "protoforge/{device_id}/humidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "环境湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 90.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["环保监测", "空气质量", "噪音"]
+}

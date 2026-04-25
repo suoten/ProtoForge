@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  protoforge:
+    build: .
+    ports:
+      - "8000:8000"
+      - "5020:5020"
+      - "4840:4840"
+      - "1883:1883"
+      - "5060:5060/udp"
+      - "47808:47808/udp"
+      - "102:102"
+    volumes:
+      - protoforge-data:/app/data
+    environment:
+      - PROTOFORGE_LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  protoforge-test:
+    build: .
+    command: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+    volumes:
+      - ./:/app
+    depends_on:
+      protoforge:
+        condition: service_healthy
+    environment:
+      - PROTOFORGE_TEST_URL=http://protoforge:8000
+    profiles:
+      - test
+
+volumes:
+  protoforge-data:

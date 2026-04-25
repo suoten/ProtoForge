@@ -1,0 +1,69 @@
+{
+    "id": "mc_q03udv",
+    "name": "三菱Q03UDV PLC",
+    "protocol": "mc",
+    "description": "三菱Q系列PLC，MC协议(SLMP)二进制通信，支持大容量D/R寄存器",
+    "manufacturer": "Mitsubishi",
+    "model": "Q03UDVCPU",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "D0",
+            "data_type": "uint16",
+            "description": "运行模式(0=STOP 1=RUN 2=PAUSE)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "scan_time",
+            "address": "D1",
+            "data_type": "uint16",
+            "unit": "ms",
+            "description": "扫描周期",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 30
+        },
+        {
+            "name": "axis1_pos",
+            "address": "D100",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴1当前位置",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 500
+        },
+        {
+            "name": "axis2_pos",
+            "address": "D102",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴2当前位置",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 300
+        },
+        {
+            "name": "output_power",
+            "address": "D200",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "输出功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 15.0
+        }
+    ],
+    "protocol_config": {
+        "network": 0,
+        "station": 1,
+        "pc": 255
+    },
+    "tags": ["PLC", "三菱", "Mitsubishi", "Q系列", "MC协议", "运动控制"]
+}

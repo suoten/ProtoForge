@@ -1,0 +1,91 @@
+{
+    "id": "modbus_omron_cp1h",
+    "name": "欧姆龙CP1H PLC",
+    "protocol": "modbus_tcp",
+    "description": "欧姆龙CP1H系列紧凑型可编程控制器，支持Modbus TCP通信，适用于包装、电子等自动化产线",
+    "manufacturer": "Omron",
+    "model": "CP1H-XA40DR-A",
+    "points": [
+        {
+            "name": "operation_mode",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "操作模式(0=编程 1=监视 2=运行)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 2
+        },
+        {
+            "name": "cio0_00",
+            "address": "1",
+            "data_type": "bool",
+            "description": "CIO0.00输入",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "cio0_01",
+            "address": "2",
+            "data_type": "bool",
+            "description": "CIO0.01输入",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "cio100_00",
+            "address": "3",
+            "data_type": "bool",
+            "description": "CIO100.00输出",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "d0",
+            "address": "4",
+            "data_type": "int32",
+            "description": "DM区D0",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 500
+        },
+        {
+            "name": "d10",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "压力值(D10)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 1.5
+        },
+        {
+            "name": "cycle_time",
+            "address": "8",
+            "data_type": "uint16",
+            "unit": "ms",
+            "description": "周期时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1,
+            "max_value": 8
+        },
+        {
+            "name": "fault_code",
+            "address": "9",
+            "data_type": "uint16",
+            "description": "故障代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 3
+    },
+    "tags": ["PLC", "欧姆龙", "Omron", "工业控制", "CP1H"]
+}

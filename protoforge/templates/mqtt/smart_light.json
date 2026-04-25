@@ -1,0 +1,56 @@
+{
+    "id": "mqtt_smart_light",
+    "name": "智能照明",
+    "protocol": "mqtt",
+    "description": "智能照明设备，支持开关、亮度、色温控制",
+    "manufacturer": "Generic",
+    "model": "SL-100",
+    "points": [
+        {
+            "name": "power",
+            "address": "protoforge/{device_id}/power",
+            "data_type": "bool",
+            "description": "电源开关",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "brightness",
+            "address": "protoforge/{device_id}/brightness",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "亮度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 80,
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "color_temp",
+            "address": "protoforge/{device_id}/color_temp",
+            "data_type": "uint16",
+            "unit": "K",
+            "description": "色温",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 4000,
+            "min_value": 2700,
+            "max_value": 6500
+        },
+        {
+            "name": "energy_consumption",
+            "address": "protoforge/{device_id}/energy",
+            "data_type": "float32",
+            "unit": "W",
+            "description": "实时功耗",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 15.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["智慧楼宇", "照明", "节能"]
+}

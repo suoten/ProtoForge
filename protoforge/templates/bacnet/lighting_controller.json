@@ -1,0 +1,62 @@
+{
+    "id": "bacnet_lighting",
+    "name": "BACnet照明控制器",
+    "protocol": "bacnet",
+    "description": "BACnet智能照明控制器，支持分组控制、调光、场景切换",
+    "manufacturer": "Generic",
+    "model": "LC-100",
+    "points": [
+        {
+            "name": "light_on",
+            "address": "binaryOutput,1",
+            "data_type": "bool",
+            "description": "照明开关",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "dim_level",
+            "address": "analogOutput,1",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "调光等级",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 80.0
+        },
+        {
+            "name": "lux_level",
+            "address": "analogInput,1",
+            "data_type": "float32",
+            "unit": "lux",
+            "description": "照度值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 100.0,
+            "max_value": 800.0
+        },
+        {
+            "name": "occupancy",
+            "address": "binaryInput,1",
+            "data_type": "bool",
+            "description": "人体感应",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "scene_id",
+            "address": "analogOutput,2",
+            "data_type": "uint16",
+            "description": "场景编号(0=关 1=全开 2=阅读 3=会议 4=投影)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {
+        "device_id_base": 200
+    },
+    "tags": ["照明", "BACnet", "楼宇自控", "调光"]
+}

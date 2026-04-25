@@ -1,0 +1,66 @@
+{
+    "id": "mtconnect_lathe",
+    "name": "MTConnect车床",
+    "protocol": "mtconnect",
+    "description": "MTConnect标准车床设备，HTTP/XML协议通信，支持实时数据采集",
+    "manufacturer": "Generic",
+    "model": "MC-Lathe-2Axis",
+    "points": [
+        {
+            "name": "execution",
+            "address": "Execution",
+            "data_type": "string",
+            "description": "执行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "ACTIVE"
+        },
+        {
+            "name": "x_position",
+            "address": "Xposition",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴位置(径向)",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 150
+        },
+        {
+            "name": "z_position",
+            "address": "Zposition",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴位置(纵向)",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -300,
+            "max_value": 50
+        },
+        {
+            "name": "spindle_speed",
+            "address": "SpindleSpeed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 500,
+            "max_value": 4000
+        },
+        {
+            "name": "tool_id",
+            "address": "ToolId",
+            "data_type": "string",
+            "description": "当前刀具ID",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "T01"
+        }
+    ],
+    "protocol_config": {
+        "device_uuid": "mtc-lathe-001",
+        "mtconnect_version": "1.3.0"
+    },
+    "tags": ["MTConnect", "车床", "机床", "数据互联", "智能制造"]
+}

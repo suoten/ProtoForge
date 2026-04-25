@@ -1,0 +1,75 @@
+{
+    "id": "modbus_flow_meter",
+    "name": "电磁流量计",
+    "protocol": "modbus_tcp",
+    "description": "电磁流量计，支持Modbus RTU/TCP，适用于水、污水、化工液体流量测量",
+    "manufacturer": "Generic",
+    "model": "FM-200",
+    "points": [
+        {
+            "name": "instant_flow",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "m³/h",
+            "description": "瞬时流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "total_flow",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "m³",
+            "description": "累积流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 99999.0
+        },
+        {
+            "name": "flow_velocity",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "m/s",
+            "description": "流速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "pipe_diameter",
+            "address": "6",
+            "data_type": "uint16",
+            "unit": "mm",
+            "description": "管径",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "alarm_empty_pipe",
+            "address": "7",
+            "data_type": "bool",
+            "description": "空管报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_high_flow",
+            "address": "8",
+            "data_type": "bool",
+            "description": "流量超限报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 7
+    },
+    "tags": ["流量计", "仪表", "水务", "化工"]
+}

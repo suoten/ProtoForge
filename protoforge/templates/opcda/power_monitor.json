@@ -1,0 +1,80 @@
+{
+    "id": "opcda_power_monitor",
+    "name": "OPC-DA 电力监控",
+    "protocol": "opcda",
+    "description": "OPC-DA电力监控系统数据源，模拟变电站/配电室数据采集",
+    "manufacturer": "Generic",
+    "model": "OPC-DA-Power-1.0",
+    "points": [
+        {
+            "name": "voltage_a",
+            "address": "Power.VoltageA",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "A相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218,
+            "max_value": 222
+        },
+        {
+            "name": "voltage_b",
+            "address": "Power.VoltageB",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "B相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218,
+            "max_value": 222
+        },
+        {
+            "name": "voltage_c",
+            "address": "Power.VoltageC",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "C相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218,
+            "max_value": 222
+        },
+        {
+            "name": "current_a",
+            "address": "Power.CurrentA",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "A相电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 50,
+            "max_value": 200
+        },
+        {
+            "name": "power_factor",
+            "address": "Power.PowerFactor",
+            "data_type": "float32",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.98
+        },
+        {
+            "name": "active_power",
+            "address": "Power.ActivePower",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30,
+            "max_value": 120
+        }
+    ],
+    "protocol_config": {
+        "server_name": "ProtoForge.OPCDA.PowerMonitor",
+        "update_rate": 500
+    },
+    "tags": ["OPC-DA", "电力", "变电站", "配电", "能源监控"]
+}

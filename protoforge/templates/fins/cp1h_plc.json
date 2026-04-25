@@ -1,0 +1,77 @@
+{
+    "id": "fins_cp1h",
+    "name": "欧姆龙CP1H PLC",
+    "protocol": "fins",
+    "description": "欧姆龙CP1H系列PLC，FINS TCP协议通信，支持CIO/DM区读写",
+    "manufacturer": "Omron",
+    "model": "CP1H-X40DR-A",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "CIO0.00",
+            "data_type": "uint16",
+            "description": "运行状态(0=STOP 1=RUN 2=MONITOR)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "DM0",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 60
+        },
+        {
+            "name": "temperature",
+            "address": "DM1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "模块温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "pressure",
+            "address": "DM3",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "系统压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.2,
+            "max_value": 1.5
+        },
+        {
+            "name": "flow_rate",
+            "address": "DM5",
+            "data_type": "float32",
+            "unit": "L/min",
+            "description": "流量",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "error_code",
+            "address": "DM7",
+            "data_type": "uint16",
+            "description": "错误代码(0=正常)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "fins_node": 1,
+        "fins_unit": 0
+    },
+    "tags": ["PLC", "欧姆龙", "Omron", "CP1H", "FINS", "工业控制"]
+}
