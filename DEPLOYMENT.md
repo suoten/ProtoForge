@@ -134,7 +134,56 @@ docker run -d \
 
 ## 生产环境部署
 
-### 使用 Nginx 反向代理
+### 使用 Nginx 反向代理（推荐）
+
+这是生产环境的标准部署方式：
+- **Nginx** 直接托管前端静态文件（高效）
+- **Nginx** 将 API 和 WebSocket 请求代理到后端
+- 通过**域名**访问，可配置 HTTPS
+
+**部署示例：**
+- 域名：`http://protoforge.jjtt.net`
+- 后端端口：`8200`（在 `.env` 中配置）
+- 前端路径：`/path/to/ProtoForge/web/dist`
+
+```nginx
+server {
+    listen 80;
+    server_name protoforge.jjtt.net;
+
+    # 前端静态文件 → Nginx 直接返回（高效）
+    location / {
+        root /path/to/ProtoForge/web/dist;
+        try_files $uri $uri/ /index.html;
+        expires 1d;
+    }
+
+    # API 请求 → 代理到 Python 后端
+    location /api/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket → 代理到 Python 后端（需升级协议）
+    location /api/v1/ws/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+}
+```
+
+> 把 `protoforge.jjtt.net` 换成你的域名，`8200` 换成 `.env` 中配置的端口，`/path/to/ProtoForge` 换成实际路径。
+
+**配置 HTTPS（可选）：**
 
 ```nginx
 server {
@@ -151,33 +200,7 @@ server {
     ssl_certificate_key /path/to/key.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
-    # 前端静态文件
-    location / {
-        root /path/to/ProtoForge/web/dist;
-        try_files $uri $uri/ /index.html;
-        expires 1d;
-    }
-
-    # API 代理
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-
-    # WebSocket 代理
-    location /api/v1/ws/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 86400s;
-    }
+    # ... 同上
 }
 ```
 
