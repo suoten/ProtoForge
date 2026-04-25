@@ -108,6 +108,19 @@ class SimulationEngine:
             await server.create_device(config)
             instance.start()
 
+        proto_config = config.protocol_config or {}
+        edgelite_url = proto_config.get("edgelite_url", "")
+        if edgelite_url:
+            try:
+                from protoforge.core.edgelite import push_device_to_edgelite
+                result = await push_device_to_edgelite(instance)
+                if result.get("ok"):
+                    logger.info("Device %s auto-pushed to EdgeLite", config.id)
+                else:
+                    logger.warning("Device %s EdgeLite push failed: %s", config.id, result.get("error", result.get("reason", "")))
+            except Exception as e:
+                logger.warning("Device %s EdgeLite push error: %s", config.id, e)
+
         logger.info("Device created: %s (%s)", config.id, config.name)
         return self._get_device_info(instance)
 
