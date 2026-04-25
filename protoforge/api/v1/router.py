@@ -93,7 +93,10 @@ async def get_device_connection_guide(device_id: str):
 @router.get("/protocols/{protocol_name}/device-config")
 async def get_protocol_device_config(protocol_name: str):
     from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
-    config = PROTOCOL_DEVICE_CONFIG.get(protocol_name, [])
+    from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
+    config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
+    if protocol_name not in ("gb28181", "video"):
+        config.extend(EDGELITE_PUSH_FIELDS)
     return {"protocol": protocol_name, "fields": config}
 
 
@@ -604,6 +607,33 @@ async def import_edgelite(config: dict[str, Any]):
         return {"status": "ok", "imported": len(results), "devices": results}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/integration/edgelite/push/{device_id}")
+async def push_device_to_edgelite(device_id: str):
+    from protoforge.core.edgelite import push_device_to_edgelite as _push
+    engine = _get_engine()
+    device = engine.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        result = await _push(device)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
+
+
+@router.post("/integration/edgelite/test")
+async def test_edgelite_connection(config: dict[str, Any] = None):
+    from protoforge.core.edgelite import test_edgelite_connection as _test
+    if not config:
+        config = {}
+    url = config.get("url", "")
+    username = config.get("username", "admin")
+    password = config.get("password", "")
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+    return await _test(url, username, password)
 
 
 @router.post("/integration/pygbsentry")
