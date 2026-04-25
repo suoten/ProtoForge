@@ -48,7 +48,18 @@ pip install -e ".[all]"
 pip install -e ".[postgres]"
 ```
 
-### 2. 配置环境变量
+### 2. 构建前端
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+```
+
+> 如果 `web/dist/` 已存在且未修改前端代码，可跳过此步骤。
+
+### 3. 配置环境变量
 
 ```bash
 # 复制示例配置文件
@@ -59,7 +70,7 @@ cp .env.example .env
 # - PROTOFORGE_DB_PATH（如需使用 PostgreSQL）
 ```
 
-### 3. 初始化数据库
+### 4. 初始化数据库
 
 如果使用 SQLite（默认），系统会在首次启动时自动创建数据库。
 
@@ -75,7 +86,7 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE protoforge TO protofo
 alembic upgrade head
 ```
 
-### 4. 启动服务
+### 5. 启动服务
 
 ```bash
 # 生产模式启动（无演示数据）
