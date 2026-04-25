@@ -49,7 +49,9 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 - Node.js 18+（仅前端开发时需要）
 - PostgreSQL 14+（可选，生产环境推荐）
 
-#### 方式一：从源码安装（推荐）
+#### 方式一：本地快速体验（推荐）
+
+适合本地开发、测试或单机使用，直接通过 `localhost` 访问。
 
 ```bash
 # 1. 克隆仓库
@@ -69,13 +71,88 @@ cd ..
 protoforge demo
 ```
 
-打开浏览器访问 \*\*<http://localhost:8000**，用> `admin` / `admin` 登录即可。
+打开浏览器访问 **<http://localhost:8000**，用> `admin` / `admin` 登录即可。
 
 > `protoforge demo` 会自动创建 4 个演示设备和 1 个仿真场景，方便你快速体验。
 > 如果不想带演示数据，用 `protoforge run` 启动空白环境。
 > 端口冲突？修改 `.env` 中的 `PROTOFORGE_PORT` 即可，无需改代码。
 
-#### 方式二：宝塔面板部署
+#### 方式二：服务器部署（Nginx + 域名）
+
+适合生产环境，通过域名访问，Nginx 托管前端静态文件，API 代理到后端。
+
+**部署架构：**
+```
+用户 → 域名 (http://protoforge.jjtt.net)
+    → Nginx
+        → 前端静态文件 (web/dist/) 直接返回
+        → /api/* 代理到后端 (127.0.0.1:8200)
+        → /api/v1/ws/* WebSocket 代理到后端
+```
+
+**1. 安装与构建**
+
+```bash
+# 克隆仓库
+git clone https://github.com/suoten/ProtoForge.git
+cd ProtoForge
+
+# 安装依赖
+pip install -e ".[all]"
+
+# 构建前端
+cd web && npm install && npm run build && cd ..
+```
+
+**2. 配置后端端口**
+
+编辑 `.env`，设置后端监听端口（例如 8200）：
+```bash
+PROTOFORGE_PORT=8200
+```
+
+**3. Nginx 配置示例**
+
+```nginx
+server {
+    listen 80;
+    server_name protoforge.jjtt.net;
+
+    # API 请求 → 代理到 Python 后端
+    location /api/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # WebSocket → 代理到 Python 后端（需升级协议）
+    location /api/v1/ws/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # 前端静态文件 → Nginx 直接返回（高效）
+    location / {
+        root /path/to/ProtoForge/web/dist;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+> 把 `8200` 换成你 `.env` 中配置的端口，把 `/path/to/ProtoForge` 换成你的实际路径。
+
+**4. 启动后端**
+
+```bash
+protoforge run
+```
+
+现在可以通过域名访问了，例如：`http://protoforge.jjtt.net`
+
+#### 方式三：宝塔面板部署
 
 1. **安装 Python 项目**
    - 宝塔 → 网站 → Python项目 → 添加Python项目
@@ -439,7 +516,13 @@ cd ProtoForge
 # 2. Install ProtoForge (auto-installs FastAPI, Pydantic, etc.)
 pip install -e .
 
-# 3. Start!
+# 3. Build frontend (skip if web/dist/ already exists)
+cd web
+npm install
+npm run build
+cd ..
+
+# 4. Start!
 protoforge demo
 ```
 
@@ -448,16 +531,6 @@ Open your browser at **<http://localhost:8000>** and log in with `admin` / `admi
 > `protoforge demo` creates 4 demo devices and 1 scenario automatically.
 > For a clean start, use `protoforge run` instead.
 > Port conflict? Just change `PROTOFORGE_PORT` in `.env` — no code changes needed.
-
-**Note**: If the `web/dist/` directory does not exist (frontend not built), you need to build it first:
-
-```bash
-cd web
-npm install
-npm run build
-cd ..
-protoforge demo
-```
 
 #### Option 2: Server Deployment (Nginx)
 
