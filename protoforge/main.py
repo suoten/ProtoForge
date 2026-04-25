@@ -1,4 +1,5 @@
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -65,6 +66,12 @@ def get_log_bus() -> LogBus:
 async def lifespan(app: FastAPI):
     global _engine, _template_manager, _database, _log_bus
 
+    from protoforge.config import get_settings
+    settings = get_settings()
+
+    from protoforge.core.auth import set_secret_key
+    set_secret_key(settings.jwt_secret)
+
     _log_bus = LogBus()
 
     _template_manager = TemplateManager()
@@ -92,73 +99,102 @@ async def lifespan(app: FastAPI):
     _engine.setup_debug_callbacks(_log_bus)
     await _engine.start()
 
+    restore_errors = []
+
     try:
         saved_devices = await _database.load_all_devices()
+        restored = 0
         for dev in saved_devices:
             try:
                 await _engine.create_device(dev)
-            except Exception:
-                pass
-        logger.info("Restored %d devices from database", len(saved_devices))
+                restored += 1
+            except Exception as e:
+                logger.error("Failed to restore device %s: %s", dev.id, e)
+        logger.info("Restored %d/%d devices from database", restored, len(saved_devices))
     except Exception as e:
-        logger.warning("Failed to restore devices: %s", e)
+        restore_errors.append(f"devices: {e}")
+        logger.error("Failed to load devices from database: %s", e)
 
     try:
         saved_scenarios = await _database.load_all_scenarios()
         for sc in saved_scenarios:
-            _engine.create_scenario(sc)
+            try:
+                _engine.create_scenario(sc)
+            except Exception as e:
+                logger.error("Failed to restore scenario %s: %s", sc.id, e)
         logger.info("Restored %d scenarios from database", len(saved_scenarios))
     except Exception as e:
-        logger.warning("Failed to restore scenarios: %s", e)
+        restore_errors.append(f"scenarios: {e}")
+        logger.error("Failed to load scenarios from database: %s", e)
 
     try:
         saved_templates = await _database.load_all_templates()
         for tmpl in saved_templates:
-            _template_manager.add_template(tmpl)
+            try:
+                _template_manager.add_template(tmpl)
+            except Exception as e:
+                logger.error("Failed to restore template %s: %s", tmpl.id, e)
         logger.info("Restored %d templates from database", len(saved_templates))
     except Exception as e:
-        logger.warning("Failed to restore templates: %s", e)
+        restore_errors.append(f"templates: {e}")
+        logger.error("Failed to load templates from database: %s", e)
 
     try:
         from protoforge.api.v1.router import _get_test_runner
         runner = _get_test_runner()
         runner.set_database(_database)
         await runner.restore_from_db()
+        logger.info("Test data restored")
     except Exception as e:
-        logger.warning("Failed to restore test data: %s", e)
+        restore_errors.append(f"tests: {e}")
+        logger.error("Failed to restore test data: %s", e)
 
     try:
         from protoforge.core.auth import user_manager
         user_manager.set_database(_database)
         await user_manager.restore_from_db()
+        logger.info("Users restored")
     except Exception as e:
-        logger.warning("Failed to restore users: %s", e)
+        restore_errors.append(f"users: {e}")
+        logger.error("Failed to restore users: %s", e)
 
     try:
         from protoforge.core.webhook import webhook_manager
         await webhook_manager.start()
+        logger.info("Webhook manager started")
     except Exception as e:
-        logger.warning("Failed to start webhook manager: %s", e)
+        restore_errors.append(f"webhooks: {e}")
+        logger.error("Failed to start webhook manager: %s", e)
 
     import os
     if os.environ.get("PROTOFORGE_DEMO_MODE"):
         try:
             from protoforge.core.demo import seed_demo_data
             await seed_demo_data(_engine, _template_manager)
+            logger.info("Demo data seeded")
         except Exception as e:
-            logger.warning("Failed to seed demo data: %s", e)
+            logger.error("Failed to seed demo data: %s", e)
 
-    logger.info("ProtoForge started")
+    if restore_errors:
+        logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
+    else:
+        logger.info("ProtoForge started successfully")
 
     yield
 
     try:
         from protoforge.core.webhook import webhook_manager
         await webhook_manager.stop()
-    except Exception:
-        pass
-    await _engine.stop()
-    await _database.close()
+    except Exception as e:
+        logger.warning("Error stopping webhook manager: %s", e)
+    try:
+        await _engine.stop()
+    except Exception as e:
+        logger.error("Error stopping engine: %s", e)
+    try:
+        await _database.close()
+    except Exception as e:
+        logger.error("Error closing database: %s", e)
     logger.info("ProtoForge stopped")
 
 
@@ -173,6 +209,12 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+
+    from protoforge.api.v1.common import setup_exception_handlers
+    setup_exception_handlers(app)
+
+    from protoforge.api.v1.rate_limit import rate_limit_middleware
+    app.middleware("http")(rate_limit_middleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -189,7 +231,7 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok"}
+        return {"status": "ok", "timestamp": int(time.time() * 1000)}
 
     static_dir = Path(__file__).parent.parent / "web" / "dist"
     if static_dir.is_dir():

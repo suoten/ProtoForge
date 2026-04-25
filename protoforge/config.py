@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     db_path: str = "data/protoforge.db"
-    jwt_secret: str = "protoforge-secret-change-me"
+    jwt_secret: str = ""
     demo_mode: bool = False
 
     modbus_tcp_port: int = 5020

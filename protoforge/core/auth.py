@@ -1,20 +1,45 @@
-import hashlib
 import logging
+import secrets
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
 import jwt
+from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-_SECRET_KEY = "protoforge-default-secret-change-in-production"
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+_SECRET_KEY: str = ""
+
+
+def _generate_secret_key() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
-    _SECRET_KEY = key
+    if not key or key == "protoforge-secret-change-me":
+        _SECRET_KEY = _generate_secret_key()
+        logger.warning(
+            "JWT secret was using default/weak value. A new secure key has been generated. "
+            "Set PROTOFORGE_JWT_SECRET in your .env to avoid token invalidation on restart."
+        )
+    else:
+        _SECRET_KEY = key
+
+
+def get_secret_key() -> str:
+    global _SECRET_KEY
+    if not _SECRET_KEY:
+        _SECRET_KEY = _generate_secret_key()
+        logger.warning(
+            "JWT secret not configured. Using auto-generated key. "
+            "Set PROTOFORGE_JWT_SECRET in your .env to avoid token invalidation on restart."
+        )
+    return _SECRET_KEY
 
 
 def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 86400) -> str:
@@ -26,13 +51,26 @@ def create_token(user_id: str, username: str, role: str = "user", expires_in: in
         "iat": int(now),
         "exp": int(now + expires_in),
         "jti": uuid.uuid4().hex,
+        "type": "access",
     }
-    return jwt.encode(payload, _SECRET_KEY, algorithm="HS256")
+    return jwt.encode(payload, get_secret_key(), algorithm="HS256")
+
+
+def create_refresh_token(user_id: str, expires_in: int = 604800) -> str:
+    now = time.time()
+    payload = {
+        "sub": user_id,
+        "iat": int(now),
+        "exp": int(now + expires_in),
+        "jti": uuid.uuid4().hex,
+        "type": "refresh",
+    }
+    return jwt.encode(payload, get_secret_key(), algorithm="HS256")
 
 
 def verify_token(token: str) -> Optional[dict]:
     try:
-        payload = jwt.decode(token, _SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, get_secret_key(), algorithms=["HS256"])
         return payload
     except jwt.ExpiredSignatureError:
         logger.debug("Token expired")
@@ -42,6 +80,15 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
+def verify_refresh_token(token: str) -> Optional[str]:
+    payload = verify_token(token)
+    if not payload:
+        return None
+    if payload.get("type") != "refresh":
+        return None
+    return payload.get("sub")
+
+
 @dataclass
 class User:
     id: str
@@ -49,30 +96,58 @@ class User:
     password_hash: str
     role: str = "user"
     created_at: float = field(default_factory=time.time)
+    login_attempts: int = 0
+    locked_until: float = 0.0
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id, "username": self.username,
-            "password_hash": self.password_hash, "role": self.role,
+            "id": self.id,
+            "username": self.username,
+            "password_hash": self.password_hash,
+            "role": self.role,
             "created_at": self.created_at,
+            "login_attempts": self.login_attempts,
+            "locked_until": self.locked_until,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "User":
         return cls(
-            id=data["id"], username=data["username"],
-            password_hash=data["password_hash"], role=data.get("role", "user"),
+            id=data["id"],
+            username=data["username"],
+            password_hash=data["password_hash"],
+            role=data.get("role", "user"),
             created_at=data.get("created_at", time.time()),
+            login_attempts=data.get("login_attempts", 0),
+            locked_until=data.get("locked_until", 0.0),
         )
 
 
 def hash_password(password: str) -> str:
-    salt = "protoforge"
-    return hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
+    return _pwd_context.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return hash_password(password) == password_hash
+    try:
+        return _pwd_context.verify(password, password_hash)
+    except Exception:
+        return False
+
+
+def _is_password_strong(password: str) -> tuple[bool, str]:
+    if len(password) < 8:
+        return False, "密码长度至少8位"
+    if not any(c.isupper() for c in password):
+        return False, "密码必须包含大写字母"
+    if not any(c.islower() for c in password):
+        return False, "密码必须包含小写字母"
+    if not any(c.isdigit() for c in password):
+        return False, "密码必须包含数字"
+    return True, ""
+
+
+_MAX_LOGIN_ATTEMPTS = 5
+_LOCKOUT_DURATION = 300
 
 
 class UserManager:
@@ -104,12 +179,28 @@ class UserManager:
         user = self._users.get(username)
         if not user:
             return None
-        if not verify_password(password, user.password_hash):
+
+        if user.locked_until > time.time():
+            logger.warning("User %s is locked until %.0f", username, user.locked_until)
             return None
+
+        if not verify_password(password, user.password_hash):
+            user.login_attempts += 1
+            if user.login_attempts >= _MAX_LOGIN_ATTEMPTS:
+                user.locked_until = time.time() + _LOCKOUT_DURATION
+                logger.warning("User %s locked for %d seconds due to failed logins", username, _LOCKOUT_DURATION)
+            return None
+
+        user.login_attempts = 0
+        user.locked_until = 0.0
         return user
 
     async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
         if username in self._users:
+            return None
+        ok, msg = _is_password_strong(password)
+        if not ok:
+            logger.warning("Password too weak for user %s: %s", username, msg)
             return None
         user = User(
             id=uuid.uuid4().hex[:12],
@@ -144,16 +235,32 @@ class UserManager:
             for u in self._users.values()
         ]
 
-    async def change_password(self, username: str, old_password: str, new_password: str) -> bool:
+    async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False
+            return False, "原密码错误"
+        ok, msg = _is_password_strong(new_password)
+        if not ok:
+            return False, msg
         user.password_hash = hash_password(new_password)
         if self._db:
             try:
                 await self._db.save_user(user.to_dict())
             except Exception as e:
                 logger.warning("Failed to update user password: %s", e)
+        return True, ""
+
+    async def reset_login_attempts(self, username: str) -> bool:
+        user = self._users.get(username)
+        if not user:
+            return False
+        user.login_attempts = 0
+        user.locked_until = 0.0
+        if self._db:
+            try:
+                await self._db.save_user(user.to_dict())
+            except Exception as e:
+                logger.warning("Failed to reset login attempts: %s", e)
         return True
 
 
