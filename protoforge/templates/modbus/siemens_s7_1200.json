@@ -1,0 +1,111 @@
+{
+    "id": "modbus_siemens_s7_1200",
+    "name": "西门子S7-1200 PLC",
+    "protocol": "modbus_tcp",
+    "description": "西门子SIMATIC S7-1200可编程逻辑控制器，支持Modbus TCP通信，适用于中小型自动化系统",
+    "manufacturer": "Siemens",
+    "model": "S7-1200",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "运行模式(0=STOP 1=RUN 2=HOLD)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "1",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 85
+        },
+        {
+            "name": "di0",
+            "address": "2",
+            "data_type": "bool",
+            "description": "数字输入0",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "di1",
+            "address": "3",
+            "data_type": "bool",
+            "description": "数字输入1",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "do0",
+            "address": "4",
+            "data_type": "bool",
+            "description": "数字输出0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "do1",
+            "address": "5",
+            "data_type": "bool",
+            "description": "数字输出1",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "ai0",
+            "address": "6",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "模拟输入0(0-10V)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "ao0",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "mA",
+            "description": "模拟输出0(4-20mA)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 12.0
+        },
+        {
+            "name": "scan_time",
+            "address": "10",
+            "data_type": "uint16",
+            "unit": "ms",
+            "description": "扫描周期",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1,
+            "max_value": 15
+        },
+        {
+            "name": "error_code",
+            "address": "11",
+            "data_type": "uint16",
+            "description": "错误代码(0=无错误)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": ["PLC", "西门子", "Siemens", "工业控制", "S7-1200"]
+}

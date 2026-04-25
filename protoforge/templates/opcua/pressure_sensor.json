@@ -1,0 +1,63 @@
+{
+    "id": "opcua_pressure_sensor",
+    "name": "压力传感器",
+    "protocol": "opcua",
+    "description": "工业压力传感器，支持压力值和报警状态监测",
+    "manufacturer": "Generic",
+    "model": "PS-300",
+    "points": [
+        {
+            "name": "pressure",
+            "address": "ns=2;s=Pressure",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "压力值",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 10.0,
+            "generator_config": {"period": 30.0}
+        },
+        {
+            "name": "temperature",
+            "address": "ns=2;s=Temperature",
+            "data_type": "float32",
+            "unit": "C",
+            "description": "传感器温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 60.0
+        },
+        {
+            "name": "alarm_high",
+            "address": "ns=2;s=AlarmHigh",
+            "data_type": "bool",
+            "description": "高压报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_low",
+            "address": "ns=2;s=AlarmLow",
+            "data_type": "bool",
+            "description": "低压报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "setpoint",
+            "address": "ns=2;s=Setpoint",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 5.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["工业安全", "压力", "报警"]
+}

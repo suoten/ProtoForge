@@ -1,0 +1,124 @@
+{
+    "id": "opcua_siemens_s7_1500",
+    "name": "西门子S7-1500 PLC",
+    "protocol": "opcua",
+    "description": "西门子SIMATIC S7-1500高端PLC，原生支持OPC UA，适用于大型自动化产线",
+    "manufacturer": "Siemens",
+    "model": "S7-1500",
+    "points": [
+        {
+            "name": "cpu_state",
+            "address": "ns=2;s=CPU.State",
+            "data_type": "uint16",
+            "description": "CPU状态(0=STOP 1=RUN 2=HOLD)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "ns=2;s=CPU.Load",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "memory_used",
+            "address": "ns=2;s=CPU.MemoryUsed",
+            "data_type": "float32",
+            "unit": "KB",
+            "description": "已用内存",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 100.0,
+            "max_value": 8000.0
+        },
+        {
+            "name": "cycle_time",
+            "address": "ns=2;s=CPU.CycleTime",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "循环扫描时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 10.0
+        },
+        {
+            "name": "di_module_0",
+            "address": "ns=2;s=DI.Module0",
+            "data_type": "uint16",
+            "description": "DI模块0输入状态(位图)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 65535
+        },
+        {
+            "name": "do_module_0",
+            "address": "ns=2;s=DO.Module0",
+            "data_type": "uint16",
+            "description": "DO模块0输出状态(位图)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "ai_channel_0",
+            "address": "ns=2;s=AI.Channel0",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "AI通道0温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 18.0,
+            "max_value": 32.0
+        },
+        {
+            "name": "ao_channel_0",
+            "address": "ns=2;s=AO.Channel0",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "AO通道0输出",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 5.0
+        },
+        {
+            "name": "db1_dbd0",
+            "address": "ns=2;s=DB1.DBD0",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "DB1.DBD0压力设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 2.5
+        },
+        {
+            "name": "db1_dbd4",
+            "address": "ns=2;s=DB1.DBD4",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "DB1.DBD4压力实际值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2.3,
+            "max_value": 2.7
+        },
+        {
+            "name": "error_code",
+            "address": "ns=2;s=CPU.ErrorCode",
+            "data_type": "uint16",
+            "description": "错误代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["PLC", "西门子", "Siemens", "S7-1500", "工业控制", "OPC-UA"]
+}

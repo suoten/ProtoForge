@@ -1,0 +1,127 @@
+{
+    "id": "s7_siemens_s7_1500",
+    "name": "S7协议-S7-1500",
+    "protocol": "s7",
+    "description": "西门子S7-1500高端PLC原生S7通信协议接口，支持大容量DB区、高速数据交换",
+    "manufacturer": "Siemens",
+    "model": "S7-1500",
+    "points": [
+        {
+            "name": "cpu_state",
+            "address": "DB1.DBX0.0",
+            "data_type": "uint16",
+            "description": "CPU状态(0=STOP 1=RUN 2=HOLD)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "DB1.DBW2",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "memory_used",
+            "address": "DB1.DBD4",
+            "data_type": "float32",
+            "unit": "KB",
+            "description": "已用内存",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 100.0,
+            "max_value": 8000.0
+        },
+        {
+            "name": "cycle_time",
+            "address": "DB1.DBD8",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "循环扫描时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 10.0
+        },
+        {
+            "name": "di_module0",
+            "address": "DB1.DBW12",
+            "data_type": "uint16",
+            "description": "DI模块0输入(位图)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 65535
+        },
+        {
+            "name": "do_module0",
+            "address": "DB1.DBW14",
+            "data_type": "uint16",
+            "description": "DO模块0输出(位图)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "ai_temp",
+            "address": "DB1.DBD16",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "AI通道温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 18.0,
+            "max_value": 32.0
+        },
+        {
+            "name": "ao_output",
+            "address": "DB1.DBD20",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "AO通道输出",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 5.0
+        },
+        {
+            "name": "pressure_set",
+            "address": "DB1.DBD24",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "压力设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 2.5
+        },
+        {
+            "name": "pressure_actual",
+            "address": "DB1.DBD28",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "压力实际值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2.3,
+            "max_value": 2.7
+        },
+        {
+            "name": "error_code",
+            "address": "DB1.DBW32",
+            "data_type": "uint16",
+            "description": "错误代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "rack": 0,
+        "slot": 1
+    },
+    "tags": ["PLC", "西门子", "Siemens", "S7", "S7-1500", "工业控制", "高端"]
+}

@@ -1,0 +1,74 @@
+{
+    "id": "opcua_motor_controller",
+    "name": "电机控制器",
+    "protocol": "opcua",
+    "description": "工业电机控制器，支持转速、电流、温度监测和控制",
+    "manufacturer": "Generic",
+    "model": "MC-500",
+    "points": [
+        {
+            "name": "speed",
+            "address": "ns=2;s=Speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "电机转速",
+            "access": "rw",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 3000.0,
+            "generator_config": {"period": 20.0}
+        },
+        {
+            "name": "current",
+            "address": "ns=2;s=Current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电机电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 15.0
+        },
+        {
+            "name": "temperature",
+            "address": "ns=2;s=Temperature",
+            "data_type": "float32",
+            "unit": "C",
+            "description": "电机温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "running",
+            "address": "ns=2;s=Running",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "alarm_overheat",
+            "address": "ns=2;s=AlarmOverheat",
+            "data_type": "bool",
+            "description": "过热报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "target_speed",
+            "address": "ns=2;s=TargetSpeed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "目标转速",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1500.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["工业", "电机", "变频器"]
+}

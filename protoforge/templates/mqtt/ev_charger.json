@@ -1,0 +1,96 @@
+{
+    "id": "mqtt_ev_charger",
+    "name": "电动汽车充电桩",
+    "protocol": "mqtt",
+    "description": "交流/直流充电桩MQTT接口，支持充电控制、状态监控、计费数据采集",
+    "manufacturer": "Generic",
+    "model": "EVC-700",
+    "points": [
+        {
+            "name": "charging_status",
+            "address": "protoforge/{device_id}/evc/status",
+            "data_type": "uint16",
+            "description": "充电状态(0=空闲 1=准备 2=充电中 3=暂停 4=完成 5=故障)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 2
+        },
+        {
+            "name": "voltage",
+            "address": "protoforge/{device_id}/evc/voltage",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "输出电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 350.0,
+            "max_value": 420.0
+        },
+        {
+            "name": "current",
+            "address": "protoforge/{device_id}/evc/current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "输出电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 120.0
+        },
+        {
+            "name": "power",
+            "address": "protoforge/{device_id}/evc/power",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "充电功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 60.0
+        },
+        {
+            "name": "soc",
+            "address": "protoforge/{device_id}/evc/soc",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "电池SOC",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 95
+        },
+        {
+            "name": "energy_charged",
+            "address": "protoforge/{device_id}/evc/energy",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "已充电量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 75.0
+        },
+        {
+            "name": "temperature",
+            "address": "protoforge/{device_id}/evc/temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "充电枪温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 65.0
+        },
+        {
+            "name": "alarm_overtemp",
+            "address": "protoforge/{device_id}/evc/alarm",
+            "data_type": "bool",
+            "description": "过温报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["充电桩", "新能源", "电动汽车", "EVC"]
+}

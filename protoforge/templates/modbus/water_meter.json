@@ -1,0 +1,64 @@
+{
+    "id": "modbus_water_meter",
+    "name": "智能水表",
+    "protocol": "modbus_tcp",
+    "description": "智能水表，支持累计流量、瞬时流量、温度等参数采集",
+    "manufacturer": "Generic",
+    "model": "WM-100",
+    "points": [
+        {
+            "name": "total_flow",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "m3",
+            "description": "累计流量",
+            "access": "r",
+            "generator_type": "sawtooth",
+            "min_value": 0.0,
+            "max_value": 99999.0,
+            "generator_config": {"period": 86400.0}
+        },
+        {
+            "name": "instant_flow",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "m3/h",
+            "description": "瞬时流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 25.0
+        },
+        {
+            "name": "temperature",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "C",
+            "description": "水温",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 40.0
+        },
+        {
+            "name": "alarm_leak",
+            "address": "6",
+            "data_type": "bool",
+            "description": "漏水报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_reverse",
+            "address": "7",
+            "data_type": "bool",
+            "description": "倒流报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {"slave_id": 1},
+    "tags": ["水务", "水表", "流量"]
+}

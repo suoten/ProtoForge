@@ -1,0 +1,65 @@
+{
+    "id": "gb28181_camera",
+    "name": "网络摄像头",
+    "protocol": "gb28181",
+    "description": "GB28181 网络摄像头，支持目录查询、心跳、实时状态",
+    "manufacturer": "ProtoForge",
+    "model": "PF-CAM-100",
+    "points": [
+        {
+            "name": "online",
+            "address": "status",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "recording",
+            "address": "recording",
+            "data_type": "bool",
+            "description": "录像状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "ptz_preset",
+            "address": "ptz",
+            "data_type": "int32",
+            "description": "云台预置位",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "resolution",
+            "address": "resolution",
+            "data_type": "string",
+            "description": "分辨率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "1920x1080"
+        },
+        {
+            "name": "bitrate",
+            "address": "bitrate",
+            "data_type": "int32",
+            "unit": "Kbps",
+            "description": "码率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2048,
+            "max_value": 4096
+        }
+    ],
+    "protocol_config": {
+        "device_host": "127.0.0.1",
+        "device_port": 5061,
+        "username": "",
+        "password": "",
+        "realm": "gb28181"
+    },
+    "tags": ["视频监控", "摄像头", "GB28181"]
+}

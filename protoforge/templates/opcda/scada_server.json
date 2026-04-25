@@ -1,0 +1,79 @@
+{
+    "id": "opcda_scada_server",
+    "name": "OPC-DA SCADA服务器",
+    "protocol": "opcda",
+    "description": "OPC-DA经典数据访问服务器，模拟传统SCADA/DCS系统的OPC数据源",
+    "manufacturer": "Generic",
+    "model": "OPC-DA-Server-1.0",
+    "points": [
+        {
+            "name": "reactor_temp",
+            "address": "Reactor.Temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "反应釜温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 180.0,
+            "max_value": 220.0
+        },
+        {
+            "name": "reactor_pressure",
+            "address": "Reactor.Pressure",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "反应釜压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 3.5
+        },
+        {
+            "name": "feed_rate",
+            "address": "Feed.Rate",
+            "data_type": "float32",
+            "unit": "L/h",
+            "description": "进料流量",
+            "access": "rw",
+            "generator_type": "sine",
+            "min_value": 50,
+            "max_value": 200
+        },
+        {
+            "name": "level",
+            "address": "Tank.Level",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "液位",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 20,
+            "max_value": 90
+        },
+        {
+            "name": "product_quality",
+            "address": "Quality.Index",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "产品质量指标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 95.0,
+            "max_value": 99.9
+        },
+        {
+            "name": "alarm_count",
+            "address": "System.AlarmCount",
+            "data_type": "int32",
+            "description": "活动报警数",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "server_name": "ProtoForge.OPCDA.Simulator",
+        "update_rate": 1000
+    },
+    "tags": ["OPC-DA", "SCADA", "DCS", "化工", "过程控制"]
+}

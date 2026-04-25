@@ -1,0 +1,107 @@
+{
+    "id": "mqtt_pv_inverter",
+    "name": "光伏逆变器",
+    "protocol": "mqtt",
+    "description": "分布式光伏逆变器MQTT接口，支持发电功率、累计发电量、并网状态监控",
+    "manufacturer": "Generic",
+    "model": "PV-INV-50K",
+    "points": [
+        {
+            "name": "active_power",
+            "address": "protoforge/{device_id}/pv/active_power",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "reactive_power",
+            "address": "protoforge/{device_id}/pv/reactive_power",
+            "data_type": "float32",
+            "unit": "kVar",
+            "description": "无功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -10.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "daily_energy",
+            "address": "protoforge/{device_id}/pv/daily_energy",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "日发电量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 300.0
+        },
+        {
+            "name": "total_energy",
+            "address": "protoforge/{device_id}/pv/total_energy",
+            "data_type": "float32",
+            "unit": "MWh",
+            "description": "累计发电量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "dc_voltage",
+            "address": "protoforge/{device_id}/pv/dc_voltage",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "直流侧电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 500.0,
+            "max_value": 850.0
+        },
+        {
+            "name": "ac_voltage",
+            "address": "protoforge/{device_id}/pv/ac_voltage",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "交流侧电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 220.0,
+            "max_value": 240.0
+        },
+        {
+            "name": "inverter_temp",
+            "address": "protoforge/{device_id}/pv/temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "逆变器温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 25.0,
+            "max_value": 65.0
+        },
+        {
+            "name": "grid_status",
+            "address": "protoforge/{device_id}/pv/grid_status",
+            "data_type": "uint16",
+            "description": "并网状态(0=离网 1=并网 2=待机)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "alarm_code",
+            "address": "protoforge/{device_id}/pv/alarm",
+            "data_type": "uint16",
+            "description": "故障代码(0=正常)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["光伏", "逆变器", "新能源", "发电"]
+}

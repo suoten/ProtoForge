@@ -1,0 +1,60 @@
+{
+    "id": "mqtt_smart_smoke",
+    "name": "智慧烟感",
+    "protocol": "mqtt",
+    "description": "NB-IoT/WiFi智慧烟感探测器，支持MQTT上报，适用于智慧消防",
+    "manufacturer": "Generic",
+    "model": "SS-100",
+    "points": [
+        {
+            "name": "smoke_value",
+            "address": "protoforge/{device_id}/smoke/value",
+            "data_type": "float32",
+            "unit": "dB/m",
+            "description": "烟雾浓度值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 3.0
+        },
+        {
+            "name": "fire_alarm",
+            "address": "protoforge/{device_id}/smoke/fire",
+            "data_type": "bool",
+            "description": "火警状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "fault_alarm",
+            "address": "protoforge/{device_id}/smoke/fault",
+            "data_type": "bool",
+            "description": "故障状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "battery",
+            "address": "protoforge/{device_id}/smoke/battery",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "电池电量",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 92
+        },
+        {
+            "name": "online",
+            "address": "protoforge/{device_id}/smoke/online",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["烟感", "消防", "智慧消防", "IoT"]
+}

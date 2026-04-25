@@ -1,0 +1,50 @@
+{
+    "id": "modbus_gas_detector",
+    "name": "可燃气体探测器",
+    "protocol": "modbus_tcp",
+    "description": "可燃气体探测器，支持浓度检测和报警",
+    "manufacturer": "Generic",
+    "model": "GD-200",
+    "points": [
+        {
+            "name": "gas_concentration",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "%LEL",
+            "description": "气体浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 25.0
+        },
+        {
+            "name": "alarm_high",
+            "address": "1",
+            "data_type": "bool",
+            "description": "高浓度报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "alarm_low",
+            "address": "2",
+            "data_type": "bool",
+            "description": "低浓度报警",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "sensor_status",
+            "address": "3",
+            "data_type": "bool",
+            "description": "传感器状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {"slave_id": 1},
+    "tags": ["安全", "气体检测", "报警"]
+}
