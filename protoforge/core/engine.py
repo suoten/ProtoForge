@@ -5,6 +5,7 @@ import time
 from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
+from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
@@ -34,7 +35,7 @@ def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100
 
 
 class SimulationEngine:
-    def __init__(self):
+    def __init__(self, event_bus: EventBus | None = None):
         self._protocol_servers: dict[str, ProtocolServer] = {}
         self._devices: dict[str, DeviceInstance] = {}
         self._scenarios: dict[str, ScenarioConfig] = {}
@@ -43,6 +44,7 @@ class SimulationEngine:
         self._generator = DataGenerator()
         self._tick_task: Optional[asyncio.Task] = None
         self._running = False
+        self._event_bus = event_bus
 
     def register_protocol(self, server: ProtocolServer) -> None:
         self._protocol_servers[server.protocol_name] = server
@@ -108,18 +110,12 @@ class SimulationEngine:
             await server.create_device(config)
             instance.start()
 
-        proto_config = config.protocol_config or {}
-        edgelite_url = proto_config.get("edgelite_url", "")
-        if edgelite_url:
-            try:
-                from protoforge.core.edgelite import push_device_to_edgelite
-                result = await push_device_to_edgelite(instance)
-                if result.get("ok"):
-                    logger.info("Device %s auto-pushed to EdgeLite", config.id)
-                else:
-                    logger.warning("Device %s EdgeLite push failed: %s", config.id, result.get("error", result.get("reason", "")))
-            except Exception as e:
-                logger.warning("Device %s EdgeLite push error: %s", config.id, e)
+        if self._event_bus:
+            await self._event_bus.publish_safe(DeviceCreatedEvent(
+                device_id=config.id,
+                protocol=config.protocol,
+                protocol_config=config.protocol_config or {},
+            ))
 
         logger.info("Device created: %s (%s)", config.id, config.name)
         return self._get_device_info(instance)
@@ -134,6 +130,10 @@ class SimulationEngine:
             await server.remove_device(device_id)
 
         instance.stop()
+
+        if self._event_bus:
+            await self._event_bus.publish_safe(DeviceRemovedEvent(device_id=device_id))
+
         logger.info("Device removed: %s", device_id)
 
     async def update_device(self, device_id: str, config: DeviceConfig) -> DeviceInfo:
@@ -161,6 +161,10 @@ class SimulationEngine:
                 await server.create_device(instance.config)
             except Exception as e:
                 logger.warning("Failed to sync device %s to protocol server: %s", device_id, e)
+
+        if self._event_bus:
+            await self._event_bus.publish_safe(DeviceStartedEvent(device_id=device_id))
+
         logger.info("Device started: %s", device_id)
 
     async def stop_device(self, device_id: str) -> None:
@@ -176,6 +180,10 @@ class SimulationEngine:
                 await server.remove_device(device_id)
             except Exception as e:
                 logger.warning("Failed to remove device %s from protocol server: %s", device_id, e)
+
+        if self._event_bus:
+            await self._event_bus.publish_safe(DeviceStoppedEvent(device_id=device_id))
+
         logger.info("Device stopped: %s", device_id)
 
     def get_device(self, device_id: str) -> DeviceInfo:

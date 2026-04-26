@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from protoforge.api.v1.router import router
 from protoforge.core.engine import SimulationEngine
+from protoforge.core.event_bus import EventBus
+from protoforge.core.integration.manager import IntegrationManager
 from protoforge.core.log_bus import LogBus
 from protoforge.core.template import TemplateManager
 from protoforge.db.session import Database
@@ -32,6 +34,8 @@ _engine: SimulationEngine | None = None
 _template_manager: TemplateManager | None = None
 _database: Database | None = None
 _log_bus: LogBus | None = None
+_event_bus: EventBus | None = None
+_integration_manager: IntegrationManager | None = None
 
 
 def get_engine() -> SimulationEngine:
@@ -62,9 +66,23 @@ def get_log_bus() -> LogBus:
     return _log_bus
 
 
+def get_event_bus() -> EventBus:
+    global _event_bus
+    if _event_bus is None:
+        raise RuntimeError("Event bus not initialized")
+    return _event_bus
+
+
+def get_integration_manager() -> IntegrationManager:
+    global _integration_manager
+    if _integration_manager is None:
+        raise RuntimeError("Integration manager not initialized")
+    return _integration_manager
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _engine, _template_manager, _database, _log_bus
+    global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager
 
     from protoforge.config import get_settings
     settings = get_settings()
@@ -74,13 +92,15 @@ async def lifespan(app: FastAPI):
 
     _log_bus = LogBus()
 
+    _event_bus = EventBus()
+
     _template_manager = TemplateManager()
     _template_manager.load_builtin_templates()
 
     _database = Database()
     await _database.connect()
 
-    _engine = SimulationEngine()
+    _engine = SimulationEngine(event_bus=_event_bus)
     _engine.register_protocol(ModbusTcpServer())
     _engine.register_protocol(ModbusRtuServer())
     _engine.register_protocol(OpcUaServer())
@@ -98,6 +118,15 @@ async def lifespan(app: FastAPI):
     _engine.register_protocol(ToledoServer())
     _engine.setup_debug_callbacks(_log_bus)
     await _engine.start()
+
+    _integration_manager = IntegrationManager(event_bus=_event_bus)
+    import os
+    integration_url = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_URL", "")
+    integration_user = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_USERNAME", "admin")
+    integration_pass = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_PASSWORD", "")
+    if integration_url:
+        _integration_manager.configure(integration_url, integration_user, integration_pass)
+    await _integration_manager.start()
 
     restore_errors = []
 
@@ -182,6 +211,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    try:
+        await _integration_manager.stop()
+    except Exception as e:
+        logger.warning("Error stopping integration manager: %s", e)
     try:
         from protoforge.core.webhook import webhook_manager
         await webhook_manager.stop()
