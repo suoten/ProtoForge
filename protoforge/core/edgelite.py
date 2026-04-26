@@ -3,38 +3,32 @@ from typing import Any, Optional
 
 import httpx
 
+from protoforge.core.integration.protocol import (
+    PROTOCOL_MAP_BASE,
+    DATA_TYPE_MAP,
+    DATA_TYPE_MAP_FALLBACK,
+    ACCESS_MODE_MAP,
+    ProtocolMapper,
+    DataTypeMapper,
+    ProtocolMappingResult,
+    DataTypeMappingResult,
+)
+
 logger = logging.getLogger(__name__)
 
 PROTOCOL_MAP: dict[str, str] = {
-    "modbus_tcp": "modbus_tcp",
-    "modbus_rtu": "modbus_rtu",
-    "opcua": "opcua",
-    "mqtt": "mqtt",
-    "http": "http",
-    "s7": "s7",
-    "mc": "mc",
-    "fins": "fins",
-    "ab": "allen_bradley",
-    "bacnet": "bacnet",
-    "fanuc": "fanuc",
-    "mtconnect": "mtconnect",
-    "toledo": "toledo",
-    "opcda": "opc_da",
+    k: v for k, v in PROTOCOL_MAP_BASE.items() if v is not None
 }
 
-DATA_TYPE_MAP: dict[str, str] = {
+DATA_TYPE_MAP_LEGACY: dict[str, str] = {
     "bool": "bool",
     "int16": "int16",
     "int32": "int32",
     "uint16": "uint16",
     "uint32": "uint32",
     "float32": "float32",
-    "float64": "float32",
+    "float64": "float64",
     "string": "string",
-}
-
-ACCESS_MODE_MAP: dict[str, str] = {
-    "r": "r", "w": "w", "rw": "rw", "ro": "r", "wo": "w",
 }
 
 EDGELITE_PUSH_FIELDS = [
@@ -46,51 +40,92 @@ EDGELITE_PUSH_FIELDS = [
      "description": "EdgeLite网关登录密码"},
 ]
 
+_DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
+    "modbus_tcp": {"host", "port", "slave_id", "timeout"},
+    "modbus_rtu": {"serial_port", "baudrate", "slave_id", "parity", "stop_bits", "timeout"},
+    "opcua": {"endpoint", "security_mode", "timeout"},
+    "mqtt": {"broker", "port", "timeout"},
+    "http": {"url", "method", "timeout"},
+    "s7": {"host", "port", "rack", "slot", "timeout"},
+    "mc": {"host", "port", "timeout"},
+    "fins": {"host", "port", "timeout"},
+    "ab": {"host", "port", "timeout"},
+    "bacnet": {"host", "port", "device_id", "timeout"},
+    "fanuc": {"host", "port", "timeout"},
+    "mtconnect": {"url", "timeout"},
+    "toledo": {"host", "port", "timeout"},
+    "opcda": {"prog_id", "timeout"},
+}
+
 
 def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "127.0.0.1") -> dict[str, Any]:
     host = protocol_config.get("host", protoforge_host)
     port = protocol_config.get("port")
 
     if protocol == "modbus_tcp":
-        return {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
+        base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
     elif protocol == "modbus_rtu":
-        return {"port": protocol_config.get("serial_port", "/dev/ttyUSB0"), "baudrate": protocol_config.get("baudrate", 9600),
-                "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
+        base = {
+            "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
+            "baudrate": protocol_config.get("baudrate", 9600),
+            "slave_id": protocol_config.get("slave_id", 1),
+            "parity": protocol_config.get("parity", "N"),
+            "stop_bits": protocol_config.get("stop_bits", 1),
+            "timeout": 5.0,
+        }
     elif protocol == "opcua":
-        return {"endpoint": protocol_config.get("endpoint", f"opc.tcp://{host}:{port or 4840}"),
+        base = {"endpoint": protocol_config.get("endpoint", f"opc.tcp://{host}:{port or 4840}"),
                 "security_mode": protocol_config.get("security_mode", "None"), "timeout": 5.0}
     elif protocol == "mqtt":
-        return {"broker": host, "port": port or 1883, "timeout": 5.0}
+        base = {"broker": host, "port": port or 1883, "timeout": 5.0}
     elif protocol == "http":
-        return {"url": protocol_config.get("url", f"http://{host}:{port or 8080}"), "timeout": 5.0}
+        base = {"url": protocol_config.get("url", f"http://{host}:{port or 8080}"),
+                "method": protocol_config.get("method", "GET"), "timeout": 5.0}
     elif protocol == "s7":
-        return {"host": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
+        base = {"host": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1), "timeout": 5.0}
     elif protocol == "mc":
-        return {"host": host, "port": port or 5000, "timeout": 5.0}
+        base = {"host": host, "port": port or 5000, "timeout": 5.0}
     elif protocol == "fins":
-        return {"host": host, "port": port or 9600, "timeout": 5.0}
+        base = {"host": host, "port": port or 9600, "timeout": 5.0}
     elif protocol == "ab":
-        return {"host": host, "port": port or 44818, "timeout": 5.0}
+        base = {"host": host, "port": port or 44818, "timeout": 5.0}
     elif protocol == "bacnet":
-        return {"host": host, "port": port or 47808, "timeout": 5.0}
+        base = {"host": host, "port": port or 47808,
+                "device_id": protocol_config.get("device_id", 0), "timeout": 5.0}
     elif protocol == "fanuc":
-        return {"host": host, "port": port or 8193, "timeout": 5.0}
+        base = {"host": host, "port": port or 8193, "timeout": 5.0}
     elif protocol == "mtconnect":
-        return {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
+        base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
     elif protocol == "toledo":
-        return {"host": host, "port": port or 1701, "timeout": 5.0}
+        base = {"host": host, "port": port or 1701, "timeout": 5.0}
     elif protocol == "opcda":
-        return {"prog_id": protocol_config.get("prog_id", ""), "timeout": 5.0}
-    return {"host": host, "port": port, "timeout": 5.0}
+        base = {"prog_id": protocol_config.get("prog_id", ""), "timeout": 5.0}
+    else:
+        base = {"host": host, "port": port, "timeout": 5.0}
+
+    known = _DRIVER_CONFIG_KNOWN_KEYS.get(protocol, set())
+    for k, v in protocol_config.items():
+        if k not in known and k not in base and k not in (
+            "edgelite_url", "edgelite_username", "edgelite_password", "collect_interval"
+        ):
+            base[k] = v
+
+    return base
 
 
-def _build_points(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_points(
+    points: list[dict[str, Any]],
+    data_type_mapper: DataTypeMapper | None = None,
+) -> list[dict[str, Any]]:
+    mapper = data_type_mapper or DataTypeMapper()
     result = []
     for p in points:
+        source_dt = p.get("data_type", "float32")
+        dt_result = mapper.map(source_dt)
         point_def: dict[str, Any] = {
             "name": p.get("name", ""),
-            "data_type": DATA_TYPE_MAP.get(p.get("data_type", "float32"), "float32"),
+            "data_type": dt_result.target_type,
             "unit": p.get("unit", ""),
             "address": p.get("address", "0"),
             "access_mode": ACCESS_MODE_MAP.get(p.get("access", "rw"), "rw"),
@@ -101,19 +136,30 @@ def _build_points(points: list[dict[str, Any]]) -> list[dict[str, Any]]:
             point_def["min"] = min_val
         if max_val is not None:
             point_def["max"] = max_val
+        if dt_result.warning:
+            logger.debug("Point '%s' data type mapping: %s", p.get("name", ""), dt_result.warning)
         result.append(point_def)
     return result
 
 
-def convert_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1") -> Optional[dict[str, Any]]:
+def convert_device_to_edgelite(
+    device: Any,
+    protoforge_host: str = "127.0.0.1",
+    protocol_mapper: ProtocolMapper | None = None,
+    data_type_mapper: DataTypeMapper | None = None,
+) -> Optional[dict[str, Any]]:
     protocol = getattr(device, "protocol", "") or ""
-    if protocol in ("gb28181", "video"):
+
+    p_mapper = protocol_mapper or ProtocolMapper()
+    proto_result = p_mapper.map(protocol)
+
+    if proto_result.status in ("unsupported", "unknown"):
+        return None
+    if proto_result.status != "ok":
+        logger.warning("Protocol mapping issue for %s: %s", protocol, proto_result.warning)
         return None
 
-    edgelite_protocol = PROTOCOL_MAP.get(protocol)
-    if not edgelite_protocol:
-        return None
-
+    edgelite_protocol = proto_result.edgelite_protocol
     config = getattr(device, "protocol_config", {}) or {}
     points = getattr(device, "points", []) or []
     points_data = []
@@ -126,7 +172,7 @@ def convert_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1") 
             points_data.append(p)
 
     driver_config = _build_driver_config(protocol, config, protoforge_host)
-    edgelite_points = _build_points(points_data)
+    edgelite_points = _build_points(points_data, data_type_mapper)
 
     return {
         "device_id": getattr(device, "id", ""),

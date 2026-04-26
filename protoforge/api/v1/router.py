@@ -14,6 +14,9 @@ from protoforge.models.template import TemplateDetail, TemplateInfo
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
 
+from protoforge.api.v1.integration import router as _integration_router
+router.include_router(_integration_router)
+
 
 def _get_engine():
     from protoforge.main import get_engine
