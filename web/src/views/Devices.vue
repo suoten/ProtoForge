@@ -24,6 +24,10 @@
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
             全部停止
           </n-button>
+          <n-button v-if="selectedIds.length > 0" type="info" @click="batchPushToEdgelite" :loading="pushLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z"/></svg></template>
+            推送到EdgeLite({{ selectedIds.length }})
+          </n-button>
           <n-button type="primary" @click="openQuickCreate">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></template>
             快速创建
@@ -222,6 +226,7 @@ const dialog = useDialog()
 const devices = ref([])
 const selectedIds = ref([])
 const batchLoading = ref(false)
+const pushLoading = ref(false)
 const protocols = ref([])
 const templates = ref([])
 const filterProtocol = ref(null)
@@ -436,6 +441,25 @@ async function stopAllDevices() {
   batchLoading.value = false
   message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
   loadData()
+}
+
+async function batchPushToEdgelite() {
+  pushLoading.value = true
+  let ok = 0, fail = 0, skip = 0
+  for (const id of selectedIds.value) {
+    try {
+      const res = await api.pushToEdgelite(id)
+      if (res.skipped) { skip++ }
+      else { ok++ }
+    } catch { fail++ }
+  }
+  pushLoading.value = false
+  selectedIds.value = []
+  const parts = []
+  if (ok) parts.push(`${ok} 个推送成功`)
+  if (skip) parts.push(`${skip} 个未配置EdgeLite`)
+  if (fail) parts.push(`${fail} 个失败`)
+  message.success(parts.join('，') || '无操作')
 }
 
 async function createDevice() {
