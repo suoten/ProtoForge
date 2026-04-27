@@ -600,11 +600,16 @@ async function createDevice() {
 }
 
 async function openEditDevice(row) {
-  editDevice.value = { id: row.id, name: row.name, protocol: row.protocol, protocol_config: row.protocol_config || {}, points: row.points || [] }
-  const { fields, defaults } = await loadDeviceConfig(row.protocol)
-  editConfigFields.value = fields
-  editProtocolConfig.value = { ...defaults, ...(row.protocol_config || {}) }
-  showEditModal.value = true
+  try {
+    const config = await api.getDeviceConfig(row.id)
+    editDevice.value = { id: config.id, name: config.name, protocol: config.protocol, protocol_config: config.protocol_config || {}, points: config.points || [] }
+    const { fields, defaults } = await loadDeviceConfig(row.protocol)
+    editConfigFields.value = fields
+    editProtocolConfig.value = { ...defaults, ...(config.protocol_config || {}) }
+    showEditModal.value = true
+  } catch (e) {
+    message.error('获取设备配置失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 async function saveEditDevice() {
