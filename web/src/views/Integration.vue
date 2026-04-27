@@ -118,7 +118,7 @@
             <div :style="{
               width:'36px',height:'36px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
               fontSize:'15px',fontWeight:600,
-              background: getStepStatus(idx) === 'success' ? '#10b981' : getStepStatus(idx) === 'error' ? '#ef4444' : getStepStatus(idx) === 'running' ? '#f59e0b' : '#64748b',
+              background: getStepStatus(idx) === 'success' ? '#10b981' : getStepStatus(idx) === 'error' ? '#ef4444' : '#64748b',
               color:'#fff'
             }">
               <svg v-if="getStepStatus(idx) === 'success'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
@@ -148,6 +148,35 @@
             </n-descriptions-item>
           </n-descriptions>
         </n-card>
+
+        <n-alert v-if="pipelineResult.skipped" type="warning" :bordered="false">
+          未配置 EdgeLite 网关地址。请编辑设备，在协议配置中填写 EdgeLite网关地址、用户名和密码。
+        </n-alert>
+        <n-alert v-else-if="pipelineResult.ok" type="success" :bordered="false">
+          联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
+        </n-alert>
+        <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
+          <div style="font-weight:600;margin-bottom:4px">认证失败</div>
+          <div>{{ pipelineResult.steps.auth.error }}</div>
+          <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查 EdgeLite 网关地址是否正确、用户名密码是否正确</div>
+        </n-alert>
+        <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
+          <div style="font-weight:600;margin-bottom:4px">设备未在 EdgeLite 注册</div>
+          <div>需要先将设备配置推送到 EdgeLite，EdgeLite 才能连接 ProtoForge 采集数据</div>
+          <n-button type="primary" size="small" style="margin-top:8px" @click="pushFromPipeline" :loading="pipelinePushLoading">
+            推送注册到 EdgeLite
+          </n-button>
+        </n-alert>
+        <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
+          <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
+          <div>{{ pipelineResult.steps.connect.error }}</div>
+          <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查：1) ProtoForge 协议服务是否在运行 2) ProtoForge 的 IP 地址 EdgeLite 是否可达 3) 端口是否正确</div>
+        </n-alert>
+        <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
+          <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
+          <div>{{ pipelineResult.steps.collect.error }}</div>
+          <div style="margin-top:4px;font-size:12px;color:#94a3b8">设备已注册且在线，但 EdgeLite 采集数据失败，请检查测点配置和采集间隔</div>
+        </n-alert>
       </n-space>
       <n-space v-else-if="pipelineLoading" vertical align="center" style="padding:40px 0">
         <n-spin size="large" />
@@ -185,6 +214,7 @@ const batchPipelineLoading = ref(false)
 const showPipelineModal = ref(false)
 const pipelineResult = ref(null)
 const pipelineLoading = ref(false)
+const pipelinePushLoading = ref(false)
 const pipelineDeviceId = ref('')
 
 const allDevices = ref([])
@@ -359,6 +389,23 @@ async function runPipeline() {
 }
 
 function rerunPipeline() { runPipeline() }
+
+async function pushFromPipeline() {
+  pipelinePushLoading.value = true
+  try {
+    const res = await api.pushToEdgelite(pipelineDeviceId.value)
+    if (res.skipped) {
+      message.warning('该设备未配置 EdgeLite 地址')
+    } else if (res.ok) {
+      message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
+      await runPipeline()
+    } else {
+      message.error('推送失败: ' + (res.error || '未知错误'))
+    }
+  } catch (e) {
+    message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+  } finally { pipelinePushLoading.value = false }
+}
 
 function getStepStatus(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return 'pending'

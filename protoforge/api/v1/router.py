@@ -296,7 +296,7 @@ async def delete_device(device_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/devices/{device_id}", response_model=DeviceInfo)
+@router.put("/devices/{device_id}")
 async def update_device(device_id: str, config: DeviceConfig):
     engine = _get_engine()
     db = _get_database()
@@ -309,7 +309,17 @@ async def update_device(device_id: str, config: DeviceConfig):
             logger.warning("Failed to update device in DB: %s", db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated",
                      f"Device {config.name} updated")
-        return result
+        response = result.model_dump() if hasattr(result, 'model_dump') else {"id": device_id, "name": config.name}
+        proto_config = config.protocol_config or {}
+        edgelite_url = proto_config.get("edgelite_url", "")
+        if edgelite_url:
+            try:
+                from protoforge.core.edgelite import push_device_to_edgelite
+                push_result = await push_device_to_edgelite(config)
+                response["edgelite_push"] = push_result
+            except Exception as e:
+                response["edgelite_push"] = {"ok": False, "error": str(e)}
+        return response
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
