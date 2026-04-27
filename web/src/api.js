@@ -102,6 +102,8 @@ export default {
 
   importEdgelite: (config) => d(api.post('/integration/edgelite', config)),
   importPygbsentry: (config) => d(api.post('/integration/pygbsentry', config)),
+  pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
+  testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
   listForwardTargets: () => d(api.get('/forward/targets')),
   addForwardTarget: (config) => d(api.post('/forward/targets', config)),
