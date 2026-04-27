@@ -1087,8 +1087,41 @@ async def change_password(data: dict[str, Any]):
     username = data.get("username", "")
     old_password = data.get("old_password", "")
     new_password = data.get("new_password", "")
-    if not await user_manager.change_password(username, old_password, new_password):
-        raise HTTPException(status_code=400, detail="Invalid old password")
+    ok, msg = await user_manager.change_password(username, old_password, new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok"}
+
+
+@router.post("/auth/admin/reset-password")
+async def admin_reset_password(data: dict[str, Any]):
+    from protoforge.core.auth import user_manager
+    username = data.get("username", "")
+    new_password = data.get("new_password", "")
+    if not username or not new_password:
+        raise HTTPException(status_code=400, detail="username and new_password required")
+    ok, msg = await user_manager.admin_reset_password(username, new_password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"status": "ok"}
+
+
+@router.put("/auth/users/{username}/role")
+async def update_user_role(username: str, data: dict[str, Any]):
+    from protoforge.core.auth import user_manager
+    new_role = data.get("role", "")
+    if not new_role:
+        raise HTTPException(status_code=400, detail="role is required")
+    if not await user_manager.update_user_role(username, new_role):
+        raise HTTPException(status_code=400, detail="Failed to update role")
+    return {"status": "ok"}
+
+
+@router.post("/auth/admin/unlock/{username}")
+async def admin_unlock_user(username: str):
+    from protoforge.core.auth import user_manager
+    if not await user_manager.reset_login_attempts(username):
+        raise HTTPException(status_code=404, detail="User not found")
     return {"status": "ok"}
 
 
