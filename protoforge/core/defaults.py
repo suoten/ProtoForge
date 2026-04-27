@@ -89,6 +89,18 @@ PROTOCOL_DEFAULTS = {
         "description": "梅特勒-托利多称重通信协议 — IND/JAG/XPR系列称重仪表标准协议，支持SI/S/SIR命令集，稳定/毛重/净重/去皮",
         "icon": "⚖️",
     },
+    "profinet": {
+        "host": "0.0.0.0", "port": 34964,
+        "display_name": "PROFINET IO",
+        "description": "PROFINET IO实时工业以太网协议 — PI组织标准，基于以太网的实时通信，支持DCP发现/配置、RT/IRT循环数据交换、GSD设备描述",
+        "icon": "🏭",
+    },
+    "ethercat": {
+        "host": "0.0.0.0", "port": 34980,
+        "display_name": "EtherCAT",
+        "description": "EtherCAT实时工业以太网协议 — 倍福(Beckhoff)开发，基于\"飞速处理\"(On-the-fly)技术，极低延迟的分布式时钟同步，广泛用于运动控制",
+        "icon": "⚡",
+    },
 }
 
 PROTOCOL_DEVICE_CONFIG = {
@@ -165,6 +177,14 @@ PROTOCOL_DEVICE_CONFIG = {
         {"key": "scale_addr", "label": "秤通讯地址", "type": "string", "default": "1", "description": "称重仪表通讯地址(SI/S命令中使用的地址编号)"},
         {"key": "unit", "label": "称重单位", "type": "select", "default": "kg", "options": ["kg", "g", "mg", "lb", "oz", "t", "ct"], "description": "称重单位(ct=克拉)"},
         {"key": "decimal_places", "label": "小数位数", "type": "number", "default": 3, "min": 0, "max": 6, "description": "称重显示小数位数"},
+    ],
+    "profinet": [
+        {"key": "device_name", "label": "设备名称(DeviceName)", "type": "string", "default": "protoforge-device", "description": "PROFINET设备名称，DCP识别和寻址使用(如: my-plc-01)"},
+        {"key": "vendor_id", "label": "厂商ID(VendorID)", "type": "number", "default": 266, "min": 0, "max": 65535, "description": "PROFINET厂商标识符(PI组织分配)"},
+        {"key": "device_id", "label": "设备ID(DeviceID)", "type": "number", "default": 256, "min": 0, "max": 65535, "description": "PROFINET设备标识符(标识设备类型)"},
+    ],
+    "ethercat": [
+        {"key": "slave_address", "label": "从站地址", "type": "number", "default": 4097, "min": 1, "max": 65535, "description": "EtherCAT从站地址(Station Address)，主站通过此地址寻址从站"},
     ],
 }
 
@@ -273,6 +293,20 @@ PROTOCOL_USAGE = {
         "mode_desc": "ProtoForge 模拟梅特勒-托利多称重仪表，你的应用通过TCP/串口发送SI/S命令读取重量数据",
         "connect_hint": "在你的称重通信程序中，连接参数填写：",
         "code_example": "# Toledo TCP 客户端示例\nimport socket\n\nsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\nsock.connect(('{host}', {port}))\n\n# SI命令: 读取稳定重量\nsock.sendall(b'SI\\r\\n')\nresponse = sock.recv(1024)\nprint(response.decode())  # 如: 'S S     12.345 kg'\n\n# S命令: 立即读取(含动态)\nsock.sendall(b'S\\r\\n')\n\n# SIR命令: 连续发送重量数据\nsock.sendall(b'SIR\\r\\n')\n\n# T命令: 去皮\nsock.sendall(b'T\\r\\n')\n\n# Z命令: 清零\nsock.sendall(b'Z\\r\\n')",
+    },
+    "profinet": {
+        "mode": "server",
+        "mode_label": "服务端模拟(IO Device)",
+        "mode_desc": "ProtoForge 模拟 PROFINET IO Device(从站)，你的 IO Controller(主站)通过DCP发现并建立连接，交换循环数据",
+        "connect_hint": "在你的 PROFINET IO Controller 配置中，添加设备并填写：",
+        "code_example": "# 使用 profinet-py 库连接 PROFINET IO Device\nfrom profinet import ProfinetIOController\n\ncontroller = ProfinetIOController('{device_name}')\ncontroller.connect('{host}', {port})\n\n# DCP 发现设备\ndevice = controller.dcp_identify('{device_name}')\nprint(f'VendorID: 0x{{device.vendor_id:04X}}')\nprint(f'DeviceID: 0x{{device.device_id:04X}}')\n\n# 读取循环输入数据\ninput_data = controller.read_cyclic_data()\nprint(f'Input: {{input_data.hex()}}')\n\n# 写入循环输出数据\ncontroller.write_cyclic_data(b'\\x01\\x00')",
+    },
+    "ethercat": {
+        "mode": "server",
+        "mode_label": "服务端模拟(Slave)",
+        "mode_desc": "ProtoForge 模拟 EtherCAT 从站(Slave)，你的 EtherCAT Master 连接后可读写PDO过程数据和SDO服务数据",
+        "connect_hint": "在你的 EtherCAT Master 程序中，配置从站参数：",
+        "code_example": "# 使用 pysoem 库连接 EtherCAT 从站\nimport pysoem\n\nmaster = pysoem.Master()\nmaster.open('{host}')\n\n# 扫描从站\nslave_count = master.config_init()\nprint(f'发现 {{slave_count}} 个从站')\n\nif slave_count > 0:\n    slave = master.slaves[0]\n    print(f'从站: {{slave.name}}, 地址: {{slave.adr}}')\n    print(f'状态: {{hex(slave.state)}}')\n\n    # 进入PRE-OP\n    master.state = pysoem.PREOP_STATE\n    master.write_state()\n\n    # 进入SAFE-OP\n    master.state = pysoem.SAFEOP_STATE\n    master.write_state()\n\n    # 进入OP，开始PDO交换\n    master.state = pysoem.OP_STATE\n    master.write_state()\n\n    # 循环读写PDO\n    master.send_processdata()\n    master.receive_processdata(5000)",
     },
 }
 

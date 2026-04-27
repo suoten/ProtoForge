@@ -27,6 +27,8 @@ from protoforge.protocols.opcda.server import OpcDaServer
 from protoforge.protocols.fanuc.server import FanucServer
 from protoforge.protocols.mtconnect.server import MtConnectServer
 from protoforge.protocols.toledo.server import ToledoServer
+from protoforge.protocols.profinet.server import ProfinetServer
+from protoforge.protocols.ethercat.server import EtherCATServer
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,8 @@ async def lifespan(app: FastAPI):
     _engine.register_protocol(FanucServer())
     _engine.register_protocol(MtConnectServer())
     _engine.register_protocol(ToledoServer())
+    _engine.register_protocol(ProfinetServer())
+    _engine.register_protocol(EtherCATServer())
     _engine.setup_debug_callbacks(_log_bus)
     await _engine.start()
 
