@@ -243,17 +243,33 @@
               :bordered="false" size="small" />
           </n-card>
 
-          <n-alert v-if="pipelineResult.ok" type="success" :bordered="false">
+          <n-alert v-if="pipelineResult.skipped" type="warning" :bordered="false">
+            未配置 EdgeLite 网关地址。请编辑设备，在协议配置中填写 EdgeLite网关地址、用户名和密码。
+          </n-alert>
+          <n-alert v-else-if="pipelineResult.ok" type="success" :bordered="false">
             联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
-            认证失败：{{ pipelineResult.steps.auth.error }}。请检查 EdgeLite 地址和账号密码。
+            <div style="font-weight:600;margin-bottom:4px">认证失败</div>
+            <div>{{ pipelineResult.steps.auth.error }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查 EdgeLite 网关地址是否正确、用户名密码是否正确</div>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
-            设备未在 EdgeLite 注册。请先点击"推送到EdgeLite"注册设备。
+            <div style="font-weight:600;margin-bottom:4px">设备未在 EdgeLite 注册</div>
+            <div>需要先将设备配置推送到 EdgeLite，EdgeLite 才能连接 ProtoForge 采集数据</div>
+            <n-button type="primary" size="small" style="margin-top:8px" @click="pushFromPipeline" :loading="pipelinePushLoading">
+              推送注册到 EdgeLite
+            </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
-            EdgeLite 无法连接 ProtoForge：{{ pipelineResult.steps.connect.error }}。请检查 ProtoForge 的 IP 和协议服务是否在运行。
+            <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
+            <div>{{ pipelineResult.steps.connect.error }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查：1) ProtoForge 协议服务是否在运行 2) ProtoForge 的 IP 地址 EdgeLite 是否可达 3) 端口是否正确</div>
+          </n-alert>
+          <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
+            <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
+            <div>{{ pipelineResult.steps.collect.error }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">设备已注册且在线，但 EdgeLite 采集数据失败，请检查测点配置和采集间隔</div>
           </n-alert>
         </n-space>
         <n-space v-else-if="pipelineLoading" vertical align="center" style="padding:40px 0">
@@ -313,6 +329,7 @@ const qcProtocol = ref('')
 const showPipelineModal = ref(false)
 const pipelineResult = ref(null)
 const pipelineLoading = ref(false)
+const pipelinePushLoading = ref(false)
 const pipelineDeviceId = ref('')
 
 const pipelineSteps = [
@@ -567,7 +584,7 @@ async function createDevice() {
 }
 
 async function openEditDevice(row) {
-  editDevice.value = { id: row.id, name: row.name, protocol: row.protocol, protocol_config: row.protocol_config || {} }
+  editDevice.value = { id: row.id, name: row.name, protocol: row.protocol, protocol_config: row.protocol_config || {}, points: row.points || [] }
   const { fields, defaults } = await loadDeviceConfig(row.protocol)
   editConfigFields.value = fields
   editProtocolConfig.value = { ...defaults, ...(row.protocol_config || {}) }
@@ -577,12 +594,24 @@ async function openEditDevice(row) {
 async function saveEditDevice() {
   saving.value = true
   try {
-    await api.updateDevice(editDevice.value.id, {
+    const res = await api.updateDevice(editDevice.value.id, {
       id: editDevice.value.id, name: editDevice.value.name,
-      protocol: editDevice.value.protocol, points: [],
+      protocol: editDevice.value.protocol, points: editDevice.value.points || [],
       protocol_config: editProtocolConfig.value,
     })
-    showEditModal.value = false; message.success('设备更新成功'); await loadData()
+    showEditModal.value = false
+    message.success('设备更新成功')
+    if (res.edgelite_push) {
+      const push = res.edgelite_push
+      if (push.ok) {
+        message.success(`EdgeLite: 设备已${push.action === 'created' ? '注册' : '更新'}`)
+      } else if (push.skipped) {
+        message.info('EdgeLite: 未配置网关地址，跳过推送')
+      } else {
+        message.warning(`EdgeLite 推送失败: ${push.error || push.reason || '未知错误'}`)
+      }
+    }
+    await loadData()
   } catch (e) { message.error('更新失败: ' + (e.response?.data?.detail || e.message)) }
   finally { saving.value = false }
 }
@@ -643,6 +672,23 @@ async function runPipelineVerify() {
 }
 
 function rerunPipelineVerify() { runPipelineVerify() }
+
+async function pushFromPipeline() {
+  pipelinePushLoading.value = true
+  try {
+    const res = await api.pushToEdgelite(pipelineDeviceId.value)
+    if (res.skipped) {
+      message.warning('该设备未配置 EdgeLite 地址')
+    } else if (res.ok) {
+      message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
+      await runPipelineVerify()
+    } else {
+      message.error('推送失败: ' + (res.error || '未知错误'))
+    }
+  } catch (e) {
+    message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+  } finally { pipelinePushLoading.value = false }
+}
 
 function getPipelineStepStatus(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return 'pending'
