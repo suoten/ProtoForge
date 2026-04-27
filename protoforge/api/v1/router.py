@@ -866,22 +866,21 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None):
             cases.append(TestCase(
                 id=f"qt-{dev_id}", name=f"设备测试: {dev.name}",
                 tags=["quick-test", "device"], steps=steps,
-                teardown_steps=[TestStep(name="清理", action="delete_device", params={"device_id": f"qt-{dev_id}" })],
             ))
 
     if scope == "all" or scope == "scenario":
         for sc_id, sc_config in engine._scenarios.items():
             if target_id and sc_id != target_id:
                 continue
+            sc_steps = [
+                TestStep(name=f"验证场景 {sc_config.name} 状态", action="http_request",
+                         params={"method": "GET", "url": f"/api/v1/scenarios/{sc_id}"},
+                         assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="场景应可访问")]),
+            ]
             cases.append(TestCase(
                 id=f"qt-scene-{sc_id}", name=f"场景测试: {sc_config.name}",
                 tags=["quick-test", "scenario"],
-                steps=[
-                    TestStep(name=f"启动场景 {sc_config.name}", action="start_scenario", params={"scenario_id": sc_id},
-                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="场景应启动成功")]),
-                    TestStep(name="等待2秒", action="wait", params={"seconds": 2}),
-                    TestStep(name=f"停止场景 {sc_config.name}", action="stop_scenario", params={"scenario_id": sc_id}),
-                ],
+                steps=sc_steps,
             ))
 
     if scope == "all" or scope == "protocol":
