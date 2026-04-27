@@ -19,6 +19,8 @@ PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "mtconnect": "mtconnect",
     "toledo": "toledo",
     "opcda": "opc_da",
+    "profinet": "profinet",
+    "ethercat": "ethercat",
     "gb28181": None,
     "video": None,
 }

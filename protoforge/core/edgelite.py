@@ -55,6 +55,8 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "mtconnect": {"url", "timeout"},
     "toledo": {"host", "port", "timeout"},
     "opcda": {"prog_id", "timeout"},
+    "profinet": {"host", "port", "device_name", "vendor_id", "device_id", "timeout"},
+    "ethercat": {"host", "port", "slave_address", "timeout"},
 }
 
 
@@ -101,6 +103,14 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         base = {"host": host, "port": port or 1701, "timeout": 5.0}
     elif protocol == "opcda":
         base = {"prog_id": protocol_config.get("prog_id", ""), "timeout": 5.0}
+    elif protocol == "profinet":
+        base = {"host": host, "port": port or 34964,
+                "device_name": protocol_config.get("device_name", "protoforge-device"),
+                "vendor_id": protocol_config.get("vendor_id", 266),
+                "device_id": protocol_config.get("device_id", 256), "timeout": 5.0}
+    elif protocol == "ethercat":
+        base = {"host": host, "port": port or 34980,
+                "slave_address": protocol_config.get("slave_address", 4097), "timeout": 5.0}
     else:
         base = {"host": host, "port": port, "timeout": 5.0}
 
