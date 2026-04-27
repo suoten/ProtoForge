@@ -28,6 +28,10 @@
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z"/></svg></template>
             推送到EdgeLite({{ selectedIds.length }})
           </n-button>
+          <n-button v-if="selectedIds.length > 0" @click="batchVerifyPipeline" :loading="pipelineLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></template>
+            验证链路({{ selectedIds.length }})
+          </n-button>
           <n-button type="primary" @click="openQuickCreate">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></template>
             快速创建
@@ -209,6 +213,58 @@
           <n-button type="primary" @click="copyGuide">复制代码</n-button>
         </template>
       </n-modal>
+
+      <n-modal v-model:show="showPipelineModal" preset="card" title="EdgeLite 联调链路验证" style="width:780px">
+        <n-space vertical size="large" v-if="pipelineResult">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0">
+            <div v-for="(step, idx) in pipelineSteps" :key="idx" style="display:flex;align-items:center;gap:4px">
+              <div :style="{
+                width:'36px',height:'36px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+                fontSize:'15px',fontWeight:600,
+                background: getPipelineStepStatus(idx) === 'success' ? '#10b981' : getPipelineStepStatus(idx) === 'error' ? '#ef4444' : '#64748b',
+                color:'#fff'
+              }">
+                <svg v-if="getPipelineStepStatus(idx) === 'success'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <svg v-else-if="getPipelineStepStatus(idx) === 'error'" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <span v-else>{{ idx + 1 }}</span>
+              </div>
+              <div>
+                <div style="font-size:13px;font-weight:500">{{ step.label }}</div>
+                <div style="font-size:11px;color:#94a3b8">{{ getPipelineStepDesc(idx) }}</div>
+              </div>
+              <svg v-if="idx < pipelineSteps.length - 1" viewBox="0 0 24 24" width="20" height="20"
+                fill="none" stroke="#94a3b8" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </div>
+          </div>
+
+          <n-card v-if="pipelineResult.data_comparison && pipelineResult.data_comparison.length > 0"
+            size="small" title="数据对比 (ProtoForge vs EdgeLite)">
+            <n-data-table :columns="pipelineComparisonColumns" :data="pipelineResult.data_comparison"
+              :bordered="false" size="small" />
+          </n-card>
+
+          <n-alert v-if="pipelineResult.ok" type="success" :bordered="false">
+            联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
+          </n-alert>
+          <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
+            认证失败：{{ pipelineResult.steps.auth.error }}。请检查 EdgeLite 地址和账号密码。
+          </n-alert>
+          <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
+            设备未在 EdgeLite 注册。请先点击"推送到EdgeLite"注册设备。
+          </n-alert>
+          <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
+            EdgeLite 无法连接 ProtoForge：{{ pipelineResult.steps.connect.error }}。请检查 ProtoForge 的 IP 和协议服务是否在运行。
+          </n-alert>
+        </n-space>
+        <n-space v-else-if="pipelineLoading" vertical align="center" style="padding:40px 0">
+          <n-spin size="large" />
+          <n-text depth="3">正在验证联调链路...</n-text>
+        </n-space>
+        <template #action>
+          <n-button @click="showPipelineModal = false">关闭</n-button>
+          <n-button type="primary" @click="rerunPipelineVerify" :loading="pipelineLoading">重新验证</n-button>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
@@ -216,7 +272,7 @@
 <script setup>
 import { ref, computed, onMounted, h, watch } from 'vue'
 import { NSpace, NSelect, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
-  NSteps, NStep, NText, NAlert, useMessage, useDialog } from 'naive-ui'
+  NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
 
@@ -253,6 +309,34 @@ const qcLoading = ref(false)
 const qcProtocolConfig = ref({})
 const qcDeviceConfigFields = ref([])
 const qcProtocol = ref('')
+
+const showPipelineModal = ref(false)
+const pipelineResult = ref(null)
+const pipelineLoading = ref(false)
+const pipelineDeviceId = ref('')
+
+const pipelineSteps = [
+  { label: '认证', key: 'auth' },
+  { label: '注册', key: 'register' },
+  { label: '连接', key: 'connect' },
+  { label: '采集', key: 'collect' },
+  { label: '验证', key: 'verify' },
+]
+
+const pipelineComparisonColumns = [
+  { title: '测点', key: 'point', width: 120 },
+  { title: 'ProtoForge值', key: 'protoforge_value', width: 140 },
+  { title: 'EdgeLite值', key: 'edgelite_value', width: 140 },
+  {
+    title: '匹配', key: 'match', width: 80,
+    render: (row) => {
+      if (row.match === null || row.match === undefined) return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '无数据')
+      return row.match
+        ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '匹配')
+        : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '不一致')
+    }
+  },
+]
 
 const protocolLabels = {
   modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
@@ -330,6 +414,7 @@ const columns = [
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id) }, () => '测点'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => showGuide(row.id) }, () => '指南'),
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openPipelineVerify(row.id) }, () => '链路'),
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => '编辑'),
       row.status === 'online' || row.status === 'running'
         ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => toggleDevice(row.id, 'stop') }, () => '停止')
@@ -535,6 +620,85 @@ function copyGuide() {
   if (!guideData.value?.code_example) return
   navigator.clipboard.writeText(guideData.value.code_example)
   message.success('代码已复制到剪贴板')
+}
+
+async function openPipelineVerify(deviceId) {
+  pipelineDeviceId.value = deviceId
+  pipelineResult.value = null
+  showPipelineModal.value = true
+  await runPipelineVerify()
+}
+
+async function runPipelineVerify() {
+  pipelineLoading.value = true
+  pipelineResult.value = null
+  try {
+    pipelineResult.value = await api.verifyEdgelitePipeline(pipelineDeviceId.value)
+  } catch (e) {
+    pipelineResult.value = {
+      ok: false,
+      steps: { auth: { ok: false, error: e.response?.data?.detail || e.message } }
+    }
+  } finally { pipelineLoading.value = false }
+}
+
+function rerunPipelineVerify() { runPipelineVerify() }
+
+function getPipelineStepStatus(idx) {
+  if (!pipelineResult.value || !pipelineResult.value.steps) return 'pending'
+  const key = pipelineSteps[idx].key
+  if (key === 'verify') {
+    const collectOk = pipelineResult.value.steps.collect?.ok
+    const hasComparison = pipelineResult.value.data_comparison?.length > 0
+    if (collectOk && hasComparison) return 'success'
+    return 'pending'
+  }
+  const step = pipelineResult.value.steps[key]
+  if (!step) return 'pending'
+  return step.ok ? 'success' : 'error'
+}
+
+function getPipelineStepDesc(idx) {
+  if (!pipelineResult.value || !pipelineResult.value.steps) return ''
+  const key = pipelineSteps[idx].key
+  if (key === 'verify') {
+    const comp = pipelineResult.value.data_comparison
+    if (comp && comp.length > 0) {
+      const matched = comp.filter(c => c.match).length
+      return `${matched}/${comp.length} 测点匹配`
+    }
+    return '等待采集数据'
+  }
+  const step = pipelineResult.value.steps[key]
+  if (!step) return '未执行'
+  if (step.ok) {
+    if (key === 'auth') return '认证成功'
+    if (key === 'register') return `已注册 (状态: ${step.status || 'ok'})`
+    if (key === 'connect') return `已连接 (状态: ${step.status})`
+    if (key === 'collect') return step.has_real_data ? '已采集到数据' : '暂无实际数据'
+    return '成功'
+  }
+  return step.error || '失败'
+}
+
+async function batchVerifyPipeline() {
+  pipelineLoading.value = true
+  let ok = 0, fail = 0, skip = 0
+  for (const id of selectedIds.value) {
+    try {
+      const res = await api.verifyEdgelitePipeline(id)
+      if (res.skipped) { skip++ }
+      else if (res.ok) { ok++ }
+      else { fail++ }
+    } catch { fail++ }
+  }
+  pipelineLoading.value = false
+  selectedIds.value = []
+  const parts = []
+  if (ok) parts.push(`${ok} 个链路正常`)
+  if (skip) parts.push(`${skip} 个未配置EdgeLite`)
+  if (fail) parts.push(`${fail} 个链路异常`)
+  message.success(parts.join('，') || '无操作')
 }
 
 onMounted(loadData)

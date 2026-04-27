@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import os
 from typing import Any, Optional
 
 import httpx
@@ -20,17 +22,6 @@ PROTOCOL_MAP: dict[str, str] = {
     k: v for k, v in PROTOCOL_MAP_BASE.items() if v is not None
 }
 
-DATA_TYPE_MAP_LEGACY: dict[str, str] = {
-    "bool": "bool",
-    "int16": "int16",
-    "int32": "int32",
-    "uint16": "uint16",
-    "uint32": "uint32",
-    "float32": "float32",
-    "float64": "float64",
-    "string": "string",
-}
-
 EDGELITE_PUSH_FIELDS = [
     {"key": "edgelite_url", "label": "EdgeLite网关地址", "type": "string", "default": "",
      "description": "填写后设备创建时自动注册到EdgeLite网关，如 http://192.168.1.200:8100"},
@@ -38,6 +29,8 @@ EDGELITE_PUSH_FIELDS = [
      "description": "EdgeLite网关登录用户名"},
     {"key": "edgelite_password", "label": "EdgeLite密码", "type": "string", "default": "",
      "description": "EdgeLite网关登录密码"},
+    {"key": "collect_interval", "label": "采集间隔(秒)", "type": "number", "default": 5, "min": 1, "max": 3600,
+     "description": "EdgeLite采集此设备数据的间隔秒数"},
 ]
 
 _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
@@ -60,8 +53,24 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
 }
 
 
-def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "127.0.0.1") -> dict[str, Any]:
-    host = protocol_config.get("host", protoforge_host)
+def get_protoforge_host() -> str:
+    host = os.environ.get("PROTOFORGE_HOST", "0.0.0.0")
+    if host in ("0.0.0.0", ""):
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            host = s.getsockname()[0]
+            s.close()
+        except Exception:
+            host = "127.0.0.1"
+    return host
+
+
+def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "") -> dict[str, Any]:
+    if not protoforge_host:
+        protoforge_host = get_protoforge_host()
+    host = protoforge_host
     port = protocol_config.get("port")
 
     if protocol == "modbus_tcp":
@@ -137,7 +146,7 @@ def _build_points(
             "name": p.get("name", ""),
             "data_type": dt_result.target_type,
             "unit": p.get("unit", ""),
-            "address": p.get("address", "0"),
+            "address": str(p.get("address", "0")),
             "access_mode": ACCESS_MODE_MAP.get(p.get("access", "rw"), "rw"),
         }
         min_val = p.get("min_value") or p.get("min")
@@ -146,15 +155,13 @@ def _build_points(
             point_def["min"] = min_val
         if max_val is not None:
             point_def["max"] = max_val
-        if dt_result.warning:
-            logger.debug("Point '%s' data type mapping: %s", p.get("name", ""), dt_result.warning)
         result.append(point_def)
     return result
 
 
 def convert_device_to_edgelite(
     device: Any,
-    protoforge_host: str = "127.0.0.1",
+    protoforge_host: str = "",
     protocol_mapper: ProtocolMapper | None = None,
     data_type_mapper: DataTypeMapper | None = None,
 ) -> Optional[dict[str, Any]]:
@@ -202,7 +209,21 @@ def get_edgelite_config_from_device(device: Any) -> dict[str, str]:
     return {"url": url, "username": username, "password": password}
 
 
-async def push_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1") -> dict[str, Any]:
+async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, password: str) -> str:
+    login_resp = await client.post(
+        f"{url.rstrip('/')}/api/v1/auth/login",
+        json={"username": username, "password": password},
+    )
+    if login_resp.status_code != 200:
+        raise Exception(f"EdgeLite login failed: HTTP {login_resp.status_code}")
+    data = login_resp.json()
+    token = data.get("data", {}).get("access_token", "") or data.get("access_token", "")
+    if not token:
+        raise Exception("EdgeLite login succeeded but no token returned")
+    return token
+
+
+async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured for this device"}
@@ -212,17 +233,10 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1
         return {"ok": False, "skipped": True, "reason": "Protocol not supported by EdgeLite"}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        token = ""
         try:
-            login_resp = await client.post(
-                f"{el_config['url'].rstrip('/')}/api/v1/auth/login",
-                json={"username": el_config["username"], "password": el_config["password"]},
-            )
-            if login_resp.status_code != 200:
-                return {"ok": False, "error": f"EdgeLite login failed: {login_resp.status_code}"}
-            token = login_resp.json().get("access_token", "")
+            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except Exception as e:
-            return {"ok": False, "error": f"EdgeLite connection failed: {e}"}
+            return {"ok": False, "error": str(e)}
 
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -231,7 +245,8 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1
             json=payload, headers=headers,
         )
         if create_resp.status_code in (200, 201):
-            return {"ok": True, "device": create_resp.json()}
+            logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
+            return {"ok": True, "action": "created", "device_id": payload["device_id"]}
 
         if create_resp.status_code == 409:
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
@@ -240,10 +255,152 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "127.0.0.1
                 json=update_payload, headers=headers,
             )
             if update_resp.status_code == 200:
-                return {"ok": True, "updated": True, "device": update_resp.json()}
-            return {"ok": False, "error": f"Update failed: {update_resp.status_code}"}
+                logger.info("Device %s updated on EdgeLite", payload["device_id"])
+                return {"ok": True, "action": "updated", "device_id": payload["device_id"]}
+            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}"}
 
-        return {"ok": False, "error": f"Create failed: {create_resp.status_code} {create_resp.text}"}
+        return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code} {create_resp.text[:200]}"}
+
+
+async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
+    el_config = get_edgelite_config_from_device(device)
+    if not el_config["url"]:
+        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
+
+    device_id = getattr(device, "id", "")
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        headers = {"Authorization": f"Bearer {token}"}
+        resp = await client.delete(
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            headers=headers,
+        )
+        if resp.status_code in (200, 204, 404):
+            return {"ok": True, "action": "deleted", "device_id": device_id}
+        return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}"}
+
+
+async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
+    el_config = get_edgelite_config_from_device(device)
+    if not el_config["url"]:
+        return {"ok": False, "skipped": True}
+
+    device_id = getattr(device, "id", "")
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        headers = {"Authorization": f"Bearer {token}"}
+        resp = await client.get(
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data", resp.json())
+            return {
+                "ok": True,
+                "device_id": device_id,
+                "status": data.get("status", "unknown"),
+                "name": data.get("name", ""),
+                "protocol": data.get("protocol", ""),
+                "collect_interval": data.get("collect_interval", 0),
+            }
+        if resp.status_code == 404:
+            return {"ok": True, "device_id": device_id, "status": "not_registered"}
+        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+
+
+async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
+    el_config = get_edgelite_config_from_device(device)
+    if not el_config["url"]:
+        return {"ok": False, "skipped": True}
+
+    device_id = getattr(device, "id", "")
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        try:
+            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+        headers = {"Authorization": f"Bearer {token}"}
+        resp = await client.get(
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}/points",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            data = resp.json().get("data", resp.json())
+            return {"ok": True, "device_id": device_id, "points": data}
+        if resp.status_code == 404:
+            return {"ok": False, "error": "Device not found on EdgeLite"}
+        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+
+
+async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
+    el_config = get_edgelite_config_from_device(device)
+    if not el_config["url"]:
+        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
+
+    device_id = getattr(device, "id", "")
+    result: dict[str, Any] = {"device_id": device_id, "steps": {}}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except Exception as e:
+            result["steps"]["auth"] = {"ok": False, "error": str(e)}
+            result["ok"] = False
+            return result
+        result["steps"]["auth"] = {"ok": True}
+        headers = {"Authorization": f"Bearer {token}"}
+
+        dev_resp = await client.get(
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            headers=headers,
+        )
+        if dev_resp.status_code == 404:
+            result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
+            result["ok"] = False
+            return result
+        if dev_resp.status_code != 200:
+            result["steps"]["register"] = {"ok": False, "error": f"HTTP {dev_resp.status_code}"}
+            result["ok"] = False
+            return result
+
+        dev_data = dev_resp.json().get("data", dev_resp.json())
+        el_status = dev_data.get("status", "unknown")
+        result["steps"]["register"] = {"ok": True, "status": el_status}
+
+        if el_status == "offline":
+            result["steps"]["connect"] = {"ok": False, "error": "EdgeLite cannot connect to ProtoForge - check host/port and protocol server status"}
+            result["ok"] = False
+            return result
+        result["steps"]["connect"] = {"ok": True, "status": el_status}
+
+        points_resp = await client.get(
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}/points",
+            headers=headers,
+        )
+        if points_resp.status_code == 200:
+            points_data = points_resp.json().get("data", points_resp.json())
+            has_data = any(v is not None for v in points_data.values()) if isinstance(points_data, dict) else False
+            result["steps"]["collect"] = {
+                "ok": True,
+                "data": points_data,
+                "has_real_data": has_data,
+            }
+        else:
+            result["steps"]["collect"] = {"ok": False, "error": f"HTTP {points_resp.status_code}"}
+
+        all_ok = all(s.get("ok", False) for s in result["steps"].values())
+        result["ok"] = all_ok
+
+    return result
 
 
 async def test_edgelite_connection(url: str, username: str = "admin", password: str = "") -> dict[str, Any]:
@@ -253,7 +410,8 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
             if resp.status_code == 200:
-                return {"ok": True}
+                data = resp.json().get("data", resp.json())
+                return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
             if resp.status_code == 401 and password:
                 login_resp = await client.post(
                     f"{url.rstrip('/')}/api/v1/auth/login",

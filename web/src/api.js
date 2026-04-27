@@ -103,6 +103,10 @@ export default {
   importEdgelite: (config) => d(api.post('/integration/edgelite', config)),
   importPygbsentry: (config) => d(api.post('/integration/pygbsentry', config)),
   pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
+  removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/integration/edgelite/push/${deviceId}`)),
+  getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/integration/edgelite/status/${deviceId}`)),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)),
+  verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
   listForwardTargets: () => d(api.get('/forward/targets')),

@@ -639,6 +639,78 @@ async def test_edgelite_connection(config: dict[str, Any] = None):
     return await _test(url, username, password)
 
 
+@router.get("/integration/edgelite/status/{device_id}")
+async def get_edgelite_device_status(device_id: str):
+    from protoforge.core.edgelite import get_edgelite_device_status as _status
+    engine = _get_engine()
+    device = engine.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        return await _status(device)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"EdgeLite status check failed: {e}")
+
+
+@router.get("/integration/edgelite/points/{device_id}")
+async def read_edgelite_device_points(device_id: str):
+    from protoforge.core.edgelite import read_edgelite_device_points as _read
+    engine = _get_engine()
+    device = engine.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        return await _read(device)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"EdgeLite read points failed: {e}")
+
+
+@router.get("/integration/edgelite/pipeline/{device_id}")
+async def verify_edgelite_pipeline(device_id: str):
+    from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
+    engine = _get_engine()
+    device = engine.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        result = await _verify(device)
+        if result.get("ok") and "collect" in result.get("steps", {}):
+            collect_step = result["steps"]["collect"]
+            if collect_step.get("ok") and collect_step.get("has_real_data"):
+                try:
+                    local_points = await engine.read_device_points(device_id)
+                    local_map = {p.name: p.value for p in local_points}
+                    edgelite_data = collect_step.get("data", {})
+                    comparison = []
+                    for name, local_val in local_map.items():
+                        el_val = edgelite_data.get(name)
+                        comparison.append({
+                            "point": name,
+                            "protoforge_value": local_val,
+                            "edgelite_value": el_val,
+                            "match": str(local_val) == str(el_val) if el_val is not None else None,
+                        })
+                    result["data_comparison"] = comparison
+                except Exception:
+                    pass
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
+
+
+@router.delete("/integration/edgelite/push/{device_id}")
+async def remove_device_from_edgelite(device_id: str):
+    from protoforge.core.edgelite import remove_device_from_edgelite as _remove
+    engine = _get_engine()
+    device = engine.get_device(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    try:
+        return await _remove(device)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"EdgeLite remove device failed: {e}")
+
+
 @router.post("/integration/pygbsentry")
 async def import_pygbsentry(config: dict[str, Any]):
     from protoforge.core.integration import import_pygbsentry_config
