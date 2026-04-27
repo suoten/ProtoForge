@@ -70,3 +70,4 @@ class DeviceInfo(BaseModel):
     status: DeviceStatus = DeviceStatus.OFFLINE
     points: list[PointValue] = Field(default_factory=list)
     created_at: Optional[str] = None
+    protocol_config: Optional[dict[str, Any]] = None

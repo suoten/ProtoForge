@@ -263,5 +263,36 @@ class UserManager:
                 logger.warning("Failed to reset login attempts: %s", e)
         return True
 
+    async def admin_reset_password(self, username: str, new_password: str) -> tuple[bool, str]:
+        user = self._users.get(username)
+        if not user:
+            return False, "用户不存在"
+        ok, msg = _is_password_strong(new_password)
+        if not ok:
+            return False, msg
+        user.password_hash = hash_password(new_password)
+        user.login_attempts = 0
+        user.locked_until = 0.0
+        if self._db:
+            try:
+                await self._db.save_user(user.to_dict())
+            except Exception as e:
+                logger.warning("Failed to reset user password: %s", e)
+        return True, ""
+
+    async def update_user_role(self, username: str, new_role: str) -> bool:
+        user = self._users.get(username)
+        if not user:
+            return False
+        if new_role not in ("admin", "operator", "viewer", "user"):
+            return False
+        user.role = new_role
+        if self._db:
+            try:
+                await self._db.save_user(user.to_dict())
+            except Exception as e:
+                logger.warning("Failed to update user role: %s", e)
+        return True
+
 
 user_manager = UserManager()

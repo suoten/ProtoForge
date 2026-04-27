@@ -365,4 +365,5 @@ class SimulationEngine:
             template_id=instance.config.template_id,
             status=instance.status,
             points=instance.read_all_points(),
+            protocol_config=instance.config.protocol_config,
         )
