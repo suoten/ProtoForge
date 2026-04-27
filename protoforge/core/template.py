@@ -32,6 +32,8 @@ class TemplateManager:
         self._load_from_dir(_TEMPLATES_DIR / "fanuc")
         self._load_from_dir(_TEMPLATES_DIR / "mtconnect")
         self._load_from_dir(_TEMPLATES_DIR / "toledo")
+        self._load_from_dir(_TEMPLATES_DIR / "profinet")
+        self._load_from_dir(_TEMPLATES_DIR / "ethercat")
         self._loaded = True
         logger.info("Loaded %d built-in templates", len(self._templates))
 

@@ -1,0 +1,107 @@
+{
+    "id": "profinet_plc_controller",
+    "name": "PROFINET-PLC控制器",
+    "protocol": "profinet",
+    "description": "PROFINET IO PLC控制器，作为IO Device模拟，支持DCP发现、RT循环数据交换、GSD设备描述",
+    "manufacturer": "Siemens",
+    "model": "S7-1500-PN",
+    "points": [
+        {
+            "name": "run_state",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "运行状态(0=STOP 1=RUN 2=ERROR)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "2",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 85
+        },
+        {
+            "name": "cycle_time",
+            "address": "4",
+            "data_type": "uint16",
+            "unit": "ms",
+            "description": "循环扫描时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1,
+            "max_value": 50
+        },
+        {
+            "name": "di_status",
+            "address": "6",
+            "data_type": "uint16",
+            "description": "数字输入状态(位图)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 65535
+        },
+        {
+            "name": "do_status",
+            "address": "8",
+            "data_type": "uint16",
+            "description": "数字输出状态(位图)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "temperature",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "机箱温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 25.0,
+            "max_value": 55.0
+        },
+        {
+            "name": "pressure",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "系统压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 3.0
+        },
+        {
+            "name": "speed_setpoint",
+            "address": "18",
+            "data_type": "float32",
+            "unit": "rpm",
+            "description": "速度设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1500.0
+        },
+        {
+            "name": "error_code",
+            "address": "22",
+            "data_type": "uint16",
+            "description": "错误代码(0=无错误)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "device_name": "s7-1500-pn-01",
+        "vendor_id": 42,
+        "device_id": 1024
+    },
+    "tags": ["PROFINET", "PLC", "西门子", "S7-1500", "实时以太网", "PI"]
+}

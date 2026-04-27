@@ -218,6 +218,8 @@ pip install -e ".[s7]"        # 西门子 S7 协议
 | FANUC FOCAS    | 不需要        | 8193  | FANUC CNC 数据采集   |
 | MTConnect      | 不需要        | 7878  | 机床数据互联标准         |
 | Mettler-Toledo | 不需要        | 1701  | 称重仪表协议           |
+| PROFINET IO    | 不需要        | 34964 | PI组织实时工业以太网协议   |
+| EtherCAT       | 不需要        | 34980 | 倍福实时工业以太网协议     |
 | OPC-UA         | `[opcua]`  | 4840  | 统一架构协议           |
 | MQTT           | `[mqtt]`   | 1883  | 物联网消息协议          |
 | BACnet         | `[bacnet]` | 47808 | 楼宇自动化协议          |

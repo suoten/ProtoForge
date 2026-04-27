@@ -1,0 +1,113 @@
+{
+    "id": "ethercat_servo_drive",
+    "name": "EtherCAT-伺服驱动器",
+    "protocol": "ethercat",
+    "description": "EtherCAT伺服驱动器从站，支持CSP/CSV/CST运动控制模式，PDO过程数据交换与CoE参数配置",
+    "manufacturer": "Beckhoff",
+    "model": "AX5206",
+    "points": [
+        {
+            "name": "status_word",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "状态字(DS402状态机: Ready/Enabled/Fault等)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 6371
+        },
+        {
+            "name": "actual_position",
+            "address": "2",
+            "data_type": "int32",
+            "unit": "inc",
+            "description": "实际位置(编码器增量)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -100000,
+            "max_value": 100000
+        },
+        {
+            "name": "actual_velocity",
+            "address": "6",
+            "data_type": "int32",
+            "unit": "rpm",
+            "description": "实际速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -3000,
+            "max_value": 3000
+        },
+        {
+            "name": "actual_torque",
+            "address": "10",
+            "data_type": "int16",
+            "unit": "‰",
+            "description": "实际转矩(额定转矩千分比)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500,
+            "max_value": 500
+        },
+        {
+            "name": "control_word",
+            "address": "14",
+            "data_type": "uint16",
+            "description": "控制字(DS402命令: Shutdown/Enable/FaultReset等)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 15
+        },
+        {
+            "name": "target_position",
+            "address": "16",
+            "data_type": "int32",
+            "unit": "inc",
+            "description": "目标位置(CSP模式)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "target_velocity",
+            "address": "20",
+            "data_type": "int32",
+            "unit": "rpm",
+            "description": "目标速度(CSV模式)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "target_torque",
+            "address": "24",
+            "data_type": "int16",
+            "unit": "‰",
+            "description": "目标转矩(CST模式)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "mode_of_operation",
+            "address": "26",
+            "data_type": "int16",
+            "description": "运行模式(8=CSP 9=CSV 10=CST)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 8
+        },
+        {
+            "name": "error_code",
+            "address": "28",
+            "data_type": "uint16",
+            "description": "故障代码(0=无故障)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_address": 4097
+    },
+    "tags": ["EtherCAT", "伺服", "运动控制", "Beckhoff", "倍福", "DS402", "实时以太网"]
+}
