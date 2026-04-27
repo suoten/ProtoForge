@@ -54,29 +54,43 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 
 适合本地开发、测试或单机使用，直接通过 `localhost` 访问。
 
+**Step 1 — 部署后端**
+
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 2. 安装 ProtoForge（会自动安装 FastAPI、Pydantic 等依赖）
+# 2. 安装后端依赖（FastAPI、Pydantic 等）
 pip install -e .
 
-# 3. 构建前端（如果 web/dist/ 已存在可跳过）
-cd web
-npm install
-npm run build
-cd ..
-
-# 4. 启动！
+# 3. 启动后端（默认端口 8000）
 protoforge demo
 ```
 
-打开浏览器访问 **http://localhost:8000**，用 `admin` / `admin` 登录即可。
-
-> `protoforge demo` 会自动创建 4 个演示设备和 1 个仿真场景，方便你快速体验。
+> `protoforge demo` 会自动创建 4 个演示设备和 1 个仿真场景。
 > 如果不想带演示数据，用 `protoforge run` 启动空白环境。
-> 端口冲突？修改 `.env` 中的 `PROTOFORGE_PORT` 即可，无需改代码。
+> 端口冲突？修改 `.env` 中的 `PROTOFORGE_PORT` 即可。
+
+**Step 2 — 部署前端**
+
+另开一个终端窗口：
+
+```bash
+cd ProtoForge/web
+
+# 1. 安装前端依赖
+npm install
+
+# 2. 启动前端开发服务器（热更新，默认端口 5173）
+npm run dev
+```
+
+**Step 3 — 访问系统**
+
+打开浏览器访问 **http://localhost:5173**，用 `admin` / `admin` 登录。
+
+> 前端开发服务器（`npm run dev`）会自动代理 API 请求到后端的 8000 端口，无需额外配置。
 
 #### 方式二：服务器部署（Nginx + 域名）
 
@@ -91,28 +105,37 @@ protoforge demo
         → /api/v1/ws/* WebSocket 代理到后端
 ```
 
-**1. 安装与构建**
+**Step 1 — 部署后端**
 
 ```bash
-# 克隆仓库
+# 1. 克隆仓库
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 安装依赖
+# 2. 安装后端依赖
 pip install -e ".[all]"
 
-# 构建前端
-cd web && npm install && npm run build && cd ..
+# 3. 配置后端端口（避免与 Nginx 冲突）
+# 编辑 .env，设置：
+# PROTOFORGE_PORT=8200
+
+# 4. 启动后端
+protoforge run
 ```
 
-**2. 配置后端端口**
+**Step 2 — 构建前端**
 
-编辑 `.env`，设置后端监听端口（例如 8200）：
 ```bash
-PROTOFORGE_PORT=8200
+cd ProtoForge/web
+
+# 1. 安装前端依赖
+npm install
+
+# 2. 构建生产包（输出到 web/dist/）
+npm run build
 ```
 
-**3. Nginx 配置示例**
+**Step 3 — 配置 Nginx**
 
 ```nginx
 server {
@@ -145,21 +168,19 @@ server {
 
 > 把 `8200` 换成你 `.env` 中配置的端口，把 `/path/to/ProtoForge` 换成你的实际路径。
 
-**4. 启动后端**
+**Step 4 — 访问系统**
 
-```bash
-protoforge run
-```
-
-现在可以通过域名访问了。
+打开浏览器访问 **http://your-domain.com**，用 `admin` / `admin` 登录。
 
 #### 方式三：Docker 一键部署
+
+Docker 方式已包含前后端完整构建，无需手动安装 Node.js 或构建前端。
 
 ```bash
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 启动（后台运行）
+# 启动（后台运行，自动构建前后端）
 docker-compose up -d
 
 # 打开浏览器访问 http://localhost:8000
@@ -206,9 +227,9 @@ pip install -e ".[s7]"        # 西门子 S7 协议
 
 ### 🚀 5 分钟上手
 
-启动后按以下步骤操作：
+按上述「方式一：本地快速体验」完成前后端部署后，按以下步骤操作：
 
-1. **登录** — 浏览器打开 http://localhost:8000，输入 admin / admin
+1. **登录** — 浏览器打开前端地址（开发模式 `http://localhost:5173`，生产模式 `http://your-domain.com`），输入 admin / admin
 2. **启动协议** — 左侧菜单「协议服务」→ 点击「一键启动」
 3. **创建设备** — 左侧菜单「模板市场」→ 选择一个模板 → 填写名称 → 一键创建
 4. **查看数据** — 设备列表 → 点击「测点」→ 看到实时变化的仿真数据
@@ -455,29 +476,43 @@ ProtoForge is an out-of-the-box IoT protocol simulation and testing platform. No
 
 For local development, testing, or single-machine use. Access directly via `localhost`.
 
+**Step 1 — Deploy Backend**
+
 ```bash
 # 1. Clone the repo
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 2. Install ProtoForge (auto-installs FastAPI, Pydantic, etc.)
+# 2. Install backend dependencies (FastAPI, Pydantic, etc.)
 pip install -e .
 
-# 3. Build frontend (skip if web/dist/ already exists)
-cd web
-npm install
-npm run build
-cd ..
-
-# 4. Start!
+# 3. Start backend (default port 8000)
 protoforge demo
 ```
 
-Open your browser at **http://localhost:8000** and log in with `admin` / `admin`.
-
 > `protoforge demo` creates 4 demo devices and 1 scenario automatically.
 > For a clean start, use `protoforge run` instead.
-> Port conflict? Just change `PROTOFORGE_PORT` in `.env` — no code changes needed.
+> Port conflict? Just change `PROTOFORGE_PORT` in `.env`.
+
+**Step 2 — Deploy Frontend**
+
+Open another terminal:
+
+```bash
+cd ProtoForge/web
+
+# 1. Install frontend dependencies
+npm install
+
+# 2. Start frontend dev server (hot reload, default port 5173)
+npm run dev
+```
+
+**Step 3 — Access the System**
+
+Open your browser at **http://localhost:5173** and log in with `admin` / `admin`.
+
+> The frontend dev server (`npm run dev`) automatically proxies API requests to the backend at port 8000, no extra configuration needed.
 
 #### Option 2: Server Deployment (Nginx + Domain)
 
@@ -492,28 +527,37 @@ User → Domain (http://your-domain.com)
         → /api/v1/ws/* WebSocket proxied to backend
 ```
 
-**1. Install and Build**
+**Step 1 — Deploy Backend**
 
 ```bash
-# Clone repo
+# 1. Clone repo
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# Install dependencies
+# 2. Install backend dependencies
 pip install -e ".[all]"
 
-# Build frontend
-cd web && npm install && npm run build && cd ..
+# 3. Configure backend port (avoid conflict with Nginx)
+# Edit .env and set:
+# PROTOFORGE_PORT=8200
+
+# 4. Start backend
+protoforge run
 ```
 
-**2. Configure Backend Port**
+**Step 2 — Build Frontend**
 
-Edit `.env` and set the backend listening port (e.g., 8200):
 ```bash
-PROTOFORGE_PORT=8200
+cd ProtoForge/web
+
+# 1. Install frontend dependencies
+npm install
+
+# 2. Build for production (outputs to web/dist/)
+npm run build
 ```
 
-**3. Nginx Configuration Example**
+**Step 3 — Configure Nginx**
 
 ```nginx
 server {
@@ -546,13 +590,9 @@ server {
 
 > Replace `8200` with the port configured in your `.env`, and `/path/to/ProtoForge` with your actual path.
 
-**4. Start Backend**
+**Step 4 — Access the System**
 
-```bash
-protoforge run
-```
-
-Now you can access via your domain.
+Open your browser at **http://your-domain.com** and log in with `admin` / `admin`.
 
 #### Option 3: Docker
 
