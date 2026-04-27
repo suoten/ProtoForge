@@ -75,11 +75,21 @@ async def get_device_connection_guide(device_id: str):
     usage = PROTOCOL_USAGE.get(device.protocol, {})
     defaults = get_protocol_defaults(device.protocol)
     config = {**defaults, **(device.protocol_config or {})}
-    if usage.get("code_example"):
+    code_examples = {}
+    if usage.get("code_examples"):
+        for lang, code in usage["code_examples"].items():
+            try:
+                code_examples[lang] = code.format(**config)
+            except KeyError:
+                code_examples[lang] = code
+    code_example = ""
+    if code_examples:
+        code_example = code_examples.get("python", list(code_examples.values())[0])
+    elif usage.get("code_example"):
         try:
-            usage["code_example"] = usage["code_example"].format(**config)
+            code_example = usage["code_example"].format(**config)
         except KeyError:
-            pass
+            code_example = usage["code_example"]
     return {
         "protocol": device.protocol,
         "device_id": device_id,
@@ -88,7 +98,8 @@ async def get_device_connection_guide(device_id: str):
         "mode_label": usage.get("mode_label", ""),
         "mode_desc": usage.get("mode_desc", ""),
         "connect_hint": usage.get("connect_hint", ""),
-        "code_example": usage.get("code_example", ""),
+        "code_example": code_example,
+        "code_examples": code_examples,
         "connection_info": config,
     }
 
