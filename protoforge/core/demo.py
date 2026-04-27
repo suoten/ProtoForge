@@ -1,48 +1,55 @@
 import logging
 from typing import Any
 
+from protoforge.config import get_protocol_port_map
+
 logger = logging.getLogger(__name__)
 
 
 async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     logger.info("Seeding demo data...")
 
-    await engine.start_protocol("modbus_tcp", {"host": "0.0.0.0", "port": 5020})
-    logger.info("  ✓ Modbus TCP 协议已启动 (端口 5020)")
+    port_map = get_protocol_port_map()
+
+    def _cfg(name: str) -> dict:
+        return port_map.get(name, {"host": "0.0.0.0", "port": 0})
+
+    await engine.start_protocol("modbus_tcp", _cfg("modbus_tcp"))
+    logger.info("  ✓ Modbus TCP 协议已启动 (端口 %s)", _cfg("modbus_tcp").get("port"))
 
     try:
-        await engine.start_protocol("mqtt", {"host": "0.0.0.0", "port": 1883})
-        logger.info("  ✓ MQTT 协议已启动 (端口 1883)")
+        await engine.start_protocol("mqtt", _cfg("mqtt"))
+        logger.info("  ✓ MQTT 协议已启动 (端口 %s)", _cfg("mqtt").get("port"))
     except Exception as e:
         logger.warning("  ✗ MQTT 协议启动失败 (需安装 amqtt): %s", e)
 
     try:
-        await engine.start_protocol("mc", {"host": "0.0.0.0", "port": 5000})
-        logger.info("  ✓ MC 协议已启动 (端口 5000)")
+        await engine.start_protocol("mc", _cfg("mc"))
+        logger.info("  ✓ MC 协议已启动 (端口 %s)", _cfg("mc").get("port"))
     except Exception as e:
         logger.warning("  ✗ MC 协议启动失败: %s", e)
 
     try:
-        await engine.start_protocol("fanuc", {"host": "0.0.0.0", "port": 8193})
-        logger.info("  ✓ FANUC 协议已启动 (端口 8193)")
+        await engine.start_protocol("fanuc", _cfg("fanuc"))
+        logger.info("  ✓ FANUC 协议已启动 (端口 %s)", _cfg("fanuc").get("port"))
     except Exception as e:
         logger.warning("  ✗ FANUC 协议启动失败: %s", e)
 
     try:
-        await engine.start_protocol("toledo", {"host": "0.0.0.0", "port": 1701})
-        logger.info("  ✓ Toledo 协议已启动 (端口 1701)")
+        await engine.start_protocol("toledo", _cfg("toledo"))
+        logger.info("  ✓ Toledo 协议已启动 (端口 %s)", _cfg("toledo").get("port"))
     except Exception as e:
         logger.warning("  ✗ Toledo 协议启动失败: %s", e)
 
     try:
-        await engine.start_protocol("profinet", {"host": "0.0.0.0", "port": 34964})
-        logger.info("  ✓ PROFINET IO 协议已启动 (端口 34964)")
+        await engine.start_protocol("profinet", _cfg("profinet"))
+        logger.info("  ✓ PROFINET IO 协议已启动 (端口 %s)", _cfg("profinet").get("port"))
     except Exception as e:
         logger.warning("  ✗ PROFINET IO 协议启动失败: %s", e)
 
     try:
-        await engine.start_protocol("ethercat", {"host": "0.0.0.0", "port": 34980})
-        logger.info("  ✓ EtherCAT 协议已启动 (端口 34980)")
+        await engine.start_protocol("ethercat", _cfg("ethercat"))
+        logger.info("  ✓ EtherCAT 协议已启动 (端口 %s)", _cfg("ethercat").get("port"))
     except Exception as e:
         logger.warning("  ✗ EtherCAT 协议启动失败: %s", e)
 
