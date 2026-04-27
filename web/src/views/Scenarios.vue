@@ -6,13 +6,30 @@
         <div class="pf-section-desc">组合多个设备并定义联动规则</div>
       </div>
       <n-space>
+        <n-button v-if="selectedIds.length > 0" type="primary" @click="batchStart" :loading="batchLoading">
+          <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+          启动选中({{ selectedIds.length }})
+        </n-button>
+        <n-button v-if="selectedIds.length > 0" type="warning" @click="batchStop" :loading="batchLoading">
+          <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+          停止选中({{ selectedIds.length }})
+        </n-button>
+        <n-button @click="startAllScenes" :loading="batchLoading">
+          <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+          全部启动
+        </n-button>
+        <n-button @click="stopAllScenes" :loading="batchLoading">
+          <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+          全部停止
+        </n-button>
         <n-button tertiary @click="showImportModal = true">导入场景</n-button>
         <n-button type="primary" @click="showCreateModal = true">创建场景</n-button>
       </n-space>
     </n-space>
 
     <n-data-table v-if="scenarios.length > 0" :columns="columns" :data="scenarios" :bordered="false"
-      :pagination="{ pageSize: 15 }" :row-key="row => row.id" />
+      :pagination="{ pageSize: 15 }" :row-key="row => row.id"
+      v-model:checked-row-keys="selectedIds" :single-line="false" />
 
     <n-card v-else style="text-align:center;padding:40px">
       <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:16px"><path d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9"/></svg>
@@ -79,6 +96,8 @@ const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const scenarios = ref([])
+const selectedIds = ref([])
+const batchLoading = ref(false)
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
 const showSnapshotModal = ref(false)
@@ -89,6 +108,7 @@ const snapshotDevices = ref([])
 const newScenario = ref({ id: '', name: '', description: '', devices: [], rules: [] })
 
 const columns = [
+  { type: 'selection' },
   { title: 'ID', key: 'id', width: 150 },
   { title: '名称', key: 'name', width: 180 },
   { title: '设备数', key: 'device_count', width: 80 },
@@ -133,6 +153,52 @@ async function loadData() {
   } catch (e) {
     message.error('加载场景失败: ' + (e.response?.data?.detail || e.message))
   }
+}
+
+async function batchStart() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const id of selectedIds.value) {
+    try { await api.startScenario(id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  selectedIds.value = []
+  message.success(`已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function batchStop() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const id of selectedIds.value) {
+    try { await api.stopScenario(id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  selectedIds.value = []
+  message.success(`已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function startAllScenes() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const sc of scenarios.value) {
+    try { await api.startScenario(sc.id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  message.success(`已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function stopAllScenes() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const sc of scenarios.value) {
+    try { await api.stopScenario(sc.id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  message.success(`已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
 }
 
 async function createScenario() {
