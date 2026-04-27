@@ -179,9 +179,9 @@ class EtherCATServer(ProtocolServer):
         for cfg in self._device_configs.values():
             for point in cfg.points:
                 sz = self._point_size(point)
-                if point.access_mode.value in ("read", "rw"):
+                if point.access in ("r", "rw"):
                     self._input_size += sz
-                if point.access_mode.value in ("write", "rw"):
+                if point.access in ("w", "rw"):
                     self._output_size += sz
         self._pd_input = bytearray(self._input_size)
         self._pd_output = bytearray(self._output_size)
