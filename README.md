@@ -27,7 +27,7 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 
 - **17 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
-- **49 设备模板** — PLC、传感器、CNC、摄像头、HVAC，选模板→起名字→一键创建
+- **53 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器，选模板→起名字→一键创建
 - **实时调试日志** — WebSocket 实时推送协议交互报文，按协议/方向/关键词筛选，点击查看详情，快速定位开发问题
 - **可视化场景编排** — 拖拽式设备联动规则编辑器
 - **一键仿真测试** — 自动生成测试用例，智能诊断问题
@@ -386,9 +386,9 @@ ProtoForge/
 │   ├── config.py             # 配置管理
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
-│   ├── protocols/            # 15 种协议服务端实现
+│   ├── protocols/            # 17 种协议服务端实现
 │   ├── sdk/                  # Python SDK
-│   └── templates/            # 49 设备模板（JSON）
+│   └── templates/            # 53 设备模板（JSON）
 ├── web/                       # Vue3 前端
 │   └── src/
 │       ├── views/            # 页面组件
@@ -453,7 +453,7 @@ ProtoForge is an out-of-the-box IoT protocol simulation and testing platform. No
 
 - **17 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT
 - **Full-Chain Simulation** — Not just data, complete protocol interaction (e.g. GB28181: SIP Register → Catalog Query → INVITE → RTP Video Stream → BYE)
-- **49 Device Templates** — PLC, sensors, CNC, cameras, HVAC — pick a template, name it, done
+- **53 Device Templates** — PLC, sensors, CNC, cameras, HVAC, servo drives — pick a template, name it, done
 - **Real-time Debug Logs** — WebSocket live protocol interaction logs, filter by protocol/direction/keyword, click for details, quickly locate issues
 - **Visual Scenario Editor** — Drag-and-drop device orchestration with rule engine
 - **One-Click Testing** — Auto-generate test cases with intelligent diagnostics

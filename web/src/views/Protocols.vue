@@ -103,6 +103,7 @@ const protocolModes = {
   http: 'server', gb28181: 'client', bacnet: 'server', s7: 'server',
   mc: 'server', fins: 'server', ab: 'server', opcda: 'server',
   fanuc: 'server', mtconnect: 'server', toledo: 'server',
+  profinet: 'server', ethercat: 'server',
 }
 
 async function startAll() {
