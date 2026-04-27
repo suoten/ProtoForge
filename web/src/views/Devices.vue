@@ -8,6 +8,22 @@
         </div>
         <n-space>
           <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议筛选" clearable style="width:160px" />
+          <n-button v-if="selectedIds.length > 0" type="primary" @click="batchStart" :loading="batchLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+            启动选中({{ selectedIds.length }})
+          </n-button>
+          <n-button v-if="selectedIds.length > 0" type="warning" @click="batchStop" :loading="batchLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+            停止选中({{ selectedIds.length }})
+          </n-button>
+          <n-button @click="startAllDevices" :loading="batchLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+            全部启动
+          </n-button>
+          <n-button @click="stopAllDevices" :loading="batchLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+            全部停止
+          </n-button>
           <n-button type="primary" @click="openQuickCreate">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></template>
             快速创建
@@ -23,7 +39,8 @@
       </n-alert>
 
       <n-data-table :columns="columns" :data="filteredDevices" :bordered="false"
-        :pagination="{ pageSize: 15 }" :row-key="row => row.id" />
+        :pagination="{ pageSize: 15 }" :row-key="row => row.id"
+        v-model:checked-row-keys="selectedIds" :single-line="false" />
 
       <n-modal v-model:show="showQuickCreateModal" preset="card" title="快速创建设备" style="width:560px">
         <n-steps :current="quickStep" size="small" style="margin-bottom:16px">
@@ -203,6 +220,8 @@ const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const devices = ref([])
+const selectedIds = ref([])
+const batchLoading = ref(false)
 const protocols = ref([])
 const templates = ref([])
 const filterProtocol = ref(null)
@@ -290,6 +309,7 @@ async function loadDeviceConfig(protocol) {
 }
 
 const columns = [
+  { type: 'selection' },
   { title: '设备', key: 'name', width: 160, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
     h('div', { style: 'font-size:11px;color:#94a3b8' }, row.id),
@@ -370,6 +390,52 @@ async function loadData() {
     const [devRes, protoRes, tmplRes] = await Promise.all([api.getDevices(), api.getProtocols(), api.getTemplates()])
     devices.value = devRes; protocols.value = protoRes; templates.value = tmplRes
   } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
+}
+
+async function batchStart() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const id of selectedIds.value) {
+    try { await api.startDevice(id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  selectedIds.value = []
+  message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function batchStop() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const id of selectedIds.value) {
+    try { await api.stopDevice(id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  selectedIds.value = []
+  message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function startAllDevices() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const dev of filteredDevices.value) {
+    try { await api.startDevice(dev.id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
+}
+
+async function stopAllDevices() {
+  batchLoading.value = true
+  let ok = 0, fail = 0
+  for (const dev of filteredDevices.value) {
+    try { await api.stopDevice(dev.id); ok++ } catch { fail++ }
+  }
+  batchLoading.value = false
+  message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+  loadData()
 }
 
 async function createDevice() {
