@@ -25,7 +25,7 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 
 ### ✨ 核心特性
 
-- **15 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo
+- **17 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
 - **49 设备模板** — PLC、传感器、CNC、摄像头、HVAC，选模板→起名字→一键创建
 - **实时调试日志** — WebSocket 实时推送协议交互报文，按协议/方向/关键词筛选，点击查看详情，快速定位开发问题
@@ -404,10 +404,12 @@ ProtoForge/
 
 ### 📡 API 文档
 
-启动后访问以下地址查看交互式 API 文档：
+后端启动后，访问以下地址查看交互式 API 文档（直接访问后端端口）：
 
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+> 这是后端 API 文档，不是前端页面。前端页面请访问前端地址（如 `http://localhost:5173`）。
 
 ***
 
@@ -447,7 +449,7 @@ ProtoForge is an out-of-the-box IoT protocol simulation and testing platform. No
 
 ### ✨ Key Features
 
-- **15 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo
+- **17 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT
 - **Full-Chain Simulation** — Not just data, complete protocol interaction (e.g. GB28181: SIP Register → Catalog Query → INVITE → RTP Video Stream → BYE)
 - **49 Device Templates** — PLC, sensors, CNC, cameras, HVAC — pick a template, name it, done
 - **Real-time Debug Logs** — WebSocket live protocol interaction logs, filter by protocol/direction/keyword, click for details, quickly locate issues
@@ -596,11 +598,13 @@ Open your browser at **http://your-domain.com** and log in with `admin` / `admin
 
 #### Option 3: Docker
 
+Docker deployment includes both frontend and backend builds — no need to manually install Node.js or build the frontend.
+
 ```bash
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# Start (runs in background)
+# Start (runs in background, auto-builds frontend and backend)
 docker-compose up -d
 
 # Open http://localhost:8000 in your browser
