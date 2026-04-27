@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     fanuc_port: int = 8193
     mtconnect_port: int = 7878
     toledo_port: int = 1701
+    profinet_port: int = 34964
+    ethercat_port: int = 34980
 
     model_config = {
         "env_prefix": "PROTOFORGE_",
@@ -118,6 +120,8 @@ def get_protocol_port_map() -> dict[str, Any]:
         "fanuc": {"port": s.fanuc_port, "host": "0.0.0.0"},
         "mtconnect": {"port": s.mtconnect_port, "host": "0.0.0.0"},
         "toledo": {"port": s.toledo_port, "host": "0.0.0.0"},
+        "profinet": {"port": s.profinet_port, "host": "0.0.0.0"},
+        "ethercat": {"port": s.ethercat_port, "host": "0.0.0.0"},
     }
 
 
@@ -144,5 +148,7 @@ def get_all_settings_dict() -> dict[str, Any]:
             "fanuc": s.fanuc_port,
             "mtconnect": s.mtconnect_port,
             "toledo": s.toledo_port,
+            "profinet": s.profinet_port,
+            "ethercat": s.ethercat_port,
         },
     }

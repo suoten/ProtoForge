@@ -34,6 +34,18 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     except Exception as e:
         logger.warning("  ✗ Toledo 协议启动失败: %s", e)
 
+    try:
+        await engine.start_protocol("profinet", {"host": "0.0.0.0", "port": 34964})
+        logger.info("  ✓ PROFINET IO 协议已启动 (端口 34964)")
+    except Exception as e:
+        logger.warning("  ✗ PROFINET IO 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("ethercat", {"host": "0.0.0.0", "port": 34980})
+        logger.info("  ✓ EtherCAT 协议已启动 (端口 34980)")
+    except Exception as e:
+        logger.warning("  ✗ EtherCAT 协议启动失败: %s", e)
+
     demo_devices = [
         {
             "id": "demo-temp-sensor",
@@ -109,6 +121,29 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
                 {"name": "weight", "address": "net_weight", "data_type": "float32", "generator_type": "random", "min_value": 0.5, "max_value": 50.0},
                 {"name": "tare", "address": "tare_weight", "data_type": "float32", "generator_type": "fixed", "fixed_value": 2.5},
                 {"name": "stable", "address": "stable_flag", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+            ],
+        },
+        {
+            "id": "demo-profinet-io",
+            "name": "PROFINET远程IO模块",
+            "protocol": "profinet",
+            "template_id": "profinet_io_device",
+            "points": [
+                {"name": "di_0_7", "address": "0", "data_type": "uint16", "generator_type": "random", "min_value": 0, "max_value": 255},
+                {"name": "ai_channel0", "address": "8", "data_type": "float32", "generator_type": "random", "min_value": 18.0, "max_value": 32.0},
+                {"name": "ai_channel1", "address": "12", "data_type": "float32", "generator_type": "random", "min_value": 0.5, "max_value": 3.0},
+            ],
+        },
+        {
+            "id": "demo-ethercat-servo",
+            "name": "EtherCAT伺服驱动器",
+            "protocol": "ethercat",
+            "template_id": "ethercat_servo_drive",
+            "points": [
+                {"name": "status_word", "address": "0", "data_type": "uint16", "generator_type": "fixed", "fixed_value": 6371},
+                {"name": "actual_position", "address": "2", "data_type": "int32", "generator_type": "random", "min_value": -100000, "max_value": 100000},
+                {"name": "actual_velocity", "address": "6", "data_type": "int32", "generator_type": "random", "min_value": -3000, "max_value": 3000},
+                {"name": "actual_torque", "address": "10", "data_type": "int16", "generator_type": "random", "min_value": -500, "max_value": 500},
             ],
         },
     ]
@@ -193,4 +228,4 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     except Exception as e:
         logger.warning("  ✗ 场景创建失败: %s", e)
 
-    logger.info("Demo data seeded! 7 devices + 1 scenario ready.")
+    logger.info("Demo data seeded! 9 devices + 1 scenario ready.")
