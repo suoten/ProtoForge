@@ -46,6 +46,7 @@ export default {
   createDevice: (config) => d(api.post('/devices', config)),
   quickCreateDevice: (templateId, name, id) => d(api.post('/devices/quick-create', { template_id: templateId, name, id })),
   getDevice: (id) => d(api.get(`/devices/${id}`)),
+  getDeviceConfig: (id) => d(api.get(`/devices/${id}/config`)),
   updateDevice: (id, config) => d(api.put(`/devices/${id}`, config)),
   deleteDevice: (id) => d(api.delete(`/devices/${id}`)),
   startDevice: (id) => d(api.post(`/devices/${id}/start`)),

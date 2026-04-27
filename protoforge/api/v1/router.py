@@ -286,6 +286,15 @@ async def get_device(device_id: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.get("/devices/{device_id}/config", response_model=DeviceConfig)
+async def get_device_config(device_id: str):
+    engine = _get_engine()
+    instance = engine._devices.get(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return instance.config
+
+
 @router.delete("/devices/{device_id}")
 async def delete_device(device_id: str):
     engine = _get_engine()
