@@ -200,7 +200,22 @@
               </n-card>
             </div>
 
-            <div v-if="guideData.code_example">
+            <div v-if="guideData.code_examples && Object.keys(guideData.code_examples).length > 0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                <div style="font-weight:600">💻 代码示例</div>
+                <n-button-group size="tiny">
+                  <n-button v-for="(_, lang) in guideData.code_examples" :key="lang"
+                    :type="guideLang === lang ? 'primary' : 'default'"
+                    @click="guideLang = lang">
+                    {{ {python:'Python',csharp:'C#',java:'Java',go:'Go'}[lang] || lang }}
+                  </n-button>
+                </n-button-group>
+              </div>
+              <n-card size="small" embedded>
+                <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ guideData.code_examples[guideLang] || guideData.code_example }}</pre>
+              </n-card>
+            </div>
+            <div v-else-if="guideData.code_example">
               <div style="font-weight:600;margin-bottom:8px">💻 代码示例</div>
               <n-card size="small" embedded>
                 <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ guideData.code_example }}</pre>
@@ -287,7 +302,7 @@
 
 <script setup>
 import { ref, computed, onMounted, h, watch } from 'vue'
-import { NSpace, NSelect, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
+import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
   NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
@@ -308,6 +323,7 @@ const showEditModal = ref(false)
 const showPointsModal = ref(false)
 const showGuideModal = ref(false)
 const guideData = ref(null)
+const guideLang = ref('python')
 const creating = ref(false)
 const saving = ref(false)
 const currentPoints = ref([])
@@ -641,13 +657,15 @@ async function viewPoints(id) {
 async function showGuide(id) {
   try {
     guideData.value = await api.getDeviceConnectionGuide(id)
+    guideLang.value = 'python'
     showGuideModal.value = true
   } catch (e) { message.error('获取连接指南失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 function copyGuide() {
-  if (!guideData.value?.code_example) return
-  navigator.clipboard.writeText(guideData.value.code_example)
+  const code = guideData.value?.code_examples?.[guideLang.value] || guideData.value?.code_example
+  if (!code) return
+  navigator.clipboard.writeText(code)
   message.success('代码已复制到剪贴板')
 }
 
