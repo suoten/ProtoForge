@@ -229,16 +229,24 @@ class ForwardEngine:
 def create_target(config: dict[str, Any]) -> ForwardTarget:
     target_type = config.get("type", "http")
     if target_type == "influxdb":
+        if not config.get("url"):
+            raise ValueError("InfluxDB target requires 'url' parameter")
+        if not config.get("token"):
+            raise ValueError("InfluxDB target requires 'token' parameter")
         return InfluxDBTarget(
             url=config["url"], token=config["token"],
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
         )
     elif target_type == "http":
+        if not config.get("url"):
+            raise ValueError("HTTP target requires 'url' parameter")
         return HTTPTarget(
             url=config["url"], headers=config.get("headers"),
             method=config.get("method", "POST"),
         )
     elif target_type == "file":
+        if not config.get("path"):
+            raise ValueError("File target requires 'path' parameter")
         return FileTarget(
             path=config["path"], format=config.get("format", "jsonl"),
         )

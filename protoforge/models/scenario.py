@@ -8,6 +8,7 @@ from protoforge.models.device import DeviceConfig
 
 class ScenarioStatus(str, Enum):
     STOPPED = "stopped"
+    STARTING = "starting"
     RUNNING = "running"
     ERROR = "error"
 

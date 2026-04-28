@@ -1,59 +1,161 @@
+import ast
 import math
 import random
 import time
 import logging
+import operator
 from typing import Any
 
 from protoforge.models.device import DataType, GeneratorType, PointConfig
 
 logger = logging.getLogger(__name__)
 
-_DANGEROUS_ATTRS = frozenset({
-    "__class__", "__bases__", "__subclasses__", "__mro__",
-    "__globals__", "__code__", "__func__", "__self__",
-    "__dict__", "__weakref__", "__del__", "__delattr__",
-    "__setattr__", "__getattribute__", "__reduce__",
-    "__reduce_ex__", "__import__", "__builtins__",
-    "exec", "eval", "compile", "open", "input",
-    "__loader__", "__spec__", "__module__",
-})
+_SAFE_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+    ast.And: lambda a, b: a and b,
+    ast.Or: lambda a, b: a or b,
+    ast.Not: operator.not_,
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+_SAFE_NAMES = {
+    "True": True, "False": False, "None": None,
+    "abs": abs, "min": min, "max": max, "round": round,
+    "int": int, "float": float, "bool": bool, "str": str,
+    "len": len, "range": range, "list": list, "dict": dict,
+    "math": math, "random": random,
+    "pi": math.pi, "e": math.e,
+    "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "sqrt": math.sqrt, "log": math.log, "log10": math.log10,
+    "ceil": math.ceil, "floor": math.floor, "fabs": math.fabs,
+}
 
 
-class _SafeNamespace(dict):
-    def __getitem__(self, key):
-        if key in _DANGEROUS_ATTRS:
-            raise KeyError(f"Access to '{key}' is not allowed")
-        return super().__getitem__(key)
+class _SafeEval:
+    def __init__(self, variables: dict[str, Any] | None = None):
+        self._variables = variables or {}
 
-    def __setitem__(self, key, value):
-        if key in _DANGEROUS_ATTRS:
-            raise KeyError(f"Setting '{key}' is not allowed")
-        super().__setitem__(key, value)
+    def eval_expr(self, expr: str) -> Any:
+        try:
+            tree = ast.parse(expr, mode="eval")
+            return self._eval_node(tree.body)
+        except Exception as e:
+            logger.debug("SafeEval error: %s", e)
+            return 0
+
+    def exec_stmts(self, code: str) -> dict[str, Any]:
+        try:
+            tree = ast.parse(code, mode="exec")
+            local_vars = dict(self._variables)
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    value = self._eval_node(node.value)
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            local_vars[target.id] = value
+                        else:
+                            raise ValueError(f"Unsupported assignment target: {type(target).__name__}")
+                elif isinstance(node, ast.Expr):
+                    self._eval_node(node.value)
+                else:
+                    raise ValueError(f"Unsupported statement: {type(node).__name__}")
+            return local_vars
+        except Exception as e:
+            logger.debug("SafeEval exec error: %s", e)
+            return dict(self._variables)
+
+    def _eval_node(self, node: ast.AST) -> Any:
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            if node.id in _SAFE_NAMES:
+                return _SAFE_NAMES[node.id]
+            if node.id in self._variables:
+                return self._variables[node.id]
+            raise NameError(f"Name '{node.id}' is not allowed")
+        elif isinstance(node, ast.BinOp):
+            op = _SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op(self._eval_node(node.left), self._eval_node(node.right))
+        elif isinstance(node, ast.UnaryOp):
+            op = _SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op(self._eval_node(node.operand))
+        elif isinstance(node, ast.Compare):
+            left = self._eval_node(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                op_func = _SAFE_OPS.get(type(op))
+                if op_func is None:
+                    raise ValueError(f"Unsupported comparison: {type(op).__name__}")
+                right = self._eval_node(comparator)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                result = True
+                for val in node.values:
+                    result = self._eval_node(val)
+                    if not result:
+                        return result
+                return result
+            elif isinstance(node.op, ast.Or):
+                result = False
+                for val in node.values:
+                    result = self._eval_node(val)
+                    if result:
+                        return result
+                return result
+        elif isinstance(node, ast.IfExp):
+            test = self._eval_node(node.test)
+            return self._eval_node(node.body) if test else self._eval_node(node.orelse)
+        elif isinstance(node, ast.Call):
+            func = self._eval_node(node.func)
+            args = [self._eval_node(a) for a in node.args]
+            return func(*args)
+        elif isinstance(node, ast.Attribute):
+            value = self._eval_node(node.value)
+            if isinstance(value, math.__class__):
+                allowed = {"pi", "e", "sin", "cos", "tan", "sqrt", "log", "log10", "ceil", "floor", "fabs"}
+                if node.attr in allowed:
+                    return getattr(value, node.attr)
+            raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
+        elif isinstance(node, ast.Subscript):
+            value = self._eval_node(node.value)
+            slice_val = self._eval_node(node.slice) if isinstance(node.slice, ast.AST) else node.slice
+            return value[slice_val]
+        raise ValueError(f"Unsupported expression: {type(node).__name__}")
 
 
 class ScriptEngine:
-    _safe_builtins = {
-        "abs": abs, "min": min, "max": max, "round": round,
-        "int": int, "float": float, "bool": bool, "str": str,
-        "len": len, "range": range, "list": list, "dict": dict,
-        "math": math, "random": random,
-        "True": True, "False": False, "None": None,
-    }
-
     def __init__(self):
         self._cache: dict[str, Any] = {}
 
     def execute(self, script: str, context: dict[str, Any]) -> Any:
-        namespace = _SafeNamespace(self._safe_builtins)
-        namespace["context"] = context
-        namespace["time"] = time.time()
-        namespace["cache"] = self._cache
-        try:
-            exec(script, {"__builtins__": {}}, namespace)
-            return namespace.get("result", 0)
-        except Exception as e:
-            logger.debug("Script execution error: %s", e)
-            return 0
+        variables = dict(context)
+        variables["cache"] = self._cache
+        variables["time"] = time.time()
+        evaluator = _SafeEval(variables)
+        result_vars = evaluator.exec_stmts(script)
+        return result_vars.get("result", 0)
 
 
 class DataGenerator:

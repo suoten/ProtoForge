@@ -70,7 +70,7 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     s = get_settings()
     changed = {}
     allowed_keys = {
-        "host", "port", "db_path", "jwt_secret", "demo_mode",
+        "host", "port", "db_path", "demo_mode",
         "log_level", "cors_origins",
         "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
     }
@@ -147,7 +147,7 @@ def get_all_settings_dict() -> dict[str, Any]:
         "log_level": s.log_level,
         "cors_origins": s.cors_origins,
         "influxdb_url": s.influxdb_url,
-        "influxdb_token": s.influxdb_token,
+        "influxdb_token": s.influxdb_token[:8] + "..." if s.influxdb_token and len(s.influxdb_token) > 8 else s.influxdb_token,
         "influxdb_org": s.influxdb_org,
         "influxdb_bucket": s.influxdb_bucket,
         "protocol_ports": {

@@ -57,32 +57,41 @@ class MetricsCollector:
         lines.append(f"# TYPE protoforge_uptime_seconds gauge")
         lines.append(f"protoforge_uptime_seconds {time.time() - self._start_time:.2f}")
 
+        seen_names = set()
         for key, value in sorted(self._gauges.items()):
             name, labels = self._parse_key(key)
-            lines.append(f"# HELP {name} {name}")
-            lines.append(f"# TYPE {name} gauge")
+            if name not in seen_names:
+                lines.append(f"# HELP {name} {name}")
+                lines.append(f"# TYPE {name} gauge")
+                seen_names.add(name)
             if labels:
                 label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
                 lines.append(f"{name}{{{label_str}}} {value:.2f}")
             else:
                 lines.append(f"{name} {value:.2f}")
 
+        seen_names = set()
         for key, value in sorted(self._counters.items()):
             name, labels = self._parse_key(key)
-            lines.append(f"# HELP {name}_total {name} total")
-            lines.append(f"# TYPE {name}_total counter")
+            if name not in seen_names:
+                lines.append(f"# HELP {name}_total {name} total")
+                lines.append(f"# TYPE {name}_total counter")
+                seen_names.add(name)
             if labels:
                 label_str = ",".join(f'{k}="{v}"' for k, v in labels.items())
                 lines.append(f"{name}_total{{{label_str}}} {value:.2f}")
             else:
                 lines.append(f"{name}_total {value:.2f}")
 
+        seen_names = set()
         for key, values in sorted(self._histograms.items()):
             name, labels = self._parse_key(key)
             if not values:
                 continue
-            lines.append(f"# HELP {name} {name}")
-            lines.append(f"# TYPE {name} summary")
+            if name not in seen_names:
+                lines.append(f"# HELP {name} {name}")
+                lines.append(f"# TYPE {name} summary")
+                seen_names.add(name)
             sorted_vals = sorted(values)
             count = len(sorted_vals)
             total = sum(sorted_vals)

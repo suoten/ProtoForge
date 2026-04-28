@@ -155,9 +155,8 @@ class ProtoForgeClient:
     def instantiate_template(self, template_id: str, device_id: str,
                              device_name: str, protocol_config: dict | None = None) -> dict:
         params = {"device_id": device_id, "device_name": device_name}
-        if protocol_config:
-            params["protocol_config"] = json.dumps(protocol_config)
-        return self._post(f"/templates/{template_id}/instantiate", params=params)
+        body = {"protocol_config": protocol_config} if protocol_config else None
+        return self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
 
     def list_scenarios(self) -> list:
         return self._get("/scenarios")
@@ -259,6 +258,26 @@ class ProtoForgeClient:
     def import_pygbsentry(self, config: dict) -> dict:
         return self._post("/integration/pygbsentry", json=config)
 
+    def update_device(self, device_id: str, updates: dict) -> dict:
+        current = self._get(f"/devices/{device_id}")
+        config = self._get(f"/devices/{device_id}/config")
+        merged = {**config, **updates}
+        if "points" not in merged and "points" in current:
+            merged["points"] = current["points"]
+        return self._put(f"/devices/{device_id}", json=merged)
+
+    def remove_forward_target(self, name: str) -> dict:
+        return self._delete(f"/forward/targets/{name}")
+
+    def delete_recording(self, recording_id: str) -> dict:
+        return self._delete(f"/recorder/recordings/{recording_id}")
+
+    def replay_recording(self, recording_id: str, speed: float = 1.0) -> dict:
+        return self._post(f"/recorder/recordings/{recording_id}/replay", json={"speed": speed})
+
+    def get_recorder_stats(self) -> dict:
+        return self._get("/recorder/stats")
+
     def login(self, username: str, password: str) -> dict:
         resp = self._post("/auth/login", json={"username": username, "password": password})
         token = resp.get("access_token")
@@ -312,6 +331,42 @@ class ProtoForgeClient:
 
     def update_settings(self, updates: dict) -> dict:
         return self._put("/settings", json=updates)
+
+    def update_scenario(self, scenario_id: str, config: dict) -> dict:
+        return self._put(f"/scenarios/{scenario_id}", json=config)
+
+    def delete_scenario(self, scenario_id: str) -> dict:
+        return self._delete(f"/scenarios/{scenario_id}")
+
+    def get_protocol_config(self, protocol_name: str) -> dict:
+        return self._get(f"/protocols/{protocol_name}/config")
+
+    def get_device_config(self, device_id: str) -> dict:
+        return self._get(f"/devices/{device_id}/config")
+
+    def get_device_connection_guide(self, device_id: str) -> dict:
+        return self._get(f"/devices/{device_id}/connection-guide")
+
+    def quick_test(self, scope: str = "all", target_id: str | None = None) -> dict:
+        params = {"scope": scope}
+        if target_id:
+            params["target_id"] = target_id
+        return self._post("/tests/quick-test", params=params)
+
+    def list_webhooks(self) -> list:
+        return self._get("/webhooks")
+
+    def add_webhook(self, config: dict) -> dict:
+        return self._post("/webhooks", json=config)
+
+    def delete_webhook(self, webhook_id: str) -> dict:
+        return self._delete(f"/webhooks/{webhook_id}")
+
+    def setup_demo(self) -> dict:
+        return self._post("/setup/demo")
+
+    def get_setup_status(self) -> dict:
+        return self._get("/setup/status")
 
 
 class AsyncProtoForgeClient:
@@ -497,6 +552,26 @@ class AsyncProtoForgeClient:
     async def import_pygbsentry(self, config: dict) -> dict:
         return await self._post("/integration/pygbsentry", json=config)
 
+    async def update_device(self, device_id: str, updates: dict) -> dict:
+        current = await self._get(f"/devices/{device_id}")
+        config = await self._get(f"/devices/{device_id}/config")
+        merged = {**config, **updates}
+        if "points" not in merged and "points" in current:
+            merged["points"] = current["points"]
+        return await self._put(f"/devices/{device_id}", json=merged)
+
+    async def remove_forward_target(self, name: str) -> dict:
+        return await self._delete(f"/forward/targets/{name}")
+
+    async def delete_recording(self, recording_id: str) -> dict:
+        return await self._delete(f"/recorder/recordings/{recording_id}")
+
+    async def replay_recording(self, recording_id: str, speed: float = 1.0) -> dict:
+        return await self._post(f"/recorder/recordings/{recording_id}/replay", json={"speed": speed})
+
+    async def get_recorder_stats(self) -> dict:
+        return await self._get("/recorder/stats")
+
     async def login(self, username: str, password: str) -> dict:
         resp = await self._post("/auth/login", json={"username": username, "password": password})
         token = resp.get("access_token")
@@ -534,9 +609,8 @@ class AsyncProtoForgeClient:
     async def instantiate_template(self, template_id: str, device_id: str,
                                    device_name: str, protocol_config: dict | None = None) -> dict:
         params = {"device_id": device_id, "device_name": device_name}
-        if protocol_config:
-            params["protocol_config"] = json.dumps(protocol_config)
-        return await self._post(f"/templates/{template_id}/instantiate", params=params)
+        body = {"protocol_config": protocol_config} if protocol_config else None
+        return await self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
 
     async def list_scenarios(self) -> list:
         return await self._get("/scenarios")
@@ -611,3 +685,39 @@ class AsyncProtoForgeClient:
 
     async def update_settings(self, updates: dict) -> dict:
         return await self._put("/settings", json=updates)
+
+    async def update_scenario(self, scenario_id: str, config: dict) -> dict:
+        return await self._put(f"/scenarios/{scenario_id}", json=config)
+
+    async def delete_scenario(self, scenario_id: str) -> dict:
+        return await self._delete(f"/scenarios/{scenario_id}")
+
+    async def get_protocol_config(self, protocol_name: str) -> dict:
+        return await self._get(f"/protocols/{protocol_name}/config")
+
+    async def get_device_config(self, device_id: str) -> dict:
+        return await self._get(f"/devices/{device_id}/config")
+
+    async def get_device_connection_guide(self, device_id: str) -> dict:
+        return await self._get(f"/devices/{device_id}/connection-guide")
+
+    async def quick_test(self, scope: str = "all", target_id: str | None = None) -> dict:
+        params = {"scope": scope}
+        if target_id:
+            params["target_id"] = target_id
+        return await self._post("/tests/quick-test", params=params)
+
+    async def list_webhooks(self) -> list:
+        return await self._get("/webhooks")
+
+    async def add_webhook(self, config: dict) -> dict:
+        return await self._post("/webhooks", json=config)
+
+    async def delete_webhook(self, webhook_id: str) -> dict:
+        return await self._delete(f"/webhooks/{webhook_id}")
+
+    async def setup_demo(self) -> dict:
+        return await self._post("/setup/demo")
+
+    async def get_setup_status(self) -> dict:
+        return await self._get("/setup/status")

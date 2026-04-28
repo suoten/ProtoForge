@@ -16,6 +16,14 @@ services:
       retries: 5
     restart: unless-stopped
 
+  init-test-db:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "psql -U protoforge -h postgres -d protoforge -c 'SELECT 1 FROM pg_database WHERE datname = $$protoforge_test$$' | grep -q 1 || psql -U protoforge -h postgres -d postgres -c 'CREATE DATABASE protoforge_test'"
+
   protoforge:
     build: .
     ports:
@@ -56,8 +64,8 @@ services:
       PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"
     depends_on:
-      postgres:
-        condition: service_healthy
+      init-test-db:
+        condition: service_completed_successfully
     volumes:
       - ./:/app
 

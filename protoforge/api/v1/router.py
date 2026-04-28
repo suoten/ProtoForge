@@ -13,7 +13,7 @@ from protoforge.core.auth import verify_token
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
-from protoforge.api.v1.auth import require_admin, require_viewer
+from protoforge.api.v1.auth import require_admin, require_operator, require_user, require_viewer
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -113,13 +113,13 @@ async def get_protocol_device_config(protocol_name: str):
     from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
     config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
-    if protocol_name not in ("gb28181", "video"):
+    if protocol_name != "gb28181":
         config.extend(EDGELITE_PUSH_FIELDS)
     return {"protocol": protocol_name, "fields": config}
 
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, config: dict[str, Any] = None):
+async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, operator: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
@@ -148,7 +148,7 @@ async def start_protocol(protocol_name: str, config: dict[str, Any] = None):
 
 
 @router.post("/protocols/{protocol_name}/stop")
-async def stop_protocol(protocol_name: str):
+async def stop_protocol(protocol_name: str, operator: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -167,7 +167,7 @@ async def list_devices(protocol: Optional[str] = None):
 
 
 @router.post("/devices", response_model=DeviceInfo)
-async def create_device(config: DeviceConfig):
+async def create_device(config: DeviceConfig, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -187,7 +187,7 @@ async def create_device(config: DeviceConfig):
 
 
 @router.post("/devices/quick-create")
-async def quick_create_device(params: dict[str, Any]):
+async def quick_create_device(params: dict[str, Any], _user: dict = Depends(require_operator)):
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
     device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("（", "(").replace("）", ")") or str(uuid.uuid4())[:8]
@@ -225,7 +225,7 @@ async def quick_create_device(params: dict[str, Any]):
 
 
 @router.post("/devices/batch")
-async def batch_create_devices(configs: list[DeviceConfig]):
+async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     results = []
@@ -241,7 +241,7 @@ async def batch_create_devices(configs: list[DeviceConfig]):
 
 
 @router.delete("/devices/batch")
-async def batch_delete_devices(device_ids: list[str]):
+async def batch_delete_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     deleted = 0
@@ -257,7 +257,7 @@ async def batch_delete_devices(device_ids: list[str]):
 
 
 @router.post("/devices/batch/start")
-async def batch_start_devices(device_ids: list[str]):
+async def batch_start_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
     engine = _get_engine()
     started = 0
     errors = []
@@ -271,7 +271,7 @@ async def batch_start_devices(device_ids: list[str]):
 
 
 @router.post("/devices/batch/stop")
-async def batch_stop_devices(device_ids: list[str]):
+async def batch_stop_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
     engine = _get_engine()
     stopped = 0
     errors = []
@@ -303,7 +303,7 @@ async def get_device_config(device_id: str):
 
 
 @router.delete("/devices/{device_id}")
-async def delete_device(device_id: str):
+async def delete_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -324,7 +324,7 @@ async def delete_device(device_id: str):
 
 
 @router.put("/devices/{device_id}")
-async def update_device(device_id: str, config: DeviceConfig):
+async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -354,7 +354,7 @@ async def get_device_points(device_id: str):
 
 
 @router.post("/devices/{device_id}/start")
-async def start_device(device_id: str):
+async def start_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     try:
         await engine.start_device(device_id)
@@ -364,7 +364,7 @@ async def start_device(device_id: str):
 
 
 @router.post("/devices/{device_id}/stop")
-async def stop_device(device_id: str):
+async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     try:
         await engine.stop_device(device_id)
@@ -374,7 +374,7 @@ async def stop_device(device_id: str):
 
 
 @router.put("/devices/{device_id}/points/{point_name}")
-async def write_device_point(device_id: str, point_name: str, value: Any = Query(None)):
+async def write_device_point(device_id: str, point_name: str, value: Any = Query(None), _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -395,7 +395,7 @@ async def list_scenarios():
 
 
 @router.post("/scenarios", response_model=ScenarioInfo)
-async def create_scenario(config: ScenarioConfig):
+async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     try:
@@ -416,7 +416,7 @@ async def get_scenario(scenario_id: str):
 
 
 @router.post("/scenarios/{scenario_id}/start")
-async def start_scenario(scenario_id: str):
+async def start_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -429,7 +429,7 @@ async def start_scenario(scenario_id: str):
 
 
 @router.post("/scenarios/{scenario_id}/stop")
-async def stop_scenario(scenario_id: str):
+async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -442,7 +442,7 @@ async def stop_scenario(scenario_id: str):
 
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioInfo)
-async def update_scenario(scenario_id: str, config: ScenarioConfig):
+async def update_scenario(scenario_id: str, config: ScenarioConfig, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     try:
         return engine.update_scenario(scenario_id, config)
@@ -451,7 +451,7 @@ async def update_scenario(scenario_id: str, config: ScenarioConfig):
 
 
 @router.delete("/scenarios/{scenario_id}")
-async def delete_scenario(scenario_id: str):
+async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     try:
@@ -478,7 +478,7 @@ async def export_scenario(scenario_id: str):
 
 
 @router.post("/scenarios/import")
-async def import_scenario(config: ScenarioConfig):
+async def import_scenario(config: ScenarioConfig, operator: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     try:
@@ -530,7 +530,7 @@ async def get_template(template_id: str):
 
 
 @router.post("/templates", response_model=TemplateDetail)
-async def create_template(template: TemplateDetail):
+async def create_template(template: TemplateDetail, _user: dict = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
     tm.add_template(template)
@@ -543,8 +543,12 @@ async def instantiate_template(
     template_id: str,
     device_id: str = Query(...),
     device_name: str = Query(...),
-    protocol_config: Optional[dict[str, Any]] = None,
+    body: Optional[dict[str, Any]] = None,
+    _user: dict = Depends(require_operator),
 ):
+    protocol_config = None
+    if body:
+        protocol_config = body.get("protocol_config")
     tm = _get_template_manager()
     try:
         return tm.create_device_from_template(template_id, device_id, device_name, protocol_config)
@@ -570,7 +574,7 @@ async def get_logs(
 
 
 @router.delete("/logs")
-async def clear_logs():
+async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
     return {"status": "ok", "message": "日志已清空"}
@@ -654,7 +658,7 @@ async def ws_logs(websocket: WebSocket):
 
 
 @router.post("/integration/edgelite")
-async def import_edgelite(config: dict[str, Any]):
+async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.integration import import_edgelite_config
     engine = _get_engine()
     try:
@@ -669,7 +673,7 @@ async def import_edgelite(config: dict[str, Any]):
 
 
 @router.post("/integration/edgelite/push/{device_id}")
-async def push_device_to_edgelite(device_id: str):
+async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import push_device_to_edgelite as _push
     engine = _get_engine()
     instance = engine._devices.get(device_id)
@@ -682,7 +686,7 @@ async def push_device_to_edgelite(device_id: str):
 
 
 @router.post("/integration/edgelite/test")
-async def test_edgelite_connection(config: dict[str, Any] = None):
+async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import test_edgelite_connection as _test
     if not config:
         config = {}
@@ -764,7 +768,7 @@ async def verify_edgelite_pipeline(device_id: str):
 
 
 @router.delete("/integration/edgelite/push/{device_id}")
-async def remove_device_from_edgelite(device_id: str):
+async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import remove_device_from_edgelite as _remove
     engine = _get_engine()
     instance = engine._devices.get(device_id)
@@ -777,7 +781,7 @@ async def remove_device_from_edgelite(device_id: str):
 
 
 @router.post("/integration/pygbsentry")
-async def import_pygbsentry(config: dict[str, Any]):
+async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.integration import import_pygbsentry_config
     engine = _get_engine()
     try:
@@ -837,7 +841,7 @@ async def _close_internal_client():
 
 
 @router.post("/tests/cases")
-async def create_test_case(case_def: dict[str, Any]):
+async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(require_user)):
     from protoforge.core.testing import TestCase
     runner = _get_test_runner()
     tc = TestCase.from_dict(case_def)
@@ -862,7 +866,7 @@ async def get_test_case(case_id: str):
 
 
 @router.put("/tests/cases/{case_id}")
-async def update_test_case(case_id: str, case_def: dict[str, Any]):
+async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict = Depends(require_user)):
     from protoforge.core.testing import TestCase
     runner = _get_test_runner()
     existing = runner.get_test_case(case_id)
@@ -875,7 +879,7 @@ async def update_test_case(case_id: str, case_def: dict[str, Any]):
 
 
 @router.delete("/tests/cases/{case_id}")
-async def delete_test_case(case_id: str):
+async def delete_test_case(case_id: str, _user: dict = Depends(require_user)):
     runner = _get_test_runner()
     if not await runner.delete_test_case(case_id):
         raise HTTPException(status_code=404, detail="Test case not found")
@@ -883,7 +887,7 @@ async def delete_test_case(case_id: str):
 
 
 @router.post("/tests/suites")
-async def create_test_suite(suite_def: dict[str, Any]):
+async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(require_user)):
     import time as _time
     from protoforge.core.testing import TestSuite
     runner = _get_test_runner()
@@ -917,7 +921,7 @@ async def get_test_suite(suite_id: str):
 
 
 @router.delete("/tests/suites/{suite_id}")
-async def delete_test_suite(suite_id: str):
+async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
     runner = _get_test_runner()
     if not await runner.delete_test_suite(suite_id):
         raise HTTPException(status_code=404, detail="Test suite not found")
@@ -925,7 +929,7 @@ async def delete_test_suite(suite_id: str):
 
 
 @router.post("/tests/run")
-async def run_test(test_cases: list[dict[str, Any]]):
+async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(require_user)):
     from protoforge.core.testing import TestCase
     runner = _get_test_runner()
     cases = []
@@ -938,7 +942,7 @@ async def run_test(test_cases: list[dict[str, Any]]):
 
 
 @router.post("/tests/run/case/{case_id}")
-async def run_test_case_by_id(case_id: str):
+async def run_test_case_by_id(case_id: str, operator: dict = Depends(require_user)):
     runner = _get_test_runner()
     tc = runner.get_test_case(case_id)
     if not tc:
@@ -949,7 +953,7 @@ async def run_test_case_by_id(case_id: str):
 
 
 @router.post("/tests/run/suite/{suite_id}")
-async def run_test_suite_by_id(suite_id: str):
+async def run_test_suite_by_id(suite_id: str, operator: dict = Depends(require_user)):
     runner = _get_test_runner()
     api_client = await _get_internal_client()
     try:
@@ -991,7 +995,7 @@ async def get_test_report_html(report_id: str):
 
 
 @router.post("/tests/quick-test")
-async def quick_test(scope: str = "all", target_id: Optional[str] = None):
+async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user: dict = Depends(require_user)):
     engine = _get_engine()
     from protoforge.core.testing import TestCase, TestStep, Assertion, AssertionType
     cases = []
@@ -1310,7 +1314,7 @@ async def list_forward_targets():
 
 
 @router.post("/forward/targets")
-async def add_forward_target(config: dict[str, Any]):
+async def add_forward_target(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.forward import create_target
     engine = _get_forward_engine()
     name = config.get("name", f"target-{int(time.time())}")
@@ -1320,21 +1324,21 @@ async def add_forward_target(config: dict[str, Any]):
 
 
 @router.delete("/forward/targets/{name}")
-async def remove_forward_target(name: str):
+async def remove_forward_target(name: str, _user: dict = Depends(require_operator)):
     engine = _get_forward_engine()
     engine.remove_target(name)
     return {"status": "ok"}
 
 
 @router.post("/forward/start")
-async def start_forward():
+async def start_forward(_user: dict = Depends(require_operator)):
     engine = _get_forward_engine()
     await engine.start()
     return {"status": "ok"}
 
 
 @router.post("/forward/stop")
-async def stop_forward():
+async def stop_forward(_user: dict = Depends(require_operator)):
     engine = _get_forward_engine()
     await engine.stop()
     return {"status": "ok"}
@@ -1358,7 +1362,7 @@ def _get_recorder():
 
 
 @router.post("/recorder/start")
-async def start_recording(config: dict[str, Any]):
+async def start_recording(config: dict[str, Any], _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     rec = await recorder.start_recording(
         name=config.get("name", "Untitled"),
@@ -1370,7 +1374,7 @@ async def start_recording(config: dict[str, Any]):
 
 
 @router.post("/recorder/stop")
-async def stop_recording():
+async def stop_recording(operator: dict = Depends(require_operator)):
     recorder = _get_recorder()
     rec = await recorder.stop_recording()
     if not rec:
@@ -1394,7 +1398,7 @@ async def get_recording(rec_id: str):
 
 
 @router.delete("/recorder/recordings/{rec_id}")
-async def delete_recording(rec_id: str):
+async def delete_recording(rec_id: str, operator: dict = Depends(require_operator)):
     recorder = _get_recorder()
     if not recorder.delete_recording(rec_id):
         raise HTTPException(status_code=404, detail="Recording not found")
@@ -1402,7 +1406,7 @@ async def delete_recording(rec_id: str):
 
 
 @router.post("/recorder/recordings/{rec_id}/replay")
-async def replay_recording(rec_id: str, config: dict[str, Any]):
+async def replay_recording(rec_id: str, config: dict[str, Any], operator: dict = Depends(require_operator)):
     recorder = _get_recorder()
     speed = config.get("speed", 1.0)
     try:
@@ -1435,7 +1439,7 @@ async def list_webhooks():
 
 
 @router.post("/webhooks")
-async def add_webhook(config: dict[str, Any]):
+async def add_webhook(config: dict[str, Any], operator: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     if "url" not in config:
         raise HTTPException(status_code=400, detail="url is required")
@@ -1444,7 +1448,7 @@ async def add_webhook(config: dict[str, Any]):
 
 
 @router.put("/webhooks/{wh_id}")
-async def update_webhook(wh_id: str, config: dict[str, Any]):
+async def update_webhook(wh_id: str, config: dict[str, Any], operator: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     webhook = webhook_manager.update_webhook(wh_id, config)
     if not webhook:
@@ -1453,7 +1457,7 @@ async def update_webhook(wh_id: str, config: dict[str, Any]):
 
 
 @router.delete("/webhooks/{wh_id}")
-async def delete_webhook(wh_id: str):
+async def delete_webhook(wh_id: str, operator: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     if not webhook_manager.remove_webhook(wh_id):
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -1461,7 +1465,7 @@ async def delete_webhook(wh_id: str):
 
 
 @router.post("/webhooks/{wh_id}/test")
-async def test_webhook(wh_id: str):
+async def test_webhook(wh_id: str, operator: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     webhook = webhook_manager.get_webhook(wh_id)
     if not webhook:
@@ -1477,7 +1481,7 @@ async def webhook_stats():
 
 
 @router.post("/setup/demo")
-async def setup_demo():
+async def setup_demo(operator: dict = Depends(require_admin)):
     engine = _get_engine()
     tm = _get_template_manager()
     from protoforge.core.demo import seed_demo_data

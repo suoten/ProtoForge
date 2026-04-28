@@ -147,6 +147,7 @@ function onLogin() {
 
 function onUserMenuSelect(key) {
   if (key === 'logout') {
+    if (ws) { ws.close(); ws = null }
     localStorage.removeItem('token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('username')
@@ -180,12 +181,13 @@ function onSearchSelect(val) {
 }
 
 function connectWebSocket() {
+  if (!loggedIn.value) return
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const token = localStorage.getItem('token') || ''
   const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs?token=${token}`
   ws = new WebSocket(wsUrl)
   ws.onopen = () => { wsConnected.value = true }
-  ws.onclose = () => { wsConnected.value = false; setTimeout(connectWebSocket, 5000) }
+  ws.onclose = () => { wsConnected.value = false; if (loggedIn.value) setTimeout(connectWebSocket, 5000) }
   ws.onerror = () => { wsConnected.value = false }
 }
 

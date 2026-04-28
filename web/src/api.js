@@ -83,7 +83,10 @@ export default {
   createTemplate: (template) => d(api.post('/templates', template)),
   searchTemplates: (params) => d(api.get('/templates/search', { params })),
   listTemplateTags: () => d(api.get('/templates/tags')),
-  instantiateTemplate: (id, params) => d(api.post(`/templates/${id}/instantiate`, null, { params })),
+  instantiateTemplate: (id, params) => {
+    const { device_id, device_name, protocol_config, ...rest } = params || {}
+    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id, device_name, ...rest } }))
+  },
 
   getScenarios: () => d(api.get('/scenarios')),
   createScenario: (config) => d(api.post('/scenarios', config)),
