@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -30,7 +30,7 @@ class PointConfig(BaseModel):
     data_type: DataType = DataType.FLOAT32
     unit: str = ""
     description: str = ""
-    access: str = "rw"
+    access: Literal["r", "w", "rw"] = "rw"
 
     generator_type: GeneratorType = GeneratorType.FIXED
     generator_config: dict[str, Any] = Field(default_factory=dict)

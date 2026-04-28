@@ -1,9 +1,34 @@
 import math
 import random
 import time
+import logging
 from typing import Any
 
 from protoforge.models.device import DataType, GeneratorType, PointConfig
+
+logger = logging.getLogger(__name__)
+
+_DANGEROUS_ATTRS = frozenset({
+    "__class__", "__bases__", "__subclasses__", "__mro__",
+    "__globals__", "__code__", "__func__", "__self__",
+    "__dict__", "__weakref__", "__del__", "__delattr__",
+    "__setattr__", "__getattribute__", "__reduce__",
+    "__reduce_ex__", "__import__", "__builtins__",
+    "exec", "eval", "compile", "open", "input",
+    "__loader__", "__spec__", "__module__",
+})
+
+
+class _SafeNamespace(dict):
+    def __getitem__(self, key):
+        if key in _DANGEROUS_ATTRS:
+            raise KeyError(f"Access to '{key}' is not allowed")
+        return super().__getitem__(key)
+
+    def __setitem__(self, key, value):
+        if key in _DANGEROUS_ATTRS:
+            raise KeyError(f"Setting '{key}' is not allowed")
+        super().__setitem__(key, value)
 
 
 class ScriptEngine:
@@ -19,7 +44,7 @@ class ScriptEngine:
         self._cache: dict[str, Any] = {}
 
     def execute(self, script: str, context: dict[str, Any]) -> Any:
-        namespace = dict(self._safe_builtins)
+        namespace = _SafeNamespace(self._safe_builtins)
         namespace["context"] = context
         namespace["time"] = time.time()
         namespace["cache"] = self._cache
@@ -27,6 +52,7 @@ class ScriptEngine:
             exec(script, {"__builtins__": {}}, namespace)
             return namespace.get("result", 0)
         except Exception as e:
+            logger.debug("Script execution error: %s", e)
             return 0
 
 

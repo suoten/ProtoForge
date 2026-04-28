@@ -581,7 +581,10 @@ class GB28181Server(ProtocolServer):
                                 "media_addr": f"{sdp_info['media_ip']}:{sdp_info['media_port']}"})
 
         media_ip = self._host if self._host != "0.0.0.0" else "127.0.0.1"
-        media_port = 6000 + (int(device_id[-4:], 16) % 1000)
+        try:
+            media_port = 6000 + (int(device_id[-4:], 16) % 1000)
+        except (ValueError, IndexError):
+            media_port = 6000
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
 
         sdp_body = gb_device.make_sdp_answer(media_ip, media_port, ssrc)

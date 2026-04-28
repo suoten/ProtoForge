@@ -145,10 +145,8 @@ class Recorder:
         if len(recording.messages) < 2:
             return {"status": "ok", "replayed": 0}
         replayed = 0
-        base_time = recording.messages[0].timestamp
         for i, msg in enumerate(recording.messages):
             if i > 0:
-                delay = (msg.timestamp - base_time) / speed
                 prev_time = recording.messages[i - 1].timestamp
                 delay = (msg.timestamp - prev_time) / speed
                 if delay > 0:
