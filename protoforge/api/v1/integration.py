@@ -98,7 +98,7 @@ async def stop_device_collect(device_id: str, _user: dict = Depends(require_oper
 
 
 @router.get("/protocols")
-async def get_protocol_mappings():
+async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
     return {
         "protocol_map": manager.protocol_mapper.get_map(),
@@ -136,19 +136,19 @@ async def test_connection(request: dict[str, Any], _user: dict = Depends(require
 
 
 @router.get("/backhaul-data")
-async def get_backhaul_data(device_id: str = "", limit: int = 100):
+async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
     return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
 
 
 @router.get("/device-status")
-async def get_device_status_cache():
+async def get_device_status_cache(_user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
     return {"devices": manager.get_device_status_cache()}
 
 
 @router.get("/alarm-rules")
-async def get_alarm_reaction_rules():
+async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
     return {"rules": [
         {"rule_id": r.rule_id, "source_device_id": r.source_device_id,

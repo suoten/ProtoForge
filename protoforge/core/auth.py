@@ -100,16 +100,18 @@ class User:
     login_attempts: int = 0
     locked_until: float = 0.0
 
-    def to_dict(self) -> dict:
-        return {
+    def to_dict(self, include_hash: bool = False) -> dict:
+        d = {
             "id": self.id,
             "username": self.username,
-            "password_hash": self.password_hash,
             "role": self.role,
             "created_at": self.created_at,
             "login_attempts": self.login_attempts,
             "locked_until": self.locked_until,
         }
+        if include_hash:
+            d["password_hash"] = self.password_hash
+        return d
 
     @classmethod
     def from_dict(cls, data: dict) -> "User":
@@ -137,7 +139,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def _is_password_strong(password: str) -> tuple[bool, str]:
     if len(password) < 8:
-        return False, "密码长度至少8位"
+        return False, "密码长度至少8�?
     if not any(c.isupper() for c in password):
         return False, "密码必须包含大写字母"
     if not any(c.islower() for c in password):
@@ -212,7 +214,7 @@ class UserManager:
         try:
             import asyncio
             loop = asyncio.get_running_loop()
-            task = loop.create_task(self._db.save_user(user.to_dict()))
+            task = loop.create_task(self._db.save_user(user.to_dict(include_hash=True)))
 
             def _on_persist_done(t):
                 try:
@@ -242,7 +244,7 @@ class UserManager:
         self._users[username] = user
         if self._db:
             try:
-                await self._db.save_user(user.to_dict())
+                await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.warning("Failed to persist user: %s", e)
         return user
@@ -269,14 +271,14 @@ class UserManager:
     async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False, "原密码错误"
+            return False, "原密码错�?
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
         user.password_hash = hash_password(new_password)
         if self._db:
             try:
-                await self._db.save_user(user.to_dict())
+                await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.warning("Failed to update user password: %s", e)
         return True, ""
@@ -289,7 +291,7 @@ class UserManager:
         user.locked_until = 0.0
         if self._db:
             try:
-                await self._db.save_user(user.to_dict())
+                await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.warning("Failed to reset login attempts: %s", e)
         return True
@@ -297,7 +299,7 @@ class UserManager:
     async def admin_reset_password(self, username: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user:
-            return False, "用户不存在"
+            return False, "用户不存�?
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -306,7 +308,7 @@ class UserManager:
         user.locked_until = 0.0
         if self._db:
             try:
-                await self._db.save_user(user.to_dict())
+                await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.warning("Failed to reset user password: %s", e)
         return True, ""
@@ -320,7 +322,7 @@ class UserManager:
         user.role = new_role
         if self._db:
             try:
-                await self._db.save_user(user.to_dict())
+                await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.warning("Failed to update user role: %s", e)
         return True

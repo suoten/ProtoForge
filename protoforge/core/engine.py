@@ -327,36 +327,40 @@ class SimulationEngine:
         scenario = Scenario(config)
         self._scenario_status[scenario_id] = ScenarioStatus.STARTING
 
-        failed_devices = []
-        for device_config in config.devices:
-            if device_config.id not in self._devices:
+        try:
+            failed_devices = []
+            for device_config in config.devices:
+                if device_config.id not in self._devices:
+                    try:
+                        await self.create_device(device_config)
+                    except Exception as e:
+                        logger.warning("Failed to create device %s in scenario: %s", device_config.id, e)
+                        failed_devices.append(device_config.id)
+
+            for device_config in config.devices:
+                if device_config.id in failed_devices:
+                    continue
+                instance = self._devices.get(device_config.id)
+                if instance:
+                    scenario.add_device(instance)
                 try:
-                    await self.create_device(device_config)
+                    await self.start_device(device_config.id)
                 except Exception as e:
-                    logger.warning("Failed to create device %s in scenario: %s", device_config.id, e)
+                    logger.warning("Failed to start device %s in scenario: %s", device_config.id, e)
                     failed_devices.append(device_config.id)
 
-        for device_config in config.devices:
-            if device_config.id in failed_devices:
-                continue
-            instance = self._devices.get(device_config.id)
-            if instance:
-                scenario.add_device(instance)
-            try:
-                await self.start_device(device_config.id)
-            except Exception as e:
-                logger.warning("Failed to start device %s in scenario: %s", device_config.id, e)
-                failed_devices.append(device_config.id)
+            if failed_devices and len(failed_devices) == len(config.devices):
+                self._scenario_status[scenario_id] = ScenarioStatus.ERROR
+                logger.error("All devices failed in scenario %s", scenario_id)
+                return
 
-        if failed_devices and len(failed_devices) == len(config.devices):
+            scenario.start()
+            self._scenario_status[scenario_id] = ScenarioStatus.RUNNING
+            self._scenario_instances[scenario_id] = scenario
+            logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
+        except Exception:
             self._scenario_status[scenario_id] = ScenarioStatus.ERROR
-            logger.error("All devices failed in scenario %s", scenario_id)
-            return
-
-        scenario.start()
-        self._scenario_status[scenario_id] = ScenarioStatus.RUNNING
-        self._scenario_instances[scenario_id] = scenario
-        logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
+            raise
 
     async def stop_scenario(self, scenario_id: str) -> None:
         config = self._scenarios.get(scenario_id)

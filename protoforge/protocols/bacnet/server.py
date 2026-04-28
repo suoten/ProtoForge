@@ -87,6 +87,10 @@ class BACnetServer(ProtocolServer):
                 except asyncio.CancelledError:
                     pass
             if self._sock:
+                try:
+                    self._sock.shutdown(socket.SHUT_RDWR)
+                except Exception:
+                    pass
                 self._sock.close()
                 self._sock = None
         except Exception as e:
@@ -134,10 +138,10 @@ class BACnetServer(ProtocolServer):
             ])
             resp.append(0x01)
             resp.append(0x04)
-            resp.append(bacnet_id & 0xFF)
-            resp.append((bacnet_id >> 8) & 0xFF)
-            resp.append((bacnet_id >> 16) & 0xFF)
             resp.append((bacnet_id >> 24) & 0xFF)
+            resp.append((bacnet_id >> 16) & 0xFF)
+            resp.append((bacnet_id >> 8) & 0xFF)
+            resp.append(bacnet_id & 0xFF)
             responses += bytes(resp)
         return responses if responses else None
 

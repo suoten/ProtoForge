@@ -284,6 +284,11 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).parent.parent / "web" / "dist"
     fallback_dir = Path(__file__).parent.parent / "static"
 
+    if not static_dir.is_dir():
+        static_dir = Path("/app/web/dist")
+    if not fallback_dir.is_dir():
+        fallback_dir = Path("/app/static")
+
     if static_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
@@ -292,7 +297,10 @@ def create_app() -> FastAPI:
             if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
-            file_path = static_dir / full_path
+            file_path = (static_dir / full_path).resolve()
+            if not str(file_path).startswith(str(static_dir.resolve())):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
             if file_path.is_file():
                 return FileResponse(file_path)
             return FileResponse(static_dir / "index.html")
@@ -304,7 +312,10 @@ def create_app() -> FastAPI:
             if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
-            file_path = fallback_dir / full_path
+            file_path = (fallback_dir / full_path).resolve()
+            if not str(file_path).startswith(str(fallback_dir.resolve())):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
             if file_path.is_file():
                 return FileResponse(file_path)
             return FileResponse(fallback_dir / "index.html")

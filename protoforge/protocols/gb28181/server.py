@@ -632,7 +632,8 @@ class GB28181Server(ProtocolServer):
 
                 if dest_ip and dest_port > 0:
                     if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
-                        asyncio.create_task(gb_device.rtp_streamer.stop())
+                        t = asyncio.create_task(gb_device.rtp_streamer.stop())
+                        t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
 
                     try:
                         from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
@@ -651,7 +652,8 @@ class GB28181Server(ProtocolServer):
                                 self._log_debug(direction, msg_type, summary, device_id=did, detail=detail)
                         )
                         gb_device.rtp_streamer = streamer
-                        asyncio.ensure_future(streamer.start())
+                        t = asyncio.ensure_future(streamer.start())
+                        t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
 
                         self._log_debug("out", "rtp_stream_start",
                                         f"ACK收到, 启动RTP视频流 → {dest_ip}:{dest_port}",
@@ -705,7 +707,8 @@ class GB28181Server(ProtocolServer):
             if gb_device._invite_call_id and call_id == gb_device._invite_call_id:
                 pf_id = gb_device._protoforge_device_id
                 if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
-                    asyncio.ensure_future(gb_device.rtp_streamer.stop())
+                    t = asyncio.ensure_future(gb_device.rtp_streamer.stop())
+                    t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
                     self._log_debug("out", "rtp_stream_stop",
                                     "BYE收到, 停止RTP视频流",
                                     device_id=pf_id)

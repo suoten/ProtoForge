@@ -43,7 +43,7 @@ def _get_database():
 
 
 @router.get("/protocols")
-async def list_protocols():
+async def list_protocols(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     protocols = engine.get_protocols()
     from protoforge.core.defaults import get_protocol_defaults, PROTOCOL_DEFAULTS
@@ -55,13 +55,13 @@ async def list_protocols():
 
 
 @router.get("/protocols/info")
-async def get_protocols_info():
+async def get_protocols_info(_user: dict = Depends(require_viewer)):
     from protoforge.core.defaults import get_all_protocol_info
     return get_all_protocol_info()
 
 
 @router.get("/protocols/{protocol_name}/config")
-async def get_protocol_config(protocol_name: str):
+async def get_protocol_config(protocol_name: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     for p in engine.get_protocols():
         if p["name"] == protocol_name:
@@ -70,7 +70,7 @@ async def get_protocol_config(protocol_name: str):
 
 
 @router.get("/devices/{device_id}/connection-guide")
-async def get_device_connection_guide(device_id: str):
+async def get_device_connection_guide(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     device = engine.get_device(device_id)
     if not device:
@@ -109,7 +109,7 @@ async def get_device_connection_guide(device_id: str):
 
 
 @router.get("/protocols/{protocol_name}/device-config")
-async def get_protocol_device_config(protocol_name: str):
+async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
     config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
@@ -119,7 +119,7 @@ async def get_protocol_device_config(protocol_name: str):
 
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, operator: dict = Depends(require_operator)):
+async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
@@ -148,7 +148,7 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
 
 
 @router.post("/protocols/{protocol_name}/stop")
-async def stop_protocol(protocol_name: str, operator: dict = Depends(require_operator)):
+async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -161,7 +161,7 @@ async def stop_protocol(protocol_name: str, operator: dict = Depends(require_ope
 
 
 @router.get("/devices", response_model=list[DeviceInfo])
-async def list_devices(protocol: Optional[str] = None):
+async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     return engine.list_devices(protocol=protocol)
 
@@ -190,14 +190,14 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
 async def quick_create_device(params: dict[str, Any], _user: dict = Depends(require_operator)):
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
-    device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("（", "(").replace("）", ")") or str(uuid.uuid4())[:8]
+    device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("�?, "(").replace("�?, ")") or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
     if not template_id or not device_name:
-        raise HTTPException(status_code=400, detail="template_id 和 name 为必填项")
+        raise HTTPException(status_code=400, detail="template_id �?name 为必填项")
     tm = _get_template_manager()
     template = tm.get_template(template_id)
     if not template:
-        raise HTTPException(status_code=404, detail=f"模板不存在: {template_id}")
+        raise HTTPException(status_code=404, detail=f"模板不存�? {template_id}")
     merged_config = {**(template.protocol_config or {}), **protocol_config}
     config = DeviceConfig(
         id=device_id, name=device_name,
@@ -233,7 +233,10 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
         try:
             info = await engine.create_device(config)
             if db:
-                await db.save_device(config)
+                try:
+                    await db.save_device(config)
+                except Exception as db_err:
+                    logger.warning("Failed to persist device %s: %s", config.id, db_err)
             results.append(info.model_dump() if hasattr(info, 'model_dump') else {"id": config.id, "name": config.name})
         except Exception as e:
             results.append({"id": config.id, "error": str(e)})
@@ -285,7 +288,7 @@ async def batch_stop_devices(device_ids: list[str], _user: dict = Depends(requir
 
 
 @router.get("/devices/{device_id}", response_model=DeviceInfo)
-async def get_device(device_id: str):
+async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
         return engine.get_device(device_id)
@@ -294,7 +297,7 @@ async def get_device(device_id: str):
 
 
 @router.get("/devices/{device_id}/config", response_model=DeviceConfig)
-async def get_device_config(device_id: str):
+async def get_device_config(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     instance = engine._devices.get(device_id)
     if not instance:
@@ -389,7 +392,7 @@ async def write_device_point(device_id: str, point_name: str, value: Any = Query
 
 
 @router.get("/scenarios", response_model=list[ScenarioInfo])
-async def list_scenarios():
+async def list_scenarios(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     return engine.list_scenarios()
 
@@ -478,12 +481,14 @@ async def export_scenario(scenario_id: str):
 
 
 @router.post("/scenarios/import")
-async def import_scenario(config: ScenarioConfig, operator: dict = Depends(require_operator)):
+async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     try:
-        await db.save_scenario(config)
-        return engine.create_scenario(config)
+        result = engine.create_scenario(config)
+        if db:
+            await db.save_scenario(config)
+        return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -577,7 +582,7 @@ async def get_logs(
 async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
-    return {"status": "ok", "message": "日志已清空"}
+    return {"status": "ok", "message": "日志已清�?}
 
 
 @router.websocket("/ws/devices")
@@ -589,6 +594,10 @@ async def ws_devices(websocket: WebSocket):
     payload = verify_token(token)
     if payload is None:
         await websocket.close(code=4001, reason="Invalid token")
+        return
+    user_role = payload.get("role", "user")
+    if user_role not in ("admin", "operator", "user", "viewer"):
+        await websocket.close(code=4003, reason="Insufficient permissions")
         return
     engine = _get_engine()
     await websocket.accept()
@@ -624,6 +633,10 @@ async def ws_logs(websocket: WebSocket):
     payload = verify_token(token)
     if payload is None:
         await websocket.close(code=4001, reason="Invalid token")
+        return
+    user_role = payload.get("role", "user")
+    if user_role not in ("admin", "operator", "user", "viewer"):
+        await websocket.close(code=4003, reason="Insufficient permissions")
         return
     log_bus = _get_log_bus()
     await websocket.accept()
@@ -814,19 +827,16 @@ def _get_test_runner():
 
 async def _get_internal_client():
     global _internal_client
-    if _internal_client is not None:
-        return _internal_client
     from httpx import ASGITransport, AsyncClient
     from protoforge.main import app
     transport = ASGITransport(app=app)
     _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
     if os.environ.get("PROTOFORGE_NO_AUTH", "").lower() not in ("1", "true", "yes"):
         try:
-            from protoforge.core.auth import user_manager
+            from protoforge.core.auth import user_manager, create_token
             admin_user = user_manager._users.get("admin")
             if admin_user:
-                from protoforge.core.auth import create_token
-                token = create_token(admin_user.id, admin_user.username, admin_user.role)
+                token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                 _internal_client.headers["Authorization"] = f"Bearer {token}"
         except Exception:
             pass
@@ -942,7 +952,7 @@ async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(requi
 
 
 @router.post("/tests/run/case/{case_id}")
-async def run_test_case_by_id(case_id: str, operator: dict = Depends(require_user)):
+async def run_test_case_by_id(case_id: str, _user: dict = Depends(require_user)):
     runner = _get_test_runner()
     tc = runner.get_test_case(case_id)
     if not tc:
@@ -953,7 +963,7 @@ async def run_test_case_by_id(case_id: str, operator: dict = Depends(require_use
 
 
 @router.post("/tests/run/suite/{suite_id}")
-async def run_test_suite_by_id(suite_id: str, operator: dict = Depends(require_user)):
+async def run_test_suite_by_id(suite_id: str, _user: dict = Depends(require_user)):
     runner = _get_test_runner()
     api_client = await _get_internal_client()
     try:
@@ -1019,7 +1029,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
                     name=f"写入 {dev.name}/{wp.name}",
                     action="write_point",
                     params={"device_id": dev_id, "point_name": wp.name, "value": 42.5},
-                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"写入 {wp.name} 应成功")],
+                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"写入 {wp.name} 应成�?)],
                 ))
             cases.append(TestCase(
                 id=f"qt-{dev_id}", name=f"设备测试: {dev.name}",
@@ -1031,7 +1041,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
             if target_id and sc_id != target_id:
                 continue
             sc_steps = [
-                TestStep(name=f"验证场景 {sc_config.name} 状态", action="http_request",
+                TestStep(name=f"验证场景 {sc_config.name} 状�?, action="http_request",
                          params={"method": "GET", "url": f"/api/v1/scenarios/{sc_id}"},
                          assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="场景应可访问")]),
             ]
@@ -1047,7 +1057,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
                 id=f"qt-proto-{proto_name}", name=f"协议测试: {proto_name}",
                 tags=["quick-test", "protocol"],
                 steps=[
-                    TestStep(name=f"验证协议 {proto_name} 运行中", action="http_request",
+                    TestStep(name=f"验证协议 {proto_name} 运行�?, action="http_request",
                              params={"method": "GET", "url": "/api/v1/protocols"},
                              assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"协议列表应可访问")]),
                 ],
@@ -1055,16 +1065,16 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
 
     if not cases:
         cases.append(TestCase(
-            id="qt-empty", name="基础连通性测试", tags=["quick-test"],
+            id="qt-empty", name="基础连通性测�?, tags=["quick-test"],
             steps=[
-                TestStep(name="API健康检查", action="http_request",
+                TestStep(name="API健康检�?, action="http_request",
                          params={"method": "GET", "url": "/api/v1/health"},
                          assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="API应可访问")]),
             ],
         ))
 
     api_client = await _get_internal_client()
-    report = await _get_test_runner().run_test_suite("一键测试", cases, api_client=api_client)
+    report = await _get_test_runner().run_test_suite("一键测�?, cases, api_client=api_client)
     return report.to_dict()
 
 
@@ -1077,7 +1087,7 @@ async def get_test_suggestions():
         suggestions.append({
             "type": "device",
             "title": f"测试设备 {dev.name}",
-            "description": f"验证 {dev.name} ({dev.protocol}) 的测点读写功能",
+            "description": f"验证 {dev.name} ({dev.protocol}) 的测点读写功�?,
             "scope": "device",
             "target_id": dev_id,
             "priority": "high" if dev.status.value == "online" else "medium",
@@ -1098,7 +1108,7 @@ async def get_test_suggestions():
         suggestions.append({
             "type": "protocol",
             "title": f"测试 {len(running_protocols)} 个运行中协议",
-            "description": "验证所有运行中协议的连通性",
+            "description": "验证所有运行中协议的连通�?,
             "scope": "protocol",
             "target_id": None,
             "priority": "low",
@@ -1107,8 +1117,8 @@ async def get_test_suggestions():
     if not suggestions:
         suggestions.append({
             "type": "basic",
-            "title": "基础连通性测试",
-            "description": "系统暂无设备，先测试API连通性",
+            "title": "基础连通性测�?,
+            "description": "系统暂无设备，先测试API连通�?,
             "scope": "all",
             "target_id": None,
             "priority": "high",
@@ -1135,30 +1145,30 @@ async def get_test_action_types():
         {"value": "stop_scenario", "label": "停止场景", "category": "场景", "params": ["scenario_id"]},
         {"value": "delete_scenario", "label": "删除场景", "category": "场景", "params": ["scenario_id"]},
         {"value": "list_templates", "label": "模板列表", "category": "模板", "params": []},
-        {"value": "instantiate_template", "label": "实例化模板", "category": "模板", "params": ["template_id"]},
+        {"value": "instantiate_template", "label": "实例化模�?, "category": "模板", "params": ["template_id"]},
         {"value": "http_request", "label": "HTTP请求", "category": "通用", "params": ["method", "url", "headers", "body"]},
         {"value": "wait", "label": "等待", "category": "通用", "params": ["seconds"]},
-        {"value": "assert_value", "label": "断言值", "category": "通用", "params": []},
+        {"value": "assert_value", "label": "断言�?, "category": "通用", "params": []},
     ]
 
 
 @router.get("/tests/assertion-types")
 async def get_test_assertion_types():
     return [
-        {"value": "status_code", "label": "请求应成功", "description": "验证HTTP状态码", "simple": True},
-        {"value": "not_null", "label": "值不应为空", "description": "验证返回值非空", "simple": True},
+        {"value": "status_code", "label": "请求应成�?, "description": "验证HTTP状态码", "simple": True},
+        {"value": "not_null", "label": "值不应为�?, "description": "验证返回值非�?, "simple": True},
         {"value": "length_greater", "label": "列表不应为空", "description": "验证列表长度>0", "simple": True},
-        {"value": "equals", "label": "值应等于", "description": "验证值等于期望值", "simple": True},
-        {"value": "contains", "label": "应包含", "description": "验证包含指定内容", "simple": True},
-        {"value": "greater_than", "label": "值应大于", "description": "验证数值大于阈值", "simple": False},
-        {"value": "less_than", "label": "值应小于", "description": "验证数值小于阈值", "simple": False},
-        {"value": "not_equals", "label": "值不应等于", "description": "验证值不等于指定值", "simple": False},
-        {"value": "not_contains", "label": "不应包含", "description": "验证不包含指定内容", "simple": False},
-        {"value": "regex_match", "label": "正则匹配", "description": "验证匹配正则表达式", "simple": False},
-        {"value": "json_path", "label": "JSON路径取值", "description": "从JSON中提取值验证", "simple": False},
-        {"value": "type_check", "label": "类型检查", "description": "验证值的类型", "simple": False},
-        {"value": "length_equals", "label": "长度等于", "description": "验证列表长度等于指定值", "simple": False},
-        {"value": "length_less", "label": "长度小于", "description": "验证列表长度小于指定值", "simple": False},
+        {"value": "equals", "label": "值应等于", "description": "验证值等于期望�?, "simple": True},
+        {"value": "contains", "label": "应包�?, "description": "验证包含指定内容", "simple": True},
+        {"value": "greater_than", "label": "值应大于", "description": "验证数值大于阈�?, "simple": False},
+        {"value": "less_than", "label": "值应小于", "description": "验证数值小于阈�?, "simple": False},
+        {"value": "not_equals", "label": "值不应等�?, "description": "验证值不等于指定�?, "simple": False},
+        {"value": "not_contains", "label": "不应包含", "description": "验证不包含指定内�?, "simple": False},
+        {"value": "regex_match", "label": "正则匹配", "description": "验证匹配正则表达�?, "simple": False},
+        {"value": "json_path", "label": "JSON路径取�?, "description": "从JSON中提取值验�?, "simple": False},
+        {"value": "type_check", "label": "类型检�?, "description": "验证值的类型", "simple": False},
+        {"value": "length_equals", "label": "长度等于", "description": "验证列表长度等于指定�?, "simple": False},
+        {"value": "length_less", "label": "长度小于", "description": "验证列表长度小于指定�?, "simple": False},
     ]
 
 
@@ -1196,7 +1206,7 @@ async def login(credentials: dict[str, Any]):
     if not user:
         if error_code.startswith("account_locked:"):
             remaining = error_code.split(":")[1]
-            raise HTTPException(status_code=423, detail=f"账户已锁定，请 {remaining} 秒后重试")
+            raise HTTPException(status_code=423, detail=f"账户已锁定，�?{remaining} 秒后重试")
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     access_token = create_token(user.id, user.username, user.role)
     refresh_token = create_refresh_token(user.id)
@@ -1237,18 +1247,18 @@ async def register(user_data: dict[str, Any]):
 
 
 @router.get("/auth/users")
-async def list_users(admin: dict = Depends(require_admin)):
+async def list_users(_user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     return user_manager.list_users()
 
 
 @router.post("/auth/change-password")
-async def change_password(data: dict[str, Any], current_user: dict = Depends(require_viewer)):
+async def change_password(data: dict[str, Any], _user: dict = Depends(require_viewer)):
     from protoforge.core.auth import user_manager
     username = data.get("username", "")
     old_password = data.get("old_password", "")
     new_password = data.get("new_password", "")
-    if current_user.get("role") != "admin" and username != current_user.get("username", ""):
+    if _user.get("role") != "admin" and username != _user.get("username", ""):
         raise HTTPException(status_code=403, detail="Can only change your own password")
     ok, msg = await user_manager.change_password(username, old_password, new_password)
     if not ok:
@@ -1257,7 +1267,7 @@ async def change_password(data: dict[str, Any], current_user: dict = Depends(req
 
 
 @router.post("/auth/admin/reset-password")
-async def admin_reset_password(data: dict[str, Any], admin: dict = Depends(require_admin)):
+async def admin_reset_password(data: dict[str, Any], _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     username = data.get("username", "")
     new_password = data.get("new_password", "")
@@ -1270,7 +1280,7 @@ async def admin_reset_password(data: dict[str, Any], admin: dict = Depends(requi
 
 
 @router.put("/auth/users/{username}/role")
-async def update_user_role(username: str, data: dict[str, Any], admin: dict = Depends(require_admin)):
+async def update_user_role(username: str, data: dict[str, Any], _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     new_role = data.get("role", "")
     if not new_role:
@@ -1281,7 +1291,7 @@ async def update_user_role(username: str, data: dict[str, Any], admin: dict = De
 
 
 @router.post("/auth/admin/unlock/{username}")
-async def admin_unlock_user(username: str, admin: dict = Depends(require_admin)):
+async def admin_unlock_user(username: str, _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.reset_login_attempts(username):
         raise HTTPException(status_code=404, detail="User not found")
@@ -1289,7 +1299,7 @@ async def admin_unlock_user(username: str, admin: dict = Depends(require_admin))
 
 
 @router.delete("/auth/users/{username}")
-async def delete_user(username: str, admin: dict = Depends(require_admin)):
+async def delete_user(username: str, _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.delete_user(username):
         raise HTTPException(status_code=400, detail="Cannot delete this user")
@@ -1374,7 +1384,7 @@ async def start_recording(config: dict[str, Any], _user: dict = Depends(require_
 
 
 @router.post("/recorder/stop")
-async def stop_recording(operator: dict = Depends(require_operator)):
+async def stop_recording(_user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     rec = await recorder.stop_recording()
     if not rec:
@@ -1398,7 +1408,7 @@ async def get_recording(rec_id: str):
 
 
 @router.delete("/recorder/recordings/{rec_id}")
-async def delete_recording(rec_id: str, operator: dict = Depends(require_operator)):
+async def delete_recording(rec_id: str, _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     if not recorder.delete_recording(rec_id):
         raise HTTPException(status_code=404, detail="Recording not found")
@@ -1406,7 +1416,7 @@ async def delete_recording(rec_id: str, operator: dict = Depends(require_operato
 
 
 @router.post("/recorder/recordings/{rec_id}/replay")
-async def replay_recording(rec_id: str, config: dict[str, Any], operator: dict = Depends(require_operator)):
+async def replay_recording(rec_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     speed = config.get("speed", 1.0)
     try:
@@ -1439,7 +1449,7 @@ async def list_webhooks():
 
 
 @router.post("/webhooks")
-async def add_webhook(config: dict[str, Any], operator: dict = Depends(require_operator)):
+async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     if "url" not in config:
         raise HTTPException(status_code=400, detail="url is required")
@@ -1448,7 +1458,7 @@ async def add_webhook(config: dict[str, Any], operator: dict = Depends(require_o
 
 
 @router.put("/webhooks/{wh_id}")
-async def update_webhook(wh_id: str, config: dict[str, Any], operator: dict = Depends(require_operator)):
+async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     webhook = webhook_manager.update_webhook(wh_id, config)
     if not webhook:
@@ -1457,7 +1467,7 @@ async def update_webhook(wh_id: str, config: dict[str, Any], operator: dict = De
 
 
 @router.delete("/webhooks/{wh_id}")
-async def delete_webhook(wh_id: str, operator: dict = Depends(require_operator)):
+async def delete_webhook(wh_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     if not webhook_manager.remove_webhook(wh_id):
         raise HTTPException(status_code=404, detail="Webhook not found")
@@ -1465,7 +1475,7 @@ async def delete_webhook(wh_id: str, operator: dict = Depends(require_operator))
 
 
 @router.post("/webhooks/{wh_id}/test")
-async def test_webhook(wh_id: str, operator: dict = Depends(require_operator)):
+async def test_webhook(wh_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.webhook import webhook_manager
     webhook = webhook_manager.get_webhook(wh_id)
     if not webhook:
@@ -1481,13 +1491,13 @@ async def webhook_stats():
 
 
 @router.post("/setup/demo")
-async def setup_demo(operator: dict = Depends(require_admin)):
+async def setup_demo(_user: dict = Depends(require_admin)):
     engine = _get_engine()
     tm = _get_template_manager()
     from protoforge.core.demo import seed_demo_data
     try:
         await seed_demo_data(engine, tm)
-        return {"status": "ok", "message": "演示数据已创建：4个设备 + 1个场景"}
+        return {"status": "ok", "message": "演示数据已创建：4个设�?+ 1个场�?}
     except Exception as e:
         from protoforge.core.defaults import get_friendly_error
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
@@ -1507,13 +1517,13 @@ async def setup_status():
 
 
 @router.get("/settings")
-async def get_settings(admin: dict = Depends(require_admin)):
+async def get_settings(_user: dict = Depends(require_admin)):
     from protoforge.config import get_all_settings_dict
     return get_all_settings_dict()
 
 
 @router.put("/settings")
-async def update_settings(updates: dict[str, Any], admin: dict = Depends(require_admin)):
+async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
     from protoforge.config import update_settings, get_all_settings_dict
     changed = update_settings(updates)
     return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
