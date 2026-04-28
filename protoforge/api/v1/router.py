@@ -226,10 +226,13 @@ async def quick_create_device(params: dict[str, Any]):
 @router.post("/devices/batch")
 async def batch_create_devices(configs: list[DeviceConfig]):
     engine = _get_engine()
+    db = _get_database()
     results = []
     for config in configs:
         try:
             info = await engine.create_device(config)
+            if db:
+                await db.save_device(config)
             results.append(info.model_dump() if hasattr(info, 'model_dump') else {"id": config.id, "name": config.name})
         except Exception as e:
             results.append({"id": config.id, "error": str(e)})
@@ -575,11 +578,13 @@ async def clear_logs():
 @router.websocket("/ws/devices")
 async def ws_devices(websocket: WebSocket):
     token = websocket.query_params.get("token")
-    if token:
-        payload = verify_token(token)
-        if payload is None:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+    payload = verify_token(token)
+    if payload is None:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
     engine = _get_engine()
     await websocket.accept()
     try:
@@ -608,11 +613,13 @@ async def ws_devices(websocket: WebSocket):
 @router.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
     token = websocket.query_params.get("token")
-    if token:
-        payload = verify_token(token)
-        if payload is None:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+    payload = verify_token(token)
+    if payload is None:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
     log_bus = _get_log_bus()
     await websocket.accept()
     queue = log_bus.subscribe()

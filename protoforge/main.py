@@ -114,8 +114,10 @@ async def lifespan(app: FastAPI):
                     dev.protocol_config = {}
                 dev.protocol_config["_skip_auto_push"] = True
                 await _engine.create_device(dev)
+                dev.protocol_config.pop("_skip_auto_push", None)
                 restored += 1
             except Exception as e:
+                dev.protocol_config.pop("_skip_auto_push", None)
                 logger.error("Failed to restore device %s: %s", dev.id, e)
         logger.info("Restored %d/%d devices from database", restored, len(saved_devices))
     except Exception as e:
