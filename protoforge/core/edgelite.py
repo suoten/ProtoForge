@@ -388,7 +388,19 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         )
         if points_resp.status_code == 200:
             points_data = points_resp.json().get("data", points_resp.json())
-            has_data = any(v is not None for v in points_data.values()) if isinstance(points_data, dict) else False
+            if isinstance(points_data, list):
+                has_data = len(points_data) > 0
+                points_dict = {}
+                for item in points_data:
+                    if isinstance(item, dict):
+                        key = item.get("name") or item.get("point_name") or item.get("id", "")
+                        points_dict[key] = item.get("value")
+                if points_dict:
+                    points_data = points_dict
+            elif isinstance(points_data, dict):
+                has_data = any(v is not None for v in points_data.values())
+            else:
+                has_data = False
             result["steps"]["collect"] = {
                 "ok": True,
                 "data": points_data,
@@ -398,6 +410,9 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["steps"]["collect"] = {"ok": False, "error": f"HTTP {points_resp.status_code}"}
 
         all_ok = all(s.get("ok", False) for s in result["steps"].values())
+        collect_step = result["steps"].get("collect", {})
+        if all_ok and not collect_step.get("has_real_data"):
+            all_ok = False
         result["ok"] = all_ok
 
     return result
@@ -418,7 +433,16 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
                     json={"username": username, "password": password},
                 )
                 if login_resp.status_code == 200:
-                    return {"ok": True}
+                    token = _extract_token(login_resp)
+                    headers = {"Authorization": f"Bearer {token}"} if token else {}
+                    try:
+                        status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
+                        if status_resp.status_code == 200:
+                            data = status_resp.json().get("data", status_resp.json())
+                            return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
+                    except Exception:
+                        pass
+                    return {"ok": True, "version": "未知", "devices": 0}
                 return {"ok": False, "error": f"Auth failed: {login_resp.status_code}"}
             return {"ok": False, "error": f"HTTP {resp.status_code}"}
         except httpx.ConnectError:

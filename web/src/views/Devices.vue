@@ -615,22 +615,16 @@ async function openEditDevice(row) {
 async function saveEditDevice() {
   saving.value = true
   try {
-    const res = await api.updateDevice(editDevice.value.id, {
+    await api.updateDevice(editDevice.value.id, {
       id: editDevice.value.id, name: editDevice.value.name,
       protocol: editDevice.value.protocol, points: editDevice.value.points || [],
       protocol_config: editProtocolConfig.value,
     })
     showEditModal.value = false
     message.success('设备更新成功')
-    if (res.edgelite_push) {
-      const push = res.edgelite_push
-      if (push.ok) {
-        message.success(`EdgeLite: 设备已${push.action === 'created' ? '注册' : '更新'}`)
-      } else if (push.skipped) {
-        message.info('EdgeLite: 未配置网关地址，跳过推送')
-      } else {
-        message.warning(`EdgeLite 推送失败: ${push.error || push.reason || '未知错误'}`)
-      }
+    const protoConfig = editProtocolConfig.value || {}
+    if (protoConfig.edgelite_url) {
+      message.info('EdgeLite: 设备配置已自动推送')
     }
     await loadData()
   } catch (e) { message.error('更新失败: ' + (e.response?.data?.detail || e.message)) }
