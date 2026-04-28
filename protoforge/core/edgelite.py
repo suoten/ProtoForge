@@ -382,7 +382,14 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["steps"]["register"] = {"ok": True, "status": el_status}
 
         if el_status == "offline":
-            result["steps"]["connect"] = {"ok": False, "error": "EdgeLite cannot connect to ProtoForge - check host/port and protocol server status"}
+            driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
+            host_info = ""
+            if isinstance(driver_config, dict):
+                h = driver_config.get("host", driver_config.get("ip", ""))
+                p = driver_config.get("port", "")
+                if h or p:
+                    host_info = f" (driver_config: {h}:{p})"
+            result["steps"]["connect"] = {"ok": False, "error": f"EdgeLite driver cannot connect to ProtoForge{host_info}. Check: 1) ProtoForge protocol server is running 2) IP {host_info.split(':')[0] if host_info else ''} is reachable from EdgeLite 3) Port is correct"}
             result["ok"] = False
             return result
         result["steps"]["connect"] = {"ok": True, "status": el_status}

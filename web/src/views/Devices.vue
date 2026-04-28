@@ -563,11 +563,15 @@ async function stopAllDevices() {
 
 async function batchPushToEdgelite() {
   pushLoading.value = true
-  let ok = 0, fail = 0, skip = 0
+  let ok = 0, fail = 0, skip = 0, unsupported = 0
   for (const id of selectedIds.value) {
     try {
       const res = await api.pushToEdgelite(id)
-      if (res.skipped) { skip++ }
+      if (res.skipped) {
+        const reason = res.reason || ''
+        if (reason.includes('not supported') || reason.includes('不支持')) { unsupported++ }
+        else { skip++ }
+      }
       else { ok++ }
     } catch { fail++ }
   }
@@ -576,6 +580,7 @@ async function batchPushToEdgelite() {
   const parts = []
   if (ok) parts.push(`${ok} 个推送成功`)
   if (skip) parts.push(`${skip} 个未配置EdgeLite`)
+  if (unsupported) parts.push(`${unsupported} 个协议不支持`)
   if (fail) parts.push(`${fail} 个失败`)
   message.success(parts.join('，') || '无操作')
 }
@@ -695,7 +700,12 @@ async function pushFromPipeline() {
   try {
     const res = await api.pushToEdgelite(pipelineDeviceId.value)
     if (res.skipped) {
-      message.warning('该设备未配置 EdgeLite 地址')
+      const reason = res.reason || ''
+      if (reason.includes('not supported') || reason.includes('不支持')) {
+        message.warning('EdgeLite 不支持该协议，无法推送')
+      } else {
+        message.warning('该设备未配置 EdgeLite 地址')
+      }
     } else if (res.ok) {
       message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
       await runPipelineVerify()

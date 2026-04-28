@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import struct
+import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
@@ -65,26 +66,36 @@ class S7Server(ProtocolServer):
         self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 102)
         self._rack = config.get("rack", 0)
         self._slot = config.get("slot", 1)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("S7 server started on %s:%d (rack=%d, slot=%d)",
-                     self._host, self._port, self._rack, self._slot)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("S7 server started on %s:%d (rack=%d, slot=%d)",
+                         self._host, self._port, self._rack, self._slot)
+            self._log_debug("system", "server_start",
+                            f"S7服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start S7 server: %s", e)
+            raise
 
     async def stop(self) -> None:
         self._server_running = False
-        self._status = ProtocolStatus.STOPPED
         if self._server_task:
             self._server_task.cancel()
             try:
                 await self._server_task
             except asyncio.CancelledError:
                 pass
+        self._status = ProtocolStatus.STOPPED
         logger.info("S7 server stopped")
+        self._log_debug("system", "server_stop", "S7服务停止")
 
     async def _serve(self) -> None:
         try:

@@ -1,7 +1,9 @@
 import logging
+import os
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from protoforge.core.auth import verify_token
@@ -9,6 +11,8 @@ from protoforge.core.auth import verify_token
 logger = logging.getLogger(__name__)
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+_NO_AUTH = os.environ.get("PROTOFORGE_NO_AUTH", "").lower() in ("1", "true", "yes")
 
 
 class RoleChecker:
@@ -44,27 +48,61 @@ require_admin = RoleChecker(["admin"])
 require_user = RoleChecker(["admin", "user"])
 require_viewer = RoleChecker(["admin", "user", "viewer"])
 
-
 _PUBLIC_PATHS = {
     "/api/v1/auth/login",
-    "/api/v1/metrics",
     "/docs",
     "/openapi.json",
     "/redoc",
+    "/health",
 }
+
+_PUBLIC_PREFIXES = (
+    "/api/v1/auth/login",
+)
+
+
+def _is_public_path(path: str) -> bool:
+    if path in _PUBLIC_PATHS:
+        return True
+    if path.startswith("/ws"):
+        return True
+    for prefix in _PUBLIC_PREFIXES:
+        if path.startswith(prefix):
+            return True
+    return False
 
 
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path in _PUBLIC_PATHS or path.startswith("/ws") or request.method == "OPTIONS":
+
+    if request.method == "OPTIONS":
         return await call_next(request)
+
+    if _is_public_path(path):
+        return await call_next(request)
+
     if not path.startswith("/api/v1/"):
         return await call_next(request)
+
+    if _NO_AUTH:
+        return await call_next(request)
+
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
-        return await call_next(request)
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Not authenticated"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = auth_header[7:]
     payload = verify_token(token)
-    if payload:
-        request.state.user = payload
+    if payload is None:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Invalid or expired token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    request.state.user = payload
     return await call_next(request)
