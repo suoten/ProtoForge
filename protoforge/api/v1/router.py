@@ -190,7 +190,7 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
 async def quick_create_device(params: dict[str, Any], _user: dict = Depends(require_operator)):
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
-    device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("�?, "(").replace("�?, ")") or str(uuid.uuid4())[:8]
+    device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("(", "").replace(")", "") or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
     if not template_id or not device_name:
         raise HTTPException(status_code=400, detail="template_id �?name 为必填项")
@@ -348,7 +348,7 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
 
 
 @router.get("/devices/{device_id}/points", response_model=list[PointValue])
-async def get_device_points(device_id: str):
+async def get_device_points(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
         return await engine.read_device_points(device_id)
@@ -410,7 +410,7 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
 
 @router.get("/scenarios/{scenario_id}", response_model=ScenarioInfo)
-async def get_scenario(scenario_id: str):
+async def get_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
         return engine.get_scenario(scenario_id)
@@ -466,7 +466,7 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
 
 
 @router.get("/scenarios/{scenario_id}/export")
-async def export_scenario(scenario_id: str):
+async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     db = _get_database()
     try:
@@ -494,13 +494,13 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
 
 @router.get("/templates", response_model=list[TemplateInfo])
-async def list_templates(protocol: Optional[str] = None):
+async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     return tm.list_templates(protocol=protocol)
 
 
 @router.get("/templates/search")
-async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Optional[str] = None):
+async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates(protocol=protocol)
     if q:
@@ -515,7 +515,7 @@ async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Opt
 
 
 @router.get("/templates/tags")
-async def list_template_tags():
+async def list_template_tags(_user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates()
     tags = set()
@@ -526,7 +526,7 @@ async def list_template_tags():
 
 
 @router.get("/templates/{template_id}", response_model=TemplateDetail)
-async def get_template(template_id: str):
+async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     try:
         return tm.get_template(template_id)
@@ -568,6 +568,7 @@ async def get_logs(
     device_id: Optional[str] = None,
     direction: Optional[str] = None,
     message_type: Optional[str] = None,
+    _user: dict = Depends(require_viewer),
 ):
     log_bus = _get_log_bus()
     entries = log_bus.get_recent(count=count * 5, protocol=protocol, device_id=device_id)
@@ -582,7 +583,7 @@ async def get_logs(
 async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
-    return {"status": "ok", "message": "日志已清�?}
+    return {"status": "ok", "message": "日志已清空"}
 
 
 @router.websocket("/ws/devices")
@@ -712,7 +713,7 @@ async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = 
 
 
 @router.get("/integration/edgelite/status/{device_id}")
-async def get_edgelite_device_status(device_id: str):
+async def get_edgelite_device_status(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import get_edgelite_device_status as _status
     engine = _get_engine()
     instance = engine._devices.get(device_id)
@@ -725,7 +726,7 @@ async def get_edgelite_device_status(device_id: str):
 
 
 @router.get("/integration/edgelite/points/{device_id}")
-async def read_edgelite_device_points(device_id: str):
+async def read_edgelite_device_points(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import read_edgelite_device_points as _read
     engine = _get_engine()
     instance = engine._devices.get(device_id)
@@ -738,7 +739,7 @@ async def read_edgelite_device_points(device_id: str):
 
 
 @router.get("/integration/edgelite/pipeline/{device_id}")
-async def verify_edgelite_pipeline(device_id: str):
+async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
     engine = _get_engine()
     instance = engine._devices.get(device_id)
@@ -860,14 +861,14 @@ async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(requi
 
 
 @router.get("/tests/cases")
-async def list_test_cases(tag: Optional[str] = None):
+async def list_test_cases(tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     cases = runner.list_test_cases(tag=tag)
     return [c.to_dict() for c in cases]
 
 
 @router.get("/tests/cases/{case_id}")
-async def get_test_case(case_id: str):
+async def get_test_case(case_id: str, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     tc = runner.get_test_case(case_id)
     if not tc:
@@ -915,14 +916,14 @@ async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(req
 
 
 @router.get("/tests/suites")
-async def list_test_suites():
+async def list_test_suites(_user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     suites = runner.list_test_suites()
     return [s.to_dict() for s in suites]
 
 
 @router.get("/tests/suites/{suite_id}")
-async def get_test_suite(suite_id: str):
+async def get_test_suite(suite_id: str, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     suite = runner.get_test_suite(suite_id)
     if not suite:
@@ -974,19 +975,19 @@ async def run_test_suite_by_id(suite_id: str, _user: dict = Depends(require_user
 
 
 @router.get("/tests/reports")
-async def list_test_reports():
+async def list_test_reports(_user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     return runner.get_reports()
 
 
 @router.get("/tests/reports/trend")
-async def get_report_trend(count: int = 20):
+async def get_report_trend(count: int = 20, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     return runner.get_report_trend(count=count)
 
 
 @router.get("/tests/reports/{report_id}")
-async def get_test_report(report_id: str):
+async def get_test_report(report_id: str, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     report = runner.get_report(report_id)
     if not report:
@@ -995,7 +996,7 @@ async def get_test_report(report_id: str):
 
 
 @router.get("/tests/reports/{report_id}/html")
-async def get_test_report_html(report_id: str):
+async def get_test_report_html(report_id: str, _user: dict = Depends(require_viewer)):
     from fastapi.responses import HTMLResponse
     runner = _get_test_runner()
     html = runner.get_report_html(report_id)
@@ -1079,7 +1080,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
 
 
 @router.get("/tests/suggestions")
-async def get_test_suggestions():
+async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     suggestions = []
 
@@ -1128,7 +1129,7 @@ async def get_test_suggestions():
 
 
 @router.get("/tests/action-types")
-async def get_test_action_types():
+async def get_test_action_types(_user: dict = Depends(require_viewer)):
     return [
         {"value": "create_device", "label": "创建设备", "category": "设备", "params": ["id", "name", "protocol", "points"]},
         {"value": "get_device", "label": "获取设备", "category": "设备", "params": ["device_id"]},
@@ -1153,7 +1154,7 @@ async def get_test_action_types():
 
 
 @router.get("/tests/assertion-types")
-async def get_test_assertion_types():
+async def get_test_assertion_types(_user: dict = Depends(require_viewer)):
     return [
         {"value": "status_code", "label": "请求应成�?, "description": "验证HTTP状态码", "simple": True},
         {"value": "not_null", "label": "值不应为�?, "description": "验证返回值非�?, "simple": True},
@@ -1173,7 +1174,7 @@ async def get_test_assertion_types():
 
 
 @router.get("/scenarios/{scenario_id}/snapshot")
-async def get_scenario_snapshot(scenario_id: str):
+async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     config = engine._scenarios.get(scenario_id)
     if not config:
@@ -1318,7 +1319,7 @@ def _get_forward_engine():
 
 
 @router.get("/forward/targets")
-async def list_forward_targets():
+async def list_forward_targets(_user: dict = Depends(require_viewer)):
     engine = _get_forward_engine()
     return engine.list_targets()
 
@@ -1355,7 +1356,7 @@ async def stop_forward(_user: dict = Depends(require_operator)):
 
 
 @router.get("/forward/stats")
-async def forward_stats():
+async def forward_stats(_user: dict = Depends(require_viewer)):
     engine = _get_forward_engine()
     return engine.get_stats()
 
@@ -1393,13 +1394,13 @@ async def stop_recording(_user: dict = Depends(require_operator)):
 
 
 @router.get("/recorder/recordings")
-async def list_recordings():
+async def list_recordings(_user: dict = Depends(require_viewer)):
     recorder = _get_recorder()
     return recorder.list_recordings()
 
 
 @router.get("/recorder/recordings/{rec_id}")
-async def get_recording(rec_id: str):
+async def get_recording(rec_id: str, _user: dict = Depends(require_viewer)):
     recorder = _get_recorder()
     rec = recorder.get_recording(rec_id)
     if not rec:
@@ -1427,7 +1428,7 @@ async def replay_recording(rec_id: str, config: dict[str, Any], _user: dict = De
 
 
 @router.get("/recorder/recordings/{rec_id}/export")
-async def export_recording(rec_id: str):
+async def export_recording(rec_id: str, _user: dict = Depends(require_viewer)):
     recorder = _get_recorder()
     rec = recorder.get_recording(rec_id)
     if not rec:
@@ -1437,13 +1438,13 @@ async def export_recording(rec_id: str):
 
 
 @router.get("/recorder/stats")
-async def recorder_stats():
+async def recorder_stats(_user: dict = Depends(require_viewer)):
     recorder = _get_recorder()
     return recorder.get_stats()
 
 
 @router.get("/webhooks")
-async def list_webhooks():
+async def list_webhooks(_user: dict = Depends(require_viewer)):
     from protoforge.core.webhook import webhook_manager
     return webhook_manager.list_webhooks()
 
@@ -1485,7 +1486,7 @@ async def test_webhook(wh_id: str, _user: dict = Depends(require_operator)):
 
 
 @router.get("/webhooks/stats")
-async def webhook_stats():
+async def webhook_stats(_user: dict = Depends(require_viewer)):
     from protoforge.core.webhook import webhook_manager
     return webhook_manager.get_stats()
 
@@ -1504,7 +1505,7 @@ async def setup_demo(_user: dict = Depends(require_admin)):
 
 
 @router.get("/setup/status")
-async def setup_status():
+async def setup_status(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     devices = engine.get_all_device_ids()
     protocols_running = sum(1 for p in engine._protocol_servers.values() if p.status.value == "running")
