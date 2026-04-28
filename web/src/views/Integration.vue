@@ -302,7 +302,7 @@ const deviceColumns = [
   {
     title: '操作', key: 'actions', width: 320,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => pushDevice(row.id) }, () => '推送注册'),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => '推送注册'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => '验证链路'),
       h(NButton, { size: 'tiny', secondary: true, onClick: () => checkStatus(row.id) }, () => '查询状态'),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => '移除'),

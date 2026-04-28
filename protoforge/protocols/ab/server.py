@@ -9,15 +9,33 @@ from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolSt
 
 logger = logging.getLogger(__name__)
 
+_CIP_TYPE_MAP = {
+    "bool": (0xC1, 1),
+    "int16": (0xC3, 2),
+    "uint16": (0xC4, 2),
+    "int32": (0xC1, 4),
+    "uint32": (0xC2, 4),
+    "float32": (0xCA, 4),
+    "float64": (0xCB, 8),
+    "string": (0xA0, 0),
+}
+
 
 class AbDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._tags: dict[str, Any] = {}
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
-            self._tags[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
+        self._data_types: dict[str, str] = {}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "int32")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
+                self._tags[name] = fixed_val if fixed_val is not None else 0
+                self._data_types[name] = data_type
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -44,6 +62,9 @@ class AbDeviceBehavior(DeviceBehavior):
         self._tags[tag_name] = value
         self._values[tag_name] = value
 
+    def get_data_type(self, point_name: str) -> str:
+        return self._data_types.get(point_name, "int32")
+
 
 class AbServer(ProtocolServer):
     protocol_name = "ab"
@@ -63,23 +84,33 @@ class AbServer(ProtocolServer):
         self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 44818)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("AB EtherNet/IP server started on %s:%d", self._host, self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("AB EtherNet/IP server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"AB服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start AB server: %s", e)
+            raise
 
     async def stop(self) -> None:
         self._server_running = False
-        self._status = ProtocolStatus.STOPPED
         if self._server_task:
             self._server_task.cancel()
             try:
                 await self._server_task
             except asyncio.CancelledError:
                 pass
+        self._status = ProtocolStatus.STOPPED
         logger.info("AB server stopped")
+        self._log_debug("system", "server_stop", "AB服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -198,31 +229,54 @@ class AbServer(ProtocolServer):
         cip_resp += struct.pack("<I", 0x00000000)
         return self._wrap_cip_response(session, cip_resp)
 
+    @staticmethod
+    def _pack_cip_value(data_type: str, value: Any) -> bytes:
+        type_info = _CIP_TYPE_MAP.get(data_type, (0xC1, 4))
+        type_code, size = type_info
+        if data_type == "bool":
+            return bytes([type_code, 0x00, 0x01, 0x00, 0x01 if value else 0x00])
+        elif data_type == "string":
+            s = str(value).encode("utf-8")
+            return struct.pack("<BH", type_code, len(s)) + s + b"\x00"
+        elif data_type in ("int16",):
+            return struct.pack("<BHh", type_code, size, int(value))
+        elif data_type in ("uint16",):
+            return struct.pack("<BHH", type_code, size, int(value))
+        elif data_type in ("int32",):
+            return struct.pack("<BHi", type_code, size, int(value))
+        elif data_type in ("uint32",):
+            return struct.pack("<BHI", type_code, size, int(value))
+        elif data_type in ("float32",):
+            return struct.pack("<BHf", type_code, size, float(value))
+        elif data_type in ("float64",):
+            return struct.pack("<BHd", type_code, size, float(value))
+        else:
+            return struct.pack("<BHi", type_code, 4, int(value))
+
     def _handle_cip_read_tag(self, session: int, cip_data: bytes) -> bytes:
         tag_value = 0
+        data_type = "int32"
+        behavior = self._behaviors.get(self._default_device_id)
         if len(cip_data) > 6:
             tag_len = struct.unpack("<H", cip_data[2:4])[0]
             if len(cip_data) >= 4 + tag_len:
                 tag_name = cip_data[4:4 + tag_len].decode("ascii", errors="replace").rstrip("\x00")
-                for behavior in self._behaviors.values():
+                if behavior:
                     tag_value = behavior.get_tag(tag_name)
                     if tag_value is None:
                         tag_value = behavior.get_value(tag_name)
-                    break
+                    data_type = behavior.get_data_type(tag_name)
         else:
-            for behavior in self._behaviors.values():
-                if behavior._values:
-                    first_key = list(behavior._values.keys())[0]
-                    tag_value = behavior.get_value(first_key)
-                break
+            if behavior and behavior._values:
+                first_key = list(behavior._values.keys())[0]
+                tag_value = behavior.get_value(first_key)
+                data_type = behavior.get_data_type(first_key)
 
         cip_resp = bytearray()
         cip_resp += bytes([0xD2])
         cip_resp += bytes([0x00])
         cip_resp += struct.pack("<I", 0x00000000)
-        cip_resp += bytes([0xC1, 0x00])
-        cip_resp += struct.pack("<H", 4)
-        cip_resp += struct.pack("<i", int(tag_value))
+        cip_resp += self._pack_cip_value(data_type, tag_value)
         return self._wrap_cip_response(session, cip_resp)
 
     def _handle_cip_write_tag(self, session: int, cip_data: bytes) -> bytes:
@@ -231,9 +285,12 @@ class AbServer(ProtocolServer):
             if len(cip_data) >= 4 + tag_len + 6:
                 tag_name = cip_data[4:4 + tag_len].decode("ascii", errors="replace").rstrip("\x00")
                 write_value = struct.unpack("<i", cip_data[4 + tag_len + 2:4 + tag_len + 6])[0]
-                for behavior in self._behaviors.values():
+                behavior = self._behaviors.get(self._default_device_id)
+                if behavior:
                     behavior.set_tag(tag_name, write_value)
-                    break
+                    self._log_debug("recv", "cip_write",
+                                    f"写入标签 {tag_name}={write_value}",
+                                    detail={"tag": tag_name, "value": write_value})
 
         cip_resp = bytearray()
         cip_resp += bytes([0xCD])
@@ -279,22 +336,30 @@ class AbServer(ProtocolServer):
         return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = AbDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = AbDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_slots[device_config.id] = proto_config.get("slot", 0)
 
         logger.info("AB device created: %s (slot=%d)",
                      device_config.id, self._device_slots[device_config.id])
+        self._log_debug("system", "device_create",
+                        f"创建AB设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_slots.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("AB device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除AB设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)
