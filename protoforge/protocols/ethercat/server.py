@@ -229,13 +229,15 @@ class EtherCATServer(ProtocolServer):
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                header = await reader.read(2)
-                if not header or len(header) < 2:
+                try:
+                    header = await reader.readexactly(2)
+                except asyncio.IncompleteReadError:
                     break
                 length = struct.unpack("<H", header)[0]
                 if length > 0:
-                    payload = await reader.read(length)
-                    if not payload:
+                    try:
+                        payload = await reader.readexactly(length)
+                    except asyncio.IncompleteReadError:
                         break
                     response = self._process_frame(header + payload)
                     if response:

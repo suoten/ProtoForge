@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+import uuid
 from enum import Enum
 from typing import Any, Literal
 
@@ -30,8 +32,8 @@ class MessageType(str, Enum):
 class IntegrationMessage(BaseModel):
     version: str = "1.0"
     type: str
-    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex[:16])
-    timestamp: float = Field(default_factory=lambda: __import__("time").time())
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:16])
+    timestamp: float = Field(default_factory=time.time)
     source: str = "protoforge"
     payload: dict[str, Any] = {}
 
@@ -115,7 +117,7 @@ class BatchPushResult(BaseModel):
 
 
 class AlarmReactionRule(BaseModel):
-    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex[:12])
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     source_device_id: str = ""
     alarm_severity: str = ""
     action: Literal["inject_fault", "adjust_generator", "stop_device"] = "stop_device"

@@ -209,7 +209,6 @@ class MtConnectServer(ProtocolServer):
                     f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'
                     f'{escape(str(val))}</{escape(point.name)}>'
                 )
-                self._sequence = (self._sequence + 1) % (2**53)
             streams_xml.append(
                 f'  <DeviceStream name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <ComponentStream component="Device" name="{escape(config.name)}">\n'
