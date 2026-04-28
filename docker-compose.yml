@@ -51,7 +51,7 @@ services:
 
   protoforge-test:
     build: .
-    command: ["sh", "-c", "pip install -e '.[dev]' && python -m pytest tests/ -v --tb=short"]
+    command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
     environment:
       PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"

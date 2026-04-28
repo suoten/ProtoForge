@@ -95,7 +95,6 @@ async def lifespan(app: FastAPI):
     await _engine.start()
 
     _integration_manager = IntegrationManager(event_bus=_event_bus)
-    import os
     integration_url = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_URL", "")
     integration_user = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_USERNAME", "admin")
     integration_pass = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_PASSWORD", "")
@@ -175,7 +174,6 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"webhooks: {e}")
         logger.error("Failed to start webhook manager: %s", e)
 
-    import os
     if os.environ.get("PROTOFORGE_DEMO_MODE"):
         try:
             from protoforge.core.demo import seed_demo_data
@@ -208,6 +206,11 @@ async def lifespan(app: FastAPI):
         await _database.close()
     except Exception as e:
         logger.error("Error closing database: %s", e)
+    try:
+        from protoforge.api.v1.router import _close_internal_client
+        await _close_internal_client()
+    except Exception:
+        pass
     logger.info("ProtoForge stopped")
 
 
@@ -231,8 +234,8 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=os.environ.get("PROTOFORGE_CORS_ORIGINS", "*").split(","),
-        allow_credentials=True,
+        allow_origins=settings.cors_origins.split(","),
+        allow_credentials=settings.cors_origins != "*",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -244,7 +247,21 @@ def create_app() -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "timestamp": int(time.time() * 1000)}
+        db_ok = _database is not None
+        engine_ok = _engine is not None
+        protocol_count = len(_engine._protocol_servers) if _engine else 0
+        running_protocols = sum(
+            1 for s in (_engine._protocol_servers.values() if _engine else [])
+            if s.status.value == "running"
+        )
+        status = "ok" if (db_ok and engine_ok) else "degraded"
+        return {
+            "status": status,
+            "timestamp": int(time.time() * 1000),
+            "database": db_ok,
+            "engine": engine_ok,
+            "protocols": {"total": protocol_count, "running": running_protocols},
+        }
 
     @app.get("/metrics", response_class=PlainTextResponse)
     async def prometheus_metrics():

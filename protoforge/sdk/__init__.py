@@ -269,8 +269,8 @@ class ProtoForgeClient:
     def refresh_token(self, refresh_token: str) -> dict:
         return self._post("/auth/refresh", json={"refresh_token": refresh_token})
 
-    def change_password(self, old_password: str, new_password: str) -> dict:
-        return self._post("/auth/change-password", json={"old_password": old_password, "new_password": new_password})
+    def change_password(self, username: str, old_password: str, new_password: str) -> dict:
+        return self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
 
     def list_forward_targets(self) -> list:
         return self._get("/forward/targets")
@@ -288,12 +288,12 @@ class ProtoForgeClient:
         return self._get("/forward/stats")
 
     def start_recording(self, protocol: str | None = None, device_id: str | None = None) -> dict:
-        params = {}
+        data = {"name": "SDK Recording"}
         if protocol:
-            params["protocol"] = protocol
+            data["protocol"] = protocol
         if device_id:
-            params["device_id"] = device_id
-        return self._post("/recorder/start", params=params)
+            data["device_id"] = device_id
+        return self._post("/recorder/start", json=data)
 
     def stop_recording(self) -> dict:
         return self._post("/recorder/stop")
@@ -507,8 +507,8 @@ class AsyncProtoForgeClient:
     async def refresh_token(self, refresh_token: str) -> dict:
         return await self._post("/auth/refresh", json={"refresh_token": refresh_token})
 
-    async def change_password(self, old_password: str, new_password: str) -> dict:
-        return await self._post("/auth/change-password", json={"old_password": old_password, "new_password": new_password})
+    async def change_password(self, username: str, old_password: str, new_password: str) -> dict:
+        return await self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
 
     async def start_protocol(self, name: str, config: dict | None = None) -> dict:
         return await self._post(f"/protocols/{name}/start", json=config or {})
@@ -587,12 +587,12 @@ class AsyncProtoForgeClient:
         return await self._get("/forward/stats")
 
     async def start_recording(self, protocol: str | None = None, device_id: str | None = None) -> dict:
-        params = {}
+        data = {"name": "SDK Recording"}
         if protocol:
-            params["protocol"] = protocol
+            data["protocol"] = protocol
         if device_id:
-            params["device_id"] = device_id
-        return await self._post("/recorder/start", params=params)
+            data["device_id"] = device_id
+        return await self._post("/recorder/start", json=data)
 
     async def stop_recording(self) -> dict:
         return await self._post("/recorder/stop")

@@ -162,6 +162,12 @@ class UserManager:
     def set_database(self, db) -> None:
         self._db = db
 
+    def get_user_by_id(self, user_id: str) -> Optional[User]:
+        for u in self._users.values():
+            if u.id == user_id:
+                return u
+        return None
+
     async def restore_from_db(self) -> None:
         if not self._db:
             return
@@ -199,16 +205,24 @@ class UserManager:
         return user, ""
 
     def _persist_user(self, user: User) -> None:
-        if self._db:
-            try:
-                import asyncio
+        if not self._db:
+            return
+        try:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(self._db.save_user(user.to_dict()))
+
+            def _on_persist_done(t):
                 try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(self._db.save_user(user.to_dict()))
-                except RuntimeError:
-                    asyncio.run(self._db.save_user(user.to_dict()))
-            except Exception as e:
-                logger.debug("Failed to persist user state: %s", e)
+                    t.result()
+                except Exception as exc:
+                    logger.warning("Failed to persist user %s: %s", user.username, exc)
+
+            task.add_done_callback(_on_persist_done)
+        except RuntimeError:
+            logger.debug("No event loop, skipping user persist for %s", user.username)
+        except Exception as e:
+            logger.warning("Failed to persist user %s: %s", user.username, e)
 
     async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
         if username in self._users:

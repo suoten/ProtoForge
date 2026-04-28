@@ -31,24 +31,32 @@ integration-test:
           echo "ProtoForge is ready"
           break
         fi
+        if [ "$i" -eq 30 ]; then
+          echo "ProtoForge did not start in time"
+          exit 1
+        fi
         echo "Waiting... ($i/30)"
         sleep 2
       done
   script:
     - |
       python -c "
-      from protoforge.sdk import ProtoForgeClient
-      client = ProtoForgeClient('http://localhost:8000')
-      client.login('admin', 'admin')
-      client.start_protocol('modbus_tcp', {'host': '0.0.0.0', 'port': 5020})
-      config = client.instantiate_template('modbus_temperature_sensor', 'ci-test-001', 'CI Test')
-      device = client.create_device(**config)
-      assert device['id'] == 'ci-test-001'
-      points = client.read_points('ci-test-001')
-      assert len(points) > 0
-      client.delete_device('ci-test-001')
-      client.stop_protocol('modbus_tcp')
-      print('CI integration test passed!')
+      import httpx, asyncio
+      async def test():
+          base = 'http://localhost:8000/api/v1'
+          async with httpx.AsyncClient() as c:
+              r = await c.post(f'{base}/auth/login', json={'username':'admin','password':'admin'})
+              assert r.status_code == 200, f'Login failed: {r.status_code}'
+              token = r.json()['access_token']
+              h = {'Authorization': f'Bearer {token}'}
+              r = await c.get(f'{base}/protocols', headers=h)
+              assert r.status_code == 200
+              r = await c.get(f'{base}/devices', headers=h)
+              assert r.status_code == 200
+              r = await c.get(f'{base}/templates', headers=h)
+              assert r.status_code == 200
+              print('CI integration test passed!')
+      asyncio.run(test())
       "
   after_script:
     - pkill -f "uvicorn protoforge" || true

@@ -4,7 +4,7 @@ import time
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
 
 from protoforge.core.auth import verify_token
@@ -12,7 +12,7 @@ from protoforge.core.auth import verify_token
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
-from protoforge.api.v1.auth import require_admin
+from protoforge.api.v1.auth import require_admin, require_viewer
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -373,7 +373,7 @@ async def stop_device(device_id: str):
 
 
 @router.put("/devices/{device_id}/points/{point_name}")
-async def write_device_point(device_id: str, point_name: str, value: Any = None):
+async def write_device_point(device_id: str, point_name: str, value: Any = Query(None)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     try:
@@ -540,8 +540,8 @@ async def create_template(template: TemplateDetail):
 @router.post("/templates/{template_id}/instantiate", response_model=DeviceConfig)
 async def instantiate_template(
     template_id: str,
-    device_id: str,
-    device_name: str,
+    device_id: str = Query(...),
+    device_name: str = Query(...),
     protocol_config: Optional[dict[str, Any]] = None,
 ):
     tm = _get_template_manager()
@@ -816,6 +816,13 @@ async def _get_internal_client():
     transport = ASGITransport(app=app)
     _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
     return _internal_client
+
+
+async def _close_internal_client():
+    global _internal_client
+    if _internal_client is not None:
+        await _internal_client.aclose()
+        _internal_client = None
 
 
 @router.post("/tests/cases")
@@ -1194,11 +1201,7 @@ async def refresh_token(data: dict[str, Any]):
     user_id = verify_refresh_token(refresh)
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-    user = None
-    for u in user_manager._users.values():
-        if u.id == user_id:
-            user = u
-            break
+    user = user_manager.get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     access_token = create_token(user.id, user.username, user.role)
@@ -1212,25 +1215,10 @@ async def register(user_data: dict[str, Any]):
     password = user_data.get("password", "")
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password required")
-    ok, msg = _is_password_strong_check(password)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
     user = await user_manager.create_user(username, password, role="user")
     if not user:
         raise HTTPException(status_code=409, detail="Username already exists")
     return {"id": user.id, "username": user.username, "role": user.role}
-
-
-def _is_password_strong_check(password: str) -> tuple[bool, str]:
-    if len(password) < 8:
-        return False, "密码长度至少8位"
-    if not any(c.isupper() for c in password):
-        return False, "密码必须包含大写字母"
-    if not any(c.islower() for c in password):
-        return False, "密码必须包含小写字母"
-    if not any(c.isdigit() for c in password):
-        return False, "密码必须包含数字"
-    return True, ""
 
 
 @router.get("/auth/users")
@@ -1240,11 +1228,13 @@ async def list_users(admin: dict = Depends(require_admin)):
 
 
 @router.post("/auth/change-password")
-async def change_password(data: dict[str, Any]):
+async def change_password(data: dict[str, Any], current_user: dict = Depends(require_viewer)):
     from protoforge.core.auth import user_manager
     username = data.get("username", "")
     old_password = data.get("old_password", "")
     new_password = data.get("new_password", "")
+    if current_user.get("role") != "admin" and username != current_user.get("username", ""):
+        raise HTTPException(status_code=403, detail="Can only change your own password")
     ok, msg = await user_manager.change_password(username, old_password, new_password)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)

@@ -152,9 +152,6 @@ class Scenario:
                 "len": len, "True": True, "False": False,
             }
             context = {"value": point_value.value, "point": point_value.value}
-            for dev_id, dev in self._devices.items():
-                if dev.status == DeviceStatus.ONLINE:
-                    context[dev_id.replace("-", "_")] = dev
             result = eval(script, {"__builtins__": safe_builtins}, context)
             if result:
                 return self._check_cooldown(rule)

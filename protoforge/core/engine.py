@@ -30,7 +30,7 @@ def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100
         port = start_port + offset
         if not _is_port_in_use(port, host):
             return port
-    return start_port
+    raise RuntimeError(f"No free port found in range {start_port}-{start_port + max_tries - 1}")
 
 
 class SimulationEngine:

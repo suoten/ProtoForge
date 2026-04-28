@@ -22,7 +22,6 @@ PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "profinet": None,
     "ethercat": None,
     "gb28181": None,
-    "video": None,
 }
 
 DATA_TYPE_MAP: dict[str, str] = {

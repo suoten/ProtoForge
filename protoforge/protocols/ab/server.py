@@ -62,6 +62,9 @@ class AbDeviceBehavior(DeviceBehavior):
         self._tags[tag_name] = value
         self._values[tag_name] = value
 
+    def get_tag_type(self, tag_name: str) -> str:
+        return self._data_types.get(tag_name, "int32")
+
     def get_data_type(self, point_name: str) -> str:
         return self._data_types.get(point_name, "int32")
 
@@ -288,9 +291,12 @@ class AbServer(ProtocolServer):
             tag_len = struct.unpack("<H", cip_data[2:4])[0]
             if len(cip_data) >= 4 + tag_len + 6:
                 tag_name = cip_data[4:4 + tag_len].decode("ascii", errors="replace").rstrip("\x00")
-                write_value = struct.unpack("<i", cip_data[4 + tag_len + 2:4 + tag_len + 6])[0]
                 behavior = self._behaviors.get(self._default_device_id)
+                write_value = 0
                 if behavior:
+                    data_type = behavior.get_tag_type(tag_name)
+                    value_data = cip_data[4 + tag_len + 2:]
+                    write_value = self._unpack_cip_value(data_type, value_data)
                     behavior.set_tag(tag_name, write_value)
                     self._log_debug("recv", "cip_write",
                                     f"写入标签 {tag_name}={write_value}",
@@ -301,6 +307,29 @@ class AbServer(ProtocolServer):
         cip_resp += bytes([0x00])
         cip_resp += struct.pack("<I", 0x00000000)
         return self._wrap_cip_response(session, cip_resp)
+
+    @staticmethod
+    def _unpack_cip_value(data_type: str, data: bytes) -> Any:
+        try:
+            if data_type == "bool" and len(data) >= 1:
+                return bool(data[0])
+            elif data_type == "int16" and len(data) >= 2:
+                return struct.unpack("<h", data[:2])[0]
+            elif data_type == "uint16" and len(data) >= 2:
+                return struct.unpack("<H", data[:2])[0]
+            elif data_type == "int32" and len(data) >= 4:
+                return struct.unpack("<i", data[:4])[0]
+            elif data_type == "uint32" and len(data) >= 4:
+                return struct.unpack("<I", data[:4])[0]
+            elif data_type == "float32" and len(data) >= 4:
+                return struct.unpack("<f", data[:4])[0]
+            elif data_type == "float64" and len(data) >= 8:
+                return struct.unpack("<d", data[:8])[0]
+            elif len(data) >= 4:
+                return struct.unpack("<i", data[:4])[0]
+        except (struct.error, IndexError):
+            pass
+        return 0
 
     def _wrap_cip_response(self, session: int, cip_data: bytes) -> bytes:
         resp = bytearray()
