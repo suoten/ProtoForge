@@ -139,7 +139,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 def _is_password_strong(password: str) -> tuple[bool, str]:
     if len(password) < 8:
-        return False, "密码长度至少8�?
+        return False, "密码长度至少8位"
     if not any(c.isupper() for c in password):
         return False, "密码必须包含大写字母"
     if not any(c.islower() for c in password):
@@ -271,7 +271,7 @@ class UserManager:
     async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False, "原密码错�?
+            return False, "原密码错误"
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -299,7 +299,7 @@ class UserManager:
     async def admin_reset_password(self, username: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user:
-            return False, "用户不存�?
+            return False, "用户不存在"
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
