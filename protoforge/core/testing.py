@@ -901,13 +901,11 @@ class TestRunner:
         if not hook:
             return
         try:
-            safe_builtins = {"print": print, "len": len, "str": str, "int": int, "float": float,
-                             "bool": bool, "list": list, "dict": dict, "range": range,
-                             "True": True, "False": False, "None": None}
-            local_vars = {"vars": var_store}
-            exec(hook, {"__builtins__": safe_builtins}, local_vars)
-            if "vars" in local_vars and isinstance(local_vars["vars"], VariableStore):
-                var_store._vars.update(local_vars["vars"]._vars)
+            from protoforge.core.generator import _SafeEval
+            evaluator = _SafeEval({"vars": var_store})
+            result_vars = evaluator.exec_stmts(hook)
+            if "vars" in result_vars and isinstance(result_vars["vars"], VariableStore):
+                var_store._vars.update(result_vars["vars"]._vars)
         except Exception as e:
             logger.warning("Test hook execution failed: %s", e)
 

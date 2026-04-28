@@ -146,13 +146,9 @@ class Scenario:
         if not script:
             return False
         try:
-            safe_builtins = {
-                "abs": abs, "min": min, "max": max, "round": round,
-                "int": int, "float": float, "str": str, "bool": bool,
-                "len": len, "True": True, "False": False,
-            }
-            context = {"value": point_value.value, "point": point_value.value}
-            result = eval(script, {"__builtins__": safe_builtins}, context)
+            from protoforge.core.generator import _SafeEval
+            evaluator = _SafeEval({"value": point_value.value, "point": point_value.value})
+            result = evaluator.eval_expr(script)
             if result:
                 return self._check_cooldown(rule)
         except Exception as e:

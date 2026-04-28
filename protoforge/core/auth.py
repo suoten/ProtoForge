@@ -1,4 +1,5 @@
 import logging
+import os
 import secrets
 import time
 import uuid
@@ -154,7 +155,8 @@ class UserManager:
     def __init__(self):
         self._users: dict[str, User] = {}
         self._db = None
-        admin_hash = hash_password("admin")
+        default_password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "admin")
+        admin_hash = hash_password(default_password)
         self._users["admin"] = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",
         )

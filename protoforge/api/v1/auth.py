@@ -23,6 +23,8 @@ class RoleChecker:
         self,
         credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
     ) -> dict:
+        if _NO_AUTH:
+            return {"sub": "no-auth", "username": "admin", "role": "admin"}
         if credentials is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,7 +82,11 @@ def _get_user_from_request(request: Request) -> Optional[dict]:
 def _check_role(request: Request, allowed_roles: list[str]) -> None:
     user = _get_user_from_request(request)
     if not user:
-        return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user_role = user.get("role", "user")
     if user_role not in allowed_roles:
         raise HTTPException(
