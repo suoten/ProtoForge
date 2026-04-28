@@ -11,12 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class S7DeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
         self._values: dict[str, Any] = {}
-        self._db_data: dict[int, bytearray] = {}
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
+        self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                if fixed_val is not None:
+                    self._values[name] = fixed_val
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -198,10 +201,10 @@ class S7Server(ProtocolServer):
         offset = struct.unpack(">H", data[29:31])[0]
 
         value_bytes = b"\x00\x00\x00\x00"
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             db_data = behavior.get_db_area(db_number, offset + 4)
             value_bytes = bytes(db_data[offset:offset + 4])
-            break
 
         result = 0xFF
 
@@ -225,6 +228,18 @@ class S7Server(ProtocolServer):
         return bytes(resp)
 
     def _make_s7_write_response(self, data: bytes) -> bytes:
+        if len(data) >= 31:
+            area = data[26]
+            db_number = struct.unpack(">H", data[27:29])[0]
+            offset = struct.unpack(">H", data[29:31])[0]
+            write_data = data[35:39] if len(data) >= 39 else b"\x00\x00\x00\x00"
+            behavior = self._behaviors.get(self._default_device_id)
+            if behavior:
+                behavior.write_db_area(db_number, offset, write_data)
+                self._log_debug("recv", "s7_write",
+                                f"写入DB{db_number}偏移{offset}",
+                                detail={"db": db_number, "offset": offset, "len": len(write_data)})
+
         resp = bytearray([
             0x03, 0x00, 0x00, 0x19,
             0x02, 0xF0, 0x80,
@@ -260,10 +275,9 @@ class S7Server(ProtocolServer):
         device_id = device_config.id
         self._device_configs[device_id] = device_config
 
-        behavior = S7DeviceBehavior(
-            [p.model_dump() for p in device_config.points]
-        )
+        behavior = S7DeviceBehavior(device_config.points)
         self._behaviors[device_id] = behavior
+        self._update_default_device(device_id)
 
         proto_config = device_config.protocol_config or {}
         rack = proto_config.get("rack", self._rack)
@@ -284,13 +298,20 @@ class S7Server(ProtocolServer):
 
         logger.info("S7 device created: %s (rack=%d, slot=%d)",
                      device_id, rack, slot)
+        self._log_debug("system", "device_create",
+                        f"创建S7设备 {device_config.name}",
+                        device_id=device_id)
         return device_id
 
     async def remove_device(self, device_id: str) -> None:
         self._device_configs.pop(device_id, None)
         self._behaviors.pop(device_id, None)
         self._device_info.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("S7 device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除S7设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)
