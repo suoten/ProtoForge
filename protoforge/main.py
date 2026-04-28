@@ -271,11 +271,16 @@ def create_app() -> FastAPI:
         return {"status": "ok", "timestamp": int(time.time() * 1000)}
 
     static_dir = Path(__file__).parent.parent / "web" / "dist"
+    if not static_dir.is_dir():
+        static_dir = Path(__file__).parent.parent / "static"
     if static_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
+            if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
             file_path = static_dir / full_path
             if file_path.is_file():
                 return FileResponse(file_path)

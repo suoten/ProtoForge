@@ -8,12 +8,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [vue()],
+    base: '/',
     server: {
-      port: 3000,
+      port: 5173,
       proxy: {
-        '/api': `http://${backendHost}:${backendPort}`,
-        '/ws': {
-          target: `ws://${backendHost}:${backendPort}`,
+        '/api': {
+          target: `http://${backendHost}:${backendPort}`,
           ws: true,
         },
       },

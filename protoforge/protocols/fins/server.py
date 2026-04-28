@@ -11,12 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 class FinsDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._memory_areas: dict[int, bytearray] = {}
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -65,23 +69,33 @@ class FinsServer(ProtocolServer):
         self._sid_counter = 1
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 9600)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("FINS server started on %s:%d", self._host, self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("FINS server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"FINS服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start FINS server: %s", e)
+            raise
 
     async def stop(self) -> None:
         self._server_running = False
-        self._status = ProtocolStatus.STOPPED
         if self._server_task:
             self._server_task.cancel()
             try:
                 await self._server_task
             except asyncio.CancelledError:
                 pass
+        self._status = ProtocolStatus.STOPPED
         logger.info("FINS server stopped")
+        self._log_debug("system", "server_stop", "FINS服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -182,9 +196,9 @@ class FinsServer(ProtocolServer):
 
         read_size = word_count * 2
         read_data = bytearray(read_size)
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             read_data = behavior.read_area(area, word_addr * 2, read_size)
-            break
 
         resp = bytearray()
         resp += struct.pack(">H", 0x0002)
@@ -206,9 +220,12 @@ class FinsServer(ProtocolServer):
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
 
         write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
-            break
+            self._log_debug("recv", "fins_write",
+                            f"写入区域{area}偏移{word_addr}",
+                            detail={"area": area, "offset": word_addr, "len": len(write_data)})
 
         resp = bytearray()
         resp += struct.pack(">H", 0x0002)
@@ -245,9 +262,10 @@ class FinsServer(ProtocolServer):
         return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = FinsDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = FinsDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -259,13 +277,20 @@ class FinsServer(ProtocolServer):
                      device_config.id,
                      self._device_params[device_config.id]["source_node"],
                      self._device_params[device_config.id]["dest_node"])
+        self._log_debug("system", "device_create",
+                        f"创建FINS设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("FINS device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除FINS设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

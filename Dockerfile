@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
 COPY pyproject.toml .
 COPY protoforge/ protoforge/
 
-COPY --from=frontend-builder /app/web/dist /app/static
+COPY --from=frontend-builder /app/web/dist /app/web/dist
 
 RUN pip install --no-cache-dir -e ".[all]"
 
