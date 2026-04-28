@@ -330,15 +330,6 @@ async def update_device(device_id: str, config: DeviceConfig):
         log_bus.emit(config.protocol, "system", device_id, "device_updated",
                      f"Device {config.name} updated")
         response = result.model_dump() if hasattr(result, 'model_dump') else {"id": device_id, "name": config.name}
-        proto_config = config.protocol_config or {}
-        edgelite_url = proto_config.get("edgelite_url", "")
-        if edgelite_url:
-            try:
-                from protoforge.core.edgelite import push_device_to_edgelite
-                push_result = await push_device_to_edgelite(config)
-                response["edgelite_push"] = push_result
-            except Exception as e:
-                response["edgelite_push"] = {"ok": False, "error": str(e)}
         return response
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -646,12 +637,11 @@ async def import_edgelite(config: dict[str, Any]):
 async def push_device_to_edgelite(device_id: str):
     from protoforge.core.edgelite import push_device_to_edgelite as _push
     engine = _get_engine()
-    device = engine.get_device(device_id)
-    if not device:
+    instance = engine._devices.get(device_id)
+    if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
     try:
-        result = await _push(device)
-        return result
+        return await _push(instance)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
 
@@ -673,11 +663,11 @@ async def test_edgelite_connection(config: dict[str, Any] = None):
 async def get_edgelite_device_status(device_id: str):
     from protoforge.core.edgelite import get_edgelite_device_status as _status
     engine = _get_engine()
-    device = engine.get_device(device_id)
-    if not device:
+    instance = engine._devices.get(device_id)
+    if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
     try:
-        return await _status(device)
+        return await _status(instance)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite status check failed: {e}")
 
@@ -686,11 +676,11 @@ async def get_edgelite_device_status(device_id: str):
 async def read_edgelite_device_points(device_id: str):
     from protoforge.core.edgelite import read_edgelite_device_points as _read
     engine = _get_engine()
-    device = engine.get_device(device_id)
-    if not device:
+    instance = engine._devices.get(device_id)
+    if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
     try:
-        return await _read(device)
+        return await _read(instance)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite read points failed: {e}")
 
@@ -699,11 +689,11 @@ async def read_edgelite_device_points(device_id: str):
 async def verify_edgelite_pipeline(device_id: str):
     from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
     engine = _get_engine()
-    device = engine.get_device(device_id)
-    if not device:
+    instance = engine._devices.get(device_id)
+    if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
     try:
-        result = await _verify(device)
+        result = await _verify(instance)
         if result.get("ok") and "collect" in result.get("steps", {}):
             collect_step = result["steps"]["collect"]
             if collect_step.get("ok") and collect_step.get("has_real_data"):
@@ -711,6 +701,16 @@ async def verify_edgelite_pipeline(device_id: str):
                     local_points = await engine.read_device_points(device_id)
                     local_map = {p.name: p.value for p in local_points}
                     edgelite_data = collect_step.get("data", {})
+                    if isinstance(edgelite_data, list):
+                        edgelite_map = {}
+                        for item in edgelite_data:
+                            if isinstance(item, dict) and "name" in item:
+                                edgelite_map[item["name"]] = item.get("value")
+                            elif isinstance(item, dict) and "point_name" in item:
+                                edgelite_map[item["point_name"]] = item.get("value")
+                        edgelite_data = edgelite_map
+                    elif not isinstance(edgelite_data, dict):
+                        edgelite_data = {}
                     comparison = []
                     for name, local_val in local_map.items():
                         el_val = edgelite_data.get(name)
@@ -732,11 +732,11 @@ async def verify_edgelite_pipeline(device_id: str):
 async def remove_device_from_edgelite(device_id: str):
     from protoforge.core.edgelite import remove_device_from_edgelite as _remove
     engine = _get_engine()
-    device = engine.get_device(device_id)
-    if not device:
+    instance = engine._devices.get(device_id)
+    if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
     try:
-        return await _remove(device)
+        return await _remove(instance)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite remove device failed: {e}")
 
