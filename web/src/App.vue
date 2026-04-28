@@ -88,6 +88,41 @@
       </n-layout-content>
     </n-layout>
   </n-layout>
+
+  <n-modal
+    v-model:show="showChangePassword"
+    title="修改密码"
+    preset="card"
+    style="width: 420px"
+    :mask-closable="false"
+  >
+    <n-space vertical>
+      <n-input
+        v-model:value="oldPassword"
+        type="password"
+        placeholder="当前密码"
+        show-password-on="click"
+      />
+      <n-input
+        v-model:value="newPassword"
+        type="password"
+        placeholder="新密码（至少6位）"
+        show-password-on="click"
+      />
+      <n-input
+        v-model:value="confirmPassword"
+        type="password"
+        placeholder="确认新密码"
+        show-password-on="click"
+      />
+    </n-space>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showChangePassword = false">取消</n-button>
+        <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">确认修改</n-button>
+      </n-space>
+    </template>
+  </n-modal>
     </n-dialog-provider>
   </n-message-provider>
 </template>
@@ -95,13 +130,14 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NMessageProvider, NDialogProvider } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NMessageProvider, NDialogProvider, NModal, NInput, useMessage } from 'naive-ui'
 import api from './api.js'
 import Login from './views/Login.vue'
 import Welcome from './views/Welcome.vue'
 
 const router = useRouter()
 const route = useRoute()
+const message = useMessage()
 const loggedIn = ref(!!localStorage.getItem('token'))
 const collapsed = ref(false)
 const username = ref(localStorage.getItem('username') || 'admin')
@@ -133,6 +169,7 @@ const menuOptions = [
 ]
 
 const userMenuOptions = [
+  { label: '修改密码', key: 'change-password' },
   { label: '退出登录', key: 'logout' },
 ]
 
@@ -145,6 +182,12 @@ function onLogin() {
   username.value = localStorage.getItem('username') || 'admin'
 }
 
+const showChangePassword = ref(false)
+const oldPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const changePasswordLoading = ref(false)
+
 function onUserMenuSelect(key) {
   if (key === 'logout') {
     if (ws) { ws.close(); ws = null }
@@ -153,6 +196,45 @@ function onUserMenuSelect(key) {
     localStorage.removeItem('username')
     localStorage.removeItem('role')
     loggedIn.value = false
+  } else if (key === 'change-password') {
+    showChangePassword.value = true
+    oldPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+  }
+}
+
+async function handleChangePassword() {
+  if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
+    message.error('请填写所有字段')
+    return
+  }
+  if (newPassword.value !== confirmPassword.value) {
+    message.error('两次输入的新密码不一致')
+    return
+  }
+  if (newPassword.value.length < 6) {
+    message.error('新密码长度至少为 6 位')
+    return
+  }
+  changePasswordLoading.value = true
+  try {
+    const currentUser = localStorage.getItem('username') || 'admin'
+    await api.changePassword(currentUser, oldPassword.value, newPassword.value)
+    message.success('密码修改成功，请重新登录')
+    showChangePassword.value = false
+    setTimeout(() => {
+      if (ws) { ws.close(); ws = null }
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
+      loggedIn.value = false
+    }, 1500)
+  } catch (e) {
+    message.error(e.response?.data?.detail || '密码修改失败')
+  } finally {
+    changePasswordLoading.value = false
   }
 }
 
