@@ -223,6 +223,11 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     return token
 
 
+def _extract_token(login_resp: httpx.Response) -> str:
+    data = login_resp.json()
+    return data.get("data", {}).get("access_token", "") or data.get("access_token", "")
+
+
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
