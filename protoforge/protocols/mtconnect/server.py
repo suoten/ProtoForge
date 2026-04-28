@@ -12,11 +12,15 @@ logger = logging.getLogger(__name__)
 
 
 class MtConnectDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -56,23 +60,37 @@ class MtConnectServer(ProtocolServer):
         self._device_uuid = str(uuid.uuid4())
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
-        self._port = config.get("port", 5000)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("MTConnect server started on %s:%d", self._host, self._port)
+        self._port = config.get("port", 7878)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("MTConnect server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"MTConnect服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start MTConnect server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        self._status = ProtocolStatus.STOPPED
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        logger.info("MTConnect server stopped")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("MTConnect server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("MTConnect server stopped")
+            self._log_debug("system", "server_stop", "MTConnect服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -191,7 +209,7 @@ class MtConnectServer(ProtocolServer):
                     f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'
                     f'{escape(str(val))}</{escape(point.name)}>'
                 )
-                self._sequence += 1
+                self._sequence = (self._sequence + 1) % (2**53)
             streams_xml.append(
                 f'  <DeviceStream name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <ComponentStream component="Device" name="{escape(config.name)}">\n'
@@ -210,7 +228,7 @@ class MtConnectServer(ProtocolServer):
             f'sender="ProtoForge" '
             f'bufferSize="131072" '
             f'nextSequence="{self._sequence}" '
-            f'lastSequence="{self._sequence - 1}" '
+            f'lastSequence="{(self._sequence - 1) % (2**53)}" '
             f'version="1.3.0"/>\n'
             '<Streams>\n'
             + "\n".join(streams_xml) + "\n"
@@ -254,9 +272,10 @@ class MtConnectServer(ProtocolServer):
         )
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = MtConnectDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = MtConnectDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -268,13 +287,20 @@ class MtConnectServer(ProtocolServer):
                      device_config.id,
                      self._device_params[device_config.id]["device_uuid"][:8] + "...",
                      self._device_params[device_config.id]["manufacturer"])
+        self._log_debug("system", "device_create",
+                        f"创建MTConnect设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("MTConnect device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除MTConnect设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

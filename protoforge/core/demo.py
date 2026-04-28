@@ -68,7 +68,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         {
             "id": "demo-plc-s7",
             "name": "西门子S7-1200",
-            "protocol": "modbus_tcp",
+            "protocol": "s7",
             "template_id": "siemens_s7_1200",
             "points": [
                 {"name": "running", "address": "0", "data_type": "bool", "generator_type": "fixed", "min_value": 1, "max_value": 1},

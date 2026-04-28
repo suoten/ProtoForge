@@ -7,9 +7,12 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
 
+from protoforge.core.auth import verify_token
+
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
+from protoforge.api.v1.auth import require_admin
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -571,8 +574,14 @@ async def clear_logs():
 
 @router.websocket("/ws/devices")
 async def ws_devices(websocket: WebSocket):
-    await websocket.accept()
+    token = websocket.query_params.get("token")
+    if token:
+        payload = verify_token(token)
+        if payload is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
     engine = _get_engine()
+    await websocket.accept()
     try:
         while True:
             devices = engine.list_devices()
@@ -583,7 +592,13 @@ async def ws_devices(websocket: WebSocket):
                 except Exception:
                     data.append({"id": d.id, "name": d.name, "protocol": d.protocol, "status": d.status.value})
             await websocket.send_json({"type": "devices", "data": data})
-            await asyncio.sleep(1.0)
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
     except WebSocketDisconnect:
         logger.debug("WebSocket /ws/devices disconnected")
     except Exception as e:
@@ -592,24 +607,36 @@ async def ws_devices(websocket: WebSocket):
 
 @router.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
-    await websocket.accept()
+    token = websocket.query_params.get("token")
+    if token:
+        payload = verify_token(token)
+        if payload is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
     log_bus = _get_log_bus()
+    await websocket.accept()
     queue = log_bus.subscribe()
     try:
         while True:
-            entry = await queue.get()
-            await websocket.send_json({
-                "type": "log",
-                "data": {
-                    "timestamp": entry.timestamp,
-                    "protocol": entry.protocol,
-                    "direction": entry.direction,
-                    "device_id": entry.device_id,
-                    "message_type": entry.message_type,
-                    "summary": entry.summary,
-                    "detail": entry.detail,
-                },
-            })
+            try:
+                entry = await asyncio.wait_for(queue.get(), timeout=30.0)
+                await websocket.send_json({
+                    "type": "log",
+                    "data": {
+                        "timestamp": entry.timestamp,
+                        "protocol": entry.protocol,
+                        "direction": entry.direction,
+                        "device_id": entry.device_id,
+                        "message_type": entry.message_type,
+                        "summary": entry.summary,
+                        "detail": entry.detail,
+                    },
+                })
+            except asyncio.TimeoutError:
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
     except WebSocketDisconnect:
         logger.debug("WebSocket /ws/logs disconnected")
     except Exception as e:
@@ -1131,33 +1158,44 @@ async def get_scenario_snapshot(scenario_id: str):
             })
     return snapshot
 
-
-@router.get("/metrics", response_class=PlainTextResponse)
-async def get_metrics():
-    from protoforge.core.metrics import metrics
-    try:
-        engine = _get_engine()
-        metrics.collect_from_engine(engine)
-    except RuntimeError:
-        pass
-    try:
-        runner = _get_test_runner()
-        metrics.collect_from_test_runner(runner)
-    except RuntimeError:
-        pass
-    return metrics.generate_prometheus_output()
-
-
 @router.post("/auth/login")
 async def login(credentials: dict[str, Any]):
-    from protoforge.core.auth import user_manager, create_token
+    from protoforge.core.auth import user_manager, create_token, create_refresh_token
     username = credentials.get("username", "")
     password = credentials.get("password", "")
-    user = user_manager.authenticate(username, password)
+    user, error_code = user_manager.authenticate(username, password)
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    token = create_token(user.id, user.username, user.role)
-    return {"access_token": token, "token_type": "bearer", "username": user.username, "role": user.role}
+        if error_code.startswith("account_locked:"):
+            remaining = error_code.split(":")[1]
+            raise HTTPException(status_code=423, detail=f"账户已锁定，请 {remaining} 秒后重试")
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+    access_token = create_token(user.id, user.username, user.role)
+    refresh_token = create_refresh_token(user.id)
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "username": user.username,
+        "role": user.role,
+    }
+
+
+@router.post("/auth/refresh")
+async def refresh_token(data: dict[str, Any]):
+    from protoforge.core.auth import verify_refresh_token, create_token, user_manager
+    refresh = data.get("refresh_token", "")
+    user_id = verify_refresh_token(refresh)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    user = None
+    for u in user_manager._users.values():
+        if u.id == user_id:
+            user = u
+            break
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    access_token = create_token(user.id, user.username, user.role)
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @router.post("/auth/register")
@@ -1165,19 +1203,31 @@ async def register(user_data: dict[str, Any]):
     from protoforge.core.auth import user_manager
     username = user_data.get("username", "")
     password = user_data.get("password", "")
-    role = user_data.get("role", "user")
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password required")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    user = await user_manager.create_user(username, password, role)
+    ok, msg = _is_password_strong_check(password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    user = await user_manager.create_user(username, password, role="user")
     if not user:
         raise HTTPException(status_code=409, detail="Username already exists")
     return {"id": user.id, "username": user.username, "role": user.role}
 
 
+def _is_password_strong_check(password: str) -> tuple[bool, str]:
+    if len(password) < 8:
+        return False, "密码长度至少8位"
+    if not any(c.isupper() for c in password):
+        return False, "密码必须包含大写字母"
+    if not any(c.islower() for c in password):
+        return False, "密码必须包含小写字母"
+    if not any(c.isdigit() for c in password):
+        return False, "密码必须包含数字"
+    return True, ""
+
+
 @router.get("/auth/users")
-async def list_users():
+async def list_users(admin: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     return user_manager.list_users()
 
@@ -1195,7 +1245,7 @@ async def change_password(data: dict[str, Any]):
 
 
 @router.post("/auth/admin/reset-password")
-async def admin_reset_password(data: dict[str, Any]):
+async def admin_reset_password(data: dict[str, Any], admin: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     username = data.get("username", "")
     new_password = data.get("new_password", "")
@@ -1208,7 +1258,7 @@ async def admin_reset_password(data: dict[str, Any]):
 
 
 @router.put("/auth/users/{username}/role")
-async def update_user_role(username: str, data: dict[str, Any]):
+async def update_user_role(username: str, data: dict[str, Any], admin: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     new_role = data.get("role", "")
     if not new_role:
@@ -1219,7 +1269,7 @@ async def update_user_role(username: str, data: dict[str, Any]):
 
 
 @router.post("/auth/admin/unlock/{username}")
-async def admin_unlock_user(username: str):
+async def admin_unlock_user(username: str, admin: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.reset_login_attempts(username):
         raise HTTPException(status_code=404, detail="User not found")
@@ -1227,7 +1277,7 @@ async def admin_unlock_user(username: str):
 
 
 @router.delete("/auth/users/{username}")
-async def delete_user(username: str):
+async def delete_user(username: str, admin: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.delete_user(username):
         raise HTTPException(status_code=400, detail="Cannot delete this user")

@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import socket
-import time
 from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
@@ -9,7 +8,6 @@ from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStarte
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
-from protoforge.models.protocol import ProtocolInfo
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
@@ -107,6 +105,9 @@ class SimulationEngine:
         logger.info("Protocol %s stopped", protocol_name)
 
     async def create_device(self, config: DeviceConfig) -> DeviceInfo:
+        if config.id in self._devices:
+            logger.warning("Device %s already exists, removing old instance first", config.id)
+            await self.remove_device(config.id)
         instance = DeviceInstance(config, self._generator)
         self._devices[config.id] = instance
 
@@ -150,6 +151,19 @@ class SimulationEngine:
 
         instance.stop()
 
+        proto_config = instance.config.protocol_config or {}
+        edgelite_url = proto_config.get("edgelite_url", "")
+        if edgelite_url:
+            try:
+                from protoforge.core.edgelite import remove_device_from_edgelite
+                result = await remove_device_from_edgelite(instance.config)
+                if result.get("ok"):
+                    logger.info("Device %s auto-removed from EdgeLite: %s", device_id, edgelite_url)
+                else:
+                    logger.warning("Device %s EdgeLite remove failed: %s", device_id, result.get("error") or result.get("reason", "unknown"))
+            except Exception as e:
+                logger.warning("Device %s EdgeLite remove error: %s", device_id, e)
+
         if self._event_bus:
             await self._event_bus.publish_safe(DeviceRemovedEvent(device_id=device_id))
 
@@ -160,9 +174,22 @@ class SimulationEngine:
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
 
-        await self.remove_device(device_id)
+        old_config = instance.config
+        try:
+            await self.remove_device(device_id)
+        except Exception as e:
+            logger.error("Failed to remove old device %s during update: %s", device_id, e)
+            raise
         config.id = device_id
-        return await self.create_device(config)
+        try:
+            return await self.create_device(config)
+        except Exception as e:
+            logger.error("Failed to create new device %s during update: %s, restoring old", device_id, e)
+            try:
+                await self.create_device(old_config)
+            except Exception as restore_err:
+                logger.error("Failed to restore old device %s: %s", device_id, restore_err)
+            raise
 
     def get_all_device_ids(self) -> list[str]:
         return list(self._devices.keys())

@@ -21,6 +21,7 @@ class LogBus:
         self._entries: deque[LogEntry] = deque(maxlen=max_entries)
         self._subscribers: list[asyncio.Queue] = []
         self._callbacks: list[Callable[[LogEntry], Coroutine]] = []
+        self._dropped_count: int = 0
 
     def emit(self, protocol: str, direction: str, device_id: str,
              message_type: str, summary: str, detail: dict[str, Any] | None = None) -> None:
@@ -38,7 +39,7 @@ class LogBus:
             try:
                 queue.put_nowait(entry)
             except asyncio.QueueFull:
-                pass
+                self._dropped_count += 1
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

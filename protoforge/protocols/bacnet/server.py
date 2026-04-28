@@ -79,18 +79,22 @@ class BACnetServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-        if self._sock:
-            self._sock.close()
-            self._sock = None
-        self._status = ProtocolStatus.STOPPED
-        logger.info("BACnet server stopped")
-        self._log_debug("system", "server_stop", "BACnet服务停止")
+        try:
+            if self._task:
+                self._task.cancel()
+                try:
+                    await self._task
+                except asyncio.CancelledError:
+                    pass
+            if self._sock:
+                self._sock.close()
+                self._sock = None
+        except Exception as e:
+            logger.warning("BACnet server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("BACnet server stopped")
+            self._log_debug("system", "server_stop", "BACnet服务停止")
 
     async def _serve_udp(self) -> None:
         loop = asyncio.get_running_loop()
@@ -219,7 +223,13 @@ class BACnetServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        success = await behavior.on_write(point_name, value)
+        if success:
+            obj_map = self._device_objects.get(device_id, {})
+            for obj_id, obj_info in obj_map.items():
+                if obj_info.get("point_name") == point_name:
+                    obj_info["present_value"] = value
+        return success
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

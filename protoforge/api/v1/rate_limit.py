@@ -57,7 +57,7 @@ async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     client_ip = get_client_ip(request)
 
-    if path.startswith("/api/v1/auth/login"):
+    if path.startswith("/api/v1/auth/login") or path.startswith("/api/v1/auth/register") or path.startswith("/api/v1/auth/change-password"):
         limiter = _auth_limiter
         key = f"auth:{client_ip}"
     else:

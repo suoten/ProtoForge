@@ -16,7 +16,31 @@
             <n-text depth="3" style="margin-left:8px;font-size:12px">重启服务后生效</n-text>
           </n-form-item>
           <n-form-item label="数据库路径">
-            <n-input v-model:value="serverConfig.db_path" placeholder="data/protoforge.db" />
+            <n-input v-model:value="serverConfig.db_path" placeholder="data/protoforge.db 或 postgresql://user:pass@host:5432/db" />
+          </n-form-item>
+          <n-form-item label="日志级别">
+            <n-select v-model:value="serverConfig.log_level" :options="logLevelOptions" style="width:200px" />
+          </n-form-item>
+          <n-form-item label="CORS源">
+            <n-input v-model:value="serverConfig.cors_origins" placeholder="* 或 https://example.com" />
+            <n-text depth="3" style="margin-left:8px;font-size:12px">多个用逗号分隔</n-text>
+          </n-form-item>
+        </n-form>
+      </n-card>
+
+      <n-card title="InfluxDB 转发配置（可选）" size="small">
+        <n-form :model="influxdbConfig" label-placement="left" label-width="120">
+          <n-form-item label="URL">
+            <n-input v-model:value="influxdbConfig.url" placeholder="http://localhost:8086" />
+          </n-form-item>
+          <n-form-item label="Token">
+            <n-input v-model:value="influxdbConfig.token" type="password" show-password-on="click" placeholder="InfluxDB API Token" />
+          </n-form-item>
+          <n-form-item label="组织">
+            <n-input v-model:value="influxdbConfig.org" placeholder="default" />
+          </n-form-item>
+          <n-form-item label="Bucket">
+            <n-input v-model:value="influxdbConfig.bucket" placeholder="protoforge" />
           </n-form-item>
         </n-form>
       </n-card>
@@ -60,7 +84,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, useMessage } from 'naive-ui'
+import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, useMessage } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -68,9 +92,17 @@ const saving = ref(false)
 const saveResult = ref('')
 const hasChanges = ref(false)
 
-const serverConfig = ref({ host: '0.0.0.0', port: 8000, db_path: 'data/protoforge.db' })
+const serverConfig = ref({ host: '0.0.0.0', port: 8000, db_path: 'data/protoforge.db', log_level: 'info', cors_origins: '*' })
+const influxdbConfig = ref({ url: '', token: '', org: 'default', bucket: 'protoforge' })
 const protocolPorts = ref({})
 const protocols = ref([])
+
+const logLevelOptions = [
+  { label: 'DEBUG', value: 'debug' },
+  { label: 'INFO', value: 'info' },
+  { label: 'WARNING', value: 'warning' },
+  { label: 'ERROR', value: 'error' },
+]
 
 const protocolLabels = {
   modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
@@ -101,6 +133,12 @@ async function loadSettings() {
     serverConfig.value.host = settings.host || '0.0.0.0'
     serverConfig.value.port = settings.port || 8000
     serverConfig.value.db_path = settings.db_path || 'data/protoforge.db'
+    serverConfig.value.log_level = settings.log_level || 'info'
+    serverConfig.value.cors_origins = settings.cors_origins || '*'
+    influxdbConfig.value.url = settings.influxdb_url || ''
+    influxdbConfig.value.token = settings.influxdb_token || ''
+    influxdbConfig.value.org = settings.influxdb_org || 'default'
+    influxdbConfig.value.bucket = settings.influxdb_bucket || 'protoforge'
     protocolPorts.value = { ...(settings.protocol_ports || {}) }
     protocols.value = protoRes
     saveResult.value = ''
@@ -117,6 +155,12 @@ async function saveSettings() {
       host: serverConfig.value.host,
       port: serverConfig.value.port,
       db_path: serverConfig.value.db_path,
+      log_level: serverConfig.value.log_level,
+      cors_origins: serverConfig.value.cors_origins,
+      influxdb_url: influxdbConfig.value.url,
+      influxdb_token: influxdbConfig.value.token,
+      influxdb_org: influxdbConfig.value.org,
+      influxdb_bucket: influxdbConfig.value.bucket,
     }
     for (const [key, value] of Object.entries(protocolPorts.value)) {
       updates[`${key}_port`] = value

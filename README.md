@@ -106,37 +106,46 @@ npm run dev
         → /api/v1/ws/* WebSocket 代理到后端
 ```
 
-**Step 1 — 部署后端**
+**Step 1 — 克隆仓库**
 
 ```bash
-# 1. 克隆仓库
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
-
-# 2. 安装后端依赖
-pip install -e ".[all]"
-
-# 3. 配置后端端口（避免与 Nginx 冲突）
-# 编辑 .env，设置：
-# PROTOFORGE_PORT=8200
-
-# 4. 启动后端
-protoforge run
 ```
 
-**Step 2 — 构建前端**
+**Step 2 — 构建前端（⚠️ 必须执行）**
+
+> 仓库已包含前端构建产物 `web/dist/`，但建议你重新构建以确保与最新代码一致：
 
 ```bash
-cd ProtoForge/web
+cd web
 
-# 1. 安装前端依赖
+# 1. 安装前端依赖（需要 Node.js 18+）
 npm install
 
 # 2. 构建生产包（输出到 web/dist/）
 npm run build
+
+cd ..
 ```
 
-**Step 3 — 配置 Nginx**
+> 如果 `web/dist/` 目录不存在，后端将无法提供前端页面，浏览器会显示空白页。
+
+**Step 3 — 部署后端**
+
+```bash
+# 1. 安装后端依赖
+pip install -e ".[all]"
+
+# 2. 配置后端端口（避免与 Nginx 冲突）
+# 编辑 .env，设置：
+# PROTOFORGE_PORT=8200
+
+# 3. 启动后端
+protoforge run
+```
+
+**Step 4 — 配置 Nginx**
 
 ```nginx
 server {
@@ -169,9 +178,11 @@ server {
 
 > 把 `8200` 换成你 `.env` 中配置的端口，把 `/path/to/ProtoForge` 换成你的实际路径。
 
-**Step 4 — 访问系统**
+**Step 5 — 访问系统**
 
-打开浏览器访问 \*\*<http://your-domain.com**，用> `admin` / `admin` 登录。
+打开浏览器访问 **<http://your-domain.com**，用> `admin` / `admin` 登录。
+
+> 如果页面空白，请检查 `web/dist/` 目录是否存在。若不存在，重新执行 Step 2 构建前端。
 
 #### 方式三：Docker 一键部署
 

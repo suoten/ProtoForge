@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 _CIP_TYPE_MAP = {
     "bool": (0xC1, 1),
     "int16": (0xC3, 2),
-    "uint16": (0xC4, 2),
-    "int32": (0xC1, 4),
-    "uint32": (0xC2, 4),
+    "uint16": (0xC7, 2),
+    "int32": (0xC4, 4),
+    "uint32": (0xC8, 4),
     "float32": (0xCA, 4),
     "float64": (0xCB, 8),
     "string": (0xA0, 0),
@@ -101,16 +101,20 @@ class AbServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        self._status = ProtocolStatus.STOPPED
-        logger.info("AB server stopped")
-        self._log_debug("system", "server_stop", "AB服务停止")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("AB server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("AB server stopped")
+            self._log_debug("system", "server_stop", "AB服务停止")
 
     async def _serve(self) -> None:
         try:

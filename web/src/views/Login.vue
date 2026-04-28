@@ -63,6 +63,9 @@ async function handleLogin() {
   try {
     const res = await api.login(form.value.username, form.value.password)
     localStorage.setItem('token', res.access_token)
+    if (res.refresh_token) {
+      localStorage.setItem('refresh_token', res.refresh_token)
+    }
     localStorage.setItem('username', res.username)
     localStorage.setItem('role', res.role)
     message.success('登录成功')

@@ -11,21 +11,25 @@ logger = logging.getLogger(__name__)
 
 
 class ToledoDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._weight = 0.0
         self._tare = 0.0
         self._unit = "kg"
         self._stable = True
         self._zero = True
-        for p in points:
-            val = p.get("fixed_value") if p.get("fixed_value") is not None else 0
-            self._values[p["name"]] = val
-            if p["name"] == "weight":
-                self._weight = float(val)
-            elif p["name"] == "tare":
-                self._tare = float(val)
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                val = fixed_val if fixed_val is not None else 0
+                self._points[name] = p
+                self._values[name] = val
+                if name == "weight":
+                    self._weight = float(val)
+                elif name == "tare":
+                    self._tare = float(val)
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -86,32 +90,53 @@ class ToledoServer(ProtocolServer):
         self._server_running = False
         self._continuous_mode = False
         self._continuous_task: asyncio.Task | None = None
+        self._continuous_writers: set[asyncio.StreamWriter] = set()
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 1701)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("Toledo server started on %s:%d", self._host, self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("Toledo server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"Toledo服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start Toledo server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        self._continuous_mode = False
-        self._status = ProtocolStatus.STOPPED
-        if self._continuous_task:
-            self._continuous_task.cancel()
-            try:
-                await self._continuous_task
-            except asyncio.CancelledError:
-                pass
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Toledo server stopped")
+        try:
+            self._server_running = False
+            self._continuous_mode = False
+            for w in self._continuous_writers:
+                try:
+                    w.close()
+                except Exception:
+                    pass
+            self._continuous_writers.clear()
+            if self._continuous_task:
+                self._continuous_task.cancel()
+                try:
+                    await self._continuous_task
+                except asyncio.CancelledError:
+                    pass
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("Toledo server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("Toledo server stopped")
+            self._log_debug("system", "server_stop", "Toledo服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -135,27 +160,28 @@ class ToledoServer(ProtocolServer):
                 data = await reader.read(1024)
                 if not data:
                     break
-                response = self._process_toledo(data)
+                response = self._process_toledo(data, writer)
                 if response:
                     writer.write(response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
+            self._continuous_writers.discard(writer)
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception:
                 pass
 
-    def _process_toledo(self, data: bytes) -> bytes | None:
+    def _process_toledo(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes | None:
         if not data:
             return None
 
         cmd = data[0]
 
         if cmd == self.STX:
-            return self._handle_stx_command(data)
+            return self._handle_stx_command(data, writer)
         elif cmd == ord("S") or cmd == ord("s"):
             return self._handle_stable_weight()
         elif cmd == ord("T") or cmd == ord("t"):
@@ -167,13 +193,13 @@ class ToledoServer(ProtocolServer):
         elif cmd == ord("I"):
             return self._handle_immediate()
         elif cmd == ord("C"):
-            return self._handle_continuous_start()
+            return self._handle_continuous_start(writer)
         elif cmd == ord("D"):
-            return self._handle_continuous_stop()
+            return self._handle_continuous_stop(writer)
 
         return self._handle_print_weight()
 
-    def _handle_stx_command(self, data: bytes) -> bytes:
+    def _handle_stx_command(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes:
         if len(data) < 2:
             return self._handle_print_weight()
 
@@ -186,27 +212,31 @@ class ToledoServer(ProtocolServer):
             return self._handle_zero()
         elif sub_cmd == ord("P"):
             return self._handle_print_weight()
+        elif sub_cmd == ord("C"):
+            return self._handle_continuous_start(writer)
+        elif sub_cmd == ord("D"):
+            return self._handle_continuous_stop(writer)
 
         return self._handle_print_weight()
 
     def _handle_stable_weight(self) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         if not behavior:
             return b"   0.000kg \r\n"
         return behavior.get_weight_string().encode("ascii")
 
     def _handle_tare(self) -> bytes:
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             behavior._tare = behavior._weight
-            break
         return self._handle_stable_weight()
 
     def _handle_zero(self) -> bytes:
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             behavior._weight = 0.0
             behavior._tare = 0.0
             behavior._zero = True
-            break
         return self._handle_stable_weight()
 
     def _handle_print_weight(self) -> bytes:
@@ -215,18 +245,54 @@ class ToledoServer(ProtocolServer):
     def _handle_immediate(self) -> bytes:
         return self._handle_stable_weight()
 
-    def _handle_continuous_start(self) -> bytes:
+    def _handle_continuous_start(self, writer: asyncio.StreamWriter = None) -> bytes:
         self._continuous_mode = True
+        if writer:
+            self._continuous_writers.add(writer)
+        if not self._continuous_task and self._continuous_writers:
+            self._continuous_task = asyncio.create_task(self._continuous_send())
         return self._handle_stable_weight()
 
-    def _handle_continuous_stop(self) -> bytes:
-        self._continuous_mode = False
+    def _handle_continuous_stop(self, writer: asyncio.StreamWriter = None) -> bytes:
+        if writer:
+            self._continuous_writers.discard(writer)
+        if not self._continuous_writers:
+            self._continuous_mode = False
+            if self._continuous_task:
+                self._continuous_task.cancel()
+                self._continuous_task = None
         return self._handle_stable_weight()
+
+    async def _continuous_send(self) -> None:
+        try:
+            while self._server_running and self._continuous_writers:
+                behavior = self._behaviors.get(self._default_device_id)
+                if behavior:
+                    weight_str = behavior.get_weight_string().encode("ascii")
+                    dead_writers = []
+                    for w in self._continuous_writers:
+                        try:
+                            w.write(weight_str)
+                            await w.drain()
+                        except Exception:
+                            dead_writers.append(w)
+                    for w in dead_writers:
+                        self._continuous_writers.discard(w)
+                        try:
+                            w.close()
+                        except Exception:
+                            pass
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error("Toledo continuous send error: %s", e)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = ToledoDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = ToledoDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         scale_addr = proto_config.get("scale_addr", "1")
@@ -235,12 +301,19 @@ class ToledoServer(ProtocolServer):
 
         logger.info("Toledo device created: %s (addr=%s, unit=%s)",
                      device_config.id, scale_addr, unit)
+        self._log_debug("system", "device_create",
+                        f"创建Toledo设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("Toledo device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除Toledo设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

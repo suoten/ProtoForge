@@ -44,30 +44,51 @@ class HttpSimulatorServer(ProtocolServer):
         self._device_prefixes: dict[str, str] = {}
 
     async def start(self, config: dict[str, Any]) -> None:
-        self._status = ProtocolStatus.RUNNING
-        logger.info("HTTP Simulator started (uses main FastAPI server)")
+        self._status = ProtocolStatus.STARTING
+        try:
+            self._status = ProtocolStatus.RUNNING
+            logger.info("HTTP Simulator started (uses main FastAPI server)")
+            self._log_debug("system", "server_start", "HTTP服务启动")
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start HTTP server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._status = ProtocolStatus.STOPPED
-        logger.info("HTTP Simulator stopped")
+        try:
+            pass
+        except Exception as e:
+            logger.warning("HTTP server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("HTTP Simulator stopped")
+            self._log_debug("system", "server_stop", "HTTP服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = HttpDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         api_prefix = proto_config.get("api_prefix", "/api")
         self._device_prefixes[device_config.id] = api_prefix
 
         logger.info("HTTP device created: %s (api_prefix=%s)", device_config.id, api_prefix)
+        self._log_debug("system", "device_create",
+                        f"创建HTTP设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_prefixes.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("HTTP device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除HTTP设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)
@@ -92,5 +113,7 @@ class HttpSimulatorServer(ProtocolServer):
     def get_config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "api_prefix": {"type": "string", "default": "/api", "description": "API路径前缀"},
+            },
         }

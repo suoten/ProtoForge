@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class FanucDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._cnc_status = {
             "alarm": 0,
@@ -29,8 +29,12 @@ class FanucDeviceBehavior(DeviceBehavior):
             "relative_pos": [0.0] * 5,
             "distance_pos": [0.0] * 5,
         }
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -39,6 +43,18 @@ class FanucDeviceBehavior(DeviceBehavior):
     async def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            if point_name == "spindle_speed":
+                self._cnc_status["spindle_speed"] = value
+            elif point_name == "feed_rate":
+                self._cnc_status["feed_rate"] = value
+            elif point_name == "x_pos":
+                self._cnc_status["absolute_pos"][0] = value
+            elif point_name == "y_pos":
+                self._cnc_status["absolute_pos"][1] = value
+            elif point_name == "z_pos":
+                self._cnc_status["absolute_pos"][2] = value
+            elif point_name == "alarm":
+                self._cnc_status["alarm"] = value
             return True
         return False
 
@@ -66,23 +82,37 @@ class FanucServer(ProtocolServer):
         self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 8193)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("FANUC FOCAS server started on %s:%d", self._host, self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("FANUC FOCAS server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"FANUC服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start FANUC server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        self._status = ProtocolStatus.STOPPED
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        logger.info("FANUC server stopped")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("FANUC server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("FANUC server stopped")
+            self._log_debug("system", "server_stop", "FANUC服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -168,7 +198,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_statinfo(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         status = behavior._cnc_status if behavior else {
             "alarm": 0, "mode": 3, "execution": 1, "motion": 0
         }
@@ -184,7 +214,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_absolute(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         positions = behavior._cnc_status.get("absolute_pos", [0.0] * 5) if behavior else [0.0] * 5
 
         resp = bytearray()
@@ -197,7 +227,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_machine(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         positions = behavior._cnc_status.get("machine_pos", [0.0] * 5) if behavior else [0.0] * 5
 
         resp = bytearray()
@@ -210,7 +240,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_relative(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         positions = behavior._cnc_status.get("relative_pos", [0.0] * 5) if behavior else [0.0] * 5
 
         resp = bytearray()
@@ -223,7 +253,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_distance(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         positions = behavior._cnc_status.get("distance_pos", [0.0] * 5) if behavior else [0.0] * 5
 
         resp = bytearray()
@@ -236,7 +266,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_rdspindlespd(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         speed = behavior._cnc_status.get("spindle_speed", 3000) if behavior else 3000
 
         resp = bytearray()
@@ -247,7 +277,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_rdfeed(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         feed = behavior._cnc_status.get("feed_rate", 500) if behavior else 500
 
         resp = bytearray()
@@ -258,7 +288,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_alarm(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         alarm = behavior._cnc_status.get("alarm", 0) if behavior else 0
 
         resp = bytearray()
@@ -276,7 +306,7 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cnc_program(self, req_id: int) -> bytes:
-        behavior = next(iter(self._behaviors.values()), None)
+        behavior = self._behaviors.get(self._default_device_id)
         prog = behavior._cnc_status.get("program", "O0001") if behavior else "O0001"
 
         resp = bytearray()
@@ -296,9 +326,10 @@ class FanucServer(ProtocolServer):
         return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = FanucDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = FanucDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -315,13 +346,20 @@ class FanucServer(ProtocolServer):
                      device_config.id,
                      self._device_params[device_config.id]["cnc_type"],
                      axis_count)
+        self._log_debug("system", "device_create",
+                        f"创建FANUC设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("FANUC device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除FANUC设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

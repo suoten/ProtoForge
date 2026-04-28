@@ -265,7 +265,7 @@ class Database:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
-    def _upsert_sql(self, table: str, columns: list[str], conflict_key: str = "id") -> tuple[str, str]:
+    def _upsert_sql(self, table: str, columns: list[str], conflict_key: str = "id") -> str:
         cols = ", ".join(columns)
         placeholders_pg = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
         placeholders_sqlite = ", ".join("?" for _ in columns)
@@ -276,7 +276,8 @@ class Database:
             f" ON CONFLICT ({conflict_key}) DO UPDATE SET {update_set}"
         )
         sqlite_sql = (
-            f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({placeholders_sqlite})"
+            f"INSERT INTO {table} ({cols}) VALUES ({placeholders_sqlite})"
+            f" ON CONFLICT ({conflict_key}) DO UPDATE SET {update_set}"
         )
         if self._is_postgres:
             return pg_sql

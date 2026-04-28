@@ -124,6 +124,13 @@ class ModbusTcpServer(ProtocolServer):
             devices.append(SimDevice(slave_id, simdata=simdata))
         return devices
 
+    async def _serve_datastore_only(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
+
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
@@ -186,11 +193,13 @@ class ModbusTcpServer(ProtocolServer):
                 logger.warning("Modbus TCP server task error: %s", e)
         self._status = ProtocolStatus.STOPPED
         logger.info("Modbus TCP server stopped")
+        self._log_debug("system", "server_stop", "Modbus TCP服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
@@ -231,7 +240,11 @@ class ModbusTcpServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("Modbus device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除Modbus设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

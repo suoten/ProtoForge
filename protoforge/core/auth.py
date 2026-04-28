@@ -42,7 +42,7 @@ def get_secret_key() -> str:
     return _SECRET_KEY
 
 
-def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 86400) -> str:
+def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 1800) -> str:
     now = time.time()
     payload = {
         "sub": user_id,
@@ -175,25 +175,40 @@ class UserManager:
         except Exception as e:
             logger.warning("Failed to restore users: %s", e)
 
-    def authenticate(self, username: str, password: str) -> Optional[User]:
+    def authenticate(self, username: str, password: str) -> tuple[Optional[User], str]:
         user = self._users.get(username)
         if not user:
-            return None
+            return None, "invalid_credentials"
 
         if user.locked_until > time.time():
+            remaining = int(user.locked_until - time.time())
             logger.warning("User %s is locked until %.0f", username, user.locked_until)
-            return None
+            return None, f"account_locked:{remaining}"
 
         if not verify_password(password, user.password_hash):
             user.login_attempts += 1
             if user.login_attempts >= _MAX_LOGIN_ATTEMPTS:
                 user.locked_until = time.time() + _LOCKOUT_DURATION
                 logger.warning("User %s locked for %d seconds due to failed logins", username, _LOCKOUT_DURATION)
-            return None
+            self._persist_user(user)
+            return None, "invalid_credentials"
 
         user.login_attempts = 0
         user.locked_until = 0.0
-        return user
+        self._persist_user(user)
+        return user, ""
+
+    def _persist_user(self, user: User) -> None:
+        if self._db:
+            try:
+                import asyncio
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._db.save_user(user.to_dict()))
+                except RuntimeError:
+                    asyncio.run(self._db.save_user(user.to_dict()))
+            except Exception as e:
+                logger.debug("Failed to persist user state: %s", e)
 
     async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
         if username in self._users:

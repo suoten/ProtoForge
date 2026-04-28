@@ -11,13 +11,20 @@ logger = logging.getLogger(__name__)
 
 
 class OpcDaDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[dict]):
-        self._points = {p["name"]: p for p in points}
+    def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._quality: dict[str, int] = {}
-        for p in points:
-            self._values[p["name"]] = p.get("fixed_value") if p.get("fixed_value") is not None else 0
-            self._quality[p["name"]] = 192
+        self._data_types: dict[str, str] = {}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "float64")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
+                self._quality[name] = 192
+                self._data_types[name] = data_type
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -40,6 +47,9 @@ class OpcDaDeviceBehavior(DeviceBehavior):
     def get_quality(self, point_name: str) -> int:
         return self._quality.get(point_name, 0)
 
+    def get_data_type(self, point_name: str) -> str:
+        return self._data_types.get(point_name, "float64")
+
     def get_all_tags(self) -> dict[str, Any]:
         return dict(self._values)
 
@@ -61,23 +71,37 @@ class OpcDaServer(ProtocolServer):
         self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 51340)
-        self._status = ProtocolStatus.RUNNING
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        logger.info("OPC-DA server started on %s:%d (TCP bridge mode)", self._host, self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("OPC-DA server started on %s:%d (TCP bridge mode)", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"OPC-DA服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start OPC-DA server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        self._status = ProtocolStatus.STOPPED
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        logger.info("OPC-DA server stopped")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("OPC-DA server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("OPC-DA server stopped")
+            self._log_debug("system", "server_stop", "OPC-DA服务停止")
 
     async def _serve(self) -> None:
         try:
@@ -139,9 +163,9 @@ class OpcDaServer(ProtocolServer):
 
     def _handle_browse(self, data: bytes) -> bytes:
         tags = []
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             tags.extend(behavior.get_all_tags().keys())
-            break
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
@@ -151,6 +175,26 @@ class OpcDaServer(ProtocolServer):
             resp += struct.pack("<H", len(tag_bytes))
             resp += tag_bytes
         return bytes(resp)
+
+    @staticmethod
+    def _pack_typed_value(data_type: str, value: Any) -> bytes:
+        if data_type == "bool":
+            return struct.pack("<BB", 0, 1 if value else 0)
+        elif data_type == "int16":
+            return struct.pack("<Bh", 1, int(value))
+        elif data_type == "uint16":
+            return struct.pack("<BH", 2, int(value))
+        elif data_type == "int32":
+            return struct.pack("<Bi", 3, int(value))
+        elif data_type == "uint32":
+            return struct.pack("<BI", 4, int(value))
+        elif data_type == "float32":
+            return struct.pack("<Bf", 5, float(value))
+        elif data_type == "string":
+            s = str(value).encode("utf-8")
+            return struct.pack("<BH", 7, len(s)) + s
+        else:
+            return struct.pack("<Bd", 6, float(value))
 
     def _handle_read(self, data: bytes) -> bytes:
         if len(data) < 8:
@@ -163,14 +207,16 @@ class OpcDaServer(ProtocolServer):
         tag_name = data[6:6 + tag_len].decode("utf-8", errors="replace")
         value = 0
         quality = 0
-        for behavior in self._behaviors.values():
+        data_type = "float64"
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             value = behavior.get_value(tag_name)
             quality = behavior.get_quality(tag_name)
-            break
+            data_type = behavior.get_data_type(tag_name)
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<d", float(value))
+        resp += self._pack_typed_value(data_type, value)
         resp += struct.pack("<I", quality)
         resp += struct.pack("<d", time.time())
         return bytes(resp)
@@ -186,9 +232,12 @@ class OpcDaServer(ProtocolServer):
         tag_name = data[6:6 + tag_len].decode("utf-8", errors="replace")
         value = struct.unpack("<d", data[6 + tag_len:6 + tag_len + 8])[0]
 
-        for behavior in self._behaviors.values():
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
             behavior.set_value(tag_name, value)
-            break
+            self._log_debug("recv", "opcda_write",
+                            f"写入标签 {tag_name}={value}",
+                            detail={"tag": tag_name, "value": value})
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
@@ -214,9 +263,10 @@ class OpcDaServer(ProtocolServer):
         return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = OpcDaDeviceBehavior([p.model_dump() for p in device_config.points])
+        behavior = OpcDaDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -226,13 +276,20 @@ class OpcDaServer(ProtocolServer):
 
         logger.info("OPC-DA device created: %s (ProgID=%s)",
                      device_config.id, self._device_params[device_config.id]["prog_id"])
+        self._log_debug("system", "device_create",
+                        f"创建OPC-DA设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("OPC-DA device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除OPC-DA设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

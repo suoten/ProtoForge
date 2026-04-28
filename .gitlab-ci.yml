@@ -1,17 +1,32 @@
 stages:
+  - lint
   - test
+
+lint:
+  stage: lint
+  image: python:3.12-slim
+  before_script:
+    - pip install -e ".[dev,all]"
+  script:
+    - ruff check protoforge/
+
+unit-test:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - pip install -e ".[dev,all]"
+  script:
+    - python -m pytest tests/ -v --tb=short --cov=protoforge --cov-report=term-missing
 
 integration-test:
   stage: test
   image: python:3.12-slim
-  services:
-    - name: protoforge:latest
-      alias: protoforge
   before_script:
-    - pip install protoforge
+    - pip install -e ".[all]"
+    - python -m uvicorn protoforge.main:app --host 0.0.0.0 --port 8000 &
     - |
       for i in $(seq 1 30); do
-        if curl -sf http://protoforge:8000/health; then
+        if curl -sf http://localhost:8000/health; then
           echo "ProtoForge is ready"
           break
         fi
@@ -22,7 +37,8 @@ integration-test:
     - |
       python -c "
       from protoforge.sdk import ProtoForgeClient
-      client = ProtoForgeClient('http://protoforge:8000')
+      client = ProtoForgeClient('http://localhost:8000')
+      client.login('admin', 'admin')
       client.start_protocol('modbus_tcp', {'host': '0.0.0.0', 'port': 5020})
       config = client.instantiate_template('modbus_temperature_sensor', 'ci-test-001', 'CI Test')
       device = client.create_device(**config)
@@ -33,3 +49,5 @@ integration-test:
       client.stop_protocol('modbus_tcp')
       print('CI integration test passed!')
       "
+  after_script:
+    - pkill -f "uvicorn protoforge" || true

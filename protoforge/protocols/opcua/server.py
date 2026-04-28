@@ -93,14 +93,19 @@ class OpcUaServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._server.start())
             logger.info("OPC-UA server starting at %s", self._endpoint)
+            self._log_debug("system", "server_start",
+                            f"OPC-UA服务启动 {self._endpoint}")
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to start OPC-UA server: %s", e)
             raise
 
     async def stop(self) -> None:
-        if self._server:
-            await self._server.stop()
+        try:
+            if self._server:
+                await self._server.stop()
+        except Exception as e:
+            logger.warning("OPC-UA server stop error: %s", e)
         if self._server_task:
             try:
                 await self._server_task
@@ -110,11 +115,13 @@ class OpcUaServer(ProtocolServer):
                 logger.warning("OPC-UA server task error: %s", e)
         self._status = ProtocolStatus.STOPPED
         logger.info("OPC-UA server stopped")
+        self._log_debug("system", "server_stop", "OPC-UA服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcUaDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         ns = proto_config.get("namespace", "protoforge")
@@ -124,12 +131,16 @@ class OpcUaServer(ProtocolServer):
             await self._create_opcua_device(device_config)
 
         logger.info("OPC-UA device created: %s (namespace=%s)", device_config.id, ns)
+        self._log_debug("system", "device_create",
+                        f"创建OPC-UA设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_namespaces.pop(device_id, None)
+        self._clear_default_device(device_id)
         nodes = self._device_nodes.pop(device_id, None)
         if nodes and self._server:
             for node in nodes.values():
@@ -138,6 +149,9 @@ class OpcUaServer(ProtocolServer):
                 except Exception as e:
                     logger.debug("OPC-UA node delete error: %s", e)
         logger.info("OPC-UA device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除OPC-UA设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

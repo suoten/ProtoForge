@@ -34,7 +34,8 @@ Thumbs.db
 desktop.ini
 
 node_modules/
-web/dist/
+# web/dist/  — 生产构建产物已入仓，用户拉取后可直接运行
+# web/dist/
 web/.vite/
 
 .env

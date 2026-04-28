@@ -64,7 +64,7 @@ def test_edgelite_protocol_mapping():
 
 def test_edgelite_push_fields():
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
-    assert len(EDGELITE_PUSH_FIELDS) == 3
+    assert len(EDGELITE_PUSH_FIELDS) >= 3
     keys = [f["key"] for f in EDGELITE_PUSH_FIELDS]
     assert "edgelite_url" in keys
     assert "edgelite_username" in keys

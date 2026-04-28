@@ -14,12 +14,46 @@ class S7DeviceBehavior(DeviceBehavior):
     def __init__(self, points: list = None):
         self._values: dict[str, Any] = {}
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
+        self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 if fixed_val is not None:
                     self._values[name] = fixed_val
+                address = getattr(p, 'address', '0') or '0'
+                db_number, offset = self._parse_s7_address(str(address))
+                self._point_addresses[name] = (db_number, offset)
+                if name in self._values:
+                    self._sync_value_to_db(name, self._values[name])
+
+    @staticmethod
+    def _parse_s7_address(address: str) -> tuple[int, int]:
+        try:
+            if '.' in address.upper():
+                parts = address.upper().split('.')
+                db_number = int(parts[0].replace('DB', '') or '1')
+                offset_str = parts[-1]
+                offset = int(''.join(c for c in offset_str if c.isdigit()) or '0')
+                return (db_number, offset)
+            return (1, int(address))
+        except (ValueError, IndexError):
+            return (1, 0)
+
+    def _sync_value_to_db(self, point_name: str, value: Any) -> None:
+        if point_name not in self._point_addresses:
+            return
+        db_number, offset = self._point_addresses[point_name]
+        try:
+            if isinstance(value, float):
+                data = struct.pack(">f", value)
+            elif isinstance(value, bool):
+                data = struct.pack(">?", value)
+            else:
+                data = struct.pack(">i", int(value))
+            self.write_db_area(db_number, offset, data)
+        except (ValueError, TypeError, struct.error):
+            pass
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -28,6 +62,7 @@ class S7DeviceBehavior(DeviceBehavior):
     async def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._sync_value_to_db(point_name, value)
             return True
         return False
 
@@ -89,16 +124,20 @@ class S7Server(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        self._status = ProtocolStatus.STOPPED
-        logger.info("S7 server stopped")
-        self._log_debug("system", "server_stop", "S7服务停止")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("S7 server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("S7 server stopped")
+            self._log_debug("system", "server_stop", "S7服务停止")
 
     async def _serve(self) -> None:
         try:

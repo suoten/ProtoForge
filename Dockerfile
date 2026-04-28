@@ -1,25 +1,22 @@
-FROM node:20-slim AS frontend-builder
-WORKDIR /app/web
-COPY web/package.json web/package-lock.json* ./
-RUN npm install
-COPY web/ ./
-RUN npm run build
-
 FROM python:3.12-slim
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libffi-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
-COPY protoforge/ protoforge/
-
-COPY --from=frontend-builder /app/web/dist /app/web/dist
-
 RUN pip install --no-cache-dir -e ".[all]"
 
-HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+COPY protoforge/ protoforge/
+COPY alembic.ini .
+COPY migrations/ migrations/
 
-EXPOSE 8000 5020 4840 1883 5060/udp 47808/udp 102
+COPY web/dist/ static/ 2>/dev/null || true
 
-CMD ["python", "-m", "uvicorn", "protoforge.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN mkdir -p data
+
+EXPOSE 8000 5020 4840 1883 5060/udp 47808/udp 102 8080 5000 9600 44818 51340 8193 7878 1701 34964 34980
+
+CMD ["python", "-m", "protoforge.cli", "run"]

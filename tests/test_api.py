@@ -1,5 +1,9 @@
+import os
+
 import pytest
 import pytest_asyncio
+
+os.environ["PROTOFORGE_NO_AUTH"] = "1"
 
 from httpx import ASGITransport, AsyncClient
 

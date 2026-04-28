@@ -115,7 +115,7 @@ class ProfinetServer(ProtocolServer):
         self._device_id = 0x0100
         self._dcp_task: asyncio.Task | None = None
         self._cyclic_task: asyncio.Task | None = None
-        self._udp_sock = None
+        self._udp_sock: Any = None
         self._input_size = 0
         self._output_size = 0
         self._connected = False
@@ -128,32 +128,41 @@ class ProfinetServer(ProtocolServer):
         self._device_name = config.get("device_name", "protoforge-device")
         self._vendor_id = config.get("vendor_id", 0x010A)
         self._device_id = config.get("device_id", 0x0100)
+        try:
+            self._recalc_data_sizes()
+            self._server_running = True
+            self._connected = False
 
-        self._recalc_data_sizes()
-        self._server_running = True
-        self._connected = False
-
-        self._server_task = asyncio.create_task(self._serve())
-        self._status = ProtocolStatus.RUNNING
-        logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
-        self._log_debug("system", "server_start",
-                        f"PROFINET IO服务启动 {self._host}:{self._port}",
-                        detail={"host": self._host, "port": self._port,
-                                "device_name": self._device_name})
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"PROFINET IO服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port,
+                                    "device_name": self._device_name})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start PROFINET server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        if self._udp_sock:
-            self._udp_sock.close()
-            self._udp_sock = None
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        self._status = ProtocolStatus.STOPPED
-        logger.info("PROFINET IO server stopped")
+        try:
+            self._server_running = False
+            if self._udp_sock:
+                self._udp_sock.close()
+                self._udp_sock = None
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("PROFINET server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("PROFINET IO server stopped")
+            self._log_debug("system", "server_stop", "PROFINET IO服务停止")
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -303,39 +312,38 @@ class ProfinetServer(ProtocolServer):
         return bytes(header)
 
     def _handle_rt_data(self, data: bytes) -> bytes | None:
-        for device_id, config in self._device_configs.items():
-            behavior = self._behaviors.get(device_id)
-            if not behavior:
-                continue
+        behavior = self._behaviors.get(self._default_device_id)
+        config = self._device_configs.get(self._default_device_id)
+        if not behavior or not config:
+            return None
 
-            if self._output_size > 0 and len(data) > 12:
-                output_data = data[12:12 + self._output_size]
-                behavior.set_output_data(config, output_data)
-                self._log_debug("inbound", "cyclic_write",
-                                f"PROFINET IO循环写入 {len(output_data)}字节",
-                                device_id=device_id,
-                                detail={"size": len(output_data)})
+        if self._output_size > 0 and len(data) > 12:
+            output_data = data[12:12 + self._output_size]
+            behavior.set_output_data(config, output_data)
+            self._log_debug("inbound", "cyclic_write",
+                            f"PROFINET IO循环写入 {len(output_data)}字节",
+                            device_id=self._default_device_id or "",
+                            detail={"size": len(output_data)})
 
-            input_data = behavior.get_input_data(config)
-            resp = bytearray(data[:4])
-            resp += struct.pack(">H", PNIO_FRAME_ID_RT)
-            resp += struct.pack(">H", len(input_data) + 6)
-            resp += b"\x00\x00\x00\x00"
-            resp += input_data
-            resp += b"\x00\x00\x00\x00\x00\x00\x00\x00"
+        input_data = behavior.get_input_data(config)
+        resp = bytearray(data[:4])
+        resp += struct.pack(">H", PNIO_FRAME_ID_RT)
+        resp += struct.pack(">H", len(input_data) + 6)
+        resp += b"\x00\x00\x00\x00"
+        resp += input_data
+        resp += b"\x00\x00\x00\x00\x00\x00\x00\x00"
 
-            self._log_debug("outbound", "cyclic_read",
-                            f"PROFINET IO循环响应 {len(input_data)}字节",
-                            device_id=device_id,
-                            detail={"size": len(input_data)})
-            return bytes(resp)
-
-        return None
+        self._log_debug("outbound", "cyclic_read",
+                        f"PROFINET IO循环响应 {len(input_data)}字节",
+                        device_id=self._default_device_id or "",
+                        detail={"size": len(input_data)})
+        return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ProfinetDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         if proto_config.get("device_name"):
@@ -359,8 +367,12 @@ class ProfinetServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         self._recalc_data_sizes()
-        logger.info("PROFINET IO device removed: %s", device_id)
+        logger.info("PROFINET device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除PROFINET设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)
