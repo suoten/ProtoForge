@@ -55,9 +55,13 @@ class HttpSimulatorServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        self._status = ProtocolStatus.STOPPED
-        logger.info("HTTP Simulator stopped")
-        self._log_debug("system", "server_stop", "HTTP服务停止")
+        try:
+            self._log_debug("system", "server_stop", "HTTP服务停止")
+        except Exception:
+            pass
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("HTTP Simulator stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = HttpDeviceBehavior(device_config.points)

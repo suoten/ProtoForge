@@ -47,12 +47,18 @@ _SAFE_NAMES = {
 
 
 class _SafeEval:
+    _MAX_DEPTH = 50
+    _MAX_CALL_ARGS = 10
+    _MAX_STR_LEN = 10000
+
     def __init__(self, variables: dict[str, Any] | None = None):
         self._variables = variables or {}
+        self._depth = 0
 
     def eval_expr(self, expr: str) -> Any:
         try:
             tree = ast.parse(expr, mode="eval")
+            self._depth = 0
             return self._eval_node(tree.body)
         except Exception as e:
             logger.debug("SafeEval error: %s", e)
@@ -62,6 +68,7 @@ class _SafeEval:
         try:
             tree = ast.parse(code, mode="exec")
             local_vars = dict(self._variables)
+            self._depth = 0
             for node in tree.body:
                 if isinstance(node, ast.Assign):
                     value = self._eval_node(node.value)
@@ -80,6 +87,15 @@ class _SafeEval:
             return dict(self._variables)
 
     def _eval_node(self, node: ast.AST) -> Any:
+        self._depth += 1
+        if self._depth > self._MAX_DEPTH:
+            raise RecursionError(f"Expression too deeply nested (max {self._MAX_DEPTH})")
+        try:
+            return self._eval_node_inner(node)
+        finally:
+            self._depth -= 1
+
+    def _eval_node_inner(self, node: ast.AST) -> Any:
         if isinstance(node, ast.Constant):
             return node.value
         elif isinstance(node, ast.Name):
@@ -129,6 +145,8 @@ class _SafeEval:
             return self._eval_node(node.body) if test else self._eval_node(node.orelse)
         elif isinstance(node, ast.Call):
             func = self._eval_node(node.func)
+            if len(node.args) > self._MAX_CALL_ARGS:
+                raise ValueError(f"Too many call arguments (max {self._MAX_CALL_ARGS})")
             args = [self._eval_node(a) for a in node.args]
             return func(*args)
         elif isinstance(node, ast.Attribute):

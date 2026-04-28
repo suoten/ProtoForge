@@ -56,7 +56,9 @@ class AbDeviceBehavior(DeviceBehavior):
         return self._values.get(point_name, 0)
 
     def get_tag(self, tag_name: str) -> Any:
-        return self._tags.get(tag_name, 0)
+        if tag_name in self._tags:
+            return self._tags[tag_name]
+        return None
 
     def set_tag(self, tag_name: str, value: Any) -> None:
         self._tags[tag_name] = value
