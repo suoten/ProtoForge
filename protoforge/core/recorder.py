@@ -155,16 +155,11 @@ class Recorder:
                     await asyncio.sleep(min(delay, 10.0))
             if target_engine:
                 try:
-                    device = None
-                    for d in target_engine.list_devices():
-                        if d.id == msg.device_id:
-                            device = d
-                            break
-                    if device and msg.direction == "write" and isinstance(msg.data, dict):
+                    if msg.direction == "write" and isinstance(msg.data, dict):
                         point_name = msg.data.get("point_name", "value")
                         point_value = msg.data.get("value")
                         if point_value is not None:
-                            device.write_point(point_name, point_value)
+                            await target_engine.write_device_point(msg.device_id, point_name, point_value)
                 except Exception as e:
                     logger.debug("Replay write error: %s", e)
             replayed += 1

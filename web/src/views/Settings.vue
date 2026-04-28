@@ -52,7 +52,15 @@
         <n-grid :cols="2" :x-gap="16" :y-gap="8">
           <n-gi v-for="item in protocolPortList" :key="item.key">
             <n-form-item :label="item.label" label-placement="left" :show-feedback="false" style="margin-bottom:4px">
+              <n-input
+                v-if="item.key === 'modbus_rtu'"
+                v-model:value="protocolPorts[item.key]"
+                :placeholder="String(item.default)"
+                style="width:180px"
+                size="small"
+              />
               <n-input-number
+                v-else
                 v-model:value="protocolPorts[item.key]"
                 :min="1" :max="65535"
                 :placeholder="String(item.default)"
@@ -109,13 +117,15 @@ const protocolLabels = {
   http: 'HTTP', gb28181: 'GB28181', bacnet: 'BACnet', s7: 'S7',
   mc: 'Mitsubishi MC', fins: 'Omron FINS', ab: 'Rockwell AB', opcda: 'OPC-DA',
   fanuc: 'FANUC FOCAS', mtconnect: 'MTConnect', toledo: 'Mettler-Toledo',
+  profinet: 'PROFINET', ethercat: 'EtherCAT',
 }
 
 const defaultPorts = {
-  modbus_tcp: 5020, modbus_rtu: 0, opcua: 4840, mqtt: 1883,
+  modbus_tcp: 5020, modbus_rtu: '/dev/ttyUSB0', opcua: 4840, mqtt: 1883,
   http: 8080, gb28181: 5060, bacnet: 47808, s7: 102,
   mc: 5000, fins: 9600, ab: 44818, opcda: 51340,
   fanuc: 8193, mtconnect: 7878, toledo: 1701,
+  profinet: 34964, ethercat: 34980,
 }
 
 const protocolPortList = computed(() => {

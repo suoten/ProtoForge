@@ -104,18 +104,20 @@ class OpcUaServer(ProtocolServer):
         try:
             if self._server:
                 await self._server.stop()
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.warning("OPC-UA server task error: %s", e)
         except Exception as e:
             logger.warning("OPC-UA server stop error: %s", e)
-        if self._server_task:
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning("OPC-UA server task error: %s", e)
-        self._status = ProtocolStatus.STOPPED
-        logger.info("OPC-UA server stopped")
-        self._log_debug("system", "server_stop", "OPC-UA服务停止")
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("OPC-UA server stopped")
+            self._log_debug("system", "server_stop", "OPC-UA服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcUaDeviceBehavior(device_config.points)

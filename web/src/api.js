@@ -15,9 +15,24 @@ api.interceptors.request.use(config => {
 
 api.interceptors.response.use(
   response => response,
-  error => {
-    if (error.response?.status === 401) {
+  async error => {
+    const originalRequest = error.config
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      const refreshToken = localStorage.getItem('refresh_token')
+      if (refreshToken) {
+        originalRequest._retry = true
+        try {
+          const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+          const newToken = res.data.access_token
+          if (newToken) {
+            localStorage.setItem('token', newToken)
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            return api(originalRequest)
+          }
+        } catch (e) { /* refresh failed */ }
+      }
       localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
       window.location.reload()
@@ -34,6 +49,9 @@ export default {
   register: (username, password) => d(api.post('/auth/register', { username, password })),
   listUsers: () => d(api.get('/auth/users')),
   changePassword: (username, old_password, new_password) => d(api.post('/auth/change-password', { username, old_password, new_password })),
+  adminResetPassword: (username, new_password) => d(api.post(`/auth/admin/reset-password`, { username, new_password })),
+  adminUnlockUser: (username) => d(api.post(`/auth/admin/unlock/${username}`)),
+  adminUpdateRole: (username, role) => d(api.put(`/auth/users/${username}/role`, { role })),
   deleteUser: (username) => d(api.delete(`/auth/users/${username}`)),
 
   getProtocols: () => d(api.get('/protocols')),

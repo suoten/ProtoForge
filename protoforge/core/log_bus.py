@@ -40,6 +40,11 @@ class LogBus:
                 queue.put_nowait(entry)
             except asyncio.QueueFull:
                 self._dropped_count += 1
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                queue.put_nowait(entry)
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

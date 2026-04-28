@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -25,10 +23,12 @@ services:
       - "5020:5020"
       - "4840:4840"
       - "1883:1883"
+      - "5060:5060"
       - "5060:5060/udp"
       - "47808:47808/udp"
       - "102:102"
       - "8080:8080"
+      - "5000:5000"
       - "9600:9600"
       - "44818:44818"
       - "51340:51340"
@@ -51,7 +51,7 @@ services:
 
   protoforge-test:
     build: .
-    command: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+    command: ["sh", "-c", "pip install -e '.[dev]' && python -m pytest tests/ -v --tb=short"]
     environment:
       PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"

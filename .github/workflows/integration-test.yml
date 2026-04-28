@@ -68,7 +68,7 @@ jobs:
         run: |
           python -m uvicorn protoforge.main:app --host 0.0.0.0 --port 8000 &
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/api/v1/protocols; then
+            if curl -sf http://localhost:8000/health; then
               echo "ProtoForge is ready"
               exit 0
             fi

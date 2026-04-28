@@ -22,7 +22,11 @@ try:
 except ImportError:
     pass
 
-from pymodbus.server import StartAsyncTcpServer
+StartAsyncTcpServer = None
+try:
+    from pymodbus.server import StartAsyncTcpServer
+except ImportError:
+    pass
 
 
 class ModbusDeviceBehavior(DeviceBehavior):
@@ -136,6 +140,9 @@ class ModbusTcpServer(ProtocolServer):
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 5020)
 
+        if not StartAsyncTcpServer:
+            raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
+
         try:
             if self._use_simdata:
                 devices = self._build_sim_devices()
@@ -183,17 +190,21 @@ class ModbusTcpServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning("Modbus TCP server task error: %s", e)
-        self._status = ProtocolStatus.STOPPED
-        logger.info("Modbus TCP server stopped")
-        self._log_debug("system", "server_stop", "Modbus TCP服务停止")
+        try:
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.warning("Modbus TCP server task error: %s", e)
+        except Exception as e:
+            logger.warning("Modbus TCP server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("Modbus TCP server stopped")
+            self._log_debug("system", "server_stop", "Modbus TCP服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
