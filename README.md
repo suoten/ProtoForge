@@ -4,10 +4,10 @@
 
 **物联网协议仿真与测试平台**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
-[![Vue3](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[!\[Python\](https://img.shields.io/badge/Python-3.10+-blue.svg null)](https://python.org)
+[!\[FastAPI\](https://img.shields.io/badge/FastAPI-0.115+-green.svg null)](https://fastapi.tiangolo.com)
+[!\[Vue3\](https://img.shields.io/badge/Vue-3.x-brightgreen.svg null)](https://vuejs.org)
+[!\[License\](https://img.shields.io/badge/License-MIT-yellow.svg null)](LICENSE)
 
 [English](#english) | [中文](#中文)
 
@@ -88,7 +88,7 @@ npm run dev
 
 **Step 3 — 访问系统**
 
-打开浏览器访问 **http://localhost:5173**，用 `admin` / `admin` 登录。
+打开浏览器访问 \*\*<http://localhost:5173**，用> `admin` / `admin` 登录。
 
 > 前端开发服务器（`npm run dev`）会自动代理 API 请求到后端的 8000 端口，无需额外配置。
 
@@ -97,6 +97,7 @@ npm run dev
 适合生产环境，通过域名访问，Nginx 托管前端静态文件，API 代理到后端。
 
 **部署架构：**
+
 ```
 用户 → 域名 (http://your-domain.com)
     → Nginx
@@ -144,7 +145,7 @@ server {
 
     # API 请求 → 代理到 Python 后端
     location /api/ {
-        proxy_pass http://127.0.0.1:8200;
+        proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -152,7 +153,7 @@ server {
 
     # WebSocket → 代理到 Python 后端（需升级协议）
     location /api/v1/ws/ {
-        proxy_pass http://127.0.0.1:8200;
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -170,7 +171,7 @@ server {
 
 **Step 4 — 访问系统**
 
-打开浏览器访问 **http://your-domain.com**，用 `admin` / `admin` 登录。
+打开浏览器访问 \*\*<http://your-domain.com**，用> `admin` / `admin` 登录。
 
 #### 方式三：Docker 一键部署
 
@@ -205,8 +206,8 @@ pip install -e ".[bacnet]"    # BACnet 协议
 pip install -e ".[s7]"        # 西门子 S7 协议
 ```
 
-| 协议             | 需要额外安装？      | 默认端口  | 说明               |
-| -------------- | ------------ | ----- | ---------------- |
+| 协议             | 需要额外安装？    | 默认端口  | 说明               |
+| -------------- | ---------- | ----- | ---------------- |
 | Modbus TCP     | 不需要        | 5020  | 工业标准通信协议         |
 | HTTP           | 不需要        | 8080  | RESTful API 仿真   |
 | Modbus RTU     | 不需要        | 串口    | 串口通信协议           |
@@ -218,8 +219,8 @@ pip install -e ".[s7]"        # 西门子 S7 协议
 | FANUC FOCAS    | 不需要        | 8193  | FANUC CNC 数据采集   |
 | MTConnect      | 不需要        | 7878  | 机床数据互联标准         |
 | Mettler-Toledo | 不需要        | 1701  | 称重仪表协议           |
-| PROFINET IO    | 不需要        | 34964 | PI组织实时工业以太网协议   |
-| EtherCAT       | 不需要        | 34980 | 倍福实时工业以太网协议     |
+| PROFINET IO    | 不需要        | 34964 | PI组织实时工业以太网协议    |
+| EtherCAT       | 不需要        | 34980 | 倍福实时工业以太网协议      |
 | OPC-UA         | `[opcua]`  | 4840  | 统一架构协议           |
 | MQTT           | `[mqtt]`   | 1883  | 物联网消息协议          |
 | BACnet         | `[bacnet]` | 47808 | 楼宇自动化协议          |
@@ -250,11 +251,11 @@ EdgeLite：设备 protocol_config 填 edgelite_url → 自动注册到 EdgeLite 
 
 **使用方式**：创建设备时，在协议配置中填写 EdgeLite 网关地址即可：
 
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| `edgelite_url` | EdgeLite 网关地址 | `http://192.168.1.200:8100` |
-| `edgelite_username` | 用户名 | `admin` |
-| `edgelite_password` | 密码 | `admin123` |
+| 字段                  | 说明            | 示例                          |
+| ------------------- | ------------- | --------------------------- |
+| `edgelite_url`      | EdgeLite 网关地址 | `http://192.168.1.200:8100` |
+| `edgelite_username` | 用户名           | `admin`                     |
+| `edgelite_password` | 密码            | `admin123`                  |
 
 > 不填就不推送，不影响 ProtoForge 正常使用。详见 [INTEGRATION.md](INTEGRATION.md)。
 
@@ -327,11 +328,13 @@ PROTOFORGE_GB28181_PORT=5060
 #### 数据库配置
 
 **SQLite（默认，适合开发和单机部署）：**
+
 ```bash
 PROTOFORGE_DB_PATH=data/protoforge.db
 ```
 
 **PostgreSQL（生产环境推荐）：**
+
 ```bash
 # 安装 PostgreSQL 支持
 pip install -e ".[postgres]"
@@ -408,8 +411,8 @@ ProtoForge/
 
 后端启动后，访问以下地址查看交互式 API 文档（直接访问后端端口）：
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: <http://localhost:8000/docs>
+- **ReDoc**: <http://localhost:8000/redoc>
 
 > 这是后端 API 文档，不是前端页面。前端页面请访问前端地址（如 `http://localhost:5173`）。
 
@@ -514,7 +517,7 @@ npm run dev
 
 **Step 3 — Access the System**
 
-Open your browser at **http://localhost:5173** and log in with `admin` / `admin`.
+Open your browser at **<http://localhost:5173>** and log in with `admin` / `admin`.
 
 > The frontend dev server (`npm run dev`) automatically proxies API requests to the backend at port 8000, no extra configuration needed.
 
@@ -523,6 +526,7 @@ Open your browser at **http://localhost:5173** and log in with `admin` / `admin`
 For production environments. Access via domain name, with Nginx serving frontend static files and proxying API requests to the backend.
 
 **Deployment Architecture:**
+
 ```
 User → Domain (http://your-domain.com)
     → Nginx
@@ -596,7 +600,7 @@ server {
 
 **Step 4 — Access the System**
 
-Open your browser at **http://your-domain.com** and log in with `admin` / `admin`.
+Open your browser at **<http://your-domain.com>** and log in with `admin` / `admin`.
 
 #### Option 3: Docker
 
@@ -629,11 +633,11 @@ EdgeLite: Fill edgelite_url in protocol_config → Auto-register to EdgeLite gat
 
 **Usage**: When creating a device, fill in the EdgeLite gateway address in protocol config:
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `edgelite_url` | EdgeLite gateway URL | `http://192.168.1.200:8100` |
-| `edgelite_username` | Username | `admin` |
-| `edgelite_password` | Password | `admin123` |
+| Field               | Description          | Example                     |
+| ------------------- | -------------------- | --------------------------- |
+| `edgelite_url`      | EdgeLite gateway URL | `http://192.168.1.200:8100` |
+| `edgelite_username` | Username             | `admin`                     |
+| `edgelite_password` | Password             | `admin123`                  |
 
 > Leave empty to skip — ProtoForge works normally without it. See [INTEGRATION.md](INTEGRATION.md) for details.
 
@@ -688,11 +692,13 @@ PROTOFORGE_GB28181_PORT=5060
 #### Database Configuration
 
 **SQLite (default):**
+
 ```bash
 PROTOFORGE_DB_PATH=data/protoforge.db
 ```
 
 **PostgreSQL (recommended for production):**
+
 ```bash
 pip install -e ".[postgres]"
 PROTOFORGE_DB_PATH=postgresql://user:password@localhost:5432/protoforge
