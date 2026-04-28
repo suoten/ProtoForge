@@ -34,6 +34,14 @@ class DeviceInstance:
         return self.config.protocol
 
     @property
+    def points(self) -> list[PointConfig]:
+        return self.config.points
+
+    @property
+    def protocol_config(self) -> dict[str, Any]:
+        return self.config.protocol_config
+
+    @property
     def status(self) -> DeviceStatus:
         return self._status
 
