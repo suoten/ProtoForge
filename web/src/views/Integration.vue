@@ -405,7 +405,11 @@ async function loadDevices() {
 async function pushDevice(deviceId) {
   try {
     const res = await api.pushToEdgelite(deviceId)
-    if (res.skipped) { message.warning('该设备未配置 EdgeLite 地址'); return }
+    if (res.skipped) {
+      const reason = res.reason || ''
+      if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
+      message.warning('该设备未配置 EdgeLite 地址'); return
+    }
     message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
   } catch (e) {
     message.error('推送失败: ' + (e.response?.data?.detail || e.message))

@@ -9,6 +9,7 @@ from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStarte
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
+from protoforge.models.protocol import ProtocolInfo
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
@@ -47,6 +48,8 @@ class SimulationEngine:
         self._event_bus = event_bus
 
     def register_protocol(self, server: ProtocolServer) -> None:
+        if server.protocol_name in self._protocol_servers:
+            logger.warning("Protocol %s already registered, overwriting", server.protocol_name)
         self._protocol_servers[server.protocol_name] = server
         logger.info("Registered protocol: %s", server.protocol_name)
 
@@ -72,6 +75,8 @@ class SimulationEngine:
             result.append({
                 "name": server.protocol_name,
                 "display_name": server.protocol_display_name,
+                "description": getattr(server, 'protocol_description', ''),
+                "version": getattr(server, 'protocol_version', '1.0.0'),
                 "status": server.status.value,
                 "config_schema": server.get_config_schema(),
             })
@@ -119,7 +124,8 @@ class SimulationEngine:
 
         proto_config = config.protocol_config or {}
         edgelite_url = proto_config.get("edgelite_url", "")
-        if edgelite_url:
+        skip_auto_push = proto_config.get("_skip_auto_push", False)
+        if edgelite_url and not skip_auto_push:
             try:
                 from protoforge.core.edgelite import push_device_to_edgelite
                 result = await push_device_to_edgelite(config)
@@ -223,11 +229,29 @@ class SimulationEngine:
         instance = self._devices.get(device_id)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
+
+        old_value = None
+        for pv in instance.read_all_points():
+            if pv.name == point_name:
+                old_value = pv.value
+                break
+
         success = instance.write_point(point_name, value)
         if success:
             server = self._protocol_servers.get(instance.protocol)
             if server and server.status == ProtocolStatus.RUNNING:
-                await server.write_point(device_id, point_name, value)
+                try:
+                    proto_success = await server.write_point(device_id, point_name, value)
+                    if not proto_success:
+                        if old_value is not None:
+                            instance.write_point(point_name, old_value)
+                        logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
+                        return False
+                except Exception as e:
+                    if old_value is not None:
+                        instance.write_point(point_name, old_value)
+                    logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
+                    return False
         return success
 
     def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:

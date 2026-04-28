@@ -135,7 +135,7 @@ class ModbusTcpServer(ProtocolServer):
                 self._server_task = asyncio.create_task(
                     StartAsyncTcpServer(context=devices, address=(self._host, self._port))
                 )
-            else:
+            elif OLD_API_AVAILABLE:
                 slaves_dict = {}
                 for device_config in self._device_configs.values():
                     slave_id = self._slave_map.get(device_config.id, self._next_slave_id)
@@ -158,6 +158,11 @@ class ModbusTcpServer(ProtocolServer):
                 self._context = ModbusServerContext(devices=slaves_dict, single=False)
                 self._server_task = asyncio.create_task(
                     StartAsyncTcpServer(context=self._context, address=(self._host, self._port))
+                )
+            else:
+                logger.warning("Neither SimData nor old API available, Modbus TCP server starting in data-store-only mode")
+                self._server_task = asyncio.create_task(
+                    self._serve_datastore_only()
                 )
 
             self._status = ProtocolStatus.RUNNING
@@ -194,17 +199,26 @@ class ModbusTcpServer(ProtocolServer):
 
         if self._status == ProtocolStatus.RUNNING:
             self._get_data_store(slave_id)
-            if not self._use_simdata:
-                device_context = ModbusDeviceContext(
-                    hr=ModbusSequentialDataBlock(1, [0] * 100),
-                    ir=ModbusSequentialDataBlock(1, [0] * 100),
-                    co=ModbusSequentialDataBlock(1, [False] * 100),
-                    di=ModbusSequentialDataBlock(1, [False] * 100),
-                )
-                if hasattr(self._context, '_devices'):
-                    self._context._devices[slave_id] = device_context
-                elif hasattr(self._context, '_slaves'):
-                    self._context._slaves[slave_id] = device_context
+            if not self._use_simdata and OLD_API_AVAILABLE:
+                try:
+                    device_context = ModbusDeviceContext(
+                        hr=ModbusSequentialDataBlock(1, [0] * 100),
+                        ir=ModbusSequentialDataBlock(1, [0] * 100),
+                        co=ModbusSequentialDataBlock(1, [False] * 100),
+                        di=ModbusSequentialDataBlock(1, [False] * 100),
+                    )
+                    if self._context is not None:
+                        try:
+                            if hasattr(self._context, 'slave'):
+                                self._context.slave(slave_id, device_context)
+                            elif hasattr(self._context, '_devices'):
+                                self._context._devices[slave_id] = device_context
+                            elif hasattr(self._context, '_slaves'):
+                                self._context._slaves[slave_id] = device_context
+                        except Exception as e:
+                            logger.warning("Failed to add slave %d to context: %s", slave_id, e)
+                except Exception as e:
+                    logger.warning("Failed to create ModbusDeviceContext: %s", e)
             await self._apply_device_to_context(device_config)
 
         logger.info("Modbus device created: %s (slave_id=%d)", device_config.id, slave_id)

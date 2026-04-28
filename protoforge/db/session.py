@@ -265,20 +265,38 @@ class Database:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
+    def _upsert_sql(self, table: str, columns: list[str], conflict_key: str = "id") -> tuple[str, str]:
+        cols = ", ".join(columns)
+        placeholders_pg = ", ".join(f"${i}" for i in range(1, len(columns) + 1))
+        placeholders_sqlite = ", ".join("?" for _ in columns)
+        update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns if c != conflict_key)
+
+        pg_sql = (
+            f"INSERT INTO {table} ({cols}) VALUES ({placeholders_pg})"
+            f" ON CONFLICT ({conflict_key}) DO UPDATE SET {update_set}"
+        )
+        sqlite_sql = (
+            f"INSERT OR REPLACE INTO {table} ({cols}) VALUES ({placeholders_sqlite})"
+        )
+        if self._is_postgres:
+            return pg_sql
+        return sqlite_sql
+
+    def _where_sql(self, column: str) -> str:
+        return f"{column} = $1" if self._is_postgres else f"{column} = ?"
+
     async def save_device(self, config: DeviceConfig) -> None:
         points_json = json.dumps([p.model_dump() for p in config.points])
         config_json = json.dumps(config.protocol_config)
+        sql = self._upsert_sql("devices", ["id", "name", "protocol", "template_id", "points", "protocol_config"])
         await self._execute(
-            """INSERT OR REPLACE INTO devices (id, name, protocol, template_id, points, protocol_config)
-               VALUES ($1, $2, $3, $4, $5, $6)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO devices (id, name, protocol, template_id, points, protocol_config)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+            sql,
             (config.id, config.name, config.protocol, config.template_id, points_json, config_json),
         )
 
     async def load_device(self, device_id: str) -> Optional[DeviceConfig]:
         row = await self._fetchone(
-            "SELECT * FROM devices WHERE id = $1" if self._is_postgres else "SELECT * FROM devices WHERE id = ?",
+            f"SELECT * FROM devices WHERE {self._where_sql('id')}",
             (device_id,),
         )
         if not row:
@@ -291,24 +309,22 @@ class Database:
 
     async def delete_device(self, device_id: str) -> None:
         await self._execute(
-            "DELETE FROM devices WHERE id = $1" if self._is_postgres else "DELETE FROM devices WHERE id = ?",
+            f"DELETE FROM devices WHERE {self._where_sql('id')}",
             (device_id,),
         )
 
     async def save_scenario(self, config: ScenarioConfig) -> None:
         devices_json = json.dumps([d.model_dump() for d in config.devices])
         rules_json = json.dumps([r.model_dump() for r in config.rules])
+        sql = self._upsert_sql("scenarios", ["id", "name", "description", "devices", "rules"])
         await self._execute(
-            """INSERT OR REPLACE INTO scenarios (id, name, description, devices, rules)
-               VALUES ($1, $2, $3, $4, $5)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO scenarios (id, name, description, devices, rules)
-               VALUES (?, ?, ?, ?, ?)""",
+            sql,
             (config.id, config.name, config.description, devices_json, rules_json),
         )
 
     async def load_scenario(self, scenario_id: str) -> Optional[ScenarioConfig]:
         row = await self._fetchone(
-            "SELECT * FROM scenarios WHERE id = $1" if self._is_postgres else "SELECT * FROM scenarios WHERE id = ?",
+            f"SELECT * FROM scenarios WHERE {self._where_sql('id')}",
             (scenario_id,),
         )
         if not row:
@@ -321,7 +337,7 @@ class Database:
 
     async def delete_scenario(self, scenario_id: str) -> None:
         await self._execute(
-            "DELETE FROM scenarios WHERE id = $1" if self._is_postgres else "DELETE FROM scenarios WHERE id = ?",
+            f"DELETE FROM scenarios WHERE {self._where_sql('id')}",
             (scenario_id,),
         )
 
@@ -329,11 +345,9 @@ class Database:
         points_json = json.dumps([p.model_dump() for p in template.points])
         config_json = json.dumps(template.protocol_config)
         tags_json = json.dumps(template.tags)
+        sql = self._upsert_sql("templates", ["id", "name", "protocol", "description", "manufacturer", "model", "points", "protocol_config", "tags"])
         await self._execute(
-            """INSERT OR REPLACE INTO templates (id, name, protocol, description, manufacturer, model, points, protocol_config, tags)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO templates (id, name, protocol, description, manufacturer, model, points, protocol_config, tags)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            sql,
             (template.id, template.name, template.protocol, template.description,
              template.manufacturer, template.model, points_json, config_json, tags_json),
         )
@@ -379,11 +393,9 @@ class Database:
         )
 
     async def save_test_case(self, case_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("test_cases", ["id", "name", "description", "tags", "steps", "setup_steps", "teardown_steps"])
         await self._execute(
-            """INSERT OR REPLACE INTO test_cases (id, name, description, tags, steps, setup_steps, teardown_steps)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO test_cases (id, name, description, tags, steps, setup_steps, teardown_steps)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            sql,
             (case_data["id"], case_data.get("name", ""), case_data.get("description", ""),
              json.dumps(case_data.get("tags", [])), json.dumps(case_data.get("steps", [])),
              json.dumps(case_data.get("setup_steps", [])), json.dumps(case_data.get("teardown_steps", []))),
@@ -391,7 +403,7 @@ class Database:
 
     async def load_test_case(self, case_id: str) -> Optional[dict[str, Any]]:
         row = await self._fetchone(
-            "SELECT * FROM test_cases WHERE id = $1" if self._is_postgres else "SELECT * FROM test_cases WHERE id = ?",
+            f"SELECT * FROM test_cases WHERE {self._where_sql('id')}",
             (case_id,),
         )
         if not row:
@@ -414,16 +426,14 @@ class Database:
 
     async def delete_test_case(self, case_id: str) -> None:
         await self._execute(
-            "DELETE FROM test_cases WHERE id = $1" if self._is_postgres else "DELETE FROM test_cases WHERE id = ?",
+            f"DELETE FROM test_cases WHERE {self._where_sql('id')}",
             (case_id,),
         )
 
     async def save_test_suite(self, suite_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("test_suites", ["id", "name", "description", "test_case_ids", "tags", "created_at", "updated_at"])
         await self._execute(
-            """INSERT OR REPLACE INTO test_suites (id, name, description, test_case_ids, tags, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO test_suites (id, name, description, test_case_ids, tags, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            sql,
             (suite_data["id"], suite_data.get("name", ""), suite_data.get("description", ""),
              json.dumps(suite_data.get("test_case_ids", [])), json.dumps(suite_data.get("tags", [])),
              suite_data.get("created_at", 0), suite_data.get("updated_at", 0)),
@@ -439,16 +449,14 @@ class Database:
 
     async def delete_test_suite(self, suite_id: str) -> None:
         await self._execute(
-            "DELETE FROM test_suites WHERE id = $1" if self._is_postgres else "DELETE FROM test_suites WHERE id = ?",
+            f"DELETE FROM test_suites WHERE {self._where_sql('id')}",
             (suite_id,),
         )
 
     async def save_test_report(self, report_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("test_reports", ["id", "name", "start_time", "end_time", "total", "passed", "failed", "errors", "skipped", "environment", "test_cases"])
         await self._execute(
-            """INSERT OR REPLACE INTO test_reports (id, name, start_time, end_time, total, passed, failed, errors, skipped, environment, test_cases)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO test_reports (id, name, start_time, end_time, total, passed, failed, errors, skipped, environment, test_cases)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            sql,
             (report_data["id"], report_data.get("name", ""),
              report_data.get("start_time", 0), report_data.get("end_time", 0),
              report_data.get("total", 0), report_data.get("passed", 0),
@@ -459,8 +467,9 @@ class Database:
         )
 
     async def load_test_reports(self, count: int = 50) -> list[dict[str, Any]]:
+        limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
         rows = await self._fetchall(
-            "SELECT * FROM test_reports ORDER BY created_at DESC LIMIT $1" if self._is_postgres else "SELECT * FROM test_reports ORDER BY created_at DESC LIMIT ?",
+            f"SELECT * FROM test_reports ORDER BY created_at DESC {limit_clause}",
             (count,),
         )
         return [{
@@ -474,16 +483,14 @@ class Database:
 
     async def delete_test_report(self, report_id: str) -> None:
         await self._execute(
-            "DELETE FROM test_reports WHERE id = $1" if self._is_postgres else "DELETE FROM test_reports WHERE id = ?",
+            f"DELETE FROM test_reports WHERE {self._where_sql('id')}",
             (report_id,),
         )
 
     async def save_user(self, user_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("users", ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"], conflict_key="username")
         await self._execute(
-            """INSERT OR REPLACE INTO users (username, id, password_hash, role, created_at, login_attempts, locked_until)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)""" if self._is_postgres else
-            """INSERT OR REPLACE INTO users (username, id, password_hash, role, created_at, login_attempts, locked_until)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            sql,
             (user_data["username"], user_data["id"], user_data["password_hash"],
              user_data.get("role", "user"), user_data.get("created_at", 0),
              user_data.get("login_attempts", 0), user_data.get("locked_until", 0.0)),
@@ -501,6 +508,6 @@ class Database:
 
     async def delete_user(self, username: str) -> None:
         await self._execute(
-            "DELETE FROM users WHERE username = $1" if self._is_postgres else "DELETE FROM users WHERE username = ?",
+            f"DELETE FROM users WHERE {self._where_sql('username')}",
             (username,),
         )
