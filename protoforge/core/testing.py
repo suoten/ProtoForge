@@ -901,8 +901,10 @@ class TestRunner:
         if not hook:
             return
         try:
-            safe_builtins = {"print": print, "len": len, "str": str, "int": int, "float": float}
-            local_vars = {"vars": var_store, "api": api_client}
+            safe_builtins = {"print": print, "len": len, "str": str, "int": int, "float": float,
+                             "bool": bool, "list": list, "dict": dict, "range": range,
+                             "True": True, "False": False, "None": None}
+            local_vars = {"vars": var_store}
             exec(hook, {"__builtins__": safe_builtins}, local_vars)
             if "vars" in local_vars and isinstance(local_vars["vars"], VariableStore):
                 var_store._vars.update(local_vars["vars"]._vars)

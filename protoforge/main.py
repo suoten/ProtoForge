@@ -218,6 +218,8 @@ def create_app() -> FastAPI:
     from pathlib import Path
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
+    from protoforge.config import get_settings
+    settings = get_settings()
 
     app = FastAPI(
         title="ProtoForge",

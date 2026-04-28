@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Any, Optional
@@ -815,6 +816,16 @@ async def _get_internal_client():
     from protoforge.main import app
     transport = ASGITransport(app=app)
     _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
+    if os.environ.get("PROTOFORGE_NO_AUTH", "").lower() not in ("1", "true", "yes"):
+        try:
+            from protoforge.core.auth import user_manager
+            admin_user = user_manager._users.get("admin")
+            if admin_user:
+                from protoforge.core.auth import create_token
+                token = create_token(admin_user.id, admin_user.username, admin_user.role)
+                _internal_client.headers["Authorization"] = f"Bearer {token}"
+        except Exception:
+            pass
     return _internal_client
 
 
@@ -1492,13 +1503,13 @@ async def setup_status():
 
 
 @router.get("/settings")
-async def get_settings():
+async def get_settings(admin: dict = Depends(require_admin)):
     from protoforge.config import get_all_settings_dict
     return get_all_settings_dict()
 
 
 @router.put("/settings")
-async def update_settings(updates: dict[str, Any]):
+async def update_settings(updates: dict[str, Any], admin: dict = Depends(require_admin)):
     from protoforge.config import update_settings, get_all_settings_dict
     changed = update_settings(updates)
     return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}

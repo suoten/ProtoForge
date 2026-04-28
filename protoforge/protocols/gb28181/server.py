@@ -621,7 +621,7 @@ class GB28181Server(ProtocolServer):
         call_id = ""
         for line in lines:
             if line.startswith("Call-ID:"):
-                call_id = line.split(":", 1)[1].strip()
+                call_id = line
                 break
 
         for gb_device in self._gb_devices.values():
