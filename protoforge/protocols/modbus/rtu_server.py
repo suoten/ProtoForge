@@ -210,17 +210,21 @@ class ModbusRtuServer(ProtocolServer):
             pass
 
     async def stop(self) -> None:
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning("Modbus RTU server task error: %s", e)
-        self._status = ProtocolStatus.STOPPED
-        logger.info("Modbus RTU server stopped")
-        self._log_debug("system", "server_stop", "Modbus RTU服务停止")
+        try:
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.warning("Modbus RTU server task error: %s", e)
+        except Exception as e:
+            logger.warning("Modbus RTU server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("Modbus RTU server stopped")
+            self._log_debug("system", "server_stop", "Modbus RTU服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusRtuDeviceBehavior(device_config.points)
