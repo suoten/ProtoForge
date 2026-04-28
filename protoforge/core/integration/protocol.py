@@ -13,7 +13,7 @@ PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "s7": "s7",
     "mc": "mc",
     "fins": "fins",
-    "ab": "ab",
+    "ab": "allen_bradley",
     "bacnet": "bacnet",
     "fanuc": "fanuc",
     "mtconnect": "mtconnect",

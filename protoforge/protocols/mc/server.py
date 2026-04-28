@@ -15,12 +15,42 @@ class McDeviceBehavior(DeviceBehavior):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._device_memory: dict[int, bytearray] = {}
+        self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 self._points[name] = p
                 self._values[name] = fixed_val if fixed_val is not None else 0
+                address = getattr(p, 'address', '0') or '0'
+                device_code, offset = self._parse_mc_address(str(address))
+                self._point_addresses[name] = (device_code, offset)
+                self._sync_value_to_memory(name, self._values[name])
+
+    @staticmethod
+    def _parse_mc_address(address: str) -> tuple[int, int]:
+        try:
+            if ':' in address:
+                parts = address.split(':')
+                device_code = int(parts[0])
+                offset = int(parts[1]) if len(parts) > 1 else 0
+                return (device_code, offset)
+            return (0x44, int(address))
+        except (ValueError, IndexError):
+            return (0x44, 0)
+
+    def _sync_value_to_memory(self, point_name: str, value: Any) -> None:
+        if point_name not in self._point_addresses:
+            return
+        device_code, offset = self._point_addresses[point_name]
+        try:
+            if isinstance(value, float):
+                data = struct.pack("<f", value)
+            else:
+                data = struct.pack("<H", int(value) & 0xFFFF)
+            self.write_memory(device_code, offset, data)
+        except (ValueError, TypeError, struct.error):
+            pass
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -29,6 +59,7 @@ class McDeviceBehavior(DeviceBehavior):
     async def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._sync_value_to_memory(point_name, value)
             return True
         return False
 
@@ -93,16 +124,20 @@ class McServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        self._status = ProtocolStatus.STOPPED
-        logger.info("MC server stopped")
-        self._log_debug("system", "server_stop", "MC服务停止")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("MC server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("MC server stopped")
+            self._log_debug("system", "server_stop", "MC服务停止")
 
     async def _serve(self) -> None:
         try:

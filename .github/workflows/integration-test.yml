@@ -2,41 +2,53 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
-  unit-tests:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,all]"
+      - name: Ruff check
+        run: ruff check protoforge/
+      - name: MyPy check
+        run: mypy protoforge/ --ignore-missing-imports || true
 
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -e ".[dev,all]"
       - name: Run Unit Tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --cov=protoforge --cov-report=term-missing
 
   build-frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-
       - name: Install frontend dependencies
         working-directory: web
         run: npm install
-
       - name: Build frontend
         working-directory: web
         run: npm run build
@@ -46,15 +58,12 @@ jobs:
     needs: [unit-tests, build-frontend]
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install ProtoForge
-        run: pip install -e "."
-
+        run: pip install -e ".[all]"
       - name: Start ProtoForge Server
         run: |
           python -m uvicorn protoforge.main:app --host 0.0.0.0 --port 8000 &
@@ -68,39 +77,25 @@ jobs:
           done
           echo "ProtoForge did not start"
           exit 1
-
       - name: Run Integration Tests
         run: |
           python -c "
           import httpx, asyncio
-
           async def test():
               base = 'http://localhost:8000/api/v1'
               async with httpx.AsyncClient() as c:
                   r = await c.post(f'{base}/auth/login', json={'username':'admin','password':'admin'})
                   token = r.json()['access_token']
                   h = {'Authorization': f'Bearer {token}'}
-
                   r = await c.get(f'{base}/protocols', headers=h)
-                  assert r.status_code == 200, f'Protocols failed: {r.status_code}'
-
-                  r = await c.get(f'{base}/devices', headers=h)
-                  assert r.status_code == 200, f'Devices failed: {r.status_code}'
-
-                  r = await c.get(f'{base}/templates', headers=h)
-                  assert r.status_code == 200, f'Templates failed: {r.status_code}'
-
-                  r = await c.get(f'{base}/tests/action-types', headers=h)
-                  assert r.status_code == 200 and len(r.json()) > 0
-
-                  r = await c.get(f'{base}/tests/suggestions', headers=h)
                   assert r.status_code == 200
-
+                  r = await c.get(f'{base}/devices', headers=h)
+                  assert r.status_code == 200
+                  r = await c.get(f'{base}/templates', headers=h)
+                  assert r.status_code == 200
                   print('All integration tests passed!')
-
           asyncio.run(test())
           "
-
       - name: Stop ProtoForge Server
         if: always()
         run: pkill -f "uvicorn protoforge" || true

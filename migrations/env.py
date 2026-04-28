@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from sqlalchemy import pool
@@ -12,7 +13,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+db_path = os.environ.get("PROTOFORGE_DB_PATH", "")
+if db_path:
+    if db_path.startswith("postgresql"):
+        sqlalchemy_url = db_path.replace("postgresql://", "postgresql+asyncpg://")
+    else:
+        sqlalchemy_url = f"sqlite+aiosqlite:///{db_path}"
+    config.set_main_option("sqlalchemy.url", sqlalchemy_url)
+
 target_metadata = None
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

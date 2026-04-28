@@ -45,8 +45,9 @@ class RoleChecker:
 
 
 require_admin = RoleChecker(["admin"])
-require_user = RoleChecker(["admin", "user"])
-require_viewer = RoleChecker(["admin", "user", "viewer"])
+require_operator = RoleChecker(["admin", "operator"])
+require_user = RoleChecker(["admin", "operator", "user"])
+require_viewer = RoleChecker(["admin", "operator", "user", "viewer"])
 
 _PUBLIC_PATHS = {
     "/api/v1/auth/login",
@@ -54,22 +55,46 @@ _PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/health",
+    "/metrics",
 }
 
 _PUBLIC_PREFIXES = (
     "/api/v1/auth/login",
+    "/api/v1/auth/register",
 )
 
 
 def _is_public_path(path: str) -> bool:
     if path in _PUBLIC_PATHS:
         return True
-    if path.startswith("/ws"):
-        return True
     for prefix in _PUBLIC_PREFIXES:
         if path.startswith(prefix):
             return True
     return False
+
+
+def _get_user_from_request(request: Request) -> Optional[dict]:
+    return getattr(request.state, "user", None)
+
+
+def _check_role(request: Request, allowed_roles: list[str]) -> None:
+    user = _get_user_from_request(request)
+    if not user:
+        return
+    user_role = user.get("role", "user")
+    if user_role not in allowed_roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Role '{user_role}' not allowed for this operation",
+        )
+
+
+_ADMIN_PATHS = {
+    "/api/v1/auth/admin/reset-password": ["admin"],
+    "/api/v1/auth/admin/unlock": ["admin"],
+}
+_ADMIN_ROLE_PATH = "/api/v1/auth/users/"
+_ADMIN_ROLE_SUFFIX = "/role"
 
 
 async def auth_middleware(request: Request, call_next):
@@ -105,4 +130,13 @@ async def auth_middleware(request: Request, call_next):
         )
 
     request.state.user = payload
+
+    for admin_path, roles in _ADMIN_PATHS.items():
+        if path.startswith(admin_path):
+            _check_role(request, roles)
+            break
+
+    if path.startswith(_ADMIN_ROLE_PATH) and path.endswith(_ADMIN_ROLE_SUFFIX):
+        _check_role(request, ["admin"])
+
     return await call_next(request)

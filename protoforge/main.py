@@ -1,9 +1,11 @@
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 
 from protoforge.api.v1.router import router
 from protoforge.core.engine import SimulationEngine
@@ -12,23 +14,7 @@ from protoforge.core.integration.manager import IntegrationManager
 from protoforge.core.log_bus import LogBus
 from protoforge.core.template import TemplateManager
 from protoforge.db.session import Database
-from protoforge.protocols.http.server import HttpSimulatorServer
-from protoforge.protocols.modbus.server import ModbusTcpServer
-from protoforge.protocols.modbus.rtu_server import ModbusRtuServer
-from protoforge.protocols.mqtt.server import MqttBroker
-from protoforge.protocols.opcua.server import OpcUaServer
-from protoforge.protocols.gb28181.server import GB28181Server
-from protoforge.protocols.bacnet.server import BACnetServer
-from protoforge.protocols.s7.server import S7Server
-from protoforge.protocols.mc.server import McServer
-from protoforge.protocols.fins.server import FinsServer
-from protoforge.protocols.ab.server import AbServer
-from protoforge.protocols.opcda.server import OpcDaServer
-from protoforge.protocols.fanuc.server import FanucServer
-from protoforge.protocols.mtconnect.server import MtConnectServer
-from protoforge.protocols.toledo.server import ToledoServer
-from protoforge.protocols.profinet.server import ProfinetServer
-from protoforge.protocols.ethercat.server import EtherCATServer
+from protoforge.protocols import PROTOCOL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -99,27 +85,12 @@ async def lifespan(app: FastAPI):
     _template_manager = TemplateManager()
     _template_manager.load_builtin_templates()
 
-    _database = Database()
+    _database = Database(db_path=settings.db_path)
     await _database.connect()
 
     _engine = SimulationEngine(event_bus=_event_bus)
-    _engine.register_protocol(ModbusTcpServer())
-    _engine.register_protocol(ModbusRtuServer())
-    _engine.register_protocol(OpcUaServer())
-    _engine.register_protocol(MqttBroker())
-    _engine.register_protocol(HttpSimulatorServer())
-    _engine.register_protocol(GB28181Server())
-    _engine.register_protocol(BACnetServer())
-    _engine.register_protocol(S7Server())
-    _engine.register_protocol(McServer())
-    _engine.register_protocol(FinsServer())
-    _engine.register_protocol(AbServer())
-    _engine.register_protocol(OpcDaServer())
-    _engine.register_protocol(FanucServer())
-    _engine.register_protocol(MtConnectServer())
-    _engine.register_protocol(ToledoServer())
-    _engine.register_protocol(ProfinetServer())
-    _engine.register_protocol(EtherCATServer())
+    for protocol_cls in PROTOCOL_REGISTRY.values():
+        _engine.register_protocol(protocol_cls())
     _engine.setup_debug_callbacks(_log_bus)
     await _engine.start()
 
@@ -139,6 +110,9 @@ async def lifespan(app: FastAPI):
         restored = 0
         for dev in saved_devices:
             try:
+                if not dev.protocol_config:
+                    dev.protocol_config = {}
+                dev.protocol_config["_skip_auto_push"] = True
                 await _engine.create_device(dev)
                 restored += 1
             except Exception as e:
@@ -255,7 +229,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=os.environ.get("PROTOFORGE_CORS_ORIGINS", "*").split(","),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -270,9 +244,25 @@ def create_app() -> FastAPI:
     async def health():
         return {"status": "ok", "timestamp": int(time.time() * 1000)}
 
+    @app.get("/metrics", response_class=PlainTextResponse)
+    async def prometheus_metrics():
+        from protoforge.core.metrics import metrics
+        try:
+            engine = get_engine()
+            metrics.collect_from_engine(engine)
+        except RuntimeError:
+            pass
+        try:
+            from protoforge.api.v1.router import _get_test_runner
+            runner = _get_test_runner()
+            metrics.collect_from_test_runner(runner)
+        except RuntimeError:
+            pass
+        return metrics.generate_prometheus_output()
+
     static_dir = Path(__file__).parent.parent / "web" / "dist"
-    if not static_dir.is_dir():
-        static_dir = Path(__file__).parent.parent / "static"
+    fallback_dir = Path(__file__).parent.parent / "static"
+
     if static_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
@@ -285,6 +275,25 @@ def create_app() -> FastAPI:
             if file_path.is_file():
                 return FileResponse(file_path)
             return FileResponse(static_dir / "index.html")
+    elif fallback_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=fallback_dir / "assets"), name="assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
+            file_path = fallback_dir / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(fallback_dir / "index.html")
+    else:
+        logger.warning(
+            "前端静态文件目录不存在: %s 和 %s 均未找到。"
+            "浏览器访问时将显示空白页。请执行 'cd web && npm install && npm run build' 构建前端。",
+            static_dir,
+            fallback_dir,
+        )
 
     return app
 

@@ -48,16 +48,19 @@ pip install -e ".[all]"
 pip install -e ".[postgres]"
 ```
 
-### 2. 构建前端
+### 2. 构建前端（⚠️ 必须执行）
 
 ```bash
 cd web
+
+# 需要 Node.js 18+
 npm install
 npm run build
+
 cd ..
 ```
 
-> 如果 `web/dist/` 已存在且未修改前端代码，可跳过此步骤�?
+> **注意**：仓库已包含预构建的 `web/dist/` 目录，但如果你修改了前端代码或从源码部署，必须重新构建。如果 `web/dist/` 不存在，后端启动后浏览器访问将显示空白页。
 
 ### 3. 配置环境变量
 
@@ -303,6 +306,22 @@ alembic upgrade head
 ```
 
 ## 故障排查
+
+### 页面空白（前端无法显示）
+
+**现象**：浏览器能打开，但页面空白或显示 404。
+
+**原因**：`web/dist/` 目录不存在，后端没有前端静态文件可提供服务。
+
+**解决**：
+
+```bash
+cd web
+npm install
+npm run build
+cd ..
+# 然后重启后端
+```
 
 ### 服务无法启动
 

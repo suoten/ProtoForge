@@ -115,14 +115,18 @@ class FileTarget(ForwardTarget):
 
     async def send(self, records: list[dict[str, Any]]) -> None:
         try:
-            with open(self._path, "a", encoding="utf-8") as f:
-                for r in records:
-                    if self._format == "jsonl":
-                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
-                    else:
-                        f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._write_sync, records)
         except Exception as e:
             logger.warning("File forward error: %s", e)
+
+    def _write_sync(self, records: list[dict[str, Any]]) -> None:
+        with open(self._path, "a", encoding="utf-8") as f:
+            for r in records:
+                if self._format == "jsonl":
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                else:
+                    f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
 
     async def close(self) -> None:
         pass
@@ -137,6 +141,9 @@ class ForwardEngine:
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self._batch_size = 100
         self._flush_interval = 5.0
+        self._sent_count: int = 0
+        self._failed_count: int = 0
+        self._retry_count: int = 3
 
     def add_target(self, name: str, target: ForwardTarget) -> None:
         self._targets[name] = target
@@ -196,17 +203,26 @@ class ForwardEngine:
             except asyncio.TimeoutError:
                 pass
             if records and self._targets:
-                for target in self._targets.values():
-                    try:
-                        await target.send(records)
-                    except Exception as e:
-                        logger.warning("Forward to %s failed: %s", type(target).__name__, e)
+                for name, target in self._targets.items():
+                    for attempt in range(self._retry_count):
+                        try:
+                            await target.send(records)
+                            self._sent_count += len(records)
+                            break
+                        except Exception as e:
+                            if attempt < self._retry_count - 1:
+                                await asyncio.sleep(0.5 * (attempt + 1))
+                            else:
+                                self._failed_count += len(records)
+                                logger.warning("Forward to %s failed after %d retries: %s", name, self._retry_count, e)
 
     def get_stats(self) -> dict[str, Any]:
         return {
             "running": self._running,
             "targets": len(self._targets),
             "queue_size": self._queue.qsize(),
+            "sent_count": self._sent_count,
+            "failed_count": self._failed_count,
         }
 
 

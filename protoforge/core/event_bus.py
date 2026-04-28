@@ -53,6 +53,7 @@ class EventBus:
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
         self._callbacks: dict[str, list[Callable]] = {}
         self._history: deque[Event] = deque(maxlen=max_history)
+        self._dropped_count: int = 0
 
     def subscribe(self, event_type: str, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:
@@ -81,6 +82,7 @@ class EventBus:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
+                self._dropped_count += 1
                 try:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:

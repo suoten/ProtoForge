@@ -107,19 +107,28 @@ class MqttBroker(ProtocolServer):
         if self._broker:
             await self._broker.shutdown()
         self._status = ProtocolStatus.STOPPED
-        logger.info("MQTT Broker stopped")
+        logger.info("MQTT broker stopped")
+        self._log_debug("system", "server_stop", "MQTT服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = MqttDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
         logger.info("MQTT device created: %s", device_config.id)
+        self._log_debug("system", "device_create",
+                        f"创建MQTT设备 {device_config.name}",
+                        device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("MQTT device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除MQTT设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)
@@ -139,7 +148,10 @@ class MqttBroker(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        success = await behavior.on_write(point_name, value)
+        if success:
+            await self._publish_device(device_id)
+        return success
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -192,3 +204,31 @@ class MqttBroker(ProtocolServer):
                     except Exception as e:
                         logger.debug("MQTT publish failed for %s: %s", topic, e)
             await asyncio.sleep(interval)
+
+    async def _publish_device(self, device_id: str) -> None:
+        import json as json_lib
+
+        behavior = self._behaviors.get(device_id)
+        config = self._device_configs.get(device_id)
+        if not behavior or not config:
+            return
+        proto_config = config.protocol_config or {}
+        topic_prefix = proto_config.get("topic_prefix", "protoforge")
+        for point in config.points:
+            value = behavior.get_value(point.name)
+            topic = f"{topic_prefix}/{device_id}/{point.name}"
+            payload = json_lib.dumps({
+                "device_id": device_id,
+                "point": point.name,
+                "value": value,
+                "timestamp": time.time(),
+                "unit": point.unit,
+            })
+            try:
+                if self._broker and hasattr(self._broker, 'internal_publish'):
+                    await self._broker.internal_publish(
+                        topic=topic,
+                        data=payload.encode("utf-8"),
+                    )
+            except Exception as e:
+                logger.debug("MQTT publish failed for %s: %s", topic, e)

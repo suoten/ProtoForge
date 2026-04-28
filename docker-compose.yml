@@ -1,6 +1,23 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: protoforge
+      POSTGRES_USER: protoforge
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:-protoforge}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U protoforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   protoforge:
     build: .
     ports:
@@ -11,30 +28,39 @@ services:
       - "5060:5060/udp"
       - "47808:47808/udp"
       - "102:102"
+      - "8080:8080"
+      - "9600:9600"
+      - "44818:44818"
+      - "51340:51340"
+      - "8193:8193"
+      - "7878:7878"
+      - "1701:1701"
+      - "34964:34964"
+      - "34980:34980"
+    environment:
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-}
+      PROTOFORGE_LOG_LEVEL: info
+      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - protoforge-data:/app/data
-    environment:
-      - PROTOFORGE_LOG_LEVEL=info
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
     restart: unless-stopped
 
   protoforge-test:
     build: .
     command: ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
+    environment:
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge_test
+      PROTOFORGE_NO_AUTH: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - ./:/app
-    depends_on:
-      protoforge:
-        condition: service_healthy
-    environment:
-      - PROTOFORGE_TEST_URL=http://protoforge:8000
-    profiles:
-      - test
 
 volumes:
+  postgres-data:
   protoforge-data:

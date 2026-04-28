@@ -27,7 +27,7 @@ class ProtocolServer(ABC):
         self._debug_callback = callback
 
     def _log_debug(self, direction: str, msg_type: str, summary: str,
-                   device_id: str = "", detail: dict = None):
+                   device_id: str = "", detail: Optional[dict] = None):
         if self._debug_callback:
             self._debug_callback(direction, msg_type, summary, device_id, detail)
 

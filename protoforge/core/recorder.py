@@ -70,6 +70,8 @@ class Recording:
 
 
 class Recorder:
+    _MAX_MESSAGES = 100000
+
     def __init__(self, log_bus: LogBus):
         self._log_bus = log_bus
         self._recordings: dict[str, Recording] = {}
@@ -153,8 +155,12 @@ class Recorder:
                     await asyncio.sleep(min(delay, 10.0))
             if target_engine:
                 try:
-                    device = target_engine._devices.get(msg.device_id)
-                    if device and msg.direction == "write" and msg.data:
+                    device = None
+                    for d in target_engine.list_devices():
+                        if d.id == msg.device_id:
+                            device = d
+                            break
+                    if device and msg.direction == "write" and isinstance(msg.data, dict):
                         point_name = msg.data.get("point_name", "value")
                         point_value = msg.data.get("value")
                         if point_value is not None:
@@ -181,13 +187,24 @@ class Recorder:
             return
         if self._filter_device and msg.device_id != self._filter_device:
             return
+        if len(self._active.messages) >= self._MAX_MESSAGES:
+            logger.warning("Recording reached max messages limit (%d)", self._MAX_MESSAGES)
+            return
+        data = {
+            "summary": msg.summary,
+            "point_name": "",
+            "value": None,
+        }
+        if isinstance(msg.detail, dict):
+            data["point_name"] = msg.detail.get("point", msg.detail.get("point_name", ""))
+            data["value"] = msg.detail.get("value")
         recorded = RecordedMessage(
             timestamp=msg.timestamp,
             protocol=msg.protocol,
             direction=msg.direction,
             device_id=msg.device_id,
             message_type=msg.message_type,
-            data=msg.summary,
+            data=data,
         )
         self._active.messages.append(recorded)
 

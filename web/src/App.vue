@@ -148,6 +148,7 @@ function onLogin() {
 function onUserMenuSelect(key) {
   if (key === 'logout') {
     localStorage.removeItem('token')
+    localStorage.removeItem('refresh_token')
     localStorage.removeItem('username')
     localStorage.removeItem('role')
     loggedIn.value = false

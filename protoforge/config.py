@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     db_path: str = "data/protoforge.db"
     jwt_secret: str = ""
     demo_mode: bool = False
+    log_level: str = "info"
+    cors_origins: str = "*"
+
+    influxdb_url: str = ""
+    influxdb_token: str = ""
+    influxdb_org: str = "default"
+    influxdb_bucket: str = "protoforge"
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"

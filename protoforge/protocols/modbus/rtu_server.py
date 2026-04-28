@@ -148,7 +148,7 @@ class ModbusRtuServer(ProtocolServer):
                         bytesize=self._bytesize,
                     )
                 )
-            else:
+            elif OLD_API_AVAILABLE:
                 slaves_dict = {}
                 for device_config in self._device_configs.values():
                     slave_id = self._slave_map.get(device_config.id, self._next_slave_id)
@@ -179,6 +179,11 @@ class ModbusRtuServer(ProtocolServer):
                         bytesize=self._bytesize,
                     )
                 )
+            else:
+                logger.warning("Neither SimData nor old API available, Modbus RTU server starting in data-store-only mode")
+                self._server_task = asyncio.create_task(
+                    self._serve_datastore_only()
+                )
 
             self._status = ProtocolStatus.RUNNING
             logger.info("Modbus RTU server starting on %s @ %d (simdata=%s)", self._port, self._baudrate, self._use_simdata)
@@ -189,6 +194,13 @@ class ModbusRtuServer(ProtocolServer):
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to start Modbus RTU server: %s", e)
             raise
+
+    async def _serve_datastore_only(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
 
     async def stop(self) -> None:
         if self._server_task:
@@ -201,11 +213,13 @@ class ModbusRtuServer(ProtocolServer):
                 logger.warning("Modbus RTU server task error: %s", e)
         self._status = ProtocolStatus.STOPPED
         logger.info("Modbus RTU server stopped")
+        self._log_debug("system", "server_stop", "Modbus RTU服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusRtuDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
@@ -214,17 +228,26 @@ class ModbusRtuServer(ProtocolServer):
 
         if self._status == ProtocolStatus.RUNNING:
             self._get_data_store(slave_id)
-            if not self._use_simdata:
-                device_context = ModbusDeviceContext(
-                    hr=ModbusSequentialDataBlock(1, [0] * 100),
-                    ir=ModbusSequentialDataBlock(1, [0] * 100),
-                    co=ModbusSequentialDataBlock(1, [False] * 100),
-                    di=ModbusSequentialDataBlock(1, [False] * 100),
-                )
-                if hasattr(self._context, '_devices'):
-                    self._context._devices[slave_id] = device_context
-                elif hasattr(self._context, '_slaves'):
-                    self._context._slaves[slave_id] = device_context
+            if not self._use_simdata and OLD_API_AVAILABLE:
+                try:
+                    device_context = ModbusDeviceContext(
+                        hr=ModbusSequentialDataBlock(1, [0] * 100),
+                        ir=ModbusSequentialDataBlock(1, [0] * 100),
+                        co=ModbusSequentialDataBlock(1, [False] * 100),
+                        di=ModbusSequentialDataBlock(1, [False] * 100),
+                    )
+                    if self._context is not None:
+                        try:
+                            if hasattr(self._context, 'slave'):
+                                self._context.slave(slave_id, device_context)
+                            elif hasattr(self._context, '_devices'):
+                                self._context._devices[slave_id] = device_context
+                            elif hasattr(self._context, '_slaves'):
+                                self._context._slaves[slave_id] = device_context
+                        except Exception as e:
+                            logger.warning("Failed to add slave %d to context: %s", slave_id, e)
+                except Exception as e:
+                    logger.warning("Failed to create ModbusDeviceContext: %s", e)
             await self._apply_device_to_context(device_config)
 
         logger.info("Modbus RTU device created: %s (slave_id=%d)", device_config.id, slave_id)
@@ -237,7 +260,11 @@ class ModbusRtuServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         logger.info("Modbus RTU device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除Modbus RTU设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

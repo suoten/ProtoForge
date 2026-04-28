@@ -143,26 +143,35 @@ class EtherCATServer(ProtocolServer):
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 34980)
         self._slave_addr = config.get("slave_address", 0x1001)
-
-        self._init_esc_regs()
-        self._server_running = True
-        self._server_task = asyncio.create_task(self._serve())
-        self._status = ProtocolStatus.RUNNING
-        logger.info("EtherCAT server starting on %s:%d", self._host, self._port)
-        self._log_debug("system", "server_start",
-                        f"EtherCAT服务启动 {self._host}:{self._port}",
-                        detail={"host": self._host, "port": self._port})
+        try:
+            self._init_esc_regs()
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("EtherCAT server starting on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"EtherCAT服务启动 {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start EtherCAT server: %s", e)
+            raise
 
     async def stop(self) -> None:
-        self._server_running = False
-        if self._server_task:
-            self._server_task.cancel()
-            try:
-                await self._server_task
-            except asyncio.CancelledError:
-                pass
-        self._status = ProtocolStatus.STOPPED
-        logger.info("EtherCAT server stopped")
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    pass
+        except Exception as e:
+            logger.warning("EtherCAT server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("EtherCAT server stopped")
+            self._log_debug("system", "server_stop", "EtherCAT服务停止")
 
     def _init_esc_regs(self) -> None:
         self._esc_regs[0x0000] = struct.pack("<H", 0x0444)
@@ -291,10 +300,9 @@ class EtherCATServer(ProtocolServer):
 
         if address >= 0x10000000:
             offset = address & 0x0FFFFFFF
-            for device_id, config in self._device_configs.items():
-                behavior = self._behaviors.get(device_id)
-                if not behavior:
-                    continue
+            behavior = self._behaviors.get(self._default_device_id)
+            config = self._device_configs.get(self._default_device_id)
+            if behavior and config:
                 input_data = behavior.get_pd_input(config)
                 if offset < len(input_data):
                     end = min(offset + length, len(input_data))
@@ -316,14 +324,13 @@ class EtherCATServer(ProtocolServer):
 
         if address >= 0x10000000:
             offset = address & 0x0FFFFFFF
-            for device_id, config in self._device_configs.items():
-                behavior = self._behaviors.get(device_id)
-                if not behavior:
-                    continue
+            behavior = self._behaviors.get(self._default_device_id)
+            config = self._device_configs.get(self._default_device_id)
+            if behavior and config:
                 behavior.set_pd_output(config, payload[:length])
                 self._log_debug("inbound", "pdo_write",
                                 f"EtherCAT PDO写入 {length}字节",
-                                device_id=device_id,
+                                device_id=self._default_device_id or "",
                                 detail={"size": length})
             return b"", 0x0001
 
@@ -359,6 +366,7 @@ class EtherCATServer(ProtocolServer):
         behavior = EtherCATDeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         if proto_config.get("slave_address"):
@@ -379,8 +387,12 @@ class EtherCATServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         self._recalc_data_sizes()
         logger.info("EtherCAT device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"移除EtherCAT设备 {device_id}",
+                        device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
         behavior = self._behaviors.get(device_id)

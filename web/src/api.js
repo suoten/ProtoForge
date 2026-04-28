@@ -30,7 +30,8 @@ const d = (promise) => promise.then(r => r.data)
 
 export default {
   login: (username, password) => d(api.post('/auth/login', { username, password })),
-  register: (username, password, role) => d(api.post('/auth/register', { username, password, role })),
+  refreshToken: (refresh_token) => d(api.post('/auth/refresh', { refresh_token })),
+  register: (username, password) => d(api.post('/auth/register', { username, password })),
   listUsers: () => d(api.get('/auth/users')),
   changePassword: (username, old_password, new_password) => d(api.post('/auth/change-password', { username, old_password, new_password })),
   deleteUser: (username) => d(api.delete(`/auth/users/${username}`)),

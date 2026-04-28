@@ -213,7 +213,7 @@ class GB28181Server(ProtocolServer):
         self._server_id = config.get("server_id", "34020000002000000001")
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             self._transport, _ = await loop.create_datagram_endpoint(
                 lambda: _SIPProtocolHandler(self),
                 local_addr=(self._host, self._port),
@@ -233,27 +233,32 @@ class GB28181Server(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        for gb_device in self._gb_devices.values():
-            if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
-                await gb_device.rtp_streamer.stop()
-        if self._heartbeat_task:
-            self._heartbeat_task.cancel()
-            try:
-                await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning("GB28181 heartbeat task error: %s", e)
-        if self._transport:
-            self._transport.close()
-        self._status = ProtocolStatus.STOPPED
-        self._log_debug("system", "server_stop", "GB28181 SIP服务停止")
-        logger.info("GB28181 server stopped")
+        try:
+            for gb_device in self._gb_devices.values():
+                if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
+                    await gb_device.rtp_streamer.stop()
+            if self._heartbeat_task:
+                self._heartbeat_task.cancel()
+                try:
+                    await self._heartbeat_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.warning("GB28181 heartbeat task error: %s", e)
+            if self._transport:
+                self._transport.close()
+        except Exception as e:
+            logger.warning("GB28181 server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            self._log_debug("system", "server_stop", "GB28181 SIP服务停止")
+            logger.info("GB28181 server stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = GB28181DeviceBehavior(device_config.points)
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
+        self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         gb_device_id = proto_config.get("device_id", device_config.id)
@@ -294,6 +299,7 @@ class GB28181Server(ProtocolServer):
             gb.registered = False
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        self._clear_default_device(device_id)
         self._log_debug("system", "device_removed", f"设备移除", device_id=device_id)
         logger.info("GB28181 device removed: %s", device_id)
 
@@ -503,7 +509,9 @@ class GB28181Server(ProtocolServer):
                 break
 
         for gb_device in self._gb_devices.values():
-            if call_id and gb_device.call_id != call_id:
+            if not call_id:
+                continue
+            if gb_device.call_id != call_id:
                 continue
             gb_device.realm = realm
             auth_request = gb_device.make_register_with_auth(nonce)
@@ -573,7 +581,7 @@ class GB28181Server(ProtocolServer):
                                 "media_addr": f"{sdp_info['media_ip']}:{sdp_info['media_port']}"})
 
         media_ip = self._host if self._host != "0.0.0.0" else "127.0.0.1"
-        media_port = 6000 + hash(device_id) % 1000
+        media_port = 6000 + (int(device_id[-4:], 16) % 1000)
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
 
         sdp_body = gb_device.make_sdp_answer(media_ip, media_port, ssrc)
@@ -621,7 +629,7 @@ class GB28181Server(ProtocolServer):
 
                 if dest_ip and dest_port > 0:
                     if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
-                        asyncio.ensure_future(gb_device.rtp_streamer.stop())
+                        asyncio.create_task(gb_device.rtp_streamer.stop())
 
                     try:
                         from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
