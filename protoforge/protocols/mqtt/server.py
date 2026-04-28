@@ -96,19 +96,23 @@ class MqttBroker(ProtocolServer):
             raise
 
     async def stop(self) -> None:
-        if self._publish_task:
-            self._publish_task.cancel()
-            try:
-                await self._publish_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning("MQTT publish task error: %s", e)
-        if self._broker:
-            await self._broker.shutdown()
-        self._status = ProtocolStatus.STOPPED
-        logger.info("MQTT broker stopped")
-        self._log_debug("system", "server_stop", "MQTT服务停止")
+        try:
+            if self._publish_task:
+                self._publish_task.cancel()
+                try:
+                    await self._publish_task
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.warning("MQTT publish task error: %s", e)
+            if self._broker:
+                await self._broker.shutdown()
+        except Exception as e:
+            logger.warning("MQTT broker stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("MQTT broker stopped")
+            self._log_debug("system", "server_stop", "MQTT服务停止")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = MqttDeviceBehavior(device_config.points)

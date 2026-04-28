@@ -379,8 +379,11 @@ class AsyncProtoForgeClient:
 
     async def create_device(self, device_id: str, name: str, protocol: str,
                             points: list[dict] | None = None,
+                            template_id: str | None = None,
                             protocol_config: dict | None = None) -> dict:
         data = {"id": device_id, "name": name, "protocol": protocol, "points": points or []}
+        if template_id:
+            data["template_id"] = template_id
         if protocol_config:
             data["protocol_config"] = protocol_config
         return await self._post("/devices", json=data)

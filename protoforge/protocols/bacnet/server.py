@@ -225,10 +225,10 @@ class BACnetServer(ProtocolServer):
             return False
         success = await behavior.on_write(point_name, value)
         if success:
-            obj_map = self._device_objects.get(device_id, {})
-            for obj_id, obj_info in obj_map.items():
-                if obj_info.get("point_name") == point_name:
-                    obj_info["present_value"] = value
+            device_obj = self._device_objects.get(device_id, {})
+            for obj in device_obj.get("objects", []):
+                if obj.get("object_name") == point_name:
+                    obj["present_value"] = value
         return success
 
     def get_config_schema(self) -> dict[str, Any]:

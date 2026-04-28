@@ -22,7 +22,11 @@ try:
 except ImportError:
     pass
 
-from pymodbus.server import StartAsyncSerialServer
+StartAsyncSerialServer = None
+try:
+    from pymodbus.server import StartAsyncSerialServer
+except ImportError:
+    pass
 
 
 class ModbusRtuDeviceBehavior(DeviceBehavior):
@@ -134,6 +138,9 @@ class ModbusRtuServer(ProtocolServer):
         self._parity = config.get("parity", "N")
         self._stopbits = config.get("stopbits", 1)
         self._bytesize = config.get("bytesize", 8)
+
+        if not StartAsyncSerialServer:
+            raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
 
         try:
             if self._use_simdata:

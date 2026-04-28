@@ -69,8 +69,13 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     global _settings, _settings_overrides
     s = get_settings()
     changed = {}
+    allowed_keys = {
+        "host", "port", "db_path", "jwt_secret", "demo_mode",
+        "log_level", "cors_origins",
+        "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
+    }
     for key, value in updates.items():
-        if key.endswith("_port") or key in ("host", "port", "db_path", "jwt_secret"):
+        if key.endswith("_port") or key in allowed_keys:
             _settings_overrides[key] = value
             if hasattr(s, key):
                 old_val = getattr(s, key)
@@ -139,6 +144,12 @@ def get_all_settings_dict() -> dict[str, Any]:
         "port": s.port,
         "db_path": s.db_path,
         "demo_mode": s.demo_mode,
+        "log_level": s.log_level,
+        "cors_origins": s.cors_origins,
+        "influxdb_url": s.influxdb_url,
+        "influxdb_token": s.influxdb_token,
+        "influxdb_org": s.influxdb_org,
+        "influxdb_bucket": s.influxdb_bucket,
         "protocol_ports": {
             "modbus_tcp": s.modbus_tcp_port,
             "modbus_rtu": s.modbus_rtu_port,

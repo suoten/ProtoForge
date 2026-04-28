@@ -181,7 +181,8 @@ function onSearchSelect(val) {
 
 function connectWebSocket() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs`
+  const token = localStorage.getItem('token') || ''
+  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs?token=${token}`
   ws = new WebSocket(wsUrl)
   ws.onopen = () => { wsConnected.value = true }
   ws.onclose = () => { wsConnected.value = false; setTimeout(connectWebSocket, 5000) }
