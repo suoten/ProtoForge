@@ -265,11 +265,12 @@ class BACnetServer(ProtocolServer):
     def _get_bacnet_object_type(self, point) -> str:
         access = point.access if hasattr(point, "access") else "r"
         data_type = point.data_type if hasattr(point, "data_type") else "float32"
+        dt_val = data_type.value if hasattr(data_type, "value") else str(data_type)
         if access == "r":
-            if data_type == "bool":
+            if dt_val == "bool":
                 return "binaryInput"
             return "analogInput"
         else:
-            if data_type == "bool":
+            if dt_val == "bool":
                 return "binaryOutput"
             return "analogOutput"
