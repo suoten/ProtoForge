@@ -21,6 +21,8 @@ class S7DeviceBehavior(DeviceBehavior):
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 if fixed_val is not None:
                     self._values[name] = fixed_val
+                else:
+                    self._values[name] = 0
                 address = getattr(p, 'address', '0') or '0'
                 db_number, offset = self._parse_s7_address(str(address))
                 self._point_addresses[name] = (db_number, offset)

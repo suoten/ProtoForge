@@ -34,7 +34,7 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 - **数据转发** — InfluxDB / HTTP Webhook / 文件，一键对接
 - **协议录制回放** — 记录通信报文，按需回放验证
 - **Prometheus 指标** — 内置监控端点，对接 Grafana
-- **JWT 认证 + RBAC** — 多用户角色权限管理，bcrypt 安全密码存储
+- **JWT 认证 + RBAC** — 4 种角色（admin/operator/user/viewer），100% API 端点权限覆盖，bcrypt 安全密码存储
 - **API 限流保护** — 内置速率限制，防止暴力破解和滥用
 - **双数据库支持** — SQLite 开箱即用，PostgreSQL 生产级支持
 - **EdgeLite 网关对接** — 设备配置中填写网关地址，自动注册到 EdgeLite
@@ -429,6 +429,84 @@ ProtoForge/
 
 ***
 
+### 📦 Python SDK
+
+ProtoForge 提供同步和异步两种 Python SDK 客户端，覆盖全部 API 功能。
+
+**安装**：
+
+```bash
+pip install protoforge
+```
+
+**快速上手**：
+
+```python
+from protoforge.sdk import ProtoForgeClient
+
+# 创建客户端
+with ProtoForgeClient("http://localhost:8000") as client:
+    # 登录
+    client.login("admin", "admin")
+
+    # 列出所有协议
+    protocols = client.list_protocols()
+
+    # 启动 Modbus TCP 协议
+    client.start_protocol("modbus_tcp")
+
+    # 从模板快速创建设备
+    device = client.quick_create("modbus-plc-controller", "测试PLC")
+
+    # 读取设备测点
+    points = client.read_points(device["id"])
+    print(points)
+
+    # 运行一键测试
+    report = client.quick_test()
+    print(report)
+```
+
+**异步客户端**：
+
+```python
+from protoforge.sdk import AsyncProtoForgeClient
+
+async with AsyncProtoForgeClient("http://localhost:8000") as client:
+    await client.login("admin", "admin")
+    devices = await client.list_devices()
+    print(devices)
+```
+
+**SDK 方法一览**（70+ 方法）：
+
+| 类别 | 方法 | 说明 |
+|------|------|------|
+| 认证 | `login`, `refresh_token`, `change_password` | JWT 认证管理 |
+| 协议 | `list_protocols`, `start_protocol`, `stop_protocol`, `get_protocol_config` | 协议启停和配置 |
+| 设备 | `create_device`, `quick_create`, `read_points`, `write_point`, `update_device`, `delete_device` | 设备 CRUD + 测点读写 |
+| 批量 | `batch_create_devices`, `batch_start_devices`, `batch_stop_devices`, `batch_delete_devices` | 批量操作 |
+| 模板 | `list_templates`, `search_templates`, `instantiate_template`, `create_template` | 模板搜索和实例化 |
+| 场景 | `create_scenario`, `start_scenario`, `stop_scenario`, `export_scenario`, `import_scenario` | 场景编排 |
+| 测试 | `quick_test`, `create_test_case`, `run_tests`, `get_test_report` | 仿真测试 |
+| 转发 | `add_forward_target`, `start_forward`, `stop_forward`, `get_forward_stats` | 数据转发 |
+| 录制 | `start_recording`, `stop_recording`, `replay_recording`, `export_recording` | 协议录制回放 |
+| 集成 | `import_edgelite`, `import_pygbsentry`, `list_webhooks`, `add_webhook` | 第三方集成 |
+| 系统 | `get_settings`, `update_settings`, `setup_demo`, `get_setup_status` | 系统管理 |
+
+***
+
+### 📊 监控端点
+
+| 端点 | 格式 | 说明 |
+|------|------|------|
+| `GET /health` | JSON | 健康检查（数据库状态、活跃设备数、协议状态） |
+| `GET /metrics` | Prometheus | 标准指标格式（uptime、设备数、转发/录制计数） |
+| `GET /api/v1/forward/stats` | JSON | 数据转发统计 |
+| `GET /api/v1/recorder/stats` | JSON | 录制统计 |
+
+***
+
 ### 🔒 安全说明
 
 ProtoForge 内置多层安全机制：
@@ -440,6 +518,29 @@ ProtoForge 内置多层安全机制：
 - **密钥管理**：JWT 密钥支持环境变量配置，未配置时自动生成随机密钥
 
 生产环境部署前，请务必阅读 [SECURITY.md](SECURITY.md) 完成安全加固。
+
+#### RBAC 角色权限
+
+| 角色 | 权限说明 | 可访问端点 |
+|------|---------|-----------|
+| `admin` | 系统管理员，拥有全部权限 | 所有端点 + 用户管理 + 系统设置 |
+| `operator` | 运维人员，可管理设备和协议 | 设备/协议/场景/转发/录制的增删改 |
+| `user` | 普通用户，可运行测试 | 读操作 + 测试用例/套件的增删改 |
+| `viewer` | 只读用户，仅可查看数据 | 所有 GET 端点 |
+
+#### 协议安全说明
+
+| 协议 | 认证支持 | 加密支持 | 说明 |
+|------|---------|---------|------|
+| HTTP | ✅ JWT + RBAC | ✅ HTTPS | API 端点受完整认证保护 |
+| Modbus TCP | ❌ 无 | ❌ 无 | 协议本身无认证机制，建议网络隔离 |
+| OPC-UA | ⚠️ 可配置 | ⚠️ 可配置 | 支持 Sign/SignAndEncrypt 模式，模板默认未启用 |
+| MQTT | ⚠️ 可配置 | ⚠️ 可配置 | 支持用户名/密码认证，模板默认未启用 |
+| GB28181 | ⚠️ Digest | ❌ 无 SRTP | SIP 支持 Digest 认证，RTP 流未加密 |
+| S7/MC/FINS/AB | ❌ 无 | ❌ 无 | 工业协议通常在 PLC 端做访问控制 |
+| BACnet | ❌ 无 | ❌ 无 | BACnet/IP 协议本身无内置认证 |
+
+> ⚠️ 仿真环境下的协议安全限制与真实设备一致。生产部署时建议通过防火墙、VPN 或网络隔离保护协议端口。
 
 ***
 
@@ -474,7 +575,7 @@ ProtoForge is an out-of-the-box IoT protocol simulation and testing platform. No
 - **Data Forwarding** — InfluxDB / HTTP Webhook / File, one-click integration
 - **Protocol Recording & Replay** — Record communication packets, replay on demand
 - **Prometheus Metrics** — Built-in monitoring endpoint for Grafana
-- **JWT Auth + RBAC** — Multi-user role-based access control with bcrypt password hashing
+- **JWT Auth + RBAC** — 4 roles (admin/operator/user/viewer), 100% API endpoint coverage, bcrypt secure password hashing
 - **API Rate Limiting** — Built-in rate limiting to prevent brute-force and abuse
 - **Dual Database Support** — SQLite out-of-the-box, PostgreSQL for production
 - **EdgeLite Integration** — Auto-register devices to EdgeLite gateway via protocol config
@@ -631,6 +732,53 @@ docker-compose up -d
 docker-compose down
 ```
 
+#### Optional: Install More Protocols
+
+Modbus TCP and HTTP work out of the box. Other protocols require additional dependencies:
+
+```bash
+# Install all protocol dependencies
+pip install -e ".[all]"
+
+# Or install only what you need
+pip install -e ".[opcua]"     # OPC-UA protocol
+pip install -e ".[mqtt]"      # MQTT protocol
+pip install -e ".[bacnet]"    # BACnet protocol
+pip install -e ".[s7]"        # Siemens S7 protocol
+```
+
+| Protocol | Extra Install? | Default Port | Description |
+|----------|---------------|-------------|-------------|
+| Modbus TCP | No | 5020 | Industrial standard communication protocol |
+| HTTP | No | 8080 | RESTful API simulation |
+| Modbus RTU | No | Serial | Serial communication protocol |
+| GB28181 | No | 5060 | Video surveillance national standard |
+| Mitsubishi MC | No | 5000 | Mitsubishi PLC SLMP protocol |
+| Omron FINS | No | 9600 | Omron PLC FINS protocol |
+| Rockwell AB | No | 44818 | Rockwell EtherNet/IP |
+| OPC-DA | No | 51340 | OPC Classic Data Access |
+| FANUC FOCAS | No | 8193 | FANUC CNC data collection |
+| MTConnect | No | 7878 | Machine tool data interop standard |
+| Mettler-Toledo | No | 1701 | Weighing instrument protocol |
+| PROFINET IO | No | 34964 | PI org real-time industrial Ethernet |
+| EtherCAT | No | 34980 | Beckhoff real-time industrial Ethernet |
+| OPC-UA | `[opcua]` | 4840 | Unified Architecture protocol |
+| MQTT | `[mqtt]` | 1883 | IoT messaging protocol |
+| BACnet | `[bacnet]` | 47808 | Building automation protocol |
+| Siemens S7 | `[s7]` | 102 | Siemens PLC protocol |
+
+***
+
+### 🚀 5-Minute Quick Start
+
+After deploying the frontend and backend using "Option 1: Local Quick Start" above, follow these steps:
+
+1. **Login** — Open the frontend URL in your browser (dev mode `http://localhost:5173`, production `http://your-domain.com`), enter admin / admin
+2. **Start Protocol** — Left menu "Protocol Services" → Click "Start All"
+3. **Create Device** — Left menu "Template Market" → Pick a template → Fill in a name → One-click create
+4. **View Data** — Device list → Click "Points" → See real-time simulation data
+5. **Run Tests** — Left menu "Simulation Test" → Click "Quick Test All"
+
 ***
 
 ### 🔗 EdgeLite Gateway Integration
@@ -682,17 +830,35 @@ ProtoForge doesn't just simulate data values — it **simulates the complete pro
 
 ***
 
+### 🐛 Debug Logging
+
+ProtoForge includes **real-time protocol debug logs** to help you quickly locate communication issues during development:
+
+1. Open the left menu "Debug Logs"
+2. View all protocol send/receive messages in real-time (WebSocket push, zero latency)
+3. Filter by protocol (GB28181 / Modbus / MQTT only...)
+4. Filter by direction (← Receive / → Send / System)
+5. Keyword search (search "error", "register", "invite"...)
+6. Click any log entry → View complete detail information
+7. Pause log stream → Carefully analyze a specific message
+8. Export as JSON → Offline analysis or sharing
+
+***
+
 ### ⚙️ Configuration
 
 All settings can be modified in the `.env` file, or directly from the web UI in "System Settings".
 
 ```bash
-PROTOFORGE_HOST=0.0.0.0
-PROTOFORGE_PORT=8000
-PROTOFORGE_DB_PATH=data/protoforge.db
-PROTOFORGE_JWT_SECRET=
-PROTOFORGE_DEMO_MODE=false
-PROTOFORGE_LOG_LEVEL=info
+# .env file example
+PROTOFORGE_HOST=0.0.0.0          # Web service listen address
+PROTOFORGE_PORT=8000             # Web service port
+PROTOFORGE_DB_PATH=data/protoforge.db  # Database path (SQLite or PostgreSQL)
+PROTOFORGE_JWT_SECRET=           # JWT secret (auto-generated if empty, recommended to set in production)
+PROTOFORGE_DEMO_MODE=false       # Demo mode
+PROTOFORGE_LOG_LEVEL=info        # Log level
+
+# Protocol ports (restart the corresponding protocol to take effect)
 PROTOFORGE_MODBUS_TCP_PORT=5020
 PROTOFORGE_OPCUA_PORT=4840
 PROTOFORGE_MQTT_PORT=1883
@@ -758,9 +924,9 @@ ProtoForge/
 │   ├── config.py             # Configuration management
 │   ├── db/                   # Database layer (SQLite + PostgreSQL)
 │   ├── models/               # Data models
-│   ├── protocols/            # 15 protocol server implementations
+│   ├── protocols/            # 17 protocol server implementations (16 dirs, Modbus TCP+RTU)
 │   ├── sdk/                  # Python SDK
-│   └── templates/            # 49 device templates (JSON)
+│   └── templates/            # 53 device templates (JSON)
 ├── web/                       # Vue3 frontend
 ├── tests/                     # Test cases
 ├── migrations/                # Alembic database migrations
@@ -773,13 +939,127 @@ ProtoForge/
 
 ### 🔒 Security
 
-- **Password Security**: bcrypt hashing with automatic salting
+ProtoForge includes multiple layers of security:
+
+- **Password Security**: bcrypt hashing with automatic salting, resistant to rainbow table attacks
 - **JWT Authentication**: 30-minute access tokens with refresh token support
-- **Login Protection**: 5 failed attempts trigger 5-minute account lockout
+- **Login Protection**: 5 failed attempts trigger 5-minute account lockout, preventing brute-force attacks
 - **API Rate Limiting**: 100 requests/minute for general APIs, 10/minute for auth endpoints
-- **Key Management**: JWT secret configurable via environment variable
+- **Key Management**: JWT secret configurable via environment variable, auto-generated random key if not configured
 
 See [SECURITY.md](SECURITY.md) for production hardening.
+
+#### RBAC Role Permissions
+
+| Role | Description | Accessible Endpoints |
+|------|------------|---------------------|
+| `admin` | System administrator, full permissions | All endpoints + User management + System settings |
+| `operator` | Operations staff, manage devices and protocols | CRUD for devices/protocols/scenarios/forwarding/recording |
+| `user` | Regular user, can run tests | Read operations + CRUD for test cases/suites |
+| `viewer` | Read-only user, view data only | All GET endpoints |
+
+#### Protocol Security
+
+| Protocol | Authentication | Encryption | Notes |
+|----------|---------------|------------|-------|
+| HTTP | ✅ JWT + RBAC | ✅ HTTPS | API endpoints fully protected by authentication |
+| Modbus TCP | ❌ None | ❌ None | Protocol itself has no auth mechanism, recommend network isolation |
+| OPC-UA | ⚠️ Configurable | ⚠️ Configurable | Supports Sign/SignAndEncrypt modes, template default is None |
+| MQTT | ⚠️ Configurable | ⚠️ Configurable | Supports username/password auth, template default is disabled |
+| GB28181 | ⚠️ Digest | ❌ No SRTP | SIP supports Digest auth, RTP stream unencrypted |
+| S7/MC/FINS/AB | ❌ None | ❌ None | Industrial protocols typically rely on PLC-side access control |
+| BACnet | ❌ None | ❌ None | BACnet/IP protocol has no built-in authentication |
+
+> ⚠️ Protocol security limitations in simulation are consistent with real devices. For production deployment, protect protocol ports via firewall, VPN, or network isolation.
+
+***
+
+### 📡 API Documentation
+
+After starting the backend, visit the following URLs for interactive API documentation (access the backend port directly):
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+> This is the backend API documentation, not the frontend page. For the frontend, visit the frontend URL (e.g. `http://localhost:5173`).
+
+***
+
+### 📦 Python SDK
+
+ProtoForge provides both synchronous and asynchronous Python SDK clients, covering all API functionality.
+
+**Installation**:
+
+```bash
+pip install protoforge
+```
+
+**Quick Start**:
+
+```python
+from protoforge.sdk import ProtoForgeClient
+
+# Create client
+with ProtoForgeClient("http://localhost:8000") as client:
+    # Login
+    client.login("admin", "admin")
+
+    # List all protocols
+    protocols = client.list_protocols()
+
+    # Start Modbus TCP protocol
+    client.start_protocol("modbus_tcp")
+
+    # Quick create device from template
+    device = client.quick_create("modbus-plc-controller", "Test PLC")
+
+    # Read device points
+    points = client.read_points(device["id"])
+    print(points)
+
+    # Run quick test
+    report = client.quick_test()
+    print(report)
+```
+
+**Async Client**:
+
+```python
+from protoforge.sdk import AsyncProtoForgeClient
+
+async with AsyncProtoForgeClient("http://localhost:8000") as client:
+    await client.login("admin", "admin")
+    devices = await client.list_devices()
+    print(devices)
+```
+
+**SDK Methods** (70+ methods):
+
+| Category | Methods | Description |
+|----------|---------|-------------|
+| Auth | `login`, `refresh_token`, `change_password` | JWT authentication management |
+| Protocols | `list_protocols`, `start_protocol`, `stop_protocol`, `get_protocol_config` | Protocol start/stop and config |
+| Devices | `create_device`, `quick_create`, `read_points`, `write_point`, `update_device`, `delete_device` | Device CRUD + point read/write |
+| Batch | `batch_create_devices`, `batch_start_devices`, `batch_stop_devices`, `batch_delete_devices` | Batch operations |
+| Templates | `list_templates`, `search_templates`, `instantiate_template`, `create_template` | Template search and instantiation |
+| Scenarios | `create_scenario`, `start_scenario`, `stop_scenario`, `export_scenario`, `import_scenario` | Scenario orchestration |
+| Testing | `quick_test`, `create_test_case`, `run_tests`, `get_test_report` | Simulation testing |
+| Forwarding | `add_forward_target`, `start_forward`, `stop_forward`, `get_forward_stats` | Data forwarding |
+| Recording | `start_recording`, `stop_recording`, `replay_recording`, `export_recording` | Protocol recording & replay |
+| Integration | `import_edgelite`, `import_pygbsentry`, `list_webhooks`, `add_webhook` | Third-party integration |
+| System | `get_settings`, `update_settings`, `setup_demo`, `get_setup_status` | System management |
+
+***
+
+### 📊 Monitoring Endpoints
+
+| Endpoint | Format | Description |
+|----------|--------|-------------|
+| `GET /health` | JSON | Health check (database status, active device count, protocol status) |
+| `GET /metrics` | Prometheus | Standard metrics format (uptime, device count, forwarding/recording counts) |
+| `GET /api/v1/forward/stats` | JSON | Data forwarding statistics |
+| `GET /api/v1/recorder/stats` | JSON | Recording statistics |
 
 ***
 
