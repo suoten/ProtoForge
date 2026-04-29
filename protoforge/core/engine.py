@@ -395,8 +395,9 @@ class SimulationEngine:
             self._scenario_status[scenario_id] = ScenarioStatus.RUNNING
             self._scenario_instances[scenario_id] = scenario
             logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
-        except Exception:
+        except Exception as e:
             self._scenario_status[scenario_id] = ScenarioStatus.ERROR
+            logger.error("Failed to start scenario %s: %s", scenario_id, e)
             raise
 
     async def stop_scenario(self, scenario_id: str) -> None:

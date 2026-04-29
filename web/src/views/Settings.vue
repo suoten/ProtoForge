@@ -94,6 +94,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { protocolLabels } from '../constants.js'
 
 const message = useMessage()
 const saving = ref(false)
@@ -111,14 +112,6 @@ const logLevelOptions = [
   { label: 'WARNING', value: 'warning' },
   { label: 'ERROR', value: 'error' },
 ]
-
-const protocolLabels = {
-  modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
-  http: 'HTTP', gb28181: 'GB28181', bacnet: 'BACnet', s7: 'S7',
-  mc: 'Mitsubishi MC', fins: 'Omron FINS', ab: 'Rockwell AB', opcda: 'OPC-DA',
-  fanuc: 'FANUC FOCAS', mtconnect: 'MTConnect', toledo: 'Mettler-Toledo',
-  profinet: 'PROFINET', ethercat: 'EtherCAT',
-}
 
 const defaultPorts = {
   modbus_tcp: 5020, modbus_rtu: '/dev/ttyUSB0', opcua: 4840, mqtt: 1883,

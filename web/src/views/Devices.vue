@@ -306,6 +306,7 @@ import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFor
   NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
+import { protocolLabels } from '../constants.js'
 
 const router = useRouter()
 const message = useMessage()
@@ -370,13 +371,6 @@ const pipelineComparisonColumns = [
     }
   },
 ]
-
-const protocolLabels = {
-  modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
-  http: 'HTTP', gb28181: 'GB28181', bacnet: 'BACnet', s7: 'S7',
-  mc: 'Mitsubishi MC', fins: 'Omron FINS', ab: 'Rockwell AB', opcda: 'OPC-DA',
-  fanuc: 'FANUC FOCAS', mtconnect: 'MTConnect', toledo: 'Mettler-Toledo',
-}
 
 const protocolOptions = computed(() => [
   { label: '全部', value: null },
