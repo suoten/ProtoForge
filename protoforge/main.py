@@ -257,10 +257,17 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins.split(","),
-        allow_credentials=settings.cors_origins != "*",
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    if settings.cors_origins == "*":
+        logger.warning(
+            "CORS is configured to allow all origins (*). "
+            "This is appropriate for development only. "
+            "Set PROTOFORGE_CORS_ORIGINS to specific domain(s) for production."
+        )
 
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)

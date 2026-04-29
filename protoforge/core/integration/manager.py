@@ -129,16 +129,22 @@ class IntegrationManager:
         try:
             await self._connect()
         except Exception as e:
-            logger.warning("IntegrationManager initial connection failed: %s", e)
+            self._cleanup_event_handlers()
+            self._running = False
+            logger.warning("IntegrationManager initial connection failed, cleaned up: %s", e)
+            return
 
         logger.info("IntegrationManager started, target: %s", self._edgelite_url)
 
-    async def stop(self) -> None:
-        self._running = False
+    def _cleanup_event_handlers(self) -> None:
         self._event_bus.off("DeviceCreatedEvent", self._on_device_created)
         self._event_bus.off("DeviceStartedEvent", self._on_device_started)
         self._event_bus.off("DeviceStoppedEvent", self._on_device_stopped)
         self._event_bus.off("DeviceRemovedEvent", self._on_device_removed)
+
+    async def stop(self) -> None:
+        self._running = False
+        self._cleanup_event_handlers()
 
         if self._channel:
             await self._channel.close()
@@ -345,7 +351,8 @@ class IntegrationManager:
         all_data = []
         for dev_id, entries in self._backhaul_data.items():
             all_data.extend(entries[-limit:])
-        return all_data[-limit:]
+        all_data.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+        return all_data[:limit]
 
     def get_device_status_cache(self) -> dict[str, str]:
         return dict(self._device_status_cache)

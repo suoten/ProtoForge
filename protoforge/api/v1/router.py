@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import time
@@ -425,519 +426,323 @@ async def start_scenario(scenario_id: str, _user: dict = Depends(require_operato
 
 @router.post("/scenarios/{scenario_id}/stop")
 async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
-
     engine = _get_engine()
-
     log_bus = _get_log_bus()
 
     try:
-
         await engine.stop_scenario(scenario_id)
-
-        log_bus.emit("", "system", "", "scenario_stop",
-
-                     f"Scenario {scenario_id} stopped", {"scenario_id": scenario_id})
-
+        log_bus.emit("", "system", "", "scenario_stop", f"Scenario {scenario_id} stopped", {"scenario_id": scenario_id})
         return {"status": "ok"}
-
     except ValueError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioInfo)
-
 async def update_scenario(scenario_id: str, config: ScenarioConfig, _user: dict = Depends(require_operator)):
-
     engine = _get_engine()
-
     db = _get_database()
 
     try:
-
         result = engine.update_scenario(scenario_id, config)
-
         if db:
-
             try:
-
                 await db.save_scenario(config)
-
             except Exception as db_err:
-
                 logger.warning("Failed to persist scenario %s: %s", scenario_id, db_err)
-
         return result
-
     except ValueError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.delete("/scenarios/{scenario_id}")
-
 async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
-
     engine = _get_engine()
-
     db = _get_database()
 
     try:
-
         engine.remove_scenario(scenario_id)
-
         if db:
-
             try:
-
                 await db.delete_scenario(scenario_id)
-
             except Exception as db_err:
-
                 logger.warning("Failed to delete scenario %s from DB: %s", scenario_id, db_err)
-
         return {"status": "ok"}
-
     except ValueError as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/scenarios/{scenario_id}/export")
-
 async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
-
     engine = _get_engine()
-
     db = _get_database()
 
     try:
-
         config = await db.load_scenario(scenario_id)
-
         if not config:
-
             config = engine._scenarios.get(scenario_id)
-
         if not config:
-
             raise HTTPException(status_code=404, detail="Scenario not found")
-
         return config.model_dump()
-
     except ValueError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/scenarios/import")
-
 async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
-
     engine = _get_engine()
-
     db = _get_database()
 
     try:
-
         result = engine.create_scenario(config)
-
         if db:
-
             await db.save_scenario(config)
-
         return result
-
     except Exception as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/templates", response_model=list[TemplateInfo])
-
 async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
-
     tm = _get_template_manager()
-
     return tm.list_templates(protocol=protocol)
 
 @router.get("/templates/search")
-
 async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
-
     tm = _get_template_manager()
-
     templates = tm.list_templates(protocol=protocol)
 
     if q:
-
         q_lower = q.lower()
-
         templates = [t for t in templates if
-
                      q_lower in t.name.lower() or
-
                      q_lower in (t.description or "").lower() or
-
                      any(q_lower in tag_item.lower() for tag_item in (t.tags or []))]
 
     if tag:
-
         templates = [t for t in templates if tag in (t.tags or [])]
-
     return templates
 
 @router.get("/templates/tags")
-
 async def list_template_tags(_user: dict = Depends(require_viewer)):
-
     tm = _get_template_manager()
-
     templates = tm.list_templates()
-
     tags = set()
 
     for t in templates:
-
         for tag in (t.tags or []):
-
             tags.add(tag)
-
     return sorted(list(tags))
 
 @router.get("/templates/{template_id}", response_model=TemplateDetail)
-
 async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
-
     tm = _get_template_manager()
 
     try:
-
         return tm.get_template(template_id)
-
     except ValueError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.post("/templates", response_model=TemplateDetail)
-
 async def create_template(template: TemplateDetail, _user: dict = Depends(require_operator)):
-
     tm = _get_template_manager()
-
     db = _get_database()
-
     tm.add_template(template)
 
     if db:
-
         try:
-
             await db.save_template(template)
-
         except Exception as db_err:
-
             logger.warning("Failed to persist template %s: %s", template.id, db_err)
-
     return template
 
 @router.post("/templates/{template_id}/instantiate", response_model=DeviceConfig)
-
 async def instantiate_template(
-
     template_id: str,
-
     device_id: str = Query(...),
-
     device_name: str = Query(...),
-
     body: Optional[dict[str, Any]] = None,
-
     _user: dict = Depends(require_operator),
-
 ):
 
     protocol_config = None
-
     if body:
-
         protocol_config = body.get("protocol_config")
-
     tm = _get_template_manager()
 
     try:
-
         return tm.create_device_from_template(template_id, device_id, device_name, protocol_config)
-
     except ValueError as e:
-
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/logs")
-
 async def get_logs(
-
     count: int = 100,
-
     protocol: Optional[str] = None,
-
     device_id: Optional[str] = None,
-
     direction: Optional[str] = None,
-
     message_type: Optional[str] = None,
-
     _user: dict = Depends(require_viewer),
-
 ):
 
     log_bus = _get_log_bus()
-
     entries = log_bus.get_recent(count=count * 5, protocol=protocol, device_id=device_id)
 
     if direction:
-
         entries = [e for e in entries if e.get("direction") == direction]
-
     if message_type:
-
         entries = [e for e in entries if message_type in e.get("message_type", "")]
-
     return entries[-count:]
 
 @router.delete("/logs")
-
 async def clear_logs(_user: dict = Depends(require_operator)):
-
     log_bus = _get_log_bus()
-
     log_bus.clear()
-
     return {"status": "ok", "message": "日志已清空"}
 
 @router.websocket("/ws/devices")
-
 async def ws_devices(websocket: WebSocket):
-
     from protoforge.api.v1.auth import _NO_AUTH
+    token = None
+    role = "viewer"
 
-    if _NO_AUTH:
+    if not _NO_AUTH:
+        try:
+            msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            try:
+                msg_data = json.loads(msg)
+                token = msg_data.get("token", "")
+            except (ValueError, TypeError):
+                token = msg
 
-        pass
-
-    else:
-
-        token = websocket.query_params.get("token")
-
-        if not token:
-
-            await websocket.close(code=4001, reason="Authentication required")
-
+            if not token:
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+            payload = verify_token(token)
+            if payload is None:
+                await websocket.close(code=4001, reason="Invalid token")
+                return
+            role = payload.get("role", "user")
+            if role not in ("admin", "operator", "user", "viewer"):
+                await websocket.close(code=4003, reason="Insufficient permissions")
+                return
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Authentication timeout")
             return
-
-        payload = verify_token(token)
-
-        if payload is None:
-
-            await websocket.close(code=4001, reason="Invalid token")
-
-            return
-
-        user_role = payload.get("role", "user")
-
-        if user_role not in ("admin", "operator", "user", "viewer"):
-
-            await websocket.close(code=4003, reason="Insufficient permissions")
-
-            return
-
-    engine = _get_engine()
 
     await websocket.accept()
+    engine = _get_engine()
 
     try:
-
         while True:
-
             devices = engine.list_devices()
-
             data = []
-
             for d in devices:
-
                 try:
-
                     data.append(d.model_dump())
-
                 except Exception:
-
                     data.append({"id": d.id, "name": d.name, "protocol": d.protocol, "status": d.status.value})
-
             await websocket.send_json({"type": "devices", "data": data})
 
             try:
-
                 await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-
             except asyncio.TimeoutError:
-
                 try:
-
                     await websocket.send_json({"type": "ping"})
-
                 except Exception:
-
                     break
-
     except WebSocketDisconnect:
-
         logger.debug("WebSocket /ws/devices disconnected")
-
     except Exception as e:
-
         logger.warning("WebSocket /ws/devices error: %s", e)
 
 @router.websocket("/ws/logs")
-
 async def ws_logs(websocket: WebSocket):
-
     from protoforge.api.v1.auth import _NO_AUTH
+    token = None
+    role = "viewer"
 
-    if _NO_AUTH:
+    if not _NO_AUTH:
+        try:
+            msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            try:
+                msg_data = json.loads(msg)
+                token = msg_data.get("token", "")
+            except (ValueError, TypeError):
+                token = msg
 
-        pass
-
-    else:
-
-        token = websocket.query_params.get("token")
-
-        if not token:
-
-            await websocket.close(code=4001, reason="Authentication required")
-
+            if not token:
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+            payload = verify_token(token)
+            if payload is None:
+                await websocket.close(code=4001, reason="Invalid token")
+                return
+            role = payload.get("role", "user")
+            if role not in ("admin", "operator", "user", "viewer"):
+                await websocket.close(code=4003, reason="Insufficient permissions")
+                return
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Authentication timeout")
             return
-
-        payload = verify_token(token)
-
-        if payload is None:
-
-            await websocket.close(code=4001, reason="Invalid token")
-
-            return
-
-        user_role = payload.get("role", "user")
-
-        if user_role not in ("admin", "operator", "user", "viewer"):
-
-            await websocket.close(code=4003, reason="Insufficient permissions")
-
-            return
-
-    log_bus = _get_log_bus()
 
     await websocket.accept()
-
+    log_bus = _get_log_bus()
     queue = log_bus.subscribe()
 
     try:
-
         while True:
-
             try:
-
                 entry = await asyncio.wait_for(queue.get(), timeout=30.0)
-
                 await websocket.send_json({
-
                     "type": "log",
-
                     "data": {
-
                         "timestamp": entry.timestamp,
-
                         "protocol": entry.protocol,
-
                         "direction": entry.direction,
-
                         "device_id": entry.device_id,
-
                         "message_type": entry.message_type,
-
                         "summary": entry.summary,
-
                         "detail": entry.detail,
-
                     },
 
                 })
-
             except asyncio.TimeoutError:
-
                 try:
-
                     await websocket.send_json({"type": "ping"})
-
                 except Exception:
-
                     break
-
     except WebSocketDisconnect:
-
         logger.debug("WebSocket /ws/logs disconnected")
-
     except Exception as e:
-
         logger.warning("WebSocket /ws/logs error: %s", e)
-
     finally:
-
         log_bus.unsubscribe(queue)
 
 @router.post("/integration/edgelite")
-
 async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_operator)):
-
     from protoforge.core.integration import import_edgelite_config
-
     engine = _get_engine()
 
     try:
-
         devices = import_edgelite_config(config)
-
         results = []
-
         for dev in devices:
-
             info = await engine.create_device(dev)
-
             results.append(info.model_dump())
-
         return {"status": "ok", "imported": len(results), "devices": results}
-
     except Exception as e:
-
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/integration/edgelite/push/{device_id}")
-
 async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
-
     from protoforge.core.edgelite import push_device_to_edgelite as _push
-
     engine = _get_engine()
-
     instance = engine._devices.get(device_id)
 
     if not instance:
-
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-
         return await _push(instance)
-
     except Exception as e:
-
         raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
 
 @router.post("/integration/edgelite/test")
-
 async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = Depends(require_operator)):
 
     from protoforge.core.edgelite import test_edgelite_connection as _test
@@ -1161,6 +966,10 @@ def _get_test_runner():
 async def _get_internal_client():
 
     global _internal_client
+
+    if _internal_client is not None:
+        await _internal_client.aclose()
+        _internal_client = None
 
     from httpx import ASGITransport, AsyncClient
 
@@ -2258,3 +2067,27 @@ async def update_settings(updates: dict[str, Any], _user: dict = Depends(require
     changed = update_settings(updates)
     return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
 
+
+@router.get("/audit")
+async def query_audit_log(
+    username: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    start_time: Optional[float] = None,
+    end_time: Optional[float] = None,
+    limit: int = 100,
+    offset: int = 0,
+    _user: dict = Depends(require_admin),
+):
+    from protoforge.core.audit import audit_logger
+    return await audit_logger.query(
+        username=username, action=action, resource_type=resource_type,
+        start_time=start_time, end_time=end_time,
+        limit=limit, offset=offset,
+    )
+
+
+@router.get("/audit/stats")
+async def get_audit_stats(_user: dict = Depends(require_admin)):
+    from protoforge.core.audit import audit_logger
+    return await audit_logger.get_stats()

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
-    for sock_type in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+    for sock_type in (socket.SOCK_STREAM,):
         try:
             with socket.socket(socket.AF_INET, sock_type) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -357,6 +357,12 @@ class SimulationEngine:
                 self._scenario_status[scenario_id] = ScenarioStatus.ERROR
                 logger.error("All devices failed in scenario %s", scenario_id)
                 return
+
+            if failed_devices:
+                logger.warning(
+                    "Scenario %s started with %d/%d device failures: %s",
+                    scenario_id, len(failed_devices), len(config.devices), failed_devices
+                )
 
             scenario.start()
             self._scenario_status[scenario_id] = ScenarioStatus.RUNNING

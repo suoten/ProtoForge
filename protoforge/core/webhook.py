@@ -73,7 +73,7 @@ class WebhookManager:
             raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
         hostname = parsed.hostname or ""
         if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):
-            logger.warning("Webhook URL points to private/internal address: %s", url)
+            logger.error("Webhook URL points to private/internal address: %s", url)
         webhook = WebhookConfig(
             id=wh_id, name=config.get("name", wh_id),
             url=url, events=config.get("events", ["rule_triggered"]),

@@ -1,4 +1,5 @@
 import time
+import threading
 from typing import Optional
 
 from fastapi import Request
@@ -6,40 +7,58 @@ from fastapi.responses import JSONResponse
 
 
 class RateLimiter:
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60, cleanup_interval: int = 300):
         self._max_requests = max_requests
         self._window_seconds = window_seconds
+        self._cleanup_interval = cleanup_interval
         self._requests: dict[str, list[float]] = {}
+        self._last_cleanup = time.time()
+        self._lock = threading.Lock()
+
+    def _cleanup(self) -> None:
+        now = time.time()
+        if now - self._last_cleanup < self._cleanup_interval:
+            return
+        window_start = now - self._window_seconds
+        with self._lock:
+            stale_keys = [k for k, ts_list in self._requests.items() if all(t <= window_start for t in ts_list)]
+            for k in stale_keys:
+                del self._requests[k]
+            self._last_cleanup = now
 
     def is_allowed(self, key: str) -> bool:
+        self._cleanup()
         now = time.time()
         window_start = now - self._window_seconds
 
-        if key not in self._requests:
-            self._requests[key] = []
+        with self._lock:
+            if key not in self._requests:
+                self._requests[key] = []
 
-        self._requests[key] = [t for t in self._requests[key] if t > window_start]
+            self._requests[key] = [t for t in self._requests[key] if t > window_start]
 
-        if len(self._requests[key]) >= self._max_requests:
-            return False
+            if len(self._requests[key]) >= self._max_requests:
+                return False
 
-        self._requests[key].append(now)
-        return True
+            self._requests[key].append(now)
+            return True
 
     def get_remaining(self, key: str) -> int:
         now = time.time()
         window_start = now - self._window_seconds
-        if key not in self._requests:
-            return self._max_requests
-        self._requests[key] = [t for t in self._requests[key] if t > window_start]
-        return max(0, self._max_requests - len(self._requests[key]))
+        with self._lock:
+            if key not in self._requests:
+                return self._max_requests
+            self._requests[key] = [t for t in self._requests[key] if t > window_start]
+            return max(0, self._max_requests - len(self._requests[key]))
 
     def get_retry_after(self, key: str) -> int:
-        if key not in self._requests or not self._requests[key]:
-            return 0
-        oldest = min(self._requests[key])
-        retry = int(oldest + self._window_seconds - time.time()) + 1
-        return max(0, retry)
+        with self._lock:
+            if key not in self._requests or not self._requests[key]:
+                return 0
+            oldest = min(self._requests[key])
+            retry = int(oldest + self._window_seconds - time.time()) + 1
+            return max(0, retry)
 
 
 _default_limiter = RateLimiter(max_requests=100, window_seconds=60)

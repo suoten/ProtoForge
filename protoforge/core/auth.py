@@ -158,6 +158,11 @@ class UserManager:
         self._users: dict[str, User] = {}
         self._db = None
         default_password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "admin")
+        if default_password == "admin":
+            logger.warning(
+                "Admin account is using the default password 'admin'. "
+                "Set the PROTOFORGE_ADMIN_PASSWORD environment variable to a strong password before deployment."
+            )
         admin_hash = hash_password(default_password)
         self._users["admin"] = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",
