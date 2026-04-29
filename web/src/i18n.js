@@ -51,13 +51,15 @@ const messages = {
     nav: {
       dashboard: '仪表盘',
       devices: '设备管理',
-      protocols: '协议日志',
+      protocols: '协议服务',
       scenarios: '场景编排',
+      scenarioEditor: '场景编辑器',
       testing: '仿真测试',
       integration: '数据转发',
       templates: '设备模板',
       settings: '系统设置',
       marketplace: '模板市场',
+      logs: '调试日志',
     },
     header: {
       searchPlaceholder: '搜索设备、场景、模板...',
@@ -244,13 +246,15 @@ const messages = {
     nav: {
       dashboard: 'Dashboard',
       devices: 'Devices',
-      protocols: 'Protocols',
+      protocols: 'Protocol Services',
       scenarios: 'Scenarios',
+      scenarioEditor: 'Scenario Editor',
       testing: 'Testing',
       integration: 'Integration',
       templates: 'Templates',
       settings: 'Settings',
       marketplace: 'Marketplace',
+      logs: 'Debug Logs',
     },
     header: {
       searchPlaceholder: 'Search devices, scenarios, templates...',

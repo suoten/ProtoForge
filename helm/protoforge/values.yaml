@@ -1,0 +1,59 @@
+replicaCount: 1
+
+image:
+  repository: suoten/protoforge
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: protoforge.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: ""
+
+postgresql:
+  enabled: true
+  image: postgres:16-alpine
+  database: protoforge
+  username: protoforge
+  password: CHANGE_ME
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+
+env:
+  PROTOFORGE_PORT: "8000"
+  PROTOFORGE_DB_ENGINE: "postgresql"
+
+jwtSecret: CHANGE_ME_RANDOM_SECRET
+
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 30
+readinessProbe:
+  initialDelaySeconds: 10
+  periodSeconds: 10

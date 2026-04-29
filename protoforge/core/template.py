@@ -67,6 +67,9 @@ class TemplateManager:
     def add_template(self, template: TemplateDetail) -> None:
         self._templates[template.id] = template
 
+    def remove_template(self, template_id: str) -> Optional[TemplateDetail]:
+        return self._templates.pop(template_id, None)
+
     def create_device_from_template(self, template_id: str, device_id: str, device_name: str,
                                     protocol_config: Optional[dict[str, Any]] = None) -> DeviceConfig:
         template = self.get_template(template_id)

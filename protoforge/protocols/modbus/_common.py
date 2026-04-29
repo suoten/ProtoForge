@@ -35,6 +35,43 @@ class ModbusDataStore:
         self._holding_regs: dict[int, int] = {}
         self._input_regs: dict[int, int] = {}
 
+    @property
+    def coils(self) -> dict[int, int]:
+        return self._coils
+
+    @property
+    def discrete_inputs(self) -> dict[int, int]:
+        return self._discrete_inputs
+
+    @property
+    def holding_regs(self) -> dict[int, int]:
+        return self._holding_regs
+
+    @property
+    def input_regs(self) -> dict[int, int]:
+        return self._input_regs
+
+    def set_point(self, fc: int, address: int, value: int) -> None:
+        if fc in (1, 5, 15):
+            self._coils[address] = int(bool(value))
+        elif fc == 2:
+            self._discrete_inputs[address] = int(bool(value))
+        elif fc in (3, 6, 16, 22, 23):
+            self._holding_regs[address] = int(value) & 0xFFFF
+        elif fc == 4:
+            self._input_regs[address] = int(value) & 0xFFFF
+
+    def get_point(self, fc: int, address: int) -> int:
+        if fc in (1, 5, 15):
+            return self._coils.get(address, 0)
+        elif fc == 2:
+            return self._discrete_inputs.get(address, 0)
+        elif fc in (3, 6, 16, 22, 23):
+            return self._holding_regs.get(address, 0)
+        elif fc == 4:
+            return self._input_regs.get(address, 0)
+        return 0
+
     def set_values(self, fc: int, address: int, values: list) -> None:
         for i, v in enumerate(values):
             addr = address + i

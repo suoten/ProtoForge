@@ -823,7 +823,7 @@ class TestRunner:
             value = params.get("value")
             resp = await api_client.put(
                 f"/api/v1/devices/{device_id}/points/{point_name}",
-                params={"value": value},
+                json={"value": value},
             )
             return self._resp_to_dict(resp)
         elif action == "start_protocol":
@@ -858,7 +858,14 @@ class TestRunner:
             return self._resp_to_dict(resp)
         elif action == "instantiate_template":
             template_id = params.get("template_id", "")
-            resp = await api_client.post(f"/api/v1/templates/{template_id}/instantiate", params=params)
+            device_id = params.get("device_id", params.get("id", "test-device"))
+            device_name = params.get("device_name", params.get("name", "Test Device"))
+            protocol_config = params.get("protocol_config")
+            body = {"protocol_config": protocol_config} if protocol_config else None
+            resp = await api_client.post(
+                f"/api/v1/templates/{template_id}/instantiate",
+                json=body, params={"device_id": device_id, "device_name": device_name},
+            )
             return self._resp_to_dict(resp)
         elif action == "batch_create_devices":
             resp = await api_client.post("/api/v1/devices/batch", json=params.get("devices", []))
@@ -878,12 +885,6 @@ class TestRunner:
                 kwargs["json"] = body
             resp = await api_client.request(method, url, **kwargs)
             return self._resp_to_dict(resp)
-        elif action == "wait":
-            seconds = params.get("seconds", 1.0)
-            await asyncio.sleep(seconds)
-            return {"waited": seconds}
-        elif action == "assert_value":
-            return params
 
         return None
 

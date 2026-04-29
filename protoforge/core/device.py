@@ -68,18 +68,18 @@ class DeviceInstance:
             return None
         return PointValue(
             name=point_name,
-            value=self._point_values[point_name],
+            value=self._point_values.get(point_name),
             timestamp=time.time(),
         )
 
     def read_all_points(self) -> list[PointValue]:
         result = []
         now = time.time()
-        for name in self._point_values:
+        for name, value in list(self._point_values.items()):
             result.append(
                 PointValue(
                     name=name,
-                    value=self._point_values[name],
+                    value=value,
                     timestamp=now,
                 )
             )

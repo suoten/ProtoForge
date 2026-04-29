@@ -61,10 +61,10 @@ class ModbusTcpServer(ProtocolServer):
         for slave_id in all_slave_ids:
             store = self._get_data_store(slave_id)
             simdata = [
-                SimData(1, values=[store._coils.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
-                SimData(10001, values=[store._discrete_inputs.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
-                SimData(40001, values=[store._holding_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
-                SimData(30001, values=[store._input_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
+                SimData(1, values=[store.coils.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
+                SimData(10001, values=[store.discrete_inputs.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
+                SimData(40001, values=[store.holding_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
+                SimData(30001, values=[store.input_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
             ]
             devices.append(SimDevice(slave_id, simdata=simdata))
         return devices
@@ -273,8 +273,8 @@ class ModbusTcpServer(ProtocolServer):
                                 values = [bool(v) for v in raw_values] if fc in (1, 2) else raw_values
                                 try:
                                     block.setValues(fc, addresses, values)
-                                except Exception:
-                                    pass
+                                except Exception as exc:
+                                    logger.debug("pymodbus setValues failed for fc=%d: %s", fc, exc)
         except Exception as e:
             logger.debug("Failed to sync to pymodbus context: %s", e)
 

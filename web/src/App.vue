@@ -171,10 +171,10 @@ const menuOptions = computed(() => [
   { label: t('nav.devices'), key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
   { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
   { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
-  { label: t('nav.scenarios'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
+  { label: t('nav.scenarioEditor'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
   { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
   { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
-  { label: t('nav.protocols'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
+  { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
   { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
   { label: t('nav.settings'), key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
 ])
@@ -277,9 +277,9 @@ function onSearchInput(query) {
     if ((d.name || '').toLowerCase().includes(q) || (d.id || '').toLowerCase().includes(q))
       results.push({ label: `[设备] ${d.name || d.id}`, value: `/devices` })
   }
-  for (const t of searchData.value.templates) {
-    if ((t.name || '').toLowerCase().includes(q))
-      results.push({ label: `[模板] ${t.name}`, value: `/marketplace` })
+  for (const tmpl of searchData.value.templates) {
+    if ((tmpl.name || '').toLowerCase().includes(q))
+      results.push({ label: `[模板] ${tmpl.name}`, value: `/marketplace` })
   }
   for (const s of searchData.value.scenarios) {
     if ((s.name || '').toLowerCase().includes(q))
@@ -316,17 +316,6 @@ async function loadSearchData() {
     }
   } catch (e) { /* skip */ }
 }
-
-onMounted(() => {
-  if (loggedIn.value) {
-    loadSearchData()
-    connectWebSocket()
-  }
-})
-
-onUnmounted(() => {
-  if (ws) { ws.close(); ws = null }
-})
 </script>
 
 <style>

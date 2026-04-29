@@ -52,8 +52,6 @@ class Scenario:
     async def tick(self) -> None:
         if self._status != ScenarioStatus.RUNNING:
             return
-        for device in self._devices.values():
-            await device.tick()
         await self._evaluate_rules()
 
     async def _evaluate_rules(self) -> None:
