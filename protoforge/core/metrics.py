@@ -34,15 +34,18 @@ class MetricsCollector:
         return self._gauges.get(key, 0)
 
     def collect_from_engine(self, engine: Any) -> None:
-        self.set_gauge("protoforge_devices_total", len(engine._devices))
-        online = sum(1 for d in engine._devices.values()
+        devices = engine.get_all_device_instances()
+        self.set_gauge("protoforge_devices_total", len(devices))
+        online = sum(1 for d in devices.values()
                      if d.status.value == "online")
         self.set_gauge("protoforge_devices_online", online)
-        self.set_gauge("protoforge_scenarios_total", len(engine._scenarios))
-        running = sum(1 for s in engine._scenario_status.values()
-                      if s.value == "running")
+        scenarios = engine.get_all_scenario_configs()
+        self.set_gauge("protoforge_scenarios_total", len(scenarios))
+        running = sum(1 for sid in scenarios
+                      if engine.get_scenario_status(sid).value == "running")
         self.set_gauge("protoforge_scenarios_running", running)
-        protocols_running = sum(1 for p in engine._protocol_servers.values()
+        protocols = engine.get_all_protocol_servers()
+        protocols_running = sum(1 for p in protocols.values()
                                 if p.status.value == "running")
         self.set_gauge("protoforge_protocols_running", protocols_running)
 

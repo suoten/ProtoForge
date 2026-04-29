@@ -25,6 +25,15 @@ const router = createRouter({
   routes,
 })
 
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  if (!token && to.path !== '/') {
+    next('/')
+  } else {
+    next()
+  }
+})
+
 const app = createApp(App)
 app.use(router)
 app.use(naive)

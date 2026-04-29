@@ -95,6 +95,28 @@ class AuditLogger:
             "actions": list(set(e.action for e in self._entries)) if self._entries else [],
         }
 
+    async def delete_entry(self, entry_id: int) -> bool:
+        if not self._database:
+            return False
+        try:
+            return await self._database.delete_audit_entry(entry_id)
+        except Exception as e:
+            logger.debug("Failed to delete audit entry %d: %s", entry_id, e)
+            return False
+
+    async def clear_entries(self, before_timestamp: Optional[float] = None) -> int:
+        if before_timestamp:
+            self._entries = [e for e in self._entries if e.timestamp >= before_timestamp]
+        else:
+            self._entries = []
+        if not self._database:
+            return 0
+        try:
+            return await self._database.clear_audit_entries(before_timestamp)
+        except Exception as e:
+            logger.debug("Failed to clear audit entries: %s", e)
+            return 0
+
     async def restore_from_db(self) -> None:
         if not self._database:
             return

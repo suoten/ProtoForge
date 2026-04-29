@@ -3,7 +3,7 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -269,10 +269,24 @@ class WebSocketChannel(ChannelBase):
                     self._missed_heartbeats += 1
                     if self._missed_heartbeats >= self._heartbeat_timeout:
                         await self._handle_timeout()
-                    self._connected = False
-                    break
+                    continue
+                if self._missed_heartbeats > 0:
+                    self._missed_heartbeats = 0
         except asyncio.CancelledError:
             pass
+
+    async def _handle_timeout(self) -> None:
+        logger.warning(
+            "WebSocket heartbeat timeout after %d missed heartbeats, disconnecting",
+            self._heartbeat_timeout,
+        )
+        self._connected = False
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception:
+                pass
+            self._ws = None
 
 
 ChannelFactory.register("websocket", WebSocketChannel)

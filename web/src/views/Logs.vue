@@ -88,6 +88,9 @@ const selectedLog = ref(null)
 const logContainer = ref(null)
 let ws = null
 let reconnectTimer = null
+let reconnectAttempts = 0
+let manualClose = false
+const MAX_RECONNECT_ATTEMPTS = 10
 const MAX_LOGS = 2000
 
 const protocolOptions = computed(() => [
@@ -193,11 +196,13 @@ function scrollToBottom() {
 
 function connectWebSocket() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs`
+  const token = localStorage.getItem('token')
+  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
   ws = new WebSocket(wsUrl)
 
   ws.onopen = () => {
     wsConnected.value = true
+    reconnectAttempts = 0
   }
 
   ws.onmessage = (event) => {
@@ -218,7 +223,9 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     wsConnected.value = false
-    scheduleReconnect()
+    if (!manualClose) {
+      scheduleReconnect()
+    }
   }
 
   ws.onerror = () => {
@@ -228,9 +235,12 @@ function connectWebSocket() {
 
 function scheduleReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return
+  const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), 60000)
+  reconnectAttempts++
   reconnectTimer = setTimeout(() => {
     connectWebSocket()
-  }, 5000)
+  }, delay)
 }
 
 async function loadProtocols() {
@@ -258,6 +268,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  manualClose = true
   if (ws) {
     ws.close()
     ws = null

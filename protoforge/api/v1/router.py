@@ -299,7 +299,7 @@ async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
 @router.get("/devices/{device_id}/config", response_model=DeviceConfig)
 async def get_device_config(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -375,9 +375,12 @@ async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.put("/devices/{device_id}/points/{point_name}")
-async def write_device_point(device_id: str, point_name: str, value: Any = Query(None), _user: dict = Depends(require_operator)):
+async def write_device_point(device_id: str, point_name: str, body: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
+    value = body.get("value") if body else None
+    if value is None:
+        raise HTTPException(status_code=400, detail="Missing 'value' in request body")
 
     try:
         success = await engine.write_device_point(device_id, point_name, value)
@@ -476,7 +479,7 @@ async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer
     try:
         config = await db.load_scenario(scenario_id)
         if not config:
-            config = engine._scenarios.get(scenario_id)
+            config = engine.get_scenario_config(scenario_id)
         if not config:
             raise HTTPException(status_code=404, detail="Scenario not found")
         return config.model_dump()
@@ -594,6 +597,13 @@ async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus.clear()
     return {"status": "ok", "message": "日志已清空"}
 
+def _extract_ws_token(websocket: WebSocket) -> str | None:
+    """Extract token from query params or first message."""
+    token = websocket.query_params.get("token", "")
+    if token:
+        return token
+    return None
+
 @router.websocket("/ws/devices")
 async def ws_devices(websocket: WebSocket):
     from protoforge.api.v1.auth import _NO_AUTH
@@ -601,27 +611,29 @@ async def ws_devices(websocket: WebSocket):
     role = "viewer"
 
     if not _NO_AUTH:
-        try:
-            msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+        token = _extract_ws_token(websocket)
+        if not token:
             try:
-                msg_data = json.loads(msg)
-                token = msg_data.get("token", "")
-            except (ValueError, TypeError):
-                token = msg
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+                try:
+                    msg_data = json.loads(msg)
+                    token = msg_data.get("token", "")
+                except (ValueError, TypeError):
+                    token = msg
+            except asyncio.TimeoutError:
+                await websocket.close(code=4001, reason="Authentication timeout")
+                return
 
-            if not token:
-                await websocket.close(code=4001, reason="Authentication required")
-                return
-            payload = verify_token(token)
-            if payload is None:
-                await websocket.close(code=4001, reason="Invalid token")
-                return
-            role = payload.get("role", "user")
-            if role not in ("admin", "operator", "user", "viewer"):
-                await websocket.close(code=4003, reason="Insufficient permissions")
-                return
-        except asyncio.TimeoutError:
-            await websocket.close(code=4001, reason="Authentication timeout")
+        if not token:
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        payload = verify_token(token)
+        if payload is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        role = payload.get("role", "user")
+        if role not in ("admin", "operator", "user", "viewer"):
+            await websocket.close(code=4003, reason="Insufficient permissions")
             return
 
     await websocket.accept()
@@ -657,27 +669,29 @@ async def ws_logs(websocket: WebSocket):
     role = "viewer"
 
     if not _NO_AUTH:
-        try:
-            msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+        token = _extract_ws_token(websocket)
+        if not token:
             try:
-                msg_data = json.loads(msg)
-                token = msg_data.get("token", "")
-            except (ValueError, TypeError):
-                token = msg
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+                try:
+                    msg_data = json.loads(msg)
+                    token = msg_data.get("token", "")
+                except (ValueError, TypeError):
+                    token = msg
+            except asyncio.TimeoutError:
+                await websocket.close(code=4001, reason="Authentication timeout")
+                return
 
-            if not token:
-                await websocket.close(code=4001, reason="Authentication required")
-                return
-            payload = verify_token(token)
-            if payload is None:
-                await websocket.close(code=4001, reason="Invalid token")
-                return
-            role = payload.get("role", "user")
-            if role not in ("admin", "operator", "user", "viewer"):
-                await websocket.close(code=4003, reason="Insufficient permissions")
-                return
-        except asyncio.TimeoutError:
-            await websocket.close(code=4001, reason="Authentication timeout")
+        if not token:
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        payload = verify_token(token)
+        if payload is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+        role = payload.get("role", "user")
+        if role not in ("admin", "operator", "user", "viewer"):
+            await websocket.close(code=4003, reason="Insufficient permissions")
             return
 
     await websocket.accept()
@@ -732,7 +746,7 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
 async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import push_device_to_edgelite as _push
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -761,7 +775,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
     from protoforge.core.edgelite import get_edgelite_device_status as _status
 
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -776,7 +790,7 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
     from protoforge.core.edgelite import read_edgelite_device_points as _read
 
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -791,7 +805,7 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
     from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
 
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -837,7 +851,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
     from protoforge.core.edgelite import remove_device_from_edgelite as _remove
 
     engine = _get_engine()
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
 
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
@@ -891,7 +905,7 @@ async def _get_internal_client():
         if time.time() > _internal_token_exp - 300:
             try:
                 from protoforge.core.auth import user_manager, create_token
-                admin_user = user_manager._users.get("admin")
+                admin_user = user_manager.get_user_by_username("admin")
                 if admin_user:
                     token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                     _internal_client.headers["Authorization"] = f"Bearer {token}"
@@ -909,7 +923,7 @@ async def _get_internal_client():
     if os.environ.get("PROTOFORGE_NO_AUTH", "").lower() not in ("1", "true", "yes"):
         try:
             from protoforge.core.auth import user_manager, create_token
-            admin_user = user_manager._users.get("admin")
+            admin_user = user_manager.get_user_by_username("admin")
             if admin_user:
                 token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                 _internal_client.headers["Authorization"] = f"Bearer {token}"
@@ -1083,7 +1097,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
     cases = []
 
     if scope == "all" or scope == "device":
-        for dev_id, dev in engine._devices.items():
+        for dev_id, dev in engine.get_all_device_instances().items():
             if target_id and dev_id != target_id:
                 continue
 
@@ -1113,7 +1127,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
             ))
 
     if scope == "all" or scope == "scenario":
-        for sc_id, sc_config in engine._scenarios.items():
+        for sc_id, sc_config in engine.get_all_scenario_configs().items():
             if target_id and sc_id != target_id:
                 continue
             sc_steps = [
@@ -1129,7 +1143,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
             ))
 
     if scope == "all" or scope == "protocol":
-        for proto_name, proto_server in engine._protocol_servers.items():
+        for proto_name, proto_server in engine.get_all_protocol_servers().items():
             cases.append(TestCase(
                 id=f"qt-proto-{proto_name}", name=f"协议测试: {proto_name}",
                 tags=["quick-test", "protocol"],
@@ -1159,7 +1173,7 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     suggestions = []
 
-    for dev_id, dev in engine._devices.items():
+    for dev_id, dev in engine.get_all_device_instances().items():
         suggestions.append({
             "type": "device",
             "title": f"测试设备 {dev.name}",
@@ -1169,7 +1183,7 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
             "priority": "high" if dev.status.value == "online" else "medium",
         })
 
-    for sc_id, sc_config in engine._scenarios.items():
+    for sc_id, sc_config in engine.get_all_scenario_configs().items():
         suggestions.append({
             "type": "scenario",
             "title": f"测试场景 {sc_config.name}",
@@ -1179,7 +1193,7 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
             "priority": "medium",
         })
 
-    running_protocols = [name for name, p in engine._protocol_servers.items() if p.status.value == "running"]
+    running_protocols = [name for name, p in engine.get_all_protocol_servers().items() if p.status.value == "running"]
 
     if running_protocols:
         suggestions.append({
@@ -1250,7 +1264,7 @@ async def get_test_assertion_types(_user: dict = Depends(require_viewer)):
 @router.get("/scenarios/{scenario_id}/snapshot")
 async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
-    config = engine._scenarios.get(scenario_id)
+    config = engine.get_scenario_config(scenario_id)
     if not config:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
@@ -1262,7 +1276,7 @@ async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_
     }
 
     for device_config in config.devices:
-        instance = engine._devices.get(device_config.id)
+        instance = engine.get_device_instance(device_config.id)
         if instance:
             points = instance.read_all_points()
             snapshot["devices"].append({
@@ -1575,7 +1589,7 @@ async def setup_demo(_user: dict = Depends(require_admin)):
 async def setup_status(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     devices = engine.get_all_device_ids()
-    protocols_running = sum(1 for p in engine._protocol_servers.values() if p.status.value == "running")
+    protocols_running = sum(1 for p in engine.get_all_protocol_servers().values() if p.status.value == "running")
     return {
         "initialized": len(devices) > 0,
         "device_count": len(devices),
@@ -1618,3 +1632,51 @@ async def query_audit_log(
 async def get_audit_stats(_user: dict = Depends(require_admin)):
     from protoforge.core.audit import audit_logger
     return await audit_logger.get_stats()
+
+
+@router.delete("/audit/{entry_id}")
+async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)):
+    from protoforge.core.audit import audit_logger
+    deleted = await audit_logger.delete_entry(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Audit entry not found")
+    return {"ok": True}
+
+
+@router.delete("/audit")
+async def clear_audit_log(
+    before: Optional[float] = None,
+    _user: dict = Depends(require_admin),
+):
+    from protoforge.core.audit import audit_logger
+    count = await audit_logger.clear_entries(before_timestamp=before)
+    return {"ok": True, "deleted": count}
+
+
+@router.get("/backup")
+async def export_backup(_user: dict = Depends(require_admin)):
+    from fastapi.responses import Response
+    import json as json_lib
+    db = _get_database()
+    data = await db.export_all()
+    backup = {
+        "version": "0.1.0",
+        "timestamp": time.time(),
+        "data": data,
+    }
+    content = json_lib.dumps(backup, ensure_ascii=False, indent=2).encode("utf-8")
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename=protoforge_backup_{int(time.time())}.json"},
+    )
+
+
+@router.post("/backup/restore")
+async def import_backup(payload: dict[str, Any], _user: dict = Depends(require_admin)):
+    db = _get_database()
+    data = payload.get("data", {})
+    if not data:
+        raise HTTPException(status_code=400, detail="No data found in backup")
+    restored = await db.import_all(data)
+    return {"status": "ok", "restored": restored}

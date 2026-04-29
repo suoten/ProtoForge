@@ -7,6 +7,7 @@
 [!\[Python\](https://img.shields.io/badge/Python-3.10+-blue.svg null)](https://python.org)
 [!\[FastAPI\](https://img.shields.io/badge/FastAPI-0.115+-green.svg null)](https://fastapi.tiangolo.com)
 [!\[Vue3\](https://img.shields.io/badge/Vue-3.x-brightgreen.svg null)](https://vuejs.org)
+[!\[Naive UI\](https://img.shields.io/badge/Naive_UI-2.x-#5f25d4.svg null)](https://naiveui.com)
 [!\[License\](https://img.shields.io/badge/License-MIT-yellow.svg null)](LICENSE)
 
 [English](#english) | [中文](#中文)
@@ -352,6 +353,203 @@ pip install -e ".[postgres]"
 
 # 配置连接字符串
 PROTOFORGE_DB_PATH=postgresql://user:password@localhost:5432/protoforge
+```
+
+***
+
+### 🔔 Webhook 通知和告警规则
+
+ProtoForge 内置 Webhook 通知和告警反应规则系统，支持事件驱动的自动化。
+
+**Webhook 通知系统**：
+
+```bash
+# 创建 Webhook
+POST /api/v1/webhooks
+{
+  "name": "告警通知",
+  "url": "https://your-server.com/webhook",
+  "events": ["rule_triggered", "device_error"],
+  "secret": "your-hmac-secret"   # 可选，启用 HMAC-SHA256 签名
+}
+
+# 验证签名（接收端）
+# 请求头 X-ProtoForge-Signature = HMAC-SHA256(secret, body)
+```
+
+| 特性 | 说明 |
+|------|------|
+| 事件订阅 | 按事件类型过滤，支持通配符 `*` |
+| HMAC 签名 | `X-ProtoForge-Signature` 头，防止伪造 |
+| 异步队列 | 5000 条消息缓冲，批量发送 |
+| 测试端点 | `POST /webhooks/{id}/test` 发送测试消息 |
+
+**告警反应规则**：
+
+```bash
+# 创建告警规则
+POST /api/v1/integration/alarm-rules
+{
+  "source_device_id": "device-001",
+  "severity": "critical",
+  "action": "stop_device"       # stop_device / inject_fault / adjust_generator
+}
+```
+
+| 动作 | 说明 |
+|------|------|
+| `stop_device` | 自动停止触发告警的设备 |
+| `inject_fault` | 向设备注入故障 |
+| `adjust_generator` | 调整数据生成器参数 |
+
+***
+
+### 🧪 仿真测试框架
+
+ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML 报告。
+
+**断言类型**：
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `equals` | 等于 | `{"expected": 100}` |
+| `not_equals` | 不等于 | `{"expected": 0}` |
+| `contains` | 包含 | `{"expected": "online"}` |
+| `not_contains` | 不包含 | `{"expected": "error"}` |
+| `greater_than` | 大于 | `{"expected": 0}` |
+| `less_than` | 小于 | `{"expected": 100}` |
+| `regex_match` | 正则匹配 | `{"expected": "^device-"}` |
+| `json_path` | JSON 路径提取 | `{"json_path": "$.status", "expected": "ok"}` |
+| `not_null` | 非空 | — |
+| `type_check` | 类型检查 | `{"expected": "number"}` |
+| `status_code` | HTTP 状态码 | `{"expected": 200}` |
+| `length_equals` | 长度等于 | `{"expected": 10}` |
+| `length_greater` | 长度大于 | `{"expected": 0}` |
+| `length_less` | 长度小于 | `{"expected": 100}` |
+
+**变量提取和钩子**：
+
+```json
+{
+  "steps": [
+    {
+      "name": "创建设备",
+      "action": "create_device",
+      "extract": {"device_id": "$.id"},
+      "post_hook": "log('设备创建成功')"
+    },
+    {
+      "name": "读取测点",
+      "action": "read_points",
+      "params": {"device_id": "${device_id}"}
+    }
+  ]
+}
+```
+
+**测试报告**：
+
+- `GET /tests/reports/{id}/html` — 完整 HTML 报告（含步骤详情、断言结果、耗时统计）
+- `GET /tests/reports/trend` — 历史测试趋势数据
+- `POST /tests/quick-test` — 一键自动生成并运行测试
+- `GET /tests/suggestions` — 根据当前状态推荐测试
+
+***
+
+### 🎬 场景规则引擎
+
+4 种规则类型 × 4 种动作，支持冷却机制和 Webhook 联动。
+
+**规则类型**：
+
+| 类型 | 说明 | 配置示例 |
+|------|------|---------|
+| `threshold` | 阈值规则（支持 AND/OR 多条件） | `{"conditions": [{"operator": ">", "value": 80}], "logic": "and"}` |
+| `value_change` | 值变化规则（支持 delta 阈值） | `{"delta": 10}` |
+| `timer` | 定时规则 | `{"interval": 60}` |
+| `script` | 脚本规则（安全沙箱） | `{"expression": "value > 80 and value < 120"}` |
+
+**规则动作**：
+
+| 动作 | 说明 |
+|------|------|
+| `set` | 设定目标测点值 |
+| `toggle` | 切换布尔值 |
+| `increment` | 递增 |
+| `decrement` | 递减 |
+
+**冷却机制**：在 `condition` 中设置 `cooldown`（秒），防止规则频繁触发：
+
+```json
+{"cooldown": 30, "conditions": [...]}
+```
+
+***
+
+### 🛠 CLI 命令
+
+| 命令 | 说明 |
+|------|------|
+| `protoforge run` | 启动服务（`--host` / `--port` / `--reload` / `--log-level`） |
+| `protoforge demo` | 演示模式（自动创建示例设备和场景） |
+| `protoforge init` | 初始化数据目录和默认配置（创建 `data/` 目录，从 `.env.example` 复制 `.env`） |
+| `protoforge migrate` | 运行数据库迁移（`--revision head`） |
+| `protoforge version` | 查看版本号 |
+
+***
+
+### 📊 性能基准参考
+
+| 场景 | 预估参考值 | 说明 |
+|------|-----------|------|
+| Modbus TCP 并发连接 | ~200 连接 | 受限于文件描述符和内存 |
+| MQTT 并发客户端 | ~500 连接 | aMQTT 性能有限，生产建议用 Mosquitto |
+| OPC-UA 并发会话 | ~50 连接 | asyncua 资源消耗较大 |
+| GB28181 RTP 推流 | ~10 路 | 受 CPU 和带宽限制 |
+| 内存占用（空载） | ~150MB | Python + FastAPI 基础开销 |
+| 内存占用（100 设备） | ~500MB | 含协议栈和仿真数据 |
+| CPU 占用（空载） | <5% | 等待连接状态 |
+| CPU 占用（100 设备活跃） | 30-60% | 取决于数据更新频率 |
+
+> ⚠️ 以上为估算值，实际性能取决于硬件配置、协议类型和数据更新频率。建议在目标环境进行基准测试。
+
+***
+
+### 🔄 升级指南
+
+**升级步骤**：
+
+```bash
+# 1. 备份数据
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o backup.json
+
+# 2. 拉取最新代码
+git pull origin main
+
+# 3. 更新依赖
+pip install -e ".[all]"
+
+# 4. 运行数据库迁移
+protoforge migrate
+
+# 5. 重新构建前端（如有更新）
+cd web && npm install && npm run build && cd ..
+
+# 6. 重启服务
+protoforge run
+```
+
+**回滚**：
+
+```bash
+# 回滚数据库到上一个版本
+alembic downgrade -1
+
+# 恢复数据备份
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @backup.json \
+  http://localhost:8000/api/v1/backup/restore
 ```
 
 ***

@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -9,6 +11,25 @@ from typing import Any, Optional
 from protoforge.core.log_bus import LogBus, LogEntry
 
 logger = logging.getLogger(__name__)
+
+
+def _encrypt_data(data: bytes, key: bytes) -> str:
+    from hashlib import sha256
+    derived_key = sha256(key).digest()
+    result = bytearray()
+    for i, b in enumerate(data):
+        result.append(b ^ derived_key[i % len(derived_key)])
+    return base64.b64encode(bytes(result)).decode("ascii")
+
+
+def _decrypt_data(encrypted: str, key: bytes) -> bytes:
+    from hashlib import sha256
+    derived_key = sha256(key).digest()
+    data = base64.b64decode(encrypted)
+    result = bytearray()
+    for i, b in enumerate(data):
+        result.append(b ^ derived_key[i % len(derived_key)])
+    return bytes(result)
 
 
 @dataclass
@@ -83,9 +104,17 @@ class Recorder:
         self._task: Optional[asyncio.Task] = None
         self._running = False
         self._database = None
+        self._encryption_key: Optional[bytes] = None
 
     def set_database(self, database) -> None:
         self._database = database
+
+    def set_encryption_key(self, key: str) -> None:
+        if key:
+            self._encryption_key = key.encode("utf-8")
+            logger.info("Recording encryption enabled")
+        else:
+            self._encryption_key = None
 
     async def start_recording(
         self, name: str, protocol: Optional[str] = None,
@@ -130,7 +159,10 @@ class Recorder:
         self._active = None
         if self._database:
             try:
-                await self._database.save_recording(result.to_full_dict())
+                save_data = result.to_full_dict()
+                if self._encryption_key:
+                    save_data = self._encrypt_recording(save_data)
+                await self._database.save_recording(save_data)
             except Exception as e:
                 logger.warning("Failed to persist recording: %s", e)
         logger.info("Recording stopped: %s, %d messages", result.id, len(result.messages))
@@ -167,6 +199,8 @@ class Recorder:
                 try:
                     full = await self._database.load_recording(row["id"])
                     if full:
+                        if full.get("encrypted") and self._encryption_key:
+                            full = self._decrypt_recording(full)
                         messages = [RecordedMessage.from_dict(m) for m in full.get("messages", [])]
                         rec = Recording(
                             id=full["id"], name=full["name"],
@@ -252,4 +286,33 @@ class Recorder:
             "active_name": self._active.name if self._active else None,
             "active_messages": len(self._active.messages) if self._active else 0,
             "saved_recordings": len(self._recordings),
+            "encryption_enabled": self._encryption_key is not None,
         }
+
+    def _encrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:
+        if not self._encryption_key:
+            return data
+        messages = data.get("messages", [])
+        encrypted_messages = []
+        for msg in messages:
+            msg_bytes = json.dumps(msg, ensure_ascii=False).encode("utf-8")
+            encrypted_messages.append(_encrypt_data(msg_bytes, self._encryption_key))
+        result = {k: v for k, v in data.items() if k != "messages"}
+        result["messages_encrypted"] = encrypted_messages
+        result["encrypted"] = True
+        return result
+
+    def _decrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:
+        if not self._encryption_key:
+            return data
+        encrypted_messages = data.get("messages_encrypted", [])
+        decrypted_messages = []
+        for enc_msg in encrypted_messages:
+            try:
+                msg_bytes = _decrypt_data(enc_msg, self._encryption_key)
+                decrypted_messages.append(json.loads(msg_bytes.decode("utf-8")))
+            except Exception as e:
+                logger.debug("Failed to decrypt recording message: %s", e)
+        result = {k: v for k, v in data.items() if k not in ("messages_encrypted", "encrypted")}
+        result["messages"] = decrypted_messages
+        return result

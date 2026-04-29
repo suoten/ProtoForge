@@ -177,6 +177,9 @@ class UserManager:
     def get_user_by_id(self, user_id: str) -> Optional[User]:
         return self._users_by_id.get(user_id)
 
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        return self._users.get(username)
+
     async def restore_from_db(self) -> None:
         if not self._db:
             return

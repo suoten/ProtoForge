@@ -732,14 +732,16 @@ class Database:
     async def clear_audit_entries(self, before_timestamp: Optional[float] = None) -> int:
         if before_timestamp is not None:
             if self._is_postgres:
-                result = await self._fetchone(
+                count_result = await self._fetchone(
                     "SELECT COUNT(*) as cnt FROM audit_log WHERE timestamp < $1",
                     (before_timestamp,),
                 )
+                count = count_result["cnt"] if count_result else 0
                 await self._execute(
                     "DELETE FROM audit_log WHERE timestamp < $1",
                     (before_timestamp,),
                 )
+                return count
             else:
                 cursor = await self._db.execute(
                     "DELETE FROM audit_log WHERE timestamp < ?", (before_timestamp,)
@@ -748,12 +750,14 @@ class Database:
                 return cursor.rowcount
         else:
             if self._is_postgres:
+                count_result = await self._fetchone("SELECT COUNT(*) as cnt FROM audit_log")
+                count = count_result["cnt"] if count_result else 0
                 await self._execute("DELETE FROM audit_log")
+                return count
             else:
                 cursor = await self._db.execute("DELETE FROM audit_log")
                 await self._db.commit()
                 return cursor.rowcount
-        return result["cnt"] if result else 0
 
     async def save_recording(self, recording_data: dict[str, Any]) -> None:
         sql = self._upsert_sql("recordings", ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"])
@@ -792,3 +796,45 @@ class Database:
             f"DELETE FROM recordings WHERE {self._where_sql('id')}",
             (rec_id,),
         )
+
+    async def export_all(self) -> dict[str, Any]:
+        result = {}
+        for table in ("devices", "scenarios", "templates", "test_cases",
+                       "test_suites", "test_reports", "users", "recordings"):
+            try:
+                rows = await self._fetchall(f"SELECT * FROM {table}")
+                result[table] = rows
+            except Exception:
+                result[table] = []
+        try:
+            rows = await self._fetchall("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 5000")
+            result["audit_log"] = rows
+        except Exception:
+            result["audit_log"] = []
+        return result
+
+    async def import_all(self, data: dict[str, Any]) -> dict[str, int]:
+        restored = {}
+        table_columns = {
+            "devices": ["id", "name", "protocol", "template_id", "points", "protocol_config"],
+            "scenarios": ["id", "name", "description", "devices", "rules"],
+            "templates": ["id", "name", "protocol", "description", "manufacturer", "model", "points", "protocol_config", "tags"],
+            "test_cases": ["id", "name", "description", "tags", "steps", "setup_steps", "teardown_steps"],
+            "test_suites": ["id", "name", "description", "test_case_ids", "tags", "created_at", "updated_at"],
+            "test_reports": ["id", "name", "start_time", "end_time", "total", "passed", "failed", "errors", "skipped", "environment", "test_cases"],
+            "users": ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"],
+            "recordings": ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"],
+        }
+        for table, columns in table_columns.items():
+            rows = data.get(table, [])
+            count = 0
+            for row in rows:
+                try:
+                    values = [row.get(c, "") for c in columns]
+                    sql = self._upsert_sql(table, columns)
+                    await self._execute(sql, tuple(values))
+                    count += 1
+                except Exception:
+                    pass
+            restored[table] = count
+        return restored
