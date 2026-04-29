@@ -98,6 +98,7 @@ class S7Server(ProtocolServer):
         self._behaviors: dict[str, S7DeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._device_info: dict[str, dict] = {}
+        self._rack_slot_map: dict[tuple[int, int], str] = {}
         self._host = "0.0.0.0"
         self._port = 102
         self._rack = 0
@@ -158,12 +159,15 @@ class S7Server(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("S7 connection from %s", addr)
+        connection_device_id: str | None = None
         try:
             while self._server_running:
                 data = await reader.read(4096)
                 if not data:
                     break
-                response = self._process_s7_message(data)
+                response, device_id = self._process_s7_message(data, connection_device_id)
+                if device_id is not None:
+                    connection_device_id = device_id
                 if response:
                     writer.write(response)
                     await writer.drain()
@@ -176,36 +180,37 @@ class S7Server(ProtocolServer):
             except Exception as e:
                 logger.debug("S7 writer close error: %s", e)
 
-    def _process_s7_message(self, data: bytes) -> bytes | None:
+    def _process_s7_message(self, data: bytes, device_id: str | None = None) -> tuple[bytes | None, str | None]:
         if len(data) < 4:
-            return None
+            return None, None
 
         tpkt_len = struct.unpack(">H", data[2:4])[0]
         if len(data) < tpkt_len:
-            return None
+            return None, None
 
         if len(data) < 10:
-            return None
+            return None, None
 
         pdu_type = data[4]
         if pdu_type == 0xF0:
             cotp_len = data[5]
             if len(data) < 7 + cotp_len:
-                return None
-            return self._make_cotp_cr_response()
+                return None, None
+            resolved_id = self._resolve_device_from_cotp(data)
+            return self._make_cotp_cr_response(), resolved_id
 
         if len(data) < 17:
-            return None
+            return None, None
 
         msg_type = data[8]
         if msg_type == 0x01:
-            return self._make_s7_connect_response(data)
+            return self._make_s7_connect_response(data), None
         elif msg_type == 0x07:
-            return self._make_s7_read_response(data)
+            return self._make_s7_read_response(data, device_id), None
         elif msg_type == 0x05:
-            return self._make_s7_write_response(data)
+            return self._make_s7_write_response(data, device_id), None
 
-        return None
+        return None, None
 
     def _make_cotp_cr_response(self) -> bytes:
         return bytes([
@@ -216,6 +221,30 @@ class S7Server(ProtocolServer):
             0x00, 0x01,
             0xC0,
         ])
+
+    def _resolve_device_from_cotp(self, data: bytes) -> str | None:
+        try:
+            offset = 11
+            while offset + 1 < len(data):
+                param_code = data[offset]
+                param_len = data[offset + 1]
+                if offset + 2 + param_len > len(data):
+                    break
+                if param_code == 0xC1 and param_len >= 2:
+                    tsap = struct.unpack(">H", data[offset + 2:offset + 4])[0]
+                    tsap_low = tsap & 0xFF
+                    rack = (tsap_low >> 5) & 0x07
+                    slot = tsap_low & 0x1F
+                    device_id = self._rack_slot_map.get((rack, slot))
+                    if device_id:
+                        logger.debug("S7 COTP CR resolved rack=%d slot=%d -> device %s",
+                                     rack, slot, device_id)
+                        return device_id
+                    return self._default_device_id
+                offset += 2 + param_len
+        except (IndexError, struct.error) as e:
+            logger.debug("S7 COTP CR parse error: %s", e)
+        return self._default_device_id
 
     def _make_s7_connect_response(self, data: bytes) -> bytes:
         resp = bytearray([
@@ -233,7 +262,7 @@ class S7Server(ProtocolServer):
         ])
         return bytes(resp)
 
-    def _make_s7_read_response(self, data: bytes) -> bytes:
+    def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:
         if len(data) < 31:
             return self._make_s7_error_response(data)
 
@@ -242,7 +271,7 @@ class S7Server(ProtocolServer):
         offset = struct.unpack(">H", data[29:31])[0]
 
         value_bytes = b"\x00\x00\x00\x00"
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
         if behavior:
             db_data = behavior.get_db_area(db_number, offset + 4)
             value_bytes = bytes(db_data[offset:offset + 4])
@@ -268,13 +297,13 @@ class S7Server(ProtocolServer):
         resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)
 
-    def _make_s7_write_response(self, data: bytes) -> bytes:
+    def _make_s7_write_response(self, data: bytes, device_id: str | None = None) -> bytes:
         if len(data) >= 31:
             area = data[26]
             db_number = struct.unpack(">H", data[27:29])[0]
             offset = struct.unpack(">H", data[29:31])[0]
             write_data = data[35:39] if len(data) >= 39 else b"\x00\x00\x00\x00"
-            behavior = self._behaviors.get(self._default_device_id)
+            behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
                 behavior.write_db_area(db_number, offset, write_data)
                 self._log_debug("recv", "s7_write",
@@ -336,6 +365,7 @@ class S7Server(ProtocolServer):
             "ew_count": 256,
             "aw_count": 256,
         }
+        self._rack_slot_map[(rack, slot)] = device_id
 
         logger.info("S7 device created: %s (rack=%d, slot=%d)",
                      device_id, rack, slot)
@@ -347,7 +377,11 @@ class S7Server(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._device_configs.pop(device_id, None)
         self._behaviors.pop(device_id, None)
-        self._device_info.pop(device_id, None)
+        info = self._device_info.pop(device_id, None)
+        if info:
+            rack = info.get("rack", 0)
+            slot = info.get("slot", 1)
+            self._rack_slot_map.pop((rack, slot), None)
         self._clear_default_device(device_id)
         logger.info("S7 device removed: %s", device_id)
         self._log_debug("system", "device_remove",

@@ -140,6 +140,32 @@ class Database:
                 login_attempts INTEGER DEFAULT 0,
                 locked_until REAL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                action TEXT NOT NULL,
+                username TEXT NOT NULL,
+                resource_type TEXT NOT NULL DEFAULT '',
+                resource_id TEXT NOT NULL DEFAULT '',
+                detail TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT ''
+            );
+            CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_audit_username ON audit_log(username);
+            CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action);
+
+            CREATE TABLE IF NOT EXISTS recordings (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                protocol TEXT NOT NULL,
+                start_time REAL NOT NULL,
+                end_time REAL DEFAULT 0,
+                messages TEXT NOT NULL DEFAULT '[]',
+                metadata TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE INDEX IF NOT EXISTS idx_recordings_protocol ON recordings(protocol);
         """)
         await self._db.commit()
 
@@ -236,6 +262,36 @@ class Database:
                 locked_until REAL DEFAULT 0
             )
         """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id SERIAL PRIMARY KEY,
+                timestamp REAL NOT NULL,
+                action TEXT NOT NULL,
+                username TEXT NOT NULL,
+                resource_type TEXT NOT NULL DEFAULT '',
+                resource_id TEXT NOT NULL DEFAULT '',
+                detail TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT ''
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_username ON audit_log(username)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS recordings (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                protocol TEXT NOT NULL,
+                start_time REAL NOT NULL,
+                end_time REAL DEFAULT 0,
+                messages TEXT NOT NULL DEFAULT '[]',
+                metadata TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_recordings_protocol ON recordings(protocol)")
 
     async def _execute(self, sql: str, params: tuple = ()) -> None:
         if self._is_postgres:
@@ -357,6 +413,21 @@ class Database:
         rows = await self._fetchall("SELECT * FROM templates")
         return [self._row_to_template(row) for row in rows]
 
+    async def load_template(self, template_id: str) -> Optional[TemplateDetail]:
+        row = await self._fetchone(
+            f"SELECT * FROM templates WHERE {self._where_sql('id')}",
+            (template_id,),
+        )
+        if not row:
+            return None
+        return self._row_to_template(row)
+
+    async def delete_template(self, template_id: str) -> None:
+        await self._execute(
+            f"DELETE FROM templates WHERE {self._where_sql('id')}",
+            (template_id,),
+        )
+
     def _row_to_device(self, row: dict) -> DeviceConfig:
         points = [PointConfig(**p) for p in json.loads(row["points"])]
         return DeviceConfig(
@@ -454,6 +525,19 @@ class Database:
             (suite_id,),
         )
 
+    async def load_test_suite(self, suite_id: str) -> Optional[dict[str, Any]]:
+        row = await self._fetchone(
+            f"SELECT * FROM test_suites WHERE {self._where_sql('id')}",
+            (suite_id,),
+        )
+        if not row:
+            return None
+        return {
+            "id": row["id"], "name": row["name"], "description": row["description"],
+            "test_case_ids": json.loads(row["test_case_ids"]), "tags": json.loads(row["tags"]),
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+        }
+
     async def save_test_report(self, report_data: dict[str, Any]) -> None:
         sql = self._upsert_sql("test_reports", ["id", "name", "start_time", "end_time", "total", "passed", "failed", "errors", "skipped", "environment", "test_cases"])
         await self._execute(
@@ -488,6 +572,22 @@ class Database:
             (report_id,),
         )
 
+    async def load_test_report(self, report_id: str) -> Optional[dict[str, Any]]:
+        row = await self._fetchone(
+            f"SELECT * FROM test_reports WHERE {self._where_sql('id')}",
+            (report_id,),
+        )
+        if not row:
+            return None
+        return {
+            "id": row["id"], "name": row["name"],
+            "start_time": row["start_time"], "end_time": row["end_time"],
+            "total": row["total"], "passed": row["passed"], "failed": row["failed"],
+            "errors": row["errors"], "skipped": row["skipped"],
+            "environment": json.loads(row["environment"]),
+            "test_cases": json.loads(row["test_cases"]),
+        }
+
     async def save_user(self, user_data: dict[str, Any]) -> None:
         sql = self._upsert_sql("users", ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"], conflict_key="username")
         await self._execute(
@@ -507,8 +607,87 @@ class Database:
             "locked_until": r["locked_until"],
         } for r in rows]
 
+    async def load_user(self, username: str) -> Optional[dict[str, Any]]:
+        row = await self._fetchone(
+            f"SELECT * FROM users WHERE {self._where_sql('username')}",
+            (username,),
+        )
+        if not row:
+            return None
+        return {
+            "id": row["id"], "username": row["username"],
+            "password_hash": row["password_hash"], "role": row["role"],
+            "created_at": row["created_at"],
+            "login_attempts": row["login_attempts"],
+            "locked_until": row["locked_until"],
+        }
+
     async def delete_user(self, username: str) -> None:
         await self._execute(
             f"DELETE FROM users WHERE {self._where_sql('username')}",
             (username,),
+        )
+
+    async def save_audit_entry(self, entry: dict[str, Any]) -> None:
+        if self._is_postgres:
+            sql = "INSERT INTO audit_log (timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"
+        else:
+            sql = "INSERT INTO audit_log (timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        await self._execute(
+            sql,
+            (entry["timestamp"], entry["action"], entry["username"],
+             entry.get("resource_type", ""), entry.get("resource_id", ""),
+             entry.get("detail", ""), entry.get("ip_address", ""),
+             entry.get("user_agent", "")),
+        )
+
+    async def load_audit_entries(self, limit: int = 1000) -> list[dict[str, Any]]:
+        limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
+        rows = await self._fetchall(
+            f"SELECT timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent FROM audit_log ORDER BY timestamp DESC {limit_clause}",
+            (limit,),
+        )
+        return [{
+            "timestamp": r["timestamp"], "action": r["action"],
+            "username": r["username"], "resource_type": r["resource_type"],
+            "resource_id": r["resource_id"], "detail": r["detail"],
+            "ip_address": r["ip_address"], "user_agent": r["user_agent"],
+        } for r in rows]
+
+    async def save_recording(self, recording_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("recordings", ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"])
+        await self._execute(
+            sql,
+            (recording_data["id"], recording_data["name"], recording_data["protocol"],
+             recording_data["start_time"], recording_data.get("end_time", 0),
+             json.dumps(recording_data.get("messages", [])),
+             json.dumps(recording_data.get("metadata", {}))),
+        )
+
+    async def load_recording(self, rec_id: str) -> Optional[dict[str, Any]]:
+        row = await self._fetchone(
+            f"SELECT * FROM recordings WHERE {self._where_sql('id')}",
+            (rec_id,),
+        )
+        if not row:
+            return None
+        return {
+            "id": row["id"], "name": row["name"], "protocol": row["protocol"],
+            "start_time": row["start_time"], "end_time": row["end_time"],
+            "messages": json.loads(row["messages"]),
+            "metadata": json.loads(row["metadata"]),
+        }
+
+    async def load_all_recordings(self) -> list[dict[str, Any]]:
+        rows = await self._fetchall("SELECT id, name, protocol, start_time, end_time, metadata FROM recordings")
+        return [{
+            "id": r["id"], "name": r["name"], "protocol": r["protocol"],
+            "start_time": r["start_time"], "end_time": r["end_time"],
+            "metadata": json.loads(r["metadata"]),
+        } for r in rows]
+
+    async def delete_recording(self, rec_id: str) -> None:
+        await self._execute(
+            f"DELETE FROM recordings WHERE {self._where_sql('id')}",
+            (rec_id,),
         )

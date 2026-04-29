@@ -55,6 +55,18 @@
             "fixed_value": true
         }
     ],
-    "protocol_config": {},
-    "tags": ["烟感", "消防", "智慧消防", "IoT"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "烟感",
+        "消防",
+        "智慧消防",
+        "IoT"
+    ]
 }

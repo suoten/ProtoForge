@@ -44,7 +44,10 @@ class LogBus:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
                     pass
-                queue.put_nowait(entry)
+                try:
+                    queue.put_nowait(entry)
+                except asyncio.QueueFull:
+                    pass
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

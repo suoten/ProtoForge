@@ -91,6 +91,18 @@
             "fixed_value": false
         }
     ],
-    "protocol_config": {},
-    "tags": ["充电桩", "新能源", "电动汽车", "EVC"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "充电桩",
+        "新能源",
+        "电动汽车",
+        "EVC"
+    ]
 }

@@ -203,8 +203,8 @@ class GB28181Server(ProtocolServer):
         self._host = "0.0.0.0"
         self._port = 5060
         self._server_id = "34020000002000000001"
-        self._listen_task: asyncio.Task | None = None
         self._heartbeat_task: asyncio.Task | None = None
+        self._rtp_tasks: list[asyncio.Task] = []
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -245,6 +245,15 @@ class GB28181Server(ProtocolServer):
                     pass
                 except Exception as e:
                     logger.warning("GB28181 heartbeat task error: %s", e)
+            for t in self._rtp_tasks:
+                if not t.done():
+                    t.cancel()
+            for t in self._rtp_tasks:
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception):
+                    pass
+            self._rtp_tasks.clear()
             if self._transport:
                 self._transport.close()
         except Exception as e:
@@ -330,6 +339,13 @@ class GB28181Server(ProtocolServer):
                 "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
                 "port": {"type": "integer", "default": 5060, "description": "监听端口"},
                 "server_id": {"type": "string", "default": "34020000002000000001", "description": "SIP服务器ID(20位编码)"},
+                "srtp_enabled": {"type": "boolean", "default": False, "description": "是否启用SRTP加密"},
+                "srtp_crypto_suite": {
+                    "type": "string",
+                    "default": "AES_CM_128_HMAC_SHA1_80",
+                    "enum": ["AES_CM_128_HMAC_SHA1_80", "AES_CM_128_HMAC_SHA1_32"],
+                    "description": "SRTP加密套件",
+                },
             },
         }
 
@@ -582,7 +598,7 @@ class GB28181Server(ProtocolServer):
 
         media_ip = self._host if self._host != "0.0.0.0" else "127.0.0.1"
         try:
-            media_port = 6000 + (int(device_id[-4:], 16) % 1000)
+            media_port = 6000 + (int(device_id[-4:], 10) % 1000)
         except (ValueError, IndexError):
             media_port = 6000
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
@@ -634,6 +650,7 @@ class GB28181Server(ProtocolServer):
                     if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
                         t = asyncio.create_task(gb_device.rtp_streamer.stop())
                         t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                        self._rtp_tasks.append(t)
 
                     try:
                         from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
@@ -654,6 +671,7 @@ class GB28181Server(ProtocolServer):
                         gb_device.rtp_streamer = streamer
                         t = asyncio.ensure_future(streamer.start())
                         t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                        self._rtp_tasks.append(t)
 
                         self._log_debug("out", "rtp_stream_start",
                                         f"ACK收到, 启动RTP视频流 → {dest_ip}:{dest_port}",
@@ -709,6 +727,7 @@ class GB28181Server(ProtocolServer):
                 if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
                     t = asyncio.ensure_future(gb_device.rtp_streamer.stop())
                     t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                    self._rtp_tasks.append(t)
                     self._log_debug("out", "rtp_stream_stop",
                                     "BYE收到, 停止RTP视频流",
                                     device_id=pf_id)

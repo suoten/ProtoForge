@@ -16,7 +16,9 @@
             "generator_type": "sine",
             "min_value": 0.0,
             "max_value": 3000.0,
-            "generator_config": {"period": 20.0}
+            "generator_config": {
+                "period": 20.0
+            }
         },
         {
             "name": "current",
@@ -69,6 +71,15 @@
             "fixed_value": 1500.0
         }
     ],
-    "protocol_config": {},
-    "tags": ["工业", "电机", "变频器"]
+    "protocol_config": {
+        "security_mode": "None",
+        "security_policy": "None",
+        "certificate_path": "",
+        "private_key_path": ""
+    },
+    "tags": [
+        "工业",
+        "电机",
+        "变频器"
+    ]
 }

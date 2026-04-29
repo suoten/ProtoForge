@@ -255,6 +255,16 @@ class McServer(ProtocolServer):
         behavior = self._behaviors.get(self._default_device_id)
         if behavior:
             behavior.write_memory(device_code, start_addr, write_data)
+            for name, (p_code, p_offset) in behavior._point_addresses.items():
+                if p_code == device_code and p_offset == start_addr:
+                    try:
+                        if len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
+                        elif len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                    except (struct.error, IndexError):
+                        pass
+                    break
             self._log_debug("recv", "mc_write",
                             f"写入设备{device_code}偏移{start_addr}",
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})

@@ -231,15 +231,15 @@ class OpcDaServer(ProtocolServer):
 
         tag_name = data[6:6 + tag_len].decode("utf-8", errors="replace")
         behavior = self._behaviors.get(self._default_device_id)
-        value = 0.0
-        if behavior:
-            data_type = behavior.get_data_type(tag_name)
-            value_data = data[6 + tag_len:]
-            value = self._unpack_typed_value(data_type, value_data)
-            behavior.set_value(tag_name, value)
-            self._log_debug("recv", "opcda_write",
-                            f"写入标签 {tag_name}={value}",
-                            detail={"tag": tag_name, "value": value})
+        if not behavior:
+            return self._make_error(0x8001)
+        data_type = behavior.get_data_type(tag_name)
+        value_data = data[6 + tag_len:]
+        value = self._unpack_typed_value(data_type, value_data)
+        behavior.set_value(tag_name, value)
+        self._log_debug("recv", "opcda_write",
+                        f"写入标签 {tag_name}={value}",
+                        detail={"tag": tag_name, "value": value})
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
@@ -250,9 +250,13 @@ class OpcDaServer(ProtocolServer):
         try:
             if data_type == "bool" and len(data) >= 1:
                 return bool(data[0])
-            elif data_type in ("int16", "uint16") and len(data) >= 2:
+            elif data_type == "int16" and len(data) >= 2:
+                return struct.unpack("<h", data[:2])[0]
+            elif data_type == "uint16" and len(data) >= 2:
                 return struct.unpack("<H", data[:2])[0]
-            elif data_type in ("int32", "uint32") and len(data) >= 4:
+            elif data_type == "int32" and len(data) >= 4:
+                return struct.unpack("<i", data[:4])[0]
+            elif data_type == "uint32" and len(data) >= 4:
                 return struct.unpack("<I", data[:4])[0]
             elif data_type == "float32" and len(data) >= 4:
                 return struct.unpack("<f", data[:4])[0]

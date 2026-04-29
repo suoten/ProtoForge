@@ -71,7 +71,16 @@
         "server_id": "34020000001320000001",
         "username": "34020000001320000001",
         "password": "12345678",
-        "realm": "3402000000"
+        "realm": "3402000000",
+        "srtp_enabled": false,
+        "srtp_crypto_suite": "AES_CM_128_HMAC_SHA1_80",
+        "srtp_key": ""
     },
-    "tags": ["球机", "PTZ", "GB28181", "摄像头", "云台"]
+    "tags": [
+        "球机",
+        "PTZ",
+        "GB28181",
+        "摄像头",
+        "云台"
+    ]
 }

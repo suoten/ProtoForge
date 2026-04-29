@@ -62,6 +62,17 @@
             "max_value": 90.0
         }
     ],
-    "protocol_config": {},
-    "tags": ["环保监测", "空气质量", "噪音"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "环保监测",
+        "空气质量",
+        "噪音"
+    ]
 }

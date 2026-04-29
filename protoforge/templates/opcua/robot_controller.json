@@ -113,6 +113,16 @@
             "max_value": 75.0
         }
     ],
-    "protocol_config": {},
-    "tags": ["机器人", "工业机器人", "六轴", "OPC-UA"]
+    "protocol_config": {
+        "security_mode": "None",
+        "security_policy": "None",
+        "certificate_path": "",
+        "private_key_path": ""
+    },
+    "tags": [
+        "机器人",
+        "工业机器人",
+        "六轴",
+        "OPC-UA"
+    ]
 }

@@ -375,7 +375,6 @@ class EtherCATServer(ProtocolServer):
             self._slave_addr = int(proto_config["slave_address"])
 
         self._recalc_data_sizes()
-        self._init_esc_regs()
 
         logger.info("EtherCAT device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)

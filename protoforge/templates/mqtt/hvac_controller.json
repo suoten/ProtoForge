@@ -66,6 +66,18 @@
             "max_value": 70.0
         }
     ],
-    "protocol_config": {},
-    "tags": ["空调", "HVAC", "楼宇自控", "暖通"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "空调",
+        "HVAC",
+        "楼宇自控",
+        "暖通"
+    ]
 }

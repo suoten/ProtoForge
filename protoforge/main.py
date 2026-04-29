@@ -174,6 +174,26 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"webhooks: {e}")
         logger.error("Failed to start webhook manager: %s", e)
 
+    try:
+        from protoforge.core.audit import audit_logger
+        audit_logger.set_database(_database)
+        await audit_logger.restore_from_db()
+        logger.info("Audit logger initialized")
+    except Exception as e:
+        restore_errors.append(f"audit: {e}")
+        logger.error("Failed to initialize audit logger: %s", e)
+
+    try:
+        from protoforge.core.recorder import Recorder
+        from protoforge.api.v1.router import _get_recorder
+        recorder = _get_recorder()
+        recorder.set_database(_database)
+        await recorder.restore_from_db()
+        logger.info("Recorder persistence initialized")
+    except Exception as e:
+        restore_errors.append(f"recorder: {e}")
+        logger.error("Failed to initialize recorder persistence: %s", e)
+
     if os.environ.get("PROTOFORGE_DEMO_MODE"):
         try:
             from protoforge.core.demo import seed_demo_data

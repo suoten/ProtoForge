@@ -87,7 +87,10 @@ class EventBus:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
                     pass
-                queue.put_nowait(event)
+                try:
+                    queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    pass
 
         for callback in self._callbacks.get(event_type, []):
             try:

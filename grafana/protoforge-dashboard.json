@@ -1,0 +1,162 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "ProtoForge 系统概览",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "protoforge_uptime_seconds",
+          "legendFormat": "运行时间",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "steps": [{"color": "green", "value": null}]
+          }
+        }
+      }
+    },
+    {
+      "title": "活跃设备数",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {
+          "expr": "protoforge_devices_active",
+          "legendFormat": "活跃设备",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{"color": "blue", "value": null}]
+          }
+        }
+      }
+    },
+    {
+      "title": "运行协议数",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "protoforge_protocols_running",
+          "legendFormat": "运行协议",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{"color": "purple", "value": null}]
+          }
+        }
+      }
+    },
+    {
+      "title": "数据转发次数",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "targets": [
+        {
+          "expr": "protoforge_forward_total",
+          "legendFormat": "转发次数",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [{"color": "orange", "value": null}]
+          }
+        }
+      }
+    },
+    {
+      "title": "设备数量趋势",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [
+        {
+          "expr": "protoforge_devices_active",
+          "legendFormat": "活跃设备",
+          "refId": "A"
+        },
+        {
+          "expr": "protoforge_devices_total",
+          "legendFormat": "总设备数",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "协议运行状态",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {
+          "expr": "protoforge_protocols_running",
+          "legendFormat": "运行协议",
+          "refId": "A"
+        },
+        {
+          "expr": "protoforge_protocols_total",
+          "legendFormat": "总协议数",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "title": "数据转发速率",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "targets": [
+        {
+          "expr": "rate(protoforge_forward_total[5m])",
+          "legendFormat": "转发速率/秒",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "录制统计",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "targets": [
+        {
+          "expr": "protoforge_recorder_active",
+          "legendFormat": "录制中",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(protoforge_recorder_messages_total[5m])",
+          "legendFormat": "消息速率/秒",
+          "refId": "B"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["protoforge", "iot", "simulation"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "ProtoForge IoT Simulation Dashboard",
+  "uid": "protoforge-main",
+  "version": 1
+}

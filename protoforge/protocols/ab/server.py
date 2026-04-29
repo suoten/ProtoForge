@@ -277,9 +277,8 @@ class AbServer(ProtocolServer):
                     data_type = behavior.get_data_type(tag_name)
         else:
             if behavior and behavior._values:
-                first_key = list(behavior._values.keys())[0]
-                tag_value = behavior.get_value(first_key)
-                data_type = behavior.get_data_type(first_key)
+                data_type = "dint"
+                tag_value = 0
 
         cip_resp = bytearray()
         cip_resp += bytes([0xD2])
@@ -313,7 +312,9 @@ class AbServer(ProtocolServer):
     @staticmethod
     def _unpack_cip_value(data_type: str, data: bytes) -> Any:
         try:
-            if data_type == "bool" and len(data) >= 1:
+            if data_type == "bool" and len(data) >= 5:
+                return bool(data[4])
+            elif data_type == "bool" and len(data) >= 1:
                 return bool(data[0])
             elif data_type == "int16" and len(data) >= 2:
                 return struct.unpack("<h", data[:2])[0]

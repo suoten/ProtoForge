@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import re
@@ -264,10 +265,10 @@ class TestReport:
                 s_color = status_colors.get(s.status.value, "#c0c0c0")
                 step_rows += f"""
                 <tr>
-                    <td>{s.name}</td>
+                    <td>{html.escape(s.name)}</td>
                     <td><span style="color:{s_color};font-weight:600">{s.status.value.upper()}</span></td>
                     <td>{round(s.duration, 3)}s</td>
-                    <td>{s.error or '-'}</td>
+                    <td>{html.escape(s.error or '-')}</td>
                 </tr>"""
                 for ar in s.assertion_results:
                     ar_color = "#18a058" if ar.get("passed") else "#d03050"
@@ -275,18 +276,18 @@ class TestReport:
                 <tr class="assertion-row">
                     <td colspan="4">
                         <span style="color:{ar_color}">{'✓' if ar.get('passed') else '✗'}</span>
-                        {ar.get('message', '')}
+                        {html.escape(ar.get('message', ''))}
                     </td>
                 </tr>"""
 
             case_rows += f"""
             <div class="case-card">
                 <div class="case-header" style="border-left:4px solid {tc_status_color}">
-                    <span class="case-name">{tc.name}</span>
+                    <span class="case-name">{html.escape(tc.name)}</span>
                     <span class="case-status" style="color:{tc_status_color}">{tc.status.value.upper()}</span>
                     <span class="case-duration">{tc_duration}s</span>
                 </div>
-                {f'<div class="case-error">{tc.error}</div>' if tc.error else ''}
+                {f'<div class="case-error">{html.escape(tc.error)}</div>' if tc.error else ''}
                 <table class="steps-table">
                     <thead><tr><th>步骤</th><th>状态</th><th>耗时</th><th>错误</th></tr></thead>
                     <tbody>{step_rows}</tbody>
@@ -295,7 +296,7 @@ class TestReport:
 
         env_rows = ""
         for k, v in self.environment.items():
-            env_rows += f"<tr><td>{k}</td><td>{v}</td></tr>"
+            env_rows += f"<tr><td>{html.escape(str(k))}</td><td>{html.escape(str(v))}</td></tr>"
 
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">

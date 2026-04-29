@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -81,6 +82,10 @@ class Recorder:
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=50000)
         self._task: Optional[asyncio.Task] = None
         self._running = False
+        self._database = None
+
+    def set_database(self, database) -> None:
+        self._database = database
 
     async def start_recording(
         self, name: str, protocol: Optional[str] = None,
@@ -88,7 +93,7 @@ class Recorder:
     ) -> Recording:
         if self._active:
             await self.stop_recording()
-        rec_id = f"rec-{int(time.time())}"
+        rec_id = f"rec-{uuid.uuid4().hex[:12]}"
         self._active = Recording(
             id=rec_id, name=name, protocol=protocol or "*",
             start_time=time.time(), metadata=metadata or {},
@@ -123,6 +128,11 @@ class Recorder:
         self._recordings[self._active.id] = self._active
         result = self._active
         self._active = None
+        if self._database:
+            try:
+                await self._database.save_recording(result.to_full_dict())
+            except Exception as e:
+                logger.debug("Failed to persist recording: %s", e)
         logger.info("Recording stopped: %s, %d messages", result.id, len(result.messages))
         return result
 
@@ -137,6 +147,41 @@ class Recorder:
             del self._recordings[rec_id]
             return True
         return False
+
+    async def delete_recording_persisted(self, rec_id: str) -> bool:
+        if rec_id in self._recordings:
+            del self._recordings[rec_id]
+        if self._database:
+            try:
+                await self._database.delete_recording(rec_id)
+            except Exception as e:
+                logger.debug("Failed to delete recording from db: %s", e)
+        return True
+
+    async def restore_from_db(self) -> None:
+        if not self._database:
+            return
+        try:
+            rows = await self._database.load_all_recordings()
+            for row in rows:
+                try:
+                    full = await self._database.load_recording(row["id"])
+                    if full:
+                        messages = [RecordedMessage.from_dict(m) for m in full.get("messages", [])]
+                        rec = Recording(
+                            id=full["id"], name=full["name"],
+                            protocol=full["protocol"],
+                            start_time=full["start_time"],
+                            end_time=full.get("end_time", 0),
+                            messages=messages,
+                            metadata=full.get("metadata", {}),
+                        )
+                        self._recordings[rec.id] = rec
+                except Exception as e:
+                    logger.debug("Failed to restore recording %s: %s", row.get("id"), e)
+            logger.info("Restored %d recordings from database", len(self._recordings))
+        except Exception as e:
+            logger.debug("Failed to restore recordings: %s", e)
 
     async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict:
         recording = self._recordings.get(rec_id)

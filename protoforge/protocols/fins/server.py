@@ -258,6 +258,16 @@ class FinsServer(ProtocolServer):
         behavior = self._behaviors.get(self._default_device_id)
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
+            for name, (p_area, p_offset) in behavior._point_addresses.items():
+                if p_area == area and p_offset == word_addr * 2:
+                    try:
+                        if len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
+                        elif len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
+                    except (struct.error, IndexError):
+                        pass
+                    break
             self._log_debug("recv", "fins_write",
                             f"写入区域{area}偏移{word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})

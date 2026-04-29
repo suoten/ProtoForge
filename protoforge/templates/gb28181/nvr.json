@@ -59,7 +59,15 @@
         "server_id": "34020000002000000001",
         "username": "34020000002000000001",
         "password": "12345678",
-        "realm": "3402000000"
+        "realm": "3402000000",
+        "srtp_enabled": false,
+        "srtp_crypto_suite": "AES_CM_128_HMAC_SHA1_80",
+        "srtp_key": ""
     },
-    "tags": ["NVR", "录像机", "GB28181", "视频监控"]
+    "tags": [
+        "NVR",
+        "录像机",
+        "GB28181",
+        "视频监控"
+    ]
 }

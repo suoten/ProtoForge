@@ -338,9 +338,10 @@ class FanucServer(ProtocolServer):
         }
 
         axis_count = self._device_params[device_config.id]["axis_count"]
-        if len(behavior._cnc_status["absolute_pos"]) < axis_count:
-            for key in ["absolute_pos", "machine_pos", "relative_pos", "distance_pos"]:
-                behavior._cnc_status[key] = [0.0] * axis_count
+        for key in ["absolute_pos", "machine_pos", "relative_pos", "distance_pos"]:
+            current = behavior._cnc_status[key]
+            if len(current) < axis_count:
+                behavior._cnc_status[key] = current + [0.0] * (axis_count - len(current))
 
         logger.info("FANUC device created: %s (cnc_type=%s, axis=%d)",
                      device_config.id,
