@@ -306,7 +306,7 @@ import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFor
   NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
-import { protocolLabels } from '../constants.js'
+import { protocolLabels, deviceStatusMap } from '../constants.js'
 
 const router = useRouter()
 const message = useMessage()
@@ -434,8 +434,7 @@ const columns = [
   {
     title: '状态', key: 'status', width: 100,
     render: (row) => {
-      const statusMap = { online: ['success', '在线'], running: ['success', '运行中'], error: ['error', '错误'], stopped: ['default', '已停止'], offline: ['default', '离线'], disabled: ['default', '已禁用'] }
-      const [type, label] = statusMap[row.status] || ['default', row.status || '离线']
+      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || '离线']
       return h(NTag, { type, size: 'small', bordered: false }, () => label)
     }
   },

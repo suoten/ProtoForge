@@ -27,7 +27,7 @@
           <template #header>
             <n-space align="center" justify="space-between" style="width: 100%">
               <span style="font-weight: bold">{{ t.name }}</span>
-              <n-tag :type="protocolColors[t.protocol] || 'default'" size="small">{{ protocolLabels[t.protocol] || t.protocol }}</n-tag>
+              <n-tag :type="protocolTagTypes[t.protocol] || 'default'" size="small">{{ protocolLabels[t.protocol] || t.protocol }}</n-tag>
             </n-space>
           </template>
           <n-text depth="3" style="font-size: 13px">{{ t.description || '工业设备仿真模板' }}</n-text>
@@ -75,6 +75,7 @@ import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
   NCard, NTag, NButton, NModal, NDescriptions, NDescriptionsItem, NEmpty, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { protocolTagTypes } from '../constants.js'
 import { protocolLabels } from '../constants.js'
 
 const message = useMessage()
@@ -87,13 +88,6 @@ const showUseModal = ref(false)
 const creating = ref(false)
 const selectedTemplate = ref(null)
 const useName = ref('')
-
-const protocolColors = {
-  modbus_tcp: 'info', modbus_rtu: 'info', opcua: 'success', mqtt: 'warning',
-  http: 'default', gb28181: 'error', bacnet: 'info', s7: 'success',
-  mc: 'error', fins: 'info', ab: 'warning', opcda: 'success',
-  fanuc: 'warning', mtconnect: 'success', toledo: 'default',
-}
 
 const categoryMap = {
   plc: ['plc', 's7', 'siemens', 'mitsubishi', 'omron', 'allen-bradley', 'ab'],

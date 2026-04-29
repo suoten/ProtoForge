@@ -118,19 +118,13 @@ import {
   NTag, NCard, NDataTable, useMessage
 } from 'naive-ui'
 import api from '../api.js'
+import { protocolColors } from '../constants.js'
 
 const message = useMessage()
 
 const DeviceNode = defineComponent({
   props: { data: Object },
   setup(props) {
-    const protocolColors = {
-      modbus_tcp: '#6366f1', modbus_rtu: '#818cf8', opcua: '#10b981',
-      mqtt: '#f59e0b', http: '#8b5cf6', gb28181: '#ef4444',
-      bacnet: '#06b6d4', s7: '#3b82f6',
-      mc: '#e11d48', fins: '#0ea5e9', ab: '#f97316', opcda: '#14b8a6',
-      fanuc: '#eab308', mtconnect: '#22c55e', toledo: '#a855f7'
-    }
     return () => h('div', {
       style: {
         padding: '12px 16px', borderRadius: '8px', background: '#fff',

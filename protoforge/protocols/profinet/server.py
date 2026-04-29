@@ -227,8 +227,8 @@ class ProfinetServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
 
     def _process_pnio_message(self, data: bytes, addr: tuple) -> bytes | None:
         if len(data) < 6:

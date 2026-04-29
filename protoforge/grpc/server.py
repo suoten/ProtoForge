@@ -75,12 +75,26 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         sliced = devices[offset : offset + limit]
         device_infos = []
         for d in sliced:
+            if isinstance(d, dict):
+                dev_id = d.get("id", "")
+                dev_name = d.get("name", "")
+                dev_proto = d.get("protocol", "")
+                dev_status = d.get("status", "unknown")
+                dev_points = len(d.get("points", []))
+            else:
+                dev_id = getattr(d, "id", "")
+                dev_name = getattr(d, "name", "")
+                dev_proto = getattr(d, "protocol", "")
+                dev_status = getattr(d, "status", "unknown")
+                if hasattr(dev_status, "value"):
+                    dev_status = dev_status.value
+                dev_points = len(getattr(d, "points", []))
             device_infos.append(pb2.DeviceInfo(
-                id=d.get("id", ""),
-                name=d.get("name", ""),
-                protocol=d.get("protocol", ""),
-                status=d.get("status", "unknown"),
-                point_count=len(d.get("points", [])),
+                id=dev_id,
+                name=dev_name,
+                protocol=dev_proto,
+                status=dev_status,
+                point_count=dev_points,
             ))
         return pb2.ListDevicesResponse(devices=device_infos, total=len(devices))
 
@@ -91,12 +105,26 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
         try:
             device = engine.get_device(request.device_id)
+            if isinstance(device, dict):
+                dev_id = device.get("id", "")
+                dev_name = device.get("name", "")
+                dev_proto = device.get("protocol", "")
+                dev_status = device.get("status", "unknown")
+                dev_points = len(device.get("points", []))
+            else:
+                dev_id = getattr(device, "id", "")
+                dev_name = getattr(device, "name", "")
+                dev_proto = getattr(device, "protocol", "")
+                dev_status = getattr(device, "status", "unknown")
+                if hasattr(dev_status, "value"):
+                    dev_status = dev_status.value
+                dev_points = len(getattr(device, "points", []))
             info = pb2.DeviceInfo(
-                id=device.get("id", ""),
-                name=device.get("name", ""),
-                protocol=device.get("protocol", ""),
-                status=device.get("status", "unknown"),
-                point_count=len(device.get("points", [])),
+                id=dev_id,
+                name=dev_name,
+                protocol=dev_proto,
+                status=dev_status,
+                point_count=dev_points,
             )
             return pb2.DeviceResponse(device=info, ok=True)
         except ValueError as e:
@@ -110,16 +138,21 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
         try:
             from protoforge.models.device import DeviceConfig
+            import uuid
             config = DeviceConfig(
+                id=str(uuid.uuid4()),
                 name=request.name,
                 protocol=request.protocol,
                 template_id=request.template_id or None,
                 protocol_config=dict(request.protocol_config) if request.protocol_config else {},
                 points=[],
             )
-            device_id = await engine.create_device(config)
+            result = await engine.create_device(config)
+            dev_id = result.id if hasattr(result, "id") else str(result)
+            dev_name = result.name if hasattr(result, "name") else request.name
+            dev_proto = result.protocol if hasattr(result, "protocol") else request.protocol
             return pb2.DeviceResponse(
-                device=pb2.DeviceInfo(id=device_id, name=request.name, protocol=request.protocol),
+                device=pb2.DeviceInfo(id=dev_id, name=dev_name, protocol=dev_proto),
                 ok=True,
             )
         except Exception as e:

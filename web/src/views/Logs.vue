@@ -75,6 +75,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem } from 'naive-ui'
 import api from '../api.js'
+import { directionTagTypeMap, directionLabelMap } from '../constants.js'
 
 const logs = ref([])
 const protocols = ref([])
@@ -134,13 +135,11 @@ function formatTime(ts) {
 }
 
 function getDirectionColor(dir) {
-  const map = { in: 'info', out: 'success', system: 'warning', recv: 'info', send: 'success', write: 'error', inbound: 'info', outbound: 'success' }
-  return map[dir] || 'default'
+  return directionTagTypeMap[dir] || 'default'
 }
 
 function getDirectionLabel(dir) {
-  const map = { in: '← 收', out: '→ 发', system: '系统', recv: '← 收', send: '→ 发', write: '✎ 写', inbound: '← 入', outbound: '→ 出' }
-  return map[dir] || dir
+  return directionLabelMap[dir] || dir
 }
 
 function getTypeColor(type) {

@@ -146,8 +146,8 @@ class FanucServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
 
     def _process_focas(self, data: bytes) -> bytes | None:
         if len(data) < self.FOCAS_HEADER_SIZE:

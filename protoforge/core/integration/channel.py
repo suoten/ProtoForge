@@ -229,8 +229,8 @@ class WebSocketChannel(ChannelBase):
         if self._ws:
             try:
                 await self._ws.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("WebSocket close error: %s", e)
             self._ws = None
         logger.info("WebSocket channel closed")
 
@@ -284,8 +284,8 @@ class WebSocketChannel(ChannelBase):
         if self._ws:
             try:
                 await self._ws.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("WebSocket close error on timeout: %s", e)
             self._ws = None
 
 
@@ -312,8 +312,8 @@ class ChannelManager:
                     if not self._fallback.is_connected:
                         try:
                             await self._fallback.connect()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Fallback connect error: %s", e)
                     if self._fallback.is_connected:
                         self._active = self._fallback
                         return await self._fallback.send(message)

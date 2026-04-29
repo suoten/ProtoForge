@@ -62,6 +62,7 @@ def get_protoforge_host() -> str:
                 s.connect(("8.8.8.8", 80))
                 host = s.getsockname()[0]
         except Exception:
+            logger.debug("Failed to detect local IP, using 127.0.0.1")
             host = "127.0.0.1"
     return host
 
@@ -451,8 +452,8 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
                         if status_resp.status_code == 200:
                             data = status_resp.json().get("data", status_resp.json())
                             return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("EdgeLite connection test failed: %s", e)
                     return {"ok": True, "version": "未知", "devices": 0}
                 return {"ok": False, "error": f"Auth failed: {login_resp.status_code}"}
             return {"ok": False, "error": f"HTTP {resp.status_code}"}
