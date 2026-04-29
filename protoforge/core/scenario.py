@@ -144,8 +144,8 @@ class Scenario:
         if not script:
             return False
         try:
-            from protoforge.core.generator import _SafeEval
-            evaluator = _SafeEval({"value": point_value.value, "point": point_value.value})
+            from protoforge.core.generator import SafeEval
+            evaluator = SafeEval({"value": point_value.value, "point": point_value.value})
             result = evaluator.eval_expr(script)
             if result:
                 return self._check_cooldown(rule)

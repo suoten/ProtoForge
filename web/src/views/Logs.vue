@@ -72,7 +72,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem } from 'naive-ui'
 import api from '../api.js'
 
