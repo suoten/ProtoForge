@@ -271,9 +271,9 @@ class ModbusRtuServer(ProtocolServer):
             address = int(point.address) + 1
             try:
                 if point.data_type.value in ("bool",):
-                    store._coils[address] = int(bool(value))
+                    store.coils[address] = int(bool(value))
                 else:
-                    store._holding_regs[address] = int(value) & 0xFFFF
+                    store.holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
                 logger.warning("Failed to write register %s: %s", point.address, e)
         self._sync_to_pymodbus_context(slave_id, store)
@@ -286,10 +286,10 @@ class ModbusRtuServer(ProtocolServer):
                 slave_ctx = self._context[slave_id]
                 if hasattr(slave_ctx, 'get'):
                     for fx_name, store_data in [
-                        ('h', store._holding_regs),
-                        ('i', store._input_regs),
-                        ('c', store._coils),
-                        ('d', store._discrete_inputs),
+                        ('h', store.holding_regs),
+                        ('i', store.input_regs),
+                        ('c', store.coils),
+                        ('d', store.discrete_inputs),
                     ]:
                         block = slave_ctx.get(fx_name)
                         if block and hasattr(block, 'setValues') and store_data:
@@ -310,9 +310,9 @@ class ModbusRtuServer(ProtocolServer):
         try:
             address = int(point.address) + 1
             if point.data_type.value in ("bool",):
-                return bool(store._coils.get(address, 0))
+                return bool(store.coils.get(address, 0))
             else:
-                return store._holding_regs.get(address, 0)
+                return store.holding_regs.get(address, 0)
         except (ValueError, TypeError) as e:
             logger.warning("Failed to read register %s: %s", point.address, e)
             return None

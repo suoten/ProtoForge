@@ -150,6 +150,10 @@ async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operat
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
 
 @router.get("/devices", response_model=list[DeviceInfo])
 async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
@@ -472,7 +476,7 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
                 logger.warning("Failed to delete scenario %s from DB: %s", scenario_id, db_err)
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.get("/scenarios/{scenario_id}/export")
 async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
@@ -628,11 +632,11 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
 
 @router.websocket("/ws/devices")
 async def ws_devices(websocket: WebSocket):
-    from protoforge.api.v1.auth import _NO_AUTH
+    from protoforge.api.v1.auth import is_no_auth
     token = None
     role = "viewer"
 
-    if not _NO_AUTH:
+    if not is_no_auth():
         token = _extract_ws_token(websocket)
         if not token:
             try:
@@ -688,11 +692,11 @@ async def ws_devices(websocket: WebSocket):
 
 @router.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
-    from protoforge.api.v1.auth import _NO_AUTH
+    from protoforge.api.v1.auth import is_no_auth
     token = None
     role = "viewer"
 
-    if not _NO_AUTH:
+    if not is_no_auth():
         token = _extract_ws_token(websocket)
         if not token:
             try:
@@ -941,11 +945,12 @@ async def _get_internal_client():
 
     from httpx import ASGITransport, AsyncClient
     from protoforge.main import app
+    from protoforge.api.v1.auth import is_no_auth
 
     transport = ASGITransport(app=app)
     _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
 
-    if os.environ.get("PROTOFORGE_NO_AUTH", "").lower() not in ("1", "true", "yes"):
+    if not is_no_auth():
         try:
             from protoforge.core.auth import user_manager, create_token
             admin_user = user_manager.get_user_by_username("admin")

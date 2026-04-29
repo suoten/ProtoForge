@@ -433,7 +433,11 @@ const columns = [
   { title: '协议', key: 'protocol', width: 120, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => protocolLabels[row.protocol] || row.protocol) },
   {
     title: '状态', key: 'status', width: 100,
-    render: (row) => h(NTag, { type: row.status === 'online' ? 'success' : row.status === 'error' ? 'error' : 'default', size: 'small', bordered: false }, () => row.status === 'online' ? '在线' : row.status === 'error' ? '错误' : '离线')
+    render: (row) => {
+      const statusMap = { online: ['success', '在线'], running: ['success', '运行中'], error: ['error', '错误'], stopped: ['default', '已停止'], offline: ['default', '离线'], disabled: ['default', '已禁用'] }
+      const [type, label] = statusMap[row.status] || ['default', row.status || '离线']
+      return h(NTag, { type, size: 'small', bordered: false }, () => label)
+    }
   },
   { title: '测点', key: 'points', width: 70, render: (row) => (row.points || []).length },
   {

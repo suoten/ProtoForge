@@ -3,12 +3,6 @@ import logging
 import time
 from typing import Any
 
-from protoforge.main import (
-    _database,
-    _engine,
-    _template_manager,
-)
-
 logger = logging.getLogger(__name__)
 
 try:
@@ -29,10 +23,26 @@ except ImportError:
     logger.debug("ProtoForge protobuf modules not generated. Run: python -m grpc_tools.protoc")
 
 
+def _get_engine():
+    try:
+        from protoforge.main import get_engine
+        return get_engine()
+    except RuntimeError:
+        return None
+
+
+def _get_database():
+    try:
+        from protoforge.main import get_database
+        return get_database()
+    except RuntimeError:
+        return None
+
+
 class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE else object):
     async def GetHealth(self, request, context):
-        engine = _engine
-        db = _database
+        engine = _get_engine()
+        db = _get_database()
         device_count = 0
         if engine:
             try:
@@ -42,7 +52,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         db_status = "unknown"
         if db:
             try:
-                await db.get_setting("port")
+                await db.load_all_devices()
                 db_status = "ok"
             except Exception:
                 db_status = "error"
@@ -54,7 +64,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         )
 
     async def ListDevices(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details("Engine not initialized")
@@ -75,7 +85,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         return pb2.ListDevicesResponse(devices=device_infos, total=len(devices))
 
     async def GetDevice(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
@@ -94,7 +104,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.DeviceResponse(ok=False, error=str(e))
 
     async def CreateDevice(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
@@ -116,18 +126,18 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.DeviceResponse(ok=False, error=str(e))
 
     async def DeleteDevice(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.DeleteDeviceResponse(ok=False, error="Engine not initialized")
         try:
-            await engine.delete_device(request.device_id)
+            await engine.remove_device(request.device_id)
             return pb2.DeleteDeviceResponse(ok=True)
         except Exception as e:
             return pb2.DeleteDeviceResponse(ok=False, error=str(e))
 
     async def StartDevice(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Engine not initialized")
@@ -138,7 +148,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def StopDevice(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Engine not initialized")
@@ -149,7 +159,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def ReadPoints(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.ReadPointsResponse(error="Engine not initialized")
@@ -167,7 +177,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.ReadPointsResponse(error=str(e))
 
     async def WritePoint(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Engine not initialized")
@@ -178,30 +188,31 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def ListScenarios(self, request, context):
-        db = _database
+        db = _get_database()
         if not db:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.ListScenariosResponse()
         try:
-            scenarios = await db.list_scenarios()
+            scenarios = await db.load_all_scenarios()
             limit = request.limit or 100
             offset = request.offset or 0
             sliced = scenarios[offset : offset + limit]
             scenario_infos = []
             for s in sliced:
                 scenario_infos.append(pb2.ScenarioInfo(
-                    id=s.get("id", ""),
-                    name=s.get("name", ""),
-                    status=s.get("status", "stopped"),
-                    device_count=len(s.get("devices", [])),
+                    id=s.id if hasattr(s, 'id') else s.get("id", ""),
+                    name=s.name if hasattr(s, 'name') else s.get("name", ""),
+                    status="stopped",
+                    device_count=len(s.devices) if hasattr(s, 'devices') else len(s.get("devices", [])),
                 ))
             return pb2.ListScenariosResponse(scenarios=scenario_infos, total=len(scenarios))
         except Exception as e:
+            logger.warning("ListScenarios failed: %s", e)
             context.set_code(grpc.StatusCode.INTERNAL)
             return pb2.ListScenariosResponse()
 
     async def StartScenario(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Engine not initialized")
@@ -212,7 +223,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def StopScenario(self, request, context):
-        engine = _engine
+        engine = _get_engine()
         if not engine:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Engine not initialized")
@@ -223,23 +234,28 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def GetSettings(self, request, context):
-        db = _database
+        db = _get_database()
         if not db:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.SettingsResponse()
         try:
-            settings = await db.get_all_settings()
-            return pb2.SettingsResponse(settings=dict(settings))
-        except Exception:
+            data = await db.export_all()
+            settings = {}
+            for table, rows in data.items():
+                settings[table] = len(rows) if isinstance(rows, list) else 0
+            return pb2.SettingsResponse(settings=settings)
+        except Exception as e:
+            logger.debug("GetSettings failed: %s", e)
             return pb2.SettingsResponse()
 
     async def UpdateSettings(self, request, context):
-        db = _database
+        db = _get_database()
         if not db:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Database not initialized")
         try:
-            await db.update_settings(dict(request.settings))
+            settings = dict(request.settings)
+            await db.import_all(settings)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
             return pb2.OperationResponse(ok=False, error=str(e))

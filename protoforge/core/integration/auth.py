@@ -39,8 +39,8 @@ class IntegrationAuth:
             try:
                 await self._refresh_access_token()
                 return self._token
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Token refresh failed, falling back to login: %s", e)
         await self._login()
         return self._token
 

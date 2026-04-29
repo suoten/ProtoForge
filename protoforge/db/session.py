@@ -804,12 +804,14 @@ class Database:
             try:
                 rows = await self._fetchall(f"SELECT * FROM {table}")
                 result[table] = rows
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to export table %s: %s", table, e)
                 result[table] = []
         try:
             rows = await self._fetchall("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 5000")
             result["audit_log"] = rows
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to export audit_log: %s", e)
             result["audit_log"] = []
         return result
 
@@ -834,7 +836,7 @@ class Database:
                     sql = self._upsert_sql(table, columns)
                     await self._execute(sql, tuple(values))
                     count += 1
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to import row into %s: %s", table, e)
             restored[table] = count
         return restored

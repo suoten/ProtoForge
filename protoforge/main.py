@@ -258,8 +258,8 @@ async def lifespan(app: FastAPI):
     try:
         from protoforge.api.v1.router import _close_internal_client
         await _close_internal_client()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Error closing internal client: %s", e)
     logger.info("ProtoForge stopped")
 
 

@@ -15,6 +15,10 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 _NO_AUTH = os.environ.get("PROTOFORGE_NO_AUTH", "").lower() in ("1", "true", "yes")
 
 
+def is_no_auth() -> bool:
+    return _NO_AUTH
+
+
 class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self._allowed_roles = allowed_roles

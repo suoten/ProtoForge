@@ -200,9 +200,10 @@ class Scenario:
                 "target_value": str(value),
                 "scenario_id": self.id,
             }
-            asyncio.get_running_loop().create_task(
+            task = asyncio.get_running_loop().create_task(
                 webhook_manager.trigger("rule_triggered", payload)
             )
+            task.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
         except Exception as e:
             logger.debug("Webhook notify error: %s", e)
 
