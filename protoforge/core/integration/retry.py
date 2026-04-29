@@ -39,11 +39,13 @@ class RetryPolicy:
         initial_delay: float = 1.0,
         max_delay: float = 30.0,
         backoff_factor: float = 2.0,
+        max_total_time: float = 120.0,
     ):
         self.max_retries = max_retries
         self.initial_delay = initial_delay
         self.max_delay = max_delay
         self.backoff_factor = backoff_factor
+        self.max_total_time = max_total_time
         self._attempt = 0
         self._last_error: Optional[Exception] = None
 
@@ -80,6 +82,7 @@ class RetryPolicy:
 
     async def execute(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         self.reset()
+        start_time = time.monotonic()
         while True:
             try:
                 result = await func(*args, **kwargs)
@@ -87,5 +90,9 @@ class RetryPolicy:
                 return result
             except Exception as e:
                 if not self.should_retry(e):
+                    raise
+                elapsed = time.monotonic() - start_time
+                if elapsed >= self.max_total_time:
+                    logger.warning("RetryPolicy.execute exceeded max_total_time (%.1fs), giving up", self.max_total_time)
                     raise
                 await self.wait()

@@ -259,7 +259,7 @@ class ModbusRtuServer(ProtocolServer):
                             logger.warning("Failed to add slave %d to context: %s", slave_id, e)
                 except Exception as e:
                     logger.warning("Failed to create ModbusDeviceContext: %s", e)
-            await self._apply_device_to_context(device_config)
+            self._apply_device_to_context(device_config)
 
         logger.info("Modbus RTU device created: %s (slave_id=%d)", device_config.id, slave_id)
         self._log_debug("system", "device_created",
@@ -300,7 +300,7 @@ class ModbusRtuServer(ProtocolServer):
             return False
         success = await behavior.on_write(point_name, value)
         if success:
-            await self._apply_device_to_context(
+            self._apply_device_to_context(
                 self._device_configs.get(device_id, DeviceConfig(id=device_id, name="", protocol="modbus_rtu"))
             )
         return success
@@ -317,7 +317,7 @@ class ModbusRtuServer(ProtocolServer):
             },
         }
 
-    async def _apply_device_to_context(self, config: DeviceConfig) -> None:
+    def _apply_device_to_context(self, config: DeviceConfig) -> None:
         behavior = self._behaviors.get(config.id)
         slave_id = self._slave_map.get(config.id, 1)
         store = self._get_data_store(slave_id)
@@ -347,18 +347,19 @@ class ModbusRtuServer(ProtocolServer):
                         ('d', store._discrete_inputs),
                     ]:
                         block = slave_ctx.get(fx_name)
-                        if block and hasattr(block, 'setValues'):
-                            max_addr = max(store_data.keys()) if store_data else 0
-                            if max_addr > 0:
-                                values = [store_data.get(a, 0) for a in range(1, max_addr + 1)]
+                        if block and hasattr(block, 'setValues') and store_data:
+                            addresses = sorted(store_data.keys())
+                            if addresses:
+                                values = [store_data.get(a, 0) for a in addresses]
+                                fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
                                 try:
-                                    block.setValues(1, values)
+                                    block.setValues(fc, addresses, values)
                                 except Exception:
                                     pass
         except Exception as e:
             logger.debug("Failed to sync to pymodbus context: %s", e)
 
-    async def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
+    def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
             address = int(point.address) + 1

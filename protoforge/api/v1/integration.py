@@ -33,7 +33,7 @@ async def push_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = get_engine()
     manager = _get_integration_manager()
 
-    instance = engine._devices.get(device_id)
+    instance = engine.get_device_instance(device_id)
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
@@ -53,7 +53,7 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
 
     devices = []
     for did in device_ids:
-        instance = engine._devices.get(did)
+        instance = engine.get_device_instance(did)
         if instance:
             if protocol_filter and instance.protocol != protocol_filter:
                 continue
@@ -76,24 +76,18 @@ async def delete_device_from_edgelite(device_id: str, _user: dict = Depends(requ
 @router.post("/device/{device_id}/start")
 async def start_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     manager = _get_integration_manager()
-    if not manager._channel or not manager._channel.is_connected:
+    if not manager.is_connected():
         raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
-    result = await manager._channel.send({
-        "type": "device_control",
-        "payload": {"device_id": device_id, "action": "start_collect"},
-    })
+    result = await manager.send_device_control(device_id, "start_collect")
     return result
 
 
 @router.post("/device/{device_id}/stop")
 async def stop_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     manager = _get_integration_manager()
-    if not manager._channel or not manager._channel.is_connected:
+    if not manager.is_connected():
         raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
-    result = await manager._channel.send({
-        "type": "device_control",
-        "payload": {"device_id": device_id, "action": "stop_collect"},
-    })
+    result = await manager.send_device_control(device_id, "stop_collect")
     return result
 
 

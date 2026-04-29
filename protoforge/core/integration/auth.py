@@ -46,25 +46,26 @@ class IntegrationAuth:
 
     async def _login(self) -> None:
         try:
-            resp = await self._client.post(
+            async with self._client.stream(
+                "POST",
                 f"{self._base_url}/api/v1/auth/login",
                 json={"username": self._username, "password": self._password},
-            )
-            if resp.status_code != 200:
-                from protoforge.core.integration.retry import AuthError
-                raise AuthError(f"Login failed: HTTP {resp.status_code}")
-            data = resp.json()
-            self._token = data.get("access_token", "")
-            self._refresh_token = data.get("refresh_token", "")
-            expires_in = data.get("expires_in", 3600)
-            self._token_expires = time.time() + expires_in
-            logger.info("EdgeLite login successful, token expires in %ds", expires_in)
+            ) as resp:
+                if resp.status_code != 200:
+                    from protoforge.core.integration.retry import AuthError
+                    raise AuthError(f"Login failed: HTTP {resp.status_code}")
+                data = await resp.json()
         except httpx.ConnectError as e:
             from protoforge.core.integration.retry import NetworkError
             raise NetworkError(f"Connection failed: {e}") from e
         except httpx.TimeoutException as e:
             from protoforge.core.integration.retry import NetworkError
             raise NetworkError(f"Login timeout: {e}") from e
+        self._token = data.get("access_token", "")
+        self._refresh_token = data.get("refresh_token", "")
+        expires_in = data.get("expires_in", 3600)
+        self._token_expires = time.time() + expires_in
+        logger.info("EdgeLite login successful, token expires in %ds", expires_in)
 
     async def _refresh_access_token(self) -> None:
         resp = await self._client.post(
@@ -86,8 +87,8 @@ class IntegrationAuth:
             try:
                 await self._refresh_access_token()
                 return self._token
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Token refresh failed, falling back to login: %s", e)
         await self._login()
         return self._token
 

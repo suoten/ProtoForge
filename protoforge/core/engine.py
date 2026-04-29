@@ -93,7 +93,7 @@ class SimulationEngine:
                     "Port %d is in use for %s, auto-switching to %d",
                     original_port, protocol_name, new_port,
                 )
-                config = {**config, "port": new_port}
+                config["port"] = new_port
         await server.start(config)
         logger.info("Protocol %s started", protocol_name)
 
@@ -238,6 +238,9 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         return self._get_device_info(instance)
 
+    def get_device_instance(self, device_id: str) -> Optional[DeviceInstance]:
+        return self._devices.get(device_id)
+
     def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
         result = []
         for instance in self._devices.values():
@@ -257,10 +260,13 @@ class SimulationEngine:
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
 
-        old_value = None
+        _SENTINEL = object()
+        old_value = _SENTINEL
+        found = False
         for pv in instance.read_all_points():
             if pv.name == point_name:
                 old_value = pv.value
+                found = True
                 break
 
         success = await instance.write_point(point_name, value)
@@ -270,12 +276,12 @@ class SimulationEngine:
                 try:
                     proto_success = await server.write_point(device_id, point_name, value)
                     if not proto_success:
-                        if old_value is not None:
+                        if found:
                             await instance.write_point(point_name, old_value)
                         logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
                         return False
                 except Exception as e:
-                    if old_value is not None:
+                    if found:
                         await instance.write_point(point_name, old_value)
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
@@ -443,9 +449,9 @@ class SimulationEngine:
 
     async def _tick_loop(self) -> None:
         while self._running:
-            for instance in self._devices.values():
+            for instance in list(self._devices.values()):
                 await instance.tick()
-            for scenario in self._scenario_instances.values():
+            for scenario in list(self._scenario_instances.values()):
                 await scenario.tick()
             await asyncio.sleep(1.0)
 

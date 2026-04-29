@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from enum import Enum
 from typing import Callable, Optional
@@ -26,18 +27,20 @@ class ConnectionStateMachine:
     def __init__(self, on_change: Optional[Callable[[ConnectionState, ConnectionState], None]] = None):
         self._state = ConnectionState.DISCONNECTED
         self._on_change = on_change
+        self._lock = asyncio.Lock()
 
     @property
     def state(self) -> ConnectionState:
         return self._state
 
-    def transition(self, new_state: ConnectionState) -> bool:
-        if new_state not in _VALID_TRANSITIONS.get(self._state, set()):
-            logger.warning("Invalid state transition: %s -> %s", self._state.value, new_state.value)
-            return False
-        old = self._state
-        self._state = new_state
-        logger.info("Connection state: %s -> %s", old.value, new_state.value)
+    async def transition(self, new_state: ConnectionState) -> bool:
+        async with self._lock:
+            if new_state not in _VALID_TRANSITIONS.get(self._state, set()):
+                logger.warning("Invalid state transition: %s -> %s", self._state.value, new_state.value)
+                return False
+            old = self._state
+            self._state = new_state
+            logger.info("Connection state: %s -> %s", old.value, new_state.value)
         if self._on_change:
             self._on_change(old, new_state)
         return True

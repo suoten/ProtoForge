@@ -95,7 +95,7 @@ class S7DeviceBehavior(DeviceBehavior):
     def get_db_area(self, db_number: int, size: int) -> bytearray:
         if db_number not in self._db_data or len(self._db_data[db_number]) < size:
             self._db_data[db_number] = bytearray(max(size, 1024))
-        return self._db_data[db_number][:size]
+        return self._db_data[db_number]
 
     def write_db_area(self, db_number: int, offset: int, data: bytes) -> None:
         if db_number not in self._db_data:

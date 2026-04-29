@@ -715,6 +715,46 @@ class Database:
             "ip_address": r["ip_address"], "user_agent": r["user_agent"],
         } for r in rows]
 
+    async def delete_audit_entry(self, entry_id: int) -> bool:
+        if self._is_postgres:
+            result = await self._fetchone(
+                "DELETE FROM audit_log WHERE id = $1 RETURNING id",
+                (entry_id,),
+            )
+        else:
+            cursor = await self._db.execute(
+                "DELETE FROM audit_log WHERE id = ?", (entry_id,)
+            )
+            await self._db.commit()
+            return cursor.rowcount > 0
+        return result is not None
+
+    async def clear_audit_entries(self, before_timestamp: Optional[float] = None) -> int:
+        if before_timestamp is not None:
+            if self._is_postgres:
+                result = await self._fetchone(
+                    "SELECT COUNT(*) as cnt FROM audit_log WHERE timestamp < $1",
+                    (before_timestamp,),
+                )
+                await self._execute(
+                    "DELETE FROM audit_log WHERE timestamp < $1",
+                    (before_timestamp,),
+                )
+            else:
+                cursor = await self._db.execute(
+                    "DELETE FROM audit_log WHERE timestamp < ?", (before_timestamp,)
+                )
+                await self._db.commit()
+                return cursor.rowcount
+        else:
+            if self._is_postgres:
+                await self._execute("DELETE FROM audit_log")
+            else:
+                cursor = await self._db.execute("DELETE FROM audit_log")
+                await self._db.commit()
+                return cursor.rowcount
+        return result["cnt"] if result else 0
+
     async def save_recording(self, recording_data: dict[str, Any]) -> None:
         sql = self._upsert_sql("recordings", ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"])
         await self._execute(

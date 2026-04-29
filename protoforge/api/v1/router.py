@@ -236,7 +236,8 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
         except Exception as e:
             results.append({"id": config.id, "error": str(e)})
 
-    return {"status": "ok", "created": len(results), "devices": results}
+    created_count = sum(1 for r in results if "error" not in r)
+    return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
 
 @router.delete("/devices/batch")
 async def batch_delete_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
@@ -880,10 +881,23 @@ def _get_test_runner():
             pass
     return _test_runner
 
+_internal_client = None
+_internal_token_exp = 0.0
+
 async def _get_internal_client():
-    global _internal_client
+    global _internal_client, _internal_token_exp
 
     if _internal_client is not None:
+        if time.time() > _internal_token_exp - 300:
+            try:
+                from protoforge.core.auth import user_manager, create_token
+                admin_user = user_manager._users.get("admin")
+                if admin_user:
+                    token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
+                    _internal_client.headers["Authorization"] = f"Bearer {token}"
+                    _internal_token_exp = time.time() + 86400
+            except Exception:
+                pass
         return _internal_client
 
     from httpx import ASGITransport, AsyncClient
@@ -899,6 +913,7 @@ async def _get_internal_client():
             if admin_user:
                 token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                 _internal_client.headers["Authorization"] = f"Bearer {token}"
+                _internal_token_exp = time.time() + 86400
         except Exception:
             pass
     return _internal_client
@@ -1264,7 +1279,7 @@ async def login(credentials: dict[str, Any]):
     from protoforge.core.auth import user_manager, create_token, create_refresh_token
     username = credentials.get("username", "")
     password = credentials.get("password", "")
-    user, error_code = user_manager.authenticate(username, password)
+    user, error_code = await user_manager.authenticate(username, password)
 
     if not user:
         if error_code.startswith("account_locked:"):

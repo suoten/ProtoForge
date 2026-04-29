@@ -110,7 +110,6 @@ class Recorder:
         if not self._active:
             return None
         self._running = False
-        self._log_bus.unsubscribe(self._queue)
         if self._task:
             self._task.cancel()
             try:
@@ -118,6 +117,7 @@ class Recorder:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        self._log_bus.unsubscribe(self._queue)
         while not self._queue.empty():
             try:
                 msg = self._queue.get_nowait()
@@ -132,7 +132,7 @@ class Recorder:
             try:
                 await self._database.save_recording(result.to_full_dict())
             except Exception as e:
-                logger.debug("Failed to persist recording: %s", e)
+                logger.warning("Failed to persist recording: %s", e)
         logger.info("Recording stopped: %s, %d messages", result.id, len(result.messages))
         return result
 

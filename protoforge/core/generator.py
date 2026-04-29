@@ -234,7 +234,9 @@ class DataGenerator:
     def _generate_sine(self, point: PointConfig, elapsed: float) -> Any:
         lo = point.min_value if point.min_value is not None else 0
         hi = point.max_value if point.max_value is not None else 100
-        period = point.generator_config.get("period", 10.0)
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
         phase = point.generator_config.get("phase", 0.0)
         mid = (lo + hi) / 2
         amp = (hi - lo) / 2
@@ -244,7 +246,9 @@ class DataGenerator:
     def _generate_triangle(self, point: PointConfig, elapsed: float) -> Any:
         lo = point.min_value if point.min_value is not None else 0
         hi = point.max_value if point.max_value is not None else 100
-        period = point.generator_config.get("period", 10.0)
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
         mid = (lo + hi) / 2
         amp = (hi - lo) / 2
         t = (elapsed % period) / period
@@ -254,7 +258,9 @@ class DataGenerator:
     def _generate_sawtooth(self, point: PointConfig, elapsed: float) -> Any:
         lo = point.min_value if point.min_value is not None else 0
         hi = point.max_value if point.max_value is not None else 100
-        period = point.generator_config.get("period", 10.0)
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
         t = (elapsed % period) / period
         value = lo + (hi - lo) * t
         return self._cast_value(value, point.data_type)

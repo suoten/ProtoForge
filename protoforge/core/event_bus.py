@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Event:
-    timestamp: float = field(default_factory=time.time)
+    timestamp: float = field(default_factory=lambda: time.time())
 
 
 @dataclass
@@ -54,6 +54,7 @@ class EventBus:
         self._callbacks: dict[str, list[Callable]] = {}
         self._history: deque[Event] = deque(maxlen=max_history)
         self._dropped_count: int = 0
+        self._lock = asyncio.Lock()
 
     def subscribe(self, event_type: str, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

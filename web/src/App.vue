@@ -5,124 +5,124 @@
         <Login @login-success="onLogin" />
       </div>
       <n-layout v-else has-sider class="app-layout">
-    <n-layout-sider
-      bordered
-      :width="220"
-      :collapsed-width="64"
-      collapse-mode="width"
-      :collapsed="collapsed"
-      show-trigger
-      @collapse="collapsed = true"
-      @expand="collapsed = false"
-      :native-scrollbar="false"
-      class="app-sider"
-    >
-      <div class="sider-logo" @click="$router.push('/')">
-        <svg v-if="!collapsed" viewBox="0 0 512 512" width="28" height="28">
-          <defs><linearGradient id="logoBg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
-          <rect width="512" height="512" rx="96" fill="url(#logoBg)"/>
-          <g transform="translate(256,256)" fill="none" stroke="white" stroke-width="12">
-            <polygon points="0,-130 112.6,-65 112.6,65 0,130 -112.6,65 -112.6,-65" opacity="0.3"/>
-            <polygon points="0,-85 73.6,-42.5 73.6,42.5 0,85 -73.6,42.5 -73.6,-42.5" opacity="0.5"/>
-          </g>
-          <g transform="translate(256,256)">
-            <circle r="24" fill="white" opacity="0.9"/>
-            <circle r="14" fill="#fbbf24"/>
-          </g>
-        </svg>
-        <span v-if="!collapsed" class="logo-text">ProtoForge</span>
-        <svg v-else viewBox="0 0 512 512" width="28" height="28">
-          <defs><linearGradient id="logoBg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
-          <rect width="512" height="512" rx="96" fill="url(#logoBg2)"/>
-          <g transform="translate(256,256)">
-            <circle r="24" fill="white" opacity="0.9"/>
-            <circle r="14" fill="#fbbf24"/>
-          </g>
-        </svg>
-      </div>
-      <n-menu
-        :value="currentRoute"
-        :collapsed="collapsed"
-        :collapsed-width="64"
-        :collapsed-icon-size="20"
-        :options="menuOptions"
-        @update:value="navigate"
-      />
-    </n-layout-sider>
-    <n-layout>
-      <n-layout-header bordered class="app-header">
-        <n-space align="center" size="small">
-          <n-auto-complete
-            v-model:value="searchQuery"
-            :options="searchResults"
-            placeholder="搜索设备、模板、场景..."
-            clearable
-            size="small"
-            style="width: 280px"
-            @select="onSearchSelect"
-            @update:value="onSearchInput"
-          >
-            <template #prefix>
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            </template>
-          </n-auto-complete>
-        </n-space>
-        <n-space align="center" size="medium">
-          <n-tag v-if="wsConnected" size="small" :bordered="false" type="success">
-            <template #icon><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></template>
-            已连接
-          </n-tag>
-          <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
-            <n-button quaternary size="small" round>
-              <template #icon>
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </template>
-              {{ username }}
-            </n-button>
-          </n-dropdown>
-        </n-space>
-      </n-layout-header>
-      <n-layout-content class="app-content">
-        <router-view />
-        <Welcome />
-      </n-layout-content>
-    </n-layout>
-  </n-layout>
+        <n-layout-sider
+          bordered
+          :width="220"
+          :collapsed-width="64"
+          collapse-mode="width"
+          :collapsed="collapsed"
+          show-trigger
+          @collapse="collapsed = true"
+          @expand="collapsed = false"
+          :native-scrollbar="false"
+          class="app-sider"
+        >
+          <div class="sider-logo" @click="$router.push('/')">
+            <svg v-if="!collapsed" viewBox="0 0 512 512" width="28" height="28">
+              <defs><linearGradient id="logoBg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
+              <rect width="512" height="512" rx="96" fill="url(#logoBg)"/>
+              <g transform="translate(256,256)" fill="none" stroke="white" stroke-width="12">
+                <polygon points="0,-130 112.6,-65 112.6,65 0,130 -112.6,65 -112.6,-65" opacity="0.3"/>
+                <polygon points="0,-85 73.6,-42.5 73.6,42.5 0,85 -73.6,42.5 -73.6,-42.5" opacity="0.5"/>
+              </g>
+              <g transform="translate(256,256)">
+                <circle r="24" fill="white" opacity="0.9"/>
+                <circle r="14" fill="#fbbf24"/>
+              </g>
+            </svg>
+            <span v-if="!collapsed" class="logo-text">ProtoForge</span>
+            <svg v-else viewBox="0 0 512 512" width="28" height="28">
+              <defs><linearGradient id="logoBg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
+              <rect width="512" height="512" rx="96" fill="url(#logoBg2)"/>
+              <g transform="translate(256,256)">
+                <circle r="24" fill="white" opacity="0.9"/>
+                <circle r="14" fill="#fbbf24"/>
+              </g>
+            </svg>
+          </div>
+          <n-menu
+            :value="currentRoute"
+            :collapsed="collapsed"
+            :collapsed-width="64"
+            :collapsed-icon-size="20"
+            :options="menuOptions"
+            @update:value="navigate"
+          />
+        </n-layout-sider>
+        <n-layout>
+          <n-layout-header bordered class="app-header">
+            <n-space align="center" size="small">
+              <n-auto-complete
+                v-model:value="searchQuery"
+                :options="searchResults"
+                placeholder="搜索设备、模板、场景..."
+                clearable
+                size="small"
+                style="width: 280px"
+                @select="onSearchSelect"
+                @update:value="onSearchInput"
+              >
+                <template #prefix>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                </template>
+              </n-auto-complete>
+            </n-space>
+            <n-space align="center" size="medium">
+              <n-tag v-if="wsConnected" size="small" :bordered="false" type="success">
+                <template #icon><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></template>
+                已连接
+              </n-tag>
+              <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
+                <n-button quaternary size="small" round>
+                  <template #icon>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </template>
+                  {{ username }}
+                </n-button>
+              </n-dropdown>
+            </n-space>
+          </n-layout-header>
+          <n-layout-content class="app-content">
+            <router-view />
+            <Welcome />
+          </n-layout-content>
+        </n-layout>
+      </n-layout>
 
-  <n-modal
-    v-model:show="showChangePassword"
-    title="修改密码"
-    preset="card"
-    style="width: 420px"
-    :mask-closable="false"
-  >
-    <n-space vertical>
-      <n-input
-        v-model:value="oldPassword"
-        type="password"
-        placeholder="当前密码"
-        show-password-on="click"
-      />
-      <n-input
-        v-model:value="newPassword"
-        type="password"
-        placeholder="新密码（至少6位）"
-        show-password-on="click"
-      />
-      <n-input
-        v-model:value="confirmPassword"
-        type="password"
-        placeholder="确认新密码"
-        show-password-on="click"
-      />
-    </n-space>
-    <template #footer>
-      <n-space justify="end">
-        <n-button @click="showChangePassword = false">取消</n-button>
-        <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">确认修改</n-button>
-      </n-space>
-    </template>
-  </n-modal>
+      <n-modal
+        v-model:show="showChangePassword"
+        title="修改密码"
+        preset="card"
+        style="width: 420px"
+        :mask-closable="false"
+      >
+        <n-space vertical>
+          <n-input
+            v-model:value="oldPassword"
+            type="password"
+            placeholder="当前密码"
+            show-password-on="click"
+          />
+          <n-input
+            v-model:value="newPassword"
+            type="password"
+            placeholder="新密码（至少6位）"
+            show-password-on="click"
+          />
+          <n-input
+            v-model:value="confirmPassword"
+            type="password"
+            placeholder="确认新密码"
+            show-password-on="click"
+          />
+        </n-space>
+        <template #footer>
+          <n-space justify="end">
+            <n-button @click="showChangePassword = false">取消</n-button>
+            <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">确认修改</n-button>
+          </n-space>
+        </template>
+      </n-modal>
     </n-dialog-provider>
   </n-message-provider>
 </template>
@@ -130,14 +130,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NMessageProvider, NDialogProvider, NModal, NInput, useMessage } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput } from 'naive-ui'
+import { createDiscreteApi } from 'naive-ui'
 import api from './api.js'
 import Login from './views/Login.vue'
 import Welcome from './views/Welcome.vue'
 
 const router = useRouter()
 const route = useRoute()
-const message = useMessage()
+const message = createDiscreteApi(['message']).message
 const loggedIn = ref(!!localStorage.getItem('token'))
 const collapsed = ref(false)
 const username = ref(localStorage.getItem('username') || 'admin')
@@ -203,6 +204,17 @@ function onUserMenuSelect(key) {
     confirmPassword.value = ''
   }
 }
+
+onMounted(() => {
+  if (loggedIn.value) {
+    loadSearchData()
+    connectWebSocket()
+  }
+})
+
+onUnmounted(() => {
+  if (ws) { ws.close(); ws = null }
+})
 
 async function handleChangePassword() {
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
