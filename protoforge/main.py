@@ -278,9 +278,9 @@ def create_app() -> FastAPI:
     async def health():
         db_ok = _database is not None
         engine_ok = _engine is not None
-        protocol_count = len(_engine._protocol_servers) if _engine else 0
+        protocol_count = len(_engine.get_all_protocol_servers()) if _engine else 0
         running_protocols = sum(
-            1 for s in (_engine._protocol_servers.values() if _engine else [])
+            1 for s in (_engine.get_all_protocol_servers().values() if _engine else [])
             if s.status.value == "running"
         )
         status = "ok" if (db_ok and engine_ok) else "degraded"

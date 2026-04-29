@@ -4,7 +4,8 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore
 
 logger = logging.getLogger(__name__)
 
@@ -29,66 +30,6 @@ except ImportError:
     pass
 
 
-class ModbusDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list[PointConfig]):
-        self._points = {p.name: p for p in points}
-        self._values: dict[str, Any] = {}
-        for p in points:
-            self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
-
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
-    async def on_write(self, point_name: str, value: Any) -> bool:
-        if point_name in self._values:
-            self._values[point_name] = value
-            return True
-        return False
-
-    def set_value(self, point_name: str, value: Any) -> None:
-        self._values[point_name] = value
-
-    def get_value(self, point_name: str) -> Any:
-        return self._values.get(point_name, 0)
-
-
-class _ModbusDataStore:
-    """兼容 pymodbus 3.x 新旧 API 的数据存储层"""
-
-    def __init__(self):
-        self._coils: dict[int, int] = {}
-        self._discrete_inputs: dict[int, int] = {}
-        self._holding_regs: dict[int, int] = {}
-        self._input_regs: dict[int, int] = {}
-
-    def set_values(self, fc: int, address: int, values: list) -> None:
-        for i, v in enumerate(values):
-            addr = address + i
-            if fc in (1, 5, 15):  # coils
-                self._coils[addr] = int(bool(v))
-            elif fc == 2:  # discrete inputs
-                self._discrete_inputs[addr] = int(bool(v))
-            elif fc in (3, 6, 16, 22, 23):  # holding registers
-                self._holding_regs[addr] = int(v) & 0xFFFF
-            elif fc == 4:  # input registers
-                self._input_regs[addr] = int(v) & 0xFFFF
-
-    def get_values(self, fc: int, address: int, count: int = 1) -> list:
-        result = []
-        for i in range(count):
-            addr = address + i
-            if fc in (1, 5, 15):
-                result.append(self._coils.get(addr, 0))
-            elif fc == 2:
-                result.append(self._discrete_inputs.get(addr, 0))
-            elif fc in (3, 6, 16, 22, 23):
-                result.append(self._holding_regs.get(addr, 0))
-            elif fc == 4:
-                result.append(self._input_regs.get(addr, 0))
-        return result
-
-
 class ModbusTcpServer(ProtocolServer):
     protocol_name = "modbus_tcp"
     protocol_display_name = "Modbus TCP"
@@ -103,12 +44,12 @@ class ModbusTcpServer(ProtocolServer):
         self._port = 5020
         self._slave_map: dict[str, int] = {}
         self._next_slave_id = 1
-        self._data_stores: dict[int, _ModbusDataStore] = {}
+        self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
 
-    def _get_data_store(self, slave_id: int) -> _ModbusDataStore:
+    def _get_data_store(self, slave_id: int) -> ModbusDataStore:
         if slave_id not in self._data_stores:
-            self._data_stores[slave_id] = _ModbusDataStore()
+            self._data_stores[slave_id] = ModbusDataStore()
         return self._data_stores[slave_id]
 
     def _build_sim_devices(self) -> list:
@@ -310,7 +251,7 @@ class ModbusTcpServer(ProtocolServer):
                 logger.warning("Failed to write register %s: %s", point.address, e)
         self._sync_to_pymodbus_context(slave_id, store)
 
-    def _sync_to_pymodbus_context(self, slave_id: int, store: _ModbusDataStore) -> None:
+    def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:
         if not self._context:
             return
         try:
@@ -327,8 +268,9 @@ class ModbusTcpServer(ProtocolServer):
                         if block and hasattr(block, 'setValues') and store_data:
                             addresses = sorted(store_data.keys())
                             if addresses:
-                                values = [store_data.get(a, 0) for a in addresses]
+                                raw_values = [store_data.get(a, 0) for a in addresses]
                                 fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
+                                values = [bool(v) for v in raw_values] if fc in (1, 2) else raw_values
                                 try:
                                     block.setValues(fc, addresses, values)
                                 except Exception:

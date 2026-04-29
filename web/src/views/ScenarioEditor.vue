@@ -299,8 +299,10 @@ async function loadScenario(scenarioId) {
   if (!scenarioId) return
   try {
     const scenario = await api.getScenario(scenarioId)
+    const scenarioDeviceIds = (scenario.devices || []).map(d => d.id)
     const allDevices = await api.getDevices()
-    nodes.value = allDevices.map((d, i) => ({
+    const scenarioDevices = allDevices.filter(d => scenarioDeviceIds.includes(d.id))
+    nodes.value = scenarioDevices.map((d, i) => ({
       id: `node-${d.id}`, type: 'device',
       position: { x: 100 + (i % 3) * 250, y: 100 + Math.floor(i / 3) * 150 },
       data: {
@@ -344,7 +346,7 @@ async function saveScenarioLayout() {
         cooldown: e.data?.rule?.cooldown || 0,
       },
       enabled: true,
-    }))
+    })).filter(r => r.source_device_id && r.target_device_id)
     await api.updateScenario(selectedScenario.value, {
       devices: deviceConfigs, rules,
     })

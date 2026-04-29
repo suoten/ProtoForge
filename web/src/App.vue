@@ -55,7 +55,7 @@
               <n-auto-complete
                 v-model:value="searchQuery"
                 :options="searchResults"
-                placeholder="搜索设备、模板、场景..."
+                :placeholder="t('header.searchPlaceholder')"
                 clearable
                 size="small"
                 style="width: 280px"
@@ -70,8 +70,16 @@
             <n-space align="center" size="medium">
               <n-tag v-if="wsConnected" size="small" :bordered="false" type="success">
                 <template #icon><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></template>
-                已连接
+                {{ t('common.online') }}
               </n-tag>
+              <n-dropdown :options="langMenuOptions" @select="onLangMenuSelect">
+                <n-button quaternary size="small" round>
+                  <template #icon>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  </template>
+                  {{ locale === 'zh' ? '中文' : 'EN' }}
+                </n-button>
+              </n-dropdown>
               <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
                 <n-button quaternary size="small" round>
                   <template #icon>
@@ -90,39 +98,39 @@
       </n-layout>
 
       <n-modal
-        v-model:show="showChangePassword"
-        title="修改密码"
-        preset="card"
-        style="width: 420px"
-        :mask-closable="false"
-      >
-        <n-space vertical>
-          <n-input
-            v-model:value="oldPassword"
-            type="password"
-            placeholder="当前密码"
-            show-password-on="click"
-          />
-          <n-input
-            v-model:value="newPassword"
-            type="password"
-            placeholder="新密码（至少6位）"
-            show-password-on="click"
-          />
-          <n-input
-            v-model:value="confirmPassword"
-            type="password"
-            placeholder="确认新密码"
-            show-password-on="click"
-          />
-        </n-space>
-        <template #footer>
-          <n-space justify="end">
-            <n-button @click="showChangePassword = false">取消</n-button>
-            <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">确认修改</n-button>
-          </n-space>
-        </template>
-      </n-modal>
+    v-model:show="showChangePassword"
+    :title="t('password.title')"
+    preset="card"
+    style="width: 420px"
+    :mask-closable="false"
+  >
+    <n-space vertical>
+      <n-input
+        v-model:value="oldPassword"
+        type="password"
+        :placeholder="t('password.oldPassword')"
+        show-password-on="click"
+      />
+      <n-input
+        v-model:value="newPassword"
+        type="password"
+        :placeholder="t('password.newPassword')"
+        show-password-on="click"
+      />
+      <n-input
+        v-model:value="confirmPassword"
+        type="password"
+        :placeholder="t('password.confirmPassword')"
+        show-password-on="click"
+      />
+    </n-space>
+    <template #footer>
+      <n-space justify="end">
+        <n-button @click="showChangePassword = false">{{ t('common.cancel') }}</n-button>
+        <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">{{ t('password.submit') }}</n-button>
+      </n-space>
+    </template>
+  </n-modal>
     </n-dialog-provider>
   </n-message-provider>
 </template>
@@ -131,6 +139,7 @@
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput } from 'naive-ui'
+import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api from './api.js'
 import Login from './views/Login.vue'
@@ -139,6 +148,7 @@ import Welcome from './views/Welcome.vue'
 const router = useRouter()
 const route = useRoute()
 const message = createDiscreteApi(['message']).message
+const { t, locale, setLocale } = useI18n()
 const loggedIn = ref(!!localStorage.getItem('token'))
 const collapsed = ref(false)
 const username = ref(localStorage.getItem('username') || 'admin')
@@ -156,23 +166,32 @@ function svgIcon(pathD, color = 'currentColor') {
   ])
 }
 
-const menuOptions = [
-  { label: '仪表盘', key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
-  { label: '设备管理', key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
-  { label: '协议服务', key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
-  { label: '仿真场景', key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
-  { label: '场景编排', key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
-  { label: '模板市场', key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
-  { label: '仿真测试', key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
-  { label: '实时日志', key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
-  { label: '联调集成', key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
-  { label: '系统设置', key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
+const menuOptions = computed(() => [
+  { label: t('nav.dashboard'), key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
+  { label: t('nav.devices'), key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
+  { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
+  { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
+  { label: t('nav.scenarios'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
+  { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
+  { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
+  { label: t('nav.protocols'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
+  { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
+  { label: t('nav.settings'), key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
+])
+
+const userMenuOptions = computed(() => [
+  { label: t('header.changePassword'), key: 'change-password' },
+  { label: t('header.logout'), key: 'logout' },
+])
+
+const langMenuOptions = [
+  { label: '中文', key: 'zh' },
+  { label: 'English', key: 'en' },
 ]
 
-const userMenuOptions = [
-  { label: '修改密码', key: 'change-password' },
-  { label: '退出登录', key: 'logout' },
-]
+function onLangMenuSelect(key) {
+  setLocale(key)
+}
 
 function navigate(key) {
   router.push(key)
@@ -218,22 +237,22 @@ onUnmounted(() => {
 
 async function handleChangePassword() {
   if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    message.error('请填写所有字段')
+    message.error(t('password.allRequired'))
     return
   }
   if (newPassword.value !== confirmPassword.value) {
-    message.error('两次输入的新密码不一致')
+    message.error(t('password.mismatch'))
     return
   }
   if (newPassword.value.length < 6) {
-    message.error('新密码长度至少为 6 位')
+    message.error(t('password.tooShort'))
     return
   }
   changePasswordLoading.value = true
   try {
     const currentUser = localStorage.getItem('username') || 'admin'
     await api.changePassword(currentUser, oldPassword.value, newPassword.value)
-    message.success('密码修改成功，请重新登录')
+    message.success(t('password.success'))
     showChangePassword.value = false
     setTimeout(() => {
       if (ws) { ws.close(); ws = null }
@@ -244,7 +263,7 @@ async function handleChangePassword() {
       loggedIn.value = false
     }, 1500)
   } catch (e) {
-    message.error(e.response?.data?.detail || '密码修改失败')
+    message.error(e.response?.data?.detail || t('password.failed'))
   } finally {
     changePasswordLoading.value = false
   }

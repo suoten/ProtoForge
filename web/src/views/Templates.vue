@@ -186,7 +186,7 @@ async function instantiateDevice() {
   instantiating.value = true
   try {
     const config = await api.instantiateTemplate(selectedTemplate.value.id, instantiateForm.value)
-    await api.createDevice(config.data)
+    await api.createDevice(config)
     showInstantiateModal.value = false
     message.success('设备实例化成功')
   } catch (e) {
@@ -208,7 +208,7 @@ function confirmDelete(t) {
 
 async function deleteTemplate(id) {
   try {
-    await api._delete(`/templates/${id}`)
+    await api.deleteTemplate(id)
     message.success('模板已删除')
     await loadData()
   } catch (e) {

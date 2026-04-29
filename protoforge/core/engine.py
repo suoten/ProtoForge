@@ -25,6 +25,12 @@ def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
     return False
 
 
+def _is_serial_path(host: str) -> bool:
+    return (host.startswith("/dev/tty") or
+            host.startswith("/dev/serial") or
+            host.upper().startswith("COM"))
+
+
 def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100) -> int:
     for offset in range(max_tries):
         port = start_port + offset
@@ -86,7 +92,7 @@ class SimulationEngine:
             raise ValueError(f"Unknown protocol: {protocol_name}")
         if "port" in config and isinstance(config["port"], int):
             host = config.get("host", "0.0.0.0")
-            if host and host not in ("/dev/ttyUSB0",) and _is_port_in_use(config["port"], host):
+            if host and not _is_serial_path(host) and _is_port_in_use(config["port"], host):
                 original_port = config["port"]
                 new_port = _find_free_port(original_port + 1, host)
                 logger.warning(
@@ -240,6 +246,21 @@ class SimulationEngine:
 
     def get_device_instance(self, device_id: str) -> Optional[DeviceInstance]:
         return self._devices.get(device_id)
+
+    def get_all_device_instances(self) -> dict[str, DeviceInstance]:
+        return dict(self._devices)
+
+    def get_scenario_config(self, scenario_id: str) -> Optional[ScenarioConfig]:
+        return self._scenarios.get(scenario_id)
+
+    def get_all_scenario_configs(self) -> dict[str, ScenarioConfig]:
+        return dict(self._scenarios)
+
+    def get_scenario_status(self, scenario_id: str) -> ScenarioStatus:
+        return self._scenario_status.get(scenario_id, ScenarioStatus.STOPPED)
+
+    def get_all_protocol_servers(self) -> dict[str, ProtocolServer]:
+        return dict(self._protocol_servers)
 
     def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
         result = []

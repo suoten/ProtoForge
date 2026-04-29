@@ -93,10 +93,23 @@ class MqttBroker(ProtocolServer):
                 },
             }
             if config.get("tls_enabled", False):
-                logger.warning(
-                    "MQTT TLS is configured but amqtt broker does not support TLS in this mode. "
-                    "TLS configuration is ignored. Set tls_enabled=false to suppress this warning."
-                )
+                import ssl
+                tls_cert_path = config.get("tls_cert_path", "")
+                tls_key_path = config.get("tls_key_path", "")
+                if tls_cert_path and tls_key_path:
+                    try:
+                        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                        ssl_context.load_cert_chain(tls_cert_path, tls_key_path)
+                        broker_config["listeners"]["default"]["ssl"] = ssl_context
+                        logger.info("MQTT TLS enabled with cert: %s", tls_cert_path)
+                    except Exception as e:
+                        logger.error("Failed to load MQTT TLS certificate: %s", e)
+                        raise RuntimeError(f"MQTT TLS certificate error: {e}")
+                else:
+                    logger.warning(
+                        "MQTT TLS is enabled but tls_cert_path or tls_key_path is not configured. "
+                        "TLS will not be activated. Provide both paths to enable TLS."
+                    )
             self._broker = Broker(broker_config)
             await self._broker.start()
 
@@ -211,6 +224,16 @@ class MqttBroker(ProtocolServer):
                     "type": "boolean",
                     "default": False,
                     "description": "是否启用TLS加密",
+                },
+                "tls_cert_path": {
+                    "type": "string",
+                    "default": "",
+                    "description": "TLS 证书文件路径（PEM格式）",
+                },
+                "tls_key_path": {
+                    "type": "string",
+                    "default": "",
+                    "description": "TLS 私钥文件路径（PEM格式）",
                 },
             },
         }

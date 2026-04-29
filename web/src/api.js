@@ -72,7 +72,7 @@ export default {
   stopDevice: (id) => d(api.post(`/devices/${id}/stop`)),
   getDevicePoints: (id) => d(api.get(`/devices/${id}/points`)),
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
-  writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, null, { params: { value } })),
+  writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
   batchDeleteDevices: (ids) => d(api.request({ method: 'DELETE', url: '/devices/batch', data: ids })),
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', ids)),
@@ -81,6 +81,7 @@ export default {
   getTemplates: (protocol) => d(api.get('/templates', { params: { protocol } })),
   getTemplate: (id) => d(api.get(`/templates/${id}`)),
   createTemplate: (template) => d(api.post('/templates', template)),
+  deleteTemplate: (id) => d(api.delete(`/templates/${id}`)),
   searchTemplates: (params) => d(api.get('/templates/search', { params })),
   listTemplateTags: () => d(api.get('/templates/tags')),
   instantiateTemplate: (id, params) => {

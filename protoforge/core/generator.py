@@ -282,8 +282,10 @@ class DataGenerator:
             return bool(value)
         elif data_type in (DataType.INT16, DataType.INT32):
             return int(value)
-        elif data_type in (DataType.UINT16, DataType.UINT32):
-            return int(abs(value))
+        elif data_type == DataType.UINT16:
+            return int(abs(value)) & 0xFFFF
+        elif data_type == DataType.UINT32:
+            return int(abs(value)) & 0xFFFFFFFF
         elif data_type in (DataType.FLOAT32, DataType.FLOAT64):
             return float(value)
         elif data_type == DataType.STRING:

@@ -37,7 +37,7 @@
         </n-form>
         <div class="login-hint">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4 M12 8h.01"/></svg>
-          <span>默认账号: admin / admin</span>
+          <span v-if="isDev">默认账号: admin / admin</span>
         </div>
       </div>
     </div>
@@ -52,6 +52,7 @@ import api from '../api.js'
 const message = useMessage()
 const loading = ref(false)
 const form = ref({ username: '', password: '' })
+const isDev = ref(import.meta.env.DEV)
 const emit = defineEmits(['login-success'])
 
 async function handleLogin() {
@@ -66,8 +67,8 @@ async function handleLogin() {
     if (res.refresh_token) {
       localStorage.setItem('refresh_token', res.refresh_token)
     }
-    localStorage.setItem('username', res.username)
-    localStorage.setItem('role', res.role)
+    if (res.username) localStorage.setItem('username', res.username)
+    if (res.role) localStorage.setItem('role', res.role)
     message.success('登录成功')
     emit('login-success', res)
   } catch (e) {
