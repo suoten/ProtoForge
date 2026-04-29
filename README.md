@@ -580,4 +580,688 @@ npm run build   # 生产构建 → web/dist/
 python -m pytest tests/ -v
 
 # 运行测试并生成覆盖率报告
-python -m pytest tests/ -v --cov=prot
+python -m pytest tests/ -v --cov=protoforge --cov-report=html
+```
+
+***
+
+### 📐 项目结构
+
+```
+ProtoForge/
+├── protoforge/                # Python 后端包
+│   ├── api/v1/               # REST API 端点
+│   │   ├── common.py         # 统一响应格式和异常处理
+│   │   ├── rate_limit.py     # API 限流中间件
+│   │   └── router.py         # API 路由
+│   ├── core/                 # 核心引擎
+│   │   ├── engine.py         # 仿真引擎（设备/场景调度）
+│   │   ├── auth.py           # JWT 认证与 bcrypt 密码哈希
+│   │   ├── audit.py          # 操作审计日志
+│   │   ├── edgelite.py       # EdgeLite 网关对接
+│   │   ├── device.py         # 设备实例
+│   │   ├── scenario.py       # 场景规则引擎
+│   │   ├── testing.py        # 测试框架（14种断言）
+│   │   ├── forward.py        # 数据转发
+│   │   ├── recorder.py       # 协议录制回放（含加密）
+│   │   ├── failover.py       # 故障切换管理
+│   │   ├── webhook.py        # Webhook 通知系统
+│   │   └── metrics.py        # Prometheus 指标
+│   ├── grpc/                 # gRPC 远程管理接口
+│   │   ├── protoforge.proto  # Protobuf 定义
+│   │   └── server.py         # gRPC 服务实现
+│   ├── config.py             # 配置管理
+│   ├── db/                   # 数据库层（SQLite + PostgreSQL）
+│   ├── models/               # 数据模型
+│   ├── protocols/            # 17 种协议服务端实现
+│   ├── sdk/                  # Python SDK（同步/异步）
+│   └── templates/            # 53 设备模板（JSON）
+├── sdk/                       # 多语言 SDK
+│   ├── java/                 # Java SDK
+│   ├── go/                   # Go SDK
+│   └── csharp/               # C# SDK
+├── web/                       # Vue3 前端
+│   └── src/
+│       ├── views/            # 页面组件
+│       ├── App.vue           # 主布局（含i18n）
+│       ├── i18n.js           # 国际化框架（中英文）
+│       ├── api.js            # API 调用
+│       ├── main.js           # 入口
+│       └── e2e/              # Playwright E2E 测试
+├── k8s/                       # Kubernetes 部署
+│   ├── deployment.yaml       # ProtoForge + PostgreSQL
+│   ├── ingress.yaml          # Ingress（WebSocket支持）
+│   └── secrets.yaml          # 密钥配置
+├── helm/                      # Helm Chart
+│   └── protoforge/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/        # K8s 模板
+├── tests/                     # 测试用例
+├── migrations/                # Alembic 数据库迁移
+├── grafana/                   # Grafana Dashboard 模板
+├── Dockerfile
+├── docker-compose.yml
+└── pyproject.toml             # 项目配置和依赖
+```
+
+***
+
+### 📡 API 文档
+
+后端启动后，访问以下地址查看交互式 API 文档（直接访问后端端口）：
+
+- **Swagger UI**: <http://localhost:8000/docs>
+- **ReDoc**: <http://localhost:8000/redoc>
+
+> 这是后端 API 文档，不是前端页面。前端页面请访问前端地址（如 `http://localhost:5173`）。
+
+***
+
+### 📦 Python SDK
+
+ProtoForge 提供同步和异步两种 Python SDK 客户端，覆盖全部 API 功能。
+
+**安装**：
+
+```bash
+pip install protoforge
+```
+
+**快速上手**：
+
+```python
+from protoforge.sdk import ProtoForgeClient
+
+# 创建客户端
+with ProtoForgeClient("http://localhost:8000") as client:
+    # 登录
+    client.login("admin", "admin")
+
+    # 列出所有协议
+    protocols = client.list_protocols()
+
+    # 启动 Modbus TCP 协议
+    client.start_protocol("modbus_tcp")
+
+    # 从模板快速创建设备
+    device = client.quick_create("modbus-plc-controller", "测试PLC")
+
+    # 读取设备测点
+    points = client.read_points(device["id"])
+    print(points)
+
+    # 运行一键测试
+    report = client.quick_test()
+    print(report)
+```
+
+**异步客户端**：
+
+```python
+from protoforge.sdk import AsyncProtoForgeClient
+
+async with AsyncProtoForgeClient("http://localhost:8000") as client:
+    await client.login("admin", "admin")
+    devices = await client.list_devices()
+    print(devices)
+```
+
+**SDK 方法一览**（70+ 方法）：
+
+| 类别 | 方法 | 说明 |
+|------|------|------|
+| 认证 | `login`, `refresh_token`, `change_password` | JWT 认证管理 |
+| 协议 | `list_protocols`, `start_protocol`, `stop_protocol`, `get_protocol_config` | 协议启停和配置 |
+| 设备 | `create_device`, `quick_create`, `read_points`, `write_point`, `update_device`, `delete_device` | 设备 CRUD + 测点读写 |
+| 批量 | `batch_create_devices`, `batch_start_devices`, `batch_stop_devices`, `batch_delete_devices` | 批量操作 |
+| 模板 | `list_templates`, `search_templates`, `instantiate_template`, `create_template` | 模板搜索和实例化 |
+| 场景 | `create_scenario`, `start_scenario`, `stop_scenario`, `export_scenario`, `import_scenario` | 场景编排 |
+| 测试 | `quick_test`, `create_test_case`, `run_tests`, `get_test_report` | 仿真测试 |
+| 转发 | `add_forward_target`, `start_forward`, `stop_forward`, `get_forward_stats` | 数据转发 |
+| 录制 | `start_recording`, `stop_recording`, `replay_recording`, `export_recording` | 协议录制回放 |
+| 集成 | `import_edgelite`, `import_pygbsentry`, `list_webhooks`, `add_webhook` | 第三方集成 |
+| 系统 | `get_settings`, `update_settings`, `setup_demo`, `get_setup_status` | 系统管理 |
+
+**Java SDK**（`sdk/java/ProtoForgeClient.java`）：
+
+```java
+import io.github.suoten.protoforge.ProtoForgeClient;
+
+public class Example {
+    public static void main(String[] args) throws Exception {
+        ProtoForgeClient client = new ProtoForgeClient("http://localhost:8000");
+        client.login("admin", "admin");
+        var devices = client.listDevices();
+        System.out.println(devices);
+    }
+}
+```
+
+**Go SDK**（`sdk/go/protoforge/client.go`）：
+
+```go
+package main
+
+import (
+    "fmt"
+    "protoforge"
+)
+
+func main() {
+    client := protoforge.NewClient("http://localhost:8000")
+    client.Login("admin", "admin")
+    devices, _ := client.ListDevices()
+    fmt.Println(devices)
+}
+```
+
+**C# SDK**（`sdk/csharp/ProtoForgeClient.cs`）：
+
+```csharp
+using ProtoForge;
+
+var client = new ProtoForgeClient("http://localhost:8000");
+await client.LoginAsync("admin", "admin");
+var devices = await client.ListDevicesAsync();
+Console.WriteLine(devices);
+```
+
+***
+
+### 📊 监控端点
+
+| 端点 | 格式 | 说明 |
+|------|------|------|
+| `GET /health` | JSON | 健康检查（数据库状态、活跃设备数、协议状态） |
+| `GET /metrics` | Prometheus | 标准指标格式（uptime、设备数、转发/录制计数） |
+| `GET /api/v1/forward/stats` | JSON | 数据转发统计 |
+| `GET /api/v1/recorder/stats` | JSON | 录制统计 |
+
+***
+
+### 🔒 安全说明
+
+ProtoForge 内置多层安全机制：
+
+- **密码安全**：使用 bcrypt 算法存储密码，自动加盐，抵抗彩虹表攻击
+- **JWT 认证**：访问令牌有效期 30 分钟，支持刷新令牌续期
+- **登录保护**：连续 5 次登录失败自动锁定账户 5 分钟，防止暴力破解
+- **API 限流**：普通接口 100 次/分钟，认证接口 10 次/分钟
+- **密钥管理**：JWT 密钥支持环境变量配置，未配置时自动生成随机密钥
+
+生产环境部署前，请务必阅读 [SECURITY.md](SECURITY.md) 完成安全加固。
+
+#### RBAC 角色权限
+
+| 角色 | 权限说明 | 可访问端点 |
+|------|---------|-----------|
+| `admin` | 系统管理员，拥有全部权限 | 所有端点 + 用户管理 + 系统设置 |
+| `operator` | 运维人员，可管理设备和协议 | 设备/协议/场景/转发/录制的增删改 |
+| `user` | 普通用户，可运行测试 | 读操作 + 测试用例/套件的增删改 |
+| `viewer` | 只读用户，仅可查看数据 | 所有 GET 端点 |
+
+#### 协议安全说明
+
+| 协议 | 认证支持 | 加密支持 | 说明 |
+|------|---------|---------|------|
+| HTTP | ✅ JWT + RBAC | ✅ HTTPS | API 端点受完整认证保护 |
+| Modbus TCP | ❌ 无 | ❌ 无 | 协议本身无认证机制，建议网络隔离 |
+| OPC-UA | ⚠️ 可配置 | ⚠️ 可配置 | 支持 Sign/SignAndEncrypt 模式，模板默认未启用 |
+| MQTT | ⚠️ 可配置 | ⚠️ 可配置 | 支持用户名/密码认证，模板默认未启用 |
+| GB28181 | ⚠️ Digest | ❌ 无 SRTP | SIP 支持 Digest 认证，RTP 流未加密 |
+| S7/MC/FINS/AB | ❌ 无 | ❌ 无 | 工业协议通常在 PLC 端做访问控制 |
+| BACnet | ❌ 无 | ❌ 无 | BACnet/IP 协议本身无内置认证 |
+
+> ⚠️ 仿真环境下的协议安全限制与真实设备一致。生产部署时建议通过防火墙、VPN 或网络隔离保护协议端口。
+
+#### 协议安全增强
+
+| 协议 | 安全特性 | 配置方式 |
+|------|---------|---------|
+| OPC-UA | ✅ 证书自动生成（RSA-2048，10年有效期） | `security_mode=Sign` 时自动生成，也可指定 `certificate_path`/`private_key_path` |
+| MQTT | ✅ TLS 加密通道 | 配置 `tls_enabled=true` + `tls_cert_path`/`tls_key_path` |
+| GB28181 | ✅ SRTP 加密传输 | 配置 `srtp_enabled=true` |
+| 录制回放 | ✅ 报文加密存储 | 调用 `recorder.set_encryption_key("your-key")` 启用 |
+
+***
+
+### 💾 数据库备份与恢复
+
+```bash
+# 导出全库备份（含设备/场景/模板/测试/用户/录制/审计日志）
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/backup -o backup.json
+
+# 恢复备份
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @backup.json \
+  http://localhost:8000/api/v1/backup/restore
+```
+
+> 备份文件为标准 JSON 格式，可版本控制、差异对比、跨环境迁移。
+
+***
+
+### 🔌 gRPC 远程管理
+
+设置 `PROTOFORGE_GRPC_PORT` 环境变量即可启用 gRPC 服务：
+
+```bash
+PROTOFORGE_GRPC_PORT=50051 protoforge run
+```
+
+**15 个 RPC 方法**：
+
+| 方法 | 说明 |
+|------|------|
+| `GetHealth` | 健康检查 |
+| `ListDevices` / `GetDevice` / `CreateDevice` / `DeleteDevice` | 设备管理 |
+| `StartDevice` / `StopDevice` | 设备启停 |
+| `ReadPoints` / `WritePoint` | 测点读写 |
+| `ListScenarios` / `StartScenario` / `StopScenario` | 场景管理 |
+| `GetSettings` / `UpdateSettings` | 系统设置 |
+
+**生成客户端代码**：
+
+```bash
+# Python
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protoforge/grpc/protoforge.proto
+
+# Go
+protoc --go_out=. --go-grpc_out=. protoforge/grpc/protoforge.proto
+
+# Java
+protoc --java_out=. --grpc-java_out=. protoforge/grpc/protoforge.proto
+
+# C#
+protoc --csharp_out=. --grpc-csharp_out=. protoforge/grpc/protoforge.proto
+```
+
+***
+
+### ☸️ Kubernetes / Helm 部署
+
+**方式一：直接使用 K8s YAML**
+
+```bash
+# 1. 创建 Secret（修改密码！）
+kubectl apply -f k8s/secrets.yaml
+
+# 2. 部署应用 + PostgreSQL
+kubectl apply -f k8s/deployment.yaml
+
+# 3. 配置 Ingress（可选）
+kubectl apply -f k8s/ingress.yaml
+```
+
+**方式二：使用 Helm Chart**
+
+```bash
+# 1. 修改配置
+helm show values helm/protoforge > my-values.yaml
+# 编辑 my-values.yaml：修改密码、域名、存储等
+
+# 2. 安装
+helm install protoforge helm/protoforge -f my-values.yaml
+
+# 3. 升级
+helm upgrade protoforge helm/protoforge -f my-values.yaml
+
+# 4. 卸载
+helm uninstall protoforge
+```
+
+**Helm values 主要配置**：
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `replicaCount` | `1` | 副本数 |
+| `image.repository` | `suoten/protoforge` | 镜像仓库 |
+| `ingress.enabled` | `false` | 启用 Ingress |
+| `postgresql.enabled` | `true` | 内置 PostgreSQL |
+| `persistence.size` | `5Gi` | 数据持久化大小 |
+| `resources.limits.memory` | `1Gi` | 内存限制 |
+
+***
+
+### 🔄 故障切换
+
+配置主备模式实现自动故障切换：
+
+```bash
+# 主节点
+PROTOFORGE_FAILOVER_ROLE=primary
+PROTOFORGE_FAILOVER_PRIMARY=http://primary:8000
+PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
+PROTOFORGE_FAILOVER_INTERVAL=10  # 健康检查间隔（秒）
+
+# 备节点
+PROTOFORGE_FAILOVER_ROLE=standby
+PROTOFORGE_FAILOVER_PRIMARY=http://primary:8000
+PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
+```
+
+**工作原理**：
+1. 备节点定期检查主节点 `/health` 端点
+2. 连续 3 次检查失败后，备节点自动晋升为主节点
+3. 晋升时触发回调通知（可注册自定义回调）
+4. 原主节点恢复后，可手动降级为备节点
+
+***
+
+### 🖥 前端开发
+
+```bash
+cd web
+npm install
+npm run dev     # 开发服务器（热更新）
+npm run build   # 生产构建 → web/dist/
+```
+
+***
+
+### 🧪 测试
+
+```bash
+# 运行全部单元测试
+python -m pytest tests/ -v
+
+# 运行测试并生成覆盖率报告
+python -m pytest tests/ -v --cov=protoforge --cov-report=html
+```
+
+***
+
+### 📐 项目结构
+
+```
+ProtoForge/
+├── protoforge/                # Python 后端包
+│   ├── api/v1/               # REST API 端点
+│   │   ├── common.py         # 统一响应格式和异常处理
+│   │   ├── rate_limit.py     # API 限流中间件
+│   │   └── router.py         # API 路由
+│   ├── core/                 # 核心引擎
+│   │   ├── engine.py         # 仿真引擎（设备/场景调度）
+│   │   ├── auth.py           # JWT 认证与 bcrypt 密码哈希
+│   │   ├── audit.py          # 操作审计日志
+│   │   ├── edgelite.py       # EdgeLite 网关对接
+│   │   ├── device.py         # 设备实例
+│   │   ├── scenario.py       # 场景规则引擎
+│   │   ├── testing.py        # 测试框架（14种断言）
+│   │   ├── forward.py        # 数据转发
+│   │   ├── recorder.py       # 协议录制回放（含加密）
+│   │   ├── failover.py       # 故障切换管理
+│   │   ├── webhook.py        # Webhook 通知系统
+│   │   └── metrics.py        # Prometheus 指标
+│   ├── grpc/                 # gRPC 远程管理接口
+│   │   ├── protoforge.proto  # Protobuf 定义
+│   │   └── server.py         # gRPC 服务实现
+│   ├── config.py             # 配置管理
+│   ├── db/                   # 数据库层（SQLite + PostgreSQL）
+│   ├── models/               # 数据模型
+│   ├── protocols/            # 17 种协议服务端实现
+│   ├── sdk/                  # Python SDK（同步/异步）
+│   └── templates/            # 53 设备模板（JSON）
+├── sdk/                       # 多语言 SDK
+│   ├── java/                 # Java SDK
+│   ├── go/                   # Go SDK
+│   └── csharp/               # C# SDK
+├── web/                       # Vue3 前端
+│   └── src/
+│       ├── views/            # 页面组件
+│       ├── App.vue           # 主布局（含i18n）
+│       ├── i18n.js           # 国际化框架（中英文）
+│       ├── api.js            # API 调用
+│       ├── main.js           # 入口
+│       └── e2e/              # Playwright E2E 测试
+├── k8s/                       # Kubernetes 部署
+│   ├── deployment.yaml       # ProtoForge + PostgreSQL
+│   ├── ingress.yaml          # Ingress（WebSocket支持）
+│   └── secrets.yaml          # 密钥配置
+├── helm/                      # Helm Chart
+│   └── protoforge/
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/        # K8s 模板
+├── tests/                     # 测试用例
+├── migrations/                # Alembic 数据库迁移
+├── grafana/                   # Grafana Dashboard 模板
+├── Dockerfile
+├── docker-compose.yml
+└── pyproject.toml             # 项目配置和依赖
+```
+
+***
+
+### 📡 API 文档
+
+后端启动后，访问以下地址查看交互式 API 文档（直接访问后端端口）：
+
+- **Swagger UI**: <http://localhost:8000/docs>
+- **ReDoc**: <http://localhost:8000/redoc>
+
+> 这是后端 API 文档，不是前端页面。前端页面请访问前端地址（如 `http://localhost:5173`）。
+
+***
+
+### 📦 Python SDK
+
+ProtoForge 提供同步和异步两种 Python SDK 客户端，覆盖全部 API 功能。
+
+**安装**：
+
+```bash
+pip install protoforge
+```
+
+**快速上手**：
+
+```python
+from protoforge.sdk import ProtoForgeClient
+
+# 创建客户端
+with ProtoForgeClient("http://localhost:8000") as client:
+    # 登录
+    client.login("admin", "admin")
+
+    # 列出所有协议
+    protocols = client.list_protocols()
+
+    # 启动 Modbus TCP 协议
+    client.start_protocol("modbus_tcp")
+
+    # 从模板快速创建设备
+    device = client.quick_create("modbus-plc-controller", "测试PLC")
+
+    # 读取设备测点
+    points = client.read_points(device["id"])
+    print(points)
+
+    # 运行一键测试
+    report = client.quick_test()
+    print(report)
+```
+
+**异步客户端**：
+
+```python
+from protoforge.sdk import AsyncProtoForgeClient
+
+async with AsyncProtoForgeClient("http://localhost:8000") as client:
+    await client.login("admin", "admin")
+    devices = await client.list_devices()
+    print(devices)
+```
+
+**SDK 方法一览**（70+ 方法）：
+
+| 类别 | 方法 | 说明 |
+|------|------|------|
+| 认证 | `login`, `refresh_token`, `change_password` | JWT 认证管理 |
+| 协议 | `list_protocols`, `start_protocol`, `stop_protocol`, `get_protocol_config` | 协议启停和配置 |
+| 设备 | `create_device`, `quick_create`, `read_points`, `write_point`, `update_device`, `delete_device` | 设备 CRUD + 测点读写 |
+| 批量 | `batch_create_devices`, `batch_start_devices`, `batch_stop_devices`, `batch_delete_devices` | 批量操作 |
+| 模板 | `list_templates`, `search_templates`, `instantiate_template`, `create_template` | 模板搜索和实例化 |
+| 场景 | `create_scenario`, `start_scenario`, `stop_scenario`, `export_scenario`, `import_scenario` | 场景编排 |
+| 测试 | `quick_test`, `create_test_case`, `run_tests`, `get_test_report` | 仿真测试 |
+| 转发 | `add_forward_target`, `start_forward`, `stop_forward`, `get_forward_stats` | 数据转发 |
+| 录制 | `start_recording`, `stop_recording`, `replay_recording`, `export_recording` | 协议录制回放 |
+| 集成 | `import_edgelite`, `import_pygbsentry`, `list_webhooks`, `add_webhook` | 第三方集成 |
+| 系统 | `get_settings`, `update_settings`, `setup_demo`, `get_setup_status` | 系统管理 |
+
+**Java SDK**（`sdk/java/ProtoForgeClient.java`）：
+
+```java
+import io.github.suoten.protoforge.ProtoForgeClient;
+
+public class Example {
+    public static void main(String[] args) throws Exception {
+        ProtoForgeClient client = new ProtoForgeClient("http://localhost:8000");
+        client.login("admin", "admin");
+        var devices = client.listDevices();
+        System.out.println(devices);
+    }
+}
+```
+
+**Go SDK**（`sdk/go/protoforge/client.go`）：
+
+```go
+package main
+
+import (
+    "fmt"
+    "protoforge"
+)
+
+func main() {
+    client := protoforge.NewClient("http://localhost:8000")
+    client.Login("admin", "admin")
+    devices, _ := client.ListDevices()
+    fmt.Println(devices)
+}
+```
+
+**C# SDK**（`sdk/csharp/ProtoForgeClient.cs`）：
+
+```csharp
+using ProtoForge;
+
+var client = new ProtoForgeClient("http://localhost:8000");
+await client.LoginAsync("admin", "admin");
+var devices = await client.ListDevicesAsync();
+Console.WriteLine(devices);
+```
+
+***
+
+### 📊 监控端点
+
+| 端点 | 格式 | 说明 |
+|------|------|------|
+| `GET /health` | JSON | 健康检查（数据库状态、活跃设备数、协议状态） |
+| `GET /metrics` | Prometheus | 标准指标格式（uptime、设备数、转发/录制计数） |
+| `GET /api/v1/forward/stats` | JSON | 数据转发统计 |
+| `GET /api/v1/recorder/stats` | JSON | 录制统计 |
+
+***
+
+### 🔒 安全说明
+
+ProtoForge 内置多层安全机制：
+
+- **密码安全**：使用 bcrypt 算法存储密码，自动加盐，抵抗彩虹表攻击
+- **JWT 认证**：访问令牌有效期 30 分钟，支持刷新令牌续期
+- **登录保护**：连续 5 次登录失败自动锁定账户 5 分钟，防止暴力破解
+- **API 限流**：普通接口 100 次/分钟，认证接口 10 次/分钟
+- **密钥管理**：JWT 密钥支持环境变量配置，未配置时自动生成随机密钥
+
+生产环境部署前，请务必阅读 [SECURITY.md](SECURITY.md) 完成安全加固。
+
+#### RBAC 角色权限
+
+| 角色 | 权限说明 | 可访问端点 |
+|------|---------|-----------|
+| `admin` | 系统管理员，拥有全部权限 | 所有端点 + 用户管理 + 系统设置 |
+| `operator` | 运维人员，可管理设备和协议 | 设备/协议/场景/转发/录制的增删改 |
+| `user` | 普通用户，可运行测试 | 读操作 + 测试用例/套件的增删改 |
+| `viewer` | 只读用户，仅可查看数据 | 所有 GET 端点 |
+
+#### 协议安全说明
+
+| 协议 | 认证支持 | 加密支持 | 说明 |
+|------|---------|---------|------|
+| HTTP | ✅ JWT + RBAC | ✅ HTTPS | API 端点受完整认证保护 |
+| Modbus TCP | ❌ 无 | ❌ 无 | 协议本身无认证机制，建议网络隔离 |
+| OPC-UA | ⚠️ 可配置 | ⚠️ 可配置 | 支持 Sign/SignAndEncrypt 模式，模板默认未启用 |
+| MQTT | ⚠️ 可配置 | ⚠️ 可配置 | 支持用户名/密码认证，模板默认未启用 |
+| GB28181 | ⚠️ Digest | ❌ 无 SRTP | SIP 支持 Digest 认证，RTP 流未加密 |
+| S7/MC/FINS/AB | ❌ 无 | ❌ 无 | 工业协议通常在 PLC 端做访问控制 |
+| BACnet | ❌ 无 | ❌ 无 | BACnet/IP 协议本身无内置认证 |
+
+> ⚠️ 仿真环境下的协议安全限制与真实设备一致。生产部署时建议通过防火墙、VPN 或网络隔离保护协议端口。
+
+#### 协议安全增强
+
+| 协议 | 安全特性 | 配置方式 |
+|------|---------|---------|
+| OPC-UA | ✅ 证书自动生成（RSA-2048，10年有效期） | `security_mode=Sign` 时自动生成，也可指定 `certificate_path`/`private_key_path` |
+| MQTT | ✅ TLS 加密通道 | 配置 `tls_enabled=true` + `tls_cert_path`/`tls_key_path` |
+| GB28181 | ✅ SRTP 加密传输 | 配置 `srtp_enabled=true` |
+| 录制回放 | ✅ 报文加密存储 | 调用 `recorder.set_encryption_key("your-key")` 启用 |
+
+***
+
+### 💾 数据库备份与恢复
+
+```bash
+# 导出全库备份（含设备/场景/模板/测试/用户/录制/审计日志）
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/backup -o backup.json
+
+# 恢复备份
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d @backup.json \
+  http://localhost:8000/api/v1/backup/restore
+```
+
+> 备份文件为标准 JSON 格式，可版本控制、差异对比、跨环境迁移。
+
+***
+
+### 🔌 gRPC 远程管理
+
+设置 `PROTOFORGE_GRPC_PORT` 环境变量即可启用 gRPC 服务：
+
+```bash
+PROTOFORGE_GRPC_PORT=50051 protoforge run
+```
+
+**15 个 RPC 方法**：
+
+| 方法 | 说明 |
+|------|------|
+| `GetHealth` | 健康检查 |
+| `ListDevices` / `GetDevice` / `CreateDevice` / `DeleteDevice` | 设备管理 |
+| `StartDevice` / `StopDevice` | 设备启停 |
+| `ReadPoints` / `WritePoint` | 测点读写 |
+| `ListScenarios` / `StartScenario` / `StopScenario` | 场景管理 |
+| `GetSettings` / `UpdateSettings` | 系统设置 |
+
+**生成客户端代码**：
+
+```bash
+# Python
+python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. protoforge/grpc/protoforge.proto
+
+# Go
+protoc --go_out=. --go-grpc_out=. protoforge/grpc/protoforge.proto
+
+# Java
+protoc --java_out=. --grpc-java_out=. protoforge/grpc/protoforge.proto
+
+#
