@@ -108,7 +108,10 @@ class _SafeEval:
             op = _SAFE_OPS.get(type(node.op))
             if op is None:
                 raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-            return op(self._eval_node(node.left), self._eval_node(node.right))
+            result = op(self._eval_node(node.left), self._eval_node(node.right))
+            if isinstance(result, str) and len(result) > self._MAX_STR_LEN:
+                raise ValueError(f"String too long (max {self._MAX_STR_LEN})")
+            return result
         elif isinstance(node, ast.UnaryOp):
             op = _SAFE_OPS.get(type(node.op))
             if op is None:

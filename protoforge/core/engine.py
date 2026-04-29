@@ -297,8 +297,9 @@ class SimulationEngine:
     def remove_scenario(self, scenario_id: str) -> None:
         if scenario_id not in self._scenarios:
             raise ValueError(f"Scenario not found: {scenario_id}")
-        if self._scenario_status.get(scenario_id) == ScenarioStatus.RUNNING:
-            raise ValueError("Cannot delete a running scenario, stop it first")
+        status = self._scenario_status.get(scenario_id)
+        if status in (ScenarioStatus.RUNNING, ScenarioStatus.STARTING):
+            raise ValueError("Cannot delete a running or starting scenario, stop it first")
         del self._scenarios[scenario_id]
         self._scenario_status.pop(scenario_id, None)
         logger.info("Scenario removed: %s", scenario_id)
@@ -308,6 +309,9 @@ class SimulationEngine:
             raise ValueError(f"Scenario not found: {scenario_id}")
         config.id = scenario_id
         self._scenarios[scenario_id] = config
+        instance = self._scenario_instances.get(scenario_id)
+        if instance and hasattr(instance, 'config'):
+            instance.config = config
         logger.info("Scenario updated: %s", scenario_id)
         status = self._scenario_status.get(scenario_id, ScenarioStatus.STOPPED)
         return ScenarioInfo(

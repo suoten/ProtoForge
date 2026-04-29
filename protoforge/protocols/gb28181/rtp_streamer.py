@@ -255,7 +255,7 @@ class RtpStreamer:
     async def start(self) -> None:
         if self._running:
             return
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             self._transport, _ = await loop.create_datagram_endpoint(
                 asyncio.DatagramProtocol,
