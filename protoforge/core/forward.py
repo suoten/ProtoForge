@@ -112,13 +112,24 @@ class HTTPTarget(ForwardTarget):
 
 class FileTarget(ForwardTarget):
     def __init__(self, path: str, format: str = "jsonl"):
-        self._path = path
+        from pathlib import Path
+        import os
+        base_dir = os.getcwd()
+        resolved_path = (Path(path).resolve())
+        if not str(resolved_path).startswith(base_dir):
+            raise ValueError(
+                f"FileTarget path '{path}' escapes the allowed directory. "
+                "Only relative paths within the working directory are permitted."
+            )
+        self._path = str(resolved_path)
         self._format = format
 
     async def send(self, records: list[dict[str, Any]]) -> None:
         try:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self._write_sync, records)
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning("File forward error: %s", e)
 
@@ -145,6 +156,7 @@ class ForwardEngine:
         self._flush_interval = 5.0
         self._sent_count: int = 0
         self._failed_count: int = 0
+        self._dropped_count: int = 0
         self._retry_count: int = 3
 
     def add_target(self, name: str, target: ForwardTarget) -> None:

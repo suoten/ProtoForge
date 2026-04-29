@@ -38,11 +38,16 @@ _SAFE_NAMES = {
     "abs": abs, "min": min, "max": max, "round": round,
     "int": int, "float": float, "bool": bool, "str": str,
     "len": len, "range": range, "list": list, "dict": dict,
-    "math": math, "random": random,
     "pi": math.pi, "e": math.e,
     "sin": math.sin, "cos": math.cos, "tan": math.tan,
     "sqrt": math.sqrt, "log": math.log, "log10": math.log10,
     "ceil": math.ceil, "floor": math.floor, "fabs": math.fabs,
+}
+
+_DANGEROUS_NAMES = {
+    "__import__", "__builtins__", "__class__", "__globals__", "__locals__",
+    "open", "file", "input", "exec", "eval", "compile", "reload",
+    "breakpoint", "exit", "quit", "help", "copyright", "credits", "license",
 }
 
 
@@ -99,6 +104,8 @@ class _SafeEval:
         if isinstance(node, ast.Constant):
             return node.value
         elif isinstance(node, ast.Name):
+            if node.id in _DANGEROUS_NAMES:
+                raise NameError(f"Name '{node.id}' is not allowed (potentially dangerous)")
             if node.id in _SAFE_NAMES:
                 return _SAFE_NAMES[node.id]
             if node.id in self._variables:
@@ -148,6 +155,8 @@ class _SafeEval:
             return self._eval_node(node.body) if test else self._eval_node(node.orelse)
         elif isinstance(node, ast.Call):
             func = self._eval_node(node.func)
+            if isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS_NAMES:
+                raise NameError(f"Calling '{node.func.id}' is not allowed")
             if len(node.args) > self._MAX_CALL_ARGS:
                 raise ValueError(f"Too many call arguments (max {self._MAX_CALL_ARGS})")
             args = [self._eval_node(a) for a in node.args]
@@ -158,6 +167,8 @@ class _SafeEval:
                 allowed = {"pi", "e", "sin", "cos", "tan", "sqrt", "log", "log10", "ceil", "floor", "fabs"}
                 if node.attr in allowed:
                     return getattr(value, node.attr)
+            if node.attr.startswith("__") or node.attr in _DANGEROUS_NAMES:
+                raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
             raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
         elif isinstance(node, ast.Subscript):
             value = self._eval_node(node.value)

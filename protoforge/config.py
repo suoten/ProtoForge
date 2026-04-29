@@ -90,7 +90,9 @@ def _save_env() -> None:
     prefix = "PROTOFORGE_"
     lines = []
     if _ENV_FILE.exists():
-        for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+        content = _ENV_FILE.read_text(encoding="utf-8")
+        content = content.replace("\r\n", "\n")
+        for line in content.splitlines():
             if "=" in line:
                 key = line.split("=", 1)[0].strip()
                 field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
