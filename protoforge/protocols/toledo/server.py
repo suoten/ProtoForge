@@ -113,18 +113,19 @@ class ToledoServer(ProtocolServer):
         try:
             self._server_running = False
             self._continuous_mode = False
-            for w in self._continuous_writers:
-                try:
-                    w.close()
-                except Exception:
-                    pass
-            self._continuous_writers.clear()
             if self._continuous_task:
                 self._continuous_task.cancel()
                 try:
                     await self._continuous_task
                 except asyncio.CancelledError:
                     pass
+                self._continuous_task = None
+            for w in list(self._continuous_writers):
+                try:
+                    w.close()
+                except Exception:
+                    pass
+            self._continuous_writers.clear()
             if self._server_task:
                 self._server_task.cancel()
                 try:
@@ -249,7 +250,7 @@ class ToledoServer(ProtocolServer):
         self._continuous_mode = True
         if writer:
             self._continuous_writers.add(writer)
-        if not self._continuous_task and self._continuous_writers:
+        if self._continuous_writers and (self._continuous_task is None or self._continuous_task.done()):
             self._continuous_task = asyncio.create_task(self._continuous_send())
         return self._handle_stable_weight()
 

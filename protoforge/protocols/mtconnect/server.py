@@ -55,6 +55,7 @@ class MtConnectServer(ProtocolServer):
         self._port = 7878
         self._instance_id = int(time.time())
         self._sequence = 1
+        self._last_values: dict[str, Any] = {}
         self._server_task: asyncio.Task | None = None
         self._server_running = False
         self._device_uuid = str(uuid.uuid4())
@@ -204,7 +205,9 @@ class MtConnectServer(ProtocolServer):
             events = []
             for point in config.points:
                 val = behavior.get_value(point.name)
-                self._sequence += 1
+                if val != self._last_values.get(point.name):
+                    self._sequence += 1
+                    self._last_values[point.name] = val
                 events.append(
                     f'      <{escape(point.name)} dataItemId="{escape(point.name)}" '
                     f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'

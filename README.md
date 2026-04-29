@@ -667,15 +667,21 @@ protoforge run
 
 **Step 2 — Build Frontend**
 
+> The repo includes pre-built frontend assets in `web/dist/`, but it's recommended to rebuild to ensure consistency with the latest code:
+
 ```bash
 cd ProtoForge/web
 
-# 1. Install frontend dependencies
+# 1. Install frontend dependencies (requires Node.js 18+)
 npm install
 
 # 2. Build for production (outputs to web/dist/)
 npm run build
+
+cd ..
 ```
+
+> If the `web/dist/` directory doesn't exist, the backend won't be able to serve the frontend page and the browser will show a blank page.
 
 **Step 3 — Configure Nginx**
 
@@ -713,6 +719,8 @@ server {
 **Step 4 — Access the System**
 
 Open your browser at **<http://your-domain.com>** and log in with `admin` / `admin`.
+
+> If you see a blank page, check that the `web/dist/` directory exists. If not, re-run Step 2 to build the frontend.
 
 #### Option 3: Docker
 
@@ -928,6 +936,11 @@ ProtoForge/
 │   ├── sdk/                  # Python SDK
 │   └── templates/            # 53 device templates (JSON)
 ├── web/                       # Vue3 frontend
+│   └── src/
+│       ├── views/            # Page components
+│       ├── App.vue           # Main layout
+│       ├── api.js            # API calls
+│       └── main.js           # Entry point
 ├── tests/                     # Test cases
 ├── migrations/                # Alembic database migrations
 ├── Dockerfile

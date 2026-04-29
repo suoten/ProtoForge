@@ -58,10 +58,9 @@ def get_protoforge_host() -> str:
     if host in ("0.0.0.0", ""):
         import socket
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            host = s.getsockname()[0]
-            s.close()
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))
+                host = s.getsockname()[0]
         except Exception:
             host = "127.0.0.1"
     return host

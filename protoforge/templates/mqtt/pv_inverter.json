@@ -102,6 +102,18 @@
             "fixed_value": 0
         }
     ],
-    "protocol_config": {},
-    "tags": ["光伏", "逆变器", "新能源", "发电"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "光伏",
+        "逆变器",
+        "新能源",
+        "发电"
+    ]
 }

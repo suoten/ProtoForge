@@ -368,6 +368,109 @@ class ProtoForgeClient:
     def get_setup_status(self) -> dict:
         return self._get("/setup/status")
 
+    def register(self, username: str, password: str, role: str = "user") -> dict:
+        return self._post("/auth/register", json={"username": username, "password": password, "role": role})
+
+    def list_users(self) -> list:
+        return self._get("/auth/users")
+
+    def admin_reset_password(self, username: str, new_password: str) -> dict:
+        return self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
+
+    def update_user_role(self, username: str, role: str) -> dict:
+        return self._put(f"/auth/users/{username}/role", json={"role": role})
+
+    def admin_unlock_user(self, username: str) -> dict:
+        return self._post(f"/auth/admin/unlock/{username}")
+
+    def delete_user(self, username: str) -> dict:
+        return self._delete(f"/auth/users/{username}")
+
+    def get_protocols_info(self) -> list:
+        return self._get("/protocols/info")
+
+    def get_protocol_device_config(self, protocol_name: str) -> dict:
+        return self._get(f"/protocols/{protocol_name}/device-config")
+
+    def clear_logs(self) -> dict:
+        return self._delete("/logs")
+
+    def get_test_suggestions(self) -> list:
+        return self._get("/tests/suggestions")
+
+    def get_test_action_types(self) -> list:
+        return self._get("/tests/action-types")
+
+    def get_test_assertion_types(self) -> list:
+        return self._get("/tests/assertion-types")
+
+    def update_webhook(self, webhook_id: str, config: dict) -> dict:
+        return self._put(f"/webhooks/{webhook_id}", json=config)
+
+    def test_webhook(self, webhook_id: str) -> dict:
+        return self._post(f"/webhooks/{webhook_id}/test")
+
+    def get_webhook_stats(self) -> dict:
+        return self._get("/webhooks/stats")
+
+    def get_integration_status(self) -> dict:
+        return self._get("/integration/status")
+
+    def get_integration_metrics(self) -> dict:
+        return self._get("/integration/metrics")
+
+    def push_device_integration(self, device_id: str) -> dict:
+        return self._post(f"/integration/push-device/{device_id}")
+
+    def batch_push(self, device_ids: list[str]) -> dict:
+        return self._post("/integration/batch-push", json={"device_ids": device_ids})
+
+    def delete_device_from_edgelite(self, device_id: str) -> dict:
+        return self._delete(f"/integration/device/{device_id}")
+
+    def start_device_collect(self, device_id: str) -> dict:
+        return self._post(f"/integration/device/{device_id}/start")
+
+    def stop_device_collect(self, device_id: str) -> dict:
+        return self._post(f"/integration/device/{device_id}/stop")
+
+    def get_protocol_mappings(self) -> list:
+        return self._get("/integration/protocols")
+
+    def validate_device_compatibility(self, device_id: str) -> dict:
+        return self._post("/integration/validate", json={"device_id": device_id})
+
+    def test_integration_connection(self, config: dict) -> dict:
+        return self._post("/integration/test-connection", json=config)
+
+    def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
+        params = {"limit": limit}
+        if device_id:
+            params["device_id"] = device_id
+        return self._get("/integration/backhaul-data", params=params)
+
+    def get_device_status_cache(self) -> dict:
+        return self._get("/integration/device-status")
+
+    def get_alarm_rules(self) -> list:
+        return self._get("/integration/alarm-rules")
+
+    def add_alarm_rule(self, rule: dict) -> dict:
+        return self._post("/integration/alarm-rules", json=rule)
+
+    def delete_alarm_rule(self, rule_id: str) -> dict:
+        return self._delete(f"/integration/alarm-rules/{rule_id}")
+
+    def query_audit_log(self, **kwargs) -> dict:
+        return self._get("/audit", params=kwargs)
+
+    def get_audit_stats(self) -> dict:
+        return self._get("/audit/stats")
+
+    def _delete(self, path: str, **kwargs) -> Any:
+        resp = self._request("DELETE", path, **kwargs)
+        return resp.json()
+
 
 class AsyncProtoForgeClient:
     def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 30.0,
@@ -721,3 +824,106 @@ class AsyncProtoForgeClient:
 
     async def get_setup_status(self) -> dict:
         return await self._get("/setup/status")
+
+    async def register(self, username: str, password: str, role: str = "user") -> dict:
+        return await self._post("/auth/register", json={"username": username, "password": password, "role": role})
+
+    async def list_users(self) -> list:
+        return await self._get("/auth/users")
+
+    async def admin_reset_password(self, username: str, new_password: str) -> dict:
+        return await self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
+
+    async def update_user_role(self, username: str, role: str) -> dict:
+        return await self._put(f"/auth/users/{username}/role", json={"role": role})
+
+    async def admin_unlock_user(self, username: str) -> dict:
+        return await self._post(f"/auth/admin/unlock/{username}")
+
+    async def delete_user(self, username: str) -> dict:
+        return await self._delete(f"/auth/users/{username}")
+
+    async def get_protocols_info(self) -> list:
+        return await self._get("/protocols/info")
+
+    async def get_protocol_device_config(self, protocol_name: str) -> dict:
+        return await self._get(f"/protocols/{protocol_name}/device-config")
+
+    async def clear_logs(self) -> dict:
+        return await self._delete("/logs")
+
+    async def get_test_suggestions(self) -> list:
+        return await self._get("/tests/suggestions")
+
+    async def get_test_action_types(self) -> list:
+        return await self._get("/tests/action-types")
+
+    async def get_test_assertion_types(self) -> list:
+        return await self._get("/tests/assertion-types")
+
+    async def update_webhook(self, webhook_id: str, config: dict) -> dict:
+        return await self._put(f"/webhooks/{webhook_id}", json=config)
+
+    async def test_webhook(self, webhook_id: str) -> dict:
+        return await self._post(f"/webhooks/{webhook_id}/test")
+
+    async def get_webhook_stats(self) -> dict:
+        return await self._get("/webhooks/stats")
+
+    async def get_integration_status(self) -> dict:
+        return await self._get("/integration/status")
+
+    async def get_integration_metrics(self) -> dict:
+        return await self._get("/integration/metrics")
+
+    async def push_device_integration(self, device_id: str) -> dict:
+        return await self._post(f"/integration/push-device/{device_id}")
+
+    async def batch_push(self, device_ids: list[str]) -> dict:
+        return await self._post("/integration/batch-push", json={"device_ids": device_ids})
+
+    async def delete_device_from_edgelite(self, device_id: str) -> dict:
+        return await self._delete(f"/integration/device/{device_id}")
+
+    async def start_device_collect(self, device_id: str) -> dict:
+        return await self._post(f"/integration/device/{device_id}/start")
+
+    async def stop_device_collect(self, device_id: str) -> dict:
+        return await self._post(f"/integration/device/{device_id}/stop")
+
+    async def get_protocol_mappings(self) -> list:
+        return await self._get("/integration/protocols")
+
+    async def validate_device_compatibility(self, device_id: str) -> dict:
+        return await self._post("/integration/validate", json={"device_id": device_id})
+
+    async def test_integration_connection(self, config: dict) -> dict:
+        return await self._post("/integration/test-connection", json=config)
+
+    async def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
+        params = {"limit": limit}
+        if device_id:
+            params["device_id"] = device_id
+        return await self._get("/integration/backhaul-data", params=params)
+
+    async def get_device_status_cache(self) -> dict:
+        return await self._get("/integration/device-status")
+
+    async def get_alarm_rules(self) -> list:
+        return await self._get("/integration/alarm-rules")
+
+    async def add_alarm_rule(self, rule: dict) -> dict:
+        return await self._post("/integration/alarm-rules", json=rule)
+
+    async def delete_alarm_rule(self, rule_id: str) -> dict:
+        return await self._delete(f"/integration/alarm-rules/{rule_id}")
+
+    async def query_audit_log(self, **kwargs) -> dict:
+        return await self._get("/audit", params=kwargs)
+
+    async def get_audit_stats(self) -> dict:
+        return await self._get("/audit/stats")
+
+    async def _delete(self, path: str, **kwargs) -> Any:
+        resp = await self._request("DELETE", path, **kwargs)
+        return resp.json()

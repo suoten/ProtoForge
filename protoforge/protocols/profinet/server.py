@@ -119,6 +119,7 @@ class ProfinetServer(ProtocolServer):
         self._input_size = 0
         self._output_size = 0
         self._connected = False
+        self._connections: set[asyncio.StreamWriter] = set()
         self._cycle_ms = 32
 
     async def start(self, config: dict[str, Any]) -> None:
@@ -204,6 +205,7 @@ class ProfinetServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.info("PROFINET IO connection from %s", addr)
+        self._connections.add(writer)
         self._connected = True
         self._log_debug("inbound", "connect",
                         f"IO Controller连接: {addr[0]}:{addr[1]}",
@@ -220,7 +222,8 @@ class ProfinetServer(ProtocolServer):
         except (ConnectionResetError, asyncio.CancelledError):
             pass
         finally:
-            self._connected = False
+            self._connections.discard(writer)
+            self._connected = len(self._connections) > 0
             writer.close()
             try:
                 await writer.wait_closed()

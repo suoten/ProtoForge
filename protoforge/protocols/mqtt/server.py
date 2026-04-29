@@ -54,6 +54,9 @@ class MqttBroker(ProtocolServer):
         self._host = "0.0.0.0"
         self._port = 1883
         self._publish_task: asyncio.Task | None = None
+        self._auth_required = False
+        self._auth_username = ""
+        self._auth_password = ""
 
     async def start(self, config: dict[str, Any]) -> None:
         if not ASYNC_MQTT_AVAILABLE:
@@ -63,8 +66,18 @@ class MqttBroker(ProtocolServer):
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 1883)
         publish_interval = config.get("publish_interval", 5)
+        self._auth_required = config.get("auth_required", False)
+        self._auth_username = config.get("auth_username", "")
+        self._auth_password = config.get("auth_password", "")
 
         try:
+            auth_plugins = {
+                "amqtt.plugins.authentication.AnonymousAuthPlugin": {
+                    "allow_anonymous": not self._auth_required,
+                },
+            }
+            if self._auth_required and self._auth_username:
+                auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"]["allow_anonymous"] = False
             broker_config = {
                 "listeners": {
                     "default": {
@@ -73,9 +86,7 @@ class MqttBroker(ProtocolServer):
                     }
                 },
                 "plugins": {
-                    "amqtt.plugins.authentication.AnonymousAuthPlugin": {
-                        "allow_anonymous": True,
-                    },
+                    **auth_plugins,
                     "amqtt.plugins.sys.broker.BrokerSysPlugin": {
                         "sys_interval": 20,
                     },
@@ -175,6 +186,26 @@ class MqttBroker(ProtocolServer):
                     "type": "integer",
                     "default": 5,
                     "description": "数据发布间隔（秒）",
+                },
+                "auth_required": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "是否启用用户名/密码认证",
+                },
+                "auth_username": {
+                    "type": "string",
+                    "default": "",
+                    "description": "认证用户名",
+                },
+                "auth_password": {
+                    "type": "string",
+                    "default": "",
+                    "description": "认证密码",
+                },
+                "tls_enabled": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "是否启用TLS加密",
                 },
             },
         }

@@ -51,6 +51,17 @@
             "max_value": 15.0
         }
     ],
-    "protocol_config": {},
-    "tags": ["智慧楼宇", "照明", "节能"]
+    "protocol_config": {
+        "auth_required": false,
+        "auth_username": "",
+        "auth_password": "",
+        "tls_enabled": false,
+        "tls_cert_path": "",
+        "topic_prefix": "protoforge"
+    },
+    "tags": [
+        "智慧楼宇",
+        "照明",
+        "节能"
+    ]
 }

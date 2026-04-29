@@ -59,7 +59,14 @@
         "device_port": 5061,
         "username": "",
         "password": "",
-        "realm": "gb28181"
+        "realm": "gb28181",
+        "srtp_enabled": false,
+        "srtp_crypto_suite": "AES_CM_128_HMAC_SHA1_80",
+        "srtp_key": ""
     },
-    "tags": ["视频监控", "摄像头", "GB28181"]
+    "tags": [
+        "视频监控",
+        "摄像头",
+        "GB28181"
+    ]
 }

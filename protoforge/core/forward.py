@@ -43,7 +43,9 @@ class InfluxDBTarget(ForwardTarget):
         lines = []
         for r in records:
             measurement = r.get("protocol", "device")
-            tags = f"device_id={r.get('device_id', 'unknown')},protocol={r.get('protocol', 'unknown')}"
+            device_id = str(r.get('device_id', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+            protocol = str(r.get('protocol', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+            tags = f"device_id={device_id},protocol={protocol}"
             fields_parts = []
             if "value" in r:
                 try:

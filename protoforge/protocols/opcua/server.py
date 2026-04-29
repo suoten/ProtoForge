@@ -71,12 +71,38 @@ class OpcUaServer(ProtocolServer):
             self._server.set_endpoint(self._endpoint)
 
             first_config = next(iter(self._device_configs.values()), None)
+            security_mode = "None"
+            security_policy = "None"
             if first_config:
                 proto_config = first_config.protocol_config or {}
                 server_name = proto_config.get("server_name", "ProtoForge OPC-UA Server")
+                security_mode = proto_config.get("security_mode", "None")
+                security_policy = proto_config.get("security_policy", "None")
             else:
                 server_name = "ProtoForge OPC-UA Server"
             self._server.set_server_name(server_name)
+
+            if security_mode != "None" and ASYNCUA_AVAILABLE:
+                try:
+                    from asyncua import ua
+                    mode_map = {
+                        "None": ua.MessageSecurityMode.None_,
+                        "Sign": ua.MessageSecurityMode.Sign,
+                        "SignAndEncrypt": ua.MessageSecurityMode.SignAndEncrypt,
+                    }
+                    policy_map = {
+                        "None": ua.SecurityPolicyType.NoSecurity,
+                        "Basic256Sha256": ua.SecurityPolicyType.Basic256Sha256,
+                    }
+                    if security_mode in mode_map:
+                        try:
+                            self._server.set_security_policy([policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)])
+                            self._server.set_security_mode(mode_map[security_mode])
+                            logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
+                        except Exception as se:
+                            logger.warning("Failed to set OPC-UA security policy: %s, falling back to None", se)
+                except Exception as e:
+                    logger.warning("OPC-UA security configuration error: %s", e)
 
             uri = "urn:protoforge:simulation"
             try:
@@ -145,11 +171,20 @@ class OpcUaServer(ProtocolServer):
         self._clear_default_device(device_id)
         nodes = self._device_nodes.pop(device_id, None)
         if nodes and self._server:
-            for node in nodes.values():
+            point_nodes = nodes.get("points", {})
+            for point_name, point_node in point_nodes.items():
+                point_node_key = f"{device_id}.{point_name}"
+                self._point_nodes.pop(point_node_key, None)
                 try:
-                    await node.delete()
+                    await point_node.delete()
                 except Exception as e:
-                    logger.debug("OPC-UA node delete error: %s", e)
+                    logger.debug("OPC-UA point node delete error: %s", e)
+            folder_node = nodes.get("folder")
+            if folder_node:
+                try:
+                    await folder_node.delete()
+                except Exception as e:
+                    logger.debug("OPC-UA folder node delete error: %s", e)
         logger.info("OPC-UA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
                         f"移除OPC-UA设备 {device_id}",
@@ -204,6 +239,18 @@ class OpcUaServer(ProtocolServer):
                     "type": "integer",
                     "default": 4840,
                     "description": "监听端口",
+                },
+                "security_mode": {
+                    "type": "string",
+                    "default": "None",
+                    "enum": ["None", "Sign", "SignAndEncrypt"],
+                    "description": "安全模式",
+                },
+                "security_policy": {
+                    "type": "string",
+                    "default": "None",
+                    "enum": ["None", "Basic256Sha256"],
+                    "description": "安全策略",
                 },
             },
         }

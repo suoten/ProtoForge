@@ -1,9 +1,12 @@
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -64,9 +67,16 @@ class WebhookManager:
 
     def add_webhook(self, config: dict[str, Any]) -> WebhookConfig:
         wh_id = config.get("id", f"wh-{int(time.time())}")
+        url = config["url"]
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
+        hostname = parsed.hostname or ""
+        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):
+            logger.warning("Webhook URL points to private/internal address: %s", url)
         webhook = WebhookConfig(
             id=wh_id, name=config.get("name", wh_id),
-            url=config["url"], events=config.get("events", ["rule_triggered"]),
+            url=url, events=config.get("events", ["rule_triggered"]),
             headers=config.get("headers", {}), enabled=config.get("enabled", True),
             secret=config.get("secret"),
         )
@@ -135,8 +145,8 @@ class WebhookManager:
                 }
                 headers = {"Content-Type": "application/json", **webhook.headers}
                 if webhook.secret:
-                    import hashlib
-                    sig = hashlib.sha256(f"{webhook.secret}:{json.dumps(body)}".encode()).hexdigest()
+                    body_bytes = json.dumps(body).encode()
+                    sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
                     headers["X-ProtoForge-Signature"] = sig
                 if self._client:
                     resp = await self._client.post(webhook.url, json=body, headers=headers)

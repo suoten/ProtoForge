@@ -134,9 +134,9 @@ def _add_emulation_prevention(data: bytes) -> bytes:
 
 
 def generate_h264_iframe(width: int = 352, height: int = 288) -> bytes:
-    sps = _generate_sps(width, height)
-    pps = _generate_pps()
-    idr = _generate_idr_slice(width, height)
+    sps = b'\x00\x00\x00\x01\x67' + _add_emulation_prevention(_generate_sps(width, height)[5:])
+    pps = b'\x00\x00\x00\x01\x68' + _add_emulation_prevention(_generate_pps(width, height)[5:])
+    idr = b'\x00\x00\x00\x01\x65' + _add_emulation_prevention(_generate_idr_slice(width, height)[5:])
     return sps + pps + idr
 
 
@@ -306,7 +306,11 @@ class RtpStreamer:
                         self._ssrc, marker=True,
                     )
                     self._seq = (self._seq + 1) & 0xFFFF
-                    self._transport.sendto(packet, (self._dest_ip, self._dest_port))
+                    if self._transport:
+                        try:
+                            self._transport.sendto(packet, (self._dest_ip, self._dest_port))
+                        except Exception as e:
+                            logger.debug("RTP sendto error: %s", e)
                 else:
                     offset = 0
                     while offset < len(ps_frame):
@@ -317,7 +321,12 @@ class RtpStreamer:
                             self._ssrc, marker=is_last,
                         )
                         self._seq = (self._seq + 1) & 0xFFFF
-                        self._transport.sendto(packet, (self._dest_ip, self._dest_port))
+                        if self._transport:
+                            try:
+                                self._transport.sendto(packet, (self._dest_ip, self._dest_port))
+                            except Exception as e:
+                                logger.debug("RTP sendto error: %s", e)
+                                break
                         offset += mtu
                         if not is_last:
                             await asyncio.sleep(0.0005)
