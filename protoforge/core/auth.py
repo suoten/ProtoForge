@@ -156,6 +156,7 @@ _LOCKOUT_DURATION = 300
 class UserManager:
     def __init__(self):
         self._users: dict[str, User] = {}
+        self._users_by_id: dict[str, User] = {}
         self._db = None
         default_password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "admin")
         if default_password == "admin":
@@ -164,18 +165,17 @@ class UserManager:
                 "Set the PROTOFORGE_ADMIN_PASSWORD environment variable to a strong password before deployment."
             )
         admin_hash = hash_password(default_password)
-        self._users["admin"] = User(
+        admin_user = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",
         )
+        self._users["admin"] = admin_user
+        self._users_by_id["admin"] = admin_user
 
     def set_database(self, db) -> None:
         self._db = db
 
     def get_user_by_id(self, user_id: str) -> Optional[User]:
-        for u in self._users.values():
-            if u.id == user_id:
-                return u
-        return None
+        return self._users_by_id.get(user_id)
 
     async def restore_from_db(self) -> None:
         if not self._db:
@@ -186,6 +186,7 @@ class UserManager:
                 user = User.from_dict(u)
                 if user.username != "admin":
                     self._users[user.username] = user
+                    self._users_by_id[user.id] = user
             logger.info("Restored %d users from database", len(users))
         except Exception as e:
             logger.warning("Failed to restore users: %s", e)
@@ -247,6 +248,7 @@ class UserManager:
             role=role,
         )
         self._users[username] = user
+        self._users_by_id[user.id] = user
         if self._db:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
@@ -258,7 +260,9 @@ class UserManager:
         if username == "admin":
             return False
         if username in self._users:
+            user = self._users[username]
             del self._users[username]
+            self._users_by_id.pop(user.id, None)
             if self._db:
                 try:
                     await self._db.delete_user(username)

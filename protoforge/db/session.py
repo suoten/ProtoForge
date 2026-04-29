@@ -46,7 +46,7 @@ class Database:
             raise RuntimeError(
                 "PostgreSQL support requires asyncpg. Install it with: pip install asyncpg"
             )
-        self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10)
+        self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10, autocommit=True)
         self._is_postgres = True
         async with self._pg_pool.acquire() as conn:
             await self._create_tables_postgres(conn)
@@ -640,6 +640,67 @@ class Database:
              entry.get("detail", ""), entry.get("ip_address", ""),
              entry.get("user_agent", "")),
         )
+
+    async def query_audit_entries(
+        self,
+        username: Optional[str] = None,
+        action: Optional[str] = None,
+        resource_type: Optional[str] = None,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions = []
+        params: list[Any] = []
+        idx = 1
+
+        if username:
+            conditions.append(f"username = ${idx}" if self._is_postgres else "username = ?")
+            params.append(username)
+            idx += 1
+        if action:
+            conditions.append(f"action = ${idx}" if self._is_postgres else "action = ?")
+            params.append(action)
+            idx += 1
+        if resource_type:
+            conditions.append(f"resource_type = ${idx}" if self._is_postgres else "resource_type = ?")
+            params.append(resource_type)
+            idx += 1
+        if start_time is not None:
+            conditions.append(f"timestamp >= ${idx}" if self._is_postgres else "timestamp >= ?")
+            params.append(start_time)
+            idx += 1
+        if end_time is not None:
+            conditions.append(f"timestamp <= ${idx}" if self._is_postgres else "timestamp <= ?")
+            params.append(end_time)
+            idx += 1
+
+        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        limit_clause = f"LIMIT ${idx}" if self._is_postgres else "LIMIT ?"
+        offset_clause = f"OFFSET ${idx + 1}" if self._is_postgres else "OFFSET ?"
+        params.extend([limit, offset])
+
+        rows = await self._fetchall(
+            f"SELECT timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent "
+            f"FROM audit_log {where_clause} ORDER BY timestamp DESC {limit_clause} {offset_clause}",
+            tuple(params),
+        )
+        entries = [{
+            "timestamp": r["timestamp"], "action": r["action"],
+            "username": r["username"], "resource_type": r["resource_type"],
+            "resource_id": r["resource_id"], "detail": r["detail"],
+            "ip_address": r["ip_address"], "user_agent": r["user_agent"],
+        } for r in rows]
+
+        count_params = params[:-2]
+        count_rows = await self._fetchall(
+            f"SELECT COUNT(*) as cnt FROM audit_log {where_clause}",
+            tuple(count_params) if count_params else (),
+        )
+        total = count_rows[0]["cnt"] if count_rows else 0
+
+        return entries, total
 
     async def load_audit_entries(self, limit: int = 1000) -> list[dict[str, Any]]:
         limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"

@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Any, Optional
 
@@ -13,6 +14,7 @@ class DeviceInstance:
         self._point_values: dict[str, Any] = {}
         self._point_configs: dict[str, PointConfig] = {}
         self._start_time: Optional[float] = None
+        self._lock = asyncio.Lock()
 
         for point in config.points:
             self._point_configs[point.name] = point
@@ -53,12 +55,13 @@ class DeviceInstance:
         self._status = DeviceStatus.OFFLINE
         self._start_time = None
 
-    def tick(self) -> None:
+    async def tick(self) -> None:
         if self._status != DeviceStatus.ONLINE:
             return
-        for name, point in self._point_configs.items():
-            if point.generator_type != GeneratorType.FIXED:
-                self._point_values[name] = self._generator.generate(point)
+        async with self._lock:
+            for name, point in self._point_configs.items():
+                if point.generator_type != GeneratorType.FIXED:
+                    self._point_values[name] = self._generator.generate(point)
 
     def read_point(self, point_name: str) -> Optional[PointValue]:
         if point_name not in self._point_values:
@@ -82,11 +85,12 @@ class DeviceInstance:
             )
         return result
 
-    def write_point(self, point_name: str, value: Any) -> bool:
+    async def write_point(self, point_name: str, value: Any) -> bool:
         if point_name not in self._point_configs:
             return False
         point = self._point_configs[point_name]
         if point.access == "r":
             return False
-        self._point_values[point_name] = value
+        async with self._lock:
+            self._point_values[point_name] = value
         return True

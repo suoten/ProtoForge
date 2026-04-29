@@ -205,9 +205,10 @@ class MtConnectServer(ProtocolServer):
             events = []
             for point in config.points:
                 val = behavior.get_value(point.name)
-                if val != self._last_values.get(point.name):
+                value_key = f"{dev_id}.{point.name}"
+                if val != self._last_values.get(value_key):
                     self._sequence += 1
-                    self._last_values[point.name] = val
+                    self._last_values[value_key] = val
                 events.append(
                     f'      <{escape(point.name)} dataItemId="{escape(point.name)}" '
                     f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'

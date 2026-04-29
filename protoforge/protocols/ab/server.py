@@ -14,6 +14,7 @@ _CIP_TYPE_MAP = {
     "int16": (0xC3, 2),
     "uint16": (0xC7, 2),
     "int32": (0xC4, 4),
+    "dint": (0xC4, 4),
     "uint32": (0xC8, 4),
     "float32": (0xCA, 4),
     "float64": (0xCB, 8),

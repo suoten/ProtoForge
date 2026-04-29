@@ -251,6 +251,9 @@ class ModbusTcpServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        slave_id = self._slave_map.pop(device_id, None)
+        if slave_id is not None:
+            self._data_stores.pop(slave_id, None)
         self._clear_default_device(device_id)
         logger.info("Modbus device removed: %s", device_id)
         self._log_debug("system", "device_remove",

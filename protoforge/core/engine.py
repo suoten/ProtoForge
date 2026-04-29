@@ -263,7 +263,7 @@ class SimulationEngine:
                 old_value = pv.value
                 break
 
-        success = instance.write_point(point_name, value)
+        success = await instance.write_point(point_name, value)
         if success:
             server = self._protocol_servers.get(instance.protocol)
             if server and server.status == ProtocolStatus.RUNNING:
@@ -271,12 +271,12 @@ class SimulationEngine:
                     proto_success = await server.write_point(device_id, point_name, value)
                     if not proto_success:
                         if old_value is not None:
-                            instance.write_point(point_name, old_value)
+                            await instance.write_point(point_name, old_value)
                         logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
                         return False
                 except Exception as e:
                     if old_value is not None:
-                        instance.write_point(point_name, old_value)
+                        await instance.write_point(point_name, old_value)
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
         return success
@@ -444,9 +444,9 @@ class SimulationEngine:
     async def _tick_loop(self) -> None:
         while self._running:
             for instance in self._devices.values():
-                instance.tick()
+                await instance.tick()
             for scenario in self._scenario_instances.values():
-                scenario.tick()
+                await scenario.tick()
             await asyncio.sleep(1.0)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:

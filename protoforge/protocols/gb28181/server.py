@@ -108,7 +108,7 @@ class GB28181Device:
             f"c=IN IP4 {media_ip}\r\n"
             f"t=0 0\r\n"
             f"m=video {media_port} RTP/AVP 96 97 98\r\n"
-            f"a=recvonly\r\n"
+            f"a=sendonly\r\n"
             f"a=rtpmap:96 PS/90000\r\n"
             f"a=rtpmap:97 MPEG4/90000\r\n"
             f"a=rtpmap:98 H264/90000\r\n"
@@ -651,7 +651,7 @@ class GB28181Server(ProtocolServer):
                         t = asyncio.create_task(gb_device.rtp_streamer.stop())
                         t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
                         self._rtp_tasks.append(t)
-
+                        self._rtp_tasks = [t for t in self._rtp_tasks if not t.done()]
                     try:
                         from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
                         ssrc = int(gb_device.device_id[-10:]) if len(gb_device.device_id) >= 10 else 0

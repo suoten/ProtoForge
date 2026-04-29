@@ -49,21 +49,21 @@ class Scenario:
         for device in self._devices.values():
             device.stop()
 
-    def tick(self) -> None:
+    async def tick(self) -> None:
         if self._status != ScenarioStatus.RUNNING:
             return
         for device in self._devices.values():
-            device.tick()
-        self._evaluate_rules()
+            await device.tick()
+        await self._evaluate_rules()
 
-    def _evaluate_rules(self) -> None:
+    async def _evaluate_rules(self) -> None:
         for rule in self.config.rules:
             if not rule.enabled:
                 continue
             try:
                 triggered = self._check_rule(rule)
                 if triggered:
-                    self._execute_action(rule)
+                    await self._execute_action(rule)
             except Exception as e:
                 logger.warning("Rule %s evaluation error: %s", rule.id, e)
 
@@ -166,7 +166,7 @@ class Scenario:
         self._last_trigger[rule.id] = now
         return True
 
-    def _execute_action(self, rule: Rule) -> None:
+    async def _execute_action(self, rule: Rule) -> None:
         if not rule.target_device_id or not rule.target_point:
             return
         target = self._devices.get(rule.target_device_id)
@@ -185,7 +185,7 @@ class Scenario:
             current = target.read_point(rule.target_point)
             step = rule.condition.get("step", 1)
             value = (current.value if current else 0) - step
-        success = target.write_point(rule.target_point, value)
+        success = await target.write_point(rule.target_point, value)
         if success:
             logger.info("Rule %s triggered: %s.%s = %s", rule.id, rule.target_device_id, rule.target_point, value)
             self._notify_webhook(rule, value)

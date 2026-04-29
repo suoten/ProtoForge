@@ -42,7 +42,7 @@ class InfluxDBTarget(ForwardTarget):
     async def send(self, records: list[dict[str, Any]]) -> None:
         lines = []
         for r in records:
-            measurement = r.get("protocol", "device")
+            measurement = str(r.get("protocol", "device")).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
             device_id = str(r.get('device_id', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
             protocol = str(r.get('protocol', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
             tags = f"device_id={device_id},protocol={protocol}"
@@ -114,9 +114,9 @@ class FileTarget(ForwardTarget):
     def __init__(self, path: str, format: str = "jsonl"):
         from pathlib import Path
         import os
-        base_dir = os.getcwd()
-        resolved_path = (Path(path).resolve())
-        if not str(resolved_path).startswith(base_dir):
+        base_dir = str(Path.cwd().resolve())
+        resolved_path = str(Path(path).resolve())
+        if not (resolved_path.startswith(base_dir + os.sep) or resolved_path == base_dir):
             raise ValueError(
                 f"FileTarget path '{path}' escapes the allowed directory. "
                 "Only relative paths within the working directory are permitted."
@@ -201,6 +201,12 @@ class ForwardEngine:
     async def _forward_loop(self) -> None:
         while self._running:
             records = []
+            queue_size = self._queue.qsize()
+            if queue_size > self._queue.maxsize * 0.5:
+                logger.warning(
+                    "Forward engine queue is at %d/%d (%.0f%%), consider reducing load or increasing batch size",
+                    queue_size, self._queue.maxsize, queue_size / self._queue.maxsize * 100
+                )
             try:
                 while len(records) < self._batch_size:
                     timeout = 0.1 if records else self._flush_interval
@@ -237,6 +243,7 @@ class ForwardEngine:
             "queue_size": self._queue.qsize(),
             "sent_count": self._sent_count,
             "failed_count": self._failed_count,
+            "dropped_count": self._dropped_count,
         }
 
 

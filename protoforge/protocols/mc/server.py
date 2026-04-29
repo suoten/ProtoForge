@@ -65,6 +65,13 @@ class McDeviceBehavior(DeviceBehavior):
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
+        if point_name in self._point_addresses:
+            area_code, offset = self._point_addresses[point_name]
+            try:
+                data = struct.pack("<h", int(value))
+                self.write_memory(area_code, offset, data)
+            except (ValueError, TypeError, struct.error):
+                pass
 
     def get_value(self, point_name: str) -> Any:
         return self._values.get(point_name, 0)
