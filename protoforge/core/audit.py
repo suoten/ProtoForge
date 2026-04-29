@@ -52,7 +52,7 @@ class AuditLogger:
             try:
                 await self._database.save_audit_entry(entry.to_dict())
             except Exception as e:
-                logger.debug("Failed to persist audit entry: %s", e)
+                logger.warning("Failed to persist audit entry: %s", e)
 
     async def query(self, username: Optional[str] = None,
                     action: Optional[str] = None,
@@ -70,7 +70,7 @@ class AuditLogger:
                 )
                 return entries
             except Exception as e:
-                logger.debug("Audit DB query failed, falling back to memory: %s", e)
+                logger.warning("Audit DB query failed, falling back to memory: %s", e)
 
         results = []
         for entry in reversed(self._entries):
@@ -101,7 +101,7 @@ class AuditLogger:
         try:
             return await self._database.delete_audit_entry(entry_id)
         except Exception as e:
-            logger.debug("Failed to delete audit entry %d: %s", entry_id, e)
+            logger.warning("Failed to delete audit entry %d: %s", entry_id, e)
             return False
 
     async def clear_entries(self, before_timestamp: Optional[float] = None) -> int:
@@ -114,7 +114,7 @@ class AuditLogger:
         try:
             return await self._database.clear_audit_entries(before_timestamp)
         except Exception as e:
-            logger.debug("Failed to clear audit entries: %s", e)
+            logger.warning("Failed to clear audit entries: %s", e)
             return 0
 
     async def restore_from_db(self) -> None:
@@ -125,7 +125,7 @@ class AuditLogger:
             self._entries = [AuditEntry(**e) for e in entries]
             logger.info("Restored %d audit entries from database", len(self._entries))
         except Exception as e:
-            logger.debug("Failed to restore audit entries: %s", e)
+            logger.warning("Failed to restore audit entries: %s", e)
 
 
 audit_logger = AuditLogger()

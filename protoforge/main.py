@@ -194,6 +194,19 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"recorder: {e}")
         logger.error("Failed to initialize recorder persistence: %s", e)
 
+    try:
+        from protoforge.core.failover import failover_manager
+        primary_url = os.environ.get("PROTOFORGE_FAILOVER_PRIMARY", "")
+        standby_url = os.environ.get("PROTOFORGE_FAILOVER_STANDBY", "")
+        is_primary = os.environ.get("PROTOFORGE_FAILOVER_ROLE", "primary") == "primary"
+        if primary_url:
+            failover_manager.configure(primary_url, standby_url, is_primary)
+            await failover_manager.start()
+            logger.info("Failover manager started (role=%s)", "primary" if is_primary else "standby")
+    except Exception as e:
+        restore_errors.append(f"failover: {e}")
+        logger.error("Failed to start failover manager: %s", e)
+
     if os.environ.get("PROTOFORGE_DEMO_MODE"):
         try:
             from protoforge.core.demo import seed_demo_data
@@ -202,12 +215,28 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("Failed to seed demo data: %s", e)
 
+    grpc_server = None
+    grpc_port = int(os.environ.get("PROTOFORGE_GRPC_PORT", "0"))
+    if grpc_port > 0:
+        try:
+            from protoforge.grpc.server import start_grpc_server
+            grpc_server = await start_grpc_server(grpc_port)
+        except Exception as e:
+            logger.warning("Failed to start gRPC server: %s", e)
+
     if restore_errors:
         logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
     else:
         logger.info("ProtoForge started successfully")
 
     yield
+
+    if grpc_server:
+        try:
+            await grpc_server.stop(grace=5)
+            logger.info("gRPC server stopped")
+        except Exception as e:
+            logger.warning("Error stopping gRPC server: %s", e)
 
     try:
         await _integration_manager.stop()

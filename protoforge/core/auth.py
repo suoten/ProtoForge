@@ -231,7 +231,7 @@ class UserManager:
         ok, msg = _is_password_strong(password)
         if not ok:
             logger.warning("Password too weak for user %s: %s", username, msg)
-            return None
+            raise ValueError(msg)
         user = User(
             id=uuid.uuid4().hex[:12],
             username=username,

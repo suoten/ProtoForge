@@ -403,7 +403,10 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
     try:
         result = engine.create_scenario(config)
-        await db.save_scenario(config)
+        try:
+            await db.save_scenario(config)
+        except Exception as db_err:
+            logger.warning("Failed to persist scenario %s: %s", config.id, db_err)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -494,7 +497,10 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
     try:
         result = engine.create_scenario(config)
         if db:
-            await db.save_scenario(config)
+            try:
+                await db.save_scenario(config)
+            except Exception as db_err:
+                logger.warning("Failed to persist scenario %s: %s", config.id, db_err)
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -552,6 +558,22 @@ async def create_template(template: TemplateDetail, _user: dict = Depends(requir
         except Exception as db_err:
             logger.warning("Failed to persist template %s: %s", template.id, db_err)
     return template
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, _user: dict = Depends(require_operator)):
+    tm = _get_template_manager()
+    db = _get_database()
+    try:
+        tm.get_template(template_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    tm.remove_template(template_id)
+    if db:
+        try:
+            await db.delete_template(template_id)
+        except Exception as db_err:
+            logger.warning("Failed to delete template %s from DB: %s", template_id, db_err)
+    return {"status": "ok"}
 
 @router.post("/templates/{template_id}/instantiate", response_model=DeviceConfig)
 async def instantiate_template(
@@ -646,7 +668,8 @@ async def ws_devices(websocket: WebSocket):
             for d in devices:
                 try:
                     data.append(d.model_dump())
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Device serialization fallback: %s", exc)
                     data.append({"id": d.id, "name": d.name, "protocol": d.protocol, "status": d.status.value})
             await websocket.send_json({"type": "devices", "data": data})
 
@@ -655,7 +678,8 @@ async def ws_devices(websocket: WebSocket):
             except asyncio.TimeoutError:
                 try:
                     await websocket.send_json({"type": "ping"})
-                except Exception:
+                except Exception as exc:
+                    logger.debug("WebSocket ping failed: %s", exc)
                     break
     except WebSocketDisconnect:
         logger.debug("WebSocket /ws/devices disconnected")
@@ -718,7 +742,8 @@ async def ws_logs(websocket: WebSocket):
             except asyncio.TimeoutError:
                 try:
                     await websocket.send_json({"type": "ping"})
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Log WebSocket ping failed: %s", exc)
                     break
     except WebSocketDisconnect:
         logger.debug("WebSocket /ws/logs disconnected")
@@ -840,8 +865,8 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
                             "match": str(local_val) == str(el_val) if el_val is not None else None,
                         })
                     result["data_comparison"] = comparison
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Data comparison failed: %s", exc)
         return result
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
@@ -910,8 +935,8 @@ async def _get_internal_client():
                     token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                     _internal_client.headers["Authorization"] = f"Bearer {token}"
                     _internal_token_exp = time.time() + 86400
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Internal client token refresh failed: %s", exc)
         return _internal_client
 
     from httpx import ASGITransport, AsyncClient
@@ -928,8 +953,8 @@ async def _get_internal_client():
                 token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
                 _internal_client.headers["Authorization"] = f"Bearer {token}"
                 _internal_token_exp = time.time() + 86400
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Internal client token creation failed: %s", exc)
     return _internal_client
 
 async def _close_internal_client():
@@ -1336,7 +1361,10 @@ async def register(user_data: dict[str, Any]):
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password required")
 
-    user = await user_manager.create_user(username, password, role="user")
+    try:
+        user = await user_manager.create_user(username, password, role="user")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     if not user:
         raise HTTPException(status_code=409, detail="Username already exists")

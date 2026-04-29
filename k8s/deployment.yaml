@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: protoforge
+  labels:
+    app: protoforge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: protoforge
+  template:
+    metadata:
+      labels:
+        app: protoforge
+    spec:
+      containers:
+        - name: protoforge
+          image: suoten/protoforge:latest
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: PROTOFORGE_PORT
+              value: "8000"
+            - name: PROTOFORGE_DB_ENGINE
+              value: "postgresql"
+            - name: PROTOFORGE_DB_HOST
+              value: "protoforge-postgres"
+            - name: PROTOFORGE_DB_PORT
+              value: "5432"
+            - name: PROTOFORGE_DB_NAME
+              value: "protoforge"
+            - name: PROTOFORGE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: protoforge-db-secret
+                  key: username
+            - name: PROTOFORGE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: protoforge-db-secret
+                  key: password
+            - name: PROTOFORGE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: protoforge-jwt-secret
+                  key: secret
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: protoforge-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: protoforge
+spec:
+  selector:
+    app: protoforge
+  ports:
+    - port: 80
+      targetPort: 8000
+      name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: protoforge-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: protoforge-postgres
+  labels:
+    app: protoforge-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: protoforge-postgres
+  template:
+    metadata:
+      labels:
+        app: protoforge-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "protoforge"
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: protoforge-db-secret
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: protoforge-db-secret
+                  key: password
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: protoforge-postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: protoforge-postgres
+spec:
+  selector:
+    app: protoforge-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: protoforge-postgres-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

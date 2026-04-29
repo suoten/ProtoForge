@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package protoforge;
+
+service ProtoForgeService {
+  rpc GetHealth(HealthRequest) returns (HealthResponse);
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+  rpc GetDevice(GetDeviceRequest) returns (DeviceResponse);
+  rpc CreateDevice(CreateDeviceRequest) returns (DeviceResponse);
+  rpc DeleteDevice(DeleteDeviceRequest) returns (DeleteDeviceResponse);
+  rpc StartDevice(DeviceIdRequest) returns (OperationResponse);
+  rpc StopDevice(DeviceIdRequest) returns (OperationResponse);
+  rpc ReadPoints(DeviceIdRequest) returns (ReadPointsResponse);
+  rpc WritePoint(WritePointRequest) returns (OperationResponse);
+  rpc ListScenarios(ListScenariosRequest) returns (ListScenariosResponse);
+  rpc StartScenario(ScenarioIdRequest) returns (OperationResponse);
+  rpc StopScenario(ScenarioIdRequest) returns (OperationResponse);
+  rpc GetSettings(SettingsRequest) returns (SettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (OperationResponse);
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  int64 uptime = 2;
+  int32 device_count = 3;
+  string database = 4;
+}
+
+message ListDevicesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message ListDevicesResponse {
+  repeated DeviceInfo devices = 1;
+  int32 total = 2;
+}
+
+message DeviceInfo {
+  string id = 1;
+  string name = 2;
+  string protocol = 3;
+  string status = 4;
+  int32 point_count = 5;
+}
+
+message GetDeviceRequest {
+  string device_id = 1;
+}
+
+message DeviceResponse {
+  DeviceInfo device = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message CreateDeviceRequest {
+  string name = 1;
+  string protocol = 2;
+  string template_id = 3;
+  map<string, string> protocol_config = 4;
+}
+
+message DeleteDeviceRequest {
+  string device_id = 1;
+}
+
+message DeleteDeviceResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message DeviceIdRequest {
+  string device_id = 1;
+}
+
+message OperationResponse {
+  bool ok = 1;
+  string error = 2;
+}
+
+message ReadPointsResponse {
+  repeated PointValue points = 1;
+  string error = 2;
+}
+
+message PointValue {
+  string name = 1;
+  string value = 2;
+  double timestamp = 3;
+}
+
+message WritePointRequest {
+  string device_id = 1;
+  string point_name = 2;
+  string value = 3;
+}
+
+message ListScenariosRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message ListScenariosResponse {
+  repeated ScenarioInfo scenarios = 1;
+  int32 total = 2;
+}
+
+message ScenarioInfo {
+  string id = 1;
+  string name = 2;
+  string status = 3;
+  int32 device_count = 4;
+}
+
+message ScenarioIdRequest {
+  string scenario_id = 1;
+}
+
+message SettingsRequest {}
+
+message SettingsResponse {
+  map<string, string> settings = 1;
+}
+
+message UpdateSettingsRequest {
+  map<string, string> settings = 1;
+}

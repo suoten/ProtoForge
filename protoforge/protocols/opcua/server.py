@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import time
+from pathlib import Path
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
@@ -14,6 +16,75 @@ try:
 except ImportError:
     ASYNCUA_AVAILABLE = False
     logger.warning("asyncua not installed, OPC-UA protocol will not be available")
+
+
+def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tuple[str, str]:
+    if cert_dir is None:
+        cert_dir = str(Path.home() / ".protoforge" / "opcua_certs")
+    cert_path = os.path.join(cert_dir, "server_cert.pem")
+    key_path = os.path.join(cert_dir, "server_key.pem")
+
+    if not force and os.path.isfile(cert_path) and os.path.isfile(key_path):
+        logger.info("OPC-UA certificates already exist at %s", cert_dir)
+        return cert_path, key_path
+
+    os.makedirs(cert_dir, exist_ok=True)
+
+    try:
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        import datetime
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "ProtoForge OPC-UA Server"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "ProtoForge"),
+        ])
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.utcnow())
+            .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+            .add_extension(
+                x509.SubjectAlternativeName([
+                    x509.DNSName("localhost"),
+                    x509.IPAddress(__import__("ipaddress").IPAddress("127.0.0.1")),
+                ]),
+                critical=False,
+            )
+            .sign(key, hashes.SHA256())
+        )
+
+        with open(cert_path, "wb") as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+        with open(key_path, "wb") as f:
+            f.write(key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.TraditionalOpenSSL,
+                serialization.NoEncryption(),
+            ))
+
+        logger.info("OPC-UA self-signed certificate generated at %s", cert_dir)
+    except ImportError:
+        logger.warning(
+            "cryptography package not installed. Cannot auto-generate OPC-UA certificates. "
+            "Install with: pip install cryptography. "
+            "You can manually provide certificates via certificate_path/private_key_path config."
+        )
+        return "", ""
+    except Exception as e:
+        logger.error("Failed to generate OPC-UA certificates: %s", e)
+        return "", ""
+
+    return cert_path, key_path
 
 
 class OpcUaDeviceBehavior(DeviceBehavior):
@@ -96,6 +167,16 @@ class OpcUaServer(ProtocolServer):
                     }
                     if security_mode in mode_map:
                         try:
+                            cert_path = proto_config.get("certificate_path", "")
+                            key_path = proto_config.get("private_key_path", "")
+                            if not cert_path or not key_path:
+                                cert_path, key_path = _ensure_certificates(
+                                    proto_config.get("cert_dir")
+                                )
+                            if cert_path and key_path:
+                                await self._server.load_certificate(cert_path)
+                                await self._server.load_private_key(key_path)
+                                logger.info("OPC-UA certificates loaded")
                             self._server.set_security_policy([policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)])
                             self._server.set_security_mode(mode_map[security_mode])
                             logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
@@ -251,6 +332,21 @@ class OpcUaServer(ProtocolServer):
                     "default": "None",
                     "enum": ["None", "Basic256Sha256"],
                     "description": "安全策略",
+                },
+                "certificate_path": {
+                    "type": "string",
+                    "default": "",
+                    "description": "服务器证书路径（PEM格式，留空自动生成）",
+                },
+                "private_key_path": {
+                    "type": "string",
+                    "default": "",
+                    "description": "服务器私钥路径（PEM格式，留空自动生成）",
+                },
+                "cert_dir": {
+                    "type": "string",
+                    "default": "",
+                    "description": "证书存储目录（默认 ~/.protoforge/opcua_certs）",
                 },
             },
         }

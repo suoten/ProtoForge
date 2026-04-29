@@ -463,17 +463,29 @@ class SimulationEngine:
                 pass
         for server in self._protocol_servers.values():
             if server.status == ProtocolStatus.RUNNING:
-                await server.stop()
+                try:
+                    await server.stop()
+                except Exception as e:
+                    logger.warning("Error stopping protocol server %s: %s", server.protocol_name, e)
         for instance in self._devices.values():
-            instance.stop()
+            try:
+                instance.stop()
+            except Exception as e:
+                logger.warning("Error stopping device %s: %s", instance.id, e)
         logger.info("Simulation engine stopped")
 
     async def _tick_loop(self) -> None:
         while self._running:
             for instance in list(self._devices.values()):
-                await instance.tick()
+                try:
+                    await instance.tick()
+                except Exception as e:
+                    logger.warning("Tick error for device %s: %s", instance.id, e)
             for scenario in list(self._scenario_instances.values()):
-                await scenario.tick()
+                try:
+                    await scenario.tick()
+                except Exception as e:
+                    logger.warning("Tick error for scenario %s: %s", scenario.config.id, e)
             await asyncio.sleep(1.0)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:
