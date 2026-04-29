@@ -89,8 +89,8 @@ class BACnetServer(ProtocolServer):
             if self._sock:
                 try:
                     self._sock.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Socket close error: %s", e)
                 self._sock = None
         except Exception as e:
             logger.warning("BACnet server stop error: %s", e)

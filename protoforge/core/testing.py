@@ -379,6 +379,9 @@ class VariableStore:
     def clear(self) -> None:
         self._vars.clear()
 
+    def update(self, other: "VariableStore") -> None:
+        self._vars.update(other._vars)
+
     def to_dict(self) -> dict[str, Any]:
         return dict(self._vars)
 
@@ -920,7 +923,7 @@ class TestRunner:
             evaluator = SafeEval({"vars": var_store})
             result_vars = evaluator.exec_stmts(hook)
             if "vars" in result_vars and isinstance(result_vars["vars"], VariableStore):
-                var_store._vars.update(result_vars["vars"]._vars)
+                var_store.update(result_vars["vars"])
         except Exception as e:
             logger.warning("Test hook execution failed: %s", e)
 

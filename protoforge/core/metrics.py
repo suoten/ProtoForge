@@ -50,9 +50,9 @@ class MetricsCollector:
         self.set_gauge("protoforge_protocols_running", protocols_running)
 
     def collect_from_test_runner(self, runner: Any) -> None:
-        self.set_gauge("protoforge_test_cases_total", len(runner._test_cases))
-        self.set_gauge("protoforge_test_suites_total", len(runner._test_suites))
-        self.set_gauge("protoforge_test_reports_total", len(runner._reports))
+        self.set_gauge("protoforge_test_cases_total", len(getattr(runner, "test_cases", getattr(runner, "_test_cases", []))))
+        self.set_gauge("protoforge_test_suites_total", len(getattr(runner, "test_suites", getattr(runner, "_test_suites", []))))
+        self.set_gauge("protoforge_test_reports_total", len(getattr(runner, "reports", getattr(runner, "_reports", []))))
 
     def generate_prometheus_output(self) -> str:
         lines = []

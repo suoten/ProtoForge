@@ -133,7 +133,8 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return _pwd_context.verify(password, password_hash)
-    except Exception:
+    except Exception as e:
+        logger.debug("Password verification failed: %s", e)
         return False
 
 

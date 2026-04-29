@@ -73,6 +73,7 @@
 import { ref, onMounted } from 'vue'
 import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
 
 const message = useMessage()
 const protocols = ref([])
@@ -82,13 +83,6 @@ const startingAll = ref(false)
 const advancedProtocol = ref({})
 const advancedConfig = ref({})
 
-const protocolColors = {
-  modbus_tcp: '#6366f1', modbus_rtu: '#818cf8', opcua: '#10b981', mqtt: '#f59e0b',
-  http: '#8b5cf6', gb28181: '#ef4444', bacnet: '#06b6d4', s7: '#3b82f6',
-  mc: '#e11d48', fins: '#0ea5e9', ab: '#f97316', opcda: '#14b8a6',
-  fanuc: '#eab308', mtconnect: '#22c55e', toledo: '#a855f7',
-}
-
 async function loadData() {
   try {
     const res = await api.getProtocols()
@@ -96,14 +90,6 @@ async function loadData() {
   } catch (e) {
     message.error('加载协议列表失败')
   }
-}
-
-const protocolModes = {
-  modbus_tcp: 'server', modbus_rtu: 'server', opcua: 'server', mqtt: 'client',
-  http: 'server', gb28181: 'client', bacnet: 'server', s7: 'server',
-  mc: 'server', fins: 'server', ab: 'server', opcda: 'server',
-  fanuc: 'server', mtconnect: 'server', toledo: 'server',
-  profinet: 'server', ethercat: 'server',
 }
 
 async function startAll() {

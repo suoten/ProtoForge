@@ -51,12 +51,12 @@ class ModbusTcpServer(ProtocolServer):
         if self._context is None:
             return
         try:
-            if hasattr(self._context, 'slave'):
+            if hasattr(self._context, '__setitem__'):
+                self._context[slave_id] = device_context
+            elif hasattr(self._context, 'slave'):
                 self._context.slave(slave_id, device_context)
-            elif hasattr(self._context, '_devices'):
-                self._context._devices[slave_id] = device_context
-            elif hasattr(self._context, '_slaves'):
-                self._context._slaves[slave_id] = device_context
+            else:
+                logger.debug("No supported method to add slave %d to context", slave_id)
         except Exception as e:
             logger.warning("Failed to add slave %d to context: %s", slave_id, e)
 

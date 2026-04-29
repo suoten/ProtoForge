@@ -94,7 +94,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, useMessage } from 'naive-ui'
 import api from '../api.js'
-import { protocolLabels } from '../constants.js'
+import { protocolLabels, defaultPorts } from '../constants.js'
 
 const message = useMessage()
 const saving = ref(false)
@@ -112,14 +112,6 @@ const logLevelOptions = [
   { label: 'WARNING', value: 'warning' },
   { label: 'ERROR', value: 'error' },
 ]
-
-const defaultPorts = {
-  modbus_tcp: 5020, modbus_rtu: '/dev/ttyUSB0', opcua: 4840, mqtt: 1883,
-  http: 8080, gb28181: 5060, bacnet: 47808, s7: 102,
-  mc: 5000, fins: 9600, ab: 44818, opcda: 51340,
-  fanuc: 8193, mtconnect: 7878, toledo: 1701,
-  profinet: 34964, ethercat: 34980,
-}
 
 const protocolPortList = computed(() => {
   return Object.keys(protocolLabels).map(key => ({

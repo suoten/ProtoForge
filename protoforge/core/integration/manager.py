@@ -173,7 +173,8 @@ class IntegrationManager:
         try:
             await self._connect()
             return self._channel is not None and self._channel.is_connected
-        except Exception:
+        except Exception as e:
+            logger.debug("Connection check failed: %s", e)
             return False
 
     async def push_device(self, device: Any, protoforge_host: str = "127.0.0.1") -> dict[str, Any]:

@@ -172,8 +172,8 @@ class ToledoServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
 
     def _process_toledo(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes | None:
         if not data:
@@ -281,8 +281,8 @@ class ToledoServer(ProtocolServer):
                         self._continuous_writers.discard(w)
                         try:
                             w.close()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Dead writer close error: %s", e)
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:
             pass

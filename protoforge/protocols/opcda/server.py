@@ -139,8 +139,8 @@ class OpcDaServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
 
     def _process_opcda(self, data: bytes) -> bytes | None:
         if len(data) < 4:

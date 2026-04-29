@@ -86,7 +86,8 @@ class FailoverManager:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"{url}/health")
                 return resp.status_code == 200
-        except Exception:
+        except Exception as e:
+            logger.debug("Health check failed for %s: %s", url, e)
             return False
 
     async def _promote_to_primary(self) -> None:

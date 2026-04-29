@@ -117,7 +117,8 @@ class MtConnectServer(ProtocolServer):
                     break
                 try:
                     request = data.decode("utf-8", errors="replace")
-                except Exception:
+                except Exception as e:
+                    logger.debug("Data decode error: %s", e)
                     break
 
                 response = self._process_http(request)
@@ -131,8 +132,8 @@ class MtConnectServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
 
     def _process_http(self, request: str) -> str | None:
         lines = request.split("\r\n")
