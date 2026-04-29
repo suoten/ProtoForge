@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 
 from protoforge.core.log_bus import LogBus
@@ -56,5 +57,3 @@ async def test_subscribe():
 
     bus.unsubscribe(queue)
 
-
-import asyncio

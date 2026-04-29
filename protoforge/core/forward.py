@@ -40,20 +40,26 @@ class InfluxDBTarget(ForwardTarget):
         return self._client
 
     async def send(self, records: list[dict[str, Any]]) -> None:
+        def _esc_tag(s: str) -> str:
+            return str(s).replace("\n", "\\n").replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+
+        def _esc_field(s: str) -> str:
+            return str(s).replace("\\", "\\\\").replace('"', '\\"')
+
         lines = []
         for r in records:
-            measurement = str(r.get("protocol", "device")).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
-            device_id = str(r.get('device_id', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
-            protocol = str(r.get('protocol', 'unknown')).replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+            measurement = _esc_tag(r.get("protocol", "device"))
+            device_id = _esc_tag(r.get('device_id', 'unknown'))
+            protocol = _esc_tag(r.get('protocol', 'unknown'))
             tags = f"device_id={device_id},protocol={protocol}"
             fields_parts = []
             if "value" in r:
                 try:
                     fields_parts.append(f"value={float(r['value'])}")
                 except (ValueError, TypeError):
-                    fields_parts.append(f'value="{r["value"]}"')
+                    fields_parts.append(f'value="{_esc_field(r["value"])}"')
             if "point_name" in r:
-                fields_parts.append(f'point_name="{r["point_name"]}"')
+                fields_parts.append(f'point_name="{_esc_field(r["point_name"])}"')
             if not fields_parts:
                 continue
             fields = ",".join(fields_parts)

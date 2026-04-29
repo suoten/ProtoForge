@@ -1,5 +1,6 @@
 """ProtoForge Python SDK - 物联网协议仿真与测试 SDK"""
 
+import asyncio
 import json
 import time
 from typing import Any, Optional
@@ -56,9 +57,7 @@ class ProtoForgeClient:
         return resp.json()
 
     def health(self) -> dict:
-        resp = self._client.get(f"{self._base_url}/health")
-        resp.raise_for_status()
-        return resp.json()
+        return self._request("GET", "/health").json()
 
     def list_protocols(self) -> list:
         return self._get("/protocols")
@@ -112,7 +111,7 @@ class ProtoForgeClient:
         return self._get(f"/devices/{device_id}/points")
 
     def write_point(self, device_id: str, point_name: str, value: Any) -> dict:
-        return self._put(f"/devices/{device_id}/points/{point_name}", params={"value": value})
+        return self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
 
     def batch_create_devices(self, configs: list[dict]) -> dict:
         return self._post("/devices/batch", json=configs)
@@ -497,7 +496,6 @@ class AsyncProtoForgeClient:
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 last_error = e
                 if attempt < self._retries:
-                    import asyncio
                     await asyncio.sleep(self._retry_delay)
         raise last_error
 
@@ -518,9 +516,7 @@ class AsyncProtoForgeClient:
         return resp.json()
 
     async def health(self) -> dict:
-        resp = await self._client.get(f"{self._base_url}/health")
-        resp.raise_for_status()
-        return resp.json()
+        return await self._request("GET", "/health").json()
 
     async def list_protocols(self) -> list:
         return await self._get("/protocols")
@@ -563,7 +559,7 @@ class AsyncProtoForgeClient:
         return await self._get(f"/devices/{device_id}/points")
 
     async def write_point(self, device_id: str, point_name: str, value: Any) -> dict:
-        return await self._put(f"/devices/{device_id}/points/{point_name}", params={"value": value})
+        return await self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
 
     async def batch_create_devices(self, configs: list[dict]) -> dict:
         return await self._post("/devices/batch", json=configs)
@@ -652,8 +648,14 @@ class AsyncProtoForgeClient:
         return await self._post("/integration/pygbsentry", json=config)
 
     async def update_device(self, device_id: str, updates: dict) -> dict:
-        current = await self._get(f"/devices/{device_id}")
-        config = await self._get(f"/devices/{device_id}/config")
+        try:
+            current = await self._get(f"/devices/{device_id}")
+        except Exception as e:
+            raise ValueError(f"Device not found: {device_id}") from e
+        try:
+            config = await self._get(f"/devices/{device_id}/config")
+        except Exception:
+            config = {}
         merged = {**config, **updates}
         if "points" not in merged and "points" in current:
             merged["points"] = current["points"]

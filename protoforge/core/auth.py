@@ -191,7 +191,7 @@ class UserManager:
         except Exception as e:
             logger.warning("Failed to restore users: %s", e)
 
-    def authenticate(self, username: str, password: str) -> tuple[Optional[User], str]:
+    async def authenticate(self, username: str, password: str) -> tuple[Optional[User], str]:
         user = self._users.get(username)
         if not user:
             return None, "invalid_credentials"
@@ -206,31 +206,19 @@ class UserManager:
             if user.login_attempts >= _MAX_LOGIN_ATTEMPTS:
                 user.locked_until = time.time() + _LOCKOUT_DURATION
                 logger.warning("User %s locked for %d seconds due to failed logins", username, _LOCKOUT_DURATION)
-            self._persist_user(user)
+            await self._persist_user(user)
             return None, "invalid_credentials"
 
         user.login_attempts = 0
         user.locked_until = 0.0
-        self._persist_user(user)
+        await self._persist_user(user)
         return user, ""
 
-    def _persist_user(self, user: User) -> None:
+    async def _persist_user(self, user: User) -> None:
         if not self._db:
             return
         try:
-            import asyncio
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(self._db.save_user(user.to_dict(include_hash=True)))
-
-            def _on_persist_done(t):
-                try:
-                    t.result()
-                except Exception as exc:
-                    logger.warning("Failed to persist user %s: %s", user.username, exc)
-
-            task.add_done_callback(_on_persist_done)
-        except RuntimeError:
-            logger.debug("No event loop, skipping user persist for %s", user.username)
+            await self._db.save_user(user.to_dict(include_hash=True))
         except Exception as e:
             logger.warning("Failed to persist user %s: %s", user.username, e)
 

@@ -264,13 +264,11 @@ class WebSocketChannel(ChannelBase):
                         "type": "heartbeat",
                         "timestamp": time.time(),
                     })
-                    self._missed_heartbeats += 1
-                    if self._missed_heartbeats >= self._heartbeat_timeout:
-                        logger.warning("Heartbeat timeout (%d missed), closing connection", self._missed_heartbeats)
-                        self._connected = False
-                        break
                 except Exception as e:
                     logger.warning("Heartbeat send failed: %s", e)
+                    self._missed_heartbeats += 1
+                    if self._missed_heartbeats >= self._heartbeat_timeout:
+                        await self._handle_timeout()
                     self._connected = False
                     break
         except asyncio.CancelledError:

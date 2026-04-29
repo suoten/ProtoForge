@@ -92,6 +92,11 @@ class MqttBroker(ProtocolServer):
                     },
                 },
             }
+            if config.get("tls_enabled", False):
+                logger.warning(
+                    "MQTT TLS is configured but amqtt broker does not support TLS in this mode. "
+                    "TLS configuration is ignored. Set tls_enabled=false to suppress this warning."
+                )
             self._broker = Broker(broker_config)
             await self._broker.start()
 

@@ -154,16 +154,17 @@ class IntegrationManager:
         logger.info("IntegrationManager stopped")
 
     async def _connect(self) -> None:
-        if not self._state.transition(ConnectionState.CONNECTING):
+        if not await self._state.transition(ConnectionState.CONNECTING):
+            logger.warning("Cannot transition to CONNECTING from current state: %s", self._state.state.value)
             return
         try:
             channel = ChannelFactory.create("http", base_url=self._edgelite_url, auth=self._auth)
             await channel.connect()
             self._channel = channel
-            self._state.transition(ConnectionState.CONNECTED)
+            await self._state.transition(ConnectionState.CONNECTED)
             self._metrics.set_connected()
         except Exception as e:
-            self._state.transition(ConnectionState.DISCONNECTED)
+            await self._state.transition(ConnectionState.DISCONNECTED)
             logger.warning("Connection failed: %s", e)
 
     async def _ensure_connected(self) -> bool:
@@ -387,6 +388,7 @@ class IntegrationManager:
                 logger.warning("Failed to send stop_collect for %s: %s", event.device_id, e)
 
     async def _on_device_removed(self, event: DeviceRemovedEvent) -> None:
+        self._backhaul_data.pop(event.device_id, None)
         if self._channel and self._channel.is_connected:
             try:
                 await self._channel.send({
@@ -402,6 +404,17 @@ class IntegrationManager:
             self._metrics.set_connected()
         elif new_state == ConnectionState.DISCONNECTED:
             self._metrics.set_disconnected()
+
+    def is_connected(self) -> bool:
+        return self._channel is not None and self._channel.is_connected
+
+    async def send_device_control(self, device_id: str, action: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        if not self._channel or not self._channel.is_connected:
+            raise IntegrationError("Not connected to EdgeLite")
+        payload: dict[str, Any] = {"device_id": device_id, "action": action}
+        if params:
+            payload["params"] = params
+        return await self._channel.send({"type": "device_control", "payload": payload})
 
     def get_status(self) -> dict[str, Any]:
         return {

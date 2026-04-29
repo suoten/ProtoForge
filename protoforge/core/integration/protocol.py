@@ -98,7 +98,7 @@ class ProtocolMapper:
         )
 
     def update_edgelite_protocols(self, protocols: list[str]) -> None:
-        self._edgelite_protocols = set(protocols)
+        self._edgelite_protocols: set[str] = set(protocols)
         logger.info("Updated EdgeLite supported protocols: %s", protocols)
 
     def get_supported_source_protocols(self) -> list[str]:

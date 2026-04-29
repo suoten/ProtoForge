@@ -34,6 +34,13 @@ class HttpDeviceBehavior(DeviceBehavior):
 
 
 class HttpSimulatorServer(ProtocolServer):
+    """HTTP REST simulation server.
+
+    Note: This server does not actually handle HTTP requests. HTTP device
+    simulation is handled by the main FastAPI application which maps device
+    IDs to device instances and reads/writes values through this protocol
+    server's behavior layer.
+    """
     protocol_name = "http"
     protocol_display_name = "HTTP REST"
 

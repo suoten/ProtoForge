@@ -13,6 +13,23 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _is_private_hostname(hostname: str) -> bool:
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
+        return True
+    if hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):
+        return True
+    if hostname.startswith("172."):
+        parts = hostname.split(".")
+        if len(parts) >= 2:
+            try:
+                second = int(parts[1])
+                if 16 <= second <= 31:
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
 @dataclass
 class WebhookConfig:
     id: str
@@ -72,7 +89,7 @@ class WebhookManager:
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
         hostname = parsed.hostname or ""
-        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+        if _is_private_hostname(hostname):
             raise ValueError(f"Webhook URL points to private/internal address: {url}")
         webhook = WebhookConfig(
             id=wh_id, name=config.get("name", wh_id),
@@ -108,7 +125,7 @@ class WebhookManager:
             if parsed.scheme not in ("http", "https"):
                 raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
             hostname = parsed.hostname or ""
-            if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+            if _is_private_hostname(hostname):
                 raise ValueError(f"Webhook URL points to private/internal address: {new_url}")
             webhook.url = new_url
         if "events" in config:
