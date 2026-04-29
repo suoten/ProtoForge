@@ -50,6 +50,19 @@ class ModbusRtuServer(ProtocolServer):
         self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
 
+    def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
+        if self._context is None:
+            return
+        try:
+            if hasattr(self._context, 'slave'):
+                self._context.slave(slave_id, device_context)
+            elif hasattr(self._context, '_devices'):
+                self._context._devices[slave_id] = device_context
+            elif hasattr(self._context, '_slaves'):
+                self._context._slaves[slave_id] = device_context
+        except Exception as e:
+            logger.warning("Failed to add slave %d to context: %s", slave_id, e)
+
     def _get_data_store(self, slave_id: int) -> ModbusDataStore:
         if slave_id not in self._data_stores:
             self._data_stores[slave_id] = ModbusDataStore()
@@ -188,16 +201,7 @@ class ModbusRtuServer(ProtocolServer):
                         co=ModbusSequentialDataBlock(1, [False] * 100),
                         di=ModbusSequentialDataBlock(1, [False] * 100),
                     )
-                    if self._context is not None:
-                        try:
-                            if hasattr(self._context, 'slave'):
-                                self._context.slave(slave_id, device_context)
-                            elif hasattr(self._context, '_devices'):
-                                self._context._devices[slave_id] = device_context
-                            elif hasattr(self._context, '_slaves'):
-                                self._context._slaves[slave_id] = device_context
-                        except Exception as e:
-                            logger.warning("Failed to add slave %d to context: %s", slave_id, e)
+                    self._add_slave_to_context(slave_id, device_context)
                 except Exception as e:
                     logger.warning("Failed to create ModbusDeviceContext: %s", e)
             self._apply_device_to_context(device_config)

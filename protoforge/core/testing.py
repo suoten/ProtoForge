@@ -916,8 +916,8 @@ class TestRunner:
         if not hook:
             return
         try:
-            from protoforge.core.generator import _SafeEval
-            evaluator = _SafeEval({"vars": var_store})
+            from protoforge.core.generator import SafeEval
+            evaluator = SafeEval({"vars": var_store})
             result_vars = evaluator.exec_stmts(hook)
             if "vars" in result_vars and isinstance(result_vars["vars"], VariableStore):
                 var_store._vars.update(result_vars["vars"]._vars)

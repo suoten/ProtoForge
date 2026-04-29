@@ -51,7 +51,7 @@ _DANGEROUS_NAMES = {
 }
 
 
-class _SafeEval:
+class SafeEval:
     _MAX_DEPTH = 50
     _MAX_CALL_ARGS = 10
     _MAX_STR_LEN = 10000
@@ -185,7 +185,7 @@ class ScriptEngine:
         variables = dict(context)
         variables["cache"] = self._cache
         variables["time"] = time.time()
-        evaluator = _SafeEval(variables)
+        evaluator = SafeEval(variables)
         result_vars = evaluator.exec_stmts(script)
         return result_vars.get("result", 0)
 
