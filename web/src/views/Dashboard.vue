@@ -48,7 +48,7 @@
               </div>
               <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
             </div>
-            <div style="margin-top:8px;font-size:11px;opacity:0.7">覆盖 15 种协议</div>
+            <div style="margin-top:8px;font-size:11px;opacity:0.7">覆盖 {{ Object.keys(protocolLabels).length }} 种协议</div>
           </n-card>
         </n-gi>
       </n-grid>
@@ -89,9 +89,9 @@
             <n-space vertical size="small" style="max-height:200px;overflow-y:auto">
               <div v-for="log in recentLogs.slice(0, 8)" :key="log.timestamp"
                 style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9">
-                <div :style="{ width:'6px',height:'6px',borderRadius:'50%',background: log.direction==='recv'?'#10b981':log.direction==='send'?'#6366f1':'#f59e0b',flexShrink:0 }"></div>
+                <div :style="{ width:'6px',height:'6px',borderRadius:'50%',background: ({in:'#6366f1',out:'#10b981',system:'#f59e0b',write:'#ec4899',recv:'#10b981',send:'#6366f1',inbound:'#6366f1',outbound:'#10b981'})[log.direction]||'#94a3b8',flexShrink:0 }"></div>
                 <span style="font-size:11px;color:#94a3b8;min-width:60px">{{ formatTime(log.timestamp) }}</span>
-                <n-tag size="tiny" :type="log.direction==='recv'?'success':log.direction==='send'?'info':'warning'" :bordered="false">{{ log.protocol }}</n-tag>
+                <n-tag size="tiny" :type="({in:'info',out:'success',system:'warning',write:'error',recv:'success',send:'info',inbound:'info',outbound:'success'})[log.direction]||'default'" :bordered="false">{{ log.protocol }}</n-tag>
                 <span style="font-size:12px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ log.summary }}</span>
               </div>
               <n-text v-if="!recentLogs.length" depth="3" style="font-size:12px">暂无日志</n-text>
@@ -146,7 +146,11 @@ const deviceColumns = [
   { title: '协议', key: 'protocol', width: 120, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => protocolLabels[row.protocol] || row.protocol) },
   {
     title: '状态', key: 'status', width: 100,
-    render: (row) => h(NTag, { size: 'tiny', type: row.status === 'online' ? 'success' : row.status === 'error' ? 'error' : 'default', bordered: false }, () => row.status === 'online' ? '在线' : row.status === 'error' ? '错误' : '离线')
+    render: (row) => {
+      const statusMap = { online: ['success', '在线'], running: ['success', '运行中'], error: ['error', '错误'], stopped: ['default', '已停止'], offline: ['default', '离线'], disabled: ['default', '已禁用'] }
+      const [type, label] = statusMap[row.status] || ['default', row.status || '离线']
+      return h(NTag, { size: 'tiny', type, bordered: false }, () => label)
+    }
   },
   { title: '测点数', key: 'points', width: 80, render: (row) => (row.points || []).length },
 ]
@@ -168,12 +172,13 @@ async function startAllProtocols() {
 
 async function loadData() {
   try {
-    const [devRes, protoRes, tmplRes, logRes] = await Promise.all([
-      api.getDevices(), api.getProtocols(), api.getTemplates(), api.getLogs({ count: 50 }),
+    const [devRes, protoRes, tmplRes, scRes, logRes] = await Promise.all([
+      api.getDevices(), api.getProtocols(), api.getTemplates(), api.getScenarios(), api.getLogs({ count: 50 }),
     ])
     devices.value = devRes
     protocols.value = protoRes
     templates.value = tmplRes
+    scenarios.value = scRes
     recentLogs.value = logRes
   } catch (e) {
     console.error('Failed to load dashboard data:', e)

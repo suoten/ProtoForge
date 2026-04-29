@@ -103,6 +103,9 @@ const directionOptions = [
   { label: '← 接收', value: 'in' },
   { label: '→ 发送', value: 'out' },
   { label: '⚡ 系统', value: 'system' },
+  { label: '✎ 写入', value: 'write' },
+  { label: '← 入站', value: 'inbound' },
+  { label: '→ 出站', value: 'outbound' },
 ]
 
 const filteredLogs = computed(() => {
@@ -131,12 +134,12 @@ function formatTime(ts) {
 }
 
 function getDirectionColor(dir) {
-  const map = { in: 'info', out: 'success', system: 'warning', recv: 'info', send: 'success' }
+  const map = { in: 'info', out: 'success', system: 'warning', recv: 'info', send: 'success', write: 'error', inbound: 'info', outbound: 'success' }
   return map[dir] || 'default'
 }
 
 function getDirectionLabel(dir) {
-  const map = { in: '← 收', out: '→ 发', system: '系统', recv: '← 收', send: '→ 发' }
+  const map = { in: '← 收', out: '→ 发', system: '系统', recv: '← 收', send: '→ 发', write: '✎ 写', inbound: '← 入', outbound: '→ 出' }
   return map[dir] || dir
 }
 
