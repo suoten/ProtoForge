@@ -333,6 +333,31 @@ class ModbusRtuServer(ProtocolServer):
                 logger.warning("Failed to write register %s: %s", point.address, e)
         self._sync_to_pymodbus_context(slave_id, store)
 
+    def _sync_to_pymodbus_context(self, slave_id: int, store: _ModbusDataStore) -> None:
+        if not self._context:
+            return
+        try:
+            if OLD_API_AVAILABLE:
+                slave_ctx = self._context[slave_id]
+                if hasattr(slave_ctx, 'get'):
+                    for fx_name, store_data in [
+                        ('h', store._holding_regs),
+                        ('i', store._input_regs),
+                        ('c', store._coils),
+                        ('d', store._discrete_inputs),
+                    ]:
+                        block = slave_ctx.get(fx_name)
+                        if block and hasattr(block, 'setValues'):
+                            max_addr = max(store_data.keys()) if store_data else 0
+                            if max_addr > 0:
+                                values = [store_data.get(a, 0) for a in range(1, max_addr + 1)]
+                                try:
+                                    block.setValues(1, values)
+                                except Exception:
+                                    pass
+        except Exception as e:
+            logger.debug("Failed to sync to pymodbus context: %s", e)
+
     async def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
