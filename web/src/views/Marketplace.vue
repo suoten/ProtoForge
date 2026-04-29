@@ -72,9 +72,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { NSpace, NH3, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
+import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
   NCard, NTag, NButton, NModal, NDescriptions, NDescriptionsItem, NEmpty, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { protocolLabels } from '../constants.js'
 
 const message = useMessage()
 const templates = ref([])
@@ -92,12 +93,6 @@ const protocolColors = {
   http: 'default', gb28181: 'error', bacnet: 'info', s7: 'success',
   mc: 'error', fins: 'info', ab: 'warning', opcda: 'success',
   fanuc: 'warning', mtconnect: 'success', toledo: 'default',
-}
-const protocolLabels = {
-  modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
-  http: 'HTTP', gb28181: 'GB28181', bacnet: 'BACnet', s7: 'S7',
-  mc: 'Mitsubishi MC', fins: 'Omron FINS', ab: 'Rockwell AB', opcda: 'OPC-DA',
-  fanuc: 'FANUC FOCAS', mtconnect: 'MTConnect', toledo: 'Mettler-Toledo',
 }
 
 const categoryMap = {

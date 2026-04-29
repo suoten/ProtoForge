@@ -114,7 +114,7 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import {
-  NSpace, NH4, NButton, NSelect, NModal, NForm, NFormItem, NInput, NInputNumber,
+  NSpace, NButton, NSelect, NModal, NForm, NFormItem, NInput, NInputNumber,
   NTag, NCard, NDataTable, useMessage
 } from 'naive-ui'
 import api from '../api.js'

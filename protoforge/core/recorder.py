@@ -187,7 +187,7 @@ class Recorder:
             try:
                 await self._database.delete_recording(rec_id)
             except Exception as e:
-                logger.debug("Failed to delete recording from db: %s", e)
+                logger.warning("Failed to delete recording from db: %s", e)
         return True
 
     async def restore_from_db(self) -> None:
@@ -212,10 +212,10 @@ class Recorder:
                         )
                         self._recordings[rec.id] = rec
                 except Exception as e:
-                    logger.debug("Failed to restore recording %s: %s", row.get("id"), e)
+                    logger.warning("Failed to restore recording %s: %s", row.get("id"), e)
             logger.info("Restored %d recordings from database", len(self._recordings))
         except Exception as e:
-            logger.debug("Failed to restore recordings: %s", e)
+            logger.warning("Failed to restore recordings: %s", e)
 
     async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict:
         recording = self._recordings.get(rec_id)

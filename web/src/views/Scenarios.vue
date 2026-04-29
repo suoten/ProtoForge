@@ -87,7 +87,7 @@
 
 <script setup>
 import { ref, h, onMounted } from 'vue'
-import { NSpace, NH4, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag, NAlert, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag, NAlert, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 
 import { useRouter } from 'vue-router'

@@ -46,7 +46,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { NCard, NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()

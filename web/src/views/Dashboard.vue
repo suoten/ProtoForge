@@ -128,6 +128,7 @@
 import { ref, computed, h, onMounted } from 'vue'
 import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { protocolLabels } from '../constants.js'
 
 const message = useMessage()
 const devices = ref([])
@@ -139,13 +140,6 @@ const recentLogs = ref([])
 const onlineDevices = computed(() => devices.value.filter(d => d.status === 'online' || d.status === 'running').length)
 const runningProtocols = computed(() => protocols.value.filter(p => p.status === 'running').length)
 const runningScenarios = computed(() => scenarios.value.filter(s => s.status === 'running').length)
-
-const protocolLabels = {
-  modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
-  http: 'HTTP', gb28181: 'GB28181', bacnet: 'BACnet', s7: 'S7',
-  mc: 'Mitsubishi MC', fins: 'Omron FINS', ab: 'Rockwell AB', opcda: 'OPC-DA',
-  fanuc: 'FANUC FOCAS', mtconnect: 'MTConnect', toledo: 'Mettler-Toledo',
-}
 
 const deviceColumns = [
   { title: '设备', key: 'name', width: 160, render: (row) => h('span', { style: 'font-weight:500' }, row.name || row.id) },

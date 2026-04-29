@@ -293,14 +293,23 @@ function onSearchSelect(val) {
   searchQuery.value = ''
 }
 
+let wsReconnectDelay = 1000
+const WS_MAX_RECONNECT_DELAY = 30000
+
 function connectWebSocket() {
   if (!loggedIn.value) return
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const token = localStorage.getItem('token') || ''
   const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs?token=${token}`
   ws = new WebSocket(wsUrl)
-  ws.onopen = () => { wsConnected.value = true }
-  ws.onclose = () => { wsConnected.value = false; if (loggedIn.value) setTimeout(connectWebSocket, 5000) }
+  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000 }
+  ws.onclose = () => {
+    wsConnected.value = false
+    if (loggedIn.value) {
+      setTimeout(connectWebSocket, wsReconnectDelay)
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+    }
+  }
   ws.onerror = () => { wsConnected.value = false }
 }
 
