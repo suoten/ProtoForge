@@ -61,6 +61,17 @@ class AuditLogger:
                     end_time: Optional[float] = None,
                     limit: int = 100,
                     offset: int = 0) -> list[dict]:
+        if self._database:
+            try:
+                entries, _ = await self._database.query_audit_entries(
+                    username=username, action=action, resource_type=resource_type,
+                    start_time=start_time, end_time=end_time,
+                    limit=limit, offset=offset,
+                )
+                return entries
+            except Exception as e:
+                logger.debug("Audit DB query failed, falling back to memory: %s", e)
+
         results = []
         for entry in reversed(self._entries):
             if username and entry.username != username:
@@ -81,7 +92,7 @@ class AuditLogger:
     async def get_stats(self) -> dict[str, Any]:
         return {
             "total_entries": len(self._entries),
-            "actions": list(set(e.action for e in self._entries[-1000:])),
+            "actions": list(set(e.action for e in self._entries)) if self._entries else [],
         }
 
     async def restore_from_db(self) -> None:

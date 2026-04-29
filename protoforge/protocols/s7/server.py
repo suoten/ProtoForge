@@ -32,13 +32,30 @@ class S7DeviceBehavior(DeviceBehavior):
     @staticmethod
     def _parse_s7_address(address: str) -> tuple[int, int]:
         try:
-            if '.' in address.upper():
-                parts = address.upper().split('.')
+            addr_upper = address.upper().replace(' ', '')
+            if addr_upper.startswith('DB'):
+                parts = addr_upper.split('.')
                 db_number = int(parts[0].replace('DB', '') or '1')
-                offset_str = parts[-1]
-                offset = int(''.join(c for c in offset_str if c.isdigit()) or '0')
-                return (db_number, offset)
-            return (1, int(address))
+                if len(parts) >= 2:
+                    offset_part = parts[1]
+                    if offset_part.startswith('DBD'):
+                        offset = int(offset_part[3:] or '0')
+                    elif offset_part.startswith('DBW'):
+                        offset = int(offset_part[3:] or '0')
+                    elif offset_part.startswith('DBX'):
+                        byte_bit = offset_part[3:]
+                        if '.' in byte_bit:
+                            byte_str, _ = byte_bit.split('.')
+                            offset = int(byte_str or '0')
+                        else:
+                            offset = int(byte_bit or '0')
+                    elif offset_part.startswith('DBB'):
+                        offset = int(offset_part[3:] or '0')
+                    else:
+                        offset = int(''.join(c for c in offset_part if c.isdigit()) or '0')
+                    return (db_number, offset)
+                return (db_number, 0)
+            return (1, int(''.join(c for c in address if c.isdigit()) or '0'))
         except (ValueError, IndexError):
             return (1, 0)
 
@@ -70,6 +87,7 @@ class S7DeviceBehavior(DeviceBehavior):
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
+        self._sync_value_to_db(point_name, value)
 
     def get_value(self, point_name: str) -> Any:
         return self._values.get(point_name, 0)

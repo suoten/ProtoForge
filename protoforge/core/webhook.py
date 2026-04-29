@@ -72,8 +72,8 @@ class WebhookManager:
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
         hostname = parsed.hostname or ""
-        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):
-            logger.error("Webhook URL points to private/internal address: %s", url)
+        if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+            raise ValueError(f"Webhook URL points to private/internal address: {url}")
         webhook = WebhookConfig(
             id=wh_id, name=config.get("name", wh_id),
             url=url, events=config.get("events", ["rule_triggered"]),
@@ -103,7 +103,14 @@ class WebhookManager:
         if "name" in config:
             webhook.name = config["name"]
         if "url" in config:
-            webhook.url = config["url"]
+            new_url = config["url"]
+            parsed = urlparse(new_url)
+            if parsed.scheme not in ("http", "https"):
+                raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
+            hostname = parsed.hostname or ""
+            if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1") or hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168.") or hostname.startswith("172."):
+                raise ValueError(f"Webhook URL points to private/internal address: {new_url}")
+            webhook.url = new_url
         if "events" in config:
             webhook.events = config["events"]
         if "headers" in config:

@@ -467,10 +467,6 @@ class ProtoForgeClient:
     def get_audit_stats(self) -> dict:
         return self._get("/audit/stats")
 
-    def _delete(self, path: str, **kwargs) -> Any:
-        resp = self._request("DELETE", path, **kwargs)
-        return resp.json()
-
 
 class AsyncProtoForgeClient:
     def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 30.0,
@@ -923,7 +919,3 @@ class AsyncProtoForgeClient:
 
     async def get_audit_stats(self) -> dict:
         return await self._get("/audit/stats")
-
-    async def _delete(self, path: str, **kwargs) -> Any:
-        resp = await self._request("DELETE", path, **kwargs)
-        return resp.json()

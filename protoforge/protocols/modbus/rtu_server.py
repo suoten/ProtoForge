@@ -271,6 +271,9 @@ class ModbusRtuServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
+        slave_id = self._slave_map.pop(device_id, None)
+        if slave_id is not None:
+            self._data_stores.pop(slave_id, None)
         self._clear_default_device(device_id)
         logger.info("Modbus RTU device removed: %s", device_id)
         self._log_debug("system", "device_remove",
@@ -328,6 +331,7 @@ class ModbusRtuServer(ProtocolServer):
                     store._holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
                 logger.warning("Failed to write register %s: %s", point.address, e)
+        self._sync_to_pymodbus_context(slave_id, store)
 
     async def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)

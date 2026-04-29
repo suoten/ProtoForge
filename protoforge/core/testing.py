@@ -1,3 +1,4 @@
+import asyncio
 import html
 import json
 import logging
@@ -231,8 +232,7 @@ class TestReport:
                     "error": tc.error,
                     "steps": [
                         {
-                            "name": s.name,
-                            "action": s.action,
+                            **s.to_dict(),
                             "status": s.status.value,
                             "duration": round(s.duration, 3),
                             "error": s.error,
@@ -302,7 +302,7 @@ class TestReport:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>ProtoForge 测试报告 - {self.name}</title>
+<title>ProtoForge 测试报告 - {html.escape(self.name)}</title>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; color:#333; padding:20px; }}
@@ -420,7 +420,11 @@ class AssertionEngine:
                 result["message"] = f"{target_value} < {assertion.expected}" if passed else f"{target_value} 不小于 {assertion.expected}"
 
             elif assertion.type == AssertionType.REGEX_MATCH:
-                passed = bool(re.search(str(assertion.expected), str(target_value))) if target_value is not None else False
+                try:
+                    compiled = re.compile(str(assertion.expected))
+                    passed = bool(compiled.search(str(target_value))) if target_value is not None else False
+                except re.error:
+                    passed = False
                 result["passed"] = passed
                 result["message"] = f"匹配正则 '{assertion.expected}'" if passed else f"不匹配正则 '{assertion.expected}'"
 
@@ -505,6 +509,8 @@ class AssertionEngine:
 
 
 class TestRunner:
+    _MAX_REPORTS = 1000
+
     def __init__(self):
         self._reports: list[TestReport] = []
         self._test_cases: dict[str, TestCase] = {}
@@ -645,7 +651,6 @@ class TestRunner:
                     await self._run_hook(step.pre_hook, var_store, api_client)
 
                 if step.delay > 0:
-                    import asyncio
                     await asyncio.sleep(step.delay)
 
                 resolved_params = var_store.resolve(step.params)
@@ -738,6 +743,8 @@ class TestRunner:
         report.skipped = sum(1 for tc in test_cases if tc.status == TestStatus.SKIPPED)
 
         self._reports.append(report)
+        if len(self._reports) > self._MAX_REPORTS:
+            self._reports = self._reports[-self._MAX_REPORTS:]
         if self._db:
             try:
                 await self._db.save_test_report(report.to_dict())
@@ -783,10 +790,17 @@ class TestRunner:
 
     async def _execute_step_with_params(self, step: TestStep, params: dict[str, Any],
                                         api_client=None) -> Any:
-        if not api_client:
-            return None
-
         action = step.action
+
+        if action == "wait":
+            seconds = params.get("seconds", 1.0)
+            await asyncio.sleep(seconds)
+            return {"waited": seconds}
+        elif action == "assert_value":
+            return params
+
+        if not api_client:
+            return {}
 
         if action == "create_device":
             resp = await api_client.post("/api/v1/devices", json=params)
@@ -865,7 +879,6 @@ class TestRunner:
             resp = await api_client.request(method, url, **kwargs)
             return self._resp_to_dict(resp)
         elif action == "wait":
-            import asyncio
             seconds = params.get("seconds", 1.0)
             await asyncio.sleep(seconds)
             return {"waited": seconds}

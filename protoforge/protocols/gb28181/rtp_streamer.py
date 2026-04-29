@@ -135,7 +135,7 @@ def _add_emulation_prevention(data: bytes) -> bytes:
 
 def generate_h264_iframe(width: int = 352, height: int = 288) -> bytes:
     sps = b'\x00\x00\x00\x01\x67' + _add_emulation_prevention(_generate_sps(width, height)[5:])
-    pps = b'\x00\x00\x00\x01\x68' + _add_emulation_prevention(_generate_pps(width, height)[5:])
+    pps = b'\x00\x00\x00\x01\x68' + _add_emulation_prevention(_generate_pps()[5:])
     idr = b'\x00\x00\x00\x01\x65' + _add_emulation_prevention(_generate_idr_slice(width, height)[5:])
     return sps + pps + idr
 
@@ -182,12 +182,14 @@ def _build_ps_system_header() -> bytes:
 def _build_pes_packet(stream_id: int, pts: float, payload: bytes) -> bytes:
     pes_start_code = b'\x00\x00\x01'
     pts_val = int(pts * 90000) % (2 ** 33)
-    pts_bytes = struct.pack('>I', pts_val)
-    p1 = 0x21 | ((pts_bytes[0] >> 3) & 0x06)
-    p2 = ((pts_bytes[0] & 0x03) << 6) | 0x30 | ((pts_bytes[1] >> 4) & 0x06)
-    p3 = ((pts_bytes[1] & 0x0F) << 4) | 0x01 | ((pts_bytes[2] >> 5) & 0x06)
-    p4 = ((pts_bytes[2] & 0x03) << 6) | 0x30 | ((pts_bytes[3] >> 4) & 0x06)
-    p5 = ((pts_bytes[3] & 0x0F) << 4) | 0x01
+    pts_32 = pts_val & 0xFFFFFFFF
+    pts_bit32 = (pts_val >> 32) & 0x01
+    pts_bytes = struct.pack('>I', pts_32)
+    p1 = 0x21 | (pts_bit32 << 1) | ((pts_bytes[0] >> 6) & 0x02)
+    p2 = ((pts_bytes[0] & 0x3F) << 2) | 0x01 | ((pts_bytes[1] >> 6) & 0x02)
+    p3 = ((pts_bytes[1] & 0x3F) << 2) | 0x01 | ((pts_bytes[2] >> 6) & 0x02)
+    p4 = ((pts_bytes[2] & 0x3F) << 2) | 0x01 | ((pts_bytes[3] >> 6) & 0x02)
+    p5 = ((pts_bytes[3] & 0x3F) << 2) | 0x01
     pts_data = bytes([p1, p2, p3, p4, p5])
     pes_header = bytes([0x80, 0x80, 0x05]) + pts_data
     pes_packet_length = len(pes_header) + len(payload)
