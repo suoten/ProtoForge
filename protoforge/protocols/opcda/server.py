@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -38,11 +38,16 @@ class OpcDaDeviceBehavior(DeviceBehavior):
             self._values[point_name] = value
             self._quality[point_name] = 192
             return True
-        return False
+        self._values[point_name] = value
+        self._quality[point_name] = 192
+        return True
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         self._quality[point_name] = 192
+
+    def set_quality(self, point_name: str, quality: int) -> None:
+        self._quality[point_name] = quality
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)
@@ -345,6 +350,7 @@ class OpcDaServer(ProtocolServer):
 
     async def _subscription_push_loop(self) -> None:
         try:
+            last_values: dict[int, dict[str, Any]] = {}
             while self._server_running:
                 await asyncio.sleep(0.5)
                 dead_subs = []
@@ -358,21 +364,30 @@ class OpcDaServer(ProtocolServer):
                     now = time.time()
                     if (now - last_push) * 1000 < rate:
                         continue
-                    sub_info["last_push"] = now
                     tags = sub_info.get("tags", [])
                     behavior = self._behaviors.get(self._default_device_id)
                     if not behavior:
                         continue
+                    prev = last_values.get(sub_id, {})
                     data_changes = []
+                    has_change = False
                     for tag in tags:
                         value = behavior.get_value(tag)
                         quality = behavior.get_quality(tag)
                         data_type = behavior.get_data_type(tag)
+                        prev_state = prev.get(tag)
+                        if prev_state is None or prev_state["value"] != value or prev_state["quality"] != quality:
+                            has_change = True
                         data_changes.append({
                             "tag": tag, "value": value,
                             "quality": quality, "timestamp": now,
                             "data_type": data_type,
                         })
+                        prev[tag] = {"value": value, "quality": quality}
+                    last_values[sub_id] = prev
+                    if not has_change and prev:
+                        continue
+                    sub_info["last_push"] = now
                     if not data_changes:
                         continue
                     resp = bytearray()

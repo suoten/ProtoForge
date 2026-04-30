@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -47,6 +47,8 @@ class EtherCATDeviceBehavior(DeviceBehavior):
         self._points = {p.name: p for p in points}
         self._values: dict[str, Any] = {}
         self._generators: dict[str, DynamicValueGenerator] = {}
+        self._config: DeviceConfig | None = None
+        self._pd_input: bytearray = bytearray()
         for p in points:
             self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
             self._generators[p.name] = DynamicValueGenerator(p)
@@ -58,11 +60,13 @@ class EtherCATDeviceBehavior(DeviceBehavior):
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._sync_values_to_pd_input()
             return True
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
+        self._sync_values_to_pd_input()
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)
@@ -71,10 +75,34 @@ class EtherCATDeviceBehavior(DeviceBehavior):
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
                 value = gen.generate()
                 self._values[point_name] = value
+                self._sync_values_to_pd_input()
                 return value
         return self._values.get(point_name, 0)
 
+    def _sync_values_to_pd_input(self) -> None:
+        if not self._config:
+            return
+        self._pd_input = bytearray()
+        for point in self._config.points:
+            val = self._values.get(point.name, 0)
+            if point.data_type.value in ("bool",):
+                self._pd_input.append(int(bool(val)))
+            elif point.data_type.value in ("int16",):
+                self._pd_input += struct.pack("<h", int(val))
+            elif point.data_type.value in ("uint16",):
+                self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
+            elif point.data_type.value in ("int32",):
+                self._pd_input += struct.pack("<i", int(val))
+            elif point.data_type.value in ("uint32",):
+                self._pd_input += struct.pack("<I", int(val) & 0xFFFFFFFF)
+            elif point.data_type.value in ("float32", "float"):
+                self._pd_input += struct.pack("<f", float(val))
+            else:
+                self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
+
     def get_pd_input(self, config: DeviceConfig) -> bytes:
+        if self._pd_input:
+            return bytes(self._pd_input)
         data = bytearray()
         for point in config.points:
             val = self._values.get(point.name, 0)
@@ -399,6 +427,7 @@ class EtherCATServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = EtherCATDeviceBehavior(device_config.points)
+        behavior._config = device_config
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
         self._update_default_device(device_config.id)
