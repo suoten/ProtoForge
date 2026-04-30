@@ -228,17 +228,33 @@ def get_edgelite_config_from_device(device: Any) -> dict[str, str]:
     return global_config
 
 
+class EdgeLiteError(Exception):
+    def __init__(self, error_type: str, message: str, suggestion: str = ""):
+        self.error_type = error_type
+        self.suggestion = suggestion
+        super().__init__(message)
+
+
 async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, password: str) -> str:
-    login_resp = await client.post(
-        f"{url.rstrip('/')}/api/v1/auth/login",
-        json={"username": username, "password": password},
-    )
+    try:
+        login_resp = await client.post(
+            f"{url.rstrip('/')}/api/v1/auth/login",
+            json={"username": username, "password": password},
+        )
+    except httpx.ConnectError as e:
+        raise EdgeLiteError("connection", f"无法连接到 EdgeLite 网关: {e}", "请检查网关地址是否正确、网络是否通畅")
+    except httpx.TimeoutException:
+        raise EdgeLiteError("timeout", "连接 EdgeLite 网关超时", "请检查网关是否在线、网络延迟是否过高")
+
+    if login_resp.status_code == 401:
+        raise EdgeLiteError("auth", "EdgeLite 用户名或密码错误", "请检查系统设置中的 EdgeLite 用户名和密码")
     if login_resp.status_code != 200:
-        raise Exception(f"EdgeLite login failed: HTTP {login_resp.status_code}")
+        raise EdgeLiteError("http", f"EdgeLite 登录失败: HTTP {login_resp.status_code}", f"网关返回错误状态码 {login_resp.status_code}")
+
     data = login_resp.json()
     token = data.get("data", {}).get("access_token", "") or data.get("access_token", "")
     if not token:
-        raise Exception("EdgeLite login succeeded but no token returned")
+        raise EdgeLiteError("token", "EdgeLite 登录成功但未返回 Token", "请检查 EdgeLite 网关版本是否兼容")
     return token
 
 
@@ -250,17 +266,34 @@ def _extract_token(login_resp: httpx.Response) -> str:
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
-        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured for this device"}
+        return {
+            "ok": False, "skipped": True,
+            "reason": "edgelite_url not configured",
+            "error_type": "not_configured",
+            "suggestion": "请先在「系统设置」中配置 EdgeLite 网关地址，或在设备协议配置中填写 edgelite_url",
+        }
 
     payload = convert_device_to_edgelite(device, protoforge_host)
     if payload is None:
-        return {"ok": False, "skipped": True, "reason": "Protocol not supported by EdgeLite"}
+        return {
+            "ok": False, "skipped": True,
+            "reason": "Protocol not supported by EdgeLite",
+            "error_type": "unsupported",
+            "suggestion": "该协议暂不支持 EdgeLite 联调",
+        }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except EdgeLiteError as e:
+            return {
+                "ok": False,
+                "error": str(e),
+                "error_type": e.error_type,
+                "suggestion": e.suggestion,
+            }
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -281,9 +314,9 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             if update_resp.status_code == 200:
                 logger.info("Device %s updated on EdgeLite", payload["device_id"])
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"]}
-            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}"}
+            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}", "error_type": "update_failed"}
 
-        return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code} {create_resp.text[:200]}"}
+        return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code} {create_resp.text[:200]}", "error_type": "create_failed"}
 
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
@@ -295,8 +328,10 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except EdgeLiteError as e:
+            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.delete(
@@ -305,20 +340,22 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
         )
         if resp.status_code in (200, 204, 404):
             return {"ok": True, "action": "deleted", "device_id": device_id}
-        return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}"}
+        return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}", "error_type": "delete_failed"}
 
 
 async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
-        return {"ok": False, "skipped": True}
+        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except EdgeLiteError as e:
+            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.get(
@@ -337,20 +374,22 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
             }
         if resp.status_code == 404:
             return {"ok": True, "device_id": device_id, "status": "not_registered"}
-        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+        return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
 
 
 async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
-        return {"ok": False, "skipped": True}
+        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except EdgeLiteError as e:
+            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.get(
@@ -361,14 +400,19 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
             data = resp.json().get("data", resp.json())
             return {"ok": True, "device_id": device_id, "points": data}
         if resp.status_code == 404:
-            return {"ok": False, "error": "Device not found on EdgeLite"}
-        return {"ok": False, "error": f"HTTP {resp.status_code}"}
+            return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
+        return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
 
 
 async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
-        return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
+        return {
+            "ok": False, "skipped": True,
+            "reason": "edgelite_url not configured",
+            "error_type": "not_configured",
+            "suggestion": "请先在「系统设置」中配置 EdgeLite 网关地址，或在设备协议配置中填写 edgelite_url",
+        }
 
     device_id = getattr(device, "id", "")
     result: dict[str, Any] = {"device_id": device_id, "steps": {}}
@@ -376,8 +420,12 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+        except EdgeLiteError as e:
+            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
+            result["ok"] = False
+            return result
         except Exception as e:
-            result["steps"]["auth"] = {"ok": False, "error": str(e)}
+            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
             result["ok"] = False
             return result
         result["steps"]["auth"] = {"ok": True}

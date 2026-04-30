@@ -66,8 +66,8 @@ class FinsDeviceBehavior(DeviceBehavior):
             else:
                 data = struct.pack(">h", int(value) & 0xFFFF)
             self.write_area(area, offset, data)
-        except (ValueError, TypeError, struct.error):
-            pass
+        except (ValueError, TypeError, struct.error) as e:
+            logger.warning("FINS on_write value conversion error for %s: %s", point_name, e)
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -315,8 +315,8 @@ class FinsServer(ProtocolServer):
                             behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
-                    except (struct.error, IndexError):
-                        pass
+                    except (struct.error, IndexError) as e:
+                        logger.warning("FINS write value sync error for %s: %s", name, e)
                     break
             self._log_debug("recv", "fins_write",
                             f"写入区域{area}偏移{word_addr}",

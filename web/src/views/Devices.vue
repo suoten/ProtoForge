@@ -259,7 +259,11 @@
           </n-card>
 
           <n-alert v-if="pipelineResult.skipped" type="warning" :bordered="false">
-            未配置 EdgeLite 网关地址。请编辑设备，在协议配置中填写 EdgeLite网关地址、用户名和密码。
+            <div style="font-weight:600;margin-bottom:4px">未配置 EdgeLite 网关</div>
+            <div>{{ pipelineResult.suggestion || '请先在「系统设置」中配置 EdgeLite 网关地址，或在设备协议配置中启用 EdgeLite 联调' }}</div>
+            <n-button type="primary" size="small" style="margin-top:8px" @click="$router.push('/settings')">
+              前往系统设置
+            </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.ok" type="success" :bordered="false">
             联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
@@ -267,7 +271,10 @@
           <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
             <div style="font-weight:600;margin-bottom:4px">认证失败</div>
             <div>{{ pipelineResult.steps.auth.error }}</div>
-            <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查 EdgeLite 网关地址是否正确、用户名密码是否正确</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ pipelineResult.steps.auth.suggestion || '请检查 EdgeLite 网关地址是否正确、用户名密码是否正确' }}</div>
+            <n-button type="primary" size="small" style="margin-top:8px" @click="$router.push('/settings')">
+              前往系统设置
+            </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
             <div style="font-weight:600;margin-bottom:4px">设备未在 EdgeLite 注册</div>
@@ -560,26 +567,45 @@ async function stopAllDevices() {
 
 async function batchPushToEdgelite() {
   pushLoading.value = true
-  let ok = 0, fail = 0, skip = 0, unsupported = 0
+  let ok = 0, fail = 0, skip = 0, unsupported = 0, notConfigured = 0
+  const errorDetails = []
   for (const id of selectedIds.value) {
     try {
       const res = await api.pushToEdgelite(id)
       if (res.skipped) {
         const reason = res.reason || ''
         if (reason.includes('not supported') || reason.includes('不支持')) { unsupported++ }
+        else if (res.error_type === 'not_configured') { notConfigured++ }
         else { skip++ }
+      } else if (res.ok) {
+        ok++
+      } else {
+        fail++
+        if (res.suggestion) {
+          errorDetails.push(res.suggestion)
+        }
       }
-      else { ok++ }
     } catch { fail++ }
   }
   pushLoading.value = false
   selectedIds.value = []
+
+  if (notConfigured > 0) {
+    message.warning(`${notConfigured} 个设备未配置 EdgeLite 网关，请先在「系统设置」中配置网关地址`)
+  }
+  if (fail > 0 && errorDetails.length > 0) {
+    const uniqueSuggestions = [...new Set(errorDetails)].slice(0, 3)
+    message.error(`推送失败: ${uniqueSuggestions.join('；')}`)
+  }
+
   const parts = []
   if (ok) parts.push(`${ok} 个推送成功`)
   if (skip) parts.push(`${skip} 个未配置EdgeLite`)
   if (unsupported) parts.push(`${unsupported} 个协议不支持`)
   if (fail) parts.push(`${fail} 个失败`)
-  message.success(parts.join('，') || '无操作')
+  if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
+    message.success(parts.join('，'))
+  }
 }
 
 async function createDevice() {
@@ -700,6 +726,8 @@ async function pushFromPipeline() {
       const reason = res.reason || ''
       if (reason.includes('not supported') || reason.includes('不支持')) {
         message.warning('EdgeLite 不支持该协议，无法推送')
+      } else if (res.error_type === 'not_configured') {
+        message.warning('未配置 EdgeLite 网关地址，请先在「系统设置」中配置')
       } else {
         message.warning('该设备未配置 EdgeLite 地址')
       }
@@ -707,7 +735,8 @@ async function pushFromPipeline() {
       message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
       await runPipelineVerify()
     } else {
-      message.error('推送失败: ' + (res.error || '未知错误'))
+      const errMsg = res.suggestion || res.error || '未知错误'
+      message.error('推送失败: ' + errMsg)
     }
   } catch (e) {
     message.error('推送失败: ' + (e.response?.data?.detail || e.message))

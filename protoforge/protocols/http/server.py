@@ -122,8 +122,8 @@ class HttpSimulatorServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("HTTP writer close error: %s", e)
 
     def _route(self, method: str, path: str, body: bytes) -> bytes:
         if method == "OPTIONS":

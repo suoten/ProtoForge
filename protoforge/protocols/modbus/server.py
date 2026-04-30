@@ -121,8 +121,8 @@ class ModbusTcpServer(ProtocolServer):
             writer.close()
             try:
                 await writer.wait_closed()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Modbus TCP writer close error: %s", e)
 
     def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:
         slave_id = unit_id if unit_id else 1

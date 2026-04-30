@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -133,8 +133,8 @@ class ToledoServer(ProtocolServer):
             for w in list(self._continuous_writers):
                 try:
                     w.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Toledo continuous writer close error: %s", e)
             self._continuous_writers.clear()
             if self._server_task:
                 self._server_task.cancel()

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import os
 import time
@@ -270,13 +270,13 @@ class OpcUaServer(ProtocolServer):
                 try:
                     await point_node.delete()
                 except Exception as e:
-                    logger.debug("OPC-UA point node delete error: %s", e)
+                    logger.warning("OPC-UA point node delete error: %s", e)
             folder_node = nodes.get("folder")
             if folder_node:
                 try:
                     await folder_node.delete()
                 except Exception as e:
-                    logger.debug("OPC-UA folder node delete error: %s", e)
+                    logger.warning("OPC-UA folder node delete error: %s", e)
         logger.info("OPC-UA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
                         f"移除OPC-UA设备 {device_id}",
@@ -299,7 +299,7 @@ class OpcUaServer(ProtocolServer):
                 try:
                     value = await node.get_value()
                 except Exception as e:
-                    logger.debug("OPC-UA read node value error: %s", e)
+                    logger.warning("OPC-UA read node value error: %s", e)
             result.append(PointValue(name=point.name, value=value, timestamp=now))
         return result
 
@@ -315,7 +315,8 @@ class OpcUaServer(ProtocolServer):
                 try:
                     await node.set_value(value)
                 except Exception as e:
-                    logger.debug("OPC-UA write node value error: %s", e)
+                    logger.warning("OPC-UA write node value error: %s", e)
+                    return False
         return success
 
     def get_config_schema(self) -> dict[str, Any]:
