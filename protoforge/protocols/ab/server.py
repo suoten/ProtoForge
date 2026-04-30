@@ -280,11 +280,33 @@ class AbServer(ProtocolServer):
             service = cip_data[0]
             if service == 0x4C:
                 cip_resp = self._handle_cip_read_tag(session, cip_data)
-                return cip_resp
             elif service == 0x4D:
                 cip_resp = self._handle_cip_write_tag(session, cip_data)
-                return cip_resp
+            else:
+                return self._make_cip_error_response(session, 0x00, 0x00)
+            return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp)
         return self._make_cip_error_response(session, 0x00, 0x00)
+
+    def _wrap_unit_data_response(self, session: int, conn_id: int, seq_num: int, cip_resp: bytes) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0070)
+        resp += struct.pack("<H", 0)
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += bytes([0, 0, 0, 0, 0, 0, 0, 0])
+        resp += struct.pack("<I", 0x00000000)
+        items = bytearray()
+        items += struct.pack("<H", 2)
+        items += struct.pack("<H", 0x00B1)
+        items += struct.pack("<H", 4)
+        items += struct.pack("<I", conn_id)
+        items += struct.pack("<H", 0x00B1)
+        items += struct.pack("<H", 2 + len(cip_resp))
+        items += struct.pack("<H", seq_num)
+        items += cip_resp
+        resp += items
+        resp[2:4] = struct.pack("<H", len(resp) - 24)
+        return bytes(resp)
 
     def _handle_cip_forward_open(self, session: int, cip_data: bytes) -> bytes:
         cip_resp = bytearray()

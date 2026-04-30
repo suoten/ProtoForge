@@ -137,6 +137,8 @@ class ModbusTcpServer(ProtocolServer):
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > 2000:
+                    return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
@@ -148,6 +150,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x02:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > 2000:
+                    return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
@@ -159,6 +163,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x03:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > 125:
+                    return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = count * 2
@@ -170,6 +176,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x04:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > 125:
+                    return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = count * 2
@@ -207,6 +215,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x10:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > 125:
+                    return bytes([fc | 0x80, 0x03])
                 byte_count = data[4]
                 for i in range(count):
                     offset = 5 + i * 2
@@ -216,6 +226,38 @@ class ModbusTcpServer(ProtocolServer):
                 self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
+            elif fc == 0x16:
+                addr = struct.unpack(">H", data[0:2])[0] + 1
+                and_mask = struct.unpack(">H", data[2:4])[0]
+                or_mask = struct.unpack(">H", data[4:6])[0]
+                current = store.get_point(3, addr)
+                new_val = (current & and_mask) | (or_mask & ~and_mask)
+                new_val &= 0xFFFF
+                store.set_point(6, addr, new_val)
+                self._log_debug("inbound", "modbus_write", f"MaskWrite: addr={addr-1} and={and_mask:#06x} or={or_mask:#06x}",
+                                detail={"fc": fc, "addr": addr-1, "unit": slave_id})
+                return bytes([fc]) + data[0:6]
+            elif fc == 0x17:
+                r_start = struct.unpack(">H", data[0:2])[0] + 1
+                r_count = struct.unpack(">H", data[2:4])[0]
+                w_start = struct.unpack(">H", data[4:6])[0] + 1
+                w_count = struct.unpack(">H", data[6:8])[0]
+                if r_count > 125 or w_count > 121:
+                    return bytes([fc | 0x80, 0x03])
+                w_byte_count = data[8]
+                for i in range(w_count):
+                    offset = 9 + i * 2
+                    if offset + 2 <= len(data):
+                        val = struct.unpack(">H", data[offset:offset + 2])[0]
+                        store.set_point(6, w_start + i, val)
+                r_byte_count = r_count * 2
+                regs = bytearray(r_byte_count)
+                for i in range(r_count):
+                    val = store.get_point(3, r_start + i)
+                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+                self._log_debug("inbound", "modbus_rw", f"ReadWriteMultiple: r={r_start-1}/{r_count} w={w_start-1}/{w_count}",
+                                detail={"fc": fc, "r_start": r_start-1, "w_start": w_start-1, "unit": slave_id})
+                return bytes([fc, r_byte_count]) + bytes(regs)
             else:
                 return bytes([fc | 0x80, 0x01])
         except (IndexError, struct.error):

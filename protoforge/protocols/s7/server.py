@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -236,9 +236,18 @@ class S7Server(ProtocolServer):
         connection_device_id: str | None = None
         try:
             while self._server_running:
-                data = await reader.read(4096)
-                if not data:
+                tpkt_header = await reader.readexactly(4)
+                if len(tpkt_header) < 4:
                     break
+                if tpkt_header[0] != 0x03:
+                    break
+                tpkt_len = struct.unpack(">H", tpkt_header[2:4])[0]
+                remaining = tpkt_len - 4
+                if remaining > 0:
+                    payload = await reader.readexactly(remaining)
+                    data = tpkt_header + payload
+                else:
+                    data = tpkt_header
                 response, device_id = self._process_s7_message(data, connection_device_id)
                 if device_id is not None:
                     connection_device_id = device_id
