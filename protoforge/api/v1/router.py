@@ -365,6 +365,8 @@ async def start_device(device_id: str, _user: dict = Depends(require_operator)):
 
     try:
         await engine.start_device(device_id)
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("device_online", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -374,6 +376,8 @@ async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     try:
         await engine.stop_device(device_id)
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("device_offline", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -391,6 +395,8 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         if not success:
             raise HTTPException(status_code=400, detail="Write failed")
         log_bus.emit("", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("data_change", {"device_id": device_id, "point": point_name, "value": value})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -430,6 +436,8 @@ async def start_scenario(scenario_id: str, _user: dict = Depends(require_operato
     try:
         await engine.start_scenario(scenario_id)
         log_bus.emit("", "system", "", "scenario_start", f"Scenario {scenario_id} started", {"scenario_id": scenario_id})
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("scenario_start", {"scenario_id": scenario_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -442,6 +450,8 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
     try:
         await engine.stop_scenario(scenario_id)
         log_bus.emit("", "system", "", "scenario_stop", f"Scenario {scenario_id} stopped", {"scenario_id": scenario_id})
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("scenario_stop", {"scenario_id": scenario_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -458,9 +468,9 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
         merged = ScenarioConfig(
             id=scenario_id,
             name=update.name if update.name is not None else existing.name,
-            description=update.description if update.description else existing.description,
-            devices=update.devices if update.devices else existing.devices,
-            rules=update.rules if update.rules else existing.rules,
+            description=update.description if update.description is not None else existing.description,
+            devices=update.devices if update.devices is not None else existing.devices,
+            rules=update.rules if update.rules is not None else existing.rules,
         )
         result = engine.update_scenario(scenario_id, merged)
         if db:
@@ -1076,6 +1086,8 @@ async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(requi
 
     api_client = await _get_internal_client()
     report = await runner.run_test_suite("API Test", cases, api_client=api_client)
+    from protoforge.core.webhook import webhook_manager
+    await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
     return report.to_dict()
 
 @router.post("/tests/run/case/{case_id}")
@@ -1088,6 +1100,8 @@ async def run_test_case_by_id(case_id: str, _user: dict = Depends(require_user))
 
     api_client = await _get_internal_client()
     report = await runner.run_test_suite(f"Single: {tc.name}", [tc], api_client=api_client)
+    from protoforge.core.webhook import webhook_manager
+    await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
     return report.to_dict()
 
 @router.post("/tests/run/suite/{suite_id}")
@@ -1097,6 +1111,8 @@ async def run_test_suite_by_id(suite_id: str, _user: dict = Depends(require_user
 
     try:
         report = await runner.run_test_suite_by_id(suite_id, api_client=api_client)
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
         return report.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

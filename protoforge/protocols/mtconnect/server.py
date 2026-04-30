@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import time
 import uuid
@@ -30,9 +30,6 @@ class MtConnectDeviceBehavior(DeviceBehavior):
         return self._values.get(name, 0)
 
     def on_write(self, point_name: str, value: Any) -> bool:
-        if point_name in self._values:
-            self._values[point_name] = value
-            return True
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:

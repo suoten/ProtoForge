@@ -171,6 +171,7 @@ class WebSocketChannel(ChannelBase):
         self._receive_task: Optional[asyncio.Task] = None
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._missed_heartbeats = 0
+        self._pending_responses: dict[str, asyncio.Future] = {}
 
     @property
     def is_connected(self) -> bool:
@@ -208,8 +209,17 @@ class WebSocketChannel(ChannelBase):
         if not self._ws or not self._connected:
             raise ConnectionError("WebSocket channel not connected")
 
+        msg_id = message.get("id")
         data = json.dumps(message)
         await self._ws.send(data)
+        if msg_id and hasattr(self, '_pending_responses'):
+            future = asyncio.get_event_loop().create_future()
+            self._pending_responses[msg_id] = future
+            try:
+                return await asyncio.wait_for(future, timeout=10.0)
+            except asyncio.TimeoutError:
+                self._pending_responses.pop(msg_id, None)
+                return {"ok": False, "error": "timeout"}
         return None
 
     async def close(self) -> None:
@@ -242,6 +252,12 @@ class WebSocketChannel(ChannelBase):
                     msg_type = message.get("type", "")
                     if msg_type == "heartbeat_ack":
                         self._missed_heartbeats = 0
+                    resp_id = message.get("id") or message.get("request_id")
+                    if resp_id and resp_id in self._pending_responses:
+                        future = self._pending_responses.pop(resp_id)
+                        if not future.done():
+                            future.set_result(message)
+                        continue
                     await self._dispatch_message(message)
                 except json.JSONDecodeError:
                     logger.warning("Invalid JSON received on WebSocket")

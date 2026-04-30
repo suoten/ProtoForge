@@ -344,7 +344,40 @@ class IntegrationManager:
                     logger.error("Alarm reaction inject_fault failed: %s", e)
 
         elif rule.action == "adjust_generator":
-            logger.info("Adjust generator for %s: %s", target_id, rule.action_params)
+            try:
+                from protoforge.main import get_engine
+                engine = get_engine()
+                if engine:
+                    params = rule.action_params or {}
+                    point_name = params.get("point", "")
+                    generator_type = params.get("generator_type", "")
+                    generator_config = params.get("generator_config", {})
+                    instance = engine._devices.get(target_id)
+                    if instance and point_name:
+                        behavior = instance.behavior
+                        if behavior and hasattr(behavior, '_generators') and point_name in behavior._generators:
+                            if generator_type:
+                                from protoforge.protocols.behavior import GeneratorType
+                                try:
+                                    gt = GeneratorType(generator_type)
+                                    behavior._generator_types[point_name] = gt
+                                except ValueError:
+                                    pass
+                            if generator_config:
+                                behavior._generators[point_name].update(generator_config)
+                            logger.info("Adjusted generator for %s/%s: type=%s config=%s",
+                                        target_id, point_name, generator_type, generator_config)
+                    elif self._channel and self._channel.is_connected:
+                        await self._channel.send({
+                            "type": "device_control",
+                            "payload": {
+                                "device_id": target_id,
+                                "action": "adjust_generator",
+                                "params": params,
+                            },
+                        })
+            except Exception as e:
+                logger.error("Alarm reaction adjust_generator failed: %s", e)
 
     def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> list[dict[str, Any]]:
         if device_id:

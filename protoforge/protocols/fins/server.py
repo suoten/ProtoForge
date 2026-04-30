@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -446,11 +446,11 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         resp_data = bytearray()
         for i in range(word_count):
             if area in (0x82, 0x83):
-                val = behavior.read_area(area, 0, word_addr + i, 1) if behavior else b"\x00\x00"
+                val = behavior.read_area(area, word_addr + i, 2) if behavior else b"\x00\x00"
                 resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
             elif area == 0x84:
                 db_num = struct.unpack(">H", data[1:3])[0]
-                val = behavior.read_area(area, db_num, word_addr + i, 1) if behavior else b"\x00\x00"
+                val = behavior.read_area(area, word_addr + i, 2) if behavior else b"\x00\x00"
                 resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
             else:
                 resp_data += b"\x00\x00"
@@ -467,7 +467,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
         behavior = server._behaviors.get(server._default_device_id)
         if behavior:
-            behavior.write_area(area, 0, word_addr, write_data)
+            behavior.write_area(area, word_addr, write_data)
         return header + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:
