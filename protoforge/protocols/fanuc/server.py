@@ -153,34 +153,64 @@ class FanucServer(ProtocolServer):
         if len(data) < self.FOCAS_HEADER_SIZE:
             return None
 
+        if data[:4] == b"FANC":
+            return self._process_focas2_ethernet(data)
+        else:
+            return self._process_focas_legacy(data)
+
+    def _process_focas2_ethernet(self, data: bytes) -> bytes | None:
+        if len(data) < 12:
+            return None
+        session_id = struct.unpack(">H", data[4:6])[0]
+        msg_len = struct.unpack(">H", data[6:8])[0]
+        if len(data) < 8 + msg_len:
+            return None
+        payload = data[8:8 + msg_len]
+        if len(payload) < 4:
+            return None
+        func_id = struct.unpack("<H", payload[0:2])[0]
+        req_id = struct.unpack("<I", payload[2:6])[0] if len(payload) >= 6 else 0
+        result = self._dispatch_focas_function(func_id, req_id, payload[6:] if len(payload) > 6 else b"")
+        resp_payload = bytearray()
+        resp_payload += struct.pack("<H", func_id)
+        resp_payload += struct.pack("<I", req_id)
+        resp_payload += result
+        resp = bytearray(b"FANC")
+        resp += struct.pack(">H", session_id)
+        resp += struct.pack(">H", len(resp_payload))
+        resp += resp_payload
+        return bytes(resp)
+
+    def _process_focas_legacy(self, data: bytes) -> bytes | None:
         func_id = struct.unpack("<H", data[0:2])[0]
         req_id = struct.unpack("<I", data[2:6])[0]
-        data_len = struct.unpack("<I", data[6:10])[0]
+        payload = data[10:] if len(data) > 10 else b""
+        result = self._dispatch_focas_function(func_id, req_id, payload)
+        resp = bytearray()
+        resp += struct.pack("<H", func_id)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += result
+        return bytes(resp)
 
-        if func_id == 0x0001:
-            return self._handle_cnc_connect(req_id)
-        elif func_id == 0x0002:
-            return self._handle_cnc_disconnect(req_id)
-        elif func_id == 0x0101:
-            return self._handle_cnc_statinfo(req_id)
-        elif func_id == 0x0102:
-            return self._handle_cnc_absolute(req_id)
-        elif func_id == 0x0103:
-            return self._handle_cnc_machine(req_id)
-        elif func_id == 0x0104:
-            return self._handle_cnc_relative(req_id)
-        elif func_id == 0x0105:
-            return self._handle_cnc_distance(req_id)
-        elif func_id == 0x0110:
-            return self._handle_cnc_rdspindlespd(req_id)
-        elif func_id == 0x0111:
-            return self._handle_cnc_rdfeed(req_id)
-        elif func_id == 0x0120:
-            return self._handle_cnc_alarm(req_id)
-        elif func_id == 0x0130:
-            return self._handle_cnc_program(req_id)
-
-        return self._make_focas_error(req_id, 0x01)
+    def _dispatch_focas_function(self, func_id: int, req_id: int, payload: bytes) -> bytes:
+        handlers = {
+            0x0001: self._handle_cnc_connect,
+            0x0002: self._handle_cnc_disconnect,
+            0x0101: self._handle_cnc_statinfo,
+            0x0102: self._handle_cnc_absolute,
+            0x0103: self._handle_cnc_machine,
+            0x0104: self._handle_cnc_relative,
+            0x0105: self._handle_cnc_distance,
+            0x0110: self._handle_cnc_rdspindlespd,
+            0x0111: self._handle_cnc_rdfeed,
+            0x0120: self._handle_cnc_alarm,
+            0x0130: self._handle_cnc_program,
+        }
+        handler = handlers.get(func_id)
+        if handler:
+            return handler(req_id)
+        return self._make_focas_error(req_id, 0x00000001)
 
     def _handle_cnc_connect(self, req_id: int) -> bytes:
         resp = bytearray()

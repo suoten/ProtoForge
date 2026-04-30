@@ -127,6 +127,7 @@ const columns = [
       row.status !== 'running'
         ? h(NButton, { size: 'small', type: 'primary', onClick: () => startScene(row.id) }, () => '启动')
         : h(NButton, { size: 'small', type: 'warning', onClick: () => stopScene(row.id) }, () => '停止'),
+      h(NButton, { size: 'small', onClick: () => editScene(row.id) }, () => '编辑'),
       h(NButton, { size: 'small', onClick: () => exportScene(row.id) }, () => '导出'),
       h(NButton, { size: 'small', onClick: () => viewSnapshot(row.id) }, () => '快照'),
       h(NButton, { size: 'small', type: 'error', onClick: () => confirmDelete(row) }, () => '删除'),
@@ -144,6 +145,10 @@ const snapshotColumns = [
 
 function goDashboard() {
   router.push('/')
+}
+
+function editScene(id) {
+  router.push(`/scenario/${id}`)
 }
 
 async function loadData() {

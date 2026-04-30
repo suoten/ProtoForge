@@ -83,6 +83,7 @@ class ModbusTcpServer(ProtocolServer):
         return devices
 
     async def _serve_datastore_only(self) -> None:
+        logger.warning("Modbus TCP running in datastore-only mode - no port is being listened on, clients cannot connect")
         try:
             while True:
                 await asyncio.sleep(1)

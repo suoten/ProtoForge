@@ -11,9 +11,19 @@ logger = logging.getLogger(__name__)
 
 
 class S7DeviceBehavior(DeviceBehavior):
+    S7_AREA_DB = 0x84
+    S7_AREA_INPUTS = 0x81
+    S7_AREA_OUTPUTS = 0x82
+    S7_AREA_MARKERS = 0x83
+    S7_AREA_TIMERS = 0x1D
+    S7_AREA_COUNTERS = 0x1C
+
     def __init__(self, points: list = None):
         self._values: dict[str, Any] = {}
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
+        self._marker_data: bytearray = bytearray(256)
+        self._input_data: bytearray = bytearray(256)
+        self._output_data: bytearray = bytearray(256)
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
@@ -105,6 +115,40 @@ class S7DeviceBehavior(DeviceBehavior):
         if end > len(buf):
             buf.extend(bytearray(end - len(buf)))
         buf[offset:offset + len(data)] = data
+
+    def read_area(self, area: int, db_number: int, offset: int, size: int) -> bytes:
+        if area == self.S7_AREA_DB:
+            buf = self.get_db_area(db_number, offset + size)
+            return bytes(buf[offset:offset + size])
+        elif area == self.S7_AREA_MARKERS:
+            end = min(offset + size, len(self._marker_data))
+            return bytes(self._marker_data[offset:end])
+        elif area == self.S7_AREA_INPUTS:
+            end = min(offset + size, len(self._input_data))
+            return bytes(self._input_data[offset:end])
+        elif area == self.S7_AREA_OUTPUTS:
+            end = min(offset + size, len(self._output_data))
+            return bytes(self._output_data[offset:end])
+        return b"\x00" * size
+
+    def write_area(self, area: int, db_number: int, offset: int, data: bytes) -> None:
+        if area == self.S7_AREA_DB:
+            self.write_db_area(db_number, offset, data)
+        elif area == self.S7_AREA_MARKERS:
+            end = offset + len(data)
+            if end > len(self._marker_data):
+                self._marker_data.extend(bytearray(end - len(self._marker_data)))
+            self._marker_data[offset:offset + len(data)] = data
+        elif area == self.S7_AREA_INPUTS:
+            end = offset + len(data)
+            if end > len(self._input_data):
+                self._input_data.extend(bytearray(end - len(self._input_data)))
+            self._input_data[offset:offset + len(data)] = data
+        elif area == self.S7_AREA_OUTPUTS:
+            end = offset + len(data)
+            if end > len(self._output_data):
+                self._output_data.extend(bytearray(end - len(self._output_data)))
+            self._output_data[offset:offset + len(data)] = data
 
 
 class S7Server(ProtocolServer):
@@ -227,6 +271,8 @@ class S7Server(ProtocolServer):
             return self._make_s7_read_response(data, device_id), None
         elif msg_type == 0x05:
             return self._make_s7_write_response(data, device_id), None
+        elif msg_type == 0x04:
+            return self._make_s7_szl_response(data, device_id), None
 
         return None, None
 
@@ -265,13 +311,29 @@ class S7Server(ProtocolServer):
         return self._default_device_id
 
     def _make_s7_connect_response(self, data: bytes) -> bytes:
+        pdu_size_req = 480
+        try:
+            s7_offset = 0
+            for i in range(len(data) - 1):
+                if data[i] == 0x32 and data[i + 1] in (0x01, 0x03):
+                    s7_offset = i
+                    break
+            if s7_offset > 0 and len(data) > s7_offset + 18:
+                param_start = s7_offset + 14
+                if data[param_start] == 0xF0 and len(data) > param_start + 5:
+                    pdu_size_req = struct.unpack(">H", data[param_start + 3:param_start + 5])[0]
+        except Exception:
+            pass
+        pdu_size = min(max(pdu_size_req, 128), 960)
         resp = bytearray([
             0x03, 0x00, 0x00, 0x1D,
             0x02, 0xF0, 0x80,
             0x32, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
             0x00, 0x00,
             0x00, 0x01,
-            0x00, 0x08,
+        ])
+        resp += struct.pack(">H", pdu_size)
+        resp += bytes([
             0x00, 0x00,
             0x01, 0x00,
             0x01, 0x01,
@@ -287,29 +349,33 @@ class S7Server(ProtocolServer):
         area = data[26]
         db_number = struct.unpack(">H", data[27:29])[0]
         offset = struct.unpack(">H", data[29:31])[0]
+        read_size = struct.unpack(">H", data[31:33])[0] if len(data) >= 33 else 4
+        if read_size <= 0 or read_size > 65535:
+            read_size = 4
 
-        value_bytes = b"\x00\x00\x00\x00"
+        value_bytes = b"\x00" * read_size
         behavior = self._behaviors.get(device_id or self._default_device_id)
         if behavior:
-            db_data = behavior.get_db_area(db_number, offset + 4)
-            value_bytes = bytes(db_data[offset:offset + 4])
+            value_bytes = behavior.read_area(area, db_number, offset, read_size)
 
         result = 0xFF
 
         resp = bytearray([
-            0x03, 0x00, 0x00, 0x1B,
+            0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
         ])
         resp += data[10:12]
         resp += bytes([
             0x00, 0x00, 0x00, 0x00,
-            0x00, 0x04,
+            0x00, 0x02 + len(value_bytes),
             0x00, 0x00,
-            0x04, 0x00,
-            result,
-            0x04,
         ])
+        resp += struct.pack(">H", len(value_bytes))
+        resp += bytes([
+            result,
+        ])
+        resp += struct.pack("B", len(value_bytes))
         resp += value_bytes
 
         resp[2:4] = struct.pack(">H", len(resp))
@@ -320,13 +386,15 @@ class S7Server(ProtocolServer):
             area = data[26]
             db_number = struct.unpack(">H", data[27:29])[0]
             offset = struct.unpack(">H", data[29:31])[0]
-            write_data = data[35:39] if len(data) >= 39 else b"\x00\x00\x00\x00"
+            write_size = data[33] if len(data) > 33 else 4
+            write_data = data[34:34 + write_size] if len(data) >= 34 + write_size else data[35:39] if len(data) >= 39 else b"\x00\x00\x00\x00"
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
-                behavior.write_db_area(db_number, offset, write_data)
+                behavior.write_area(area, db_number, offset, write_data)
+                area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
-                                f"写入DB{db_number}偏移{offset}",
-                                detail={"db": db_number, "offset": offset, "len": len(write_data)})
+                                f"写入{area_name}{db_number}偏移{offset}",
+                                detail={"area": area_name, "db": db_number, "offset": offset, "len": len(write_data)})
 
         resp = bytearray([
             0x03, 0x00, 0x00, 0x19,
@@ -358,6 +426,71 @@ class S7Server(ProtocolServer):
             0x85,
         ])
         return bytes(resp)
+
+    def _make_s7_szl_response(self, data: bytes, device_id: str | None = None) -> bytes:
+        szl_id = struct.unpack(">H", data[26:28])[0] if len(data) >= 28 else 0x0011
+        szl_index = struct.unpack(">H", data[28:30])[0] if len(data) >= 30 else 0x0000
+
+        if szl_id == 0x0011:
+            szl_data = self._build_szl_module_identification(szl_index)
+        elif szl_id == 0x0012:
+            szl_data = self._build_szl_component_identification(szl_index)
+        elif szl_id == 0x001C:
+            szl_data = self._build_szl_cpu_features()
+        else:
+            szl_data = self._build_szl_module_identification(0x0000)
+
+        resp = bytearray([
+            0x03, 0x00, 0x00, 0x00,
+            0x02, 0xF0, 0x80,
+            0x32, 0x03,
+        ])
+        resp += data[10:12] if len(data) > 11 else b"\x00\x00"
+        resp += bytes([
+            0x00, 0x00, 0x00, 0x00,
+        ])
+        resp += struct.pack(">H", 2 + len(szl_data))
+        resp += bytes([
+            0x00, 0x00,
+            0xFF,
+            0x04,
+            0x01,
+        ])
+        resp += struct.pack(">H", szl_id)
+        resp += szl_data
+        resp[2:4] = struct.pack(">H", len(resp))
+        return bytes(resp)
+
+    def _build_szl_module_identification(self, index: int) -> bytes:
+        return struct.pack(">HHHHHII",
+            0x0001,
+            index or 0x0001,
+            0x3131,
+            0x0001,
+            0x0000,
+            0x00000000,
+            0x00000000,
+        ) + b"ProtoForge S7\x00\x00\x00"
+
+    def _build_szl_component_identification(self, index: int) -> bytes:
+        return struct.pack(">HHHH",
+            0x0001,
+            index or 0x0001,
+            0x0001,
+            0x0000,
+        ) + b"6ES7 000-0AA00-0AA0\x00"
+
+    def _build_szl_cpu_features(self) -> bytes:
+        return struct.pack(">HHHHHHHH",
+            0x0001,
+            0x0001,
+            0x0001,
+            0x0001,
+            0x0000,
+            0x0000,
+            0x0000,
+            0x0000,
+        )
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id

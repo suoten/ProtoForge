@@ -1186,13 +1186,13 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
 
     if not cases:
         cases.append(TestCase(
-            id="qt-empty", name="基础连通性测试", tags=["quick-test"],
-            steps=[
-                TestStep(name="API健康检查", action="http_request",
-                         params={"method": "GET", "url": "/api/v1/health"},
-                         assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="API应可访问")]),
-            ],
-        ))
+                id="qt-empty", name="基础连通性测试", tags=["quick-test"],
+                steps=[
+                    TestStep(name="API健康检查", action="http_request",
+                             params={"method": "GET", "url": "/health"},
+                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="API应可访问")]),
+                ],
+            ))
 
     api_client = await _get_internal_client()
     report = await _get_test_runner().run_test_suite("一键测试", cases, api_client=api_client)
