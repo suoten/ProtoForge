@@ -165,7 +165,7 @@ async function clearAllLogs() {
   try {
     await api.clearLogs()
   } catch (e) {
-    // ignore
+    console.warn('清空日志失败:', e)
   }
 }
 
@@ -216,7 +216,7 @@ function connectWebSocket() {
         scrollToBottom()
       }
     } catch (e) {
-      // ignore
+      console.warn('WebSocket日志消息解析失败:', e)
     }
   }
 
@@ -247,7 +247,7 @@ async function loadProtocols() {
     const res = await api.getProtocols()
     protocols.value = res
   } catch (e) {
-    // ignore
+    console.warn('加载协议列表失败:', e)
   }
 }
 
@@ -256,7 +256,7 @@ async function loadHistory() {
     const res = await api.getLogs({ count: 200 })
     logs.value = res || []
   } catch (e) {
-    // ignore
+    console.warn('加载历史日志失败:', e)
   }
 }
 

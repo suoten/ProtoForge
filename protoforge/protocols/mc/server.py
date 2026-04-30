@@ -87,8 +87,8 @@ class McDeviceBehavior(DeviceBehavior):
             try:
                 data = struct.pack("<h", int(value))
                 self.write_memory(area_code, offset, data)
-            except (ValueError, TypeError, struct.error):
-                pass
+            except (ValueError, TypeError, struct.error) as e:
+                logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)
@@ -313,8 +313,8 @@ class McServer(ProtocolServer):
                             behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
-                    except (struct.error, IndexError):
-                        pass
+                    except (struct.error, IndexError) as e:
+                        logger.warning("MC write value sync error: %s", e)
                     break
             self._log_debug("recv", "mc_write",
                             f"写入设备{device_code}偏移{start_addr}",

@@ -476,8 +476,8 @@ class AbServer(ProtocolServer):
                 return struct.unpack("<d", data[:8])[0]
             elif len(data) >= 4:
                 return struct.unpack("<i", data[:4])[0]
-        except (struct.error, IndexError):
-            pass
+        except (struct.error, IndexError) as e:
+            logger.warning("AB CIP value unpack error: %s", e)
         return 0
 
     def _wrap_cip_response(self, session: int, cip_data: bytes) -> bytes:

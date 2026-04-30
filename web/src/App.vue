@@ -318,7 +318,7 @@ function connectWebSocket() {
         logMessages.value.push(msg.data)
         if (logMessages.value.length > 500) logMessages.value = logMessages.value.slice(-500)
       }
-    } catch { }
+    } catch (e) { console.warn('WebSocket日志消息解析失败:', e) }
   }
 }
 
@@ -332,7 +332,7 @@ async function loadSearchData() {
       templates: tmplRes || [],
       scenarios: scRes || [],
     }
-  } catch (e) { /* skip */ }
+  } catch (e) { console.warn('加载搜索数据失败:', e) }
 }
 </script>
 

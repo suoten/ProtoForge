@@ -312,8 +312,8 @@ class OpcDaServer(ProtocolServer):
                 return struct.unpack("<d", data[:8])[0]
             elif len(data) >= 8:
                 return struct.unpack("<d", data[:8])[0]
-        except (struct.error, IndexError):
-            pass
+        except (struct.error, IndexError) as e:
+            logger.warning("OPC-DA value unpack error: %s", e)
         return 0.0
 
     def _handle_subscribe(self, data: bytes) -> bytes:
