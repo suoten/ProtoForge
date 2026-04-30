@@ -8,6 +8,10 @@
         </div>
         <n-space>
           <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议筛选" clearable style="width:160px" />
+          <n-button v-if="selectedIds.length > 0" type="error" @click="batchDelete" :loading="batchLoading">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></template>
+            批量删除({{ selectedIds.length }})
+          </n-button>
           <n-button v-if="selectedIds.length > 0" type="primary" @click="batchStart" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
             启动选中({{ selectedIds.length }})
@@ -37,6 +41,7 @@
             快速创建
           </n-button>
           <n-button tertiary @click="openAdvancedCreate">高级创建</n-button>
+          <n-button tertiary @click="openBatchCreateModal">批量创建</n-button>
         </n-space>
       </n-space>
 
@@ -166,6 +171,14 @@
 
       <n-modal v-model:show="showPointsModal" preset="card" title="设备测点" style="width:700px">
         <n-data-table :columns="pointColumns" :data="currentPoints" :bordered="false" size="small" />
+        <n-space vertical style="margin-top:12px">
+          <n-text strong style="font-size:13px">快速写入测点值</n-text>
+          <n-space align="center" size="small">
+            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: p.name, value: p.name }))" placeholder="选择测点" style="width:160px" size="small" />
+            <n-input v-model:value="writePointValue" placeholder="输入值" style="width:120px" size="small" />
+            <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">写入</n-button>
+          </n-space>
+        </n-space>
       </n-modal>
 
       <n-modal v-model:show="showGuideModal" preset="card" title="连接指南" style="width:680px">
@@ -226,6 +239,32 @@
         <template #action>
           <n-button @click="showGuideModal = false">关闭</n-button>
           <n-button type="primary" @click="copyGuide">复制代码</n-button>
+        </template>
+      </n-modal>
+
+      <n-modal v-model:show="showBatchCreateModal" preset="card" title="批量创建设备" style="width:640px">
+        <n-space vertical>
+          <n-alert type="info" :bordered="false">选择模板和数量，一键批量创建多个同类型设备</n-alert>
+          <n-form :model="batchForm" label-placement="left" label-width="100">
+            <n-form-item label="模板">
+              <n-select v-model:value="batchForm.templateId" :options="quickTemplateOptions" placeholder="选择设备模板" filterable />
+            </n-form-item>
+            <n-form-item label="数量">
+              <n-input-number v-model:value="batchForm.count" :min="1" :max="50" style="width:100%" />
+            </n-form-item>
+            <n-form-item label="名称前缀">
+              <n-input v-model:value="batchForm.namePrefix" placeholder="如: 车间传感器" />
+            </n-form-item>
+            <n-form-item label="ID前缀">
+              <n-input v-model:value="batchForm.idPrefix" placeholder="如: sensor-group" />
+            </n-form-item>
+          </n-form>
+        </n-space>
+        <template #action>
+          <n-space>
+            <n-button @click="showBatchCreateModal = false">取消</n-button>
+            <n-button type="primary" @click="doBatchCreate" :loading="batchCreating">批量创建</n-button>
+          </n-space>
         </template>
       </n-modal>
 
@@ -355,6 +394,15 @@ const pipelineResult = ref(null)
 const pipelineLoading = ref(false)
 const pipelinePushLoading = ref(false)
 const pipelineDeviceId = ref('')
+
+const showBatchCreateModal = ref(false)
+const batchCreating = ref(false)
+const batchForm = ref({ templateId: null, count: 5, namePrefix: '', idPrefix: '' })
+
+const writePointName = ref('')
+const writePointValue = ref('')
+const writeLoading = ref(false)
+const currentViewDeviceId = ref('')
 
 const pipelineSteps = [
   { label: '认证', key: 'auth' },
@@ -521,26 +569,52 @@ async function loadData() {
 
 async function batchStart() {
   batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const id of selectedIds.value) {
-    try { await api.startDevice(id); ok++ } catch { fail++ }
-  }
-  batchLoading.value = false
-  selectedIds.value = []
-  message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-  loadData()
+  try {
+    const res = await api.batchStartDevices(selectedIds.value)
+    const ok = res.started?.length || res.success_count || 0
+    const fail = res.failed?.length || res.fail_count || 0
+    selectedIds.value = []
+    message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+    loadData()
+  } catch (e) {
+    message.error('批量启动失败: ' + (e.response?.data?.detail || e.message))
+  } finally { batchLoading.value = false }
 }
 
 async function batchStop() {
   batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const id of selectedIds.value) {
-    try { await api.stopDevice(id); ok++ } catch { fail++ }
-  }
-  batchLoading.value = false
-  selectedIds.value = []
-  message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-  loadData()
+  try {
+    const res = await api.batchStopDevices(selectedIds.value)
+    const ok = res.stopped?.length || res.success_count || 0
+    const fail = res.failed?.length || res.fail_count || 0
+    selectedIds.value = []
+    message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+    loadData()
+  } catch (e) {
+    message.error('批量停止失败: ' + (e.response?.data?.detail || e.message))
+  } finally { batchLoading.value = false }
+}
+
+async function batchDelete() {
+  dialog.warning({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${selectedIds.value.length} 个设备吗？此操作不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      try {
+        const res = await api.batchDeleteDevices(selectedIds.value)
+        const ok = res.deleted?.length || res.success_count || 0
+        const fail = res.failed?.length || res.fail_count || 0
+        selectedIds.value = []
+        message.success(`已删除 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        loadData()
+      } catch (e) {
+        message.error('批量删除失败: ' + (e.response?.data?.detail || e.message))
+      } finally { batchLoading.value = false }
+    }
+  })
 }
 
 async function startAllDevices() {
@@ -677,8 +751,62 @@ async function deleteDevice(id) {
 }
 
 async function viewPoints(id) {
-  try { const res = await api.getDevicePoints(id); currentPoints.value = res; showPointsModal.value = true }
-  catch (e) { message.error('读取测点失败: ' + (e.response?.data?.detail || e.message)) }
+  try {
+    const res = await api.getDevicePoints(id)
+    currentPoints.value = res
+    currentViewDeviceId.value = id
+    writePointName.value = ''
+    writePointValue.value = ''
+    showPointsModal.value = true
+  } catch (e) { message.error('读取测点失败: ' + (e.response?.data?.detail || e.message)) }
+}
+
+async function writeDevicePointQuick() {
+  if (!currentViewDeviceId.value || !writePointName.value) {
+    message.warning('请选择要写入的测点')
+    return
+  }
+  writeLoading.value = true
+  try {
+    const numVal = Number(writePointValue.value)
+    const value = isNaN(numVal) ? writePointValue.value : numVal
+    await api.writeDevicePoint(currentViewDeviceId.value, writePointName.value, value)
+    message.success(`测点 ${writePointName.value} 写入成功`)
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = res
+  } catch (e) {
+    message.error('写入失败: ' + (e.response?.data?.detail || e.message))
+  } finally { writeLoading.value = false }
+}
+
+function openBatchCreateModal() {
+  batchForm.value = { templateId: null, count: 5, namePrefix: '', idPrefix: '' }
+  showBatchCreateModal.value = true
+}
+
+async function doBatchCreate() {
+  if (!batchForm.value.templateId) { message.warning('请选择模板'); return }
+  if (!batchForm.value.namePrefix) { message.warning('请输入名称前缀'); return }
+  if (!batchForm.value.idPrefix) { message.warning('请输入ID前缀'); return }
+  batchCreating.value = true
+  try {
+    const tmpl = templates.value.find(t => t.id === batchForm.value.templateId)
+    const configs = []
+    for (let i = 1; i <= batchForm.value.count; i++) {
+      configs.push({
+        id: `${batchForm.value.idPrefix}-${String(i).padStart(3, '0')}`,
+        name: `${batchForm.value.namePrefix}-${i}`,
+        protocol: tmpl?.protocol || 'modbus_tcp',
+        points: tmpl?.points || [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }],
+      })
+    }
+    const res = await api.batchCreateDevices(configs)
+    showBatchCreateModal.value = false
+    message.success(`成功创建 ${res.created || res.success_count || configs.length} 个设备`)
+    await loadData()
+  } catch (e) {
+    message.error('批量创建失败: ' + (e.response?.data?.detail || e.message))
+  } finally { batchCreating.value = false }
 }
 
 async function showGuide(id) {

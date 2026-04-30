@@ -16,6 +16,20 @@
           </n-space>
         </n-space>
       </template>
+      <n-grid :cols="4" :x-gap="12" :y-gap="8" style="margin-bottom:12px" v-if="auditStats">
+        <n-gi>
+          <n-statistic label="总记录数" :value="auditStats.total_entries || 0" />
+        </n-gi>
+        <n-gi>
+          <n-statistic label="今日操作" :value="auditStats.today_count || 0" />
+        </n-gi>
+        <n-gi>
+          <n-statistic label="活跃用户" :value="auditStats.active_users || 0" />
+        </n-gi>
+        <n-gi>
+          <n-statistic label="最近操作" :value="auditStats.last_action || '-'" />
+        </n-gi>
+      </n-grid>
       <n-space vertical size="small" style="margin-bottom:12px">
         <n-space size="small" align="center">
           <n-input v-model:value="filterUsername" placeholder="用户名" size="small" style="width:140px" clearable />
@@ -32,7 +46,7 @@
 
 <script setup>
 import { ref, h, onMounted } from 'vue'
-import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, useMessage } from 'naive-ui'
+import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -41,6 +55,7 @@ const loading = ref(false)
 const filterUsername = ref('')
 const filterAction = ref('')
 const filterResource = ref('')
+const auditStats = ref(null)
 
 const columns = [
   { title: '时间', key: 'timestamp', width: 170, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
@@ -73,6 +88,14 @@ async function loadData() {
   }
 }
 
+async function loadAuditStats() {
+  try {
+    auditStats.value = await api.getAuditStats()
+  } catch (e) {
+    auditStats.value = null
+  }
+}
+
 async function handleDelete(id) {
   try {
     await api.deleteAuditEntry(id)
@@ -93,5 +116,8 @@ async function handleClearAll() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  loadAuditStats()
+})
 </script>

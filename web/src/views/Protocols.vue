@@ -45,6 +45,7 @@
                 <n-button v-if="p.status !== 'running'" type="primary" size="small" @click="quickStart(p.name)">一键启动</n-button>
                 <n-button v-else type="warning" size="small" @click="stopProtocol(p.name)">停止</n-button>
                 <n-button size="small" tertiary @click="openAdvanced(p)">高级配置</n-button>
+                <n-button size="small" tertiary @click="showProtocolInfo(p.name)">详情</n-button>
               </n-space>
             </n-space>
           </n-card>
@@ -65,13 +66,38 @@
           </n-space>
         </template>
       </n-modal>
+
+      <n-modal v-model:show="showInfoModal" preset="card" :title="`协议详情 - ${protocolInfoName}`" style="width: 600px">
+        <n-spin :show="loadingInfo">
+          <n-space vertical v-if="protocolInfoData">
+            <n-descriptions label-placement="left" :column="1" bordered size="small">
+              <n-descriptions-item label="协议名称">{{ protocolInfoData.name || protocolInfoName }}</n-descriptions-item>
+              <n-descriptions-item label="显示名称">{{ protocolInfoData.display_name || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="描述">{{ protocolInfoData.description || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="默认端口">{{ protocolInfoData.default_port || '-' }}</n-descriptions-item>
+              <n-descriptions-item label="模式">{{ protocolInfoData.mode || 'Server' }}</n-descriptions-item>
+              <n-descriptions-item label="版本">{{ protocolInfoData.version || '-' }}</n-descriptions-item>
+            </n-descriptions>
+            <n-text strong v-if="protocolInfoData.features && protocolInfoData.features.length > 0" style="font-size:13px">支持功能:</n-text>
+            <n-space v-if="protocolInfoData.features && protocolInfoData.features.length > 0" size="small">
+              <n-tag v-for="f in protocolInfoData.features" :key="f" size="tiny" type="info" :bordered="false">{{ f }}</n-tag>
+            </n-space>
+            <n-text strong v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0" style="font-size:13px">配置参数:</n-text>
+            <n-data-table v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0"
+              :columns="configInfoColumns" :data="configInfoRows" :bordered="false" size="small" />
+          </n-space>
+        </n-spin>
+        <template #action>
+          <n-button @click="showInfoModal = false">关闭</n-button>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, useMessage } from 'naive-ui'
+import { ref, computed, onMounted } from 'vue'
+import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
 
@@ -82,6 +108,29 @@ const starting = ref(false)
 const startingAll = ref(false)
 const advancedProtocol = ref({})
 const advancedConfig = ref({})
+
+const showInfoModal = ref(false)
+const protocolInfoName = ref('')
+const protocolInfoData = ref(null)
+const protocolConfigData = ref(null)
+const loadingInfo = ref(false)
+
+const configInfoColumns = [
+  { title: '参数', key: 'key', width: 140 },
+  { title: '类型', key: 'type', width: 100 },
+  { title: '默认值', key: 'default', width: 120 },
+  { title: '说明', key: 'description' },
+]
+
+const configInfoRows = computed(() => {
+  if (!protocolConfigData.value) return []
+  return Object.entries(protocolConfigData.value).map(([key, info]) => ({
+    key,
+    type: info.type || '-',
+    default: info.default ?? '-',
+    description: info.description || '-',
+  }))
+})
 
 async function loadData() {
   try {
@@ -132,6 +181,27 @@ async function stopProtocol(name) {
   } catch (e) {
     message.error('停止失败: ' + (e.response?.data?.detail || e.message))
   }
+}
+
+async function showProtocolInfo(name) {
+  protocolInfoName.value = name
+  showInfoModal.value = true
+  loadingInfo.value = true
+  protocolInfoData.value = null
+  protocolConfigData.value = null
+  try {
+    const [infoRes, configRes] = await Promise.all([
+      api.getProtocolInfo().catch(() => ({})),
+      api.getProtocolConfig(name).catch(() => ({})),
+    ])
+    const infoList = infoRes.protocols || infoRes || []
+    const found = Array.isArray(infoList) ? infoList.find(p => p.name === name) : infoList[name]
+    protocolInfoData.value = found || protocols.value.find(p => p.name === name) || { name }
+    protocolConfigData.value = configRes.config_schema || configRes || {}
+  } catch (e) {
+    protocolInfoData.value = protocols.value.find(p => p.name === name) || { name }
+    protocolConfigData.value = {}
+  } finally { loadingInfo.value = false }
 }
 
 function openAdvanced(p) {

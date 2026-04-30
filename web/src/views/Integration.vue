@@ -373,6 +373,17 @@
       </template>
     </n-modal>
 
+    <n-modal v-model:show="showEdgelitePointsModal" preset="card" title="EdgeLite 采集测点" style="width:600px">
+      <n-spin :show="loadingElPoints">
+        <n-data-table v-if="edgelitePoints.length > 0"
+          :columns="edgelitePointColumns" :data="edgelitePoints" :bordered="false" size="small" />
+        <n-empty v-else description="暂无采集数据" />
+      </n-spin>
+      <template #action>
+        <n-button @click="showEdgelitePointsModal = false">关闭</n-button>
+      </template>
+    </n-modal>
+
     <div class="pf-section-title" style="font-size:16px;margin-top:16px">导入结果</div>
     <n-data-table :columns="resultColumns" :data="importResults" :bordered="false" size="small"
       :pagination="{ pageSize: 10 }" />
@@ -383,7 +394,7 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NTabs, NTabPane, NCard, NInput, NButton, NButtonGroup, NAlert, NDataTable, NCode,
   NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, NGrid, NGi,
-  NSelect, NSwitch, NPopconfirm, useMessage } from 'naive-ui'
+  NSelect, NSwitch, NPopconfirm, NEmpty, useMessage } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -424,6 +435,16 @@ const alarmForm = ref({ rule_id: '', source_device_id: '', alarm_severity: 'crit
 const validateForm = ref({ device_id: '', protocol: '' })
 const validating = ref(false)
 const validateResult = ref(null)
+
+const showEdgelitePointsModal = ref(false)
+const loadingElPoints = ref(false)
+const edgelitePoints = ref([])
+const edgelitePointColumns = [
+  { title: '测点', key: 'name', width: 120 },
+  { title: '值', key: 'value', width: 120 },
+  { title: '质量', key: 'quality', width: 80 },
+  { title: '时间戳', key: 'timestamp', width: 180 },
+]
 
 const severityOptions = [
   { label: '严重 (critical)', value: 'critical' },
@@ -512,6 +533,7 @@ const deviceColumns = [
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => '推送注册'),
       h(NButton, { size: 'tiny', type: 'success', secondary: true, onClick: () => startCollect(row.id) }, () => '启动采集'),
       h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => '停止采集'),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => readEdgelitePoints(row.id) }, () => '读测点'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => '验证链路'),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => '移除'),
     ])
@@ -892,24 +914,37 @@ function getStepDesc(idx) {
 async function batchPushAndVerify() {
   if (elDevices.value.length === 0) { message.warning('没有配置了 EdgeLite 的设备'); return }
   batchPipelineLoading.value = true
-  let pushed = 0, verified = 0, failed = 0
-  for (const dev of elDevices.value) {
-    try {
-      const pushRes = await api.pushToEdgelite(dev.id)
-      if (!pushRes.skipped) pushed++
-    } catch { failed++ }
-  }
-  message.info(`已推送 ${pushed} 个设备，等待 ${elConfig.value.collect_interval || 5}s 让 EdgeLite 采集数据...`)
-  await new Promise(r => setTimeout(r, (elConfig.value.collect_interval || 5) * 1000))
-  for (const dev of elDevices.value) {
-    try {
-      const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
-      dev._el_status = statusRes.status
-      if (statusRes.status === 'online') verified++
-    } catch (e) { console.warn('获取EdgeLite设备状态失败:', dev.id, e) }
-  }
-  batchPipelineLoading.value = false
-  message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
+  try {
+    const deviceIds = elDevices.value.map(d => d.id)
+    const res = await api.batchPushDevices({ device_ids: deviceIds })
+    const pushed = res.pushed?.length || res.success_count || 0
+    const failed = res.failed?.length || res.fail_count || 0
+    message.info(`已推送 ${pushed} 个设备${failed ? `，${failed} 个失败` : ''}，等待 ${elConfig.value.collect_interval || 5}s 让 EdgeLite 采集数据...`)
+    await new Promise(r => setTimeout(r, (elConfig.value.collect_interval || 5) * 1000))
+    let verified = 0
+    for (const dev of elDevices.value) {
+      try {
+        const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
+        dev._el_status = statusRes.status
+        if (statusRes.status === 'online') verified++
+      } catch (e) { console.warn('获取EdgeLite设备状态失败:', dev.id, e) }
+    }
+    message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
+  } catch (e) {
+    message.error('批量推送失败: ' + (e.response?.data?.detail || e.message))
+  } finally { batchPipelineLoading.value = false }
+}
+
+async function readEdgelitePoints(deviceId) {
+  showEdgelitePointsModal.value = true
+  loadingElPoints.value = true
+  edgelitePoints.value = []
+  try {
+    const res = await api.readEdgeliteDevicePoints(deviceId)
+    edgelitePoints.value = res.points || res || []
+  } catch (e) {
+    message.error('读取EdgeLite测点失败: ' + (e.response?.data?.detail || e.message))
+  } finally { loadingElPoints.value = false }
 }
 
 async function importEdgeLite() {
