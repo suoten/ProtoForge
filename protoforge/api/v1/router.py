@@ -1490,6 +1490,16 @@ async def add_forward_target(config: dict[str, Any], _user: dict = Depends(requi
 
     engine = _get_forward_engine()
     name = config.get("name", f"target-{int(time.time())}")
+    if "host" in config and "url" not in config:
+        host = config.get("host", "localhost")
+        port = config.get("port", 8086)
+        protocol = config.get("protocol", "http")
+        if protocol in ("influxdb",):
+            config["url"] = f"http://{host}:{port}"
+            config.setdefault("type", "influxdb")
+        else:
+            config["url"] = f"http://{host}:{port}"
+            config.setdefault("type", "http")
     target = create_target(config)
     engine.add_target(name, target)
     return {"status": "ok", "name": name}
@@ -1527,13 +1537,14 @@ def _get_recorder():
     return _recorder
 
 @router.post("/recorder/start")
-async def start_recording(config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def start_recording(config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
+    cfg = config or {}
     recorder = _get_recorder()
     rec = await recorder.start_recording(
-        name=config.get("name", "Untitled"),
-        protocol=config.get("protocol"),
-        device_id=config.get("device_id"),
-        metadata=config.get("metadata"),
+        name=cfg.get("name", "Untitled"),
+        protocol=cfg.get("protocol"),
+        device_id=cfg.get("device_id"),
+        metadata=cfg.get("metadata"),
     )
     return rec.to_dict()
 
@@ -1569,9 +1580,10 @@ async def delete_recording(rec_id: str, _user: dict = Depends(require_operator))
     return {"status": "ok"}
 
 @router.post("/recorder/recordings/{rec_id}/replay")
-async def replay_recording(rec_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
-    speed = config.get("speed", 1.0)
+    cfg = config or {}
+    speed = cfg.get("speed", 1.0)
 
     try:
         result = await recorder.replay_recording(rec_id, speed=speed, target_engine=_get_engine())

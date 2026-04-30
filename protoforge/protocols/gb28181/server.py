@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import re
 import socket
@@ -385,9 +385,29 @@ class GB28181Server(ProtocolServer):
     async def _heartbeat_loop(self) -> None:
         while self._status == ProtocolStatus.RUNNING:
             for gb_device in self._gb_devices.values():
-                await self._register_device(gb_device)
+                await self._send_keepalive(gb_device)
             refresh_interval = max(60, min(gb_device.expires for gb_device in self._gb_devices.values()) // 2) if self._gb_devices else 1800
             await asyncio.sleep(refresh_interval)
+
+    async def _send_keepalive(self, gb_device) -> None:
+        if not self._transport:
+            return
+        keepalive_body = f'<?xml version="1.0"?>\r\n<Notify>\r\n<CmdType>Keepalive</CmdType>\r\n<SN>{int(time.time()) % 100000}</SN>\r\n<DeviceID>{gb_device.device_id}</DeviceID>\r\n<Status>OK</Status>\r\n</Notify>'
+        msg = (
+            f"MESSAGE sip:{self._server_id}@{self._config.get('host', '0.0.0.0')} SIP/2.0\r\n"
+            f"Via: SIP/2.0/UDP {self._config.get('host', '0.0.0.0')}:{self._config.get('port', 5060)};rport;branch={uuid.uuid4().hex[:8]}\r\n"
+            f"From: <sip:{gb_device.device_id}@{self._config.get('host', '0.0.0.0')}>;tag={gb_device.device_id}\r\n"
+            f"To: <sip:{self._server_id}@{self._config.get('host', '0.0.0.0')}>\r\n"
+            f"Call-ID: {uuid.uuid4().hex[:16]}@{self._config.get('host', '0.0.0.0')}\r\n"
+            f"CSeq: {int(time.time()) % 100000} MESSAGE\r\n"
+            f"Content-Type: Application/MANSCDP+xml\r\n"
+            f"Content-Length: {len(keepalive_body.encode())}\r\n\r\n"
+            f"{keepalive_body}"
+        )
+        try:
+            self._transport.sendto(msg.encode(), (self._config.get('sip_host', self._config.get('host', '127.0.0.1')), self._config.get('sip_port', 5060)))
+        except Exception as e:
+            logger.debug("Keepalive send failed for %s: %s", gb_device.device_id, e)
 
     def _parse_sdp(self, sdp: str) -> dict:
         result = {"media_ip": "", "media_port": 0, "media_type": ""}

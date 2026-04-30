@@ -37,8 +37,8 @@
             <n-space justify="space-between" align="center">
               <n-space size="small" align="center">
                 <n-text depth="3" style="font-size:12px">{{ p.default_port ? `端口 ${p.default_port}` : '' }}</n-text>
-                <n-tag size="tiny" :type="protocolModes[p.name] === 'client' ? 'warning' : 'info'" :bordered="false">
-                  {{ protocolModes[p.name] === 'client' ? '客户端上报' : '服务端模拟' }}
+                <n-tag size="tiny" :type="protocolModes[p.name] === 'Broker' || protocolModes[p.name] === 'SIP' || protocolModes[p.name] === 'Agent' ? 'warning' : 'info'" :bordered="false">
+                  {{ protocolModes[p.name] || 'Server' }}
                 </n-tag>
               </n-space>
               <n-space size="small">
