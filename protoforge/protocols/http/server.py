@@ -254,7 +254,7 @@ class HttpSimulatorServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

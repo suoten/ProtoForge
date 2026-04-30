@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import struct
 import time
@@ -29,11 +29,11 @@ class OpcDaDeviceBehavior(DeviceBehavior):
                 self._quality[name] = 192
                 self._data_types[name] = data_type
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             self._quality[point_name] = 192
@@ -458,7 +458,7 @@ class OpcDaServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

@@ -76,9 +76,9 @@ class ProtocolServer(ABC):
 
 class DeviceBehavior(ABC):
     @abstractmethod
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         pass
 
     @abstractmethod
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         pass

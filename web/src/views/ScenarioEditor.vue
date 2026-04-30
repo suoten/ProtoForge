@@ -295,16 +295,12 @@ async function loadScenario(scenarioId) {
   if (!scenarioId) return
   try {
     const scenario = await api.getScenario(scenarioId)
-    const scenarioDeviceIds = (scenario.devices || []).map(d => d.id)
-    const allDevices = await api.getDevices()
-    const scenarioDevices = allDevices.filter(d => scenarioDeviceIds.includes(d.id))
-    nodes.value = scenarioDevices.map((d, i) => ({
+    nodes.value = (scenario.devices || []).map((d, i) => ({
       id: `node-${d.id}`, type: 'device',
-      position: { x: 100 + (i % 3) * 250, y: 100 + Math.floor(i / 3) * 150 },
+      position: d.position || { x: 100 + (i % 3) * 250, y: 100 + Math.floor(i / 3) * 150 },
       data: {
         label: d.name, deviceId: d.id, protocol: d.protocol,
-        online: d.status === 'online' || d.status === 'running',
-        points: d.points || [], pointCount: (d.points || []).length
+        online: false, points: d.points || [], pointCount: (d.points || []).length
       }
     }))
     edges.value = (scenario.rules || []).map((rule, i) => ({
@@ -326,7 +322,17 @@ async function saveScenarioLayout() {
   try {
     const deviceConfigs = nodes.value.map(n => ({
       id: n.data.deviceId, name: n.data.label, protocol: n.data.protocol,
-      points: n.data.points || [], position: n.position,
+      points: (n.data.points || []).map(p => ({
+        name: p.name, address: p.address ?? '0',
+        data_type: p.data_type || 'float32', unit: p.unit || '',
+        description: p.description || '', access: p.access || 'rw',
+        generator_type: p.generator_type || 'random',
+        generator_config: p.generator_config || {},
+        min_value: p.min_value ?? null, max_value: p.max_value ?? null,
+        fixed_value: p.fixed_value ?? null,
+      })),
+      protocol_config: n.data.protocol_config || {},
+      position: n.position,
     }))
     const rules = edges.value.map(e => ({
       id: e.id, name: e.data?.rule?.name || e.data?.label || 'Rule',
@@ -343,7 +349,11 @@ async function saveScenarioLayout() {
       },
       enabled: true,
     })).filter(r => r.source_device_id && r.target_device_id)
+    const currentScenario = scenarios.value.find(s => s.id === selectedScenario.value)
     await api.updateScenario(selectedScenario.value, {
+      id: selectedScenario.value,
+      name: currentScenario?.name || '',
+      description: currentScenario?.description || '',
       devices: deviceConfigs, rules,
     })
     message.success('场景布局已保存')

@@ -25,11 +25,11 @@ class MtConnectDeviceBehavior(DeviceBehavior):
                 self._values[name] = fixed_val if fixed_val is not None else 0
                 self._generators[name] = DynamicValueGenerator(p)
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             return True
@@ -329,7 +329,7 @@ class MtConnectServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

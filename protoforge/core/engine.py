@@ -8,7 +8,7 @@ from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStarte
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
-from protoforge.models.scenario import ScenarioConfig, ScenarioInfo, ScenarioStatus
+from protoforge.models.scenario import ScenarioConfig, ScenarioDetail, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
@@ -435,18 +435,20 @@ class SimulationEngine:
             )
         return result
 
-    def get_scenario(self, scenario_id: str) -> ScenarioInfo:
+    def get_scenario(self, scenario_id: str) -> ScenarioDetail:
         config = self._scenarios.get(scenario_id)
         if not config:
             raise ValueError(f"Scenario not found: {scenario_id}")
         status = self._scenario_status.get(scenario_id, ScenarioStatus.STOPPED)
-        return ScenarioInfo(
+        return ScenarioDetail(
             id=config.id,
             name=config.name,
             description=config.description,
             status=status,
             device_count=len(config.devices),
             rule_count=len(config.rules),
+            devices=config.devices,
+            rules=config.rules,
         )
 
     async def start(self) -> None:

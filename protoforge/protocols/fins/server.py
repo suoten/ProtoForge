@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import struct
 import time
@@ -55,11 +55,11 @@ class FinsDeviceBehavior(DeviceBehavior):
         except (ValueError, TypeError, struct.error):
             pass
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             self._sync_value_to_area(point_name, value)
@@ -115,6 +115,7 @@ class FinsServer(ProtocolServer):
         self._server_task: asyncio.Task | None = None
         self._server_running = False
         self._sid_counter = 1
+        self._udp_transport = None
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -150,17 +151,25 @@ class FinsServer(ProtocolServer):
             self._log_debug("system", "server_stop", "FINS服务停止")
 
     async def _serve(self) -> None:
+        loop = asyncio.get_running_loop()
+        tcp_server = await asyncio.start_server(
+            self._handle_connection, self._host, self._port
+        )
+        transport, _ = await loop.create_datagram_endpoint(
+            lambda: FinsUdpProtocol(self), local_addr=(self._host, self._port)
+        )
+        self._udp_transport = transport
         try:
-            server = await asyncio.start_server(
-                self._handle_connection, self._host, self._port
-            )
-            async with server:
-                await server.serve_forever()
+            async with tcp_server:
+                await tcp_server.serve_forever()
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error("FINS server error: %s", e)
             self._status = ProtocolStatus.ERROR
+        finally:
+            if self._udp_transport:
+                self._udp_transport.close()
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
@@ -379,13 +388,102 @@ class FinsServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
                 "host": {"type": "string", "default": "0.0.0.0", "description": "FINS 服务器监听地址"},
-                "port": {"type": "integer", "default": 9600, "description": "FINS 端口 (默认9600)"},
+                "port": {"type": "integer", "default": 9600, "description": "FINS 端口 (默认9600, TCP+UDP共用)"},
             },
         }
+
+
+class FinsUdpProtocol(asyncio.DatagramProtocol):
+    def __init__(self, server: FinsServer):
+        self._server = server
+        self._transport = None
+
+    def connection_made(self, transport):
+        self._transport = transport
+
+    def datagram_received(self, data: bytes, addr: tuple):
+        if len(data) < 10:
+            return
+        icf = data[0]
+        rsv = data[1]
+        gateway = data[2]
+        dest_node = data[3]
+        src_node = data[4]
+        sid = data[5]
+        mrc = data[6]
+        src = data[7]
+        fins_data = data[8:]
+        response = self._process_fins_udp(mrc, src, fins_data, data[:8])
+        if response and self._transport:
+            self._transport.sendto(response, addr)
+
+    def _process_fins_udp(self, mrc: int, src: int, data: bytes, header: bytes) -> bytes | None:
+        server = self._server
+        if mrc == 0x01 and src == 0x01:
+            return self._handle_memory_read_udp(data, header)
+        elif mrc == 0x02 and src == 0x01:
+            return self._handle_memory_write_udp(data, header)
+        elif mrc == 0x05 and src == 0x01:
+            return self._handle_controller_read_udp(data, header)
+        return None
+
+    def _handle_memory_read_udp(self, data: bytes, header: bytes) -> bytes:
+        server = self._server
+        if len(data) < 6:
+            return header + bytes([0x01, 0x01]) + b"\x00\x00"
+        area = data[0]
+        word_addr = struct.unpack(">H", data[1:3])[0]
+        bit_addr = data[3]
+        word_count = struct.unpack(">H", data[4:6])[0]
+        behavior = server._behaviors.get(server._default_device_id)
+        resp_data = bytearray()
+        for i in range(word_count):
+            if area in (0x82, 0x83):
+                val = behavior.read_area(area, 0, word_addr + i, 1) if behavior else b"\x00\x00"
+                resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
+            elif area == 0x84:
+                db_num = struct.unpack(">H", data[1:3])[0]
+                val = behavior.read_area(area, db_num, word_addr + i, 1) if behavior else b"\x00\x00"
+                resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
+            else:
+                resp_data += b"\x00\x00"
+        return header + bytes([0x01, 0x01]) + struct.pack(">H", 0) + bytes(resp_data)
+
+    def _handle_memory_write_udp(self, data: bytes, header: bytes) -> bytes:
+        if len(data) < 6:
+            return header + bytes([0x02, 0x01]) + b"\x00\x00"
+        server = self._server
+        area = data[0]
+        word_addr = struct.unpack(">H", data[1:3])[0]
+        bit_addr = data[3]
+        word_count = struct.unpack(">H", data[4:6])[0]
+        write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
+        behavior = server._behaviors.get(server._default_device_id)
+        if behavior:
+            behavior.write_area(area, 0, word_addr, write_data)
+        return header + bytes([0x02, 0x01]) + struct.pack(">H", 0)
+
+    def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:
+        server = self._server
+        device_config = server._device_configs.get(server._default_device_id)
+        controller_data = bytearray(28)
+        controller_data[0:2] = struct.pack(">H", 0x0000)
+        controller_data[2:4] = struct.pack(">H", 0x0000)
+        controller_data[4:6] = b"PF"
+        if device_config:
+            name_bytes = device_config.name.encode("ascii", errors="replace")[:14]
+            controller_data[6:20] = name_bytes.ljust(14, b"\x00")
+        else:
+            controller_data[6:20] = b"ProtoForge-FINS\x00"[:14]
+        controller_data[20:22] = struct.pack(">H", 0x0100)
+        return header + bytes([0x05, 0x01]) + struct.pack(">H", 0) + bytes(controller_data)
+
+    def error_received(self, exc):
+        pass
