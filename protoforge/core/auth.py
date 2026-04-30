@@ -224,7 +224,8 @@ class UserManager:
         try:
             await self._db.save_user(user.to_dict(include_hash=True))
         except Exception as e:
-            logger.warning("Failed to persist user %s: %s", user.username, e)
+            logger.error("Failed to persist user %s: %s", user.username, e)
+            raise RuntimeError(f"Failed to persist user: {e}") from e
 
     async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
         if username in self._users:

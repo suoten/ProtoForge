@@ -797,10 +797,15 @@ class Database:
             (rec_id,),
         )
 
+    _VALID_TABLES = {"devices", "scenarios", "templates", "test_cases",
+                      "test_suites", "test_reports", "users", "recordings", "audit_log"}
+
     async def export_all(self) -> dict[str, Any]:
         result = {}
         for table in ("devices", "scenarios", "templates", "test_cases",
                        "test_suites", "test_reports", "users", "recordings"):
+            if table not in self._VALID_TABLES:
+                continue
             try:
                 rows = await self._fetchall(f"SELECT * FROM {table}")
                 result[table] = rows

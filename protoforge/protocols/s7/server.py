@@ -561,7 +561,7 @@ class S7Server(ProtocolServer):
                             else:
                                 behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
                         except (struct.error, IndexError) as e:
-                        logger.warning("S7 write value sync error for %s: %s", name, e)
+                            logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
                                 f"写入{area_name}{db_number}偏移{offset}",
