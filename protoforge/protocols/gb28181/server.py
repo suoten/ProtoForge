@@ -393,19 +393,23 @@ class GB28181Server(ProtocolServer):
         if not self._transport:
             return
         keepalive_body = f'<?xml version="1.0"?>\r\n<Notify>\r\n<CmdType>Keepalive</CmdType>\r\n<SN>{int(time.time()) % 100000}</SN>\r\n<DeviceID>{gb_device.device_id}</DeviceID>\r\n<Status>OK</Status>\r\n</Notify>'
+        local_host = self._host if self._host != "0.0.0.0" else "127.0.0.1"
+        local_port = self._port
         msg = (
-            f"MESSAGE sip:{self._server_id}@{self._config.get('host', '0.0.0.0')} SIP/2.0\r\n"
-            f"Via: SIP/2.0/UDP {self._config.get('host', '0.0.0.0')}:{self._config.get('port', 5060)};rport;branch={uuid.uuid4().hex[:8]}\r\n"
-            f"From: <sip:{gb_device.device_id}@{self._config.get('host', '0.0.0.0')}>;tag={gb_device.device_id}\r\n"
-            f"To: <sip:{self._server_id}@{self._config.get('host', '0.0.0.0')}>\r\n"
-            f"Call-ID: {uuid.uuid4().hex[:16]}@{self._config.get('host', '0.0.0.0')}\r\n"
+            f"MESSAGE sip:{self._server_id}@{local_host} SIP/2.0\r\n"
+            f"Via: SIP/2.0/UDP {local_host}:{local_port};rport;branch={uuid.uuid4().hex[:8]}\r\n"
+            f"From: <sip:{gb_device.device_id}@{local_host}>;tag={gb_device.device_id}\r\n"
+            f"To: <sip:{self._server_id}@{local_host}>\r\n"
+            f"Call-ID: {uuid.uuid4().hex[:16]}@{local_host}\r\n"
             f"CSeq: {int(time.time()) % 100000} MESSAGE\r\n"
             f"Content-Type: Application/MANSCDP+xml\r\n"
             f"Content-Length: {len(keepalive_body.encode())}\r\n\r\n"
             f"{keepalive_body}"
         )
         try:
-            self._transport.sendto(msg.encode(), (self._config.get('sip_host', self._config.get('host', '127.0.0.1')), self._config.get('sip_port', 5060)))
+            dest_host = gb_device.host
+            dest_port = gb_device.port
+            self._transport.sendto(msg.encode(), (dest_host, dest_port))
         except Exception as e:
             logger.debug("Keepalive send failed for %s: %s", gb_device.device_id, e)
 
@@ -601,6 +605,10 @@ class GB28181Server(ProtocolServer):
             if m:
                 device_id = m.group(1)
 
+        if self._transport:
+            trying = f"SIP/2.0 100 Trying\r\n{via}\r\n{from_header}\r\n{to_header}\r\n{call_id}\r\n{cseq}\r\nContent-Length: 0\r\n\r\n"
+            self._transport.sendto(trying.encode("utf-8"), addr)
+
         gb_device = None
         for did, dev in self._gb_devices.items():
             if dev.device_id == device_id:
@@ -629,9 +637,19 @@ class GB28181Server(ProtocolServer):
 
         media_ip = self._host if self._host != "0.0.0.0" else "127.0.0.1"
         try:
-            media_port = 6000 + (int(device_id[-4:], 10) % 1000)
+            base_port = 6000 + (int(device_id[-4:], 10) % 1000)
         except (ValueError, IndexError):
-            media_port = 6000
+            base_port = 6000
+        media_port = base_port
+        if not hasattr(self, '_allocated_media_ports'):
+            self._allocated_media_ports = set()
+        while media_port in self._allocated_media_ports:
+            media_port += 2
+            if media_port > 6999:
+                media_port = 6000
+                break
+        self._allocated_media_ports.add(media_port)
+        self._allocated_media_ports.add(media_port + 1)
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
 
         sdp_body = gb_device.make_sdp_answer(media_ip, media_port, ssrc)

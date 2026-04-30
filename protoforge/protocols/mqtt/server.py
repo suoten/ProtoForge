@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import time
 from typing import Any
@@ -81,13 +81,19 @@ class MqttBroker(ProtocolServer):
         self._auth_password = config.get("auth_password", "")
 
         try:
-            auth_plugins = {
-                "amqtt.plugins.authentication.AnonymousAuthPlugin": {
-                    "allow_anonymous": not self._auth_required,
-                },
-            }
+            auth_plugins = {}
             if self._auth_required and self._auth_username:
-                auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"]["allow_anonymous"] = False
+                auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
+                    "allow_anonymous": False,
+                }
+                auth_plugins["protoforge.mqtt_auth.MqttAuthPlugin"] = {
+                    "username": self._auth_username,
+                    "password": self._auth_password,
+                }
+            else:
+                auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
+                    "allow_anonymous": True,
+                }
             broker_config = {
                 "listeners": {
                     "default": {

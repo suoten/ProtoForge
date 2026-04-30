@@ -183,6 +183,7 @@ function openInstantiate(t) {
 
 async function instantiateDevice() {
   if (!selectedTemplate.value) return
+  if (!instantiateForm.value.device_id) { message.warning('请填写设备ID'); return }
   instantiating.value = true
   try {
     const config = await api.instantiateTemplate(selectedTemplate.value.id, instantiateForm.value)

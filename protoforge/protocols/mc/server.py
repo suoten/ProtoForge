@@ -244,10 +244,14 @@ class McServer(ProtocolServer):
 
         if cmd == 0x0401:
             return self._handle_read(data, subcmd)
+        elif cmd == 0x0402:
+            return self._handle_random_read(data, subcmd)
         elif cmd == 0x1401:
             return self._handle_write(data, subcmd)
+        elif cmd == 0x1402:
+            return self._handle_random_write(data, subcmd)
         elif cmd == 0x0001:
-            return self._handle_batch_read(data, subcmd)
+            return self._handle_self_test(data)
 
         return self._make_error_response(data, 0xC059)
 
@@ -326,8 +330,86 @@ class McServer(ProtocolServer):
 
         return bytes(resp)
 
-    def _handle_batch_read(self, data: bytes, subcmd: int) -> bytes:
-        return self._handle_read(data, subcmd)
+    def _handle_random_read(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 17:
+            return self._make_error_response(data, 0xC059)
+        try:
+            point_count = struct.unpack("<H", data[15:17])[0]
+        except (IndexError, struct.error):
+            return self._make_error_response(data, 0xC059)
+        read_data = bytearray()
+        behavior = self._behaviors.get(self._default_device_id)
+        offset = 17
+        for _ in range(min(point_count, 64)):
+            if offset + 3 > len(data):
+                break
+            start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+            device_code = data[offset + 2]
+            offset += 3
+            if behavior:
+                if subcmd == 0x0000:
+                    mem = behavior.read_memory(device_code, start_addr + 2)
+                    read_data += mem[start_addr:start_addr + 2]
+                elif subcmd == 0x0001:
+                    mem = behavior.read_memory(device_code, start_addr + 1)
+                    read_data += mem[start_addr:start_addr + 1]
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", len(read_data) + 2)
+        resp += struct.pack("<H", 0x0000)
+        resp += read_data
+        return bytes(resp)
+
+    def _handle_random_write(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 17:
+            return self._make_error_response(data, 0xC059)
+        behavior = self._behaviors.get(self._default_device_id)
+        try:
+            point_count = struct.unpack("<H", data[15:17])[0]
+        except (IndexError, struct.error):
+            return self._make_error_response(data, 0xC059)
+        offset = 17
+        for _ in range(min(point_count, 64)):
+            if subcmd == 0x0000:
+                if offset + 5 > len(data):
+                    break
+                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+                device_code = data[offset + 2]
+                write_val = data[offset + 3:offset + 5]
+                if behavior:
+                    behavior.write_memory(device_code, start_addr, write_val)
+                offset += 5
+            elif subcmd == 0x0001:
+                if offset + 4 > len(data):
+                    break
+                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+                device_code = data[offset + 2]
+                write_val = data[offset + 3:offset + 4]
+                if behavior:
+                    behavior.write_memory(device_code, start_addr, write_val)
+                offset += 4
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", 0x0000)
+        return bytes(resp)
+
+    def _handle_self_test(self, data: bytes) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        if len(data) >= 7:
+            resp += data[2:7]
+        else:
+            resp += bytes([0, 0, 0, 0, 0])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", 0x0000)
+        return bytes(resp)
 
     def _make_error_response(self, data: bytes, error_code: int) -> bytes:
         resp = bytearray()
@@ -424,10 +506,14 @@ class McServer(ProtocolServer):
 
         if cmd == 0x0401:
             return self._handle_read_ascii(data, subcmd)
+        elif cmd == 0x0402:
+            return self._handle_random_read_ascii(data, subcmd)
         elif cmd == 0x1401:
             return self._handle_write_ascii(data, subcmd)
+        elif cmd == 0x1402:
+            return self._handle_random_write_ascii(data, subcmd)
         elif cmd == 0x0001:
-            return self._handle_batch_read_ascii(data, subcmd)
+            return self._make_ascii_error_response(data, 0x0000)
 
         return self._make_ascii_error_response(data, 0xC059)
 
@@ -490,8 +576,85 @@ class McServer(ProtocolServer):
         resp += b"0000"
         return bytes(resp)
 
-    def _handle_batch_read_ascii(self, data: bytes, subcmd: int) -> bytes:
-        return self._handle_read_ascii(data, subcmd)
+    def _handle_random_read_ascii(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            point_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+        read_data = bytearray()
+        behavior = self._behaviors.get(self._default_device_id)
+        offset = 40
+        for _ in range(min(point_count, 64)):
+            if offset + 6 > len(data):
+                break
+            try:
+                start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+            except (ValueError, IndexError):
+                break
+            offset += 6
+            if behavior:
+                if subcmd == 0x0000:
+                    mem = behavior.read_memory(device_code, start_addr + 2)
+                    read_data += mem[start_addr:start_addr + 2]
+                elif subcmd == 0x0001:
+                    mem = behavior.read_memory(device_code, start_addr + 1)
+                    read_data += mem[start_addr:start_addr + 1]
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(2 + len(read_data) * 2)
+        resp += b"0000"
+        for b in read_data:
+            resp += self._hex_to_ascii(b, 2)
+        return bytes(resp)
+
+    def _handle_random_write_ascii(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        behavior = self._behaviors.get(self._default_device_id)
+        try:
+            point_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+        offset = 40
+        for _ in range(min(point_count, 64)):
+            if subcmd == 0x0000:
+                if offset + 10 > len(data):
+                    break
+                try:
+                    start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                    device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+                    write_ascii = data[offset + 6:offset + 10]
+                    write_data = bytearray()
+                    for i in range(0, len(write_ascii) - 1, 2):
+                        write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+                    if behavior:
+                        behavior.write_memory(device_code, start_addr, bytes(write_data))
+                except (ValueError, IndexError):
+                    break
+                offset += 10
+            elif subcmd == 0x0001:
+                if offset + 8 > len(data):
+                    break
+                try:
+                    start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                    device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+                    write_ascii = data[offset + 6:offset + 8]
+                    write_data = bytearray()
+                    for i in range(0, len(write_ascii) - 1, 2):
+                        write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+                    if behavior:
+                        behavior.write_memory(device_code, start_addr, bytes(write_data))
+                except (ValueError, IndexError):
+                    break
+                offset += 8
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(2)
+        resp += b"0000"
+        return bytes(resp)
 
     def _make_ascii_error_response(self, data: bytes, error_code: int) -> bytes:
         resp = bytearray(b"5000")

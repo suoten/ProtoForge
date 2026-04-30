@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -127,6 +127,9 @@ class ProfinetServer(ProtocolServer):
         self._output_size = 0
         self._connected = False
         self._connections: set[asyncio.StreamWriter] = set()
+        self._ip_address = "192.168.1.1"
+        self._subnet_mask = "255.255.255.0"
+        self._gateway = "192.168.1.254"
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -135,6 +138,9 @@ class ProfinetServer(ProtocolServer):
         self._device_name = config.get("device_name", "protoforge-device")
         self._vendor_id = config.get("vendor_id", 0x010A)
         self._device_id = config.get("device_id", 0x0100)
+        self._ip_address = config.get("ip_address", "192.168.1.1")
+        self._subnet_mask = config.get("subnet_mask", "255.255.255.0")
+        self._gateway = config.get("gateway", "192.168.1.254")
         try:
             self._recalc_data_sizes()
             self._server_running = True
@@ -272,9 +278,9 @@ class ProfinetServer(ProtocolServer):
 
         resp += struct.pack(">BHIHII",
                             DCP_BLOCK_IP, 14,
-                            0xC0A80101,
-                            0xFFFFFF00,
-                            0xC0A801FE,
+                            self._ip_to_int(self._ip_address),
+                            self._ip_to_int(self._subnet_mask),
+                            self._ip_to_int(self._gateway),
                             0)
 
         header = bytearray()
@@ -400,6 +406,19 @@ class ProfinetServer(ProtocolServer):
                 "device_name": {"type": "string", "default": "protoforge-device", "description": "PROFINET设备名称(DCP识别用)"},
                 "vendor_id": {"type": "integer", "default": 266, "description": "厂商ID(VendorID)"},
                 "device_id": {"type": "integer", "default": 256, "description": "设备ID(DeviceID)"},
+                "ip_address": {"type": "string", "default": "192.168.1.1", "description": "DCP Identify响应IP地址"},
+                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": "子网掩码"},
+                "gateway": {"type": "string", "default": "192.168.1.254", "description": "默认网关"},
             },
             "description": "TCP隧道模式 - PROFINET协议帧通过TCP传输，需配套隧道适配器连接真实控制器",
         }
+
+    @staticmethod
+    def _ip_to_int(ip_str: str) -> int:
+        try:
+            parts = [int(x) for x in ip_str.split(".")]
+            if len(parts) == 4:
+                return (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
+        except (ValueError, IndexError):
+            pass
+        return 0xC0A80101

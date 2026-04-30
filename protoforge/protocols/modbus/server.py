@@ -439,6 +439,13 @@ class ModbusTcpServer(ProtocolServer):
                     data = struct.pack(">I", int(value))
                     store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
                     store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("string",):
+                    encoded = str(value).encode("utf-8")
+                    if len(encoded) % 2:
+                        encoded += b'\x00'
+                    for j in range(0, len(encoded), 2):
+                        word = encoded[j:j + 2]
+                        store.holding_regs[address + j // 2] = struct.unpack(">H", word)[0]
                 else:
                     store.holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
@@ -475,10 +482,36 @@ class ModbusTcpServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         try:
             address = int(point.address) + 1
-            if point.data_type.value in ("bool",):
+            dt = point.data_type.value
+            if dt in ("bool",):
                 return bool(store.coils.get(address, 0))
+            elif dt in ("float32",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">f", struct.pack(">HH", *regs))[0]
+            elif dt in ("float64",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(4)]
+                return struct.unpack(">d", struct.pack(">HHHH", *regs))[0]
+            elif dt in ("int32",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">i", struct.pack(">HH", *regs))[0]
+            elif dt in ("uint32",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">I", struct.pack(">HH", *regs))[0]
+            elif dt in ("int16",):
+                raw = store.holding_regs.get(address, 0)
+                return struct.unpack(">h", struct.pack(">H", raw & 0xFFFF))[0]
+            elif dt in ("uint16",):
+                return store.holding_regs.get(address, 0)
+            elif dt in ("string",):
+                result = bytearray()
+                for i in range(32):
+                    w = store.holding_regs.get(address + i, 0)
+                    result += struct.pack(">H", w)
+                    if w & 0xFF == 0:
+                        break
+                return result.rstrip(b'\x00').decode("utf-8", errors="replace")
             else:
                 return store.holding_regs.get(address, 0)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, struct.error) as e:
             logger.warning("Failed to read register %s: %s", point.address, e)
             return None

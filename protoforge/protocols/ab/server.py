@@ -103,6 +103,7 @@ class AbServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 44818)
+        self._start_config = config
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
@@ -190,8 +191,9 @@ class AbServer(ProtocolServer):
         return self._make_eip_error(command, session, 0x01)
 
     def _handle_list_identity(self, data: bytes, session: int) -> bytes:
-        host = self._config.get("host", "0.0.0.0")
-        port = self._config.get("port", 44818)
+        config = getattr(self, '_start_config', {})
+        host = config.get("host", self._host)
+        port = config.get("port", self._port)
         try:
             ip_parts = [int(x) for x in host.split(".")]
             ip_bytes = bytes(ip_parts) if len(ip_parts) == 4 else b"\x00\x00\x00\x00"
@@ -211,7 +213,7 @@ class AbServer(ProtocolServer):
         identity += struct.pack("<H", 0x0000)
         identity += struct.pack("<H", 0x0000)
         identity += struct.pack("<H", 0x0000)
-        device_name = self._config.get("device_name", "ProtoForge-AB").encode("utf-8")
+        device_name = config.get("device_name", "ProtoForge-AB").encode("utf-8")
         identity += struct.pack("<B", len(device_name))
         identity += device_name
         return self._make_eip_response(0x0001, session, bytes(identity))
@@ -309,21 +311,32 @@ class AbServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_cip_forward_open(self, session: int, cip_data: bytes) -> bytes:
+        o_t_rpi = struct.unpack("<I", cip_data[6:10])[0] if len(cip_data) >= 10 else 0x00010000
+        t_o_rpi = struct.unpack("<I", cip_data[10:14])[0] if len(cip_data) >= 14 else 0x00010000
+        o_t_params = struct.unpack("<H", cip_data[14:16])[0] if len(cip_data) >= 16 else 0x4302
+        t_o_params = struct.unpack("<H", cip_data[16:18])[0] if len(cip_data) >= 18 else 0x4302
+        conn_serial = struct.unpack("<H", cip_data[18:20])[0] if len(cip_data) >= 20 else 0x0001
+        vendor_id = struct.unpack("<H", cip_data[20:22])[0] if len(cip_data) >= 22 else 0x0001
+        orig_serial = struct.unpack("<I", cip_data[22:26])[0] if len(cip_data) >= 26 else 0x00000001
         cip_resp = bytearray()
-        cip_resp += bytes([0xD6])
-        cip_resp += bytes([0x00])
-        cip_resp += struct.pack("<I", 0x00000000)
-        cip_resp += struct.pack("<H", 0x0100)
-        cip_resp += struct.pack("<H", 0x0002)
-        cip_resp += struct.pack("<I", 0x00000042)
-        cip_resp += struct.pack("<I", 0x00000042)
+        cip_resp += bytes([0xD6, 0x00])
+        cip_resp += bytes([0x00, 0x00])
+        cip_resp += struct.pack("<I", 0x00000001)
+        cip_resp += struct.pack("<I", 0x00000002)
+        cip_resp += struct.pack("<H", conn_serial)
+        cip_resp += struct.pack("<H", vendor_id)
+        cip_resp += struct.pack("<I", orig_serial)
+        cip_resp += struct.pack("<I", o_t_rpi)
+        cip_resp += struct.pack("<I", t_o_rpi)
+        cip_resp += struct.pack("<H", o_t_params)
+        cip_resp += struct.pack("<H", t_o_params)
+        cip_resp += bytes([0xA3])
         return self._wrap_cip_response(session, cip_resp)
 
     def _handle_cip_forward_close(self, session: int, cip_data: bytes) -> bytes:
         cip_resp = bytearray()
         cip_resp += bytes([0xCE])
-        cip_resp += bytes([0x00])
-        cip_resp += struct.pack("<I", 0x00000000)
+        cip_resp += bytes([0x00, 0x00])
         return self._wrap_cip_response(session, cip_resp)
 
     @staticmethod
@@ -419,8 +432,7 @@ class AbServer(ProtocolServer):
 
         cip_resp = bytearray()
         cip_resp += bytes([0xD2])
-        cip_resp += bytes([0x00])
-        cip_resp += struct.pack("<I", 0x00000000)
+        cip_resp += bytes([0x00, 0x00])
         cip_resp += self._pack_cip_value(data_type, tag_value)
         return self._wrap_cip_response(session, cip_resp)
 
@@ -440,8 +452,7 @@ class AbServer(ProtocolServer):
 
         cip_resp = bytearray()
         cip_resp += bytes([0xCD])
-        cip_resp += bytes([0x00])
-        cip_resp += struct.pack("<I", 0x00000000)
+        cip_resp += bytes([0x00, 0x00])
         return self._wrap_cip_response(session, cip_resp)
 
     @staticmethod

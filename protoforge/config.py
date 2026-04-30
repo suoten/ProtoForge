@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     influxdb_org: str = "default"
     influxdb_bucket: str = "protoforge"
 
+    edgelite_url: str = ""
+    edgelite_username: str = "admin"
+    edgelite_password: str = ""
+
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
     opcua_port: int = 4840
@@ -73,6 +77,7 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
         "host", "port", "db_path", "demo_mode",
         "log_level", "cors_origins",
         "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
+        "edgelite_url", "edgelite_username", "edgelite_password",
     }
     for key, value in updates.items():
         if key.endswith("_port") or key in allowed_keys:
@@ -152,6 +157,9 @@ def get_all_settings_dict() -> dict[str, Any]:
         "influxdb_token": s.influxdb_token[:8] + "..." if s.influxdb_token and len(s.influxdb_token) > 8 else s.influxdb_token,
         "influxdb_org": s.influxdb_org,
         "influxdb_bucket": s.influxdb_bucket,
+        "edgelite_url": s.edgelite_url,
+        "edgelite_username": s.edgelite_username,
+        "edgelite_password": "***" if s.edgelite_password else "",
         "protocol_ports": {
             "modbus_tcp": s.modbus_tcp_port,
             "modbus_rtu": s.modbus_rtu_port,

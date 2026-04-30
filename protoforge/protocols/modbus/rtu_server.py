@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -269,6 +269,36 @@ class ModbusRtuServer(ProtocolServer):
                         val = struct.unpack(">H", data[offset:offset + 2])[0]
                         store.set_point(16, start + i, val)
                 return bytes([fc]) + data[0:4]
+            elif fc == 0x16:
+                if len(data) < 10:
+                    return bytes([fc | 0x80, 0x02])
+                ref_addr = struct.unpack(">H", data[0:2])[0] + 1
+                and_mask = struct.unpack(">H", data[2:4])[0]
+                or_mask = struct.unpack(">H", data[4:6])[0]
+                current = store.get_point(3, ref_addr)
+                new_val = (current & and_mask) | (or_mask & ~and_mask)
+                new_val = new_val & 0xFFFF
+                store.set_point(16, ref_addr, new_val)
+                return bytes([fc]) + data[0:6]
+            elif fc == 0x17:
+                if len(data) < 10:
+                    return bytes([fc | 0x80, 0x02])
+                read_start = struct.unpack(">H", data[0:2])[0] + 1
+                read_count = struct.unpack(">H", data[2:4])[0]
+                write_start = struct.unpack(">H", data[4:6])[0] + 1
+                write_count = struct.unpack(">H", data[6:8])[0]
+                write_byte_count = data[8] if len(data) > 8 else 0
+                for i in range(write_count):
+                    offset = 9 + i * 2
+                    if offset + 2 <= len(data):
+                        val = struct.unpack(">H", data[offset:offset + 2])[0]
+                        store.set_point(16, write_start + i, val)
+                byte_count = read_count * 2
+                regs = bytearray(byte_count)
+                for i in range(read_count):
+                    val = store.get_point(3, read_start + i)
+                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+                return bytes([fc, byte_count]) + bytes(regs)
             else:
                 return bytes([fc | 0x80, 0x01])
         except (IndexError, struct.error):
