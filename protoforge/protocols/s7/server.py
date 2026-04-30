@@ -437,6 +437,16 @@ class S7Server(ProtocolServer):
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
                 value_bytes = behavior.read_area(area, db_number, offset // 8 if is_bit else offset, read_size)
+                for name, (p_db, p_offset) in behavior._point_addresses.items():
+                    if area == behavior.S7_AREA_DB and db_number == p_db:
+                        pt = behavior._points.get(name)
+                        if pt and hasattr(pt, "data_type"):
+                            dt = str(pt.data_type)
+                            p_size = 4 if dt in ("float32", "int32", "uint32") else 8 if dt == "float64" else 2
+                            if offset // 8 if is_bit else offset == p_offset:
+                                val = behavior.get_value(name)
+                                behavior._sync_value_to_db(name, val)
+                                value_bytes = behavior.read_area(area, db_number, offset // 8 if is_bit else offset, read_size)
 
             item_results.append((0xFF, value_bytes))
 
@@ -529,6 +539,29 @@ class S7Server(ProtocolServer):
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
                 behavior.write_area(area, db_number, offset, write_data)
+                for name, (p_db, p_offset) in behavior._point_addresses.items():
+                    if area == behavior.S7_AREA_DB and db_number == p_db and offset == p_offset:
+                        try:
+                            pt = behavior._points.get(name)
+                            dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
+                            if dt in ("float32",):
+                                behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
+                            elif dt in ("float64",):
+                                behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
+                            elif dt in ("int16",):
+                                behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
+                            elif dt in ("uint16",):
+                                behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
+                            elif dt in ("int32", "dint"):
+                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
+                            elif dt in ("uint32",):
+                                behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
+                            elif dt in ("bool",):
+                                behavior._values[name] = bool(write_data[0]) if write_data else False
+                            else:
+                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
+                        except (struct.error, IndexError):
+                            pass
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
                                 f"写入{area_name}{db_number}偏移{offset}",
@@ -609,23 +642,40 @@ class S7Server(ProtocolServer):
         return bytes(resp)
 
     def _build_szl_module_identification(self, index: int) -> bytes:
+        info = self._device_info.get(self._default_device_id, {})
+        module_name = info.get("module_name", "ProtoForge S7")
+        serial = info.get("serial_number", "PF-00000000")
+        hw_rev = int(info.get("hardware_revision", "1"))
+        fw_rev_str = info.get("firmware_revision", "V1.0.0")
+        fw_parts = fw_rev_str.replace("V", "").split(".")
+        fw_major = int(fw_parts[0]) if fw_parts and fw_parts[0].isdigit() else 1
+        fw_minor = int(fw_parts[1]) if len(fw_parts) > 1 and fw_parts[1].isdigit() else 0
+        name_bytes = module_name.encode("utf-8")[:24].ljust(24, b"\x00")
+        serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")
         return struct.pack(">HHHHHII",
             0x0001,
             index or 0x0001,
             0x3131,
-            0x0001,
-            0x0000,
+            hw_rev,
+            (fw_major << 8) | fw_minor,
             0x00000000,
             0x00000000,
-        ) + b"ProtoForge S7\x00\x00\x00"
+        ) + name_bytes + serial_bytes
 
     def _build_szl_component_identification(self, index: int) -> bytes:
+        info = self._device_info.get(self._default_device_id, {})
+        order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
+        serial = info.get("serial_number", "PF-00000000")
+        hw_rev = int(info.get("hardware_revision", "1"))
+        fw_rev_str = info.get("firmware_revision", "V1.0.0")
+        order_bytes = order_num.encode("utf-8")[:20].ljust(20, b"\x00")
+        serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")
         return struct.pack(">HHHH",
             0x0001,
             index or 0x0001,
-            0x0001,
+            hw_rev,
             0x0000,
-        ) + b"6ES7 000-0AA00-0AA0\x00"
+        ) + order_bytes + serial_bytes
 
     def _build_szl_cpu_features(self) -> bytes:
         return struct.pack(">HHHHHHHH",
@@ -654,8 +704,9 @@ class S7Server(ProtocolServer):
         self._device_info[device_id] = {
             "module_name": device_config.name,
             "serial_number": f"PF-{device_id[:8].upper()}",
-            "hardware_revision": "1",
-            "firmware_revision": "V1.0.0",
+            "order_number": proto_config.get("order_number", "6ES7 000-0AA00-0AA0"),
+            "hardware_revision": proto_config.get("hardware_revision", "1"),
+            "firmware_revision": proto_config.get("firmware_revision", "V1.0.0"),
             "rack": rack,
             "slot": slot,
             "db_count": 1,

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -52,12 +52,55 @@ class FanucDeviceBehavior(DeviceBehavior):
                 self._cnc_status["feed_rate"] = value
             elif point_name == "x_pos":
                 self._cnc_status["absolute_pos"][0] = value
+                self._cnc_status["machine_pos"][0] = value
             elif point_name == "y_pos":
                 self._cnc_status["absolute_pos"][1] = value
+                self._cnc_status["machine_pos"][1] = value
             elif point_name == "z_pos":
                 self._cnc_status["absolute_pos"][2] = value
+                self._cnc_status["machine_pos"][2] = value
             elif point_name == "alarm":
                 self._cnc_status["alarm"] = value
+            elif point_name == "mode":
+                self._cnc_status["mode"] = value
+            elif point_name == "execution":
+                self._cnc_status["execution"] = value
+            elif point_name == "motion":
+                self._cnc_status["motion"] = value
+            elif point_name == "program":
+                self._cnc_status["program"] = str(value)
+            elif point_name == "speed_override":
+                self._cnc_status["speed_override"] = value
+            elif point_name == "feed_override":
+                self._cnc_status["feed_override"] = value
+            elif point_name.startswith("abs_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["absolute_pos"]):
+                        self._cnc_status["absolute_pos"][idx] = value
+                except (ValueError, IndexError):
+                    pass
+            elif point_name.startswith("machine_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["machine_pos"]):
+                        self._cnc_status["machine_pos"][idx] = value
+                except (ValueError, IndexError):
+                    pass
+            elif point_name.startswith("rel_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["relative_pos"]):
+                        self._cnc_status["relative_pos"][idx] = value
+                except (ValueError, IndexError):
+                    pass
+            elif point_name.startswith("dist_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["distance_pos"]):
+                        self._cnc_status["distance_pos"][idx] = value
+                except (ValueError, IndexError):
+                    pass
             return True
         return False
 
@@ -255,53 +298,57 @@ class FanucServer(ProtocolServer):
 
     def _handle_cnc_absolute(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        positions = behavior._cnc_status.get("absolute_pos", [0.0] * 5) if behavior else [0.0] * 5
+        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("absolute_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0102)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<H", 5)
-        for pos in positions[:5]:
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
     def _handle_cnc_machine(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        positions = behavior._cnc_status.get("machine_pos", [0.0] * 5) if behavior else [0.0] * 5
+        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("machine_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0103)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<H", 5)
-        for pos in positions[:5]:
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
     def _handle_cnc_relative(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        positions = behavior._cnc_status.get("relative_pos", [0.0] * 5) if behavior else [0.0] * 5
+        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("relative_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0104)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<H", 5)
-        for pos in positions[:5]:
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
     def _handle_cnc_distance(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        positions = behavior._cnc_status.get("distance_pos", [0.0] * 5) if behavior else [0.0] * 5
+        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("distance_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0105)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<H", 5)
-        for pos in positions[:5]:
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
             resp += struct.pack("<d", pos)
         return bytes(resp)
 

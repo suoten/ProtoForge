@@ -148,7 +148,11 @@ class FileTarget(ForwardTarget):
                     f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
 
     async def close(self) -> None:
-        pass
+        try:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.flush()
+        except Exception as e:
+            logger.debug("FileTarget close flush error: %s", e)
 
 
 class ForwardEngine:

@@ -295,7 +295,23 @@ class FinsServer(ProtocolServer):
             for name, (p_area, p_offset) in behavior._point_addresses.items():
                 if p_area == area and p_offset == word_addr * 2:
                     try:
-                        if len(write_data) >= 4:
+                        pt = behavior._points.get(name)
+                        dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
+                        if dt in ("float32",) and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
+                        elif dt in ("float64",) and len(write_data) >= 8:
+                            behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
+                        elif dt in ("int16",) and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
+                        elif dt in ("uint16",) and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
+                        elif dt in ("int32", "dint") and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
+                        elif dt in ("uint32",) and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
+                        elif dt in ("bool",) and len(write_data) >= 1:
+                            behavior._values[name] = bool(write_data[0])
+                        elif len(write_data) >= 4:
                             behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
@@ -493,4 +509,4 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         return header + bytes([0x05, 0x01]) + struct.pack(">H", 0) + bytes(controller_data)
 
     def error_received(self, exc):
-        pass
+        logger.warning("FINS UDP error received: %s", exc)
