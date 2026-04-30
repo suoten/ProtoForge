@@ -358,51 +358,150 @@ class S7Server(ProtocolServer):
         return bytes(resp)
 
     def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:
-        if len(data) < 31:
+        if len(data) < 14:
             return self._make_s7_error_response(data)
 
-        area = data[26]
-        db_number = struct.unpack(">H", data[27:29])[0]
-        offset = struct.unpack(">H", data[29:31])[0]
-        read_size = struct.unpack(">H", data[31:33])[0] if len(data) >= 33 else 4
-        if read_size <= 0 or read_size > 65535:
-            read_size = 4
+        param_start = 14
+        if len(data) <= param_start + 2:
+            return self._make_s7_error_response(data)
 
-        value_bytes = b"\x00" * read_size
-        behavior = self._behaviors.get(device_id or self._default_device_id)
-        if behavior:
-            value_bytes = behavior.read_area(area, db_number, offset, read_size)
+        func_code = data[param_start]
+        if func_code != 0x04:
+            return self._make_s7_error_response(data)
 
-        result = 0xFF
+        item_count = data[param_start + 2] if len(data) > param_start + 2 else 1
+        if item_count == 0:
+            item_count = 1
 
+        item_offset = param_start + 3
+        item_results = []
+
+        for i in range(item_count):
+            if item_offset + 12 > len(data):
+                item_results.append((0x0A, b"\x00"))
+                continue
+
+            item_spec = data[item_offset:item_offset + 12]
+            item_offset += 12
+
+            spec_type = item_spec[0]
+            if spec_type != 0x12:
+                item_results.append((0x0A, b"\x00"))
+                continue
+
+            transport_size_code = item_spec[1]
+            length = struct.unpack(">H", item_spec[2:4])[0]
+            area = item_spec[6]
+            db_number = struct.unpack(">H", item_spec[7:9])[0]
+            byte_addr = struct.unpack(">H", item_spec[9:11])[0]
+            bit_addr = item_spec[11]
+            offset = (byte_addr << 3) | (bit_addr & 0x07)
+
+            if transport_size_code == 0x09:
+                read_size = (length + 7) // 8
+                is_bit = True
+            else:
+                read_size = length
+                is_bit = False
+
+            if read_size <= 0:
+                read_size = 1
+            if read_size > 65535:
+                read_size = 65535
+
+            value_bytes = b"\x00" * read_size
+            behavior = self._behaviors.get(device_id or self._default_device_id)
+            if behavior:
+                value_bytes = behavior.read_area(area, db_number, offset // 8 if is_bit else offset, read_size)
+
+            item_results.append((0xFF, value_bytes))
+
+        data_len = 0
+        for result_code, val_bytes in item_results:
+            data_len += 1 + 1 + 2 + len(val_bytes)
+            if len(val_bytes) % 2 != 0:
+                data_len += 1
+
+        param_len = 2 + item_count
         resp = bytearray([
             0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
         ])
         resp += data[10:12]
-        resp += bytes([
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x02 + len(value_bytes),
-            0x00, 0x00,
-        ])
-        resp += struct.pack(">H", len(value_bytes))
-        resp += bytes([
-            result,
-        ])
-        resp += struct.pack("B", len(value_bytes))
-        resp += value_bytes
+        resp += struct.pack(">H", 0x0000)
+        resp += struct.pack(">H", param_len)
+        resp += struct.pack(">H", data_len)
+
+        resp += bytes([0x04])
+        resp += bytes([0x00])
+        resp += bytes([item_count])
+
+        for result_code, val_bytes in item_results:
+            resp += bytes([result_code])
+            if result_code != 0xFF:
+                resp += bytes([0x00])
+                resp += struct.pack(">H", 0)
+            else:
+                transport_size = 0x09 if len(val_bytes) <= 1 else 0x04
+                resp += bytes([transport_size])
+                resp += struct.pack(">H", len(val_bytes))
+                resp += val_bytes
+                if len(val_bytes) % 2 != 0:
+                    resp += bytes([0x00])
 
         resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)
 
     def _make_s7_write_response(self, data: bytes, device_id: str | None = None) -> bytes:
-        if len(data) >= 31:
-            area = data[26]
-            db_number = struct.unpack(">H", data[27:29])[0]
-            offset = struct.unpack(">H", data[29:31])[0]
-            write_size = data[33] if len(data) > 33 else 4
-            write_data = data[34:34 + write_size] if len(data) >= 34 + write_size else data[35:39] if len(data) >= 39 else b"\x00\x00\x00\x00"
+        if len(data) < 14:
+            return self._make_s7_error_response(data)
+
+        param_start = 14
+        func_code = data[param_start] if len(data) > param_start else 0x05
+        item_count = data[param_start + 2] if len(data) > param_start + 2 else 1
+        if item_count == 0:
+            item_count = 1
+
+        item_offset = param_start + 3
+        result_codes = []
+
+        for i in range(item_count):
+            if item_offset + 12 > len(data):
+                result_codes.append(0x0A)
+                continue
+
+            item_spec = data[item_offset:item_offset + 12]
+            item_offset += 12
+
+            spec_type = item_spec[0]
+            if spec_type != 0x12:
+                result_codes.append(0x0A)
+                continue
+
+            area = item_spec[6]
+            db_number = struct.unpack(">H", item_spec[7:9])[0]
+            byte_addr = struct.unpack(">H", item_spec[9:11])[0]
+            bit_addr = item_spec[11]
+            offset = (byte_addr << 3) | (bit_addr & 0x07)
+
+            write_data = b"\x00\x00\x00\x00"
+            data_section_start = param_start + 3 + item_count * 12
+            if data_section_start + 4 <= len(data):
+                data_item_count = data[data_section_start] if len(data) > data_section_start else 0
+                ptr = data_section_start + 1
+                for j in range(i + 1):
+                    if ptr + 4 > len(data):
+                        break
+                    rc = data[ptr]
+                    ts = data[ptr + 1]
+                    dlen = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
+                    if j == i and ptr + 4 + dlen <= len(data):
+                        write_data = data[ptr + 4:ptr + 4 + dlen]
+                    ptr += 4 + dlen
+                    if dlen % 2 != 0:
+                        ptr += 1
+
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
                 behavior.write_area(area, db_number, offset, write_data)
@@ -410,20 +509,29 @@ class S7Server(ProtocolServer):
                 self._log_debug("recv", "s7_write",
                                 f"写入{area_name}{db_number}偏移{offset}",
                                 detail={"area": area_name, "db": db_number, "offset": offset, "len": len(write_data)})
+            result_codes.append(0xFF)
+
+        param_len = 2 + item_count
+        data_len = item_count
 
         resp = bytearray([
-            0x03, 0x00, 0x00, 0x19,
+            0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
         ])
         resp += data[10:12]
-        resp += bytes([
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x02,
-            0x00, 0x00,
-            0x01, 0x00,
-            0xFF,
-        ])
+        resp += struct.pack(">H", 0x0000)
+        resp += struct.pack(">H", param_len)
+        resp += struct.pack(">H", data_len)
+
+        resp += bytes([0x05])
+        resp += bytes([0x00])
+        resp += bytes([item_count])
+
+        for rc in result_codes:
+            resp += bytes([rc])
+
+        resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)
 
     def _make_s7_error_response(self, data: bytes) -> bytes:

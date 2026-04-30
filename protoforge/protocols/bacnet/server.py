@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import socket
 import struct
@@ -176,13 +176,13 @@ class BACnetServer(ProtocolServer):
                         resp.append(0x19)
                         resp.append(0x01 if value else 0x00)
                     elif isinstance(value, float):
-                        resp.append(0x55)
+                        resp.append(0x44)
                         resp += struct.pack(">f", value)
                     elif isinstance(value, int):
-                        resp.append(0x22)
+                        resp.append(0x34)
                         resp += struct.pack(">i", value)
                     else:
-                        resp.append(0x55)
+                        resp.append(0x44)
                         resp += struct.pack(">f", float(value) if value else 0.0)
                     resp[3] = len(resp) - 4
                     return bytes(resp)
@@ -203,10 +203,14 @@ class BACnetServer(ProtocolServer):
                 obj_id = i + 1
                 if obj_inst == 0 or obj_inst == obj_id:
                     tag = data[9] if len(data) > 9 else 0
-                    if tag == 0x55 and len(data) >= 14:
+                    if tag == 0x44 and len(data) >= 14:
                         value = struct.unpack(">f", data[10:14])[0]
-                    elif tag == 0x22 and len(data) >= 14:
+                    elif tag == 0x55 and len(data) >= 18:
+                        value = struct.unpack(">d", data[10:18])[0]
+                    elif tag == 0x34 and len(data) >= 14:
                         value = struct.unpack(">i", data[10:14])[0]
+                    elif tag == 0x22 and len(data) >= 12:
+                        value = struct.unpack(">H", data[10:12])[0]
                     elif tag == 0x19 and len(data) >= 11:
                         value = bool(data[10])
                     else:

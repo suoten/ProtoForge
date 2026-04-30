@@ -386,7 +386,8 @@ class GB28181Server(ProtocolServer):
         while self._status == ProtocolStatus.RUNNING:
             for gb_device in self._gb_devices.values():
                 await self._register_device(gb_device)
-            await asyncio.sleep(60)
+            refresh_interval = max(60, min(gb_device.expires for gb_device in self._gb_devices.values()) // 2) if self._gb_devices else 1800
+            await asyncio.sleep(refresh_interval)
 
     def _parse_sdp(self, sdp: str) -> dict:
         result = {"media_ip": "", "media_port": 0, "media_type": ""}

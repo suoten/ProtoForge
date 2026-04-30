@@ -608,7 +608,8 @@ async function deleteSuite(suiteId) {
 }
 
 function viewHtmlReport(id) {
-  window.open(`/api/v1/tests/reports/${id}/html`, '_blank')
+  const token = localStorage.getItem('token')
+  window.open(`/api/v1/tests/reports/${id}/html${token ? '?token=' + token : ''}`, '_blank')
 }
 
 async function createSuite() {

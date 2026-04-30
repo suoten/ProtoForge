@@ -280,8 +280,8 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.common import setup_exception_handlers
     setup_exception_handlers(app)
 
-    from protoforge.api.v1.rate_limit import rate_limit_middleware
-    app.middleware("http")(rate_limit_middleware)
+    from protoforge.api.v1.auth import auth_middleware
+    app.middleware("http")(auth_middleware)
 
     app.add_middleware(
         CORSMiddleware,
@@ -298,8 +298,8 @@ def create_app() -> FastAPI:
             "Set PROTOFORGE_CORS_ORIGINS to specific domain(s) for production."
         )
 
-    from protoforge.api.v1.auth import auth_middleware
-    app.middleware("http")(auth_middleware)
+    from protoforge.api.v1.rate_limit import rate_limit_middleware
+    app.middleware("http")(rate_limit_middleware)
 
     app.include_router(router)
 

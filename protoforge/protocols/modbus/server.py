@@ -129,10 +129,16 @@ class ModbusTcpServer(ProtocolServer):
         store = self._data_stores.get(slave_id)
         if not store:
             store = self._get_data_store(slave_id)
+        fc_names = {0x01: "Read Coils", 0x02: "Read Discrete Inputs", 0x03: "Read Holding Registers",
+                    0x04: "Read Input Registers", 0x05: "Write Single Coil", 0x06: "Write Single Register",
+                    0x0F: "Write Multiple Coils", 0x10: "Write Multiple Registers"}
+        fc_name = fc_names.get(fc, f"FC{fc:02X}")
         try:
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -142,6 +148,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x02:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -151,6 +159,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x03:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -160,6 +170,8 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x04:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -170,11 +182,15 @@ class ModbusTcpServer(ProtocolServer):
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} val={val}",
+                                detail={"fc": fc, "start": start-1, "value": val, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_point(6, start, val)
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} val={val}",
+                                detail={"fc": fc, "start": start-1, "value": val, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
                 start = struct.unpack(">H", data[0:2])[0] + 1
@@ -185,6 +201,8 @@ class ModbusTcpServer(ProtocolServer):
                     bit_idx = i % 8
                     if byte_idx < len(data):
                         store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x10:
                 start = struct.unpack(">H", data[0:2])[0] + 1
@@ -195,6 +213,8 @@ class ModbusTcpServer(ProtocolServer):
                     if offset + 2 <= len(data):
                         val = struct.unpack(">H", data[offset:offset + 2])[0]
                         store.set_point(16, start + i, val)
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} count={count}",
+                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             else:
                 return bytes([fc | 0x80, 0x01])
@@ -361,6 +381,22 @@ class ModbusTcpServer(ProtocolServer):
             try:
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
+                elif point.data_type.value in ("float32",):
+                    data = struct.pack(">f", float(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("float64",):
+                    data = struct.pack(">d", float(value))
+                    for j in range(4):
+                        store.holding_regs[address + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+                elif point.data_type.value in ("int32",):
+                    data = struct.pack(">i", int(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("uint32",):
+                    data = struct.pack(">I", int(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
                 else:
                     store.holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:

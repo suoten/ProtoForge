@@ -1,3 +1,4 @@
+import struct
 from typing import Any
 
 from protoforge.models.device import PointConfig
@@ -53,6 +54,22 @@ class ModbusDataStore:
             self._holding_regs[address] = int(value) & 0xFFFF
         elif fc == 4:
             self._input_regs[address] = int(value) & 0xFFFF
+
+    def set_32bit_point(self, fc: int, address: int, value: Any, data_type: str = "int32") -> None:
+        if data_type == "float32":
+            data = struct.pack(">f", float(value))
+        elif data_type == "int32":
+            data = struct.pack(">i", int(value))
+        elif data_type == "uint32":
+            data = struct.pack(">I", int(value))
+        elif data_type == "float64":
+            data = struct.pack(">d", float(value))
+        else:
+            self.set_point(fc, address, int(value))
+            return
+        regs = self._holding_regs if fc in (3, 6, 16, 22, 23) else self._input_regs
+        for j in range(len(data) // 2):
+            regs[address + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
 
     def get_point(self, fc: int, address: int) -> int:
         if fc in (1, 5, 15):

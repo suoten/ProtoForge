@@ -231,11 +231,21 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             offset = request.offset or 0
             sliced = scenarios[offset : offset + limit]
             scenario_infos = []
+            engine = _get_engine()
             for s in sliced:
+                s_id = s.id if hasattr(s, 'id') else s.get("id", "")
+                s_status = "stopped"
+                if engine:
+                    try:
+                        scenario_obj = engine.get_scenario(s_id)
+                        if scenario_obj:
+                            s_status = scenario_obj.status.value if hasattr(scenario_obj.status, 'value') else str(scenario_obj.status)
+                    except Exception:
+                        pass
                 scenario_infos.append(pb2.ScenarioInfo(
-                    id=s.id if hasattr(s, 'id') else s.get("id", ""),
+                    id=s_id,
                     name=s.name if hasattr(s, 'name') else s.get("name", ""),
-                    status="stopped",
+                    status=s_status,
                     device_count=len(s.devices) if hasattr(s, 'devices') else len(s.get("devices", [])),
                 ))
             return pb2.ListScenariosResponse(scenarios=scenario_infos, total=len(scenarios))

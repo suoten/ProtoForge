@@ -52,8 +52,8 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
             .issuer_name(issuer)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.datetime.utcnow())
-            .not_valid_after(datetime.datetime.utcnow() + datetime.timedelta(days=3650))
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=3650))
             .add_extension(
                 x509.SubjectAlternativeName([
                     x509.DNSName("localhost"),
@@ -370,11 +370,28 @@ class OpcUaServer(ProtocolServer):
             self._idx, config.name
         )
         point_nodes = {}
+        from asyncua import ua
+        type_map = {
+            "bool": ua.VariantType.Boolean,
+            "int16": ua.VariantType.Int16,
+            "uint16": ua.VariantType.UInt16,
+            "int32": ua.VariantType.Int32,
+            "uint32": ua.VariantType.UInt32,
+            "float32": ua.VariantType.Float,
+            "float64": ua.VariantType.Double,
+            "string": ua.VariantType.String,
+        }
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            node = await device_folder.add_variable(
-                self._idx, point.name, value
-            )
+            variant_type = type_map.get(point.data_type.value, None)
+            if variant_type:
+                node = await device_folder.add_variable(
+                    self._idx, point.name, ua.Variant(value, variant_type)
+                )
+            else:
+                node = await device_folder.add_variable(
+                    self._idx, point.name, value
+                )
             if point.access and "w" in point.access:
                 await node.set_writable()
             point_nodes[point.name] = node
