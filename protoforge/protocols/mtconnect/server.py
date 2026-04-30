@@ -7,6 +7,7 @@ from xml.sax.saxutils import escape
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +16,14 @@ class MtConnectDeviceBehavior(DeviceBehavior):
     def __init__(self, points: list = None):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
+        self._generators: dict[str, DynamicValueGenerator] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 self._points[name] = p
                 self._values[name] = fixed_val if fixed_val is not None else 0
+                self._generators[name] = DynamicValueGenerator(p)
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -36,6 +39,13 @@ class MtConnectDeviceBehavior(DeviceBehavior):
         self._values[point_name] = value
 
     def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
         return self._values.get(point_name, 0)
 
     def get_all_values(self) -> dict[str, Any]:

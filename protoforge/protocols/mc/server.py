@@ -6,6 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class McDeviceBehavior(DeviceBehavior):
     def __init__(self, points: list = None):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
+        self._generators: dict[str, DynamicValueGenerator] = {}
         self._device_memory: dict[int, bytearray] = {}
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
@@ -22,6 +24,7 @@ class McDeviceBehavior(DeviceBehavior):
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 self._points[name] = p
                 self._values[name] = fixed_val if fixed_val is not None else 0
+                self._generators[name] = DynamicValueGenerator(p)
                 address = getattr(p, 'address', '0') or '0'
                 device_code, offset = self._parse_mc_address(str(address))
                 self._point_addresses[name] = (device_code, offset)
@@ -74,6 +77,13 @@ class McDeviceBehavior(DeviceBehavior):
                 pass
 
     def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
         return self._values.get(point_name, 0)
 
     def read_memory(self, area_code: int, size: int) -> bytearray:

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -6,6 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ class S7DeviceBehavior(DeviceBehavior):
 
     def __init__(self, points: list = None):
         self._values: dict[str, Any] = {}
+        self._generators: dict[str, DynamicValueGenerator] = {}
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
         self._marker_data: bytearray = bytearray(256)
         self._input_data: bytearray = bytearray(256)
@@ -33,6 +35,7 @@ class S7DeviceBehavior(DeviceBehavior):
                     self._values[name] = fixed_val
                 else:
                     self._values[name] = 0
+                self._generators[name] = DynamicValueGenerator(p)
                 address = getattr(p, 'address', '0') or '0'
                 db_number, offset = self._parse_s7_address(str(address))
                 self._point_addresses[name] = (db_number, offset)
@@ -100,6 +103,13 @@ class S7DeviceBehavior(DeviceBehavior):
         self._sync_value_to_db(point_name, value)
 
     def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
         return self._values.get(point_name, 0)
 
     def get_db_area(self, db_number: int, size: int) -> bytearray:
