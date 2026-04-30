@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import time
 import uuid
@@ -6,7 +6,7 @@ from typing import Any
 from xml.sax.saxutils import escape
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 

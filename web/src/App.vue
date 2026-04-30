@@ -300,10 +300,7 @@ const WS_MAX_RECONNECT_DELAY = 30000
 
 function connectWebSocket() {
   if (!loggedIn.value) return
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const token = localStorage.getItem('token') || ''
-  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs?token=${token}`
-  ws = new WebSocket(wsUrl)
+  ws = api.createLogWs()
   ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000 }
   ws.onclose = () => {
     wsConnected.value = false
@@ -313,6 +310,15 @@ function connectWebSocket() {
     }
   }
   ws.onerror = () => { wsConnected.value = false }
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'log') {
+        logMessages.value.push(msg.data)
+        if (logMessages.value.length > 500) logMessages.value = logMessages.value.slice(-500)
+      }
+    } catch { }
+  }
 }
 
 async function loadSearchData() {

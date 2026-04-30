@@ -7,7 +7,7 @@ from protoforge.api.v1.auth import require_operator, require_viewer
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/integration", tags=["integration"])
+router = APIRouter(prefix="/integration", tags=["integration"])
 
 
 def _get_integration_manager():

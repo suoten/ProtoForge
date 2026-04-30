@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,8 @@ class OpcDaServer(ProtocolServer):
         self._server_running = False
         self._subscriptions: dict[int, dict] = {}
         self._next_sub_id: int = 1
+        self._sub_clients: dict[int, asyncio.StreamWriter] = {}
+        self._sub_push_task: asyncio.Task | None = None
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -79,6 +81,7 @@ class OpcDaServer(ProtocolServer):
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
+            self._sub_push_task = asyncio.create_task(self._subscription_push_loop())
             self._status = ProtocolStatus.RUNNING
             logger.info("OPC-DA server started on %s:%d (TCP bridge mode)", self._host, self._port)
             self._log_debug("system", "server_start",
@@ -92,12 +95,25 @@ class OpcDaServer(ProtocolServer):
     async def stop(self) -> None:
         try:
             self._server_running = False
+            if self._sub_push_task:
+                self._sub_push_task.cancel()
+                try:
+                    await self._sub_push_task
+                except asyncio.CancelledError:
+                    pass
             if self._server_task:
                 self._server_task.cancel()
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
                     pass
+            for sid, writer in list(self._sub_clients.items()):
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+            self._sub_clients.clear()
+            self._subscriptions.clear()
         except Exception as e:
             logger.warning("OPC-DA server stop error: %s", e)
         finally:
@@ -122,6 +138,7 @@ class OpcDaServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("OPC-DA connection from %s", addr)
+        client_sub_ids = []
         try:
             while self._server_running:
                 header = await reader.readexactly(8)
@@ -130,19 +147,33 @@ class OpcDaServer(ProtocolServer):
                     break
                 body_len = struct.unpack("<I", header[4:8])[0]
                 body = await reader.readexactly(body_len) if body_len > 0 else b""
-                response = self._process_opcda(body)
+                response, sub_id = self._process_opcda_with_sub(body, writer)
                 if response:
                     resp_header = self.OPCDA_MAGIC + struct.pack("<I", len(response))
                     writer.write(resp_header + response)
                     await writer.drain()
+                if sub_id:
+                    client_sub_ids.append(sub_id)
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError):
             pass
         finally:
+            for sid in client_sub_ids:
+                self._sub_clients.pop(sid, None)
+                self._subscriptions.pop(sid, None)
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
+
+    def _process_opcda_with_sub(self, data: bytes, writer: asyncio.StreamWriter) -> tuple[bytes | None, int | None]:
+        if len(data) < 4:
+            return self._make_error(0x8000), None
+        cmd = struct.unpack("<I", data[0:4])[0]
+        if cmd == 0x0004:
+            resp, sub_id = self._handle_subscribe_with_client(data, writer)
+            return resp, sub_id
+        return self._process_opcda(data), None
 
     def _process_opcda(self, data: bytes) -> bytes | None:
         if len(data) < 4:
@@ -294,6 +325,70 @@ class OpcDaServer(ProtocolServer):
         resp += struct.pack("<I", sub_id)
         resp += struct.pack("<f", actual_rate)
         return bytes(resp)
+
+    def _handle_subscribe_with_client(self, data: bytes, writer: asyncio.StreamWriter) -> tuple[bytes, int]:
+        resp = self._handle_subscribe(data)
+        sub_id = self._next_sub_id - 1
+        self._sub_clients[sub_id] = writer
+        logger.info("OPC-DA subscription %d created with %d tags", sub_id, len(self._subscriptions[sub_id]["tags"]))
+        return resp, sub_id
+
+    async def _subscription_push_loop(self) -> None:
+        try:
+            while self._server_running:
+                await asyncio.sleep(0.5)
+                dead_subs = []
+                for sub_id, sub_info in list(self._subscriptions.items()):
+                    writer = self._sub_clients.get(sub_id)
+                    if not writer or writer.is_closing():
+                        dead_subs.append(sub_id)
+                        continue
+                    rate = sub_info.get("rate", 1000.0)
+                    last_push = sub_info.get("last_push", 0)
+                    now = time.time()
+                    if (now - last_push) * 1000 < rate:
+                        continue
+                    sub_info["last_push"] = now
+                    tags = sub_info.get("tags", [])
+                    behavior = self._behaviors.get(self._default_device_id)
+                    if not behavior:
+                        continue
+                    data_changes = []
+                    for tag in tags:
+                        value = behavior.get_value(tag)
+                        quality = behavior.get_quality(tag)
+                        data_type = behavior.get_data_type(tag)
+                        data_changes.append({
+                            "tag": tag, "value": value,
+                            "quality": quality, "timestamp": now,
+                            "data_type": data_type,
+                        })
+                    if not data_changes:
+                        continue
+                    resp = bytearray()
+                    resp += struct.pack("<I", 0x00000004)
+                    resp += struct.pack("<I", sub_id)
+                    resp += struct.pack("<I", len(data_changes))
+                    for dc in data_changes:
+                        tag_bytes = dc["tag"].encode("utf-8")
+                        resp += struct.pack("<H", len(tag_bytes))
+                        resp += tag_bytes
+                        resp += self._pack_typed_value(dc["data_type"], dc["value"])
+                        resp += struct.pack("<I", dc["quality"])
+                        resp += struct.pack("<d", dc["timestamp"])
+                    try:
+                        msg_header = self.OPCDA_MAGIC + struct.pack("<I", len(resp))
+                        writer.write(msg_header + bytes(resp))
+                        await writer.drain()
+                    except (ConnectionResetError, OSError):
+                        dead_subs.append(sub_id)
+                for sid in dead_subs:
+                    self._sub_clients.pop(sid, None)
+                    self._subscriptions.pop(sid, None)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error("OPC-DA subscription push error: %s", e)
 
     def _handle_get_status(self, data: bytes) -> bytes:
         resp = bytearray()

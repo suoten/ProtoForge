@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import re
 import socket
@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 

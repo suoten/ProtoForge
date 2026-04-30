@@ -135,11 +135,6 @@ export default {
 
   getIntegrationStatus: () => d(api.get('/integration/status')),
   getIntegrationMetrics: () => d(api.get('/integration/metrics')),
-  integrationPushDevice: (deviceId) => d(api.post(`/integration/push-device/${deviceId}`)),
-  integrationBatchPush: (data) => d(api.post('/integration/batch-push', data)),
-  integrationDeleteDevice: (deviceId) => d(api.delete(`/integration/device/${deviceId}`)),
-  integrationStartDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
-  integrationStopDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),
   getIntegrationProtocols: () => d(api.get('/integration/protocols')),
   validateDeviceCompatibility: (data) => d(api.post('/integration/validate', data)),
   getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })),
@@ -147,6 +142,20 @@ export default {
   getAlarmRules: () => d(api.get('/integration/alarm-rules')),
   addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
   deleteAlarmRule: (ruleId) => d(api.delete(`/integration/alarm-rules/${ruleId}`)),
+
+  createDeviceWs: () => {
+    const token = localStorage.getItem('token')
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = `${proto}//${window.location.host}/api/v1/ws/devices${token ? '?token=' + token : ''}`
+    return new WebSocket(url)
+  },
+
+  createLogWs: () => {
+    const token = localStorage.getItem('token')
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = `${proto}//${window.location.host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
+    return new WebSocket(url)
+  },
 
   listForwardTargets: () => d(api.get('/forward/targets')),
   addForwardTarget: (config) => d(api.post('/forward/targets', config)),
