@@ -1,15 +1,15 @@
 export const protocolLabels = {
-  modbus: 'Modbus TCP',
-  'modbus-rtu': 'Modbus RTU',
+  modbus_tcp: 'Modbus TCP',
+  modbus_rtu: 'Modbus RTU',
   opcua: 'OPC-UA',
   mqtt: 'MQTT',
-  http: 'HTTP',
+  http: 'HTTP REST',
   gb28181: 'GB28181',
   bacnet: 'BACnet',
-  s7: 'S7',
-  mc: 'MC Protocol',
-  fins: 'FINS',
-  ab: 'AB EtherNet/IP',
+  s7: 'Siemens S7',
+  mc: 'Mitsubishi MC',
+  fins: 'Omron FINS',
+  ab: 'Rockwell AB',
   opcda: 'OPC-DA',
   fanuc: 'FANUC FOCAS',
   mtconnect: 'MTConnect',
@@ -19,8 +19,8 @@ export const protocolLabels = {
 }
 
 export const protocolColors = {
-  modbus: '#4f46e5',
-  'modbus-rtu': '#6366f1',
+  modbus_tcp: '#4f46e5',
+  modbus_rtu: '#6366f1',
   opcua: '#059669',
   mqtt: '#d97706',
   http: '#dc2626',
@@ -39,8 +39,8 @@ export const protocolColors = {
 }
 
 export const protocolTagTypes = {
-  modbus: 'info',
-  'modbus-rtu': 'info',
+  modbus_tcp: 'info',
+  modbus_rtu: 'info',
   opcua: 'success',
   mqtt: 'warning',
   http: 'error',
@@ -59,8 +59,8 @@ export const protocolTagTypes = {
 }
 
 export const protocolModes = {
-  modbus: 'TCP',
-  'modbus-rtu': 'RTU',
+  modbus_tcp: 'TCP',
+  modbus_rtu: 'RTU',
   opcua: 'Server',
   mqtt: 'Broker',
   http: 'Server',
@@ -79,8 +79,8 @@ export const protocolModes = {
 }
 
 export const defaultPorts = {
-  modbus: 502,
-  'modbus-rtu': '/dev/ttyUSB0',
+  modbus_tcp: 502,
+  modbus_rtu: '/dev/ttyUSB0',
   opcua: 4840,
   mqtt: 1883,
   http: 8080,

@@ -69,6 +69,8 @@ class OpcDaServer(ProtocolServer):
         self._port = 51340
         self._server_task: asyncio.Task | None = None
         self._server_running = False
+        self._subscriptions: dict[int, dict] = {}
+        self._next_sub_id: int = 1
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -269,9 +271,28 @@ class OpcDaServer(ProtocolServer):
         return 0.0
 
     def _handle_subscribe(self, data: bytes) -> bytes:
+        sub_id = self._next_sub_id
+        self._next_sub_id += 1
+        requested_rate = struct.unpack("<f", data[:4])[0] if len(data) >= 4 else 1000.0
+        actual_rate = max(requested_rate, 100.0)
+        tag_count = struct.unpack("<I", data[4:8])[0] if len(data) >= 8 else 0
+        tags = []
+        offset = 8
+        for _ in range(tag_count):
+            if offset + 4 > len(data):
+                break
+            tag_len = struct.unpack("<I", data[offset:offset + 4])[0]
+            offset += 4
+            if offset + tag_len > len(data):
+                break
+            tag_name = data[offset:offset + tag_len].decode("utf-8", errors="replace").rstrip("\x00")
+            tags.append(tag_name)
+            offset += tag_len
+        self._subscriptions[sub_id] = {"rate": actual_rate, "tags": tags}
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
-        resp += struct.pack("<I", 1)
+        resp += struct.pack("<I", sub_id)
+        resp += struct.pack("<f", actual_rate)
         return bytes(resp)
 
     def _handle_get_status(self, data: bytes) -> bytes:
@@ -279,7 +300,11 @@ class OpcDaServer(ProtocolServer):
         resp += struct.pack("<I", 0x00000000)
         resp += struct.pack("<I", 1)
         resp += b"ProtoForge OPC-DA Bridge\x00"
-        resp += struct.pack("<I", 8)
+        server_state = 1
+        resp += struct.pack("<I", server_state)
+        vendor_info = b"ProtoForge\x00"
+        resp += struct.pack("<I", len(vendor_info))
+        resp += vendor_info
         return bytes(resp)
 
     def _make_error(self, code: int) -> bytes:

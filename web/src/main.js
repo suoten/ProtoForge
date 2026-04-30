@@ -12,6 +12,7 @@ const routes = [
   { path: '/templates', component: () => import('./views/Templates.vue') },
   { path: '/scenarios', component: () => import('./views/Scenarios.vue') },
   { path: '/scenario-editor', component: () => import('./views/ScenarioEditor.vue') },
+  { path: '/scenario/:id', component: () => import('./views/ScenarioEditor.vue') },
   { path: '/marketplace', component: () => import('./views/Marketplace.vue') },
   { path: '/logs', component: () => import('./views/Logs.vue') },
   { path: '/testing', component: () => import('./views/Testing.vue') },

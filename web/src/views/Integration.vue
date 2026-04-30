@@ -78,6 +78,150 @@
         </n-space>
       </n-tab-pane>
 
+      <n-tab-pane name="integration-status" tab="集成状态">
+        <n-space vertical size="large">
+          <n-grid :cols="4" :x-gap="12" :y-gap="12">
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">连接状态</div>
+                <n-tag :type="intStatus.connected ? 'success' : 'error'" size="small" :bordered="false">
+                  {{ intStatus.connected ? '已连接' : '未连接' }}
+                </n-tag>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">已注册设备</div>
+                <div style="font-size:24px;font-weight:600;color:#6366f1">{{ intMetrics.registered_devices || 0 }}</div>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">在线设备</div>
+                <div style="font-size:24px;font-weight:600;color:#10b981">{{ intMetrics.online_devices || 0 }}</div>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">数据推送次数</div>
+                <div style="font-size:24px;font-weight:600;color:#f59e0b">{{ intMetrics.push_count || 0 }}</div>
+              </n-card>
+            </n-gi>
+          </n-grid>
+
+          <n-grid :cols="4" :x-gap="12" :y-gap="12">
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">采集次数</div>
+                <div style="font-size:24px;font-weight:600;color:#3b82f6">{{ intMetrics.collect_count || 0 }}</div>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">验证次数</div>
+                <div style="font-size:24px;font-weight:600;color:#8b5cf6">{{ intMetrics.verify_count || 0 }}</div>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">告警触发</div>
+                <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.alarm_count || 0 }}</div>
+              </n-card>
+            </n-gi>
+            <n-gi>
+              <n-card size="small" style="text-align:center">
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">最后活动</div>
+                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_activity || '无' }}</div>
+              </n-card>
+            </n-gi>
+          </n-grid>
+
+          <n-card size="small" title="设备状态缓存">
+            <template #header-extra>
+              <n-button size="small" @click="loadDeviceStatusCache" :loading="loadingStatusCache">刷新</n-button>
+            </template>
+            <n-data-table :columns="statusCacheColumns" :data="deviceStatusCache" :bordered="false" size="small"
+              :pagination="{ pageSize: 10 }" />
+          </n-card>
+
+          <n-card size="small" title="回传数据">
+            <template #header-extra>
+              <n-space size="small">
+                <n-input v-model:value="backhaulDeviceId" size="small" placeholder="设备ID过滤" clearable style="width:180px" />
+                <n-button size="small" @click="loadBackhaulData" :loading="loadingBackhaul">查询</n-button>
+              </n-space>
+            </template>
+            <n-data-table :columns="backhaulColumns" :data="backhaulData" :bordered="false" size="small"
+              :pagination="{ pageSize: 10 }" />
+          </n-card>
+
+          <n-card size="small" title="协议映射">
+            <template #header-extra>
+              <n-button size="small" @click="loadProtocolMappings" :loading="loadingProtocols">刷新</n-button>
+            </template>
+            <n-data-table :columns="protocolMapColumns" :data="protocolMappings" :bordered="false" size="small"
+              :pagination="{ pageSize: 10 }" />
+          </n-card>
+        </n-space>
+      </n-tab-pane>
+
+      <n-tab-pane name="alarm-rules" tab="告警联动">
+        <n-space vertical size="large">
+          <n-card size="small" title="告警联动规则">
+            <template #header-extra>
+              <n-space size="small">
+                <n-button size="small" @click="loadAlarmRules" :loading="loadingAlarmRules">刷新</n-button>
+                <n-button size="small" type="primary" @click="showAddAlarmModal = true">添加规则</n-button>
+              </n-space>
+            </template>
+            <n-alert v-if="alarmRules.length === 0 && !loadingAlarmRules" type="info" :bordered="false" style="margin-bottom:12px">
+              暂无告警联动规则。添加规则后，当源设备产生告警时，系统将自动执行指定动作（如停止目标设备）。
+            </n-alert>
+            <n-data-table :columns="alarmRuleColumns" :data="alarmRules" :bordered="false" size="small"
+              :pagination="{ pageSize: 10 }" />
+          </n-card>
+
+          <n-card size="small" title="设备兼容性验证">
+            <n-space vertical>
+              <n-form :model="validateForm" label-placement="left" label-width="100" inline>
+                <n-form-item label="设备ID">
+                  <n-input v-model:value="validateForm.device_id" placeholder="输入设备ID" style="width:180px" />
+                </n-form-item>
+                <n-form-item label="协议">
+                  <n-input v-model:value="validateForm.protocol" placeholder="如 modbus_tcp" style="width:140px" />
+                </n-form-item>
+                <n-form-item>
+                  <n-button type="primary" @click="validateDevice" :loading="validating">验证兼容性</n-button>
+                </n-form-item>
+              </n-form>
+              <n-alert v-if="validateResult" :type="validateResult.compatible ? 'success' : 'error'" :bordered="false">
+                <div style="font-weight:600;margin-bottom:4px">
+                  {{ validateResult.compatible ? '设备兼容' : '设备不兼容' }}
+                </div>
+                <div v-if="validateResult.warnings && validateResult.warnings.length > 0" style="margin-top:4px">
+                  <div style="font-weight:500;color:#f59e0b">警告:</div>
+                  <ul style="margin:4px 0;padding-left:20px">
+                    <li v-for="w in validateResult.warnings" :key="w">{{ w }}</li>
+                  </ul>
+                </div>
+                <div v-if="validateResult.errors && validateResult.errors.length > 0" style="margin-top:4px">
+                  <div style="font-weight:500;color:#ef4444">错误:</div>
+                  <ul style="margin:4px 0;padding-left:20px">
+                    <li v-for="e in validateResult.errors" :key="e">{{ e }}</li>
+                  </ul>
+                </div>
+                <div v-if="validateResult.protocol_result" style="margin-top:4px;font-size:12px;color:#94a3b8">
+                  协议验证: {{ validateResult.protocol_result }}
+                </div>
+                <div v-if="validateResult.data_type_results" style="margin-top:4px;font-size:12px;color:#94a3b8">
+                  数据类型: {{ JSON.stringify(validateResult.data_type_results) }}
+                </div>
+              </n-alert>
+            </n-space>
+          </n-card>
+        </n-space>
+      </n-tab-pane>
+
       <n-tab-pane name="edgelite-import" tab="EdgeLite 导入">
         <n-card size="small">
           <n-space vertical>
@@ -200,6 +344,35 @@
       </template>
     </n-modal>
 
+    <n-modal v-model:show="showAddAlarmModal" preset="card" title="添加告警联动规则" style="width:560px">
+      <n-form :model="alarmForm" label-placement="left" label-width="120">
+        <n-form-item label="规则ID">
+          <n-input v-model:value="alarmForm.rule_id" placeholder="如 alarm-stop-001" />
+        </n-form-item>
+        <n-form-item label="源设备ID">
+          <n-input v-model:value="alarmForm.source_device_id" placeholder="产生告警的设备ID" />
+        </n-form-item>
+        <n-form-item label="告警级别">
+          <n-select v-model:value="alarmForm.alarm_severity" :options="severityOptions" />
+        </n-form-item>
+        <n-form-item label="执行动作">
+          <n-select v-model:value="alarmForm.action" :options="actionOptions" />
+        </n-form-item>
+        <n-form-item label="目标设备ID">
+          <n-input v-model:value="alarmForm.target_device_id" placeholder="被控制的设备ID" />
+        </n-form-item>
+        <n-form-item label="启用">
+          <n-switch v-model:value="alarmForm.enabled" />
+        </n-form-item>
+      </n-form>
+      <template #action>
+        <n-space>
+          <n-button @click="showAddAlarmModal = false">取消</n-button>
+          <n-button type="primary" @click="addAlarmRule" :loading="addingAlarm">添加</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
     <div class="pf-section-title" style="font-size:16px;margin-top:16px">导入结果</div>
     <n-data-table :columns="resultColumns" :data="importResults" :bordered="false" size="small"
       :pagination="{ pageSize: 10 }" />
@@ -209,7 +382,8 @@
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NTabs, NTabPane, NCard, NInput, NButton, NButtonGroup, NAlert, NDataTable, NCode,
-  NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, useMessage } from 'naive-ui'
+  NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, NGrid, NGi,
+  NSelect, NSwitch, NPopconfirm, useMessage } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -230,6 +404,39 @@ const pipelinePushLoading = ref(false)
 const pipelineDeviceId = ref('')
 
 const allDevices = ref([])
+
+const intStatus = ref({ connected: false })
+const intMetrics = ref({})
+const loadingStatusCache = ref(false)
+const deviceStatusCache = ref([])
+const loadingBackhaul = ref(false)
+const backhaulData = ref([])
+const backhaulDeviceId = ref('')
+const loadingProtocols = ref(false)
+const protocolMappings = ref([])
+
+const loadingAlarmRules = ref(false)
+const alarmRules = ref([])
+const showAddAlarmModal = ref(false)
+const addingAlarm = ref(false)
+const alarmForm = ref({ rule_id: '', source_device_id: '', alarm_severity: 'critical', action: 'stop_device', target_device_id: '', enabled: true })
+
+const validateForm = ref({ device_id: '', protocol: '' })
+const validating = ref(false)
+const validateResult = ref(null)
+
+const severityOptions = [
+  { label: '严重 (critical)', value: 'critical' },
+  { label: '重要 (major)', value: 'major' },
+  { label: '一般 (minor)', value: 'minor' },
+  { label: '提示 (info)', value: 'info' },
+]
+const actionOptions = [
+  { label: '停止设备', value: 'stop_device' },
+  { label: '启动设备', value: 'start_device' },
+  { label: '发送通知', value: 'send_notification' },
+  { label: '记录日志', value: 'log_only' },
+]
 
 const pipelineSteps = [
   { label: '认证', color: '#6366f1', key: 'auth' },
@@ -310,6 +517,55 @@ const deviceColumns = [
   },
 ]
 
+const statusCacheColumns = [
+  { title: '设备ID', key: 'device_id', width: 180 },
+  { title: '状态', key: 'status', width: 100, render: (row) => {
+    const map = { online: 'success', offline: 'error' }
+    return h(NTag, { size: 'tiny', type: map[row.status] || 'default', bordered: false }, () => row.status || '未知')
+  }},
+  { title: '协议', key: 'protocol', width: 120 },
+  { title: '最后更新', key: 'last_updated', width: 180 },
+]
+
+const backhaulColumns = [
+  { title: '设备ID', key: 'device_id', width: 160 },
+  { title: '测点', key: 'point_name', width: 120 },
+  { title: '值', key: 'value', width: 120 },
+  { title: '时间戳', key: 'timestamp', width: 180 },
+]
+
+const protocolMapColumns = [
+  { title: '源协议', key: 'source_protocol', width: 160 },
+  { title: '目标协议', key: 'target_protocol', width: 160 },
+  { title: '驱动类型', key: 'driver_type', width: 140 },
+  { title: '状态', key: 'status', width: 100, render: (row) => h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '可用') },
+]
+
+const alarmRuleColumns = [
+  { title: '规则ID', key: 'rule_id', width: 150 },
+  { title: '源设备', key: 'source_device_id', width: 150 },
+  {
+    title: '告警级别', key: 'alarm_severity', width: 100,
+    render: (row) => {
+      const map = { critical: 'error', major: 'warning', minor: 'info', info: 'default' }
+      return h(NTag, { size: 'tiny', type: map[row.alarm_severity] || 'default', bordered: false }, () => row.alarm_severity)
+    }
+  },
+  { title: '动作', key: 'action', width: 120 },
+  { title: '目标设备', key: 'target_device_id', width: 150 },
+  {
+    title: '状态', key: 'enabled', width: 80,
+    render: (row) => h(NTag, { size: 'tiny', type: row.enabled ? 'success' : 'default', bordered: false }, () => row.enabled ? '启用' : '禁用')
+  },
+  {
+    title: '操作', key: 'actions', width: 100,
+    render: (row) => h(NPopconfirm, { onPositiveClick: () => deleteAlarmRule(row.rule_id) }, {
+      trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => '删除'),
+      default: () => `确定删除规则 "${row.rule_id}" 吗？`,
+    })
+  },
+]
+
 const sdkLang = ref('python')
 const sdkExamples = {
   python: `# ProtoForge Python SDK
@@ -378,6 +634,98 @@ func main() {
     client.StopScenario("factory-001")
     client.StopProtocol("modbus_tcp")
 }`,
+}
+
+async function loadIntStatus() {
+  try {
+    intStatus.value = await api.getIntegrationStatus()
+  } catch { }
+}
+
+async function loadIntMetrics() {
+  try {
+    intMetrics.value = await api.getIntegrationMetrics()
+  } catch { }
+}
+
+async function loadDeviceStatusCache() {
+  loadingStatusCache.value = true
+  try {
+    const res = await api.getDeviceStatusCache()
+    deviceStatusCache.value = res.devices || []
+  } catch { } finally { loadingStatusCache.value = false }
+}
+
+async function loadBackhaulData() {
+  loadingBackhaul.value = true
+  try {
+    const params = {}
+    if (backhaulDeviceId.value) params.device_id = backhaulDeviceId.value
+    const res = await api.getBackhaulData(params)
+    backhaulData.value = res.data || []
+  } catch { } finally { loadingBackhaul.value = false }
+}
+
+async function loadProtocolMappings() {
+  loadingProtocols.value = true
+  try {
+    const res = await api.getIntegrationProtocols()
+    const pmap = res.protocol_map || {}
+    protocolMappings.value = Object.entries(pmap).map(([source, target]) => ({
+      source_protocol: source,
+      target_protocol: typeof target === 'string' ? target : target.protocol || JSON.stringify(target),
+      driver_type: typeof target === 'object' ? target.driver || '' : '',
+    }))
+  } catch { } finally { loadingProtocols.value = false }
+}
+
+async function loadAlarmRules() {
+  loadingAlarmRules.value = true
+  try {
+    const res = await api.getAlarmRules()
+    alarmRules.value = res.rules || []
+  } catch { } finally { loadingAlarmRules.value = false }
+}
+
+async function addAlarmRule() {
+  if (!alarmForm.value.rule_id || !alarmForm.value.source_device_id || !alarmForm.value.target_device_id) {
+    message.warning('请填写规则ID、源设备ID和目标设备ID')
+    return
+  }
+  addingAlarm.value = true
+  try {
+    await api.addAlarmRule(alarmForm.value)
+    showAddAlarmModal.value = false
+    alarmForm.value = { rule_id: '', source_device_id: '', alarm_severity: 'critical', action: 'stop_device', target_device_id: '', enabled: true }
+    message.success('告警规则已添加')
+    await loadAlarmRules()
+  } catch (e) {
+    message.error('添加失败: ' + (e.response?.data?.detail || e.message))
+  } finally { addingAlarm.value = false }
+}
+
+async function deleteAlarmRule(ruleId) {
+  try {
+    await api.deleteAlarmRule(ruleId)
+    message.success('规则已删除')
+    await loadAlarmRules()
+  } catch (e) {
+    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function validateDevice() {
+  if (!validateForm.value.device_id) {
+    message.warning('请输入设备ID')
+    return
+  }
+  validating.value = true
+  validateResult.value = null
+  try {
+    validateResult.value = await api.validateDeviceCompatibility(validateForm.value)
+  } catch (e) {
+    validateResult.value = { compatible: false, errors: [e.response?.data?.detail || e.message], warnings: [] }
+  } finally { validating.value = false }
 }
 
 async function testConnection() {
@@ -567,5 +915,11 @@ async function importPyGBSentry() {
   } finally { importing.value = false }
 }
 
-onMounted(loadDevices)
+onMounted(() => {
+  loadDevices()
+  loadIntStatus()
+  loadIntMetrics()
+  loadAlarmRules()
+  loadProtocolMappings()
+})
 </script>

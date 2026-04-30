@@ -117,10 +117,12 @@ import {
   NSpace, NButton, NSelect, NModal, NForm, NFormItem, NInput, NInputNumber,
   NTag, NCard, NDataTable, useMessage
 } from 'naive-ui'
+import { useRoute } from 'vue-router'
 import api from '../api.js'
 import { protocolColors } from '../constants.js'
 
 const message = useMessage()
+const route = useRoute()
 
 const DeviceNode = defineComponent({
   props: { data: Object },
@@ -383,6 +385,11 @@ async function loadData() {
     devices.value = dRes
     templates.value = tRes
     protocols.value = pRes
+    const scenarioId = route.params.id
+    if (scenarioId) {
+      selectedScenario.value = scenarioId
+      await loadScenario(scenarioId)
+    }
   } catch (e) {
     message.error('加载数据失败')
   }
