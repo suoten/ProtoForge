@@ -631,7 +631,7 @@ async function loadSuggestions() {
   loadingSuggestions.value = true
   try {
     suggestions.value = await api.getTestSuggestions()
-  } catch (e) { /* skip */ } finally {
+  } catch (e) { message.error('加载测试建议失败') } finally {
     loadingSuggestions.value = false
   }
 }
@@ -650,19 +650,19 @@ async function loadMetadata() {
     devices.value = dev || []
     scenarios.value = sc || []
     protocols.value = proto || []
-  } catch (e) { /* skip */ }
+  } catch (e) { message.error('加载测试元数据失败') }
 }
 
 async function loadReports() {
-  try { reports.value = await api.listTestReports() } catch (e) { /* skip */ }
+  try { reports.value = await api.listTestReports() } catch (e) { message.error('加载测试报告失败') }
 }
 
 async function loadCases() {
-  try { testCases.value = await api.listTestCases() } catch (e) { /* skip */ }
+  try { testCases.value = await api.listTestCases() } catch (e) { message.error('加载测试用例失败') }
 }
 
 async function loadSuites() {
-  try { suites.value = await api.listTestSuites() } catch (e) { /* skip */ }
+  try { suites.value = await api.listTestSuites() } catch (e) { message.error('加载测试套件失败') }
 }
 
 const caseColumns = [

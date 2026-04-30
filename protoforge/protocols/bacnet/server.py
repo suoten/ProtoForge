@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import socket
 import struct
@@ -139,26 +139,87 @@ class BACnetServer(ProtocolServer):
                         return self._handle_read_property(data, addr, invoke_id)
                     elif service_choice == 0x0F:
                         return self._handle_write_property(data, addr, invoke_id)
+                    elif service_choice == 0x0E:
+                        return self._handle_read_property_multiple(data, addr, invoke_id)
+                    else:
+                        return self._make_error_response(invoke_id, 0x0C, 2, 3)
+            elif msg_type == 0x01:
+                pass
+            elif msg_type == 0x04:
+                pass
         return None
 
-    def _handle_read_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
-        if len(data) < 8:
-            return None
-        obj_type_raw = data[5] if len(data) > 5 else 0
-        obj_inst_raw = struct.unpack(">H", data[6:8])[0] if len(data) >= 8 else 0
-        prop_id = data[8] if len(data) > 8 else 85
+    def _decode_object_identifier(self, raw_bytes: bytes) -> tuple[int, int]:
+        if len(raw_bytes) < 4:
+            return (0, 0)
+        obj_id = struct.unpack(">I", raw_bytes)[0]
+        obj_type = (obj_id >> 22) & 0x3FF
+        obj_inst = obj_id & 0x3FFFFF
+        return (obj_type, obj_inst)
 
-        obj_type = (obj_type_raw >> 4) & 0x0F
-        obj_inst = obj_inst_raw
+    def _encode_object_identifier(self, obj_type: int, obj_inst: int) -> bytes:
+        obj_id = ((obj_type & 0x3FF) << 22) | (obj_inst & 0x3FFFFF)
+        return struct.pack(">I", obj_id)
+
+    def _make_error_response(self, invoke_id: int, service_choice: int,
+                              error_class: int, error_code: int) -> bytes:
+        resp = bytearray()
+        resp.append(0x81)
+        resp.append(0x0A)
+        resp.append(0x00)
+        resp.append(0x00)
+        resp.append(0x01)
+        resp.append(0x04)
+        resp.append(0x00)
+        resp.append(invoke_id & 0xFF)
+        resp.append(0x50)
+        resp.append(service_choice & 0xFF)
+        resp.append(0x91)
+        resp.append(error_class & 0xFF)
+        resp.append(0x91)
+        resp.append(error_code & 0xFF)
+        resp[3] = len(resp) - 4
+        return bytes(resp)
+
+    def _make_reject_response(self, invoke_id: int, reason: int) -> bytes:
+        resp = bytearray()
+        resp.append(0x81)
+        resp.append(0x0A)
+        resp.append(0x00)
+        resp.append(0x00)
+        resp.append(0x01)
+        resp.append(0x04)
+        resp.append(0x00)
+        resp.append(invoke_id & 0xFF)
+        resp.append(0x40)
+        resp.append(reason & 0xFF)
+        resp[3] = len(resp) - 4
+        return bytes(resp)
+
+    def _handle_read_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
+        if len(data) < 10:
+            return self._make_reject_response(invoke_id, 4)
+        obj_id_bytes = data[5:9] if len(data) >= 9 else data[5:]
+        obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes[:4] if len(obj_id_bytes) >= 4 else obj_id_bytes)
+        prop_id = data[9] if len(data) > 9 else 85
 
         for device_id, device_obj in self._device_objects.items():
             behavior = self._behaviors.get(device_id)
             if not behavior:
                 continue
             for i, obj in enumerate(device_obj.get("objects", [])):
-                obj_id = i + 1
-                if obj_inst == 0 or obj_inst == obj_id:
-                    value = behavior.get_value(obj.get("object_name", ""))
+                obj_idx = i + 1
+                if obj_inst == 0 or obj_inst == obj_idx:
+                    if prop_id == 85 or prop_id == 0x55:
+                        value = behavior.get_value(obj.get("object_name", ""))
+                    elif prop_id == 77 or prop_id == 0x4D:
+                        value = obj.get("object_name", "")
+                    elif prop_id == 28 or prop_id == 0x1C:
+                        value = obj.get("description", "")
+                    elif prop_id == 96 or prop_id == 0x60:
+                        value = obj.get("units", "")
+                    else:
+                        value = behavior.get_value(obj.get("object_name", ""))
                     resp = bytearray()
                     resp.append(0x81)
                     resp.append(0x0A)
@@ -169,8 +230,7 @@ class BACnetServer(ProtocolServer):
                     resp.append(0x00)
                     resp.append(invoke_id & 0xFF)
                     resp.append(0x0C | 0x80)
-                    resp.append(obj_type_raw)
-                    resp += struct.pack(">H", obj_id)
+                    resp += self._encode_object_identifier(obj_type, obj_idx)
                     resp.append(prop_id)
                     if isinstance(value, bool):
                         resp.append(0x19)
@@ -179,14 +239,105 @@ class BACnetServer(ProtocolServer):
                         resp.append(0x44)
                         resp += struct.pack(">f", value)
                     elif isinstance(value, int):
-                        resp.append(0x34)
-                        resp += struct.pack(">i", value)
+                        resp.append(0x22)
+                        resp += struct.pack(">H", value & 0xFFFF)
+                    elif isinstance(value, str):
+                        encoded = value.encode("utf-8")
+                        resp.append(0x75)
+                        resp += struct.pack(">H", len(encoded))
+                        resp += encoded
                     else:
                         resp.append(0x44)
                         resp += struct.pack(">f", float(value) if value else 0.0)
                     resp[3] = len(resp) - 4
                     return bytes(resp)
-        return None
+        return self._make_error_response(invoke_id, 0x0C, 1, 31)
+
+    def _handle_read_property_multiple(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
+        if len(data) < 7:
+            return self._make_reject_response(invoke_id, 4)
+        resp = bytearray()
+        resp.append(0x81)
+        resp.append(0x0A)
+        resp.append(0x00)
+        resp.append(0x00)
+        resp.append(0x01)
+        resp.append(0x04)
+        resp.append(0x00)
+        resp.append(invoke_id & 0xFF)
+        resp.append(0x0E | 0x80)
+        offset = 5
+        while offset + 4 <= len(data):
+            obj_type, obj_inst = self._decode_object_identifier(data[offset:offset + 4])
+            offset += 4
+            if offset >= len(data):
+                break
+            prop_count = data[offset] if data[offset] != 0xFE else 1
+            offset += 1
+            obj_data = bytearray()
+            obj_data += self._encode_object_identifier(obj_type, obj_inst)
+            found = False
+            for device_id, device_obj in self._device_objects.items():
+                behavior = self._behaviors.get(device_id)
+                if not behavior:
+                    continue
+                for i, obj in enumerate(device_obj.get("objects", [])):
+                    obj_idx = i + 1
+                    if obj_inst == 0 or obj_inst == obj_idx:
+                        found = True
+                        prop_list = bytearray()
+                        prop_list.append(0x01)
+                        p_offset = offset
+                        for _ in range(min(prop_count, 10)):
+                            if p_offset >= len(data):
+                                break
+                            pid = data[p_offset]
+                            p_offset += 1
+                            if pid == 85 or pid == 0x55:
+                                value = behavior.get_value(obj.get("object_name", ""))
+                            elif pid == 77:
+                                value = obj.get("object_name", "")
+                            elif pid == 28:
+                                value = obj.get("description", "")
+                            elif pid == 96:
+                                value = obj.get("units", "")
+                            else:
+                                value = behavior.get_value(obj.get("object_name", ""))
+                            prop_list.append(pid)
+                            if isinstance(value, bool):
+                                prop_list.append(0x19)
+                                prop_list.append(0x01 if value else 0x00)
+                            elif isinstance(value, float):
+                                prop_list.append(0x44)
+                                prop_list += struct.pack(">f", value)
+                            elif isinstance(value, int):
+                                prop_list.append(0x22)
+                                prop_list += struct.pack(">H", value & 0xFFFF)
+                            elif isinstance(value, str):
+                                encoded = value.encode("utf-8")
+                                prop_list.append(0x75)
+                                prop_list += struct.pack(">H", len(encoded))
+                                prop_list += encoded
+                            else:
+                                prop_list.append(0x44)
+                                prop_list += struct.pack(">f", float(value) if value else 0.0)
+                        obj_data += prop_list
+                        break
+                if found:
+                    break
+            if not found:
+                obj_data += self._encode_object_identifier(obj_type, obj_inst)
+                obj_data.append(0x01)
+                obj_data.append(85)
+                obj_data.append(0x91)
+                obj_data.append(31)
+            resp += obj_data
+            while offset < len(data) and data[offset] not in (0x0C, 0x0E, 0x0F):
+                offset += 1
+                if offset >= len(data):
+                    break
+        resp[3] = len(resp) - 4
+        return bytes(resp)
 
     def _handle_write_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
         if len(data) < 12:

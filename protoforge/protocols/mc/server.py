@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -30,6 +30,13 @@ class McDeviceBehavior(DeviceBehavior):
                 self._point_addresses[name] = (device_code, offset)
                 self._sync_value_to_memory(name, self._values[name])
 
+    DEVICE_CODE_MAP: dict[str, int] = {
+        'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
+        'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
+        'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
+        'V': 0x56, 'Z': 0x5A, 'U': 0x55, 'SM': 0x53,
+    }
+
     @staticmethod
     def _parse_mc_address(address: str) -> tuple[int, int]:
         try:
@@ -38,6 +45,13 @@ class McDeviceBehavior(DeviceBehavior):
                 device_code = int(parts[0])
                 offset = int(parts[1]) if len(parts) > 1 else 0
                 return (device_code, offset)
+            import re
+            match = re.match(r'^([A-Za-z]+)(\d+)$', address)
+            if match:
+                name = match.group(1).upper()
+                offset = int(match.group(2))
+                code = McDeviceBehavior.DEVICE_CODE_MAP.get(name, 0x44)
+                return (code, offset)
             return (0x44, int(address))
         except (ValueError, IndexError):
             return (0x44, 0)
@@ -87,9 +101,12 @@ class McDeviceBehavior(DeviceBehavior):
         return self._values.get(point_name, 0)
 
     def read_memory(self, area_code: int, size: int) -> bytearray:
-        if area_code not in self._device_memory or len(self._device_memory[area_code]) < size:
+        if area_code not in self._device_memory:
             self._device_memory[area_code] = bytearray(max(size, 1024))
-        return self._device_memory[area_code][:size]
+        buf = self._device_memory[area_code]
+        if len(buf) < size:
+            buf.extend(bytearray(size - len(buf)))
+        return buf[:size]
 
     def write_memory(self, area_code: int, offset: int, data: bytes) -> None:
         if area_code not in self._device_memory:
@@ -176,9 +193,18 @@ class McServer(ProtocolServer):
         logger.debug("MC connection from %s", addr)
         try:
             while self._server_running:
-                data = await reader.read(4096)
-                if not data:
+                header = await reader.readexactly(9)
+                if len(header) < 9:
                     break
+                if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
+                    data_len_field = int(header[7:9], 16)
+                    remaining = await reader.readexactly(data_len_field + 6)
+                    data = header + remaining
+                else:
+                    data_len = struct.unpack("<H", header[7:9])[0]
+                    total_len = 9 + data_len
+                    remaining = await reader.readexactly(total_len - 9)
+                    data = header + remaining
                 response = self._process_slmp(data)
                 if response:
                     writer.write(response)

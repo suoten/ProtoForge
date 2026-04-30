@@ -388,11 +388,10 @@ async function stopScenario() {
 
 async function loadData() {
   try {
-    const [sRes, dRes, tRes, pRes] = await Promise.all([
-      api.getScenarios(), api.getDevices(), api.getTemplates(), api.getProtocols()
+    const [sRes, tRes, pRes] = await Promise.all([
+      api.getScenarios(), api.getTemplates(), api.getProtocols()
     ])
     scenarios.value = sRes
-    devices.value = dRes
     templates.value = tRes
     protocols.value = pRes
     const scenarioId = route.params.id
