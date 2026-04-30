@@ -64,11 +64,18 @@ def test_edgelite_protocol_mapping():
 
 def test_edgelite_push_fields():
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
-    assert len(EDGELITE_PUSH_FIELDS) >= 3
+    assert len(EDGELITE_PUSH_FIELDS) == 2
     keys = [f["key"] for f in EDGELITE_PUSH_FIELDS]
-    assert "edgelite_url" in keys
-    assert "edgelite_username" in keys
-    assert "edgelite_password" in keys
+    assert "edgelite_enabled" in keys
+    assert "collect_interval" in keys
+
+
+def test_edgelite_global_config():
+    from protoforge.core.edgelite import get_global_edgelite_config
+    config = get_global_edgelite_config()
+    assert "url" in config
+    assert "username" in config
+    assert "password" in config
 
 
 def test_edgelite_convert_device():

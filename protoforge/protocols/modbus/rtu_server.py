@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
@@ -6,13 +7,13 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore
+from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
 SIMDATA_AVAILABLE = False
 try:
-    from pymodbus.simulator import SimData, SimDevice, DataType
+    from pymodbus.simulator import DataType, SimData, SimDevice
     SIMDATA_AVAILABLE = True
 except ImportError:
     DataType = None
@@ -25,10 +26,8 @@ except ImportError:
     pass
 
 StartAsyncSerialServer = None
-try:
+with contextlib.suppress(ImportError):
     from pymodbus.server import StartAsyncSerialServer
-except ImportError:
-    pass
 
 
 class ModbusRtuServer(ProtocolServer):
@@ -287,7 +286,7 @@ class ModbusRtuServer(ProtocolServer):
                 read_count = struct.unpack(">H", data[2:4])[0]
                 write_start = struct.unpack(">H", data[4:6])[0] + 1
                 write_count = struct.unpack(">H", data[6:8])[0]
-                write_byte_count = data[8] if len(data) > 8 else 0
+                data[8] if len(data) > 8 else 0
                 for i in range(write_count):
                     offset = 9 + i * 2
                     if offset + 2 <= len(data):

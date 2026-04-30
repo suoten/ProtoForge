@@ -1,20 +1,16 @@
-import asyncio
 import logging
 import os
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
 from protoforge.config import get_settings
 from protoforge.core.integration.protocol import (
-    PROTOCOL_MAP_BASE,
-    DATA_TYPE_MAP,
-    DATA_TYPE_MAP_FALLBACK,
     ACCESS_MODE_MAP,
-    ProtocolMapper,
+    DATA_TYPE_MAP,
+    PROTOCOL_MAP_BASE,
     DataTypeMapper,
-    ProtocolMappingResult,
-    DataTypeMappingResult,
+    ProtocolMapper,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,7 +173,7 @@ def convert_device_to_edgelite(
     protoforge_host: str = "",
     protocol_mapper: ProtocolMapper | None = None,
     data_type_mapper: DataTypeMapper | None = None,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     protocol = getattr(device, "protocol", "") or ""
 
     p_mapper = protocol_mapper or ProtocolMapper()

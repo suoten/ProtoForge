@@ -1,9 +1,11 @@
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +123,7 @@ class HttpChannel(ChannelBase):
                 resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
                 return {"ok": resp.status_code == 200, "data": resp.json() if resp.status_code == 200 else None}
 
-        except Exception as e:
+        except Exception:
             self._connected = False
             raise
 
@@ -168,8 +170,8 @@ class WebSocketChannel(ChannelBase):
         self._heartbeat_timeout = heartbeat_timeout
         self._connected = False
         self._ws: Any = None
-        self._receive_task: Optional[asyncio.Task] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._receive_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._missed_heartbeats = 0
         self._pending_responses: dict[str, asyncio.Future] = {}
 
@@ -226,16 +228,12 @@ class WebSocketChannel(ChannelBase):
         self._connected = False
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
         if self._receive_task:
             self._receive_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._receive_task
-            except asyncio.CancelledError:
-                pass
         if self._ws:
             try:
                 await self._ws.close()

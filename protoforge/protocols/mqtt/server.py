@@ -4,8 +4,8 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 

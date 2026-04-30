@@ -184,7 +184,6 @@ async def lifespan(app: FastAPI):
         logger.error("Failed to initialize audit logger: %s", e)
 
     try:
-        from protoforge.core.recorder import Recorder
         from protoforge.api.v1.router import _get_recorder
         recorder = _get_recorder()
         recorder.set_database(_database)
@@ -265,8 +264,10 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     from pathlib import Path
-    from fastapi.staticfiles import StaticFiles
+
     from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
     from protoforge.config import get_settings
     settings = get_settings()
 

@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import aiosqlite
@@ -16,9 +16,9 @@ _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
 
 class Database:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         self._db_path = db_path or str(_DEFAULT_DB_PATH)
-        self._db: Optional[aiosqlite.Connection] = None
+        self._db: aiosqlite.Connection | None = None
         self._is_postgres = False
         self._pg_pool = None
 
@@ -301,7 +301,7 @@ class Database:
             await self._db.execute(sql, params)
             await self._db.commit()
 
-    async def _fetchone(self, sql: str, params: tuple = ()) -> Optional[dict]:
+    async def _fetchone(self, sql: str, params: tuple = ()) -> dict | None:
         if self._is_postgres:
             async with self._pg_pool.acquire() as conn:
                 row = await conn.fetchrow(sql, *params)
@@ -351,7 +351,7 @@ class Database:
             (config.id, config.name, config.protocol, config.template_id, points_json, config_json),
         )
 
-    async def load_device(self, device_id: str) -> Optional[DeviceConfig]:
+    async def load_device(self, device_id: str) -> DeviceConfig | None:
         row = await self._fetchone(
             f"SELECT * FROM devices WHERE {self._where_sql('id')}",
             (device_id,),
@@ -379,7 +379,7 @@ class Database:
             (config.id, config.name, config.description, devices_json, rules_json),
         )
 
-    async def load_scenario(self, scenario_id: str) -> Optional[ScenarioConfig]:
+    async def load_scenario(self, scenario_id: str) -> ScenarioConfig | None:
         row = await self._fetchone(
             f"SELECT * FROM scenarios WHERE {self._where_sql('id')}",
             (scenario_id,),
@@ -413,7 +413,7 @@ class Database:
         rows = await self._fetchall("SELECT * FROM templates")
         return [self._row_to_template(row) for row in rows]
 
-    async def load_template(self, template_id: str) -> Optional[TemplateDetail]:
+    async def load_template(self, template_id: str) -> TemplateDetail | None:
         row = await self._fetchone(
             f"SELECT * FROM templates WHERE {self._where_sql('id')}",
             (template_id,),
@@ -473,7 +473,7 @@ class Database:
              json.dumps(case_data.get("setup_steps", [])), json.dumps(case_data.get("teardown_steps", []))),
         )
 
-    async def load_test_case(self, case_id: str) -> Optional[dict[str, Any]]:
+    async def load_test_case(self, case_id: str) -> dict[str, Any] | None:
         row = await self._fetchone(
             f"SELECT * FROM test_cases WHERE {self._where_sql('id')}",
             (case_id,),
@@ -525,7 +525,7 @@ class Database:
             (suite_id,),
         )
 
-    async def load_test_suite(self, suite_id: str) -> Optional[dict[str, Any]]:
+    async def load_test_suite(self, suite_id: str) -> dict[str, Any] | None:
         row = await self._fetchone(
             f"SELECT * FROM test_suites WHERE {self._where_sql('id')}",
             (suite_id,),
@@ -572,7 +572,7 @@ class Database:
             (report_id,),
         )
 
-    async def load_test_report(self, report_id: str) -> Optional[dict[str, Any]]:
+    async def load_test_report(self, report_id: str) -> dict[str, Any] | None:
         row = await self._fetchone(
             f"SELECT * FROM test_reports WHERE {self._where_sql('id')}",
             (report_id,),
@@ -607,7 +607,7 @@ class Database:
             "locked_until": r["locked_until"],
         } for r in rows]
 
-    async def load_user(self, username: str) -> Optional[dict[str, Any]]:
+    async def load_user(self, username: str) -> dict[str, Any] | None:
         row = await self._fetchone(
             f"SELECT * FROM users WHERE {self._where_sql('username')}",
             (username,),
@@ -643,11 +643,11 @@ class Database:
 
     async def query_audit_entries(
         self,
-        username: Optional[str] = None,
-        action: Optional[str] = None,
-        resource_type: Optional[str] = None,
-        start_time: Optional[float] = None,
-        end_time: Optional[float] = None,
+        username: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        start_time: float | None = None,
+        end_time: float | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
@@ -729,7 +729,7 @@ class Database:
             return cursor.rowcount > 0
         return result is not None
 
-    async def clear_audit_entries(self, before_timestamp: Optional[float] = None) -> int:
+    async def clear_audit_entries(self, before_timestamp: float | None = None) -> int:
         if before_timestamp is not None:
             if self._is_postgres:
                 count_result = await self._fetchone(
@@ -769,7 +769,7 @@ class Database:
              json.dumps(recording_data.get("metadata", {}))),
         )
 
-    async def load_recording(self, rec_id: str) -> Optional[dict[str, Any]]:
+    async def load_recording(self, rec_id: str) -> dict[str, Any] | None:
         row = await self._fetchone(
             f"SELECT * FROM recordings WHERE {self._where_sql('id')}",
             (rec_id,),

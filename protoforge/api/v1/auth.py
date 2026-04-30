@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -25,7 +24,7 @@ class RoleChecker:
 
     async def __call__(
         self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+        credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
     ) -> dict:
         if _NO_AUTH:
             return {"sub": "no-auth", "username": "admin", "role": "admin"}
@@ -73,13 +72,10 @@ _PUBLIC_PREFIXES = (
 def _is_public_path(path: str) -> bool:
     if path in _PUBLIC_PATHS:
         return True
-    for prefix in _PUBLIC_PREFIXES:
-        if path.startswith(prefix):
-            return True
-    return False
+    return any(path.startswith(prefix) for prefix in _PUBLIC_PREFIXES)
 
 
-def _get_user_from_request(request: Request) -> Optional[dict]:
+def _get_user_from_request(request: Request) -> dict | None:
     return getattr(request.state, "user", None)
 
 

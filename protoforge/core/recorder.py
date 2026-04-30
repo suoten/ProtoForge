@@ -1,12 +1,12 @@
 import asyncio
 import base64
+import contextlib
 import json
 import logging
-import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from protoforge.core.log_bus import LogBus, LogEntry
 
@@ -40,7 +40,7 @@ class RecordedMessage:
     device_id: str
     message_type: str
     data: Any
-    raw: Optional[bytes] = None
+    raw: bytes | None = None
 
     def to_dict(self) -> dict:
         d = {
@@ -97,14 +97,14 @@ class Recorder:
     def __init__(self, log_bus: LogBus):
         self._log_bus = log_bus
         self._recordings: dict[str, Recording] = {}
-        self._active: Optional[Recording] = None
-        self._filter_protocol: Optional[str] = None
-        self._filter_device: Optional[str] = None
+        self._active: Recording | None = None
+        self._filter_protocol: str | None = None
+        self._filter_device: str | None = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=50000)
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._running = False
         self._database = None
-        self._encryption_key: Optional[bytes] = None
+        self._encryption_key: bytes | None = None
 
     def set_database(self, database) -> None:
         self._database = database
@@ -117,8 +117,8 @@ class Recorder:
             self._encryption_key = None
 
     async def start_recording(
-        self, name: str, protocol: Optional[str] = None,
-        device_id: Optional[str] = None, metadata: Optional[dict] = None,
+        self, name: str, protocol: str | None = None,
+        device_id: str | None = None, metadata: dict | None = None,
     ) -> Recording:
         if self._active:
             await self.stop_recording()
@@ -135,16 +135,14 @@ class Recorder:
         logger.info("Recording started: %s (%s)", name, rec_id)
         return self._active
 
-    async def stop_recording(self) -> Optional[Recording]:
+    async def stop_recording(self) -> Recording | None:
         if not self._active:
             return None
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
             self._task = None
         self._log_bus.unsubscribe(self._queue)
         while not self._queue.empty():
@@ -168,7 +166,7 @@ class Recorder:
         logger.info("Recording stopped: %s, %d messages", result.id, len(result.messages))
         return result
 
-    def get_recording(self, rec_id: str) -> Optional[Recording]:
+    def get_recording(self, rec_id: str) -> Recording | None:
         return self._recordings.get(rec_id)
 
     def list_recordings(self) -> list[dict]:

@@ -1,11 +1,13 @@
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -54,10 +56,8 @@ class HttpSimulatorServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("HTTP server stop error: %s", e)
         finally:
@@ -80,7 +80,7 @@ class HttpSimulatorServer(ProtocolServer):
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
-        addr = writer.get_extra_info("peername")
+        writer.get_extra_info("peername")
         try:
             while self._server_running:
                 request_line = await reader.readline()

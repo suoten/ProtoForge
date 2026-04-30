@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +47,14 @@ class RetryPolicy:
         self.backoff_factor = backoff_factor
         self.max_total_time = max_total_time
         self._attempt = 0
-        self._last_error: Optional[Exception] = None
+        self._last_error: Exception | None = None
 
     @property
     def attempt(self) -> int:
         return self._attempt
 
     @property
-    def last_error(self) -> Optional[Exception]:
+    def last_error(self) -> Exception | None:
         return self._last_error
 
     def get_delay(self) -> float:
@@ -63,12 +63,9 @@ class RetryPolicy:
 
     def should_retry(self, error: Exception) -> bool:
         self._last_error = error
-        if isinstance(error, IntegrationError):
-            if not error.retryable:
-                return False
-        if self._attempt >= self.max_retries:
+        if isinstance(error, IntegrationError) and not error.retryable:
             return False
-        return True
+        return not self._attempt >= self.max_retries
 
     async def wait(self) -> None:
         delay = self.get_delay()

@@ -56,8 +56,8 @@ class MetricsCollector:
 
     def generate_prometheus_output(self) -> str:
         lines = []
-        lines.append(f"# HELP protoforge_uptime_seconds Server uptime in seconds")
-        lines.append(f"# TYPE protoforge_uptime_seconds gauge")
+        lines.append("# HELP protoforge_uptime_seconds Server uptime in seconds")
+        lines.append("# TYPE protoforge_uptime_seconds gauge")
         lines.append(f"protoforge_uptime_seconds {time.time() - self._start_time:.2f}")
 
         seen_names = set()

@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -38,19 +38,19 @@ class PointConfig(BaseModel):
     generator_type: GeneratorType = GeneratorType.FIXED
     generator_config: dict[str, Any] = Field(default_factory=dict)
 
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    fixed_value: Optional[Any] = None
+    min_value: float | None = None
+    max_value: float | None = None
+    fixed_value: Any | None = None
 
 
 class DeviceConfig(BaseModel):
     id: str
     name: str
     protocol: str
-    template_id: Optional[str] = None
+    template_id: str | None = None
     points: list[PointConfig] = Field(default_factory=list)
     protocol_config: dict[str, Any] = Field(default_factory=dict)
-    position: Optional[dict[str, float]] = None
+    position: dict[str, float] | None = None
 
 
 class PointValue(BaseModel):
@@ -70,8 +70,8 @@ class DeviceInfo(BaseModel):
     id: str
     name: str
     protocol: str
-    template_id: Optional[str] = None
+    template_id: str | None = None
     status: DeviceStatus = DeviceStatus.OFFLINE
     points: list[PointValue] = Field(default_factory=list)
-    created_at: Optional[str] = None
-    protocol_config: Optional[dict[str, Any]] = None
+    created_at: str | None = None
+    protocol_config: dict[str, Any] | None = None

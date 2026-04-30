@@ -1,9 +1,10 @@
 import asyncio
+import contextlib
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -28,7 +29,7 @@ class InfluxDBTarget(ForwardTarget):
         self._token = token
         self._org = org
         self._bucket = bucket
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -86,11 +87,11 @@ class InfluxDBTarget(ForwardTarget):
 
 
 class HTTPTarget(ForwardTarget):
-    def __init__(self, url: str, headers: Optional[dict[str, str]] = None, method: str = "POST"):
+    def __init__(self, url: str, headers: dict[str, str] | None = None, method: str = "POST"):
         self._url = url
         self._headers = headers or {}
         self._method = method.upper()
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -126,8 +127,8 @@ class HTTPTarget(ForwardTarget):
 
 class FileTarget(ForwardTarget):
     def __init__(self, path: str, format: str = "jsonl"):
-        from pathlib import Path
         import os
+        from pathlib import Path
         base_dir = str(Path.cwd().resolve())
         resolved_path = str(Path(path).resolve())
         if not (resolved_path.startswith(base_dir + os.sep) or resolved_path == base_dir):
@@ -168,7 +169,7 @@ class ForwardEngine:
         self._log_bus = log_bus
         self._targets: dict[str, ForwardTarget] = {}
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self._batch_size = 100
         self._flush_interval = 5.0
@@ -218,10 +219,8 @@ class ForwardEngine:
         self._log_bus.unsubscribe(self._queue)
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         for target in self._targets.values():
             try:
                 await target.close()
