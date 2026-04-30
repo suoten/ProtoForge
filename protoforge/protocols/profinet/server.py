@@ -113,14 +113,10 @@ class ProfinetServer(ProtocolServer):
         self._device_name = "protoforge-device"
         self._vendor_id = 0x010A
         self._device_id = 0x0100
-        self._dcp_task: asyncio.Task | None = None
-        self._cyclic_task: asyncio.Task | None = None
-        self._udp_sock: Any = None
         self._input_size = 0
         self._output_size = 0
         self._connected = False
         self._connections: set[asyncio.StreamWriter] = set()
-        self._cycle_ms = 32
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -149,9 +145,6 @@ class ProfinetServer(ProtocolServer):
     async def stop(self) -> None:
         try:
             self._server_running = False
-            if self._udp_sock:
-                self._udp_sock.close()
-                self._udp_sock = None
             if self._server_task:
                 self._server_task.cancel()
                 try:
@@ -212,14 +205,15 @@ class ProfinetServer(ProtocolServer):
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                data = await reader.read(4096)
-                if not data:
-                    break
-                response = self._process_pnio_message(data, addr)
+                header = await reader.readexactly(2)
+                body_len = struct.unpack(">H", header)[0]
+                data = await reader.readexactly(body_len) if body_len > 0 else b""
+                response = self._process_tunnel_message(data, addr)
                 if response:
-                    writer.write(response)
+                    resp_len = struct.pack(">H", len(response))
+                    writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
             pass
         finally:
             self._connections.discard(writer)
@@ -230,37 +224,30 @@ class ProfinetServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
 
-    def _process_pnio_message(self, data: bytes, addr: tuple) -> bytes | None:
-        if len(data) < 6:
+    def _process_tunnel_message(self, data: bytes, addr: tuple) -> bytes | None:
+        if len(data) < 2:
             return None
-
-        eth_type = struct.unpack(">H", data[2:4])[0] if len(data) >= 4 else 0
-
-        if eth_type == PROFINET_ETH_TYPE:
-            frame_id = struct.unpack(">H", data[4:6])[0] if len(data) >= 6 else 0
-
-            if frame_id >= PNIO_FRAME_ID_RT:
-                return self._handle_rt_data(data)
-
-            return self._handle_dcp(data, addr)
-
+        msg_type = data[0]
+        if msg_type == 0x01:
+            return self._handle_dcp_tunnel(data, addr)
+        elif msg_type == 0x02:
+            return self._handle_rt_tunnel(data)
         return None
 
-    def _handle_dcp(self, data: bytes, addr: tuple) -> bytes | None:
-        if len(data) < 14:
+    def _handle_dcp_tunnel(self, data: bytes, addr: tuple) -> bytes | None:
+        if len(data) < 6:
             return None
-
-        service_id = data[4]
-        service_type = data[5]
-        xid = struct.unpack(">I", data[6:10])[0] if len(data) >= 10 else 0
-
+        service_id = data[1]
+        xid = struct.unpack(">I", data[2:6])[0] if len(data) >= 6 else 0
         if service_id == DCP_SERVICE_IDENTIFY:
-            return self._make_dcp_identify_response(data, xid)
+            resp = self._make_dcp_identify_response(data, xid)
+            return b"\x01" + resp
         elif service_id == DCP_SERVICE_GET:
-            return self._make_dcp_get_response(data, xid)
+            resp = self._make_dcp_get_response(data, xid)
+            return b"\x01" + resp
         elif service_id == DCP_SERVICE_SET:
-            return self._make_dcp_set_response(data, xid)
-
+            resp = self._make_dcp_set_response(data, xid)
+            return b"\x01" + resp
         return None
 
     def _make_dcp_identify_response(self, data: bytes, xid: int) -> bytes:
@@ -314,14 +301,15 @@ class ProfinetServer(ProtocolServer):
                               0)
         return bytes(header)
 
-    def _handle_rt_data(self, data: bytes) -> bytes | None:
+    def _handle_rt_tunnel(self, data: bytes) -> bytes | None:
         behavior = self._behaviors.get(self._default_device_id)
         config = self._device_configs.get(self._default_device_id)
         if not behavior or not config:
             return None
 
-        if self._output_size > 0 and len(data) > 12:
-            output_data = data[12:12 + self._output_size]
+        payload = data[1:]
+        if self._output_size > 0 and len(payload) >= self._output_size:
+            output_data = payload[:self._output_size]
             behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
                             f"PROFINET IO循环写入 {len(output_data)}字节",
@@ -329,18 +317,11 @@ class ProfinetServer(ProtocolServer):
                             detail={"size": len(output_data)})
 
         input_data = behavior.get_input_data(config)
-        resp = bytearray(data[:4])
-        resp += struct.pack(">H", PNIO_FRAME_ID_RT)
-        resp += struct.pack(">H", len(input_data) + 6)
-        resp += b"\x00\x00\x00\x00"
-        resp += input_data
-        resp += b"\x00\x00\x00\x00\x00\x00\x00\x00"
-
         self._log_debug("outbound", "cyclic_read",
                         f"PROFINET IO循环响应 {len(input_data)}字节",
                         device_id=self._default_device_id or "",
                         detail={"size": len(input_data)})
-        return bytes(resp)
+        return b"\x02" + input_data
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ProfinetDeviceBehavior(device_config.points)
@@ -404,10 +385,11 @@ class ProfinetServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
-                "port": {"type": "integer", "default": 34964, "description": "PROFINET IO端口"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址(TCP隧道模式)"},
+                "port": {"type": "integer", "default": 34964, "description": "TCP隧道端口"},
                 "device_name": {"type": "string", "default": "protoforge-device", "description": "PROFINET设备名称(DCP识别用)"},
                 "vendor_id": {"type": "integer", "default": 266, "description": "厂商ID(VendorID)"},
                 "device_id": {"type": "integer", "default": 256, "description": "设备ID(DeviceID)"},
             },
+            "description": "TCP隧道模式 - PROFINET协议帧通过TCP传输，需配套隧道适配器连接真实控制器",
         }

@@ -125,6 +125,96 @@ class BACnetServer(ProtocolServer):
                     service_choice = data[4] if len(data) > 4 else 0
                     if service_choice == 0x08:
                         return self._make_who_is_response(data, addr)
+                    elif service_choice == 0x0C:
+                        return self._handle_read_property(data, addr, invoke_id)
+                    elif service_choice == 0x0F:
+                        return self._handle_write_property(data, addr, invoke_id)
+        return None
+
+    def _handle_read_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
+        if len(data) < 8:
+            return None
+        obj_type_raw = data[5] if len(data) > 5 else 0
+        obj_inst_raw = struct.unpack(">H", data[6:8])[0] if len(data) >= 8 else 0
+        prop_id = data[8] if len(data) > 8 else 85
+
+        obj_type = (obj_type_raw >> 4) & 0x0F
+        obj_inst = obj_inst_raw
+
+        for device_id, device_obj in self._device_objects.items():
+            behavior = self._behaviors.get(device_id)
+            if not behavior:
+                continue
+            for i, obj in enumerate(device_obj.get("objects", [])):
+                obj_id = i + 1
+                if obj_inst == 0 or obj_inst == obj_id:
+                    value = behavior.get_value(obj.get("object_name", ""))
+                    resp = bytearray()
+                    resp.append(0x81)
+                    resp.append(0x0A)
+                    resp.append(0x00)
+                    resp.append(0x00)
+                    resp.append(0x01)
+                    resp.append(0x04)
+                    resp.append(0x00)
+                    resp.append(invoke_id & 0xFF)
+                    resp.append(0x0C | 0x80)
+                    resp.append(obj_type_raw)
+                    resp += struct.pack(">H", obj_id)
+                    resp.append(prop_id)
+                    if isinstance(value, bool):
+                        resp.append(0x19)
+                        resp.append(0x01 if value else 0x00)
+                    elif isinstance(value, float):
+                        resp.append(0x55)
+                        resp += struct.pack(">f", value)
+                    elif isinstance(value, int):
+                        resp.append(0x22)
+                        resp += struct.pack(">i", value)
+                    else:
+                        resp.append(0x55)
+                        resp += struct.pack(">f", float(value) if value else 0.0)
+                    resp[3] = len(resp) - 4
+                    return bytes(resp)
+        return None
+
+    def _handle_write_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
+        if len(data) < 12:
+            return None
+        obj_type_raw = data[5] if len(data) > 5 else 0
+        obj_inst = struct.unpack(">H", data[6:8])[0] if len(data) >= 8 else 0
+        prop_id = data[8] if len(data) > 8 else 85
+
+        for device_id, device_obj in self._device_objects.items():
+            behavior = self._behaviors.get(device_id)
+            if not behavior:
+                continue
+            for i, obj in enumerate(device_obj.get("objects", [])):
+                obj_id = i + 1
+                if obj_inst == 0 or obj_inst == obj_id:
+                    tag = data[9] if len(data) > 9 else 0
+                    if tag == 0x55 and len(data) >= 14:
+                        value = struct.unpack(">f", data[10:14])[0]
+                    elif tag == 0x22 and len(data) >= 14:
+                        value = struct.unpack(">i", data[10:14])[0]
+                    elif tag == 0x19 and len(data) >= 11:
+                        value = bool(data[10])
+                    else:
+                        value = 0
+                    point_name = obj.get("object_name", "")
+                    behavior.set_value(point_name, value)
+                    obj["present_value"] = value
+                    resp = bytearray()
+                    resp.append(0x81)
+                    resp.append(0x0A)
+                    resp.append(0x00)
+                    resp.append(0x06)
+                    resp.append(0x01)
+                    resp.append(0x04)
+                    resp.append(0x00)
+                    resp.append(invoke_id & 0xFF)
+                    resp.append(0x0F | 0x80)
+                    return bytes(resp)
         return None
 
     def _make_who_is_response(self, data: bytes, addr: tuple) -> bytes:
