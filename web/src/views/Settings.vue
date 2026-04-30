@@ -9,6 +9,22 @@
       <n-tabs type="card">
         <n-tab-pane name="general" tab="通用配置">
           <n-space vertical size="large">
+            <n-card size="small" title="快速设置">
+              <template #header-extra>
+                <n-space size="small">
+                  <n-button size="small" @click="loadSetupStatus" :loading="loadingSetup">检查状态</n-button>
+                  <n-button size="small" type="primary" @click="runSetupDemo" :loading="settingUpDemo">一键演示</n-button>
+                </n-space>
+              </template>
+              <n-alert v-if="setupStatus" :type="setupStatus.demo_initialized ? 'success' : 'info'" :bordered="false">
+                <template v-if="setupStatus.demo_initialized">
+                  演示环境已初始化。设备数: {{ setupStatus.device_count || 0 }}，场景数: {{ setupStatus.scenario_count || 0 }}
+                </template>
+                <template v-else>
+                  点击「一键演示」自动创建示例设备和场景，快速体验 ProtoForge 功能
+                </template>
+              </n-alert>
+            </n-card>
             <n-card title="服务器配置" size="small">
               <n-form :model="serverConfig" label-placement="left" label-width="120">
                 <n-form-item label="监听地址">
@@ -348,13 +364,57 @@
           </n-space>
         </template>
       </n-modal>
+
+      <n-modal v-model:show="showEditWebhookModal" preset="card" title="编辑 Webhook" style="width:520px">
+        <n-form :model="editWebhookForm" label-placement="left" label-width="100">
+          <n-form-item label="名称">
+            <n-input v-model:value="editWebhookForm.name" />
+          </n-form-item>
+          <n-form-item label="URL">
+            <n-input v-model:value="editWebhookForm.url" />
+          </n-form-item>
+          <n-form-item label="事件">
+            <n-select v-model:value="editWebhookForm.events" :options="webhookEventOptions" multiple />
+          </n-form-item>
+          <n-form-item label="请求头">
+            <n-input v-model:value="editWebhookForm.headersStr" type="textarea" :rows="2" />
+          </n-form-item>
+          <n-form-item label="启用">
+            <n-switch v-model:value="editWebhookForm.enabled" />
+          </n-form-item>
+        </n-form>
+        <template #action>
+          <n-space>
+            <n-button @click="showEditWebhookModal = false">取消</n-button>
+            <n-button type="primary" @click="doUpdateWebhook" :loading="updatingWebhook">保存</n-button>
+          </n-space>
+        </template>
+      </n-modal>
+
+      <n-modal v-model:show="showRecordingDetailModal" preset="card" title="录制详情" style="width:600px">
+        <n-space vertical v-if="recordingDetail">
+          <n-descriptions label-placement="left" :column="2" bordered size="small">
+            <n-descriptions-item label="ID">{{ recordingDetail.id }}</n-descriptions-item>
+            <n-descriptions-item label="设备ID">{{ recordingDetail.device_id || '-' }}</n-descriptions-item>
+            <n-descriptions-item label="时长">{{ recordingDetail.duration_seconds ? recordingDetail.duration_seconds.toFixed(1) + 's' : '-' }}</n-descriptions-item>
+            <n-descriptions-item label="帧数">{{ recordingDetail.frame_count || 0 }}</n-descriptions-item>
+            <n-descriptions-item label="创建时间" :span="2">{{ recordingDetail.created_at || '-' }}</n-descriptions-item>
+          </n-descriptions>
+          <n-text strong style="font-size:13px" v-if="recordingDetail.frames && recordingDetail.frames.length > 0">帧数据 (前20帧)</n-text>
+          <n-data-table v-if="recordingDetail.frames && recordingDetail.frames.length > 0"
+            :columns="recordingFrameColumns" :data="recordingDetail.frames.slice(0, 20)" :bordered="false" size="small" />
+        </n-space>
+        <template #action>
+          <n-button @click="showRecordingDetailModal = false">关闭</n-button>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
-import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, NDataTable, NModal, NPopconfirm, NTabs, NTabPane, NStatistic, NSwitch, useMessage } from 'naive-ui'
+import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, NDataTable, NModal, NPopconfirm, NTabs, NTabPane, NStatistic, NSwitch, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, defaultPorts } from '../constants.js'
 
@@ -495,8 +555,9 @@ const recordingColumns = [
     title: '创建时间', key: 'created_at', width: 160,
   },
   {
-    title: '操作', key: 'actions', width: 220,
+    title: '操作', key: 'actions', width: 280,
     render: (row) => h(NSpace, { size: 4 }, () => [
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewRecordingDetail(row.id) }, () => '详情'),
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => replayRecording(row.id) }, () => '回放'),
       h(NButton, { size: 'tiny', secondary: true, onClick: () => exportRecording(row.id) }, () => '导出'),
       h(NPopconfirm, { onPositiveClick: () => deleteRecording(row.id) }, {
@@ -513,6 +574,24 @@ const webhookStats = ref({})
 const showAddWebhookModal = ref(false)
 const addingWebhook = ref(false)
 const newWebhook = ref({ name: '', url: '', events: [], headers: '', enabled: true })
+
+const showEditWebhookModal = ref(false)
+const updatingWebhook = ref(false)
+const editWebhookForm = ref({ id: '', name: '', url: '', events: [], headersStr: '', enabled: true })
+
+const setupStatus = ref(null)
+const loadingSetup = ref(false)
+const settingUpDemo = ref(false)
+
+const showRecordingDetailModal = ref(false)
+const recordingDetail = ref(null)
+
+const recordingFrameColumns = [
+  { title: '序号', key: 'index', width: 60 },
+  { title: '时间戳', key: 'timestamp', width: 160 },
+  { title: '设备ID', key: 'device_id', width: 140 },
+  { title: '数据', key: 'data', ellipsis: { tooltip: true } },
+]
 
 const webhookEventOptions = [
   { label: '设备上线', value: 'device_online' },
@@ -536,9 +615,10 @@ const webhookColumns = [
     render: (row) => h(NTag, { size: 'tiny', type: row.enabled ? 'success' : 'default', bordered: false }, () => row.enabled ? '启用' : '禁用'),
   },
   {
-    title: '操作', key: 'actions', width: 160,
+    title: '操作', key: 'actions', width: 220,
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', secondary: true, onClick: () => testWebhook(row.id) }, () => '测试'),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openEditWebhook(row) }, () => '编辑'),
       h(NPopconfirm, { onPositiveClick: () => deleteWebhook(row.id) }, {
         trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => '删除'),
         default: () => `确定删除 Webhook "${row.name}" 吗？`,
@@ -837,6 +917,74 @@ async function loadWebhookStats() {
   } catch { webhookStats.value = {} }
 }
 
+async function openEditWebhook(row) {
+  editWebhookForm.value = {
+    id: row.id,
+    name: row.name || '',
+    url: row.url || '',
+    events: [...(row.events || [])],
+    headersStr: row.headers ? JSON.stringify(row.headers, null, 2) : '',
+    enabled: row.enabled !== false,
+  }
+  showEditWebhookModal.value = true
+}
+
+async function doUpdateWebhook() {
+  if (!editWebhookForm.value.name || !editWebhookForm.value.url) {
+    message.warning('请填写名称和 URL')
+    return
+  }
+  updatingWebhook.value = true
+  try {
+    let headers = {}
+    if (editWebhookForm.value.headersStr) {
+      try { headers = JSON.parse(editWebhookForm.value.headersStr) } catch { headers = {} }
+    }
+    await api.updateWebhook(editWebhookForm.value.id, {
+      name: editWebhookForm.value.name,
+      url: editWebhookForm.value.url,
+      events: editWebhookForm.value.events,
+      headers,
+      enabled: editWebhookForm.value.enabled,
+    })
+    showEditWebhookModal.value = false
+    message.success('Webhook 已更新')
+    await loadWebhooks()
+  } catch (e) {
+    message.error('更新失败: ' + (e.response?.data?.detail || e.message))
+  } finally { updatingWebhook.value = false }
+}
+
+async function loadSetupStatus() {
+  loadingSetup.value = true
+  try {
+    setupStatus.value = await api.getSetupStatus()
+  } catch (e) {
+    setupStatus.value = { demo_initialized: false }
+  } finally { loadingSetup.value = false }
+}
+
+async function runSetupDemo() {
+  settingUpDemo.value = true
+  try {
+    const res = await api.setupDemo()
+    message.success(`演示环境已创建！设备: ${res.device_count || 0}，场景: ${res.scenario_count || 0}`)
+    await loadSetupStatus()
+  } catch (e) {
+    message.error('创建演示失败: ' + (e.response?.data?.detail || e.message))
+  } finally { settingUpDemo.value = false }
+}
+
+async function viewRecordingDetail(id) {
+  try {
+    const res = await api.getRecording(id)
+    recordingDetail.value = res
+    showRecordingDetailModal.value = true
+  } catch (e) {
+    message.error('获取录制详情失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
 async function loadSettings() {
   try {
     const [settings, protoRes] = await Promise.all([api.getSettings(), api.getProtocols()])
@@ -934,5 +1082,6 @@ onMounted(() => {
   loadRecorderStats()
   loadWebhooks()
   loadWebhookStats()
+  loadSetupStatus()
 })
 </script>

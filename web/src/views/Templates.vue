@@ -3,7 +3,9 @@
     <n-space justify="space-between">
       <n-space>
         <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议筛选" clearable style="width: 160px" />
-        <n-input v-model:value="searchQuery" placeholder="搜索模板..." clearable style="width: 200px" />
+        <n-input v-model:value="searchQuery" placeholder="搜索模板..." clearable style="width: 200px" @keyup.enter="doSearch" />
+        <n-button type="primary" @click="doSearch" :loading="searching">搜索</n-button>
+        <n-select v-model:value="filterTag" :options="tagOptions" placeholder="按标签筛选" clearable style="width: 160px" />
       </n-space>
       <n-button type="primary" @click="showCreateModal = true">创建模板</n-button>
     </n-space>
@@ -110,6 +112,9 @@ const templates = ref([])
 const protocols = ref([])
 const filterProtocol = ref(null)
 const searchQuery = ref('')
+const filterTag = ref(null)
+const allTags = ref([])
+const searching = ref(false)
 const showCreateModal = ref(false)
 const showInstantiateModal = ref(false)
 const creating = ref(false)
@@ -124,12 +129,20 @@ const protocolOptions = computed(() => [
   ...protocols.value.map(p => ({ label: p.display_name, value: p.name })),
 ])
 
+const tagOptions = computed(() => [
+  { label: '全部标签', value: null },
+  ...allTags.value.map(t => ({ label: t, value: t })),
+])
+
 const filteredTemplates = computed(() => {
   let result = templates.value
   if (filterProtocol.value) {
     result = result.filter(t => t.protocol === filterProtocol.value)
   }
-  if (searchQuery.value) {
+  if (filterTag.value) {
+    result = result.filter(t => (t.tags || []).includes(filterTag.value))
+  }
+  if (searchQuery.value && !searching.value) {
     const q = searchQuery.value.toLowerCase()
     result = result.filter(t =>
       t.name.toLowerCase().includes(q) ||
@@ -152,8 +165,37 @@ async function loadData() {
     ])
     templates.value = tmplRes
     protocols.value = protoRes
+    await loadTags()
   } catch (e) {
     message.error('加载数据失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function loadTags() {
+  try {
+    const res = await api.listTemplateTags()
+    allTags.value = res.tags || res || []
+  } catch (e) {
+    allTags.value = []
+  }
+}
+
+async function doSearch() {
+  if (!searchQuery.value) {
+    await loadData()
+    return
+  }
+  searching.value = true
+  try {
+    const params = { q: searchQuery.value }
+    if (filterProtocol.value) params.protocol = filterProtocol.value
+    if (filterTag.value) params.tag = filterTag.value
+    const res = await api.searchTemplates(params)
+    templates.value = res.templates || res || []
+  } catch (e) {
+    message.error('搜索失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    searching.value = false
   }
 }
 

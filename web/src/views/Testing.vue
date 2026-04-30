@@ -231,8 +231,32 @@
         </n-tab-pane>
 
         <n-tab-pane name="history" tab="历史报告">
-          <n-data-table :columns="reportColumns" :data="reports" :bordered="false" size="small"
-            :pagination="{ pageSize: 10 }" />
+          <n-space vertical>
+            <n-space justify="space-between" align="center">
+              <n-text depth="3">历史测试报告列表</n-text>
+              <n-button size="small" @click="loadReportTrend" :loading="loadingTrend">查看趋势</n-button>
+            </n-space>
+            <n-data-table :columns="reportColumns" :data="reports" :bordered="false" size="small"
+              :pagination="{ pageSize: 10 }" />
+            <n-card v-if="trendData.length > 0" size="small" title="测试趋势">
+              <n-space vertical>
+                <n-grid :cols="3" :x-gap="12">
+                  <n-gi v-for="(item, idx) in trendData" :key="idx">
+                    <n-card size="small" embedded>
+                      <n-statistic :label="item.name || `报告 ${idx + 1}`">
+                        <template #default>
+                          <span :style="{ color: item.success_rate >= 100 ? '#18a058' : item.success_rate >= 50 ? '#f0a020' : '#d03050' }">
+                            {{ item.success_rate }}%
+                          </span>
+                        </template>
+                      </n-statistic>
+                      <n-text depth="3" style="font-size:12px">{{ item.passed }}/{{ item.total }} 通过</n-text>
+                    </n-card>
+                  </n-gi>
+                </n-grid>
+              </n-space>
+            </n-card>
+          </n-space>
         </n-tab-pane>
       </n-tabs>
 
@@ -245,13 +269,81 @@
           <n-button type="primary" @click="createSuite" :loading="creatingSuite">创建</n-button>
         </n-space>
       </n-modal>
+
+      <n-modal v-model:show="showEditCaseModal" preset="card" title="编辑测试用例" style="width: 600px">
+        <n-space vertical>
+          <n-form :model="editCaseForm" label-placement="left" label-width="80">
+            <n-form-item label="名称">
+              <n-input v-model:value="editCaseForm.name" placeholder="用例名称" />
+            </n-form-item>
+            <n-form-item label="标签">
+              <n-dynamic-tags v-model:value="editCaseForm.tags" />
+            </n-form-item>
+          </n-form>
+          <n-text depth="3" style="font-size:12px">步骤编辑：请使用可视化编辑器加载用例后修改步骤</n-text>
+        </n-space>
+        <template #action>
+          <n-space>
+            <n-button @click="showEditCaseModal = false">取消</n-button>
+            <n-button type="primary" @click="doUpdateTestCase" :loading="updatingCase">保存</n-button>
+          </n-space>
+        </template>
+      </n-modal>
+
+      <n-modal v-model:show="showSuiteDetailModal" preset="card" title="测试套件详情" style="width: 600px">
+        <n-space vertical v-if="suiteDetail">
+          <n-descriptions label-placement="left" :column="1" bordered size="small">
+            <n-descriptions-item label="名称">{{ suiteDetail.name }}</n-descriptions-item>
+            <n-descriptions-item label="描述">{{ suiteDetail.description || '-' }}</n-descriptions-item>
+            <n-descriptions-item label="用例数">{{ (suiteDetail.test_case_ids || []).length }}</n-descriptions-item>
+          </n-descriptions>
+          <n-text strong style="font-size:13px">包含用例:</n-text>
+          <n-data-table :columns="suiteDetailCaseColumns" :data="suiteDetailCases" :bordered="false" size="small" />
+        </n-space>
+        <template #action>
+          <n-button @click="showSuiteDetailModal = false">关闭</n-button>
+        </template>
+      </n-modal>
+
+      <n-modal v-model:show="showReportDetailModal" preset="card" title="报告详情" style="width: 700px">
+        <n-space vertical v-if="reportDetail">
+          <n-grid :cols="4" :x-gap="12">
+            <n-gi><n-statistic label="总数" :value="reportDetail.total" /></n-gi>
+            <n-gi><n-statistic label="通过" :value="reportDetail.passed" /></n-gi>
+            <n-gi><n-statistic label="失败" :value="reportDetail.failed" /></n-gi>
+            <n-gi><n-statistic label="通过率" :value="reportDetail.success_rate + '%'" /></n-gi>
+          </n-grid>
+          <n-collapse v-if="reportDetail.test_cases">
+            <n-collapse-item v-for="tc in reportDetail.test_cases" :key="tc.id" :name="tc.id">
+              <template #header>
+                <n-space align="center" size="small">
+                  <span :style="{ color: tc.status === 'passed' ? '#18a058' : '#d03050', fontWeight: 600 }">
+                    {{ tc.status === 'passed' ? '✓' : '✗' }}
+                  </span>
+                  <span>{{ tc.name }}</span>
+                </n-space>
+              </template>
+              <div v-for="(s, i) in tc.steps" :key="i" style="padding:4px 8px;font-size:12px">
+                {{ s.status === 'passed' ? '✓' : '✗' }} {{ s.name }} ({{ s.action }})
+                <span v-if="s.error" style="color:#d03050"> - {{ s.error }}</span>
+              </div>
+            </n-collapse-item>
+          </n-collapse>
+        </n-space>
+        <template #action>
+          <n-space>
+            <n-button @click="showReportDetailModal = false">关闭</n-button>
+            <n-button type="primary" @click="viewHtmlReport(reportDetail.id)">HTML报告</n-button>
+          </n-space>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
-import { useMessage } from 'naive-ui'
+import { useMessage, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -275,6 +367,20 @@ const assertionTypes = ref([])
 const devices = ref([])
 const scenarios = ref([])
 const protocols = ref([])
+
+const showEditCaseModal = ref(false)
+const updatingCase = ref(false)
+const editCaseForm = ref({ id: '', name: '', tags: [] })
+
+const showSuiteDetailModal = ref(false)
+const suiteDetail = ref(null)
+const suiteDetailCases = ref([])
+
+const showReportDetailModal = ref(false)
+const reportDetail = ref(null)
+
+const loadingTrend = ref(false)
+const trendData = ref([])
 
 const builderCase = ref({
   id: 'tc-' + Date.now().toString(36),
@@ -670,10 +776,11 @@ const caseColumns = [
   { title: '标签', key: 'tags', width: 150, render: (row) => (row.tags || []).map(t => h('span', { style: 'background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:2px;font-size:11px' }, t)) },
   { title: '步骤数', key: 'steps', width: 70, render: (row) => (row.steps || []).length },
   {
-    title: '操作', key: 'actions', width: 200,
+    title: '操作', key: 'actions', width: 260,
     render: (row) => [
       h('button', { onClick: () => runCaseById(row.id), style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '执行'),
-      h('button', { onClick: () => loadCaseToEditor(row.id), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '编辑'),
+      h('button', { onClick: () => openEditCase(row), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '编辑'),
+      h('button', { onClick: () => loadCaseToEditor(row.id), style: 'color:#6366f1;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '加载到编辑器'),
       h('button', { onClick: () => deleteCase(row.id), style: 'color:#d03050;border:none;background:none;cursor:pointer;font-size:12px' }, '删除'),
     ]
   },
@@ -683,9 +790,10 @@ const suiteColumns = [
   { title: '名称', key: 'name', width: 150 },
   { title: '用例数', key: 'test_case_ids', width: 80, render: (row) => (row.test_case_ids || []).length },
   {
-    title: '操作', key: 'actions', width: 140,
+    title: '操作', key: 'actions', width: 200,
     render: (row) => [
       h('button', { onClick: () => runSuiteById(row.id), style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '执行'),
+      h('button', { onClick: () => viewSuiteDetail(row.id), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '详情'),
       h('button', { onClick: () => deleteSuite(row.id), style: 'color:#d03050;border:none;background:none;cursor:pointer;font-size:12px' }, '删除'),
     ]
   },
@@ -699,13 +807,75 @@ const reportColumns = [
   { title: '通过率', key: 'success_rate', width: 80, render: (row) => `${row.success_rate}%` },
   { title: '耗时', key: 'duration', width: 80, render: (row) => `${(row.duration || 0).toFixed(2)}s` },
   {
-    title: '操作', key: 'actions', width: 120,
+    title: '操作', key: 'actions', width: 160,
     render: (row) => [
-      h('button', { onClick: () => { lastReport.value = row }, style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '查看'),
-      h('button', { onClick: () => viewHtmlReport(row.id), style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px' }, 'HTML'),
+      h('button', { onClick: () => viewReportDetail(row.id), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '详情'),
+      h('button', { onClick: () => { lastReport.value = row }, style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '查看'),
+      h('button', { onClick: () => viewHtmlReport(row.id), style: 'color:#6366f1;border:none;background:none;cursor:pointer;font-size:12px' }, 'HTML'),
     ]
   },
 ]
+
+const suiteDetailCaseColumns = [
+  { title: '用例ID', key: 'id', width: 180 },
+  { title: '名称', key: 'name', width: 150 },
+  { title: '步骤数', key: 'steps', width: 80, render: (row) => (row.steps || []).length },
+]
+
+async function openEditCase(row) {
+  editCaseForm.value = { id: row.id, name: row.name || '', tags: [...(row.tags || [])] }
+  showEditCaseModal.value = true
+}
+
+async function doUpdateTestCase() {
+  if (!editCaseForm.value.name) { message.warning('请输入用例名称'); return }
+  updatingCase.value = true
+  try {
+    await api.updateTestCase(editCaseForm.value.id, {
+      name: editCaseForm.value.name,
+      tags: editCaseForm.value.tags,
+    })
+    showEditCaseModal.value = false
+    message.success('用例已更新')
+    await loadCases()
+  } catch (e) {
+    message.error('更新失败: ' + (e.response?.data?.detail || e.message))
+  } finally { updatingCase.value = false }
+}
+
+async function viewSuiteDetail(suiteId) {
+  try {
+    const res = await api.getTestSuite(suiteId)
+    suiteDetail.value = res
+    suiteDetailCases.value = (res.test_case_ids || []).map(id => {
+      const c = testCases.value.find(tc => tc.id === id)
+      return c || { id, name: '未知用例', steps: [] }
+    })
+    showSuiteDetailModal.value = true
+  } catch (e) {
+    message.error('获取套件详情失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function viewReportDetail(reportId) {
+  try {
+    const res = await api.getTestReport(reportId)
+    reportDetail.value = res
+    showReportDetailModal.value = true
+  } catch (e) {
+    message.error('获取报告详情失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function loadReportTrend() {
+  loadingTrend.value = true
+  try {
+    const res = await api.getReportTrend({ count: 10 })
+    trendData.value = res.trends || res || []
+  } catch (e) {
+    message.error('加载趋势数据失败: ' + (e.response?.data?.detail || e.message))
+  } finally { loadingTrend.value = false }
+}
 
 onMounted(() => {
   loadSuggestions()
