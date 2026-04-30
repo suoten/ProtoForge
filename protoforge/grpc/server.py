@@ -47,8 +47,8 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         if engine:
             try:
                 device_count = len(engine.list_devices())
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("gRPC device count error: %s", e)
         db_status = "unknown"
         if db:
             try:
@@ -240,8 +240,8 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
                         scenario_obj = engine.get_scenario(s_id)
                         if scenario_obj:
                             s_status = scenario_obj.status.value if hasattr(scenario_obj.status, 'value') else str(scenario_obj.status)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("gRPC scenario status error: %s", e)
                 scenario_infos.append(pb2.ScenarioInfo(
                     id=s_id,
                     name=s.name if hasattr(s, 'name') else s.get("name", ""),

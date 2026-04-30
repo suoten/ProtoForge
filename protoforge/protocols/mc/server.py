@@ -66,8 +66,8 @@ class McDeviceBehavior(DeviceBehavior):
             else:
                 data = struct.pack("<H", int(value) & 0xFFFF)
             self.write_memory(device_code, offset, data)
-        except (ValueError, TypeError, struct.error):
-            pass
+        except (ValueError, TypeError, struct.error) as e:
+            logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")

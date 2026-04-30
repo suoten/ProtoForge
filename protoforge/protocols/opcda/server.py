@@ -125,8 +125,8 @@ class OpcDaServer(ProtocolServer):
             for sid, writer in list(self._sub_clients.items()):
                 try:
                     writer.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("OPC-DA subscription writer close error: %s", e)
             self._sub_clients.clear()
             self._subscriptions.clear()
         except Exception as e:

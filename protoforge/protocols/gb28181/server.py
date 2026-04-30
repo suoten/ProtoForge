@@ -261,8 +261,8 @@ class GB28181Server(ProtocolServer):
             for t in self._rtp_tasks:
                 try:
                     await t
-                except (asyncio.CancelledError, Exception):
-                    pass
+                except (asyncio.CancelledError, Exception) as e:
+                    logger.debug("GB28181 RTP task cancel error: %s", e)
             self._rtp_tasks.clear()
             if self._transport:
                 self._transport.close()

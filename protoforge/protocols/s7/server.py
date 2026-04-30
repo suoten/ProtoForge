@@ -101,8 +101,8 @@ class S7DeviceBehavior(DeviceBehavior):
             else:
                 data = struct.pack(">i", int(value))
             self.write_db_area(db_number, offset, data)
-        except (ValueError, TypeError, struct.error):
-            pass
+        except (ValueError, TypeError, struct.error) as e:
+            logger.warning("S7 on_write value conversion error for %s: %s", point_name, e)
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -364,8 +364,8 @@ class S7Server(ProtocolServer):
                         max_amq_caller = struct.unpack(">H", data[param_start + 5:param_start + 7])[0] or 8
                     if len(data) > param_start + 9:
                         max_amq_callee = struct.unpack(">H", data[param_start + 7:param_start + 9])[0] or 8
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("S7 connect param parse error: %s", e)
         pdu_size = min(max(pdu_size_req, 128), 960)
         max_amq_caller = min(max(max_amq_caller, 1), 64)
         max_amq_callee = min(max(max_amq_callee, 1), 64)
@@ -560,8 +560,8 @@ class S7Server(ProtocolServer):
                                 behavior._values[name] = bool(write_data[0]) if write_data else False
                             else:
                                 behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
-                        except (struct.error, IndexError):
-                            pass
+                        except (struct.error, IndexError) as e:
+                        logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
                                 f"写入{area_name}{db_number}偏移{offset}",

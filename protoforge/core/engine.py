@@ -143,10 +143,12 @@ class SimulationEngine:
             if global_el["url"]:
                 should_push = True
 
+        edgelite_result = None
         if should_push:
             try:
                 from protoforge.core.edgelite import push_device_to_edgelite
                 result = await push_device_to_edgelite(config)
+                edgelite_result = result
                 if result.get("ok"):
                     logger.info("Device %s auto-pushed to EdgeLite", config.id)
                 else:
@@ -155,7 +157,10 @@ class SimulationEngine:
                 logger.warning("Device %s EdgeLite push error: %s", config.id, e)
 
         logger.info("Device created: %s (%s)", config.id, config.name)
-        return self._get_device_info(instance)
+        info = self._get_device_info(instance)
+        if edgelite_result:
+            info.edgelite_status = edgelite_result
+        return info
 
     async def remove_device(self, device_id: str) -> None:
         instance = self._devices.pop(device_id, None)
