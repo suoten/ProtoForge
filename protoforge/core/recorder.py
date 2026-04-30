@@ -281,12 +281,17 @@ class Recorder:
         self._active.messages.append(recorded)
 
     def get_stats(self) -> dict[str, Any]:
+        is_rec = self._active is not None
         return {
-            "recording": self._active is not None,
+            "recording": is_rec,
+            "is_recording": is_rec,
             "active_name": self._active.name if self._active else None,
             "active_messages": len(self._active.messages) if self._active else 0,
+            "frames_captured": len(self._active.messages) if self._active else 0,
             "saved_recordings": len(self._recordings),
+            "total_recordings": len(self._recordings),
             "encryption_enabled": self._encryption_key is not None,
+            "duration_seconds": (time.time() - self._active.start_time) if is_rec and hasattr(self._active, 'start_time') else 0,
         }
 
     def _encrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:

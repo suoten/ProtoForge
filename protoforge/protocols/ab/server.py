@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -179,15 +179,53 @@ class AbServer(ProtocolServer):
         if command == 0x0065:
             return self._handle_register_session(data)
         elif command == 0x0066:
-            return None
+            return self._make_eip_response(0x0066, session, b"")
         elif command == 0x006F:
             return self._handle_send_rr_data(data)
         elif command == 0x0070:
             return self._handle_send_unit_data(data)
         elif command == 0x0001:
-            return None
+            return self._handle_list_identity(data, session)
 
         return self._make_eip_error(command, session, 0x01)
+
+    def _handle_list_identity(self, data: bytes, session: int) -> bytes:
+        host = self._config.get("host", "0.0.0.0")
+        port = self._config.get("port", 44818)
+        try:
+            ip_parts = [int(x) for x in host.split(".")]
+            ip_bytes = bytes(ip_parts) if len(ip_parts) == 4 else b"\x00\x00\x00\x00"
+        except (ValueError, AttributeError):
+            ip_bytes = b"\x00\x00\x00\x00"
+        identity = bytearray()
+        identity += struct.pack("<I", 0x00000001)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x008E)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", port)
+        identity += ip_bytes
+        identity += bytes([0x01, 0x00])
+        identity += struct.pack("<I", 0x00000000)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x0000)
+        device_name = self._config.get("device_name", "ProtoForge-AB").encode("utf-8")
+        identity += struct.pack("<B", len(device_name))
+        identity += device_name
+        return self._make_eip_response(0x0001, session, bytes(identity))
+
+    def _make_eip_response(self, command: int, session: int, payload: bytes) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", command)
+        resp += struct.pack("<H", len(payload))
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += bytes([0, 0, 0, 0, 0, 0, 0, 0])
+        resp += struct.pack("<I", 0x00000000)
+        resp += payload
+        return bytes(resp)
 
     def _handle_register_session(self, data: bytes) -> bytes:
         resp = bytearray()

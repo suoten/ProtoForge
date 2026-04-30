@@ -173,11 +173,24 @@ class ForwardEngine:
         self._targets.pop(name, None)
         logger.info("Forward target removed: %s", name)
 
-    def list_targets(self) -> list[dict[str, str]]:
+    def list_targets(self) -> list[dict[str, Any]]:
         result = []
         for name, target in self._targets.items():
-            target_type = type(target).__name__
-            result.append({"name": name, "type": target_type})
+            info: dict[str, Any] = {"name": name}
+            if isinstance(target, InfluxDBTarget):
+                info.update({"type": "influxdb", "protocol": "influxdb", "url": target.url})
+            elif isinstance(target, HTTPTarget):
+                info.update({"type": "http", "protocol": "http", "url": target.url, "method": target.method})
+            elif isinstance(target, FileTarget):
+                info.update({"type": "file", "protocol": "file", "path": target.path})
+            else:
+                info["type"] = type(target).__name__
+            if hasattr(target, 'url') and target.url:
+                from urllib.parse import urlparse
+                parsed = urlparse(target.url)
+                info.setdefault("host", parsed.hostname or "")
+                info.setdefault("port", parsed.port or "")
+            result.append(info)
         return result
 
     async def start(self) -> None:
@@ -247,7 +260,10 @@ class ForwardEngine:
             "running": self._running,
             "targets": len(self._targets),
             "queue_size": self._queue.qsize(),
+            "total_forwards": self._sent_count,
+            "success_count": self._sent_count,
             "sent_count": self._sent_count,
+            "fail_count": self._failed_count,
             "failed_count": self._failed_count,
             "dropped_count": self._dropped_count,
         }

@@ -44,9 +44,9 @@ class ScenarioConfig(BaseModel):
 class ScenarioConfigUpdate(BaseModel):
     id: Optional[str] = None
     name: Optional[str] = None
-    description: str = ""
-    devices: list[DeviceConfig] = Field(default_factory=list)
-    rules: list[Rule] = Field(default_factory=list)
+    description: Optional[str] = None
+    devices: Optional[list[DeviceConfig]] = None
+    rules: Optional[list[Rule]] = None
 
 
 class ScenarioInfo(BaseModel):

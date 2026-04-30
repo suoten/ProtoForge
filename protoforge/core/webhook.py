@@ -185,12 +185,17 @@ class WebhookManager:
                 webhook.error_count += 1
 
     def get_stats(self) -> dict[str, Any]:
+        total_triggers = sum(w.trigger_count for w in self._webhooks.values())
+        total_errors = sum(w.error_count for w in self._webhooks.values())
         return {
             "running": self._running,
             "webhooks": len(self._webhooks),
             "queue_size": self._queue.qsize(),
-            "total_triggers": sum(w.trigger_count for w in self._webhooks.values()),
-            "total_errors": sum(w.error_count for w in self._webhooks.values()),
+            "total_triggers": total_triggers,
+            "total_calls": total_triggers,
+            "total_errors": total_errors,
+            "success_count": total_triggers - total_errors,
+            "fail_count": total_errors,
         }
 
 

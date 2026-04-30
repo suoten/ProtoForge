@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import json
 import logging
 import time
@@ -126,6 +126,8 @@ class HttpSimulatorServer(ProtocolServer):
                 pass
 
     def _route(self, method: str, path: str, body: bytes) -> bytes:
+        if method == "OPTIONS":
+            return self._cors_preflight_response()
         for device_id, prefix in self._device_prefixes.items():
             if path.startswith(prefix):
                 rel_path = path[len(prefix):] or "/"
@@ -199,8 +201,20 @@ class HttpSimulatorServer(ProtocolServer):
 
         return self._json_response(404, {"error": f"Point not found: {point_name}"})
 
+    def _cors_preflight_response(self) -> bytes:
+        header = (
+            "HTTP/1.1 204 No Content\r\n"
+            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH\r\n"
+            "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
+            "Access-Control-Max-Age: 86400\r\n"
+            "Content-Length: 0\r\n"
+            "\r\n"
+        )
+        return header.encode("utf-8")
+
     def _json_response(self, status: int, body: dict) -> bytes:
-        status_text = {200: "OK", 400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status, "OK")
+        status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
         header = (
             f"HTTP/1.1 {status} {status_text}\r\n"
@@ -208,6 +222,8 @@ class HttpSimulatorServer(ProtocolServer):
             f"Content-Length: {len(body_bytes)}\r\n"
             f"Connection: keep-alive\r\n"
             f"Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH\r\n"
+            f"Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
             f"\r\n"
         )
         return header.encode("utf-8") + body_bytes
