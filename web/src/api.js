@@ -215,6 +215,8 @@ export default {
   deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
   clearAuditLog: (params) => d(api.delete('/audit', { params })),
 
+  testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
+
   exportBackup: () => d(api.get('/backup')),
   importBackup: (data) => d(api.post('/backup/restore', data)),
 }

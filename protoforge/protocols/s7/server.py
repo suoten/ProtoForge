@@ -79,8 +79,23 @@ class S7DeviceBehavior(DeviceBehavior):
             return
         db_number, offset = self._point_addresses[point_name]
         try:
-            if isinstance(value, float):
-                data = struct.pack(">f", value)
+            point = self._points.get(point_name)
+            dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
+            if dt in ("float32",) or (not dt and isinstance(value, float)):
+                data = struct.pack(">f", float(value))
+            elif dt in ("float64",):
+                data = struct.pack(">d", float(value))
+            elif dt in ("int16",):
+                data = struct.pack(">h", int(value))
+            elif dt in ("uint16",):
+                data = struct.pack(">H", int(value) & 0xFFFF)
+            elif dt in ("int32", "dint"):
+                data = struct.pack(">i", int(value))
+            elif dt in ("uint32",):
+                data = struct.pack(">I", int(value) & 0xFFFFFFFF)
+            elif dt in ("string",) or isinstance(value, str):
+                encoded = str(value).encode("utf-8")
+                data = bytes([254, min(len(encoded), 254)]) + encoded[:254]
             elif isinstance(value, bool):
                 data = struct.pack(">?", value)
             else:
@@ -543,7 +558,7 @@ class S7Server(ProtocolServer):
         resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)
 
-    def _make_s7_error_response(self, data: bytes) -> bytes:
+    def _make_s7_error_response(self, data: bytes, error_code: int = 0x85) -> bytes:
         resp = bytearray([
             0x03, 0x00, 0x00, 0x15,
             0x02, 0xF0, 0x80,
@@ -555,7 +570,7 @@ class S7Server(ProtocolServer):
             0x00, 0x02,
             0x00, 0x00,
             0x01, 0x00,
-            0x85,
+            error_code,
         ])
         return bytes(resp)
 

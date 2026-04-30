@@ -131,13 +131,24 @@ class SimulationEngine:
 
         proto_config = config.protocol_config or {}
         edgelite_url = proto_config.get("edgelite_url", "")
+        edgelite_enabled = proto_config.get("edgelite_enabled", False)
         skip_auto_push = proto_config.get("_skip_auto_push", False)
+
+        should_push = False
         if edgelite_url and not skip_auto_push:
+            should_push = True
+        elif edgelite_enabled and not skip_auto_push:
+            from protoforge.core.edgelite import get_global_edgelite_config
+            global_el = get_global_edgelite_config()
+            if global_el["url"]:
+                should_push = True
+
+        if should_push:
             try:
                 from protoforge.core.edgelite import push_device_to_edgelite
                 result = await push_device_to_edgelite(config)
                 if result.get("ok"):
-                    logger.info("Device %s auto-pushed to EdgeLite: %s", config.id, edgelite_url)
+                    logger.info("Device %s auto-pushed to EdgeLite", config.id)
                 else:
                     logger.warning("Device %s EdgeLite push failed: %s", config.id, result.get("error") or result.get("reason", "unknown"))
             except Exception as e:
@@ -159,12 +170,23 @@ class SimulationEngine:
 
         proto_config = instance.config.protocol_config or {}
         edgelite_url = proto_config.get("edgelite_url", "")
+        edgelite_enabled = proto_config.get("edgelite_enabled", False)
+
+        should_remove = False
         if edgelite_url:
+            should_remove = True
+        elif edgelite_enabled:
+            from protoforge.core.edgelite import get_global_edgelite_config
+            global_el = get_global_edgelite_config()
+            if global_el["url"]:
+                should_remove = True
+
+        if should_remove:
             try:
                 from protoforge.core.edgelite import remove_device_from_edgelite
                 result = await remove_device_from_edgelite(instance.config)
                 if result.get("ok"):
-                    logger.info("Device %s auto-removed from EdgeLite: %s", device_id, edgelite_url)
+                    logger.info("Device %s auto-removed from EdgeLite", device_id)
                 else:
                     logger.warning("Device %s EdgeLite remove failed: %s", device_id, result.get("error") or result.get("reason", "unknown"))
             except Exception as e:

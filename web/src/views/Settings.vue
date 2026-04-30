@@ -31,6 +31,32 @@
               </n-form>
             </n-card>
 
+            <n-card title="EdgeLite 网关联调配置（可选）" size="small">
+              <template #header-extra>
+                <n-text depth="3" style="font-size:12px">配置后可在设备中一键启用联调</n-text>
+              </template>
+              <n-form :model="edgeliteConfig" label-placement="left" label-width="120">
+                <n-form-item label="网关地址">
+                  <n-input v-model:value="edgeliteConfig.url" placeholder="http://192.168.1.200:8100" />
+                </n-form-item>
+                <n-form-item label="用户名">
+                  <n-input v-model:value="edgeliteConfig.username" placeholder="admin" />
+                </n-form-item>
+                <n-form-item label="密码">
+                  <n-input v-model:value="edgeliteConfig.password" type="password" show-password-on="click" placeholder="EdgeLite 登录密码" />
+                </n-form-item>
+                <n-form-item>
+                  <n-button size="small" @click="testEdgeliteConnection" :loading="testingEdgelite">
+                    <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></template>
+                    测试连接
+                  </n-button>
+                  <n-text v-if="edgeliteTestResult" :type="edgeliteTestResult.ok ? 'success' : 'error'" style="margin-left:12px;font-size:13px">
+                    {{ edgeliteTestResult.ok ? '连接成功' + (edgeliteTestResult.version ? ' (版本: ' + edgeliteTestResult.version + ')' : '') : '连接失败: ' + edgeliteTestResult.error }}
+                  </n-text>
+                </n-form-item>
+              </n-form>
+            </n-card>
+
             <n-card title="InfluxDB 转发配置（可选）" size="small">
               <n-form :model="influxdbConfig" label-placement="left" label-width="120">
                 <n-form-item label="URL">
@@ -339,6 +365,9 @@ const hasChanges = ref(false)
 
 const serverConfig = ref({ host: '0.0.0.0', port: 8000, db_path: 'data/protoforge.db', log_level: 'info', cors_origins: '*' })
 const influxdbConfig = ref({ url: '', token: '', org: 'default', bucket: 'protoforge' })
+const edgeliteConfig = ref({ url: '', username: 'admin', password: '' })
+const edgeliteTestResult = ref(null)
+const testingEdgelite = ref(false)
 const protocolPorts = ref({})
 const protocols = ref([])
 
@@ -624,7 +653,7 @@ async function addForwardTarget() {
   try {
     let params = {}
     if (newForward.value.params) {
-      try { params = JSON.parse(newForward.value.params) } catch { params = {} }
+      try { params = JSON.parse(newForward.value.params) } catch { message.warning('额外参数JSON格式错误，已忽略'); params = {} }
     }
     await api.addForwardTarget({
       name: newForward.value.name,
@@ -672,6 +701,7 @@ async function toggleForward() {
 async function loadForwardStats() {
   try {
     forwardStats.value = await api.getForwardStats()
+    forwardRunning.value = forwardStats.value.running || false
   } catch { forwardStats.value = {} }
 }
 
@@ -819,11 +849,36 @@ async function loadSettings() {
     influxdbConfig.value.token = settings.influxdb_token || ''
     influxdbConfig.value.org = settings.influxdb_org || 'default'
     influxdbConfig.value.bucket = settings.influxdb_bucket || 'protoforge'
+    edgeliteConfig.value.url = settings.edgelite_url || ''
+    edgeliteConfig.value.username = settings.edgelite_username || 'admin'
+    if (settings.edgelite_password && settings.edgelite_password !== '***') {
+      edgeliteConfig.value.password = settings.edgelite_password
+    }
     protocolPorts.value = { ...(settings.protocol_ports || {}) }
     protocols.value = protoRes
     saveResult.value = ''
   } catch (e) {
     message.error('加载设置失败')
+  }
+}
+
+async function testEdgeliteConnection() {
+  if (!edgeliteConfig.value.url) {
+    message.warning('请先填写 EdgeLite 网关地址')
+    return
+  }
+  testingEdgelite.value = true
+  edgeliteTestResult.value = null
+  try {
+    edgeliteTestResult.value = await api.testEdgeliteConnection({
+      url: edgeliteConfig.value.url,
+      username: edgeliteConfig.value.username,
+      password: edgeliteConfig.value.password,
+    })
+  } catch (e) {
+    edgeliteTestResult.value = { ok: false, error: e.response?.data?.detail || e.message }
+  } finally {
+    testingEdgelite.value = false
   }
 }
 
@@ -841,6 +896,9 @@ async function saveSettings() {
       influxdb_token: influxdbConfig.value.token,
       influxdb_org: influxdbConfig.value.org,
       influxdb_bucket: influxdbConfig.value.bucket,
+      edgelite_url: edgeliteConfig.value.url,
+      edgelite_username: edgeliteConfig.value.username,
+      edgelite_password: edgeliteConfig.value.password,
     }
     for (const [key, value] of Object.entries(protocolPorts.value)) {
       updates[`${key}_port`] = value

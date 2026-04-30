@@ -5,6 +5,7 @@ from typing import Any, Optional
 
 import httpx
 
+from protoforge.config import get_settings
 from protoforge.core.integration.protocol import (
     PROTOCOL_MAP_BASE,
     DATA_TYPE_MAP,
@@ -23,15 +24,27 @@ PROTOCOL_MAP: dict[str, str] = {
 }
 
 EDGELITE_PUSH_FIELDS = [
-    {"key": "edgelite_url", "label": "EdgeLite网关地址", "type": "string", "default": "",
-     "description": "填写后设备创建时自动注册到EdgeLite网关，如 http://192.168.1.200:8100"},
-    {"key": "edgelite_username", "label": "EdgeLite用户名", "type": "string", "default": "admin",
-     "description": "EdgeLite网关登录用户名"},
-    {"key": "edgelite_password", "label": "EdgeLite密码", "type": "string", "default": "",
-     "description": "EdgeLite网关登录密码"},
+    {"key": "edgelite_enabled", "label": "启用EdgeLite联调", "type": "boolean", "default": False,
+     "description": "开启后此设备将自动注册到全局配置的EdgeLite网关"},
     {"key": "collect_interval", "label": "采集间隔(秒)", "type": "number", "default": 5, "min": 1, "max": 3600,
      "description": "EdgeLite采集此设备数据的间隔秒数"},
 ]
+
+
+def get_global_edgelite_config() -> dict[str, str]:
+    s = get_settings()
+    return {
+        "url": s.edgelite_url or "",
+        "username": s.edgelite_username or "admin",
+        "password": s.edgelite_password or "",
+    }
+
+
+def is_edgelite_enabled_for_device(device: Any) -> bool:
+    config = getattr(device, "protocol_config", {}) or {}
+    if isinstance(config, dict):
+        return config.get("edgelite_enabled", False) is True
+    return False
 
 _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_tcp": {"host", "port", "slave_id", "timeout"},
@@ -202,11 +215,17 @@ def convert_device_to_edgelite(
 
 
 def get_edgelite_config_from_device(device: Any) -> dict[str, str]:
-    config = getattr(device, "protocol_config", {}) or {}
-    url = config.get("edgelite_url", "")
-    username = config.get("edgelite_username", "admin")
-    password = config.get("edgelite_password", "")
-    return {"url": url, "username": username, "password": password}
+    global_config = get_global_edgelite_config()
+    device_config = getattr(device, "protocol_config", {}) or {}
+
+    if device_config.get("edgelite_url"):
+        return {
+            "url": device_config.get("edgelite_url", ""),
+            "username": device_config.get("edgelite_username", global_config["username"]),
+            "password": device_config.get("edgelite_password", global_config["password"]),
+        }
+
+    return global_config
 
 
 async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, password: str) -> str:

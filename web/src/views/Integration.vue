@@ -539,7 +539,11 @@ const protocolMapColumns = [
   { title: '源协议', key: 'source_protocol', width: 160 },
   { title: '目标协议', key: 'target_protocol', width: 160 },
   { title: '驱动类型', key: 'driver_type', width: 140 },
-  { title: '状态', key: 'status', width: 100, render: (row) => h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '可用') },
+  { title: '状态', key: 'status', width: 100, render: (row) => {
+    const m = { available: ['success', '可用'], unsupported: ['warning', '不支持'], disabled: ['default', '已禁用'] }
+    const [t, l] = m[row.status] || ['info', row.status || '未知']
+    return h(NTag, { size: 'tiny', type: t, bordered: false }, () => l)
+  }},
 ]
 
 const alarmRuleColumns = [

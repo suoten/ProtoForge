@@ -62,6 +62,8 @@ class BACnetServer(ProtocolServer):
         self._port = 47808
         self._device_id_base = 100
         self._bbmd_enabled = False
+        self._bbmd_peers: list[tuple[str, int]] = []
+        self._bbmd_fwd_table: dict[tuple[str, int], float] = {}
         self._task: asyncio.Task | None = None
         self._sock: socket.socket | None = None
 
@@ -71,6 +73,17 @@ class BACnetServer(ProtocolServer):
         self._port = config.get("port", 47808)
         self._device_id_base = config.get("device_id_base", 100)
         self._bbmd_enabled = config.get("bbmd_enabled", False)
+        bbmd_peers = config.get("bbmd_peers", [])
+        self._bbmd_peers = []
+        for peer in bbmd_peers:
+            if isinstance(peer, str) and ":" in peer:
+                h, p = peer.rsplit(":", 1)
+                try:
+                    self._bbmd_peers.append((h, int(p)))
+                except ValueError:
+                    pass
+            elif isinstance(peer, dict):
+                self._bbmd_peers.append((peer.get("host", "0.0.0.0"), peer.get("port", 47808)))
         try:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -117,6 +130,8 @@ class BACnetServer(ProtocolServer):
                 response = self._handle_bacnet_packet(data, addr)
                 if response:
                     await loop.sock_sendto(self._sock, response, addr)
+                if self._bbmd_enabled and data[0] == 0x81 and len(data) >= 2 and data[1] == 0x00:
+                    self._bbmd_forward(data, addr)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -141,12 +156,19 @@ class BACnetServer(ProtocolServer):
                         return self._handle_write_property(data, addr, invoke_id)
                     elif service_choice == 0x0E:
                         return self._handle_read_property_multiple(data, addr, invoke_id)
+                    elif service_choice == 0x05:
+                        return self._handle_register_foreign_device(data, addr, invoke_id)
                     else:
                         return self._make_error_response(invoke_id, 0x0C, 2, 3)
             elif msg_type == 0x01:
-                pass
+                if len(data) >= 6:
+                    invoke_id = data[3] if len(data) > 3 else 0
+                    logger.debug("BACnet Result message received, invoke_id=%d", invoke_id)
             elif msg_type == 0x04:
-                pass
+                if len(data) >= 6:
+                    invoke_id = data[3] if len(data) > 3 else 0
+                    reject_reason = data[4] if len(data) > 4 else 0
+                    logger.debug("BACnet Reject message received, invoke_id=%d, reason=%d", invoke_id, reject_reason)
         return None
 
     def _decode_object_identifier(self, raw_bytes: bytes) -> tuple[int, int]:
@@ -340,30 +362,30 @@ class BACnetServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_write_property(self, data: bytes, addr: tuple, invoke_id: int) -> bytes | None:
-        if len(data) < 12:
-            return None
-        obj_type_raw = data[5] if len(data) > 5 else 0
-        obj_inst = struct.unpack(">H", data[6:8])[0] if len(data) >= 8 else 0
-        prop_id = data[8] if len(data) > 8 else 85
+        if len(data) < 10:
+            return self._make_reject_response(invoke_id, 4)
+        obj_id_bytes = data[5:9] if len(data) >= 9 else data[5:]
+        obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes[:4] if len(obj_id_bytes) >= 4 else obj_id_bytes)
+        prop_id = data[9] if len(data) > 9 else 85
 
         for device_id, device_obj in self._device_objects.items():
             behavior = self._behaviors.get(device_id)
             if not behavior:
                 continue
             for i, obj in enumerate(device_obj.get("objects", [])):
-                obj_id = i + 1
-                if obj_inst == 0 or obj_inst == obj_id:
-                    tag = data[9] if len(data) > 9 else 0
-                    if tag == 0x44 and len(data) >= 14:
-                        value = struct.unpack(">f", data[10:14])[0]
-                    elif tag == 0x55 and len(data) >= 18:
-                        value = struct.unpack(">d", data[10:18])[0]
-                    elif tag == 0x34 and len(data) >= 14:
-                        value = struct.unpack(">i", data[10:14])[0]
-                    elif tag == 0x22 and len(data) >= 12:
-                        value = struct.unpack(">H", data[10:12])[0]
-                    elif tag == 0x19 and len(data) >= 11:
-                        value = bool(data[10])
+                obj_idx = i + 1
+                if obj_inst == 0 or obj_inst == obj_idx:
+                    tag = data[10] if len(data) > 10 else 0
+                    if tag == 0x44 and len(data) >= 15:
+                        value = struct.unpack(">f", data[11:15])[0]
+                    elif tag == 0x55 and len(data) >= 19:
+                        value = struct.unpack(">d", data[11:19])[0]
+                    elif tag == 0x34 and len(data) >= 15:
+                        value = struct.unpack(">i", data[11:15])[0]
+                    elif tag == 0x22 and len(data) >= 13:
+                        value = struct.unpack(">H", data[11:13])[0]
+                    elif tag == 0x19 and len(data) >= 12:
+                        value = bool(data[11])
                     else:
                         value = 0
                     point_name = obj.get("object_name", "")
@@ -382,20 +404,60 @@ class BACnetServer(ProtocolServer):
                     return bytes(resp)
         return None
 
+    def _handle_register_foreign_device(self, data: bytes, addr: tuple, invoke_id: int) -> bytes:
+        if not self._bbmd_enabled:
+            return self._make_error_response(invoke_id, 0x05, 5, 4)
+        self._bbmd_fwd_table[addr] = time.time()
+        logger.info("BACnet Foreign Device registered: %s:%d", addr[0], addr[1])
+        resp = bytearray()
+        resp.append(0x81)
+        resp.append(0x0A)
+        resp.append(0x00)
+        resp.append(0x06)
+        resp.append(0x01)
+        resp.append(0x04)
+        resp.append(0x00)
+        resp.append(invoke_id & 0xFF)
+        resp.append(0x05 | 0x80)
+        return bytes(resp)
+
+    def _bbmd_forward(self, data: bytes, source_addr: tuple) -> None:
+        if not self._bbmd_enabled or not self._sock:
+            return
+        now = time.time()
+        expired = [k for k, v in self._bbmd_fwd_table.items() if now - v > 3600]
+        for k in expired:
+            del self._bbmd_fwd_table[k]
+        for peer_addr in self._bbmd_peers:
+            if peer_addr != source_addr:
+                try:
+                    self._sock.sendto(data, peer_addr)
+                except Exception as e:
+                    logger.debug("BBMD forward to %s failed: %s", peer_addr, e)
+        for fd_addr in list(self._bbmd_fwd_table.keys()):
+            if fd_addr != source_addr:
+                try:
+                    self._sock.sendto(data, fd_addr)
+                except Exception as e:
+                    logger.debug("BBMD forward to FD %s failed: %s", fd_addr, e)
+
     def _make_who_is_response(self, data: bytes, addr: tuple) -> bytes:
         responses = b""
         for device_id, device_obj in self._device_objects.items():
             bacnet_id = device_obj.get("device_id", self._device_id_base)
-            resp = bytearray([
-                0x81, 0x0A,
-                0x00, 0x0C,
-            ])
-            resp.append(0x01)
-            resp.append(0x04)
-            resp.append((bacnet_id >> 24) & 0xFF)
-            resp.append((bacnet_id >> 16) & 0xFF)
-            resp.append((bacnet_id >> 8) & 0xFF)
-            resp.append(bacnet_id & 0xFF)
+            vendor_id = device_obj.get("vendor_id", 999)
+            max_apdu = min(device_obj.get("max_apdu_length_accepted", 1024), 255)
+            resp = bytearray()
+            resp += bytes([0x81, 0x0A, 0x00, 0x00])
+            resp += bytes([0x01, 0x00])
+            resp += bytes([0x10, 0x00])
+            resp += bytes([0xC4])
+            resp += self._encode_object_identifier(8, bacnet_id)
+            resp += bytes([0x21, max_apdu])
+            resp += bytes([0x22, 0x03])
+            resp += bytes([0x33])
+            resp += struct.pack(">H", vendor_id)
+            resp[2:4] = struct.pack(">H", len(resp))
             responses += bytes(resp)
         return responses if responses else None
 
@@ -512,6 +574,12 @@ class BACnetServer(ProtocolServer):
                     "type": "boolean",
                     "default": False,
                     "description": "启用BBMD广播管理",
+                },
+                "bbmd_peers": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "default": [],
+                    "description": "BBMD对等节点列表 (格式: host:port)",
                 },
             },
         }

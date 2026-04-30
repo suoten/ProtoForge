@@ -47,8 +47,22 @@ class FinsDeviceBehavior(DeviceBehavior):
             return
         area, offset = self._point_addresses[point_name]
         try:
-            if isinstance(value, float):
-                data = struct.pack(">f", value)
+            point = self._points.get(point_name)
+            dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
+            if dt in ("float32",) or (not dt and isinstance(value, float)):
+                data = struct.pack(">f", float(value))
+            elif dt in ("float64",):
+                data = struct.pack(">d", float(value))
+            elif dt in ("int16",):
+                data = struct.pack(">h", int(value))
+            elif dt in ("uint16",):
+                data = struct.pack(">H", int(value) & 0xFFFF)
+            elif dt in ("int32", "dint"):
+                data = struct.pack(">i", int(value))
+            elif dt in ("uint32",):
+                data = struct.pack(">I", int(value) & 0xFFFFFFFF)
+            elif dt in ("string",) or isinstance(value, str):
+                data = str(value).encode("utf-8")
             else:
                 data = struct.pack(">h", int(value) & 0xFFFF)
             self.write_area(area, offset, data)
@@ -68,13 +82,7 @@ class FinsDeviceBehavior(DeviceBehavior):
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
-        if point_name in self._point_addresses:
-            area, offset = self._point_addresses[point_name]
-            try:
-                data = struct.pack(">h", int(value))
-                self.write_area(area, offset, data)
-            except (ValueError, TypeError, struct.error):
-                pass
+        self._sync_value_to_area(point_name, value)
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)

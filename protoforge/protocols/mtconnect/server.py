@@ -66,6 +66,9 @@ class MtConnectServer(ProtocolServer):
         self._server_task: asyncio.Task | None = None
         self._server_running = False
         self._device_uuid = str(uuid.uuid4())
+        self._sample_buffer: list[dict] = []
+        self._sample_buffer_max = 131072
+        self._first_sequence = 1
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -154,15 +157,28 @@ class MtConnectServer(ProtocolServer):
         method = parts[0]
         path = parts[1]
 
+        path_parts = path.split("?", 1)
+        path_base = path_parts[0]
+        query_params = {}
+        if len(path_parts) > 1:
+            for kv in path_parts[1].split("&"):
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    query_params[k] = v
+
         if method == "GET":
-            if path == "/probe" or path == "/" or path.startswith("/probe"):
+            if path_base == "/probe" or path_base == "/" or path_base.startswith("/probe"):
                 return self._make_http_response(self._build_probe())
-            elif path == "/current" or path.startswith("/current"):
+            elif path_base == "/current" or path_base.startswith("/current"):
                 return self._make_http_response(self._build_current())
-            elif path == "/sample" or path.startswith("/sample"):
-                return self._make_http_response(self._build_sample())
-            elif path.startswith("/asset"):
-                return self._make_http_response(self._build_assets())
+            elif path_base == "/sample" or path_base.startswith("/sample"):
+                from_seq = int(query_params.get("from", 0))
+                count = int(query_params.get("count", 100))
+                return self._make_http_response(self._build_sample(from_seq, count))
+            elif path_base.startswith("/asset"):
+                asset_id = query_params.get("id", "")
+                count = int(query_params.get("count", 100))
+                return self._make_http_response(self._build_assets(asset_id, count))
 
         return self._make_http_response(self._build_error("UNSUPPORTED", f"Path {path} not supported"), status=404)
 
@@ -217,6 +233,18 @@ class MtConnectServer(ProtocolServer):
                 if val != self._last_values.get(value_key):
                     self._sequence += 1
                     self._last_values[value_key] = val
+                    self._sample_buffer.append({
+                        "sequence": self._sequence,
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "data_item_id": point.name,
+                        "device_id": dev_id,
+                        "device_uuid": dev_uuid,
+                        "device_name": config.name,
+                        "value": val,
+                    })
+                    if len(self._sample_buffer) > self._sample_buffer_max:
+                        self._sample_buffer = self._sample_buffer[-self._sample_buffer_max:]
+                        self._first_sequence = self._sample_buffer[0]["sequence"]
                 events.append(
                     f'      <{escape(point.name)} dataItemId="{escape(point.name)}" '
                     f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'
@@ -238,9 +266,10 @@ class MtConnectServer(ProtocolServer):
             f'  <Header creationTime="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}" '
             f'instanceId="{self._instance_id}" '
             f'sender="ProtoForge" '
-            f'bufferSize="131072" '
-            f'nextSequence="{self._sequence}" '
-            f'lastSequence="{(self._sequence - 1) % (2**53)}" '
+            f'bufferSize="{self._sample_buffer_max}" '
+            f'nextSequence="{self._sequence + 1}" '
+            f'lastSequence="{self._sequence}" '
+            f'firstSequence="{self._first_sequence}" '
             f'version="1.3.0"/>\n'
             '<Streams>\n'
             + "\n".join(streams_xml) + "\n"
@@ -248,15 +277,117 @@ class MtConnectServer(ProtocolServer):
             '</MTConnectStreams>'
         )
 
-    def _build_sample(self) -> str:
-        return self._build_current()
+    def _build_sample(self, from_seq: int = 0, count: int = 100) -> str:
+        if from_seq > 0 and self._sample_buffer:
+            filtered = [e for e in self._sample_buffer if e["sequence"] >= from_seq]
+            entries = filtered[:count]
+        elif self._sample_buffer:
+            entries = self._sample_buffer[-count:]
+        else:
+            entries = []
 
-    def _build_assets(self) -> str:
+        if not entries:
+            return (
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<MTConnectStreams xmlns="urn:mtconnect.org:MTConnectStreams:1.3">\n'
+                f'  <Header creationTime="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}" '
+                f'instanceId="{self._instance_id}" '
+                f'sender="ProtoForge" '
+                f'bufferSize="{self._sample_buffer_max}" '
+                f'nextSequence="{self._sequence + 1}" '
+                f'lastSequence="{self._sequence}" '
+                f'firstSequence="{self._first_sequence}" '
+                f'version="1.3.0"/>\n'
+                '<Streams/>\n'
+                '</MTConnectStreams>'
+            )
+
+        device_events: dict[str, list] = {}
+        device_info: dict[str, dict] = {}
+        for entry in entries:
+            did = entry["device_id"]
+            if did not in device_events:
+                device_events[did] = []
+                device_info[did] = {
+                    "name": entry["device_name"],
+                    "uuid": entry["device_uuid"],
+                }
+            device_events[did].append(entry)
+
+        streams_xml = []
+        for did, events in device_events.items():
+            info = device_info[did]
+            samples_xml = []
+            for e in events:
+                samples_xml.append(
+                    f'      <{escape(e["data_item_id"])} dataItemId="{escape(e["data_item_id"])}" '
+                    f'sequence="{e["sequence"]}" timestamp="{e["timestamp"]}">'
+                    f'{escape(str(e["value"]))}</{escape(e["data_item_id"])}>'
+                )
+            streams_xml.append(
+                f'  <DeviceStream name="{escape(info["name"])}" uuid="{escape(info["uuid"])}">\n'
+                f'    <ComponentStream component="Device" name="{escape(info["name"])}">\n'
+                f'      <Samples>\n'
+                + "\n".join(samples_xml) + "\n"
+                f'      </Samples>\n'
+                f'    </ComponentStream>\n'
+                f'  </DeviceStream>'
+            )
+
+        first_seq = entries[0]["sequence"]
+        last_seq = entries[-1]["sequence"]
+        return (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<MTConnectStreams xmlns="urn:mtconnect.org:MTConnectStreams:1.3">\n'
+            f'  <Header creationTime="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}" '
+            f'instanceId="{self._instance_id}" '
+            f'sender="ProtoForge" '
+            f'bufferSize="{self._sample_buffer_max}" '
+            f'nextSequence="{last_seq + 1}" '
+            f'lastSequence="{last_seq}" '
+            f'firstSequence="{first_seq}" '
+            f'version="1.3.0"/>\n'
+            '<Streams>\n'
+            + "\n".join(streams_xml) + "\n"
+            '</Streams>\n'
+            '</MTConnectStreams>'
+        )
+
+    def _build_assets(self, asset_id: str = "", count: int = 100) -> str:
+        assets_xml = []
+        for dev_id, config in self._device_configs.items():
+            params = self._device_params.get(dev_id, {})
+            dev_uuid = params.get("device_uuid", self._device_uuid)
+            manufacturer = params.get("manufacturer", "ProtoForge")
+            asset_uuid = f"PF-{dev_id}"
+            if asset_id and asset_uuid != asset_id:
+                continue
+            description_items = []
+            for point in config.points:
+                dt_val = point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type)
+                description_items.append(
+                    f'        <DataItemDescription id="{escape(point.name)}" name="{escape(point.name)}" '
+                    f'type="{escape(dt_val)}" category="SAMPLE" units="{escape(point.unit)}"/>'
+                )
+            assets_xml.append(
+                f'  <Asset assetId="{escape(asset_uuid)}" deviceUuid="{escape(dev_uuid)}" '
+                f'timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">\n'
+                f'    <Description manufacturer="{escape(manufacturer)}" model="ProtoForge-Sim"/>\n'
+                f'    <Configuration>\n'
+                + "\n".join(description_items) + "\n"
+                f'    </Configuration>\n'
+                f'  </Asset>'
+            )
+            if len(assets_xml) >= count:
+                break
+
         return (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<MTConnectAssets xmlns="urn:mtconnect.org:MTConnectAssets:1.3">\n'
             f'  <Header creationTime="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}" '
-            f'instanceId="{self._instance_id}" sender="ProtoForge" version="1.3.0"/>\n'
+            f'instanceId="{self._instance_id}" sender="ProtoForge" '
+            f'assetCount="{len(assets_xml)}" version="1.3.0"/>\n'
+            + "\n".join(assets_xml) + "\n"
             '</MTConnectAssets>'
         )
 
