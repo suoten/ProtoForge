@@ -60,6 +60,8 @@ const messages = {
       settings: '系统设置',
       marketplace: '模板市场',
       logs: '调试日志',
+      audit: '审计日志',
+      backup: '备份恢复',
     },
     header: {
       searchPlaceholder: '搜索设备、场景、模板...',
@@ -255,6 +257,8 @@ const messages = {
       settings: 'Settings',
       marketplace: 'Marketplace',
       logs: 'Debug Logs',
+      audit: 'Audit Log',
+      backup: 'Backup & Restore',
     },
     header: {
       searchPlaceholder: 'Search devices, scenarios, templates...',

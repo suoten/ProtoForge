@@ -155,6 +155,8 @@ class EtherCATServer(ProtocolServer):
         self._slave_addr = config.get("slave_address", 0x1001)
         try:
             self._init_esc_regs()
+            self._al_state = ECAT_STATE_PREOP
+            self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
             self._status = ProtocolStatus.RUNNING
@@ -326,12 +328,6 @@ class EtherCATServer(ProtocolServer):
                       payload: bytes) -> tuple[bytes, int]:
         if address >= 0x1000 and address < 0x2000:
             self._write_esc_reg(address, payload[:length])
-            if address == ECAT_AL_STATUS:
-                new_state = payload[0] if payload else self._al_state
-                self._al_state = new_state
-                self._log_debug("inbound", "state_change",
-                                f"EtherCAT状态变更: 0x{new_state:02X}",
-                                detail={"state": new_state})
             return b"", 0x0001
 
         if address >= 0x10000000:
@@ -371,8 +367,35 @@ class EtherCATServer(ProtocolServer):
                 end = min(offset + len(data), len(new_data))
                 new_data[offset:end] = data[:end - offset]
                 self._esc_regs[reg_addr] = bytes(new_data)
+                if address == ECAT_AL_STATUS:
+                    requested_state = data[0] if data else self._al_state
+                    self._handle_al_state_transition(requested_state)
                 return
         self._esc_regs[address] = data
+
+    def _handle_al_state_transition(self, requested_state: int) -> None:
+        valid_transitions = {
+            ECAT_STATE_INIT: (ECAT_STATE_INIT, ECAT_STATE_PREOP, ECAT_STATE_BOOT),
+            ECAT_STATE_PREOP: (ECAT_STATE_INIT, ECAT_STATE_PREOP, ECAT_STATE_SAFEOP),
+            ECAT_STATE_BOOT: (ECAT_STATE_INIT, ECAT_STATE_BOOT),
+            ECAT_STATE_SAFEOP: (ECAT_STATE_INIT, ECAT_STATE_PREOP, ECAT_STATE_SAFEOP, ECAT_STATE_OP),
+            ECAT_STATE_OP: (ECAT_STATE_INIT, ECAT_STATE_PREOP, ECAT_STATE_SAFEOP, ECAT_STATE_OP),
+        }
+        current = self._al_state
+        allowed = valid_transitions.get(current, (ECAT_STATE_INIT,))
+        if requested_state in allowed:
+            self._al_state = requested_state
+            self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
+            self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
+            state_names = {0x01: "INIT", 0x02: "PREOP", 0x03: "BOOT", 0x04: "SAFEOP", 0x08: "OP"}
+            self._log_debug("inbound", "state_change",
+                            f"EtherCAT AL状态: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",
+                            detail={"from": current, "to": requested_state})
+        else:
+            self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0016)
+            self._log_debug("inbound", "state_change_error",
+                            f"EtherCAT AL非法状态转换: 0x{current:02X} -> 0x{requested_state:02X}",
+                            detail={"from": current, "to": requested_state, "error_code": 0x0016})
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = EtherCATDeviceBehavior(device_config.points)

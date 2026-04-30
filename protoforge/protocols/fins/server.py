@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -299,11 +299,24 @@ class FinsServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_controller_read(self, data: bytes, fins_frame: bytes) -> bytes:
+        device_config = self._device_configs.get(self._default_device_id)
+        device_name = b"ProtoForge-FINS\x00"
+        model = b"PF-FINS\x00"
+        version = b"V1.0.0\x00"
+        if device_config:
+            name_bytes = device_config.name.encode("ascii", errors="replace")[:14]
+            device_name = name_bytes.ljust(14, b"\x00") + b"\x00"
+            proto_config = device_config.protocol_config or {}
+            if "model" in proto_config:
+                model = proto_config["model"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
+            if "firmware" in proto_config:
+                version = proto_config["firmware"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
+
         controller_data = bytearray(28)
         controller_data[0:2] = struct.pack(">H", 0x0000)
         controller_data[2:4] = struct.pack(">H", 0x0000)
         controller_data[4:6] = b"PF"
-        controller_data[6:20] = b"ProtoForge-FINS\x00"
+        controller_data[6:20] = device_name[:14]
         controller_data[20:22] = struct.pack(">H", 0x0100)
 
         resp = bytearray()

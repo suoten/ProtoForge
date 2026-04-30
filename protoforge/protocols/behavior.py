@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import PointConfig, GeneratorType
-from protoforge.protocols.base import DeviceBehavior
+from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
 
 
 class DynamicValueGenerator:

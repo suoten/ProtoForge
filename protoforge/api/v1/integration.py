@@ -174,3 +174,15 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
     manager = _get_integration_manager()
     manager.remove_alarm_reaction_rule(rule_id)
     return {"ok": True}
+
+
+@router.post("/message")
+async def handle_integration_message(request: dict[str, Any], _user: dict = Depends(require_operator)):
+    msg_type = request.get("type", "")
+    payload = request.get("payload", request)
+    logger.info("Integration message received: type=%s", msg_type)
+    manager = _get_integration_manager()
+    if manager.is_connected():
+        result = await manager.send_message(request)
+        return {"ok": True, "data": result}
+    return {"ok": False, "error": "Not connected to integration target"}
