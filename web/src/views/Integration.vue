@@ -507,11 +507,12 @@ const deviceColumns = [
   },
   { title: '采集间隔', key: 'collect_interval', width: 80, render: (row) => `${row.collect_interval || 5}s` },
   {
-    title: '操作', key: 'actions', width: 320,
+    title: '操作', key: 'actions', width: 400,
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => '推送注册'),
+      h(NButton, { size: 'tiny', type: 'success', secondary: true, onClick: () => startCollect(row.id) }, () => '启动采集'),
+      h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => '停止采集'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => '验证链路'),
-      h(NButton, { size: 'tiny', secondary: true, onClick: () => checkStatus(row.id) }, () => '查询状态'),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => '移除'),
     ])
   },
@@ -772,6 +773,24 @@ async function removeFromEdgelite(deviceId) {
     await checkStatus(deviceId)
   } catch (e) {
     message.error('移除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function startCollect(deviceId) {
+  try {
+    await api.startIntegrationDevice(deviceId)
+    message.success('采集已启动')
+  } catch (e) {
+    message.error('启动采集失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function stopCollect(deviceId) {
+  try {
+    await api.stopIntegrationDevice(deviceId)
+    message.success('采集已停止')
+  } catch (e) {
+    message.error('停止采集失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

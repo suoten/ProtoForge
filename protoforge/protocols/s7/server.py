@@ -20,6 +20,7 @@ class S7DeviceBehavior(DeviceBehavior):
     S7_AREA_COUNTERS = 0x1C
 
     def __init__(self, points: list = None):
+        self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._generators: dict[str, DynamicValueGenerator] = {}
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
@@ -30,6 +31,7 @@ class S7DeviceBehavior(DeviceBehavior):
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
+                self._points[name] = p
                 fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 if fixed_val is not None:
                     self._values[name] = fixed_val
