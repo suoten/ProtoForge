@@ -133,6 +133,21 @@ export default {
   verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
+  getIntegrationStatus: () => d(api.get('/integration/status')),
+  getIntegrationMetrics: () => d(api.get('/integration/metrics')),
+  integrationPushDevice: (deviceId) => d(api.post(`/integration/push-device/${deviceId}`)),
+  integrationBatchPush: (data) => d(api.post('/integration/batch-push', data)),
+  integrationDeleteDevice: (deviceId) => d(api.delete(`/integration/device/${deviceId}`)),
+  integrationStartDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
+  integrationStopDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),
+  getIntegrationProtocols: () => d(api.get('/integration/protocols')),
+  validateDeviceCompatibility: (data) => d(api.post('/integration/validate', data)),
+  getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })),
+  getDeviceStatusCache: () => d(api.get('/integration/device-status')),
+  getAlarmRules: () => d(api.get('/integration/alarm-rules')),
+  addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
+  deleteAlarmRule: (ruleId) => d(api.delete(`/integration/alarm-rules/${ruleId}`)),
+
   listForwardTargets: () => d(api.get('/forward/targets')),
   addForwardTarget: (config) => d(api.post('/forward/targets', config)),
   removeForwardTarget: (name) => d(api.delete(`/forward/targets/${name}`)),
@@ -161,4 +176,12 @@ export default {
 
   getSettings: () => d(api.get('/settings')),
   updateSettings: (updates) => d(api.put('/settings', updates)),
+
+  queryAuditLog: (params) => d(api.get('/audit', { params })),
+  getAuditStats: () => d(api.get('/audit/stats')),
+  deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
+  clearAuditLog: (params) => d(api.delete('/audit', { params })),
+
+  exportBackup: () => d(api.get('/backup')),
+  importBackup: (data) => d(api.post('/backup/restore', data)),
 }

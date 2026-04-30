@@ -17,6 +17,8 @@ const routes = [
   { path: '/testing', component: () => import('./views/Testing.vue') },
   { path: '/integration', component: () => import('./views/Integration.vue') },
   { path: '/settings', component: () => import('./views/Settings.vue') },
+  { path: '/audit', component: () => import('./views/Audit.vue') },
+  { path: '/backup', component: () => import('./views/Backup.vue') },
   { path: '/:pathMatch(.*)*', component: NotFound },
 ]
 
