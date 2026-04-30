@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import struct
 import time
@@ -29,7 +29,7 @@ class ProfinetDeviceBehavior(DeviceBehavior):
         self._generators: dict[str, DynamicValueGenerator] = {}
         for p in points:
             self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
-                self._generators[p.name] = DynamicValueGenerator(p)
+            self._generators[p.name] = DynamicValueGenerator(p)
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")

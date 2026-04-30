@@ -11,18 +11,18 @@ class ModbusDeviceBehavior(DefaultDeviceBehavior):
 
 class ModbusDataStore:
     def __init__(self):
-        self._coils: dict[int, bool] = {}
-        self._discrete_inputs: dict[int, bool] = {}
+        self._coils: dict[int, int] = {}
+        self._discrete_inputs: dict[int, int] = {}
         self._holding_regs: dict[int, int] = {}
         self._input_regs: dict[int, int] = {}
 
     @property
     def coils(self) -> dict[int, int]:
-        return {k: int(v) for k, v in self._coils.items()}
+        return self._coils
 
     @property
     def discrete_inputs(self) -> dict[int, int]:
-        return {k: int(v) for k, v in self._discrete_inputs.items()}
+        return self._discrete_inputs
 
     @property
     def holding_regs(self) -> dict[int, int]:
@@ -33,22 +33,22 @@ class ModbusDataStore:
         return self._input_regs
 
     def set_coil(self, address: int, value: Any) -> None:
-        self._coils[address] = bool(value)
+        self._coils[address] = int(bool(value))
 
     def get_coil(self, address: int) -> int:
-        return int(self._coils.get(address, False))
+        return self._coils.get(address, 0)
 
     def set_discrete_input(self, address: int, value: Any) -> None:
-        self._discrete_inputs[address] = bool(value)
+        self._discrete_inputs[address] = int(bool(value))
 
     def get_discrete_input(self, address: int) -> int:
-        return int(self._discrete_inputs.get(address, False))
+        return self._discrete_inputs.get(address, 0)
 
     def set_point(self, fc: int, address: int, value: int) -> None:
         if fc in (1, 5, 15):
-            self._coils[address] = bool(value)
+            self._coils[address] = int(bool(value))
         elif fc == 2:
-            self._discrete_inputs[address] = bool(value)
+            self._discrete_inputs[address] = int(bool(value))
         elif fc in (3, 6, 16, 22, 23):
             self._holding_regs[address] = int(value) & 0xFFFF
         elif fc == 4:
@@ -56,9 +56,9 @@ class ModbusDataStore:
 
     def get_point(self, fc: int, address: int) -> int:
         if fc in (1, 5, 15):
-            return int(self._coils.get(address, False))
+            return self._coils.get(address, 0)
         elif fc == 2:
-            return int(self._discrete_inputs.get(address, False))
+            return self._discrete_inputs.get(address, 0)
         elif fc in (3, 6, 16, 22, 23):
             return self._holding_regs.get(address, 0)
         elif fc == 4:
@@ -69,9 +69,9 @@ class ModbusDataStore:
         for i, v in enumerate(values):
             addr = address + i
             if fc in (1, 5, 15):
-                self._coils[addr] = bool(v)
+                self._coils[addr] = int(bool(v))
             elif fc == 2:
-                self._discrete_inputs[addr] = bool(v)
+                self._discrete_inputs[addr] = int(bool(v))
             elif fc in (3, 6, 16, 22, 23):
                 self._holding_regs[addr] = int(v) & 0xFFFF
             elif fc == 4:
@@ -82,9 +82,9 @@ class ModbusDataStore:
         for i in range(count):
             addr = address + i
             if fc in (1, 5, 15):
-                result.append(int(self._coils.get(addr, False)))
+                result.append(self._coils.get(addr, 0))
             elif fc == 2:
-                result.append(int(self._discrete_inputs.get(addr, False)))
+                result.append(self._discrete_inputs.get(addr, 0))
             elif fc in (3, 6, 16, 22, 23):
                 result.append(self._holding_regs.get(addr, 0))
             elif fc == 4:
