@@ -41,11 +41,11 @@ class AbDeviceBehavior(DeviceBehavior):
                 self._tags[name] = fixed_val if fixed_val is not None else 0
                 self._data_types[name] = data_type
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             self._tags[point_name] = value
@@ -229,6 +229,23 @@ class AbServer(ProtocolServer):
 
     def _handle_send_unit_data(self, data: bytes) -> bytes:
         session = struct.unpack("<I", data[4:8])[0]
+        if len(data) < 40:
+            return self._make_cip_error_response(session, 0x00, 0x00)
+        timeout = struct.unpack("<B", data[14:15])[0] if len(data) > 14 else 10
+        item_count = struct.unpack("<H", data[16:18])[0] if len(data) > 17 else 0
+        if item_count < 2:
+            return self._make_cip_error_response(session, 0x00, 0x00)
+        t_o_conn_id = struct.unpack("<I", data[22:26])[0] if len(data) >= 26 else 0
+        seq_num = struct.unpack("<H", data[30:32])[0] if len(data) >= 32 else 0
+        cip_data = data[34:] if len(data) > 34 else b""
+        if len(cip_data) > 2:
+            service = cip_data[0]
+            if service == 0x4C:
+                cip_resp = self._handle_cip_read_tag(session, cip_data)
+                return cip_resp
+            elif service == 0x4D:
+                cip_resp = self._handle_cip_write_tag(session, cip_data)
+                return cip_resp
         return self._make_cip_error_response(session, 0x00, 0x00)
 
     def _handle_cip_forward_open(self, session: int, cip_data: bytes) -> bytes:
@@ -273,20 +290,69 @@ class AbServer(ProtocolServer):
         else:
             return struct.pack("<BHi", type_code, 4, int(value))
 
+    def _parse_cip_tag_path(self, cip_data: bytes) -> str:
+        tag_parts = []
+        offset = 2
+        while offset < len(cip_data):
+            segment_type = cip_data[offset]
+            if segment_type == 0x91:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                tag_len = cip_data[offset]
+                offset += 1
+                if offset + tag_len > len(cip_data):
+                    break
+                tag_name = cip_data[offset:offset + tag_len].decode("ascii", errors="replace").rstrip("\x00")
+                tag_parts.append(tag_name)
+                offset += tag_len
+                if tag_len % 2 != 0:
+                    offset += 1
+            elif segment_type == 0x28:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                member_id = cip_data[offset]
+                offset += 1
+                if tag_parts:
+                    tag_parts[-1] = f"{tag_parts[-1]}.{member_id}"
+            elif segment_type == 0x00:
+                offset += 1
+            else:
+                offset += 1
+        return ".".join(tag_parts) if tag_parts else ""
+
+    def _get_path_end_offset(self, cip_data: bytes) -> int:
+        offset = 2
+        while offset < len(cip_data):
+            segment_type = cip_data[offset]
+            if segment_type == 0x91:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                tag_len = cip_data[offset]
+                offset += 1 + tag_len
+                if tag_len % 2 != 0:
+                    offset += 1
+            elif segment_type == 0x28:
+                offset += 2
+            elif segment_type == 0x00:
+                offset += 1
+            else:
+                offset += 1
+        return offset
+
     def _handle_cip_read_tag(self, session: int, cip_data: bytes) -> bytes:
         tag_value = 0
         data_type = "int32"
         behavior = self._behaviors.get(self._default_device_id)
-        if len(cip_data) > 6:
-            tag_len = struct.unpack("<H", cip_data[2:4])[0]
-            if len(cip_data) >= 4 + tag_len:
-                tag_name = cip_data[4:4 + tag_len].decode("ascii", errors="replace").rstrip("\x00")
-                if behavior:
-                    tag_value = behavior.get_tag(tag_name)
-                    if tag_value is None:
-                        tag_value = behavior.get_value(tag_name)
-                    data_type = behavior.get_data_type(tag_name)
-        else:
+        tag_name = self._parse_cip_tag_path(cip_data)
+        if tag_name and behavior:
+            tag_value = behavior.get_tag(tag_name)
+            if tag_value is None:
+                tag_value = behavior.get_value(tag_name)
+            data_type = behavior.get_data_type(tag_name)
+        elif not tag_name:
             if behavior and behavior._values:
                 data_type = "dint"
                 tag_value = 0
@@ -299,20 +365,18 @@ class AbServer(ProtocolServer):
         return self._wrap_cip_response(session, cip_resp)
 
     def _handle_cip_write_tag(self, session: int, cip_data: bytes) -> bytes:
-        if len(cip_data) > 6:
-            tag_len = struct.unpack("<H", cip_data[2:4])[0]
-            if len(cip_data) >= 4 + tag_len + 6:
-                tag_name = cip_data[4:4 + tag_len].decode("ascii", errors="replace").rstrip("\x00")
-                behavior = self._behaviors.get(self._default_device_id)
-                write_value = 0
-                if behavior:
-                    data_type = behavior.get_tag_type(tag_name)
-                    value_data = cip_data[4 + tag_len + 2:]
-                    write_value = self._unpack_cip_value(data_type, value_data)
-                    behavior.set_tag(tag_name, write_value)
-                    self._log_debug("recv", "cip_write",
-                                    f"写入标签 {tag_name}={write_value}",
-                                    detail={"tag": tag_name, "value": write_value})
+        tag_name = self._parse_cip_tag_path(cip_data)
+        behavior = self._behaviors.get(self._default_device_id)
+        if tag_name and behavior:
+            path_end = self._get_path_end_offset(cip_data)
+            if path_end + 2 <= len(cip_data):
+                data_type = behavior.get_tag_type(tag_name)
+                value_data = cip_data[path_end + 2:]
+                write_value = self._unpack_cip_value(data_type, value_data)
+                behavior.set_tag(tag_name, write_value)
+                self._log_debug("recv", "cip_write",
+                                f"写入标签 {tag_name}={write_value}",
+                                detail={"tag": tag_name, "value": write_value})
 
         cip_resp = bytearray()
         cip_resp += bytes([0xCD])
@@ -420,7 +484,7 @@ class AbServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

@@ -1,4 +1,4 @@
-import math
+﻿import math
 import random
 import time
 from typing import Any
@@ -31,6 +31,8 @@ class DynamicValueGenerator:
         gt = self._point.generator_type
         if gt == GeneratorType.FIXED:
             return self._generate_fixed()
+        elif gt == GeneratorType.CONSTANT:
+            return self._generate_fixed()
         elif gt == GeneratorType.SINE:
             return self._generate_sine()
         elif gt == GeneratorType.RANDOM:
@@ -39,6 +41,10 @@ class DynamicValueGenerator:
             return self._generate_triangle()
         elif gt == GeneratorType.SAWTOOTH:
             return self._generate_sawtooth()
+        elif gt == GeneratorType.SQUARE:
+            return self._generate_square()
+        elif gt == GeneratorType.INCREMENT:
+            return self._generate_increment()
         elif gt == GeneratorType.SCRIPT:
             return self._generate_script()
         return self._generate_fixed()
@@ -103,6 +109,27 @@ class DynamicValueGenerator:
             value += random.gauss(0, self._noise)
         return self._clamp(value)
 
+    def _generate_square(self) -> Any:
+        t = time.time() - self._start_time
+        period = 1.0 / self._frequency if self._frequency > 0 else 10.0
+        phase_t = ((t + self._phase / (2 * math.pi * max(self._frequency, 0.001))) % period) / period
+        value = self._max if phase_t < 0.5 else self._min
+        if self._noise > 0:
+            value += random.gauss(0, self._noise)
+        return self._clamp(value)
+
+    def _generate_increment(self) -> Any:
+        t = time.time() - self._start_time
+        step = self._config.get("step", 1)
+        period = 1.0 / self._frequency if self._frequency > 0 else 10.0
+        count = int(t / period)
+        value = self._min + step * count
+        if self._max > self._min:
+            value = self._min + (value - self._min) % (self._max - self._min)
+        if self._noise > 0:
+            value += random.gauss(0, self._noise)
+        return self._clamp(value)
+
     def _generate_script(self) -> Any:
         if not self._script_code:
             return self._last_value
@@ -129,7 +156,7 @@ class DefaultDeviceBehavior(DeviceBehavior):
             self._values[p.name] = init_val
             self._generators[p.name] = DynamicValueGenerator(p)
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         if name in self._written_values:
             return self._written_values[name]
@@ -140,7 +167,7 @@ class DefaultDeviceBehavior(DeviceBehavior):
             return value
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._written_values[point_name] = value
             self._values[point_name] = value

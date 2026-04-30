@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import struct
 import time
@@ -51,11 +51,11 @@ class EtherCATDeviceBehavior(DeviceBehavior):
             self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
             self._generators[p.name] = DynamicValueGenerator(p)
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             return True
@@ -444,7 +444,7 @@ class EtherCATServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        success = await behavior.on_write(point_name, value)
+        success = behavior.on_write(point_name, value)
         if success:
             self._log_debug("system", "write_point",
                             f"EtherCAT写入测点: {point_name}={value}",

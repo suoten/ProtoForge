@@ -55,11 +55,11 @@ class McDeviceBehavior(DeviceBehavior):
         except (ValueError, TypeError, struct.error):
             pass
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             self._sync_value_to_memory(point_name, value)
@@ -106,6 +106,7 @@ class McServer(ProtocolServer):
     protocol_display_name = "Mitsubishi MC"
 
     SLMP_3E_BIN_SUBHEADER = 0x0054
+    SLMP_3E_ASCII_SUBHEADER = b"5000"
 
     def __init__(self):
         super().__init__()
@@ -194,6 +195,9 @@ class McServer(ProtocolServer):
     def _process_slmp(self, data: bytes) -> bytes | None:
         if len(data) < 11:
             return None
+
+        if data[:4] == self.SLMP_3E_ASCII_SUBHEADER:
+            return self._process_slmp_ascii(data)
 
         subheader = struct.unpack("<H", data[0:2])[0]
         if subheader != self.SLMP_3E_BIN_SUBHEADER:
@@ -355,7 +359,7 @@ class McServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return await behavior.on_write(point_name, value)
+        return behavior.on_write(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -368,3 +372,105 @@ class McServer(ProtocolServer):
                 "pc": {"type": "integer", "default": 255, "description": "PC号 (0xFF=自身)"},
             },
         }
+
+    @staticmethod
+    def _ascii_to_hex(ascii_str: bytes) -> int:
+        return int(ascii_str.decode("ascii"), 16)
+
+    @staticmethod
+    def _hex_to_ascii(val: int, width: int = 4) -> bytes:
+        return format(val, f"0{width}X").encode("ascii")
+
+    def _process_slmp_ascii(self, data: bytes) -> bytes | None:
+        if len(data) < 30:
+            return None
+        try:
+            network = self._ascii_to_hex(data[4:6])
+            pc = self._ascii_to_hex(data[6:8])
+            req_dest_io = self._ascii_to_hex(data[8:12])
+            req_dest_station = self._ascii_to_hex(data[12:14])
+            req_data_len = self._ascii_to_hex(data[14:18])
+            cpu_monitor_timer = self._ascii_to_hex(data[18:22])
+            cmd = self._ascii_to_hex(data[22:26])
+            subcmd = self._ascii_to_hex(data[26:30])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        if cmd == 0x0401:
+            return self._handle_read_ascii(data, subcmd)
+        elif cmd == 0x1401:
+            return self._handle_write_ascii(data, subcmd)
+        elif cmd == 0x0001:
+            return self._handle_batch_read_ascii(data, subcmd)
+
+        return self._make_ascii_error_response(data, 0xC059)
+
+    def _handle_read_ascii(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            start_addr = self._ascii_to_hex(data[30:34])
+            device_code = self._ascii_to_hex(data[34:36])
+            word_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        if subcmd == 0x0000:
+            read_len = word_count * 2
+        elif subcmd == 0x0001:
+            read_len = word_count
+        else:
+            return self._make_ascii_error_response(data, 0xC059)
+
+        read_data = bytearray(read_len)
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
+            mem = behavior.read_memory(device_code, start_addr + read_len)
+            read_data = mem[start_addr:start_addr + read_len]
+
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(2 + len(read_data) * 2)
+        resp += b"0000"
+        for b in read_data:
+            resp += self._hex_to_ascii(b, 2)
+        return bytes(resp)
+
+    def _handle_write_ascii(self, data: bytes, subcmd: int) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            start_addr = self._ascii_to_hex(data[30:34])
+            device_code = self._ascii_to_hex(data[34:36])
+            word_count = self._ascii_to_hex(data[36:40])
+            write_ascii = data[40:]
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        write_data = bytearray()
+        for i in range(0, len(write_ascii) - 1, 2):
+            try:
+                write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+            except ValueError:
+                break
+
+        behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
+            behavior.write_memory(device_code, start_addr, bytes(write_data))
+
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(2)
+        resp += b"0000"
+        return bytes(resp)
+
+    def _handle_batch_read_ascii(self, data: bytes, subcmd: int) -> bytes:
+        return self._handle_read_ascii(data, subcmd)
+
+    def _make_ascii_error_response(self, data: bytes, error_code: int) -> bytes:
+        resp = bytearray(b"5000")
+        if len(data) >= 14:
+            resp += data[4:14]
+        resp += self._hex_to_ascii(2)
+        resp += self._hex_to_ascii(error_code)
+        return bytes(resp)

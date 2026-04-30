@@ -41,6 +41,14 @@ class ScenarioConfig(BaseModel):
     rules: list[Rule] = Field(default_factory=list)
 
 
+class ScenarioConfigUpdate(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: str = ""
+    devices: list[DeviceConfig] = Field(default_factory=list)
+    rules: list[Rule] = Field(default_factory=list)
+
+
 class ScenarioInfo(BaseModel):
     id: str
     name: str
@@ -49,3 +57,8 @@ class ScenarioInfo(BaseModel):
     device_count: int = 0
     rule_count: int = 0
     created_at: Optional[str] = None
+
+
+class ScenarioDetail(ScenarioInfo):
+    devices: list[DeviceConfig] = Field(default_factory=list)
+    rules: list[Rule] = Field(default_factory=list)

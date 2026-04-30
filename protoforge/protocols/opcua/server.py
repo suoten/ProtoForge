@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import logging
 import os
 import time
@@ -98,11 +98,11 @@ class OpcUaDeviceBehavior(DeviceBehavior):
             self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
             self._generators[p.name] = DynamicValueGenerator(p)
 
-    async def generate_value(self, point_config: dict[str, Any]) -> Any:
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
         return self._values.get(name, 0)
 
-    async def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             return True
@@ -307,7 +307,7 @@ class OpcUaServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        success = await behavior.on_write(point_name, value)
+        success = behavior.on_write(point_name, value)
         if success:
             point_node_key = f"{device_id}.{point_name}"
             node = self._point_nodes.get(point_node_key)

@@ -17,10 +17,13 @@ class DataType(str, Enum):
 
 class GeneratorType(str, Enum):
     FIXED = "fixed"
+    CONSTANT = "constant"
     RANDOM = "random"
     SINE = "sine"
     TRIANGLE = "triangle"
     SAWTOOTH = "sawtooth"
+    SQUARE = "square"
+    INCREMENT = "increment"
     SCRIPT = "script"
 
 
@@ -47,6 +50,7 @@ class DeviceConfig(BaseModel):
     template_id: Optional[str] = None
     points: list[PointConfig] = Field(default_factory=list)
     protocol_config: dict[str, Any] = Field(default_factory=dict)
+    position: Optional[dict[str, float]] = None
 
 
 class PointValue(BaseModel):

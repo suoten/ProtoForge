@@ -5,10 +5,10 @@ import os
 import time
 import uuid
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from protoforge.core.auth import verify_token
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
-from protoforge.models.scenario import ScenarioConfig, ScenarioInfo
+from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate, ScenarioDetail, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
 from protoforge.api.v1.auth import require_admin, require_operator, require_user, require_viewer
 router = APIRouter(prefix="/api/v1")
@@ -415,7 +415,7 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.get("/scenarios/{scenario_id}", response_model=ScenarioInfo)
+@router.get("/scenarios/{scenario_id}", response_model=ScenarioDetail)
 async def get_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
@@ -447,15 +447,25 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
         raise HTTPException(status_code=404, detail=str(e))
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioInfo)
-async def update_scenario(scenario_id: str, config: ScenarioConfig, _user: dict = Depends(require_operator)):
+async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
 
     try:
-        result = engine.update_scenario(scenario_id, config)
+        existing = engine.get_scenario_config(scenario_id)
+        if not existing:
+            raise ValueError(f"Scenario not found: {scenario_id}")
+        merged = ScenarioConfig(
+            id=scenario_id,
+            name=update.name if update.name is not None else existing.name,
+            description=update.description if update.description else existing.description,
+            devices=update.devices if update.devices else existing.devices,
+            rules=update.rules if update.rules else existing.rules,
+        )
+        result = engine.update_scenario(scenario_id, merged)
         if db:
             try:
-                await db.save_scenario(config)
+                await db.save_scenario(merged)
             except Exception as db_err:
                 logger.warning("Failed to persist scenario %s: %s", scenario_id, db_err)
         return result

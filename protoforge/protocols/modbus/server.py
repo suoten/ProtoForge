@@ -355,7 +355,7 @@ class ModbusTcpServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        success = await behavior.on_write(point_name, value)
+        success = behavior.on_write(point_name, value)
         if success:
             self._apply_device_to_context(
                 self._device_configs.get(device_id, DeviceConfig(id=device_id, name="", protocol="modbus_tcp"))
@@ -418,15 +418,14 @@ class ModbusTcpServer(ProtocolServer):
                     ]:
                         block = slave_ctx.get(fx_name)
                         if block and hasattr(block, 'setValues') and store_data:
-                            addresses = sorted(store_data.keys())
-                            if addresses:
-                                raw_values = [store_data.get(a, 0) for a in addresses]
-                                fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
-                                values = [bool(v) for v in raw_values] if fc in (1, 2) else raw_values
+                            fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
+                            is_bool = fc in (1, 2)
+                            for addr in sorted(store_data.keys()):
+                                val = bool(store_data[addr]) if is_bool else store_data[addr]
                                 try:
-                                    block.setValues(fc, addresses, values)
+                                    block.setValues(fc, addr, [val])
                                 except Exception as exc:
-                                    logger.debug("pymodbus setValues failed for fc=%d: %s", fc, exc)
+                                    logger.debug("pymodbus setValues failed for fc=%d addr=%d: %s", fc, addr, exc)
         except Exception as e:
             logger.debug("Failed to sync to pymodbus context: %s", e)
 
