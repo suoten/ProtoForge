@@ -383,6 +383,22 @@ class ModbusRtuServer(ProtocolServer):
             try:
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
+                elif point.data_type.value in ("float32",):
+                    data = struct.pack(">f", float(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("float64",):
+                    data = struct.pack(">d", float(value))
+                    for j in range(4):
+                        store.holding_regs[address + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+                elif point.data_type.value in ("int32",):
+                    data = struct.pack(">i", int(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("uint32",):
+                    data = struct.pack(">I", int(value))
+                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
                 else:
                     store.holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:

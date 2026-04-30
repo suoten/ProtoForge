@@ -13,6 +13,14 @@ api.interceptors.request.use(config => {
   return config
 })
 
+let isRefreshing = false
+let refreshSubscribers = []
+
+function onTokenRefreshed(newToken) {
+  refreshSubscribers.forEach(cb => cb(newToken))
+  refreshSubscribers = []
+}
+
 api.interceptors.response.use(
   response => response,
   async error => {
@@ -20,6 +28,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       const refreshToken = localStorage.getItem('refresh_token')
       if (refreshToken) {
+        if (isRefreshing) {
+          return new Promise(resolve => {
+            refreshSubscribers.push(newToken => {
+              originalRequest.headers.Authorization = `Bearer ${newToken}`
+              originalRequest._retry = true
+              resolve(api(originalRequest))
+            })
+          })
+        }
+        isRefreshing = true
         originalRequest._retry = true
         try {
           const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
@@ -27,9 +45,12 @@ api.interceptors.response.use(
           if (newToken) {
             localStorage.setItem('token', newToken)
             originalRequest.headers.Authorization = `Bearer ${newToken}`
+            onTokenRefreshed(newToken)
             return api(originalRequest)
           }
-        } catch (e) { /* refresh failed */ }
+        } catch (e) { /* refresh failed */ } finally {
+          isRefreshing = false
+        }
       }
       localStorage.removeItem('token')
       localStorage.removeItem('refresh_token')

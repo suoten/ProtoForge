@@ -1108,10 +1108,16 @@ async def get_test_report(report_id: str, _user: dict = Depends(require_viewer))
 
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    return report.to_dict() if hasattr(report, 'to_dict') else report
 
 @router.get("/tests/reports/{report_id}/html")
-async def get_test_report_html(report_id: str, _user: dict = Depends(require_viewer)):
+async def get_test_report_html(report_id: str, request: Request, _user: dict = Depends(require_viewer)):
+    token = request.query_params.get("token")
+    if token and not _user:
+        from protoforge.core.auth import UserManager
+        user = UserManager.verify_token(token)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
     from fastapi.responses import HTMLResponse
     runner = _get_test_runner()
     html = runner.get_report_html(report_id)
@@ -1673,7 +1679,7 @@ async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)
     deleted = await audit_logger.delete_entry(entry_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Audit entry not found")
-    return {"ok": True}
+    return {"status": "ok"}
 
 
 @router.delete("/audit")
@@ -1683,7 +1689,7 @@ async def clear_audit_log(
 ):
     from protoforge.core.audit import audit_logger
     count = await audit_logger.clear_entries(before_timestamp=before)
-    return {"ok": True, "deleted": count}
+    return {"status": "ok", "deleted": count}
 
 
 @router.get("/backup")
