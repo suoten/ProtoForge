@@ -425,16 +425,16 @@ class GB28181Server(ProtocolServer):
                 if len(parts) >= 2:
                     try:
                         result["media_port"] = int(parts[1])
-                    except ValueError:
-                        pass
+                    except ValueError as e:
+                        logger.debug("GB28181 SDP media port parse error: %s", e)
                     result["media_type"] = "video"
             elif line.startswith("m=audio "):
                 parts = line.split()
                 if len(parts) >= 2:
                     try:
                         result["media_port"] = int(parts[1])
-                    except ValueError:
-                        pass
+                    except ValueError as e:
+                        logger.debug("GB28181 SDP audio port parse error: %s", e)
                     result["media_type"] = "audio"
         if conn_addr:
             result["media_ip"] = conn_addr

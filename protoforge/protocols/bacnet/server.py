@@ -80,8 +80,8 @@ class BACnetServer(ProtocolServer):
                 h, p = peer.rsplit(":", 1)
                 try:
                     self._bbmd_peers.append((h, int(p)))
-                except ValueError:
-                    pass
+                except ValueError as e:
+                    logger.debug("BACnet BBMD peer port parse error: %s", e)
             elif isinstance(peer, dict):
                 self._bbmd_peers.append((peer.get("host", "0.0.0.0"), peer.get("port", 47808)))
         try:

@@ -6,20 +6,20 @@ import App from './App.vue'
 const NotFound = () => import('./views/NotFound.vue')
 
 const routes = [
-  { path: '/', component: () => import('./views/Dashboard.vue') },
-  { path: '/devices', component: () => import('./views/Devices.vue') },
-  { path: '/protocols', component: () => import('./views/Protocols.vue') },
-  { path: '/templates', component: () => import('./views/Templates.vue') },
-  { path: '/scenarios', component: () => import('./views/Scenarios.vue') },
-  { path: '/scenario-editor', component: () => import('./views/ScenarioEditor.vue') },
-  { path: '/scenario/:id', component: () => import('./views/ScenarioEditor.vue') },
-  { path: '/marketplace', component: () => import('./views/Marketplace.vue') },
-  { path: '/logs', component: () => import('./views/Logs.vue') },
-  { path: '/testing', component: () => import('./views/Testing.vue') },
-  { path: '/integration', component: () => import('./views/Integration.vue') },
-  { path: '/settings', component: () => import('./views/Settings.vue') },
-  { path: '/audit', component: () => import('./views/Audit.vue') },
-  { path: '/backup', component: () => import('./views/Backup.vue') },
+  { path: '/', component: () => import('./views/Dashboard.vue'), meta: { public: true } },
+  { path: '/devices', component: () => import('./views/Devices.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/protocols', component: () => import('./views/Protocols.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/templates', component: () => import('./views/Templates.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/scenarios', component: () => import('./views/Scenarios.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/scenario-editor', component: () => import('./views/ScenarioEditor.vue'), meta: { roles: ['admin', 'operator', 'user'] } },
+  { path: '/scenario/:id', component: () => import('./views/ScenarioEditor.vue'), meta: { roles: ['admin', 'operator', 'user'] } },
+  { path: '/marketplace', component: () => import('./views/Marketplace.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/logs', component: () => import('./views/Logs.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
+  { path: '/testing', component: () => import('./views/Testing.vue'), meta: { roles: ['admin', 'operator', 'user'] } },
+  { path: '/integration', component: () => import('./views/Integration.vue'), meta: { roles: ['admin', 'operator'] } },
+  { path: '/settings', component: () => import('./views/Settings.vue'), meta: { roles: ['admin'] } },
+  { path: '/audit', component: () => import('./views/Audit.vue'), meta: { roles: ['admin'] } },
+  { path: '/backup', component: () => import('./views/Backup.vue'), meta: { roles: ['admin'] } },
   { path: '/:pathMatch(.*)*', component: NotFound },
 ]
 
@@ -30,11 +30,24 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
-  if (!token && to.path !== '/') {
-    next('/')
-  } else {
+  const userRole = localStorage.getItem('role') || 'viewer'
+
+  if (to.meta?.public) {
     next()
+    return
   }
+
+  if (!token) {
+    next('/')
+    return
+  }
+
+  if (to.meta?.roles && !to.meta.roles.includes(userRole)) {
+    next('/')
+    return
+  }
+
+  next()
 })
 
 const app = createApp(App)

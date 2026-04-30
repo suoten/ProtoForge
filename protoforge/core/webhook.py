@@ -160,6 +160,17 @@ class WebhookManager:
                 continue
             if event not in webhook.events and "*" not in webhook.events:
                 continue
+
+            # Rate limiting: max 1 trigger per 5 seconds per webhook
+            if timestamp - webhook.last_triggered < 5.0:
+                continue
+
+            # Auto-disable webhook after too many errors
+            if webhook.error_count >= 50:
+                webhook.enabled = False
+                logger.warning("Webhook %s auto-disabled due to %d errors", webhook.id, webhook.error_count)
+                continue
+
             try:
                 body = {
                     "event": event,

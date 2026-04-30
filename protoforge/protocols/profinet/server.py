@@ -419,6 +419,6 @@ class ProfinetServer(ProtocolServer):
             parts = [int(x) for x in ip_str.split(".")]
             if len(parts) == 4:
                 return (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
-        except (ValueError, IndexError):
-            pass
+        except (ValueError, IndexError) as e:
+            logger.warning("PROFINET IP parse error for '%s': %s", ip_str, e)
         return 0xC0A80101

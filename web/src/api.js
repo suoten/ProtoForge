@@ -48,8 +48,11 @@ api.interceptors.response.use(
             onTokenRefreshed(newToken)
             return api(originalRequest)
           }
-        } catch (e) { /* refresh failed */ } finally {
+        } catch (e) {
+          console.warn('Token refresh failed:', e.message)
+        } finally {
           isRefreshing = false
+          refreshSubscribers = []
         }
       }
       localStorage.removeItem('token')

@@ -644,13 +644,13 @@ func main() {
 async function loadIntStatus() {
   try {
     intStatus.value = await api.getIntegrationStatus()
-  } catch { }
+  } catch (e) { console.warn('加载集成状态失败:', e) }
 }
 
 async function loadIntMetrics() {
   try {
     intMetrics.value = await api.getIntegrationMetrics()
-  } catch { }
+  } catch (e) { console.warn('加载集成指标失败:', e) }
 }
 
 async function loadDeviceStatusCache() {
@@ -658,7 +658,7 @@ async function loadDeviceStatusCache() {
   try {
     const res = await api.getDeviceStatusCache()
     deviceStatusCache.value = res.devices || []
-  } catch { } finally { loadingStatusCache.value = false }
+  } catch (e) { console.warn('加载设备状态缓存失败:', e) } finally { loadingStatusCache.value = false }
 }
 
 async function loadBackhaulData() {
@@ -668,7 +668,7 @@ async function loadBackhaulData() {
     if (backhaulDeviceId.value) params.device_id = backhaulDeviceId.value
     const res = await api.getBackhaulData(params)
     backhaulData.value = res.data || []
-  } catch { } finally { loadingBackhaul.value = false }
+  } catch (e) { console.warn('加载回传数据失败:', e) } finally { loadingBackhaul.value = false }
 }
 
 async function loadProtocolMappings() {
@@ -681,7 +681,7 @@ async function loadProtocolMappings() {
       target_protocol: typeof target === 'string' ? target : target.protocol || JSON.stringify(target),
       driver_type: typeof target === 'object' ? target.driver || '' : '',
     }))
-  } catch { } finally { loadingProtocols.value = false }
+  } catch (e) { console.warn('加载协议映射失败:', e) } finally { loadingProtocols.value = false }
 }
 
 async function loadAlarmRules() {
@@ -689,7 +689,7 @@ async function loadAlarmRules() {
   try {
     const res = await api.getAlarmRules()
     alarmRules.value = res.rules || []
-  } catch { } finally { loadingAlarmRules.value = false }
+  } catch (e) { console.warn('加载告警规则失败:', e) } finally { loadingAlarmRules.value = false }
 }
 
 async function addAlarmRule() {
@@ -906,7 +906,7 @@ async function batchPushAndVerify() {
       const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
       dev._el_status = statusRes.status
       if (statusRes.status === 'online') verified++
-    } catch { }
+    } catch (e) { console.warn('获取EdgeLite设备状态失败:', dev.id, e) }
   }
   batchPipelineLoading.value = false
   message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
