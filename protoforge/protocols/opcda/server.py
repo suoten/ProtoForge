@@ -6,6 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ class OpcDaDeviceBehavior(DeviceBehavior):
     def __init__(self, points: list = None):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
+        self._generators: dict[str, DynamicValueGenerator] = {}
         self._quality: dict[str, int] = {}
         self._data_types: dict[str, str] = {}
         if points:
@@ -23,6 +25,7 @@ class OpcDaDeviceBehavior(DeviceBehavior):
                 data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "float64")
                 self._points[name] = p
                 self._values[name] = fixed_val if fixed_val is not None else 0
+                self._generators[name] = DynamicValueGenerator(p)
                 self._quality[name] = 192
                 self._data_types[name] = data_type
 
@@ -42,6 +45,13 @@ class OpcDaDeviceBehavior(DeviceBehavior):
         self._quality[point_name] = 192
 
     def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
         return self._values.get(point_name, 0)
 
     def get_quality(self, point_name: str) -> int:
