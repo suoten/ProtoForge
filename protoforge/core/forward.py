@@ -107,8 +107,16 @@ class HTTPTarget(ForwardTarget):
                 resp = await client.put(self._url, json=payload, headers=self._headers)
             if resp.status_code >= 400:
                 logger.warning("HTTP forward failed: %d %s", resp.status_code, resp.text[:200])
+                raise RuntimeError(f"HTTP forward failed: {resp.status_code}")
+        except httpx.TimeoutException as e:
+            logger.warning("HTTP forward timeout: %s", e)
+            raise RuntimeError("HTTP forward timeout") from e
+        except httpx.ConnectError as e:
+            logger.warning("HTTP forward connection error: %s", e)
+            raise RuntimeError("HTTP forward connection error") from e
         except Exception as e:
             logger.warning("HTTP forward error: %s", e)
+            raise
 
     async def close(self) -> None:
         if self._client:
