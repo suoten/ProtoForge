@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -202,10 +203,8 @@ class EtherCATServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("EtherCAT server stop error: %s", e)
         finally:
@@ -359,7 +358,7 @@ class EtherCATServer(ProtocolServer):
             return b"", 0x0001
 
         if address >= 0x10000000:
-            offset = address & 0x0FFFFFFF
+            address & 0x0FFFFFFF
             behavior = self._behaviors.get(self._default_device_id)
             config = self._device_configs.get(self._default_device_id)
             if behavior and config:

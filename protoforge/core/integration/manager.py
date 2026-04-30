@@ -1,23 +1,24 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from protoforge.core.event_bus import (
-    EventBus,
     DeviceCreatedEvent,
+    DeviceRemovedEvent,
     DeviceStartedEvent,
     DeviceStoppedEvent,
-    DeviceRemovedEvent,
-    IntegrationConnectionEvent,
-    IntegrationHealthAlertEvent,
+    EventBus,
 )
-from protoforge.core.integration.channel import ChannelBase, HttpChannel, ChannelFactory, WebSocketChannel, ChannelManager
-from protoforge.core.integration.protocol import ProtocolMapper, DataTypeMapper
-from protoforge.core.integration.state import ConnectionStateMachine, ConnectionState
-from protoforge.core.integration.retry import RetryPolicy, IntegrationError, NetworkError
 from protoforge.core.integration.auth import IntegrationAuth
+from protoforge.core.integration.channel import (
+    ChannelBase,
+    ChannelFactory,
+)
 from protoforge.core.integration.metrics import IntegrationMetrics
+from protoforge.core.integration.protocol import DataTypeMapper, ProtocolMapper
+from protoforge.core.integration.retry import IntegrationError, RetryPolicy
+from protoforge.core.integration.state import ConnectionState, ConnectionStateMachine
 from protoforge.core.integration.validator import MappingValidator
 
 logger = logging.getLogger(__name__)
@@ -47,9 +48,7 @@ class AlarmReactionRule:
             return False
         if self.source_device_id and self.source_device_id != source_device_id:
             return False
-        if self.alarm_severity and self.alarm_severity != severity:
-            return False
-        return True
+        return not (self.alarm_severity and self.alarm_severity != severity)
 
 
 class IntegrationManager:
@@ -66,8 +65,8 @@ class IntegrationManager:
         self._edgelite_url = edgelite_url
         self._username = username
         self._password = password
-        self._channel: Optional[ChannelBase] = None
-        self._auth: Optional[IntegrationAuth] = None
+        self._channel: ChannelBase | None = None
+        self._auth: IntegrationAuth | None = None
         self._state = ConnectionStateMachine(on_change=self._on_state_change)
         self._retry = RetryPolicy()
         self._metrics = IntegrationMetrics()
@@ -181,7 +180,7 @@ class IntegrationManager:
         if not self._enabled:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
-        from protoforge.core.edgelite import convert_device_to_edgelite, get_edgelite_config_from_device
+        from protoforge.core.edgelite import convert_device_to_edgelite
         payload = convert_device_to_edgelite(device, protoforge_host, self._protocol_mapper, self._data_type_mapper)
         if payload is None:
             return {"ok": False, "skipped": True, "reason": "Protocol not supported by EdgeLite"}
@@ -384,7 +383,7 @@ class IntegrationManager:
             data = self._backhaul_data.get(device_id, [])
             return data[-limit:]
         all_data = []
-        for dev_id, entries in self._backhaul_data.items():
+        for _dev_id, entries in self._backhaul_data.items():
             all_data.extend(entries[-limit:])
         all_data.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return all_data[:limit]

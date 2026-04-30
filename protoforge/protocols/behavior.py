@@ -1,9 +1,9 @@
-﻿import math
+import math
 import random
 import time
 from typing import Any
 
-from protoforge.models.device import PointConfig, GeneratorType
+from protoforge.models.device import GeneratorType, PointConfig
 from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
 
 
@@ -29,9 +29,7 @@ class DynamicValueGenerator:
 
     def generate(self) -> Any:
         gt = self._point.generator_type
-        if gt == GeneratorType.FIXED:
-            return self._generate_fixed()
-        elif gt == GeneratorType.CONSTANT:
+        if gt == GeneratorType.FIXED or gt == GeneratorType.CONSTANT:
             return self._generate_fixed()
         elif gt == GeneratorType.SINE:
             return self._generate_sine()

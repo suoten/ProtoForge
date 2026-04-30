@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 
@@ -179,7 +179,7 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
 @router.post("/message")
 async def handle_integration_message(request: dict[str, Any], _user: dict = Depends(require_operator)):
     msg_type = request.get("type", "")
-    payload = request.get("payload", request)
+    request.get("payload", request)
     logger.info("Integration message received: type=%s", msg_type)
     manager = _get_integration_manager()
     if manager.is_connected():

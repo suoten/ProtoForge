@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +54,7 @@ class S7DeviceBehavior(DeviceBehavior):
                 db_number = int(parts[0].replace('DB', '') or '1')
                 if len(parts) >= 2:
                     offset_part = parts[1]
-                    if offset_part.startswith('DBD'):
-                        offset = int(offset_part[3:] or '0')
-                    elif offset_part.startswith('DBW'):
+                    if offset_part.startswith('DBD') or offset_part.startswith('DBW'):
                         offset = int(offset_part[3:] or '0')
                     elif offset_part.startswith('DBX'):
                         byte_bit = offset_part[3:]
@@ -220,10 +219,8 @@ class S7Server(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("S7 server stop error: %s", e)
         finally:
@@ -400,7 +397,7 @@ class S7Server(ProtocolServer):
         item_offset = param_start + 3
         item_results = []
 
-        for i in range(item_count):
+        for _i in range(item_count):
             if item_offset + 12 > len(data):
                 item_results.append((0x0A, b"\x00"))
                 continue
@@ -441,8 +438,7 @@ class S7Server(ProtocolServer):
                     if area == behavior.S7_AREA_DB and db_number == p_db:
                         pt = behavior._points.get(name)
                         if pt and hasattr(pt, "data_type"):
-                            dt = str(pt.data_type)
-                            p_size = 4 if dt in ("float32", "int32", "uint32") else 8 if dt == "float64" else 2
+                            str(pt.data_type)
                             if offset // 8 if is_bit else offset == p_offset:
                                 val = behavior.get_value(name)
                                 behavior._sync_value_to_db(name, val)
@@ -492,7 +488,7 @@ class S7Server(ProtocolServer):
             return self._make_s7_error_response(data)
 
         param_start = 14
-        func_code = data[param_start] if len(data) > param_start else 0x05
+        data[param_start] if len(data) > param_start else 0x05
         item_count = data[param_start + 2] if len(data) > param_start + 2 else 1
         if item_count == 0:
             item_count = 1
@@ -522,13 +518,13 @@ class S7Server(ProtocolServer):
             write_data = b"\x00\x00\x00\x00"
             data_section_start = param_start + 3 + item_count * 12
             if data_section_start + 4 <= len(data):
-                data_item_count = data[data_section_start] if len(data) > data_section_start else 0
+                data[data_section_start] if len(data) > data_section_start else 0
                 ptr = data_section_start + 1
                 for j in range(i + 1):
                     if ptr + 4 > len(data):
                         break
                     rc = data[ptr]
-                    ts = data[ptr + 1]
+                    data[ptr + 1]
                     dlen = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
                     if j == i and ptr + 4 + dlen <= len(data):
                         write_data = data[ptr + 4:ptr + 4 + dlen]
@@ -667,7 +663,7 @@ class S7Server(ProtocolServer):
         order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
         serial = info.get("serial_number", "PF-00000000")
         hw_rev = int(info.get("hardware_revision", "1"))
-        fw_rev_str = info.get("firmware_revision", "V1.0.0")
+        info.get("firmware_revision", "V1.0.0")
         order_bytes = order_num.encode("utf-8")[:20].ljust(20, b"\x00")
         serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")
         return struct.pack(">HHHH",

@@ -1,7 +1,7 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from enum import Enum
-from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ _VALID_TRANSITIONS: dict[ConnectionState, set[ConnectionState]] = {
 
 
 class ConnectionStateMachine:
-    def __init__(self, on_change: Optional[Callable[[ConnectionState, ConnectionState], None]] = None):
+    def __init__(self, on_change: Callable[[ConnectionState, ConnectionState], None] | None = None):
         self._state = ConnectionState.DISCONNECTED
         self._on_change = on_change
         self._lock = asyncio.Lock()

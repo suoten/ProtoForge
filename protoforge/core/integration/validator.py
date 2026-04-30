@@ -1,8 +1,8 @@
 import logging
-from typing import Any, Optional
 from dataclasses import dataclass, field
+from typing import Any
 
-from protoforge.core.integration.protocol import ProtocolMapper, DataTypeMapper
+from protoforge.core.integration.protocol import DataTypeMapper, ProtocolMapper
 
 logger = logging.getLogger(__name__)
 

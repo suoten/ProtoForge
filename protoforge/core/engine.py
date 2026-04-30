@@ -1,10 +1,17 @@
 import asyncio
+import contextlib
 import logging
 import socket
-from typing import Any, Optional
+from typing import Any
 
 from protoforge.core.device import DeviceInstance
-from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent
+from protoforge.core.event_bus import (
+    DeviceCreatedEvent,
+    DeviceRemovedEvent,
+    DeviceStartedEvent,
+    DeviceStoppedEvent,
+    EventBus,
+)
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
@@ -47,7 +54,7 @@ class SimulationEngine:
         self._scenario_instances: dict[str, Scenario] = {}
         self._scenario_status: dict[str, ScenarioStatus] = {}
         self._generator = DataGenerator()
-        self._tick_task: Optional[asyncio.Task] = None
+        self._tick_task: asyncio.Task | None = None
         self._running = False
         self._event_bus = event_bus
 
@@ -75,7 +82,7 @@ class SimulationEngine:
 
     def get_protocols(self) -> list[dict[str, Any]]:
         result = []
-        for name, server in self._protocol_servers.items():
+        for _name, server in self._protocol_servers.items():
             result.append({
                 "name": server.protocol_name,
                 "display_name": server.protocol_display_name,
@@ -271,13 +278,13 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         return self._get_device_info(instance)
 
-    def get_device_instance(self, device_id: str) -> Optional[DeviceInstance]:
+    def get_device_instance(self, device_id: str) -> DeviceInstance | None:
         return self._devices.get(device_id)
 
     def get_all_device_instances(self) -> dict[str, DeviceInstance]:
         return dict(self._devices)
 
-    def get_scenario_config(self, scenario_id: str) -> Optional[ScenarioConfig]:
+    def get_scenario_config(self, scenario_id: str) -> ScenarioConfig | None:
         return self._scenarios.get(scenario_id)
 
     def get_all_scenario_configs(self) -> dict[str, ScenarioConfig]:
@@ -289,7 +296,7 @@ class SimulationEngine:
     def get_all_protocol_servers(self) -> dict[str, ProtocolServer]:
         return dict(self._protocol_servers)
 
-    def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
+    def list_devices(self, protocol: str | None = None) -> list[DeviceInfo]:
         result = []
         for instance in self._devices.values():
             if protocol and instance.protocol != protocol:
@@ -487,10 +494,8 @@ class SimulationEngine:
         self._running = False
         if self._tick_task:
             self._tick_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._tick_task
-            except asyncio.CancelledError:
-                pass
         for server in self._protocol_servers.values():
             if server.status == ProtocolStatus.RUNNING:
                 try:

@@ -33,11 +33,12 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
     os.makedirs(cert_dir, exist_ok=True)
 
     try:
+        import datetime
+
         from cryptography import x509
-        from cryptography.x509.oid import NameOID
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import rsa
-        import datetime
+        from cryptography.x509.oid import NameOID
 
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -384,7 +385,7 @@ class OpcUaServer(ProtocolServer):
         }
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            variant_type = type_map.get(point.data_type.value, None)
+            variant_type = type_map.get(point.data_type.value)
             if variant_type:
                 node = await device_folder.add_variable(
                     self._idx, point.name, ua.Variant(value, variant_type)

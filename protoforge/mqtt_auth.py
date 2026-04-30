@@ -3,8 +3,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from amqtt.plugins.authentication import BaseAuthPlugin
     from amqtt.contexts import Action
+    from amqtt.plugins.authentication import BaseAuthPlugin
     from amqtt.session import Session
 
     class MqttAuthPlugin(BaseAuthPlugin):

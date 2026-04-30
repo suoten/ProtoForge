@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -163,10 +164,8 @@ class ProfinetServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("PROFINET server stop error: %s", e)
         finally:

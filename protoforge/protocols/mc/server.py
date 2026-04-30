@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +62,7 @@ class McDeviceBehavior(DeviceBehavior):
             return
         device_code, offset = self._point_addresses[point_name]
         try:
-            if isinstance(value, float):
-                data = struct.pack("<f", value)
-            else:
-                data = struct.pack("<H", int(value) & 0xFFFF)
+            data = struct.pack("<f", value) if isinstance(value, float) else struct.pack("<H", int(value) & 65535)
             self.write_memory(device_code, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
@@ -163,10 +161,8 @@ class McServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("MC server stop error: %s", e)
         finally:
@@ -229,12 +225,12 @@ class McServer(ProtocolServer):
         if subheader != self.SLMP_3E_BIN_SUBHEADER:
             return self._make_error_response(data, 0xC059)
 
-        network = data[2]
-        pc = data[3]
-        req_dest_io = struct.unpack("<H", data[4:6])[0]
-        req_dest_station = data[6]
-        req_data_len = struct.unpack("<H", data[7:9])[0]
-        cpu_monitor_timer = struct.unpack("<H", data[9:11])[0]
+        data[2]
+        data[3]
+        struct.unpack("<H", data[4:6])[0]
+        data[6]
+        struct.unpack("<H", data[7:9])[0]
+        struct.unpack("<H", data[9:11])[0]
 
         if len(data) < 15:
             return self._make_error_response(data, 0xC059)
@@ -493,12 +489,12 @@ class McServer(ProtocolServer):
         if len(data) < 30:
             return None
         try:
-            network = self._ascii_to_hex(data[4:6])
-            pc = self._ascii_to_hex(data[6:8])
-            req_dest_io = self._ascii_to_hex(data[8:12])
-            req_dest_station = self._ascii_to_hex(data[12:14])
-            req_data_len = self._ascii_to_hex(data[14:18])
-            cpu_monitor_timer = self._ascii_to_hex(data[18:22])
+            self._ascii_to_hex(data[4:6])
+            self._ascii_to_hex(data[6:8])
+            self._ascii_to_hex(data[8:12])
+            self._ascii_to_hex(data[12:14])
+            self._ascii_to_hex(data[14:18])
+            self._ascii_to_hex(data[18:22])
             cmd = self._ascii_to_hex(data[22:26])
             subcmd = self._ascii_to_hex(data[26:30])
         except (ValueError, IndexError):
@@ -554,7 +550,7 @@ class McServer(ProtocolServer):
         try:
             start_addr = self._ascii_to_hex(data[30:34])
             device_code = self._ascii_to_hex(data[34:36])
-            word_count = self._ascii_to_hex(data[36:40])
+            self._ascii_to_hex(data[36:40])
             write_ascii = data[40:]
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)

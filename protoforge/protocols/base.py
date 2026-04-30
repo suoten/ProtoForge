@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 
@@ -20,14 +21,14 @@ class ProtocolServer(ABC):
 
     def __init__(self):
         self._status: ProtocolStatus = ProtocolStatus.STOPPED
-        self._debug_callback: Optional[Callable] = None
-        self._default_device_id: Optional[str] = None
+        self._debug_callback: Callable | None = None
+        self._default_device_id: str | None = None
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
 
     def _log_debug(self, direction: str, msg_type: str, summary: str,
-                   device_id: str = "", detail: Optional[dict] = None):
+                   device_id: str = "", detail: dict | None = None):
         if self._debug_callback:
             self._debug_callback(direction, msg_type, summary, device_id, detail)
 

@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +148,8 @@ class FinsServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("FINS server stop error: %s", e)
         finally:
@@ -210,13 +209,9 @@ class FinsServer(ProtocolServer):
             return None
 
         command = struct.unpack(">H", data[0:2])[0]
-        if command == 0x0000:
+        if command == 0x0000 or command == 0x0001:
             return self._handle_fins_init(data)
-        elif command == 0x0001:
-            return self._handle_fins_init(data)
-        elif command == 0x0002:
-            return self._handle_fins_send(data)
-        elif command == 0x0003:
+        elif command == 0x0002 or command == 0x0003:
             return self._handle_fins_send(data)
 
         return self._make_fins_error(0x0204)
@@ -243,7 +238,7 @@ class FinsServer(ProtocolServer):
             return self._make_fins_error(0x0204)
 
         mrc = fins_frame[10]
-        src = fins_frame[11]
+        fins_frame[11]
 
         if mrc == 0x01:
             return self._handle_memory_read(data, fins_frame)
@@ -260,7 +255,7 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        bit_addr = fins_frame[15]
+        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
 
         read_size = word_count * 2
@@ -285,7 +280,7 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        bit_addr = fins_frame[15]
+        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
 
         write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
@@ -334,16 +329,14 @@ class FinsServer(ProtocolServer):
     def _handle_controller_read(self, data: bytes, fins_frame: bytes) -> bytes:
         device_config = self._device_configs.get(self._default_device_id)
         device_name = b"ProtoForge-FINS\x00"
-        model = b"PF-FINS\x00"
-        version = b"V1.0.0\x00"
         if device_config:
             name_bytes = device_config.name.encode("ascii", errors="replace")[:14]
             device_name = name_bytes.ljust(14, b"\x00") + b"\x00"
             proto_config = device_config.protocol_config or {}
             if "model" in proto_config:
-                model = proto_config["model"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
+                proto_config["model"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
             if "firmware" in proto_config:
-                version = proto_config["firmware"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
+                proto_config["firmware"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
 
         controller_data = bytearray(28)
         controller_data[0:2] = struct.pack(">H", 0x0000)
@@ -435,12 +428,12 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, addr: tuple):
         if len(data) < 10:
             return
-        icf = data[0]
-        rsv = data[1]
-        gateway = data[2]
-        dest_node = data[3]
-        src_node = data[4]
-        sid = data[5]
+        data[0]
+        data[1]
+        data[2]
+        data[3]
+        data[4]
+        data[5]
         mrc = data[6]
         src = data[7]
         fins_data = data[8:]
@@ -449,7 +442,6 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             self._transport.sendto(response, addr)
 
     def _process_fins_udp(self, mrc: int, src: int, data: bytes, header: bytes) -> bytes | None:
-        server = self._server
         if mrc == 0x01 and src == 0x01:
             return self._handle_memory_read_udp(data, header)
         elif mrc == 0x02 and src == 0x01:
@@ -464,15 +456,12 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             return header + bytes([0x01, 0x01]) + b"\x00\x00"
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        bit_addr = data[3]
+        data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         behavior = server._behaviors.get(server._default_device_id)
         resp_data = bytearray()
         for i in range(word_count):
-            if area in (0x82, 0x83):
-                val = behavior.read_area(area, (word_addr + i) * 2, 2) if behavior else b"\x00\x00"
-                resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
-            elif area == 0x84:
+            if area in (0x82, 0x83) or area == 0x84:
                 val = behavior.read_area(area, (word_addr + i) * 2, 2) if behavior else b"\x00\x00"
                 resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
             else:
@@ -485,7 +474,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         server = self._server
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        bit_addr = data[3]
+        data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
         behavior = server._behaviors.get(server._default_device_id)
