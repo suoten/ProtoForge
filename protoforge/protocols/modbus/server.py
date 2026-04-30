@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import struct
 import time
 from typing import Any
 
@@ -83,12 +84,122 @@ class ModbusTcpServer(ProtocolServer):
         return devices
 
     async def _serve_datastore_only(self) -> None:
-        logger.warning("Modbus TCP running in datastore-only mode - no port is being listened on, clients cannot connect")
+        logger.info("Modbus TCP running in native frame mode (pymodbus SimData/OldAPI unavailable)")
         try:
-            while True:
-                await asyncio.sleep(1)
+            server = await asyncio.start_server(
+                self._handle_native_modbus, self._host, self._port
+            )
+            async with server:
+                await server.serve_forever()
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            logger.error("Modbus native frame server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_native_modbus(self, reader: asyncio.StreamReader,
+                                     writer: asyncio.StreamWriter) -> None:
+        try:
+            while self._server_running:
+                header = await reader.readexactly(7)
+                tx_id = struct.unpack(">H", header[0:2])[0]
+                proto_id = struct.unpack(">H", header[2:4])[0]
+                length = struct.unpack(">H", header[4:6])[0]
+                unit_id = header[6]
+                if length > 0:
+                    payload = await reader.readexactly(length - 1)
+                else:
+                    payload = b""
+                fc = payload[0] if payload else 0
+                resp = self._process_modbus_frame(unit_id, fc, payload[1:])
+                mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
+                writer.write(mbap + resp)
+                await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError):
+            pass
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+    def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:
+        slave_id = unit_id if unit_id else 1
+        store = self._data_stores.get(slave_id)
+        if not store:
+            store = self._get_data_store(slave_id)
+        try:
+            if fc == 0x01:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = (count + 7) // 8
+                bits = bytearray(byte_count)
+                for i in range(count):
+                    if store.get_coil(start + i):
+                        bits[i // 8] |= (1 << (i % 8))
+                return bytes([fc, byte_count]) + bytes(bits)
+            elif fc == 0x02:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = (count + 7) // 8
+                bits = bytearray(byte_count)
+                for i in range(count):
+                    if store.get_discrete_input(start + i):
+                        bits[i // 8] |= (1 << (i % 8))
+                return bytes([fc, byte_count]) + bytes(bits)
+            elif fc == 0x03:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = count * 2
+                regs = bytearray(byte_count)
+                for i in range(count):
+                    val = store.get_point(3, start + i)
+                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+                return bytes([fc, byte_count]) + bytes(regs)
+            elif fc == 0x04:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = count * 2
+                regs = bytearray(byte_count)
+                for i in range(count):
+                    val = store.get_point(4, start + i)
+                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+                return bytes([fc, byte_count]) + bytes(regs)
+            elif fc == 0x05:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                val = struct.unpack(">H", data[2:4])[0]
+                store.set_coil(start, 1 if val == 0xFF00 else 0)
+                return bytes([fc]) + data[0:4]
+            elif fc == 0x06:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                val = struct.unpack(">H", data[2:4])[0]
+                store.set_point(6, start, val)
+                return bytes([fc]) + data[0:4]
+            elif fc == 0x0F:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = data[4]
+                for i in range(count):
+                    byte_idx = 5 + i // 8
+                    bit_idx = i % 8
+                    if byte_idx < len(data):
+                        store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
+                return bytes([fc]) + data[0:4]
+            elif fc == 0x10:
+                start = struct.unpack(">H", data[0:2])[0] + 1
+                count = struct.unpack(">H", data[2:4])[0]
+                byte_count = data[4]
+                for i in range(count):
+                    offset = 5 + i * 2
+                    if offset + 2 <= len(data):
+                        val = struct.unpack(">H", data[offset:offset + 2])[0]
+                        store.set_point(16, start + i, val)
+                return bytes([fc]) + data[0:4]
+            else:
+                return bytes([fc | 0x80, 0x01])
+        except (IndexError, struct.error):
+            return bytes([fc | 0x80, 0x02])
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING

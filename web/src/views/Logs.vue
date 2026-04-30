@@ -197,10 +197,7 @@ function scrollToBottom() {
 }
 
 function connectWebSocket() {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const token = localStorage.getItem('token')
-  const wsUrl = `${wsProtocol}//${window.location.host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
-  ws = new WebSocket(wsUrl)
+  ws = api.createLogWs()
 
   ws.onopen = () => {
     wsConnected.value = true

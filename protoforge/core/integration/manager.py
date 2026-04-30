@@ -417,6 +417,11 @@ class IntegrationManager:
             payload["params"] = params
         return await self._channel.send({"type": "device_control", "payload": payload})
 
+    async def send_message(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        if not self._channel or not self._channel.is_connected:
+            raise IntegrationError("Not connected to EdgeLite")
+        return await self._channel.send(message)
+
     def get_status(self) -> dict[str, Any]:
         return {
             "enabled": self._enabled,

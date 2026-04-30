@@ -324,6 +324,8 @@ class S7Server(ProtocolServer):
 
     def _make_s7_connect_response(self, data: bytes) -> bytes:
         pdu_size_req = 480
+        max_amq_caller = 8
+        max_amq_callee = 8
         try:
             s7_offset = 0
             for i in range(len(data) - 1):
@@ -334,9 +336,15 @@ class S7Server(ProtocolServer):
                 param_start = s7_offset + 14
                 if data[param_start] == 0xF0 and len(data) > param_start + 5:
                     pdu_size_req = struct.unpack(">H", data[param_start + 3:param_start + 5])[0]
+                    if len(data) > param_start + 7:
+                        max_amq_caller = struct.unpack(">H", data[param_start + 5:param_start + 7])[0] or 8
+                    if len(data) > param_start + 9:
+                        max_amq_callee = struct.unpack(">H", data[param_start + 7:param_start + 9])[0] or 8
         except Exception:
             pass
         pdu_size = min(max(pdu_size_req, 128), 960)
+        max_amq_caller = min(max(max_amq_caller, 1), 64)
+        max_amq_callee = min(max(max_amq_callee, 1), 64)
         resp = bytearray([
             0x03, 0x00, 0x00, 0x1D,
             0x02, 0xF0, 0x80,
@@ -345,13 +353,8 @@ class S7Server(ProtocolServer):
             0x00, 0x01,
         ])
         resp += struct.pack(">H", pdu_size)
-        resp += bytes([
-            0x00, 0x00,
-            0x01, 0x00,
-            0x01, 0x01,
-            0x00,
-            0x09, 0x00, 0x04, 0x00, 0x03, 0x01,
-        ])
+        resp += struct.pack(">H", max_amq_callee)
+        resp += struct.pack(">H", max_amq_caller)
         return bytes(resp)
 
     def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:
