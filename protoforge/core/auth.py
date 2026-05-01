@@ -14,20 +14,48 @@ logger = logging.getLogger(__name__)
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 _SECRET_KEY: str = ""
+_SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
 
 
 def _generate_secret_key() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _load_persistent_secret_key() -> str:
+    global _SECRET_KEY
+    try:
+        key_dir = os.path.dirname(_SECRET_KEY_FILE)
+        os.makedirs(key_dir, exist_ok=True)
+        if os.path.exists(_SECRET_KEY_FILE):
+            with open(_SECRET_KEY_FILE, "r") as f:
+                saved = f.read().strip()
+            if saved and len(saved) >= 32:
+                _SECRET_KEY = saved
+                return saved
+    except Exception as e:
+        logger.debug("Could not load persistent JWT secret: %s", e)
+    new_key = _generate_secret_key()
+    _SECRET_KEY = new_key
+    try:
+        key_dir = os.path.dirname(_SECRET_KEY_FILE)
+        os.makedirs(key_dir, exist_ok=True)
+        with open(_SECRET_KEY_FILE, "w") as f:
+            f.write(new_key)
+        logger.info("Generated and saved new JWT secret to %s", _SECRET_KEY_FILE)
+    except Exception as e:
+        logger.warning("Could not persist JWT secret: %s. Tokens will invalidate on restart.", e)
+    return new_key
+
+
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
     if not key or key == "protoforge-secret-change-me":
-        _SECRET_KEY = _generate_secret_key()
-        logger.warning(
-            "JWT secret was using default/weak value. A new secure key has been generated. "
-            "Set PROTOFORGE_JWT_SECRET in your .env to avoid token invalidation on restart."
-        )
+        _load_persistent_secret_key()
+        if not key:
+            logger.warning(
+                "JWT secret not configured. Using persistent auto-generated key. "
+                "Set PROTOFORGE_JWT_SECRET in your .env for explicit control."
+            )
     else:
         _SECRET_KEY = key
 
@@ -35,15 +63,11 @@ def set_secret_key(key: str) -> None:
 def get_secret_key() -> str:
     global _SECRET_KEY
     if not _SECRET_KEY:
-        _SECRET_KEY = _generate_secret_key()
-        logger.warning(
-            "JWT secret not configured. Using auto-generated key. "
-            "Set PROTOFORGE_JWT_SECRET in your .env to avoid token invalidation on restart."
-        )
+        _load_persistent_secret_key()
     return _SECRET_KEY
 
 
-def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 1800) -> str:
+def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 86400) -> str:
     now = time.time()
     payload = {
         "sub": user_id,

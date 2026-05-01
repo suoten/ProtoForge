@@ -196,7 +196,8 @@ function scrollToBottom() {
   })
 }
 
-function connectWebSocket() {
+async function connectWebSocket() {
+  await api.ensureValidToken()
   ws = api.createLogWs()
 
   ws.onopen = () => {

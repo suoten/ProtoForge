@@ -111,8 +111,8 @@ const columns = [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 150 },
   { title: '名称', key: 'name', width: 180 },
-  { title: '设备数', key: 'device_count', width: 80 },
-  { title: '规则数', key: 'rule_count', width: 80 },
+  { title: '设备数', key: 'device_count', width: 80, render: (row) => row.device_count ?? (row.devices || []).length },
+  { title: '规则数', key: 'rule_count', width: 80, render: (row) => row.rule_count ?? (row.rules || []).length },
   {
     title: '状态', key: 'status', width: 100,
     render: (row) => {
