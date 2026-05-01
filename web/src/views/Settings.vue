@@ -801,7 +801,7 @@ async function toggleRecorder() {
       recorderActive.value = false
       message.success('录制已停止')
     } else {
-      await api.startRecording()
+      await api.startRecording({})
       recorderActive.value = true
       message.success('录制已开始')
     }
