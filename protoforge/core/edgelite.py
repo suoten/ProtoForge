@@ -502,24 +502,36 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
             if resp.status_code == 200:
                 data = resp.json().get("data", resp.json())
                 return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
-            if resp.status_code == 401 and password:
-                login_resp = await client.post(
-                    f"{url.rstrip('/')}/api/v1/auth/login",
-                    json={"username": username, "password": password},
-                )
-                if login_resp.status_code == 200:
-                    token = _extract_token(login_resp)
-                    headers = {"Authorization": f"Bearer {token}"} if token else {}
-                    try:
-                        status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
-                        if status_resp.status_code == 200:
-                            data = status_resp.json().get("data", status_resp.json())
-                            return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
-                    except Exception as e:
-                        logger.debug("EdgeLite connection test failed: %s", e)
-                    return {"ok": True, "version": "未知", "devices": 0}
-                return {"ok": False, "error": f"Auth failed: {login_resp.status_code}"}
-            return {"ok": False, "error": f"HTTP {resp.status_code}"}
+
+            needs_auth = resp.status_code in (401, 403)
+            if not needs_auth:
+                return {"ok": False, "error": f"HTTP {resp.status_code}"}
+
+            if not password:
+                return {"ok": False, "error": "EdgeLite 需要认证，请输入用户名和密码"}
+
+            login_resp = await client.post(
+                f"{url.rstrip('/')}/api/v1/auth/login",
+                json={"username": username, "password": password},
+            )
+            if login_resp.status_code == 200:
+                token = _extract_token(login_resp)
+                headers = {"Authorization": f"Bearer {token}"} if token else {}
+                try:
+                    status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
+                    if status_resp.status_code == 200:
+                        data = status_resp.json().get("data", status_resp.json())
+                        return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
+                except Exception as e:
+                    logger.debug("EdgeLite connection test after auth failed: %s", e)
+                return {"ok": True, "version": "未知", "devices": 0}
+
+            if login_resp.status_code == 401:
+                return {"ok": False, "error": "EdgeLite 用户名或密码错误"}
+            if login_resp.status_code == 403:
+                return {"ok": False, "error": f"EdgeLite 拒绝登录 (HTTP {login_resp.status_code})，请检查账号权限"}
+            return {"ok": False, "error": f"EdgeLite 登录失败: HTTP {login_resp.status_code}"}
+
         except httpx.ConnectError:
             return {"ok": False, "error": "Connection refused"}
         except httpx.TimeoutException:

@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AuditEntry:
-    timestamp: float
-    action: str
-    username: str
-    resource_type: str
-    resource_id: str
+    id: int = 0
+    timestamp: float = 0.0
+    action: str = ""
+    username: str = ""
+    resource_type: str = ""
+    resource_id: str = ""
     detail: str = ""
     ip_address: str = ""
     user_agent: str = ""
@@ -28,6 +29,7 @@ class AuditLogger:
     def __init__(self):
         self._entries: list[AuditEntry] = []
         self._database = None
+        self._next_id = 1
 
     def set_database(self, database) -> None:
         self._database = database
@@ -36,6 +38,7 @@ class AuditLogger:
                   resource_id: str = "", detail: str = "",
                   ip_address: str = "", user_agent: str = "") -> None:
         entry = AuditEntry(
+            id=self._next_id,
             timestamp=time.time(),
             action=action,
             username=username,
@@ -45,6 +48,7 @@ class AuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
         )
+        self._next_id += 1
         self._entries.append(entry)
         if len(self._entries) > self._MAX_ENTRIES:
             self._entries = self._entries[-self._MAX_ENTRIES:]
@@ -90,8 +94,18 @@ class AuditLogger:
         return results[offset:offset + limit]
 
     async def get_stats(self) -> dict[str, Any]:
+        now = time.time()
+        today_start = now - (now % 86400)
+        today_count = sum(1 for e in self._entries if e.timestamp >= today_start)
+        active_users = list(set(e.username for e in self._entries)) if self._entries else []
+        last_action = self._entries[-1].action if self._entries else ""
+        last_timestamp = self._entries[-1].timestamp if self._entries else 0
         return {
             "total_entries": len(self._entries),
+            "today_count": today_count,
+            "active_users": active_users,
+            "last_action": last_action,
+            "last_timestamp": last_timestamp,
             "actions": list(set(e.action for e in self._entries)) if self._entries else [],
         }
 

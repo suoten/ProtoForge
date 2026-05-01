@@ -253,8 +253,8 @@ function connectWs() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
-      if (msg.type === 'protocols' && Array.isArray(msg.data)) {
-        protocols.value = msg.data
+      if (msg.type === 'devices' && Array.isArray(msg.data)) {
+        loadData()
       }
     } catch {}
   }
