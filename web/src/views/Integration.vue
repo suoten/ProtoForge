@@ -877,7 +877,9 @@ async function pushFromPipeline() {
       message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
       await runPipeline()
     } else {
-      message.error('推送失败: ' + (res.error || '未知错误'))
+      const errMsg = res.error || '未知错误'
+      const hint = res.suggestion ? ` (${res.suggestion})` : ''
+      message.error('推送失败: ' + errMsg + hint)
     }
   } catch (e) {
     message.error('推送失败: ' + (e.response?.data?.detail || e.message))

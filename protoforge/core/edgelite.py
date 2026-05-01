@@ -63,6 +63,10 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
 
 
 def get_protoforge_host() -> str:
+    s = get_settings()
+    if s.protoforge_public_host:
+        return s.protoforge_public_host
+
     host = os.environ.get("PROTOFORGE_HOST", "0.0.0.0")
     if host in ("0.0.0.0", ""):
         import socket
@@ -312,7 +316,23 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"]}
             return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}", "error_type": "update_failed"}
 
-        return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code} {create_resp.text[:200]}", "error_type": "create_failed"}
+        if create_resp.status_code == 422:
+            return {
+                "ok": False,
+                "error": f"EdgeLite 拒绝推送: {create_resp.text[:300]}",
+                "error_type": "validation_error",
+                "suggestion": "设备配置可能存在不兼容字段，请检查协议类型和测点配置",
+            }
+
+        if create_resp.status_code >= 500:
+            return {
+                "ok": False,
+                "error": f"EdgeLite 服务器错误: HTTP {create_resp.status_code}",
+                "error_type": "edgelite_error",
+                "suggestion": f"EdgeLite ({el_config['url']}) 内部错误。请检查 EdgeLite 日志，确认已注册的协议驱动类型: {payload['protocol']}",
+            }
+
+        return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
 
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:

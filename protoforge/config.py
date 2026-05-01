@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     edgelite_url: str = ""
     edgelite_username: str = "admin"
     edgelite_password: str = ""
+    protoforge_public_host: str = ""
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
@@ -78,6 +79,7 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
         "log_level", "cors_origins",
         "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
         "edgelite_url", "edgelite_username", "edgelite_password",
+        "protoforge_public_host",
     }
     for key, value in updates.items():
         if key.endswith("_port") or key in allowed_keys:
@@ -160,6 +162,7 @@ def get_all_settings_dict() -> dict[str, Any]:
         "edgelite_url": s.edgelite_url,
         "edgelite_username": s.edgelite_username,
         "edgelite_password": "***" if s.edgelite_password else "",
+        "protoforge_public_host": s.protoforge_public_host or "",
         "protocol_ports": {
             "modbus_tcp": s.modbus_tcp_port,
             "modbus_rtu": s.modbus_rtu_port,
