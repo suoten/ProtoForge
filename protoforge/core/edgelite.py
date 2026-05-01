@@ -420,6 +420,105 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
 
 
+_PROTOCOL_DISPLAY = {
+    "modbus_tcp": "Modbus TCP", "modbus_rtu": "Modbus RTU", "opcua": "OPC-UA",
+    "mqtt": "MQTT", "http": "HTTP REST", "s7": "S7", "mc": "MC协议",
+    "fins": "FINS", "ab": "EtherNet/IP", "bacnet": "BACnet",
+    "fanuc": "FOCAS", "mtconnect": "MTConnect", "toledo": "Toledo",
+    "profinet": "PROFINET", "ethercat": "EtherCAT",
+}
+
+_PROTOCOL_DEFAULT_PORTS = {
+    "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
+    "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "bacnet": 47808,
+    "fanuc": 8193, "mtconnect": 7878, "toledo": 1701,
+    "profinet": 34964, "ethercat": 34980,
+}
+
+
+def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[str, str]:
+    if not isinstance(driver_config, dict):
+        return ("", "")
+    host = ""
+    port = ""
+    if protocol == "mqtt":
+        host = driver_config.get("broker", "")
+        port = str(driver_config.get("port", ""))
+    elif protocol == "http":
+        url = driver_config.get("url", "")
+        if url:
+            import urllib.parse
+            try:
+                parsed = urllib.parse.urlparse(url)
+                host = parsed.hostname or ""
+                port = str(parsed.port) if parsed.port else ""
+            except Exception:
+                host = url
+        else:
+            host = driver_config.get("host", "")
+            port = str(driver_config.get("port", ""))
+    elif protocol == "opcua":
+        endpoint = driver_config.get("endpoint", "")
+        if endpoint:
+            try:
+                import re
+                m = re.search(r'opc\.tcp://([^:]+):?(\d+)?', endpoint)
+                if m:
+                    host = m.group(1) or ""
+                    port = m.group(2) or ""
+            except Exception:
+                host = endpoint
+        else:
+            host = driver_config.get("host", "")
+            port = str(driver_config.get("port", ""))
+    elif protocol == "mtconnect":
+        url = driver_config.get("url", "")
+        if url:
+            import urllib.parse
+            try:
+                parsed = urllib.parse.urlparse(url)
+                host = parsed.hostname or ""
+                port = str(parsed.port) if parsed.port else ""
+            except Exception:
+                host = url
+        else:
+            host = driver_config.get("host", "")
+            port = str(driver_config.get("port", ""))
+    else:
+        host = driver_config.get("host", driver_config.get("ip", ""))
+        port = str(driver_config.get("port", ""))
+    return (host, port)
+
+
+def _build_connect_error(driver_config: dict, protocol: str, protoforge_running: bool) -> dict[str, Any]:
+    driver_host, driver_port = _extract_driver_host_port(driver_config, protocol)
+    proto_name = _PROTOCOL_DISPLAY.get(protocol, protocol.upper())
+    default_port = _PROTOCOL_DEFAULT_PORTS.get(protocol, "")
+
+    parts = []
+    if not protoforge_running:
+        parts.append(f"ProtoForge 的 {proto_name} 协议服务未启动。请先在「协议管理」中启动 {proto_name} 服务")
+    elif not driver_host:
+        parts.append(f"driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
+    else:
+        parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+
+        if driver_port and default_port and str(driver_port) != str(default_port):
+            parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 EdgeLite 侧 {proto_name} 服务是否在端口 {driver_port} 上运行")
+
+        parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
+        parts.append(f"如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
+
+    host_info = f" ({driver_host}:{driver_port})" if driver_host or driver_port else ""
+    return {
+        "ok": False,
+        "error": "\n".join(parts),
+        "driver_config": driver_config,
+        "driver_host": driver_host,
+        "driver_port": driver_port,
+    }
+
+
 async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
     if not el_config["url"]:
@@ -466,22 +565,16 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         if el_status == "offline":
             driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
-            host_info = ""
-            driver_host = ""
-            driver_port = ""
-            if isinstance(driver_config, dict):
-                driver_host = driver_config.get("host", driver_config.get("ip", ""))
-                driver_port = str(driver_config.get("port", ""))
-                if driver_host or driver_port:
-                    host_info = f" (driver_config: {driver_host}:{driver_port})"
-            suggestion = (
-                f"EdgeLite 驱动无法连接 ProtoForge{host_info}。请检查：\n"
-                f"1) ProtoForge 协议服务是否在运行\n"
-                f"2) ProtoForge 的 IP 地址 ({driver_host or '未知'}) EdgeLite 是否可达\n"
-                f"3) 端口 ({driver_port or '未知'}) 是否正确\n"
-                f"4) 如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP"
-            )
-            result["steps"]["connect"] = {"ok": False, "error": suggestion, "driver_config": driver_config}
+            device_protocol = getattr(device, "protocol", "") or ""
+            protoforge_running = False
+            try:
+                from protoforge.main import get_engine
+                engine = get_engine()
+                protoforge_running = engine.is_protocol_running(device_protocol)
+            except Exception:
+                pass
+            connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running)
+            result["steps"]["connect"] = connect_error
             result["ok"] = False
             return result
         result["steps"]["connect"] = {"ok": True, "status": el_status}

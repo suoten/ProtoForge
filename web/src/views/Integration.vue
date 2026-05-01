@@ -328,7 +328,10 @@
           <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
           <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
             <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
-            <code>{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+            <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+          </div>
+          <div v-if="!pipelineResult.steps.connect.driver_host || pipelineResult.steps.connect.driver_host === ''" style="margin-top:8px">
+            <n-button size="small" type="primary" @click="$router.push('/settings')">前往设置 ProtoForge 地址</n-button>
           </div>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
