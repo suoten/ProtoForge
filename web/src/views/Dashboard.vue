@@ -160,7 +160,7 @@ const deviceColumns = [
       return h(NTag, { size: 'tiny', type, bordered: false }, () => label)
     }
   },
-  { title: '测点数', key: 'points', width: 80, render: (row) => (row.points || []).length },
+  { title: '测点数', key: 'points', width: 80, render: (row) => row.point_count || (row.points || []).length },
 ]
 
 function formatTime(ts) {
@@ -194,7 +194,7 @@ async function loadData() {
     protocols.value = protoRes
     templates.value = tmplRes
     scenarios.value = scRes
-    recentLogs.value = logRes
+    recentLogs.value = Array.isArray(logRes) ? logRes : (logRes.logs || logRes.entries || [])
   } catch (e) {
     loadError.value = e.response?.data?.detail || e.message || '未知错误'
   } finally {

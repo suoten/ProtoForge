@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 10000,
+  timeout: 15000,
 })
 
 api.interceptors.request.use(config => {
@@ -21,11 +21,17 @@ function onTokenRefreshed(newToken) {
   refreshSubscribers = []
 }
 
+function isLoginRequest(url) {
+  return url && (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/register'))
+}
+
 api.interceptors.response.use(
   response => response,
   async error => {
     const originalRequest = error.config
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const status = error.response?.status
+
+    if (status === 401 && !originalRequest._retry && !isLoginRequest(originalRequest.url)) {
       const refreshToken = localStorage.getItem('refresh_token')
       if (refreshToken) {
         if (isRefreshing) {
@@ -42,8 +48,12 @@ api.interceptors.response.use(
         try {
           const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
           const newToken = res.data.access_token
+          const newRefresh = res.data.refresh_token
           if (newToken) {
             localStorage.setItem('token', newToken)
+            if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
+            if (res.data.username) localStorage.setItem('username', res.data.username)
+            if (res.data.role) localStorage.setItem('role', res.data.role)
             originalRequest.headers.Authorization = `Bearer ${newToken}`
             onTokenRefreshed(newToken)
             return api(originalRequest)
@@ -59,7 +69,9 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      window.location.reload()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
     }
     return Promise.reject(error)
   }
@@ -182,6 +194,36 @@ export default {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${proto}//${window.location.host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
     return new WebSocket(url)
+  },
+
+  ensureValidToken: async () => {
+    const token = localStorage.getItem('token')
+    if (!token) return false
+    try {
+      const parts = token.split('.')
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]))
+        const exp = payload.exp || 0
+        const now = Math.floor(Date.now() / 1000)
+        if (exp - now < 300) {
+          const refreshToken = localStorage.getItem('refresh_token')
+          if (refreshToken) {
+            const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
+            if (res.data.access_token) {
+              localStorage.setItem('token', res.data.access_token)
+              if (res.data.refresh_token) localStorage.setItem('refresh_token', res.data.refresh_token)
+              if (res.data.username) localStorage.setItem('username', res.data.username)
+              if (res.data.role) localStorage.setItem('role', res.data.role)
+              return true
+            }
+          }
+          return false
+        }
+      }
+      return true
+    } catch {
+      return true
+    }
   },
 
   listForwardTargets: () => d(api.get('/forward/targets')),

@@ -42,6 +42,9 @@ web/.vite/
 .env.local
 .env.*.local
 
+data/
+.jwt_secret
+
 .coverage
 htmlcov/
 .pytest_cache/

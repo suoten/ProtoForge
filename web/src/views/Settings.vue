@@ -396,7 +396,7 @@
           <n-descriptions label-placement="left" :column="2" bordered size="small">
             <n-descriptions-item label="ID">{{ recordingDetail.id }}</n-descriptions-item>
             <n-descriptions-item label="设备ID">{{ recordingDetail.device_id || '-' }}</n-descriptions-item>
-            <n-descriptions-item label="时长">{{ recordingDetail.duration_seconds ? recordingDetail.duration_seconds.toFixed(1) + 's' : '-' }}</n-descriptions-item>
+            <n-descriptions-item label="时长">{{ recordingDetail.duration_seconds != null ? recordingDetail.duration_seconds.toFixed(1) + 's' : '-' }}</n-descriptions-item>
             <n-descriptions-item label="帧数">{{ recordingDetail.frame_count || 0 }}</n-descriptions-item>
             <n-descriptions-item label="创建时间" :span="2">{{ recordingDetail.created_at || '-' }}</n-descriptions-item>
           </n-descriptions>
