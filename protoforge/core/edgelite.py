@@ -303,7 +303,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
         )
         if create_resp.status_code in (200, 201):
             logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
-            return {"ok": True, "action": "created", "device_id": payload["device_id"]}
+            return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
 
         if create_resp.status_code == 409:
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
@@ -313,7 +313,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             )
             if update_resp.status_code == 200:
                 logger.info("Device %s updated on EdgeLite", payload["device_id"])
-                return {"ok": True, "action": "updated", "device_id": payload["device_id"]}
+                return {"ok": True, "action": "updated", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
             return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}", "error_type": "update_failed"}
 
         if create_resp.status_code == 422:
@@ -467,12 +467,21 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         if el_status == "offline":
             driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
             host_info = ""
+            driver_host = ""
+            driver_port = ""
             if isinstance(driver_config, dict):
-                h = driver_config.get("host", driver_config.get("ip", ""))
-                p = driver_config.get("port", "")
-                if h or p:
-                    host_info = f" (driver_config: {h}:{p})"
-            result["steps"]["connect"] = {"ok": False, "error": f"EdgeLite driver cannot connect to ProtoForge{host_info}. Check: 1) ProtoForge protocol server is running 2) IP {host_info.split(':')[0] if host_info else ''} is reachable from EdgeLite 3) Port is correct"}
+                driver_host = driver_config.get("host", driver_config.get("ip", ""))
+                driver_port = str(driver_config.get("port", ""))
+                if driver_host or driver_port:
+                    host_info = f" (driver_config: {driver_host}:{driver_port})"
+            suggestion = (
+                f"EdgeLite 驱动无法连接 ProtoForge{host_info}。请检查：\n"
+                f"1) ProtoForge 协议服务是否在运行\n"
+                f"2) ProtoForge 的 IP 地址 ({driver_host or '未知'}) EdgeLite 是否可达\n"
+                f"3) 端口 ({driver_port or '未知'}) 是否正确\n"
+                f"4) 如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP"
+            )
+            result["steps"]["connect"] = {"ok": False, "error": suggestion, "driver_config": driver_config}
             result["ok"] = False
             return result
         result["steps"]["connect"] = {"ok": True, "status": el_status}
