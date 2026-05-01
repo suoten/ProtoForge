@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import Any
@@ -136,9 +137,8 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
         try:
-            import uuid
-
             from protoforge.models.device import DeviceConfig
+            import uuid
             config = DeviceConfig(
                 id=str(uuid.uuid4()),
                 name=request.name,

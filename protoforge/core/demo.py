@@ -205,7 +205,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
 
     try:
         from protoforge.models.device import DeviceConfig, PointConfig
-        from protoforge.models.scenario import Rule, RuleType, ScenarioConfig
+        from protoforge.models.scenario import ScenarioConfig, Rule, RuleType
         rules = []
         for r in demo_scenario["rules"]:
             rules.append(Rule(

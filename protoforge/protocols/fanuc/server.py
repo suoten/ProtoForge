@@ -1,13 +1,12 @@
 import asyncio
-import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -157,8 +156,10 @@ class FanucServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._server_task
+                except asyncio.CancelledError:
+                    pass
         except Exception as e:
             logger.warning("FANUC server stop error: %s", e)
         finally:

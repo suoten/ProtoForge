@@ -571,8 +571,8 @@ async function batchStart() {
   batchLoading.value = true
   try {
     const res = await api.batchStartDevices(selectedIds.value)
-    const ok = res.started?.length || res.success_count || 0
-    const fail = res.failed?.length || res.fail_count || 0
+    const ok = res.started || 0
+    const fail = res.errors?.length || 0
     selectedIds.value = []
     message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
     loadData()
@@ -585,8 +585,8 @@ async function batchStop() {
   batchLoading.value = true
   try {
     const res = await api.batchStopDevices(selectedIds.value)
-    const ok = res.stopped?.length || res.success_count || 0
-    const fail = res.failed?.length || res.fail_count || 0
+    const ok = res.stopped || 0
+    const fail = res.errors?.length || 0
     selectedIds.value = []
     message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
     loadData()
@@ -605,8 +605,8 @@ async function batchDelete() {
       batchLoading.value = true
       try {
         const res = await api.batchDeleteDevices(selectedIds.value)
-        const ok = res.deleted?.length || res.success_count || 0
-        const fail = res.failed?.length || res.fail_count || 0
+        const ok = res.deleted || 0
+        const fail = res.errors?.length || 0
         selectedIds.value = []
         message.success(`已删除 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
         loadData()

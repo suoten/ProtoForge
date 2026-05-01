@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Any
+from typing import Any, Optional
 
 from protoforge.core.generator import DataGenerator
 from protoforge.models.device import DeviceConfig, DeviceStatus, GeneratorType, PointConfig, PointValue
@@ -13,7 +13,7 @@ class DeviceInstance:
         self._status: DeviceStatus = DeviceStatus.OFFLINE
         self._point_values: dict[str, Any] = {}
         self._point_configs: dict[str, PointConfig] = {}
-        self._start_time: float | None = None
+        self._start_time: Optional[float] = None
         self._lock = asyncio.Lock()
 
         for point in config.points:
@@ -63,7 +63,7 @@ class DeviceInstance:
                 if point.generator_type != GeneratorType.FIXED:
                     self._point_values[name] = self._generator.generate(point)
 
-    def read_point(self, point_name: str) -> PointValue | None:
+    def read_point(self, point_name: str) -> Optional[PointValue]:
         if point_name not in self._point_values:
             return None
         return PointValue(

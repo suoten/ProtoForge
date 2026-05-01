@@ -1,24 +1,23 @@
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import Any, Optional
 
 from protoforge.core.event_bus import (
+    EventBus,
     DeviceCreatedEvent,
-    DeviceRemovedEvent,
     DeviceStartedEvent,
     DeviceStoppedEvent,
-    EventBus,
+    DeviceRemovedEvent,
+    IntegrationConnectionEvent,
+    IntegrationHealthAlertEvent,
 )
+from protoforge.core.integration.channel import ChannelBase, HttpChannel, ChannelFactory, WebSocketChannel, ChannelManager
+from protoforge.core.integration.protocol import ProtocolMapper, DataTypeMapper
+from protoforge.core.integration.state import ConnectionStateMachine, ConnectionState
+from protoforge.core.integration.retry import RetryPolicy, IntegrationError, NetworkError
 from protoforge.core.integration.auth import IntegrationAuth
-from protoforge.core.integration.channel import (
-    ChannelBase,
-    ChannelFactory,
-)
 from protoforge.core.integration.metrics import IntegrationMetrics
-from protoforge.core.integration.protocol import DataTypeMapper, ProtocolMapper
-from protoforge.core.integration.retry import IntegrationError, RetryPolicy
-from protoforge.core.integration.state import ConnectionState, ConnectionStateMachine
 from protoforge.core.integration.validator import MappingValidator
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,9 @@ class AlarmReactionRule:
             return False
         if self.source_device_id and self.source_device_id != source_device_id:
             return False
-        return not (self.alarm_severity and self.alarm_severity != severity)
+        if self.alarm_severity and self.alarm_severity != severity:
+            return False
+        return True
 
 
 class IntegrationManager:
@@ -65,8 +66,8 @@ class IntegrationManager:
         self._edgelite_url = edgelite_url
         self._username = username
         self._password = password
-        self._channel: ChannelBase | None = None
-        self._auth: IntegrationAuth | None = None
+        self._channel: Optional[ChannelBase] = None
+        self._auth: Optional[IntegrationAuth] = None
         self._state = ConnectionStateMachine(on_change=self._on_state_change)
         self._retry = RetryPolicy()
         self._metrics = IntegrationMetrics()
@@ -180,7 +181,7 @@ class IntegrationManager:
         if not self._enabled:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
-        from protoforge.core.edgelite import convert_device_to_edgelite
+        from protoforge.core.edgelite import convert_device_to_edgelite, get_edgelite_config_from_device
         payload = convert_device_to_edgelite(device, protoforge_host, self._protocol_mapper, self._data_type_mapper)
         if payload is None:
             return {"ok": False, "skipped": True, "reason": "Protocol not supported by EdgeLite"}
@@ -378,12 +379,26 @@ class IntegrationManager:
             except Exception as e:
                 logger.error("Alarm reaction adjust_generator failed: %s", e)
 
+        elif rule.action == "start_device":
+            try:
+                from protoforge.main import get_engine
+                engine = get_engine()
+                if engine:
+                    await engine.start_device(target_id)
+                    logger.info("Alarm reaction started device: %s", target_id)
+            except Exception as e:
+                logger.error("Alarm reaction start_device failed: %s", e)
+
+        elif rule.action == "log_only":
+            logger.warning("Alarm logged only: rule=%s severity=%s source=%s payload=%s",
+                           rule.rule_id, rule.alarm_severity, rule.source_device_id, alarm_payload)
+
     def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> list[dict[str, Any]]:
         if device_id:
             data = self._backhaul_data.get(device_id, [])
             return data[-limit:]
         all_data = []
-        for _dev_id, entries in self._backhaul_data.items():
+        for dev_id, entries in self._backhaul_data.items():
             all_data.extend(entries[-limit:])
         all_data.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return all_data[:limit]

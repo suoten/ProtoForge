@@ -1,5 +1,6 @@
-import threading
 import time
+import threading
+from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse

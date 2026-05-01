@@ -1,13 +1,12 @@
 import asyncio
-import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -113,13 +112,17 @@ class OpcDaServer(ProtocolServer):
             self._server_running = False
             if self._sub_push_task:
                 self._sub_push_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._sub_push_task
+                except asyncio.CancelledError:
+                    pass
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._server_task
-            for _sid, writer in list(self._sub_clients.items()):
+                except asyncio.CancelledError:
+                    pass
+            for sid, writer in list(self._sub_clients.items()):
                 try:
                     writer.close()
                 except Exception as e:
@@ -305,7 +308,9 @@ class OpcDaServer(ProtocolServer):
                 return struct.unpack("<I", data[:4])[0]
             elif data_type == "float32" and len(data) >= 4:
                 return struct.unpack("<f", data[:4])[0]
-            elif data_type == "float64" and len(data) >= 8 or len(data) >= 8:
+            elif data_type == "float64" and len(data) >= 8:
+                return struct.unpack("<d", data[:8])[0]
+            elif len(data) >= 8:
                 return struct.unpack("<d", data[:8])[0]
         except (struct.error, IndexError) as e:
             logger.warning("OPC-DA value unpack error: %s", e)

@@ -120,7 +120,7 @@ class AlarmReactionRule(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     source_device_id: str = ""
     alarm_severity: str = ""
-    action: Literal["inject_fault", "adjust_generator", "stop_device"] = "stop_device"
+    action: Literal["inject_fault", "adjust_generator", "stop_device", "start_device", "log_only"] = "stop_device"
     target_device_id: str = ""
     action_params: dict[str, Any] = Field(default_factory=dict)
     enabled: bool = True

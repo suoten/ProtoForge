@@ -1,12 +1,12 @@
 import asyncio
 import base64
-import contextlib
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 from protoforge.core.log_bus import LogBus, LogEntry
 
@@ -40,7 +40,7 @@ class RecordedMessage:
     device_id: str
     message_type: str
     data: Any
-    raw: bytes | None = None
+    raw: Optional[bytes] = None
 
     def to_dict(self) -> dict:
         d = {
@@ -75,16 +75,22 @@ class Recording:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        duration = (self.end_time - self.start_time) if self.end_time > 0 else 0
         return {
             "id": self.id, "name": self.name, "protocol": self.protocol,
             "start_time": self.start_time, "end_time": self.end_time,
             "message_count": len(self.messages),
             "metadata": self.metadata,
+            "device_id": self.metadata.get("device_id", ""),
+            "duration_seconds": round(duration, 1),
+            "frame_count": len(self.messages),
+            "created_at": self.start_time,
         }
 
     def to_full_dict(self) -> dict:
         d = self.to_dict()
         d["messages"] = [m.to_dict() for m in self.messages]
+        d["frames"] = [{**m.to_dict(), "index": i} for i, m in enumerate(self.messages)]
         return d
 
     def export_json(self) -> str:
@@ -97,14 +103,14 @@ class Recorder:
     def __init__(self, log_bus: LogBus):
         self._log_bus = log_bus
         self._recordings: dict[str, Recording] = {}
-        self._active: Recording | None = None
-        self._filter_protocol: str | None = None
-        self._filter_device: str | None = None
+        self._active: Optional[Recording] = None
+        self._filter_protocol: Optional[str] = None
+        self._filter_device: Optional[str] = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=50000)
-        self._task: asyncio.Task | None = None
+        self._task: Optional[asyncio.Task] = None
         self._running = False
         self._database = None
-        self._encryption_key: bytes | None = None
+        self._encryption_key: Optional[bytes] = None
 
     def set_database(self, database) -> None:
         self._database = database
@@ -117,8 +123,8 @@ class Recorder:
             self._encryption_key = None
 
     async def start_recording(
-        self, name: str, protocol: str | None = None,
-        device_id: str | None = None, metadata: dict | None = None,
+        self, name: str, protocol: Optional[str] = None,
+        device_id: Optional[str] = None, metadata: Optional[dict] = None,
     ) -> Recording:
         if self._active:
             await self.stop_recording()
@@ -135,14 +141,16 @@ class Recorder:
         logger.info("Recording started: %s (%s)", name, rec_id)
         return self._active
 
-    async def stop_recording(self) -> Recording | None:
+    async def stop_recording(self) -> Optional[Recording]:
         if not self._active:
             return None
         self._running = False
         if self._task:
             self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
             self._task = None
         self._log_bus.unsubscribe(self._queue)
         while not self._queue.empty():
@@ -166,7 +174,7 @@ class Recorder:
         logger.info("Recording stopped: %s, %d messages", result.id, len(result.messages))
         return result
 
-    def get_recording(self, rec_id: str) -> Recording | None:
+    def get_recording(self, rec_id: str) -> Optional[Recording]:
         return self._recordings.get(rec_id)
 
     def list_recordings(self) -> list[dict]:

@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import logging
 import time
 import uuid
@@ -7,8 +6,8 @@ from typing import Any
 from xml.sax.saxutils import escape
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +92,10 @@ class MtConnectServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._server_task
+                except asyncio.CancelledError:
+                    pass
         except Exception as e:
             logger.warning("MTConnect server stop error: %s", e)
         finally:
@@ -199,8 +200,8 @@ class MtConnectServer(ProtocolServer):
                 f'    <Description manufacturer="{escape(manufacturer)}">Simulated Device</Description>\n'
                 f'    <DataItems>\n'
                 + "\n".join(data_items) + "\n"
-                '    </DataItems>\n'
-                '  </Device>'
+                f'    </DataItems>\n'
+                f'  </Device>'
             )
 
         return (
@@ -254,9 +255,9 @@ class MtConnectServer(ProtocolServer):
                 f'    <ComponentStream component="Device" name="{escape(config.name)}">\n'
                 f'      <Samples>\n'
                 + "\n".join(events) + "\n"
-                '      </Samples>\n'
-                '    </ComponentStream>\n'
-                '  </DeviceStream>'
+                f'      </Samples>\n'
+                f'    </ComponentStream>\n'
+                f'  </DeviceStream>'
             )
 
         return (
@@ -328,9 +329,9 @@ class MtConnectServer(ProtocolServer):
                 f'    <ComponentStream component="Device" name="{escape(info["name"])}">\n'
                 f'      <Samples>\n'
                 + "\n".join(samples_xml) + "\n"
-                '      </Samples>\n'
-                '    </ComponentStream>\n'
-                '  </DeviceStream>'
+                f'      </Samples>\n'
+                f'    </ComponentStream>\n'
+                f'  </DeviceStream>'
             )
 
         first_seq = entries[0]["sequence"]
@@ -374,8 +375,8 @@ class MtConnectServer(ProtocolServer):
                 f'    <Description manufacturer="{escape(manufacturer)}" model="ProtoForge-Sim"/>\n'
                 f'    <Configuration>\n'
                 + "\n".join(description_items) + "\n"
-                '    </Configuration>\n'
-                '  </Asset>'
+                f'    </Configuration>\n'
+                f'  </Asset>'
             )
             if len(assets_xml) >= count:
                 break

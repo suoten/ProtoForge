@@ -1,22 +1,19 @@
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
-from typing import Any
-
+from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-
-from protoforge.api.v1.auth import require_admin, require_operator, require_user, require_viewer
 from protoforge.core.auth import verify_token
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate, ScenarioDetail, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
-
+from protoforge.api.v1.auth import require_admin, require_operator, require_user, require_viewer
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
 from protoforge.api.v1.integration import router as _integration_router
-
 router.include_router(_integration_router)
 
 def _get_engine():
@@ -39,7 +36,7 @@ def _get_database():
 async def list_protocols(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     protocols = engine.get_protocols()
-    from protoforge.core.defaults import PROTOCOL_DEFAULTS, get_protocol_defaults
+    from protoforge.core.defaults import get_protocol_defaults, PROTOCOL_DEFAULTS
     for p in protocols:
         defaults = get_protocol_defaults(p.get("name", ""))
         p["description"] = PROTOCOL_DEFAULTS.get(p.get("name", ""), {}).get("description", "")
@@ -112,10 +109,10 @@ async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(r
     return {"protocol": protocol_name, "fields": config}
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, config: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
+async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
-    from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
+    from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
     if not config:
         config = get_protocol_defaults(protocol_name)
     original_port = config.get("port") if config else None
@@ -159,7 +156,7 @@ async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operat
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
 
 @router.get("/devices", response_model=list[DeviceInfo])
-async def list_devices(protocol: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     return engine.list_devices(protocol=protocol)
 
@@ -533,12 +530,12 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/templates", response_model=list[TemplateInfo])
-async def list_templates(protocol: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     return tm.list_templates(protocol=protocol)
 
 @router.get("/templates/search")
-async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None, _user: dict = Depends(require_viewer)):
+async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates(protocol=protocol)
 
@@ -562,7 +559,7 @@ async def list_template_tags(_user: dict = Depends(require_viewer)):
     for t in templates:
         for tag in (t.tags or []):
             tags.add(tag)
-    return sorted(tags)
+    return sorted(list(tags))
 
 @router.get("/templates/{template_id}", response_model=TemplateDetail)
 async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
@@ -607,7 +604,7 @@ async def instantiate_template(
     template_id: str,
     device_id: str = Query(...),
     device_name: str = Query(...),
-    body: dict[str, Any] | None = None,
+    body: Optional[dict[str, Any]] = None,
     _user: dict = Depends(require_operator),
 ):
 
@@ -624,10 +621,10 @@ async def instantiate_template(
 @router.get("/logs")
 async def get_logs(
     count: int = 100,
-    protocol: str | None = None,
-    device_id: str | None = None,
-    direction: str | None = None,
-    message_type: str | None = None,
+    protocol: Optional[str] = None,
+    device_id: Optional[str] = None,
+    direction: Optional[str] = None,
+    message_type: Optional[str] = None,
     _user: dict = Depends(require_viewer),
 ):
 
@@ -956,7 +953,7 @@ async def _get_internal_client():
     if _internal_client is not None:
         if time.time() > _internal_token_exp - 300:
             try:
-                from protoforge.core.auth import create_token, user_manager
+                from protoforge.core.auth import user_manager, create_token
                 admin_user = user_manager.get_user_by_username("admin")
                 if admin_user:
                     token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
@@ -967,16 +964,15 @@ async def _get_internal_client():
         return _internal_client
 
     from httpx import ASGITransport, AsyncClient
-
-    from protoforge.api.v1.auth import is_no_auth
     from protoforge.main import app
+    from protoforge.api.v1.auth import is_no_auth
 
     transport = ASGITransport(app=app)
     _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
 
     if not is_no_auth():
         try:
-            from protoforge.core.auth import create_token, user_manager
+            from protoforge.core.auth import user_manager, create_token
             admin_user = user_manager.get_user_by_username("admin")
             if admin_user:
                 token = create_token(admin_user.id, admin_user.username, admin_user.role, expires_in=86400)
@@ -1001,7 +997,7 @@ async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(requi
     return tc.to_dict()
 
 @router.get("/tests/cases")
-async def list_test_cases(tag: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_test_cases(tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     cases = runner.list_test_cases(tag=tag)
     return [c.to_dict() for c in cases]
@@ -1040,7 +1036,6 @@ async def delete_test_case(case_id: str, _user: dict = Depends(require_user)):
 @router.post("/tests/suites")
 async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(require_user)):
     import time as _time
-
     from protoforge.core.testing import TestSuite
 
     runner = _get_test_runner()
@@ -1158,9 +1153,9 @@ async def get_test_report_html(report_id: str, request: Request, _user: dict = D
     return HTMLResponse(content=html)
 
 @router.post("/tests/quick-test")
-async def quick_test(scope: str = "all", target_id: str | None = None, _user: dict = Depends(require_user)):
+async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user: dict = Depends(require_user)):
     engine = _get_engine()
-    from protoforge.core.testing import Assertion, AssertionType, TestCase, TestStep
+    from protoforge.core.testing import TestCase, TestStep, Assertion, AssertionType
     cases = []
 
     if scope == "all" or scope == "device":
@@ -1210,14 +1205,14 @@ async def quick_test(scope: str = "all", target_id: str | None = None, _user: di
             ))
 
     if scope == "all" or scope == "protocol":
-        for proto_name, _proto_server in engine.get_all_protocol_servers().items():
+        for proto_name, proto_server in engine.get_all_protocol_servers().items():
             cases.append(TestCase(
                 id=f"qt-proto-{proto_name}", name=f"协议测试: {proto_name}",
                 tags=["quick-test", "protocol"],
                 steps=[
                     TestStep(name=f"验证协议 {proto_name} 运行状态", action="http_request",
                              params={"method": "GET", "url": "/api/v1/protocols"},
-                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="协议列表应可访问")]),
+                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"协议列表应可访问")]),
                 ],
             ))
 
@@ -1357,7 +1352,7 @@ async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_
 
 @router.post("/auth/login")
 async def login(credentials: dict[str, Any]):
-    from protoforge.core.auth import create_refresh_token, create_token, user_manager
+    from protoforge.core.auth import user_manager, create_token, create_refresh_token
     username = credentials.get("username", "")
     password = credentials.get("password", "")
     user, error_code = await user_manager.authenticate(username, password)
@@ -1379,7 +1374,7 @@ async def login(credentials: dict[str, Any]):
 
 @router.post("/auth/refresh")
 async def refresh_token(data: dict[str, Any]):
-    from protoforge.core.auth import create_token, user_manager, verify_refresh_token
+    from protoforge.core.auth import verify_refresh_token, create_token, user_manager
     refresh = data.get("refresh_token", "")
     user_id = verify_refresh_token(refresh)
 
@@ -1542,7 +1537,7 @@ def _get_recorder():
     return _recorder
 
 @router.post("/recorder/start")
-async def start_recording(config: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
+async def start_recording(config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     cfg = config or {}
     recorder = _get_recorder()
     rec = await recorder.start_recording(
@@ -1585,7 +1580,7 @@ async def delete_recording(rec_id: str, _user: dict = Depends(require_operator))
     return {"status": "ok"}
 
 @router.post("/recorder/recordings/{rec_id}/replay")
-async def replay_recording(rec_id: str, config: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
+async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     cfg = config or {}
     speed = cfg.get("speed", 1.0)
@@ -1662,7 +1657,14 @@ async def setup_demo(_user: dict = Depends(require_admin)):
     from protoforge.core.demo import seed_demo_data
     try:
         await seed_demo_data(engine, tm)
-        return {"status": "ok", "message": "演示数据已创建：4个设备 + 1个场景"}
+        devices = engine.get_all_device_ids()
+        scenarios = engine.get_all_scenario_configs()
+        return {
+            "status": "ok",
+            "message": "演示数据已创建",
+            "device_count": len(devices),
+            "scenario_count": len(scenarios),
+        }
     except Exception as e:
         from protoforge.core.defaults import get_friendly_error
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
@@ -1671,10 +1673,13 @@ async def setup_demo(_user: dict = Depends(require_admin)):
 async def setup_status(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     devices = engine.get_all_device_ids()
+    scenarios = engine.get_all_scenario_configs()
     protocols_running = sum(1 for p in engine.get_all_protocol_servers().values() if p.status.value == "running")
     return {
         "initialized": len(devices) > 0,
+        "demo_initialized": len(devices) > 0,
         "device_count": len(devices),
+        "scenario_count": len(scenarios),
         "protocols_running": protocols_running,
         "templates_available": len(_get_template_manager().list_templates()),
     }
@@ -1686,18 +1691,18 @@ async def get_settings(_user: dict = Depends(require_admin)):
 
 @router.put("/settings")
 async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
-    from protoforge.config import get_all_settings_dict, update_settings
+    from protoforge.config import update_settings, get_all_settings_dict
     changed = update_settings(updates)
     return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
 
 
 @router.get("/audit")
 async def query_audit_log(
-    username: str | None = None,
-    action: str | None = None,
-    resource_type: str | None = None,
-    start_time: float | None = None,
-    end_time: float | None = None,
+    username: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    start_time: Optional[float] = None,
+    end_time: Optional[float] = None,
     limit: int = 100,
     offset: int = 0,
     _user: dict = Depends(require_admin),
@@ -1727,7 +1732,7 @@ async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)
 
 @router.delete("/audit")
 async def clear_audit_log(
-    before: float | None = None,
+    before: Optional[float] = None,
     _user: dict = Depends(require_admin),
 ):
     from protoforge.core.audit import audit_logger
@@ -1737,9 +1742,8 @@ async def clear_audit_log(
 
 @router.get("/backup")
 async def export_backup(_user: dict = Depends(require_admin)):
-    import json as json_lib
-
     from fastapi.responses import Response
+    import json as json_lib
     db = _get_database()
     data = await db.export_all()
     backup = {

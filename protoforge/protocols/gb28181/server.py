@@ -1,14 +1,15 @@
 import asyncio
 import logging
 import re
+import socket
 import time
 import uuid
 import xml.etree.ElementTree as ET
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -318,7 +319,7 @@ class GB28181Server(ProtocolServer):
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._clear_default_device(device_id)
-        self._log_debug("system", "device_removed", "设备移除", device_id=device_id)
+        self._log_debug("system", "device_removed", f"设备移除", device_id=device_id)
         logger.info("GB28181 device removed: %s", device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -477,7 +478,7 @@ class GB28181Server(ProtocolServer):
             device_id = root.findtext("DeviceID", "")
 
             gb_device = None
-            for _did, dev in self._gb_devices.items():
+            for did, dev in self._gb_devices.items():
                 if dev.device_id == device_id:
                     gb_device = dev
                     break
@@ -496,25 +497,25 @@ class GB28181Server(ProtocolServer):
                 response_body = gb_device.make_catalog_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_catalog_response",
-                                "发送Catalog响应 (1个设备)",
+                                f"发送Catalog响应 (1个设备)",
                                 device_id=pf_id)
             elif cmd_type == "Keepalive":
                 response_body = gb_device.make_heartbeat_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_keepalive_response",
-                                "发送Keepalive响应 OK",
+                                f"发送Keepalive响应 OK",
                                 device_id=pf_id)
             elif cmd_type == "DeviceControl":
                 response_body = gb_device.make_control_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_control_response",
-                                "发送DeviceControl响应 OK",
+                                f"发送DeviceControl响应 OK",
                                 device_id=pf_id)
             elif cmd_type == "DeviceConfig":
                 response_body = gb_device.make_config_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_config_response",
-                                "发送DeviceConfig响应 OK",
+                                f"发送DeviceConfig响应 OK",
                                 device_id=pf_id)
         except ET.ParseError:
             self._log_debug("in", "sip_xml_error", "XML解析失败")
@@ -532,13 +533,13 @@ class GB28181Server(ProtocolServer):
                 pf_id = gb_device._protoforge_device_id
                 if not was_registered:
                     self._log_debug("in", "sip_register_ok",
-                                    "设备注册成功! 服务器已确认",
+                                    f"设备注册成功! 服务器已确认",
                                     device_id=pf_id,
                                     detail={"gb_id": gb_device.device_id,
                                             "server": f"{gb_device.host}:{gb_device.port}"})
                 else:
                     self._log_debug("in", "sip_register_refresh",
-                                    "注册刷新成功",
+                                    f"注册刷新成功",
                                     device_id=pf_id)
                 logger.info("Device %s registered successfully", gb_device.device_id)
                 break
@@ -609,7 +610,7 @@ class GB28181Server(ProtocolServer):
             self._transport.sendto(trying.encode("utf-8"), addr)
 
         gb_device = None
-        for _did, dev in self._gb_devices.items():
+        for did, dev in self._gb_devices.items():
             if dev.device_id == device_id:
                 gb_device = dev
                 break
@@ -734,7 +735,7 @@ class GB28181Server(ProtocolServer):
                                         device_id=pf_id)
                 else:
                     self._log_debug("in", "sip_ack_no_media",
-                                    "ACK收到但无有效媒体地址",
+                                    f"ACK收到但无有效媒体地址",
                                     device_id=pf_id)
                 break
 

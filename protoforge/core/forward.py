@@ -1,10 +1,9 @@
 import asyncio
-import contextlib
 import json
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 import httpx
 
@@ -29,7 +28,23 @@ class InfluxDBTarget(ForwardTarget):
         self._token = token
         self._org = org
         self._bucket = bucket
-        self._client: httpx.AsyncClient | None = None
+        self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def token(self) -> str:
+        return self._token
+
+    @property
+    def org(self) -> str:
+        return self._org
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -87,11 +102,19 @@ class InfluxDBTarget(ForwardTarget):
 
 
 class HTTPTarget(ForwardTarget):
-    def __init__(self, url: str, headers: dict[str, str] | None = None, method: str = "POST"):
+    def __init__(self, url: str, headers: Optional[dict[str, str]] = None, method: str = "POST"):
         self._url = url
         self._headers = headers or {}
         self._method = method.upper()
-        self._client: httpx.AsyncClient | None = None
+        self._client: Optional[httpx.AsyncClient] = None
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def method(self) -> str:
+        return self._method
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -127,8 +150,8 @@ class HTTPTarget(ForwardTarget):
 
 class FileTarget(ForwardTarget):
     def __init__(self, path: str, format: str = "jsonl"):
-        import os
         from pathlib import Path
+        import os
         base_dir = str(Path.cwd().resolve())
         resolved_path = str(Path(path).resolve())
         if not (resolved_path.startswith(base_dir + os.sep) or resolved_path == base_dir):
@@ -138,6 +161,10 @@ class FileTarget(ForwardTarget):
             )
         self._path = str(resolved_path)
         self._format = format
+
+    @property
+    def path(self) -> str:
+        return self._path
 
     async def send(self, records: list[dict[str, Any]]) -> None:
         try:
@@ -169,7 +196,7 @@ class ForwardEngine:
         self._log_bus = log_bus
         self._targets: dict[str, ForwardTarget] = {}
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._task: Optional[asyncio.Task] = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self._batch_size = 100
         self._flush_interval = 5.0
@@ -219,8 +246,10 @@ class ForwardEngine:
         self._log_bus.unsubscribe(self._queue)
         if self._task:
             self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
         for target in self._targets.values():
             try:
                 await target.close()
