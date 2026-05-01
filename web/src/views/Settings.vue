@@ -68,7 +68,17 @@
                   <n-input v-model:value="edgeliteConfig.username" placeholder="admin" />
                 </n-form-item>
                 <n-form-item label="密码">
-                  <n-input v-model:value="edgeliteConfig.password" type="password" show-password-on="click" placeholder="EdgeLite 登录密码" />
+                  <n-input
+                    v-model:value="edgeliteConfig.password"
+                    type="password"
+                    show-password-on="click"
+                    :placeholder="passwordPreviouslySet ? '已设置，无需重新输入' : 'EdgeLite 登录密码'"
+                  />
+                  <n-text v-if="passwordPreviouslySet" depth="3" style="margin-left:8px;font-size:11px">(已保存)</n-text>
+                </n-form-item>
+                <n-form-item label="ProtoForge地址">
+                  <n-input v-model:value="edgeliteConfig.protoforge_public_host" placeholder="10.0.0.82（空则自动检测，EdgeLite从此地址连接ProtoForge）" />
+                  <n-text depth="3" style="margin-left:8px;font-size:12px">EdgeLite 连 ProtoForge 用的 IP</n-text>
                 </n-form-item>
                 <n-form-item>
                   <n-space>
@@ -461,7 +471,13 @@ const portsSaveResult = ref(null)
 
 const serverConfig = ref({ host: '0.0.0.0', port: 8000, db_path: 'data/protoforge.db', log_level: 'info', cors_origins: '*' })
 const influxdbConfig = ref({ url: '', token: '', org: 'default', bucket: 'protoforge' })
-const edgeliteConfig = ref({ url: '', username: 'admin', password: '' })
+const edgeliteConfig = ref({
+  url: '',
+  username: 'admin',
+  password: '',
+  protoforge_public_host: '',
+})
+const passwordPreviouslySet = ref(false)
 const edgeliteTestResult = ref(null)
 const testingEdgelite = ref(false)
 const protocolPorts = ref({})
@@ -1038,7 +1054,15 @@ async function loadSettings() {
     edgeliteConfig.value.username = settings.edgelite_username || 'admin'
     if (settings.edgelite_password && settings.edgelite_password !== '***') {
       edgeliteConfig.value.password = settings.edgelite_password
+      passwordPreviouslySet.value = false
+    } else if (settings.edgelite_password === '***') {
+      edgeliteConfig.value.password = ''
+      passwordPreviouslySet.value = true
+    } else {
+      edgeliteConfig.value.password = ''
+      passwordPreviouslySet.value = false
     }
+    edgeliteConfig.value.protoforge_public_host = settings.protoforge_public_host || ''
     protocolPorts.value = { ...(settings.protocol_ports || {}) }
     protocols.value = protoRes
     saveResult.value = ''
@@ -1061,11 +1085,16 @@ async function testEdgeliteConnection() {
       password: edgeliteConfig.value.password,
     })
     if (edgeliteTestResult.value.ok) {
-      await api.updateSettings({
+      const updateData = {
         edgelite_url: edgeliteConfig.value.url,
         edgelite_username: edgeliteConfig.value.username,
-        edgelite_password: edgeliteConfig.value.password,
-      })
+        protoforge_public_host: edgeliteConfig.value.protoforge_public_host,
+      }
+      if (edgeliteConfig.value.password && !passwordPreviouslySet.value) {
+        updateData.edgelite_password = edgeliteConfig.value.password
+      }
+      await api.updateSettings(updateData)
+      passwordPreviouslySet.value = true
     }
   } catch (e) {
     edgeliteTestResult.value = { ok: false, error: e.response?.data?.detail || e.message }
@@ -1153,7 +1182,10 @@ async function saveSettings() {
       influxdb_bucket: influxdbConfig.value.bucket,
       edgelite_url: edgeliteConfig.value.url,
       edgelite_username: edgeliteConfig.value.username,
-      edgelite_password: edgeliteConfig.value.password,
+      protoforge_public_host: edgeliteConfig.value.protoforge_public_host,
+    }
+    if (edgeliteConfig.value.password && !passwordPreviouslySet.value) {
+      updates.edgelite_password = edgeliteConfig.value.password
     }
     for (const [key, value] of Object.entries(protocolPorts.value)) {
       updates[`${key}_port`] = value
