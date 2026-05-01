@@ -77,7 +77,7 @@
                   <n-text v-if="passwordPreviouslySet" depth="3" style="margin-left:8px;font-size:11px">(已保存)</n-text>
                 </n-form-item>
                 <n-form-item label="ProtoForge地址">
-                  <n-input v-model:value="edgeliteConfig.protoforge_public_host" placeholder="10.0.0.82（空则自动检测，EdgeLite从此地址连接ProtoForge）" />
+                  <n-input v-model:value="edgeliteConfig.protoforge_public_host" placeholder="同服务器填 127.0.0.1，跨服务器填 EdgeLite 可达的 IP" />
                   <n-text depth="3" style="margin-left:8px;font-size:12px">EdgeLite 连 ProtoForge 用的 IP</n-text>
                 </n-form-item>
                 <n-form-item>

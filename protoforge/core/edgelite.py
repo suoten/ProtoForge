@@ -80,9 +80,24 @@ def get_protoforge_host() -> str:
     return host
 
 
-def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "") -> dict[str, Any]:
+def _is_edgelite_local(el_config: dict[str, str]) -> bool:
+    url = (el_config.get("url") or "").strip().rstrip("/")
+    if not url:
+        return False
+    import urllib.parse
+    try:
+        parsed = urllib.parse.urlparse(url)
+        hostname = (parsed.hostname or "").lower()
+        return hostname in ("127.0.0.1", "localhost", "[::1]", "::1", "")
+    except Exception:
+        return "127.0.0.1" in url or "localhost" in url
+
+
+def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "", el_config: dict[str, str] | None = None) -> dict[str, Any]:
     if not protoforge_host:
         protoforge_host = get_protoforge_host()
+    if el_config and _is_edgelite_local(el_config):
+        protoforge_host = "127.0.0.1"
     host = protoforge_host
     port = protocol_config.get("port")
 
@@ -177,6 +192,7 @@ def convert_device_to_edgelite(
     protoforge_host: str = "",
     protocol_mapper: ProtocolMapper | None = None,
     data_type_mapper: DataTypeMapper | None = None,
+    el_config: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
     protocol = getattr(device, "protocol", "") or ""
 
@@ -201,7 +217,7 @@ def convert_device_to_edgelite(
         else:
             points_data.append(p)
 
-    driver_config = _build_driver_config(protocol, config, protoforge_host)
+    driver_config = _build_driver_config(protocol, config, protoforge_host, el_config)
     edgelite_points = _build_points(points_data, data_type_mapper)
 
     return {
@@ -273,7 +289,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             "suggestion": "请先在「系统设置」中配置 EdgeLite 网关地址，或在设备协议配置中填写 edgelite_url",
         }
 
-    payload = convert_device_to_edgelite(device, protoforge_host)
+    payload = convert_device_to_edgelite(device, protoforge_host, el_config=el_config)
     if payload is None:
         return {
             "ok": False, "skipped": True,
@@ -490,7 +506,7 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
     return (host, port)
 
 
-def _build_connect_error(driver_config: dict, protocol: str, protoforge_running: bool) -> dict[str, Any]:
+def _build_connect_error(driver_config: dict, protocol: str, protoforge_running: bool, same_server: bool = False) -> dict[str, Any]:
     driver_host, driver_port = _extract_driver_host_port(driver_config, protocol)
     proto_name = _PROTOCOL_DISPLAY.get(protocol, protocol.upper())
     default_port = _PROTOCOL_DEFAULT_PORTS.get(protocol, "")
@@ -499,17 +515,25 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
     if not protoforge_running:
         parts.append(f"ProtoForge 的 {proto_name} 协议服务未启动。请先在「协议管理」中启动 {proto_name} 服务")
     elif not driver_host:
-        parts.append(f"driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
+        if same_server:
+            parts.append(f"driver_config 中未指定 ProtoForge 地址。由于 EdgeLite 和 ProtoForge 在同一台服务器，请确保「系统设置 > EdgeLite配置 > ProtoForge地址」填写了 127.0.0.1")
+        else:
+            parts.append(f"driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
     else:
-        parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+        if same_server:
+            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+            if driver_host not in ("127.0.0.1", "localhost"):
+                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1，当前使用的是 {driver_host}")
+            if driver_port and default_port and str(driver_port) != str(default_port):
+                parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 ProtoForge 的 {proto_name} 服务是否在端口 {driver_port} 上运行")
+            parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) 端口 {driver_port} 是否正确")
+        else:
+            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+            if driver_port and default_port and str(driver_port) != str(default_port):
+                parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 EdgeLite 侧 {proto_name} 服务是否在端口 {driver_port} 上运行")
+            parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
+            parts.append(f"如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
 
-        if driver_port and default_port and str(driver_port) != str(default_port):
-            parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 EdgeLite 侧 {proto_name} 服务是否在端口 {driver_port} 上运行")
-
-        parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
-        parts.append(f"如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
-
-    host_info = f" ({driver_host}:{driver_port})" if driver_host or driver_port else ""
     return {
         "ok": False,
         "error": "\n".join(parts),
@@ -573,7 +597,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 protoforge_running = engine.is_protocol_running(device_protocol)
             except Exception:
                 pass
-            connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running)
+            same_server = _is_edgelite_local(el_config)
+            connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running, same_server)
             result["steps"]["connect"] = connect_error
             result["ok"] = False
             return result
