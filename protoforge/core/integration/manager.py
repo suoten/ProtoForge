@@ -182,7 +182,8 @@ class IntegrationManager:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
         from protoforge.core.edgelite import convert_device_to_edgelite, get_edgelite_config_from_device
-        payload = convert_device_to_edgelite(device, protoforge_host, self._protocol_mapper, self._data_type_mapper)
+        el_config = get_edgelite_config_from_device(device)
+        payload = convert_device_to_edgelite(device, protoforge_host, self._protocol_mapper, self._data_type_mapper, el_config=el_config)
         if payload is None:
             return {"ok": False, "skipped": True, "reason": "Protocol not supported by EdgeLite"}
 
