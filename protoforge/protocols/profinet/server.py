@@ -2,6 +2,8 @@ import asyncio
 import logging
 import struct
 import time
+import uuid
+from enum import IntEnum
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
@@ -20,6 +22,80 @@ DCP_BLOCK_IP = 0x01
 
 PNIO_FRAME_ID_RT = 0x8000
 PNIO_ALARM_HIGH = 0xFC01
+PNIO_ALARM_LOW = 0xFE01
+
+MSG_TYPE_DCP = 0x01
+MSG_TYPE_RT = 0x02
+MSG_TYPE_CM = 0x03
+MSG_TYPE_ALARM = 0x04
+
+
+class ARState(IntEnum):
+    W_CONNECT = 1
+    W_DATA = 2
+    W_ABORT = 3
+
+
+class CRType(IntEnum):
+    INPUT = 1
+    OUTPUT = 2
+    ALARM = 3
+
+
+class CommunicationRelation:
+    def __init__(self, cr_type: CRType, cr_id: int, data_length: int):
+        self.cr_type = cr_type
+        self.cr_id = cr_id
+        self.data_length = data_length
+        self.frame_id: int = 0
+        self.is_consumer: bool = cr_type == CRType.INPUT
+        self.is_provider: bool = cr_type == CRType.OUTPUT
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cr_type": self.cr_type.name,
+            "cr_id": self.cr_id,
+            "data_length": self.data_length,
+            "frame_id": self.frame_id,
+        }
+
+
+class ApplicationRelation:
+    def __init__(self, ar_id: int, ar_uuid: bytes, ar_type: int = 1):
+        self.ar_id = ar_id
+        self.ar_uuid = ar_uuid
+        self.ar_type = ar_type
+        self.state = ARState.W_CONNECT
+        self.crs: list[CommunicationRelation] = []
+        self.session_key: int = 0
+        self.send_clock: int = 0x0032
+        self.reduction_ratio: int = 1
+        self.watchdog_timeout: int = 100
+        self.data_hold_factor: int = 1
+        self.input_cr: CommunicationRelation | None = None
+        self.output_cr: CommunicationRelation | None = None
+        self.alarm_cr: CommunicationRelation | None = None
+
+    def setup_default_crs(self, input_size: int, output_size: int) -> None:
+        if input_size > 0:
+            self.input_cr = CommunicationRelation(CRType.INPUT, 1, input_size)
+            self.input_cr.frame_id = PNIO_FRAME_ID_RT
+            self.crs.append(self.input_cr)
+        if output_size > 0:
+            self.output_cr = CommunicationRelation(CRType.OUTPUT, 2, output_size)
+            self.output_cr.frame_id = PNIO_FRAME_ID_RT
+            self.crs.append(self.output_cr)
+        self.alarm_cr = CommunicationRelation(CRType.ALARM, 3, 0)
+        self.alarm_cr.frame_id = PNIO_ALARM_HIGH
+        self.crs.append(self.alarm_cr)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ar_id": self.ar_id,
+            "ar_uuid": self.ar_uuid.hex(),
+            "state": self.state.name,
+            "crs": [cr.to_dict() for cr in self.crs],
+        }
 
 
 class ProfinetDeviceBehavior(DeviceBehavior):
@@ -125,11 +201,13 @@ class ProfinetServer(ProtocolServer):
         self._device_id = 0x0100
         self._input_size = 0
         self._output_size = 0
-        self._connected = False
         self._connections: set[asyncio.StreamWriter] = set()
         self._ip_address = "192.168.1.1"
         self._subnet_mask = "255.255.255.0"
         self._gateway = "192.168.1.254"
+        self._ar_counter = 0
+        self._active_ars: dict[int, ApplicationRelation] = {}
+        self._alarm_seq = 0
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -144,7 +222,8 @@ class ProfinetServer(ProtocolServer):
         try:
             self._recalc_data_sizes()
             self._server_running = True
-            self._connected = False
+            self._active_ars.clear()
+            self._ar_counter = 0
 
             self._server_task = asyncio.create_task(self._serve())
             self._status = ProtocolStatus.RUNNING
@@ -171,6 +250,7 @@ class ProfinetServer(ProtocolServer):
             logger.warning("PROFINET server stop error: %s", e)
         finally:
             self._status = ProtocolStatus.STOPPED
+            self._active_ars.clear()
             logger.info("PROFINET IO server stopped")
             self._log_debug("system", "server_stop", "PROFINET IO服务停止")
 
@@ -215,7 +295,6 @@ class ProfinetServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         logger.info("PROFINET IO connection from %s", addr)
         self._connections.add(writer)
-        self._connected = True
         self._log_debug("inbound", "connect",
                         f"IO Controller连接: {addr[0]}:{addr[1]}",
                         detail={"peer": str(addr)})
@@ -224,7 +303,7 @@ class ProfinetServer(ProtocolServer):
                 header = await reader.readexactly(2)
                 body_len = struct.unpack(">H", header)[0]
                 data = await reader.readexactly(body_len) if body_len > 0 else b""
-                response = self._process_tunnel_message(data, addr)
+                response = self._process_tunnel_message(data, addr, writer)
                 if response:
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
@@ -233,21 +312,32 @@ class ProfinetServer(ProtocolServer):
             pass
         finally:
             self._connections.discard(writer)
-            self._connected = len(self._connections) > 0
+            for ar_id in list(self._active_ars.keys()):
+                ar = self._active_ars[ar_id]
+                if ar.state == ARState.W_DATA:
+                    ar.state = ARState.W_ABORT
+                    self._log_debug("outbound", "ar_abort",
+                                    f"PROFINET AR[{ar_id}]连接断开, 转为W_ABORT",
+                                    detail={"ar_id": ar_id})
             writer.close()
             try:
                 await writer.wait_closed()
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
 
-    def _process_tunnel_message(self, data: bytes, addr: tuple) -> bytes | None:
+    def _process_tunnel_message(self, data: bytes, addr: tuple,
+                                 writer: asyncio.StreamWriter) -> bytes | None:
         if len(data) < 2:
             return None
         msg_type = data[0]
-        if msg_type == 0x01:
+        if msg_type == MSG_TYPE_DCP:
             return self._handle_dcp_tunnel(data, addr)
-        elif msg_type == 0x02:
+        elif msg_type == MSG_TYPE_RT:
             return self._handle_rt_tunnel(data)
+        elif msg_type == MSG_TYPE_CM:
+            return self._handle_cm_tunnel(data, addr, writer)
+        elif msg_type == MSG_TYPE_ALARM:
+            return self._handle_alarm_tunnel(data)
         return None
 
     def _handle_dcp_tunnel(self, data: bytes, addr: tuple) -> bytes | None:
@@ -257,13 +347,13 @@ class ProfinetServer(ProtocolServer):
         xid = struct.unpack(">I", data[2:6])[0] if len(data) >= 6 else 0
         if service_id == DCP_SERVICE_IDENTIFY:
             resp = self._make_dcp_identify_response(data, xid)
-            return b"\x01" + resp
+            return bytes([MSG_TYPE_DCP]) + resp
         elif service_id == DCP_SERVICE_GET:
             resp = self._make_dcp_get_response(data, xid)
-            return b"\x01" + resp
+            return bytes([MSG_TYPE_DCP]) + resp
         elif service_id == DCP_SERVICE_SET:
             resp = self._make_dcp_set_response(data, xid)
-            return b"\x01" + resp
+            return bytes([MSG_TYPE_DCP]) + resp
         return None
 
     def _make_dcp_identify_response(self, data: bytes, xid: int) -> bytes:
@@ -317,27 +407,223 @@ class ProfinetServer(ProtocolServer):
                               0)
         return bytes(header)
 
+    def _handle_cm_tunnel(self, data: bytes, addr: tuple,
+                           writer: asyncio.StreamWriter) -> bytes | None:
+        if len(data) < 3:
+            return None
+        cm_op = data[1]
+        cm_seq = data[2]
+
+        if cm_op == 0x01:
+            return self._handle_cm_connect(data, addr, writer, cm_seq)
+        elif cm_op == 0x02:
+            return self._handle_cm_release(data, cm_seq)
+        elif cm_op == 0x03:
+            return self._handle_cm_read(data, cm_seq)
+        elif cm_op == 0x04:
+            return self._handle_cm_write(data, cm_seq)
+        elif cm_op == 0x05:
+            return self._handle_cm_control(data, cm_seq)
+
+        return bytes([MSG_TYPE_CM, 0xFF, cm_seq]) + struct.pack(">H", 0x8001)
+
+    def _handle_cm_connect(self, data: bytes, addr: tuple,
+                            writer: asyncio.StreamWriter, cm_seq: int) -> bytes:
+        self._ar_counter += 1
+        ar_id = self._ar_counter
+        ar_uuid = uuid.uuid4().bytes
+
+        ar = ApplicationRelation(ar_id, ar_uuid)
+        ar.setup_default_crs(self._input_size, self._output_size)
+
+        if len(data) >= 10:
+            ar.ar_type = data[3] if len(data) > 3 else 1
+            ar.session_key = struct.unpack(">H", data[4:6])[0] if len(data) >= 6 else 0
+            ar.send_clock = struct.unpack(">H", data[6:8])[0] if len(data) >= 8 else 0x0032
+            ar.reduction_ratio = struct.unpack(">H", data[8:10])[0] if len(data) >= 10 else 1
+
+        ar.state = ARState.W_DATA
+        self._active_ars[ar_id] = ar
+
+        resp = bytearray()
+        resp += struct.pack(">H", ar_id)
+        resp += ar_uuid
+        resp += struct.pack(">B", ar.ar_type)
+        resp += struct.pack(">H", ar.session_key)
+        resp += struct.pack(">H", ar.send_clock)
+        resp += struct.pack(">H", ar.reduction_ratio)
+        resp += struct.pack(">H", 0x0000)
+        resp += struct.pack(">H", len(ar.crs))
+        for cr in ar.crs:
+            resp += struct.pack(">B", cr.cr_type.value)
+            resp += struct.pack(">H", cr.cr_id)
+            resp += struct.pack(">H", cr.data_length)
+            resp += struct.pack(">H", cr.frame_id)
+            resp += struct.pack(">B", 0x01 if cr.is_provider else 0x00)
+            resp += struct.pack(">B", 0x01 if cr.is_consumer else 0x00)
+
+        self._log_debug("inbound", "cm_connect",
+                        f"PROFINET CM Connect: AR[{ar_id}]建立, 状态=W_DATA, "
+                        f"CRs={len(ar.crs)}, input={self._input_size}, output={self._output_size}",
+                        detail={"ar_id": ar_id, "session_key": ar.session_key,
+                                "send_clock": ar.send_clock, "crs": len(ar.crs)})
+
+        return bytes([MSG_TYPE_CM, 0x01, cm_seq]) + resp
+
+    def _handle_cm_release(self, data: bytes, cm_seq: int) -> bytes:
+        ar_id = struct.unpack(">H", data[3:5])[0] if len(data) >= 5 else 0
+        ar = self._active_ars.pop(ar_id, None)
+
+        if ar:
+            ar.state = ARState.W_ABORT
+            self._log_debug("inbound", "cm_release",
+                            f"PROFINET CM Release: AR[{ar_id}]释放",
+                            detail={"ar_id": ar_id})
+        else:
+            self._log_debug("inbound", "cm_release_error",
+                            f"PROFINET CM Release: AR[{ar_id}]不存在",
+                            detail={"ar_id": ar_id})
+
+        resp = bytearray()
+        resp += struct.pack(">H", ar_id)
+        resp += struct.pack(">H", 0x0000)
+
+        return bytes([MSG_TYPE_CM, 0x02, cm_seq]) + resp
+
+    def _handle_cm_read(self, data: bytes, cm_seq: int) -> bytes:
+        resp = bytearray()
+        resp += struct.pack(">H", 0x0000)
+        resp += struct.pack(">H", 0x0000)
+        return bytes([MSG_TYPE_CM, 0x03, cm_seq]) + resp
+
+    def _handle_cm_write(self, data: bytes, cm_seq: int) -> bytes:
+        resp = bytearray()
+        resp += struct.pack(">H", 0x0000)
+        resp += struct.pack(">H", 0x0000)
+        return bytes([MSG_TYPE_CM, 0x04, cm_seq]) + resp
+
+    def _handle_cm_control(self, data: bytes, cm_seq: int) -> bytes:
+        ar_id = struct.unpack(">H", data[3:5])[0] if len(data) >= 5 else 0
+        control_cmd = data[5] if len(data) > 5 else 0
+
+        ar = self._active_ars.get(ar_id)
+        if ar:
+            if control_cmd == 0x01:
+                ar.state = ARState.W_DATA
+                self._log_debug("inbound", "cm_control",
+                                f"PROFINET CM Control: AR[{ar_id}] -> W_DATA (ApplicationReady)",
+                                detail={"ar_id": ar_id, "command": "ApplicationReady"})
+            elif control_cmd == 0x02:
+                ar.state = ARState.W_ABORT
+                self._log_debug("inbound", "cm_control",
+                                f"PROFINET CM Control: AR[{ar_id}] -> W_ABORT",
+                                detail={"ar_id": ar_id, "command": "Abort"})
+
+        resp = bytearray()
+        resp += struct.pack(">H", ar_id)
+        resp += struct.pack(">B", control_cmd)
+        resp += struct.pack(">H", 0x0000)
+
+        return bytes([MSG_TYPE_CM, 0x05, cm_seq]) + resp
+
+    def _handle_alarm_tunnel(self, data: bytes) -> bytes | None:
+        if len(data) < 8:
+            return None
+
+        alarm_type = struct.unpack(">H", data[1:3])[0]
+        ar_id = struct.unpack(">H", data[3:5])[0]
+        alarm_seq = struct.unpack(">H", data[5:7])[0]
+        alarm_spec = data[7] if len(data) > 7 else 0
+
+        ar = self._active_ars.get(ar_id)
+
+        self._log_debug("inbound", "alarm_received",
+                        f"PROFINET Alarm: AR[{ar_id}] type=0x{alarm_type:04X} seq={alarm_seq}",
+                        detail={"ar_id": ar_id, "alarm_type": alarm_type,
+                                "alarm_seq": alarm_seq, "alarm_spec": alarm_spec})
+
+        resp = bytearray()
+        resp += struct.pack(">H", alarm_type)
+        resp += struct.pack(">H", ar_id)
+        resp += struct.pack(">H", alarm_seq)
+        resp += struct.pack(">B", 0x00)
+        resp += struct.pack(">H", 0x0000)
+
+        return bytes([MSG_TYPE_ALARM]) + resp
+
+    def _send_alarm(self, ar_id: int, alarm_type: int, alarm_detail: bytes = b"",
+                     writers: set[asyncio.StreamWriter] | None = None) -> None:
+        self._alarm_seq = (self._alarm_seq + 1) & 0xFFFF
+        alarm_msg = bytearray()
+        alarm_msg += struct.pack(">H", alarm_type)
+        alarm_msg += struct.pack(">H", ar_id)
+        alarm_msg += struct.pack(">H", self._alarm_seq)
+        alarm_msg += struct.pack(">B", 0x01)
+        alarm_msg += struct.pack(">H", len(alarm_detail))
+        alarm_msg += alarm_detail
+
+        payload = bytes([MSG_TYPE_ALARM]) + bytes(alarm_msg)
+        frame = struct.pack(">H", len(payload)) + payload
+
+        self._log_debug("outbound", "alarm_send",
+                        f"PROFINET Alarm发送: AR[{ar_id}] type=0x{alarm_type:04X}",
+                        detail={"ar_id": ar_id, "alarm_type": alarm_type,
+                                "alarm_seq": self._alarm_seq})
+
+        if writers:
+            for w in writers:
+                try:
+                    w.write(frame)
+                except Exception:
+                    pass
+
     def _handle_rt_tunnel(self, data: bytes) -> bytes | None:
         behavior = self._behaviors.get(self._default_device_id)
         config = self._device_configs.get(self._default_device_id)
         if not behavior or not config:
             return None
 
+        active_ar = None
+        for ar in self._active_ars.values():
+            if ar.state == ARState.W_DATA:
+                active_ar = ar
+                break
+
         payload = data[1:]
-        if self._output_size > 0 and len(payload) >= self._output_size:
-            output_data = payload[:self._output_size]
+        cycle_counter = 0
+        data_status = 0x01
+        transfer_status = 0x00
+
+        if len(payload) >= 4:
+            cycle_counter = struct.unpack(">H", payload[0:2])[0]
+            data_status = payload[2]
+            transfer_status = payload[3]
+
+        rt_payload = payload[4:] if len(payload) > 4 else b""
+
+        if self._output_size > 0 and len(rt_payload) >= self._output_size:
+            output_data = rt_payload[:self._output_size]
             behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
-                            f"PROFINET IO循环写入 {len(output_data)}字节",
+                            f"PROFINET IO循环写入 {len(output_data)}字节 cycle={cycle_counter}",
                             device_id=self._default_device_id or "",
-                            detail={"size": len(output_data)})
+                            detail={"size": len(output_data), "cycle": cycle_counter})
 
         input_data = behavior.get_input_data(config)
+
+        resp_cycle = (cycle_counter + 1) & 0xFFFF
+        resp = bytearray()
+        resp += struct.pack(">H", resp_cycle)
+        resp += struct.pack(">B", 0x05 if active_ar else 0x01)
+        resp += struct.pack(">B", transfer_status)
+        resp += input_data
+
         self._log_debug("outbound", "cyclic_read",
-                        f"PROFINET IO循环响应 {len(input_data)}字节",
+                        f"PROFINET IO循环响应 {len(input_data)}字节 cycle={resp_cycle}",
                         device_id=self._default_device_id or "",
-                        detail={"size": len(input_data)})
-        return b"\x02" + input_data
+                        detail={"size": len(input_data), "cycle": resp_cycle})
+
+        return bytes([MSG_TYPE_RT]) + bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ProfinetDeviceBehavior(device_config.points)
@@ -354,6 +640,10 @@ class ProfinetServer(ProtocolServer):
             self._device_id = int(proto_config["device_id"])
 
         self._recalc_data_sizes()
+
+        for ar in self._active_ars.values():
+            if ar.state == ARState.W_DATA:
+                ar.setup_default_crs(self._input_size, self._output_size)
 
         logger.info("PROFINET IO device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
@@ -410,7 +700,7 @@ class ProfinetServer(ProtocolServer):
                 "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": "子网掩码"},
                 "gateway": {"type": "string", "default": "192.168.1.254", "description": "默认网关"},
             },
-            "description": "TCP隧道模式 - PROFINET协议帧通过TCP传输，需配套隧道适配器连接真实控制器",
+            "description": "TCP隧道模式 - 支持DCP发现/CM连接建立/AR状态机/RT循环数据/Alarm通知",
         }
 
     @staticmethod

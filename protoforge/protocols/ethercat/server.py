@@ -41,6 +41,37 @@ ECAT_STATION_ADDR = 0x0010
 ECAT_ERR_UNSUPPORTED = 0x0001
 ECAT_ERR_NO_SLAVE = 0x0002
 
+SM_NUM_CHANNELS = 16
+SM_REG_SIZE = 8
+SM_BASE_ADDR = 0x0800
+
+FMMU_NUM_CHANNELS = 16
+FMMU_REG_SIZE = 16
+FMMU_BASE_ADDR = 0x0600
+
+EEPROM_CTRL_STATUS = 0x0500
+EEPROM_ADDR = 0x0502
+EEPROM_DATA = 0x0504
+
+EEPROM_SIZE = 0x100
+
+SM_CTRL_MAILBOX_WRITE = 0x01
+SM_CTRL_MAILBOX_READ = 0x02
+SM_CTRL_PROCESS_DATA_WRITE = 0x04
+SM_CTRL_PROCESS_DATA_READ = 0x08
+
+SM_STATUS_WRITTEN = 0x01
+SM_STATUS_READ = 0x02
+
+SM_ACT_ENABLE = 0x01
+
+EEPROM_CMD_READ = 0x0100
+EEPROM_CMD_IDLE = 0x0000
+EEPROM_STATUS_BUSY = 0x8000
+EEPROM_STATUS_ERROR = 0x2000
+EEPROM_STATUS_NOT_LOADED = 0x1000
+EEPROM_STATUS_ADDR_ERR = 0x0400
+
 
 class EtherCATDeviceBehavior(DeviceBehavior):
     def __init__(self, points: list[PointConfig]):
@@ -175,14 +206,30 @@ class EtherCATServer(ProtocolServer):
         self._pd_input = bytearray()
         self._pd_output = bytearray()
         self._esc_regs: dict[int, bytes] = {}
+        self._sm_channels: list[bytearray] = []
+        self._fmmu_channels: list[bytearray] = []
+        self._eeprom: bytearray = bytearray()
+        self._eeprom_ctrl: int = 0
+        self._eeprom_addr_reg: int = 0
+        self._vendor_id: int = 0x0000
+        self._product_code: int = 0x0000
+        self._revision_number: int = 0x0001
+        self._serial_number: int = 0x00000001
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 34980)
         self._slave_addr = config.get("slave_address", 0x1001)
+        self._vendor_id = config.get("vendor_id", 0x0000)
+        self._product_code = config.get("product_code", 0x0000)
+        self._revision_number = config.get("revision_number", 0x0001)
+        self._serial_number = config.get("serial_number", 0x00000001)
         try:
+            self._init_eeprom()
             self._init_esc_regs()
+            self._init_sm_channels()
+            self._init_fmmu_channels()
             self._al_state = ECAT_STATE_INIT
             self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
             self._server_running = True
@@ -213,14 +260,118 @@ class EtherCATServer(ProtocolServer):
             logger.info("EtherCAT server stopped")
             self._log_debug("system", "server_stop", "EtherCAT服务停止")
 
+    def _init_eeprom(self) -> None:
+        self._eeprom = bytearray(EEPROM_SIZE * 2)
+        self._eeprom[0x00:0x04] = struct.pack("<HH", self._vendor_id, self._product_code)
+        self._eeprom[0x04:0x08] = struct.pack("<HH", self._revision_number, self._serial_number & 0xFFFF)
+        self._eeprom[0x08:0x0C] = struct.pack("<HH", (self._serial_number >> 16) & 0xFFFF, 0x0000)
+        self._eeprom[0x0C:0x0E] = struct.pack("<H", 0x0001)
+        self._eeprom[0x0E:0x10] = struct.pack("<H", 0x0000)
+        self._eeprom[0x10:0x12] = struct.pack("<H", 0x0000)
+        self._eeprom[0x12:0x14] = struct.pack("<H", 0x0000)
+        self._eeprom[0x14:0x16] = struct.pack("<H", 0x0010)
+        self._eeprom[0x16:0x18] = struct.pack("<H", 0x0000)
+        self._eeprom[0x18:0x1A] = struct.pack("<H", 0x0000)
+        self._eeprom[0x1A:0x1C] = struct.pack("<H", 0x0000)
+        self._eeprom[0x1C:0x1E] = struct.pack("<H", 0x0000)
+        self._eeprom[0x1E:0x20] = struct.pack("<H", 0x0000)
+        self._eeprom[0x20:0x24] = struct.pack("<HH", 0x0033, 0x0002)
+        self._eeprom[0x24:0x28] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x28:0x2C] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x2C:0x30] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x30:0x34] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x34:0x38] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x38:0x3C] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x3C:0x40] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x40:0x42] = struct.pack("<H", 0x0000)
+        self._eeprom[0x42:0x44] = struct.pack("<H", 0x0000)
+        self._eeprom[0x44:0x46] = struct.pack("<H", 0x0000)
+        self._eeprom[0x46:0x48] = struct.pack("<H", 0x0000)
+        self._eeprom[0x48:0x4A] = struct.pack("<H", 0x0000)
+        self._eeprom[0x4A:0x4C] = struct.pack("<H", 0x0000)
+        self._eeprom[0x4C:0x4E] = struct.pack("<H", 0x0000)
+        self._eeprom[0x4E:0x50] = struct.pack("<H", 0x0000)
+        self._eeprom[0x50:0x52] = struct.pack("<H", 0x0000)
+        self._eeprom[0x52:0x54] = struct.pack("<H", 0x0000)
+        self._eeprom[0x54:0x56] = struct.pack("<H", 0x0000)
+        self._eeprom[0x56:0x58] = struct.pack("<H", 0x0000)
+        self._eeprom[0x58:0x5A] = struct.pack("<H", 0x0000)
+        self._eeprom[0x5A:0x5C] = struct.pack("<H", 0x0000)
+        self._eeprom[0x5C:0x5E] = struct.pack("<H", 0x0000)
+        self._eeprom[0x5E:0x60] = struct.pack("<H", 0x0000)
+        self._eeprom[0x60:0x64] = struct.pack("<HH", 0x0000, 0x0000)
+        self._eeprom[0x64:0x66] = struct.pack("<H", 0x0000)
+        self._eeprom[0x80:0x82] = struct.pack("<H", 0x0002)
+        self._eeprom[0x82:0x84] = struct.pack("<H", 0x0000)
+        self._eeprom[0x84:0x86] = struct.pack("<H", 0x0000)
+        self._eeprom[0x86:0x88] = struct.pack("<H", 0x0000)
+
     def _init_esc_regs(self) -> None:
+        self._esc_regs.clear()
         self._esc_regs[0x0000] = struct.pack("<H", 0x0444)
+        self._esc_regs[0x0002] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0004] = struct.pack("<H", 0x0000)
         self._esc_regs[ECAT_STATION_ADDR] = struct.pack("<H", self._slave_addr)
+        self._esc_regs[0x0012] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0014] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0020] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0022] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0030] = struct.pack("<H", 0x1000)
+        self._esc_regs[0x0032] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0034] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0036] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0100] = struct.pack("<I", 0x00000000)
+        self._esc_regs[0x0104] = struct.pack("<I", 0x00000000)
+        self._esc_regs[0x0108] = struct.pack("<I", 0x00000000)
+        self._esc_regs[0x010C] = struct.pack("<I", 0x00000000)
         self._esc_regs[ECAT_DL_STATUS] = struct.pack("<H", 0x0004)
+        self._esc_regs[0x0112] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0114] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0118] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x011A] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x011C] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x011E] = struct.pack("<H", 0x0000)
         self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
         self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
-        self._esc_regs[0x0500] = struct.pack("<H", 0x0000)
-        self._esc_regs[0x0502] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0136] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0138] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x013A] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x013C] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x013E] = struct.pack("<H", 0x0000)
+        self._esc_regs[EEPROM_CTRL_STATUS] = struct.pack("<H", 0x0000)
+        self._esc_regs[EEPROM_ADDR] = struct.pack("<H", 0x0000)
+        self._esc_regs[EEPROM_DATA] = struct.pack("<HH", 0x0000, 0x0000)
+        self._esc_regs[0x0600 + FMMU_NUM_CHANNELS * FMMU_REG_SIZE] = b""
+        self._esc_regs[0x0800 + SM_NUM_CHANNELS * SM_REG_SIZE] = b""
+
+    def _init_sm_channels(self) -> None:
+        self._sm_channels = []
+        for i in range(SM_NUM_CHANNELS):
+            ch = bytearray(SM_REG_SIZE)
+            ch[0:2] = struct.pack("<H", 0x0000)
+            ch[2:4] = struct.pack("<H", 0x0000)
+            ch[4] = 0x00
+            ch[5] = 0x00
+            ch[6] = 0x00
+            ch[7] = 0x00
+            self._sm_channels.append(ch)
+
+    def _init_fmmu_channels(self) -> None:
+        self._fmmu_channels = []
+        for i in range(FMMU_NUM_CHANNELS):
+            ch = bytearray(FMMU_REG_SIZE)
+            ch[0:4] = struct.pack("<I", 0x00000000)
+            ch[4:6] = struct.pack("<H", 0x0000)
+            ch[6] = 0x00
+            ch[7] = 0x00
+            ch[8:10] = struct.pack("<H", 0x0000)
+            ch[10] = 0x00
+            ch[11] = 0x00
+            ch[12] = 0x00
+            ch[13] = 0x00
+            ch[14] = 0x00
+            ch[15] = 0x00
+            self._fmmu_channels.append(ch)
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -234,6 +385,72 @@ class EtherCATServer(ProtocolServer):
                     self._output_size += sz
         self._pd_input = bytearray(self._input_size)
         self._pd_output = bytearray(self._output_size)
+        self._configure_sm_for_pd()
+
+    def _configure_sm_for_pd(self) -> None:
+        if self._output_size > 0:
+            sm2 = self._sm_channels[2]
+            sm2[0:2] = struct.pack("<H", 0x1000)
+            sm2[2:4] = struct.pack("<H", self._output_size)
+            sm2[4] = SM_CTRL_PROCESS_DATA_WRITE
+            sm2[5] = 0x00
+            sm2[6] = SM_ACT_ENABLE
+            sm2[7] = 0x01
+        else:
+            sm2 = self._sm_channels[2]
+            sm2[0:2] = struct.pack("<H", 0x0000)
+            sm2[2:4] = struct.pack("<H", 0x0000)
+            sm2[4] = 0x00
+            sm2[6] = 0x00
+
+        if self._input_size > 0:
+            sm3 = self._sm_channels[3]
+            sm3[0:2] = struct.pack("<H", 0x1000 + self._output_size)
+            sm3[2:4] = struct.pack("<H", self._input_size)
+            sm3[4] = SM_CTRL_PROCESS_DATA_READ
+            sm3[5] = 0x00
+            sm3[6] = SM_ACT_ENABLE
+            sm3[7] = 0x01
+        else:
+            sm3 = self._sm_channels[3]
+            sm3[0:2] = struct.pack("<H", 0x0000)
+            sm3[2:4] = struct.pack("<H", 0x0000)
+            sm3[4] = 0x00
+            sm3[6] = 0x00
+
+    def _configure_fmmu_for_pd(self) -> None:
+        logical_base = 0x10000000
+        if self._output_size > 0:
+            f0 = self._fmmu_channels[0]
+            f0[0:4] = struct.pack("<I", logical_base)
+            f0[4:6] = struct.pack("<H", self._output_size)
+            f0[6] = 0x00
+            f0[7] = 0x00
+            f0[8:10] = struct.pack("<H", 0x1000)
+            f0[10] = 0x00
+            f0[11] = 0x00
+            f0[12] = 0x06
+            f0[13] = 0x01
+            f0[14] = 0x00
+            f0[15] = 0x00
+        else:
+            self._fmmu_channels[0] = bytearray(FMMU_REG_SIZE)
+
+        if self._input_size > 0:
+            f1 = self._fmmu_channels[1]
+            f1[0:4] = struct.pack("<I", logical_base + self._output_size)
+            f1[4:6] = struct.pack("<H", self._input_size)
+            f1[6] = 0x00
+            f1[7] = 0x00
+            f1[8:10] = struct.pack("<H", 0x1000 + self._output_size)
+            f1[10] = 0x00
+            f1[11] = 0x00
+            f1[12] = 0x02
+            f1[13] = 0x01
+            f1[14] = 0x00
+            f1[15] = 0x00
+        else:
+            self._fmmu_channels[1] = bytearray(FMMU_REG_SIZE)
 
     def _point_size(self, point: PointConfig) -> int:
         dt = point.data_type.value
@@ -340,6 +557,14 @@ class EtherCATServer(ProtocolServer):
                 return reg_data, 0x0001
             return b"\x00" * length, 0x0001
 
+        if FMMU_BASE_ADDR <= address < FMMU_BASE_ADDR + FMMU_NUM_CHANNELS * FMMU_REG_SIZE:
+            fmmu_data = self._read_fmmu(address, length)
+            return fmmu_data, 0x0001
+
+        if SM_BASE_ADDR <= address < SM_BASE_ADDR + SM_NUM_CHANNELS * SM_REG_SIZE:
+            sm_data = self._read_sm(address, length)
+            return sm_data, 0x0001
+
         if address >= 0x10000000:
             offset = address & 0x0FFFFFFF
             behavior = self._behaviors.get(self._default_device_id)
@@ -356,6 +581,14 @@ class EtherCATServer(ProtocolServer):
                       payload: bytes) -> tuple[bytes, int]:
         if address >= 0x1000 and address < 0x2000:
             self._write_esc_reg(address, payload[:length])
+            return b"", 0x0001
+
+        if FMMU_BASE_ADDR <= address < FMMU_BASE_ADDR + FMMU_NUM_CHANNELS * FMMU_REG_SIZE:
+            self._write_fmmu(address, payload[:length])
+            return b"", 0x0001
+
+        if SM_BASE_ADDR <= address < SM_BASE_ADDR + SM_NUM_CHANNELS * SM_REG_SIZE:
+            self._write_sm(address, payload[:length])
             return b"", 0x0001
 
         if address >= 0x10000000:
@@ -379,6 +612,18 @@ class EtherCATServer(ProtocolServer):
         return read_data, max(wc1, wc2)
 
     def _read_esc_reg(self, address: int, length: int) -> bytes | None:
+        if EEPROM_CTRL_STATUS <= address < EEPROM_CTRL_STATUS + 2:
+            status = EEPROM_CMD_IDLE
+            return struct.pack("<H", status)[:length]
+        if EEPROM_ADDR <= address < EEPROM_ADDR + 2:
+            return struct.pack("<H", self._eeprom_addr_reg)[:length]
+        if EEPROM_DATA <= address < EEPROM_DATA + 4:
+            word_addr = self._eeprom_addr_reg
+            if word_addr * 2 + 2 <= len(self._eeprom):
+                val = struct.unpack("<H", self._eeprom[word_addr * 2:word_addr * 2 + 2])[0]
+                return struct.pack("<HH", val, 0x0000)[:length]
+            return b"\x00" * length
+
         for reg_addr, reg_data in self._esc_regs.items():
             if address >= reg_addr and address < reg_addr + len(reg_data):
                 offset = address - reg_addr
@@ -387,6 +632,16 @@ class EtherCATServer(ProtocolServer):
         return None
 
     def _write_esc_reg(self, address: int, data: bytes) -> None:
+        if EEPROM_CTRL_STATUS <= address < EEPROM_CTRL_STATUS + 2:
+            ctrl = struct.unpack("<H", data[:2].ljust(2, b"\x00"))[0]
+            if ctrl & EEPROM_CMD_READ:
+                self._eeprom_ctrl = ctrl
+            return
+
+        if EEPROM_ADDR <= address < EEPROM_ADDR + 2:
+            self._eeprom_addr_reg = struct.unpack("<H", data[:2].ljust(2, b"\x00"))[0]
+            return
+
         for reg_addr in list(self._esc_regs.keys()):
             reg_data = self._esc_regs[reg_addr]
             if address >= reg_addr and address < reg_addr + len(reg_data):
@@ -401,6 +656,77 @@ class EtherCATServer(ProtocolServer):
                 return
         self._esc_regs[address] = data
 
+    def _read_fmmu(self, address: int, length: int) -> bytes:
+        ch_idx = (address - FMMU_BASE_ADDR) // FMMU_REG_SIZE
+        offset = (address - FMMU_BASE_ADDR) % FMMU_REG_SIZE
+        if 0 <= ch_idx < FMMU_NUM_CHANNELS:
+            ch = self._fmmu_channels[ch_idx]
+            end = min(offset + length, FMMU_REG_SIZE)
+            return bytes(ch[offset:end])
+        return b"\x00" * length
+
+    def _write_fmmu(self, address: int, data: bytes) -> None:
+        ch_idx = (address - FMMU_BASE_ADDR) // FMMU_REG_SIZE
+        offset = (address - FMMU_BASE_ADDR) % FMMU_REG_SIZE
+        if 0 <= ch_idx < FMMU_NUM_CHANNELS:
+            ch = self._fmmu_channels[ch_idx]
+            end = min(offset + len(data), FMMU_REG_SIZE)
+            ch[offset:end] = data[:end - offset]
+            self._log_debug("inbound", "fmmu_config",
+                            f"EtherCAT FMMU[{ch_idx}]配置写入",
+                            detail={"channel": ch_idx, "address": hex(address)})
+            self._configure_fmmu_for_pd()
+
+    def _read_sm(self, address: int, length: int) -> bytes:
+        ch_idx = (address - SM_BASE_ADDR) // SM_REG_SIZE
+        offset = (address - SM_BASE_ADDR) % SM_REG_SIZE
+        if 0 <= ch_idx < SM_NUM_CHANNELS:
+            ch = self._sm_channels[ch_idx]
+            end = min(offset + length, SM_REG_SIZE)
+            return bytes(ch[offset:end])
+        return b"\x00" * length
+
+    def _write_sm(self, address: int, data: bytes) -> None:
+        ch_idx = (address - SM_BASE_ADDR) // SM_REG_SIZE
+        offset = (address - SM_BASE_ADDR) % SM_REG_SIZE
+        if 0 <= ch_idx < SM_NUM_CHANNELS:
+            ch = self._sm_channels[ch_idx]
+            end = min(offset + len(data), SM_REG_SIZE)
+            ch[offset:end] = data[:end - offset]
+            sm_type = "Output" if ch_idx == 2 else "Input" if ch_idx == 3 else f"SM{ch_idx}"
+            self._log_debug("inbound", "sm_config",
+                            f"EtherCAT SM[{ch_idx}]({sm_type})配置写入",
+                            detail={"channel": ch_idx, "address": hex(address),
+                                    "physical_start": struct.unpack("<H", ch[0:2])[0],
+                                    "length": struct.unpack("<H", ch[2:4])[0],
+                                    "control": ch[4], "activate": ch[6]})
+
+    def _sm_activated(self, sm_idx: int) -> bool:
+        if sm_idx >= len(self._sm_channels):
+            return False
+        ch = self._sm_channels[sm_idx]
+        return (ch[6] & SM_ACT_ENABLE) != 0
+
+    def _fmmu_activated(self, fmmu_idx: int) -> bool:
+        if fmmu_idx >= len(self._fmmu_channels):
+            return False
+        ch = self._fmmu_channels[fmmu_idx]
+        return ch[13] != 0
+
+    def _check_sm_configured(self) -> bool:
+        has_input = self._input_size > 0
+        has_output = self._output_size > 0
+        sm3_ok = (not has_input) or self._sm_activated(3)
+        sm2_ok = (not has_output) or self._sm_activated(2)
+        return sm2_ok and sm3_ok
+
+    def _check_fmmu_configured(self) -> bool:
+        has_input = self._input_size > 0
+        has_output = self._output_size > 0
+        f0_ok = (not has_output) or self._fmmu_activated(0)
+        f1_ok = (not has_input) or self._fmmu_activated(1)
+        return f0_ok and f1_ok
+
     def _handle_al_state_transition(self, requested_state: int) -> None:
         valid_transitions = {
             ECAT_STATE_INIT: (ECAT_STATE_INIT, ECAT_STATE_PREOP, ECAT_STATE_BOOT),
@@ -411,19 +737,46 @@ class EtherCATServer(ProtocolServer):
         }
         current = self._al_state
         allowed = valid_transitions.get(current, (ECAT_STATE_INIT,))
-        if requested_state in allowed:
-            self._al_state = requested_state
-            self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
-            self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
-            state_names = {0x01: "INIT", 0x02: "PREOP", 0x03: "BOOT", 0x04: "SAFEOP", 0x08: "OP"}
-            self._log_debug("inbound", "state_change",
-                            f"EtherCAT AL状态: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",
-                            detail={"from": current, "to": requested_state})
-        else:
+
+        if requested_state not in allowed:
             self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0016)
+            self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
             self._log_debug("inbound", "state_change_error",
                             f"EtherCAT AL非法状态转换: 0x{current:02X} -> 0x{requested_state:02X}",
                             detail={"from": current, "to": requested_state, "error_code": 0x0016})
+            return
+
+        if requested_state == ECAT_STATE_SAFEOP and not self._check_sm_configured():
+            self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
+            self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
+            self._log_debug("inbound", "state_change_error",
+                            "EtherCAT AL: PREOP->SAFEOP失败, SM未配置",
+                            detail={"error_code": 0x001A, "reason": "SM not configured"})
+            return
+
+        if requested_state == ECAT_STATE_OP:
+            if not self._check_sm_configured():
+                self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
+                self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
+                self._log_debug("inbound", "state_change_error",
+                                "EtherCAT AL: ->OP失败, SM未配置",
+                                detail={"error_code": 0x001A})
+                return
+            if not self._check_fmmu_configured():
+                self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001B)
+                self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
+                self._log_debug("inbound", "state_change_error",
+                                "EtherCAT AL: ->OP失败, FMMU未配置",
+                                detail={"error_code": 0x001B})
+                return
+
+        self._al_state = requested_state
+        self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state)
+        self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
+        state_names = {0x01: "INIT", 0x02: "PREOP", 0x03: "BOOT", 0x04: "SAFEOP", 0x08: "OP"}
+        self._log_debug("inbound", "state_change",
+                        f"EtherCAT AL状态: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",
+                        detail={"from": current, "to": requested_state})
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = EtherCATDeviceBehavior(device_config.points)
@@ -487,5 +840,9 @@ class EtherCATServer(ProtocolServer):
                 "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
                 "port": {"type": "integer", "default": 34980, "description": "EtherCAT帧服务端口"},
                 "slave_address": {"type": "integer", "default": 4097, "description": "从站地址(Station Address)"},
+                "vendor_id": {"type": "integer", "default": 0, "description": "厂商ID(EEPROM)"},
+                "product_code": {"type": "integer", "default": 0, "description": "产品代码(EEPROM)"},
+                "revision_number": {"type": "integer", "default": 1, "description": "修订号(EEPROM)"},
+                "serial_number": {"type": "integer", "default": 1, "description": "序列号(EEPROM)"},
             },
         }
