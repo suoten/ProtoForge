@@ -86,6 +86,10 @@ class SimulationEngine:
             })
         return result
 
+    def is_protocol_running(self, protocol_name: str) -> bool:
+        server = self._protocol_servers.get(protocol_name)
+        return server is not None and server.status == ProtocolStatus.RUNNING
+
     async def start_protocol(self, protocol_name: str, config: dict[str, Any]) -> None:
         server = self._protocol_servers.get(protocol_name)
         if not server:
