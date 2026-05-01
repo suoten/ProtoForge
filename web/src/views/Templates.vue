@@ -28,6 +28,7 @@
               </n-space>
               <n-space size="small">
                 <n-button size="tiny" type="primary" @click="openInstantiate(t)">实例化</n-button>
+                <n-button size="tiny" secondary @click="openEdit(t)">编辑</n-button>
                 <n-button size="tiny" type="error" @click="confirmDelete(t)">删除</n-button>
               </n-space>
             </n-space>
@@ -47,31 +48,88 @@
       </div>
     </n-space>
 
-    <n-modal v-model:show="showCreateModal" preset="card" title="创建模板" style="width: 600px">
-      <n-form :model="newTemplate" label-placement="left" label-width="80">
-        <n-form-item label="模板ID">
-          <n-input v-model:value="newTemplate.id" placeholder="如: my-custom-device" />
-        </n-form-item>
-        <n-form-item label="名称">
-          <n-input v-model:value="newTemplate.name" placeholder="如: 自定义传感器" />
-        </n-form-item>
-        <n-form-item label="协议">
-          <n-select v-model:value="newTemplate.protocol" :options="protocolOptions.filter(o => o.value)" />
-        </n-form-item>
-        <n-form-item label="厂商">
-          <n-input v-model:value="newTemplate.manufacturer" />
-        </n-form-item>
-        <n-form-item label="型号">
-          <n-input v-model:value="newTemplate.model" />
-        </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="newTemplate.description" type="textarea" />
-        </n-form-item>
-      </n-form>
+    <n-modal v-model:show="showCreateModal" preset="card" title="创建模板" style="width: 750px">
+      <n-space vertical>
+        <n-form :model="newTemplate" label-placement="left" label-width="80">
+          <n-form-item label="模板ID">
+            <n-input v-model:value="newTemplate.id" placeholder="如: my-custom-device" />
+          </n-form-item>
+          <n-form-item label="名称">
+            <n-input v-model:value="newTemplate.name" placeholder="如: 自定义传感器" />
+          </n-form-item>
+          <n-form-item label="协议">
+            <n-select v-model:value="newTemplate.protocol" :options="protocolOptions.filter(o => o.value)" />
+          </n-form-item>
+          <n-form-item label="厂商">
+            <n-input v-model:value="newTemplate.manufacturer" />
+          </n-form-item>
+          <n-form-item label="型号">
+            <n-input v-model:value="newTemplate.model" />
+          </n-form-item>
+          <n-form-item label="描述">
+            <n-input v-model:value="newTemplate.description" type="textarea" />
+          </n-form-item>
+          <n-form-item label="标签">
+            <n-dynamic-tags v-model:value="newTagList" />
+          </n-form-item>
+        </n-form>
+        <n-divider />
+        <n-space justify="space-between" align="center">
+          <n-text strong>测点配置 ({{ newTemplate.points.length }} 个)</n-text>
+          <n-button size="small" type="primary" @click="addNewPoint">添加测点</n-button>
+        </n-space>
+        <div v-if="newTemplate.points.length === 0" style="text-align:center;padding:20px">
+          <n-text depth="3">暂无测点，请点击"添加测点"按钮配置</n-text>
+        </div>
+        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" />
+      </n-space>
       <template #action>
         <n-space>
           <n-button @click="showCreateModal = false">取消</n-button>
           <n-button type="primary" @click="createTemplate" :loading="creating">创建</n-button>
+        </n-space>
+      </template>
+    </n-modal>
+
+    <n-modal v-model:show="showEditModal" preset="card" title="编辑模板" style="width: 750px">
+      <n-space vertical>
+        <n-form :model="editForm" label-placement="left" label-width="80">
+          <n-form-item label="模板ID">
+            <n-input v-model:value="editForm.id" disabled />
+          </n-form-item>
+          <n-form-item label="名称">
+            <n-input v-model:value="editForm.name" />
+          </n-form-item>
+          <n-form-item label="协议">
+            <n-select v-model:value="editForm.protocol" :options="protocolOptions.filter(o => o.value)" />
+          </n-form-item>
+          <n-form-item label="厂商">
+            <n-input v-model:value="editForm.manufacturer" />
+          </n-form-item>
+          <n-form-item label="型号">
+            <n-input v-model:value="editForm.model" />
+          </n-form-item>
+          <n-form-item label="描述">
+            <n-input v-model:value="editForm.description" type="textarea" />
+          </n-form-item>
+          <n-form-item label="标签">
+            <n-dynamic-tags v-model:value="editTagList" />
+          </n-form-item>
+        </n-form>
+        <n-divider />
+        <n-space justify="space-between" align="center">
+          <n-text strong>测点配置 ({{ editForm.points.length }} 个)</n-text>
+          <n-button size="small" type="primary" @click="addEditPoint">添加测点</n-button>
+        </n-space>
+        <div v-if="editForm.points.length === 0" style="text-align:center;padding:20px">
+          <n-text depth="3">暂无测点，请点击"添加测点"按钮配置</n-text>
+        </div>
+        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" />
+      </n-space>
+      <template #action>
+        <n-space>
+          <n-button @click="showEditModal = false">取消</n-button>
+          <n-button type="primary" @click="saveEditTemplate" :loading="saving">保存</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -99,10 +157,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, useMessage, useDialog } from 'naive-ui'
+import { ref, computed, onMounted, h } from 'vue'
+import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
-
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -116,13 +173,19 @@ const filterTag = ref(null)
 const allTags = ref([])
 const searching = ref(false)
 const showCreateModal = ref(false)
+const showEditModal = ref(false)
 const showInstantiateModal = ref(false)
 const creating = ref(false)
+const saving = ref(false)
 const instantiating = ref(false)
 const selectedTemplate = ref(null)
 const instantiateForm = ref({ device_id: '', device_name: '' })
 
 const newTemplate = ref({ id: '', name: '', protocol: 'modbus_tcp', manufacturer: '', model: '', description: '', points: [], tags: [] })
+const newTagList = ref([])
+
+const editForm = ref({ id: '', name: '', protocol: '', manufacturer: '', model: '', description: '', points: [], tags: [], protocol_config: {} })
+const editTagList = ref([])
 
 const protocolOptions = computed(() => [
   { label: '全部', value: null },
@@ -153,16 +216,65 @@ const filteredTemplates = computed(() => {
   return result
 })
 
-function goMarketplace() {
-  router.push('/marketplace')
+const dataTypeOptions = [
+  { label: 'float32', value: 'float32' }, { label: 'float64', value: 'float64' },
+  { label: 'int16', value: 'int16' }, { label: 'int32', value: 'int32' },
+  { label: 'uint16', value: 'uint16' }, { label: 'bool', value: 'bool' },
+  { label: 'string', value: 'string' },
+]
+
+const generatorOptions = [
+  { label: '随机', value: 'random' }, { label: '正弦波', value: 'sine' },
+  { label: '锯齿波', value: 'sawtooth' }, { label: '方波', value: 'square' },
+  { label: '递增', value: 'increment' }, { label: '常量', value: 'constant' },
+  { label: '固定值', value: 'fixed' },
+]
+
+const pointEditColumns = [
+  { title: '名称', key: 'name', width: 100, render: makeEditRenderer('name', newTemplate, NInput) },
+  { title: '地址', key: 'address', width: 80, render: makeEditRenderer('address', newTemplate, NInput) },
+  { title: '类型', key: 'data_type', width: 90, render: makeSelectRenderer('data_type', newTemplate, dataTypeOptions) },
+  { title: '生成器', key: 'generator_type', width: 90, render: makeSelectRenderer('generator_type', newTemplate, generatorOptions) },
+  { title: '最小值', key: 'min_value', width: 80, render: makeEditRenderer('min_value', newTemplate, NInputNumber) },
+  { title: '最大值', key: 'max_value', width: 80, render: makeEditRenderer('max_value', newTemplate, NInputNumber) },
+  { title: '操作', key: 'actions', width: 60, render: (_row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => newTemplate.value.points.splice(idx, 1) }, () => '删除') },
+]
+
+const editPointColumns = [
+  { title: '名称', key: 'name', width: 100, render: makeEditRenderer('name', editForm, NInput) },
+  { title: '地址', key: 'address', width: 80, render: makeEditRenderer('address', editForm, NInput) },
+  { title: '类型', key: 'data_type', width: 90, render: makeSelectRenderer('data_type', editForm, dataTypeOptions) },
+  { title: '生成器', key: 'generator_type', width: 90, render: makeSelectRenderer('generator_type', editForm, generatorOptions) },
+  { title: '最小值', key: 'min_value', width: 80, render: makeEditRenderer('min_value', editForm, NInputNumber) },
+  { title: '最大值', key: 'max_value', width: 80, render: makeEditRenderer('max_value', editForm, NInputNumber) },
+  { title: '操作', key: 'actions', width: 60, render: (_row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editForm.value.points.splice(idx, 1) }, () => '删除') },
+]
+
+function makeEditRenderer(key, sourceRef, Component) {
+  return (_row, idx) => h(Component, {
+    value: sourceRef.value.points[idx]?.[key],
+    size: 'tiny',
+    placeholder: key,
+    style: 'width:100%',
+    onUpdateValue: (v) => { const p = sourceRef.value.points[idx]; if (p) p[key] = v },
+  })
 }
+
+function makeSelectRenderer(key, sourceRef, options) {
+  return (_row, idx) => h(NSelect, {
+    value: sourceRef.value.points[idx]?.[key],
+    size: 'tiny',
+    options,
+    style: 'width:100%',
+    onUpdateValue: (v) => { const p = sourceRef.value.points[idx]; if (p) p[key] = v },
+  })
+}
+
+function goMarketplace() { router.push('/marketplace') }
 
 async function loadData() {
   try {
-    const [tmplRes, protoRes] = await Promise.all([
-      api.getTemplates(),
-      api.getProtocols(),
-    ])
+    const [tmplRes, protoRes] = await Promise.all([api.getTemplates(), api.getProtocols()])
     templates.value = tmplRes
     protocols.value = protoRes
     await loadTags()
@@ -172,49 +284,86 @@ async function loadData() {
 }
 
 async function loadTags() {
-  try {
-    const res = await api.listTemplateTags()
-    allTags.value = res.tags || res || []
-  } catch (e) {
-    allTags.value = []
-  }
+  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch { allTags.value = [] }
 }
 
 async function doSearch() {
-  if (!searchQuery.value) {
-    await loadData()
-    return
-  }
+  if (!searchQuery.value) { await loadData(); return }
   searching.value = true
   try {
     const params = { q: searchQuery.value }
     if (filterProtocol.value) params.protocol = filterProtocol.value
     if (filterTag.value) params.tag = filterTag.value
     const res = await api.searchTemplates(params)
-    templates.value = res.templates || res || []
+    templates.value = (res?.templates || res || [])
   } catch (e) {
     message.error('搜索失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    searching.value = false
-  }
+  } finally { searching.value = false }
+}
+
+function addNewPoint() {
+  newTemplate.value.points.push({ name: 'point_' + (newTemplate.value.points.length + 1), address: String(newTemplate.value.points.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
+}
+
+function addEditPoint() {
+  editForm.value.points.push({ name: 'point_' + (editForm.value.points.length + 1), address: String(editForm.value.points.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
 }
 
 async function createTemplate() {
+  if (!newTemplate.value.id || !newTemplate.value.name) { message.warning('请填写模板ID和名称'); return }
   creating.value = true
   try {
     await api.createTemplate({
-      ...newTemplate.value,
-      point_count: newTemplate.value.points?.length || 0,
+      ...newTemplate.value, tags: newTagList.value,
+      point_count: newTemplate.value.points.length,
     })
     showCreateModal.value = false
     newTemplate.value = { id: '', name: '', protocol: 'modbus_tcp', manufacturer: '', model: '', description: '', points: [], tags: [] }
+    newTagList.value = []
     message.success('模板创建成功')
     await loadData()
   } catch (e) {
     message.error('创建失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    creating.value = false
+  } finally { creating.value = false }
+}
+
+async function openEdit(t) {
+  try {
+    const detail = await api.getTemplate(t.id)
+    editForm.value = {
+      id: detail.id, name: detail.name, protocol: detail.protocol,
+      manufacturer: detail.manufacturer || '', model: detail.model || '',
+      description: detail.description || '',
+      points: (detail.points || []).map(p => ({
+        name: p.name, address: p.address || String(0),
+        data_type: p.data_type || 'float32', generator_type: p.generator_type || 'random',
+        min_value: p.min_value ?? 0, max_value: p.max_value ?? 100,
+        fixed_value: p.fixed_value ?? null, unit: p.unit || '', access: p.access || 'rw',
+      })),
+      tags: detail.tags || [], protocol_config: detail.protocol_config || {},
+    }
+    editTagList.value = [...(detail.tags || [])]
+    showEditModal.value = true
+  } catch (e) {
+    message.error('获取模板详情失败: ' + (e.response?.data?.detail || e.message))
   }
+}
+
+async function saveEditTemplate() {
+  if (!editForm.value.name) { message.warning('请填写模板名称'); return }
+  saving.value = true
+  try {
+    await api.deleteTemplate(editForm.value.id)
+    await api.createTemplate({
+      ...editForm.value, tags: editTagList.value,
+      point_count: editForm.value.points.length,
+    })
+    showEditModal.value = false
+    message.success('模板已更新')
+    await loadData()
+  } catch (e) {
+    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+  } finally { saving.value = false }
 }
 
 function openInstantiate(t) {
@@ -228,35 +377,30 @@ async function instantiateDevice() {
   if (!instantiateForm.value.device_id) { message.warning('请填写设备ID'); return }
   instantiating.value = true
   try {
-    const config = await api.instantiateTemplate(selectedTemplate.value.id, instantiateForm.value)
-    await api.createDevice(config)
+    await api.quickCreateDevice(
+      selectedTemplate.value.id,
+      instantiateForm.value.device_name,
+      instantiateForm.value.device_id,
+    )
     showInstantiateModal.value = false
     message.success('设备实例化成功')
   } catch (e) {
     message.error('实例化失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    instantiating.value = false
-  }
+  } finally { instantiating.value = false }
 }
 
 function confirmDelete(t) {
   dialog.warning({
     title: '确认删除',
-    content: `确定要删除模板 "${t.name}" (${t.id}) 吗？`,
-    positiveText: '删除',
-    negativeText: '取消',
+    content: `确定要删除模板 "${t.name}" (${t.id}) 吗？已基于该模板创建的设备不受影响。`,
+    positiveText: '删除', negativeText: '取消',
     onPositiveClick: () => deleteTemplate(t.id),
   })
 }
 
 async function deleteTemplate(id) {
-  try {
-    await api.deleteTemplate(id)
-    message.success('模板已删除')
-    await loadData()
-  } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
-  }
+  try { await api.deleteTemplate(id); message.success('模板已删除'); await loadData() }
+  catch (e) { message.error('删除失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 onMounted(loadData)

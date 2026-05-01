@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
@@ -238,5 +238,26 @@ async function startWithConfig() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => {
+  loadData()
+  connectWs()
+})
+
+onUnmounted(() => {
+  if (ws) { ws.close(); ws = null }
+})
+
+let ws = null
+function connectWs() {
+  ws = api.createDeviceWs()
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'protocols' && Array.isArray(msg.data)) {
+        protocols.value = msg.data
+      }
+    } catch {}
+  }
+  ws.onclose = () => { if (ws) setTimeout(connectWs, 5000) }
+}
 </script>

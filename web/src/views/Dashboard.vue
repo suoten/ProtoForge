@@ -132,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, computed, h, onMounted } from 'vue'
+import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
@@ -145,6 +145,11 @@ const scenarios = ref([])
 const recentLogs = ref([])
 const loading = ref(true)
 const loadError = ref('')
+
+let deviceWs = null
+let logWs = null
+let wsReconnectDelay = 1000
+const WS_MAX_RECONNECT_DELAY = 30000
 
 const onlineDevices = computed(() => devices.value.filter(d => d.status === 'online' || d.status === 'running').length)
 const runningProtocols = computed(() => protocols.value.filter(p => p.status === 'running').length)
@@ -202,5 +207,44 @@ async function loadData() {
   }
 }
 
-onMounted(loadData)
+function connectDeviceWs() {
+  deviceWs = api.createDeviceWs()
+  deviceWs.onopen = () => { wsReconnectDelay = 1000 }
+  deviceWs.onclose = () => { setTimeout(connectDeviceWs, wsReconnectDelay); wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
+  deviceWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'devices' && Array.isArray(msg.data)) {
+        devices.value = msg.data
+      }
+    } catch {}
+  }
+}
+
+function connectLogWs() {
+  logWs = api.createLogWs()
+  logWs.onclose = () => {
+    if (logWs) { setTimeout(connectLogWs, 5000) }
+  }
+  logWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'log') {
+        recentLogs.value.unshift(msg.data)
+        if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
+      }
+    } catch {}
+  }
+}
+
+onMounted(() => {
+  loadData()
+  connectDeviceWs()
+  connectLogWs()
+})
+
+onUnmounted(() => {
+  if (deviceWs) { deviceWs.close(); deviceWs = null }
+  if (logWs) { logWs.close(); logWs = null }
+})
 </script>
