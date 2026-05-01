@@ -259,7 +259,7 @@ async function loadProtocols() {
 async function loadHistory() {
   try {
     const res = await api.getLogs({ count: 200 })
-    logs.value = res || []
+    logs.value = Array.isArray(res) ? res : (res.logs || res.entries || [])
   } catch (e) {
     console.warn('加载历史日志失败:', e)
     message.error('加载历史日志失败')

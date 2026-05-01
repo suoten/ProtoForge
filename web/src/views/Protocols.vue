@@ -194,10 +194,10 @@ async function showProtocolInfo(name) {
       api.getProtocolInfo().catch(() => ({})),
       api.getProtocolConfig(name).catch(() => ({})),
     ])
-    const infoList = infoRes.protocols || infoRes || []
-    const found = Array.isArray(infoList) ? infoList.find(p => p.name === name) : infoList[name]
-    protocolInfoData.value = found || protocols.value.find(p => p.name === name) || { name }
-    protocolConfigData.value = configRes.config_schema || configRes || {}
+    const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
+    const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
+    protocolInfoData.value = found
+    protocolConfigData.value = configRes.config_schema || (Object.keys(configRes).length > 0 ? configRes : {})
   } catch (e) {
     protocolInfoData.value = protocols.value.find(p => p.name === name) || { name }
     protocolConfigData.value = {}
