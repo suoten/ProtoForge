@@ -325,8 +325,11 @@
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
           <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
-          <div>{{ pipelineResult.steps.connect.error }}</div>
-          <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查：1) ProtoForge 协议服务是否在运行 2) ProtoForge 的 IP 地址 EdgeLite 是否可达 3) 端口是否正确</div>
+          <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
+          <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
+            <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
+            <code>{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+          </div>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
           <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
@@ -796,7 +799,9 @@ async function pushDevice(deviceId) {
       if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
       message.warning('该设备未配置 EdgeLite 地址'); return
     }
-    message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
+    const dc = res.driver_config
+    const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
+    message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
   } catch (e) {
     message.error('推送失败: ' + (e.response?.data?.detail || e.message))
   }
@@ -874,7 +879,9 @@ async function pushFromPipeline() {
     if (res.skipped) {
       message.warning('该设备未配置 EdgeLite 地址')
     } else if (res.ok) {
-      message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
+      const dc = res.driver_config
+      const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
+      message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
       await runPipeline()
     } else {
       const errMsg = res.error || '未知错误'
