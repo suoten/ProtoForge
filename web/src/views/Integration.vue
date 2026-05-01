@@ -667,21 +667,21 @@ func main() {
 async function loadIntStatus() {
   try {
     intStatus.value = await api.getIntegrationStatus()
-  } catch (e) { console.warn('加载集成状态失败:', e) }
+  } catch (e) { console.warn('加载集成状态失败:', e); message.error('加载集成状态失败') }
 }
 
 async function loadIntMetrics() {
   try {
     intMetrics.value = await api.getIntegrationMetrics()
-  } catch (e) { console.warn('加载集成指标失败:', e) }
+  } catch (e) { console.warn('加载集成指标失败:', e); message.error('加载集成指标失败') }
 }
 
 async function loadDeviceStatusCache() {
   loadingStatusCache.value = true
   try {
     const res = await api.getDeviceStatusCache()
-    deviceStatusCache.value = res.devices || []
-  } catch (e) { console.warn('加载设备状态缓存失败:', e) } finally { loadingStatusCache.value = false }
+    deviceStatusCache.value = Array.isArray(res) ? res : (res.devices || [])
+  } catch (e) { console.warn('加载设备状态缓存失败:', e); message.error('加载设备状态失败') } finally { loadingStatusCache.value = false }
 }
 
 async function loadBackhaulData() {
@@ -690,8 +690,8 @@ async function loadBackhaulData() {
     const params = {}
     if (backhaulDeviceId.value) params.device_id = backhaulDeviceId.value
     const res = await api.getBackhaulData(params)
-    backhaulData.value = res.data || []
-  } catch (e) { console.warn('加载回传数据失败:', e) } finally { loadingBackhaul.value = false }
+    backhaulData.value = Array.isArray(res) ? res : (res.data || [])
+  } catch (e) { console.warn('加载回传数据失败:', e); message.error('加载回传数据失败') } finally { loadingBackhaul.value = false }
 }
 
 async function loadProtocolMappings() {
@@ -705,15 +705,15 @@ async function loadProtocolMappings() {
       driver_type: typeof target === 'object' ? target.driver || '' : '',
       status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
     }))
-  } catch (e) { console.warn('加载协议映射失败:', e) } finally { loadingProtocols.value = false }
+  } catch (e) { console.warn('加载协议映射失败:', e); message.error('加载协议映射失败') } finally { loadingProtocols.value = false }
 }
 
 async function loadAlarmRules() {
   loadingAlarmRules.value = true
   try {
     const res = await api.getAlarmRules()
-    alarmRules.value = res.rules || []
-  } catch (e) { console.warn('加载告警规则失败:', e) } finally { loadingAlarmRules.value = false }
+    alarmRules.value = Array.isArray(res) ? res : (res.rules || [])
+  } catch (e) { console.warn('加载告警规则失败:', e); message.error('加载告警规则失败') } finally { loadingAlarmRules.value = false }
 }
 
 async function addAlarmRule() {
@@ -906,8 +906,8 @@ function getStepDesc(idx) {
   if (step.ok) {
     if (key === 'auth') return '认证成功'
     if (key === 'register') return `已注册 (状态: ${step.status || 'ok'})`
-    if (key === 'connect') return `已连接 (状态: ${step.status})`
-    if (key === 'collect') return step.has_real_data ? '已采集到数据' : '暂无实际数据'
+    if (key === 'connect') return `已连接 (状态: ${step.status || 'ok'})`
+    if (key === 'collect') return step.has_real_data || (step.data && Object.keys(step.data).length > 0) ? '已采集到数据' : '暂无实际数据'
     return '成功'
   }
   return step.error || '失败'

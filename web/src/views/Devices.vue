@@ -476,7 +476,7 @@ async function loadDeviceConfig(protocol) {
     const defaults = {}
     res.fields.forEach(f => { defaults[f.key] = f.default })
     return { fields: res.fields, defaults }
-  } catch (e) { return { fields: [], defaults: {} } }
+  } catch (e) { message.warning('加载协议配置失败，使用默认值'); return { fields: [], defaults: {} } }
 }
 
 const columns = [
@@ -817,11 +817,15 @@ async function showGuide(id) {
   } catch (e) { message.error('获取连接指南失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
-function copyGuide() {
+async function copyGuide() {
   const code = guideData.value?.code_examples?.[guideLang.value] || guideData.value?.code_example
   if (!code) return
-  navigator.clipboard.writeText(code)
-  message.success('代码已复制到剪贴板')
+  try {
+    await navigator.clipboard.writeText(code)
+    message.success('代码已复制到剪贴板')
+  } catch (e) {
+    message.error('复制失败，请手动复制')
+  }
 }
 
 async function openPipelineVerify(deviceId) {
@@ -901,7 +905,7 @@ function getPipelineStepDesc(idx) {
   if (step.ok) {
     if (key === 'auth') return '认证成功'
     if (key === 'register') return `已注册 (状态: ${step.status || 'ok'})`
-    if (key === 'connect') return `已连接 (状态: ${step.status})`
+    if (key === 'connect') return `已连接 (状态: ${step.status || 'ok'})`
     if (key === 'collect') return step.has_real_data ? '已采集到数据' : '暂无实际数据'
     return '成功'
   }

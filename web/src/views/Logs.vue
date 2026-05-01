@@ -166,6 +166,7 @@ async function clearAllLogs() {
     await api.clearLogs()
   } catch (e) {
     console.warn('清空日志失败:', e)
+    message.error('清空日志失败')
   }
 }
 
@@ -249,6 +250,7 @@ async function loadProtocols() {
     protocols.value = res
   } catch (e) {
     console.warn('加载协议列表失败:', e)
+    message.error('加载协议列表失败')
   }
 }
 
@@ -258,6 +260,7 @@ async function loadHistory() {
     logs.value = res || []
   } catch (e) {
     console.warn('加载历史日志失败:', e)
+    message.error('加载历史日志失败')
   }
 }
 
