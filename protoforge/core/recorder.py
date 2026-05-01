@@ -79,17 +79,15 @@ class Recording:
         return {
             "id": self.id, "name": self.name, "protocol": self.protocol,
             "start_time": self.start_time, "end_time": self.end_time,
-            "message_count": len(self.messages),
+            "frame_count": len(self.messages),
             "metadata": self.metadata,
             "device_id": self.metadata.get("device_id", ""),
             "duration_seconds": round(duration, 1),
-            "frame_count": len(self.messages),
             "created_at": self.start_time,
         }
 
     def to_full_dict(self) -> dict:
         d = self.to_dict()
-        d["messages"] = [m.to_dict() for m in self.messages]
         d["frames"] = [{**m.to_dict(), "index": i} for i, m in enumerate(self.messages)]
         return d
 
@@ -289,12 +287,9 @@ class Recorder:
     def get_stats(self) -> dict[str, Any]:
         is_rec = self._active is not None
         return {
-            "recording": is_rec,
             "is_recording": is_rec,
             "active_name": self._active.name if self._active else None,
-            "active_messages": len(self._active.messages) if self._active else 0,
             "frames_captured": len(self._active.messages) if self._active else 0,
-            "saved_recordings": len(self._recordings),
             "total_recordings": len(self._recordings),
             "encryption_enabled": self._encryption_key is not None,
             "duration_seconds": (time.time() - self._active.start_time) if is_rec and hasattr(self._active, 'start_time') else 0,
