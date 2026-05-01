@@ -80,21 +80,10 @@ async function quickCreate() {
   if (!selectedTemplate.value || !deviceName.value) return
   creating.value = true
   try {
-    const tmplRes = await api.getTemplate(selectedTemplate.value)
-    const tmpl = tmplRes
     let deviceId = deviceName.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     if (!deviceId) deviceId = 'dev-' + Date.now().toString(36)
-    await api.createDevice({
-      id: deviceId, name: deviceName.value, protocol: tmpl.protocol,
-      template_id: tmpl.id, points: tmpl.points || [],
-    })
-    let started = false
-    try { await api.startDevice(deviceId); started = true } catch (e) { /* start failed */ }
-    if (started) {
-      message.success(`设备 "${deviceName.value}" 创建成功并已启动！`)
-    } else {
-      message.success(`设备 "${deviceName.value}" 创建成功，但启动失败，请手动启动`)
-    }
+    await api.quickCreateDevice(selectedTemplate.value, deviceName.value, deviceId)
+    message.success(`设备 "${deviceName.value}" 创建成功并已启动！`)
     showWelcome.value = false
     localStorage.setItem('protoforge_onboarded', '1')
   } catch (e) {

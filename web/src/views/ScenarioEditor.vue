@@ -294,13 +294,20 @@ async function confirmAddNode() {
 async function loadScenario(scenarioId) {
   if (!scenarioId) return
   try {
-    const scenario = await api.getScenario(scenarioId)
+    const [scenario, allDevices] = await Promise.all([
+      api.getScenario(scenarioId),
+      api.getDevices().catch(() => []),
+    ])
+    const deviceMap = {}
+    for (const d of allDevices) {
+      deviceMap[d.id] = d.status === 'online' || d.status === 'running'
+    }
     nodes.value = (scenario.devices || []).map((d, i) => ({
       id: `node-${d.id}`, type: 'device',
       position: d.position || { x: 100 + (i % 3) * 250, y: 100 + Math.floor(i / 3) * 150 },
       data: {
         label: d.name, deviceId: d.id, protocol: d.protocol,
-        online: false, points: d.points || [], pointCount: (d.points || []).length
+        online: deviceMap[d.id] || false, points: d.points || [], pointCount: (d.points || []).length
       }
     }))
     edges.value = (scenario.rules || []).map((rule, i) => ({
