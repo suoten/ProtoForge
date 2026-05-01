@@ -71,6 +71,25 @@ class TemplateManager:
     def remove_template(self, template_id: str) -> Optional[TemplateDetail]:
         return self._templates.pop(template_id, None)
 
+    def update_template(self, template_id: str, data: dict[str, Any]) -> TemplateDetail:
+        existing = self._templates.get(template_id)
+        if not existing:
+            raise ValueError(f"Template not found: {template_id}")
+        points = [PointConfig(**p) for p in data.get("points", [])] if "points" in data else existing.points
+        updated = TemplateDetail(
+            id=template_id,
+            name=data.get("name", existing.name),
+            protocol=data.get("protocol", existing.protocol),
+            description=data.get("description", existing.description),
+            manufacturer=data.get("manufacturer", existing.manufacturer),
+            model=data.get("model", existing.model),
+            points=points,
+            protocol_config=data.get("protocol_config", existing.protocol_config),
+            tags=data.get("tags", existing.tags),
+        )
+        self._templates[template_id] = updated
+        return updated
+
     def create_device_from_template(self, template_id: str, device_id: str, device_name: str,
                                     protocol_config: Optional[dict[str, Any]] = None) -> DeviceConfig:
         template = self.get_template(template_id)

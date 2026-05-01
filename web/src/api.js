@@ -118,6 +118,7 @@ export default {
   getTemplate: (id) => d(api.get(`/templates/${id}`)),
   createTemplate: (template) => d(api.post('/templates', template)),
   deleteTemplate: (id) => d(api.delete(`/templates/${id}`)),
+  updateTemplate: (id, data) => d(api.put(`/templates/${id}`, data)),
   searchTemplates: (params) => d(api.get('/templates/search', { params })),
   listTemplateTags: () => d(api.get('/templates/tags')),
   instantiateTemplate: (id, params) => {

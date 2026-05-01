@@ -929,7 +929,10 @@ async function batchVerifyPipeline() {
   if (ok) parts.push(`${ok} 个链路正常`)
   if (skip) parts.push(`${skip} 个未配置EdgeLite`)
   if (fail) parts.push(`${fail} 个链路异常`)
-  message.success(parts.join('，') || '无操作')
+  const msg = parts.join('，') || '无操作'
+  if (fail > 0 && ok === 0) message.error(msg)
+  else if (fail > 0) message.warning(msg)
+  else message.success(msg)
 }
 
 onMounted(loadData)

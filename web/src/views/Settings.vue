@@ -44,6 +44,15 @@
                   <n-input v-model:value="serverConfig.cors_origins" placeholder="* 或 https://example.com" />
                   <n-text depth="3" style="margin-left:8px;font-size:12px">多个用逗号分隔</n-text>
                 </n-form-item>
+                <n-form-item>
+                  <n-space>
+                    <n-button type="primary" size="small" @click="saveServerConfig" :loading="savingServer">
+                      <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></template>
+                      保存服务器配置
+                    </n-button>
+                    <n-text v-if="serverSaveResult" :type="serverSaveResult.type" style="font-size:12px">{{ serverSaveResult.text }}</n-text>
+                  </n-space>
+                </n-form-item>
               </n-form>
             </n-card>
 
@@ -62,13 +71,15 @@
                   <n-input v-model:value="edgeliteConfig.password" type="password" show-password-on="click" placeholder="EdgeLite 登录密码" />
                 </n-form-item>
                 <n-form-item>
-                  <n-button size="small" @click="testEdgeliteConnection" :loading="testingEdgelite">
-                    <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></template>
-                    测试连接
-                  </n-button>
-                  <n-text v-if="edgeliteTestResult" :type="edgeliteTestResult.ok ? 'success' : 'error'" style="margin-left:12px;font-size:13px">
-                    {{ edgeliteTestResult.ok ? '连接成功' + (edgeliteTestResult.version ? ' (版本: ' + edgeliteTestResult.version + ')' : '') : '连接失败: ' + edgeliteTestResult.error }}
-                  </n-text>
+                  <n-space>
+                    <n-button size="small" type="primary" @click="testEdgeliteConnection" :loading="testingEdgelite">
+                      <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></template>
+                      测试并保存
+                    </n-button>
+                    <n-text v-if="edgeliteTestResult" :type="edgeliteTestResult.ok ? 'success' : 'error'" style="font-size:13px">
+                      {{ edgeliteTestResult.ok ? '连接成功，配置已保存' + (edgeliteTestResult.version ? ' (版本: ' + edgeliteTestResult.version + ')' : '') : '连接失败: ' + edgeliteTestResult.error }}
+                    </n-text>
+                  </n-space>
                 </n-form-item>
               </n-form>
             </n-card>
@@ -86,6 +97,15 @@
                 </n-form-item>
                 <n-form-item label="Bucket">
                   <n-input v-model:value="influxdbConfig.bucket" placeholder="protoforge" />
+                </n-form-item>
+                <n-form-item>
+                  <n-space>
+                    <n-button type="primary" size="small" @click="saveInfluxdbConfig" :loading="savingInfluxdb">
+                      <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></template>
+                      保存 InfluxDB 配置
+                    </n-button>
+                    <n-text v-if="influxdbSaveResult" :type="influxdbSaveResult.type" style="font-size:12px">{{ influxdbSaveResult.text }}</n-text>
+                  </n-space>
                 </n-form-item>
               </n-form>
             </n-card>
@@ -118,6 +138,15 @@
                   </n-form-item>
                 </n-gi>
               </n-grid>
+              <n-form-item style="margin-top:8px">
+                <n-space>
+                  <n-button type="primary" size="small" @click="saveProtocolPorts" :loading="savingPorts">
+                    <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></template>
+                    保存端口配置
+                  </n-button>
+                  <n-text v-if="portsSaveResult" :type="portsSaveResult.type" style="font-size:12px">{{ portsSaveResult.text }}</n-text>
+                </n-space>
+              </n-form-item>
             </n-card>
 
             <n-space>
@@ -422,6 +451,13 @@ const message = useMessage()
 const saving = ref(false)
 const saveResult = ref('')
 const hasChanges = ref(false)
+
+const savingServer = ref(false)
+const savingInfluxdb = ref(false)
+const savingPorts = ref(false)
+const serverSaveResult = ref(null)
+const influxdbSaveResult = ref(null)
+const portsSaveResult = ref(null)
 
 const serverConfig = ref({ host: '0.0.0.0', port: 8000, db_path: 'data/protoforge.db', log_level: 'info', cors_origins: '*' })
 const influxdbConfig = ref({ url: '', token: '', org: 'default', bucket: 'protoforge' })
@@ -1024,10 +1060,80 @@ async function testEdgeliteConnection() {
       username: edgeliteConfig.value.username,
       password: edgeliteConfig.value.password,
     })
+    if (edgeliteTestResult.value.ok) {
+      await api.updateSettings({
+        edgelite_url: edgeliteConfig.value.url,
+        edgelite_username: edgeliteConfig.value.username,
+        edgelite_password: edgeliteConfig.value.password,
+      })
+    }
   } catch (e) {
     edgeliteTestResult.value = { ok: false, error: e.response?.data?.detail || e.message }
   } finally {
     testingEdgelite.value = false
+  }
+}
+
+async function saveServerConfig() {
+  savingServer.value = true
+  serverSaveResult.value = null
+  try {
+    await api.updateSettings({
+      host: serverConfig.value.host,
+      port: serverConfig.value.port,
+      db_path: serverConfig.value.db_path,
+      log_level: serverConfig.value.log_level,
+      cors_origins: serverConfig.value.cors_origins,
+    })
+    serverSaveResult.value = { type: 'success', text: '已保存。端口修改需重启服务生效' }
+    message.success('服务器配置已保存')
+  } catch (e) {
+    serverSaveResult.value = { type: 'error', text: '保存失败: ' + (e.response?.data?.detail || e.message) }
+    message.error('保存失败')
+  } finally {
+    savingServer.value = false
+    setTimeout(() => { serverSaveResult.value = null }, 5000)
+  }
+}
+
+async function saveInfluxdbConfig() {
+  savingInfluxdb.value = true
+  influxdbSaveResult.value = null
+  try {
+    await api.updateSettings({
+      influxdb_url: influxdbConfig.value.url,
+      influxdb_token: influxdbConfig.value.token,
+      influxdb_org: influxdbConfig.value.org,
+      influxdb_bucket: influxdbConfig.value.bucket,
+    })
+    influxdbSaveResult.value = { type: 'success', text: 'InfluxDB 配置已保存' }
+    message.success('InfluxDB 配置已保存')
+  } catch (e) {
+    influxdbSaveResult.value = { type: 'error', text: '保存失败: ' + (e.response?.data?.detail || e.message) }
+    message.error('保存失败')
+  } finally {
+    savingInfluxdb.value = false
+    setTimeout(() => { influxdbSaveResult.value = null }, 5000)
+  }
+}
+
+async function saveProtocolPorts() {
+  savingPorts.value = true
+  portsSaveResult.value = null
+  try {
+    const updates = {}
+    for (const [key, value] of Object.entries(protocolPorts.value)) {
+      updates[`${key}_port`] = value
+    }
+    await api.updateSettings(updates)
+    portsSaveResult.value = { type: 'success', text: '端口配置已保存。需重启对应协议生效' }
+    message.success('端口配置已保存')
+  } catch (e) {
+    portsSaveResult.value = { type: 'error', text: '保存失败: ' + (e.response?.data?.detail || e.message) }
+    message.error('保存失败')
+  } finally {
+    savingPorts.value = false
+    setTimeout(() => { portsSaveResult.value = null }, 5000)
   }
 }
 

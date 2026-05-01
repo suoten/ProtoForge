@@ -302,9 +302,7 @@ class ForwardEngine:
             "queue_size": self._queue.qsize(),
             "total_forwards": self._sent_count,
             "success_count": self._sent_count,
-            "sent_count": self._sent_count,
             "fail_count": self._failed_count,
-            "failed_count": self._failed_count,
             "dropped_count": self._dropped_count,
         }
 

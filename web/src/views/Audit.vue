@@ -24,7 +24,7 @@
           <n-statistic label="今日操作" :value="auditStats.today_count || 0" />
         </n-gi>
         <n-gi>
-          <n-statistic label="活跃用户" :value="auditStats.active_users || 0" />
+          <n-statistic label="活跃用户" :value="Array.isArray(auditStats.active_users) ? auditStats.active_users.length : (auditStats.active_users || 0)" />
         </n-gi>
         <n-gi>
           <n-statistic label="最近操作" :value="auditStats.last_action || '-'" />

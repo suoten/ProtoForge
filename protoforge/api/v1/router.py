@@ -599,6 +599,24 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
             logger.warning("Failed to delete template %s from DB: %s", template_id, db_err)
     return {"status": "ok"}
 
+
+@router.put("/templates/{template_id}")
+async def update_template(template_id: str, data: dict[str, Any], _user: dict = Depends(require_operator)):
+    tm = _get_template_manager()
+    db = _get_database()
+    try:
+        existing = tm.get_template(template_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    data["id"] = template_id
+    updated = tm.update_template(template_id, data)
+    if db:
+        try:
+            await db.save_template(updated)
+        except Exception as db_err:
+            logger.warning("Failed to update template %s in DB: %s", template_id, db_err)
+    return updated
+
 @router.post("/templates/{template_id}/instantiate", response_model=DeviceConfig)
 async def instantiate_template(
     template_id: str,

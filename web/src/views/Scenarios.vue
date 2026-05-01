@@ -164,11 +164,14 @@ async function batchStart() {
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const id of selectedIds.value) {
-    try { await api.startScenario(id); ok++ } catch { fail++ }
+    try { await api.startScenario(id); ok++ } catch (e) { fail++; console.warn('启动场景失败:', id, e) }
   }
   batchLoading.value = false
   selectedIds.value = []
-  message.success(`已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  const msg = `已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+  if (fail > 0 && ok === 0) message.error(msg)
+  else if (fail > 0) message.warning(msg)
+  else message.success(msg)
   loadData()
 }
 
@@ -176,11 +179,14 @@ async function batchStop() {
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const id of selectedIds.value) {
-    try { await api.stopScenario(id); ok++ } catch { fail++ }
+    try { await api.stopScenario(id); ok++ } catch (e) { fail++; console.warn('停止场景失败:', id, e) }
   }
   batchLoading.value = false
   selectedIds.value = []
-  message.success(`已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  const msg = `已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+  if (fail > 0 && ok === 0) message.error(msg)
+  else if (fail > 0) message.warning(msg)
+  else message.success(msg)
   loadData()
 }
 

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <n-space vertical>
     <n-space justify="space-between">
       <n-space>
@@ -353,10 +353,8 @@ async function saveEditTemplate() {
   if (!editForm.value.name) { message.warning('请填写模板名称'); return }
   saving.value = true
   try {
-    await api.deleteTemplate(editForm.value.id)
-    await api.createTemplate({
+    await api.updateTemplate(editForm.value.id, {
       ...editForm.value, tags: editTagList.value,
-      point_count: editForm.value.points.length,
     })
     showEditModal.value = false
     message.success('模板已更新')
@@ -377,11 +375,8 @@ async function instantiateDevice() {
   if (!instantiateForm.value.device_id) { message.warning('请填写设备ID'); return }
   instantiating.value = true
   try {
-    await api.quickCreateDevice(
-      selectedTemplate.value.id,
-      instantiateForm.value.device_name,
-      instantiateForm.value.device_id,
-    )
+    const deviceConfig = await api.instantiateTemplate(selectedTemplate.value.id, { device_id: instantiateForm.value.device_id, device_name: instantiateForm.value.device_name })
+    await api.createDevice(deviceConfig)
     showInstantiateModal.value = false
     message.success('设备实例化成功')
   } catch (e) {
@@ -405,3 +400,4 @@ async function deleteTemplate(id) {
 
 onMounted(loadData)
 </script>
+

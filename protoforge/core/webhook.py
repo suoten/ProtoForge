@@ -203,9 +203,7 @@ class WebhookManager:
             "running": self._running,
             "webhooks": len(self._webhooks),
             "queue_size": self._queue.qsize(),
-            "total_triggers": total_triggers,
             "total_calls": total_triggers,
-            "total_errors": total_errors,
             "success_count": total_triggers - total_errors,
             "fail_count": total_errors,
         }
