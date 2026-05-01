@@ -720,7 +720,7 @@ async function loadForwardTargets() {
   loadingForward.value = true
   try {
     forwardTargets.value = await api.listForwardTargets()
-  } catch { forwardTargets.value = [] }
+  } catch { forwardTargets.value = []; message.error('加载转发目标失败') }
   finally { loadingForward.value = false }
 }
 
@@ -782,14 +782,14 @@ async function loadForwardStats() {
   try {
     forwardStats.value = await api.getForwardStats()
     forwardRunning.value = forwardStats.value.running || false
-  } catch { forwardStats.value = {} }
+  } catch { forwardStats.value = {}; message.error('加载转发统计失败') }
 }
 
 async function loadRecordings() {
   loadingRecordings.value = true
   try {
     recordings.value = await api.listRecordings()
-  } catch { recordings.value = [] }
+  } catch { recordings.value = []; message.error('加载录制列表失败') }
   finally { loadingRecordings.value = false }
 }
 
@@ -850,14 +850,14 @@ async function loadRecorderStats() {
   try {
     recorderStats.value = await api.getRecorderStats()
     recorderActive.value = recorderStats.value.is_recording || false
-  } catch { recorderStats.value = {} }
+  } catch { recorderStats.value = {}; message.error('加载录制统计失败') }
 }
 
 async function loadWebhooks() {
   loadingWebhooks.value = true
   try {
     webhooks.value = await api.listWebhooks()
-  } catch { webhooks.value = [] }
+  } catch { webhooks.value = []; message.error('加载Webhook列表失败') }
   finally { loadingWebhooks.value = false }
 }
 
@@ -914,7 +914,7 @@ async function deleteWebhook(id) {
 async function loadWebhookStats() {
   try {
     webhookStats.value = await api.getWebhookStats()
-  } catch { webhookStats.value = {} }
+  } catch { webhookStats.value = {}; message.error('加载Webhook统计失败') }
 }
 
 async function openEditWebhook(row) {
@@ -961,6 +961,7 @@ async function loadSetupStatus() {
     setupStatus.value = await api.getSetupStatus()
   } catch (e) {
     setupStatus.value = { demo_initialized: false }
+    message.error('检查系统状态失败')
   } finally { loadingSetup.value = false }
 }
 
