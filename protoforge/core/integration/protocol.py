@@ -1,9 +1,10 @@
 import logging
-from dataclasses import dataclass
+from typing import Any, Optional
+from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-PROTOCOL_MAP_BASE: dict[str, str | None] = {
+PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "modbus_tcp": "modbus_tcp",
     "modbus_rtu": "modbus_rtu",
     "opcua": "opcua",
@@ -49,7 +50,7 @@ ACCESS_MODE_MAP: dict[str, str] = {
 class ProtocolMappingResult:
     status: str
     protoforge_protocol: str
-    edgelite_protocol: str | None = None
+    edgelite_protocol: Optional[str] = None
     warning: str = ""
 
 
@@ -63,8 +64,8 @@ class DataTypeMappingResult:
 
 
 class ProtocolMapper:
-    def __init__(self, base_map: dict[str, str | None] | None = None):
-        self._map: dict[str, str | None] = dict(base_map or PROTOCOL_MAP_BASE)
+    def __init__(self, base_map: dict[str, Optional[str]] | None = None):
+        self._map: dict[str, Optional[str]] = dict(base_map or PROTOCOL_MAP_BASE)
         self._edgelite_protocols: set[str] = set()
 
     def map(self, protoforge_protocol: str) -> ProtocolMappingResult:
@@ -103,10 +104,10 @@ class ProtocolMapper:
     def get_supported_source_protocols(self) -> list[str]:
         return [k for k, v in self._map.items() if v is not None]
 
-    def get_map(self) -> dict[str, str | None]:
+    def get_map(self) -> dict[str, Optional[str]]:
         return dict(self._map)
 
-    def add_mapping(self, protoforge_protocol: str, edgelite_protocol: str | None) -> None:
+    def add_mapping(self, protoforge_protocol: str, edgelite_protocol: Optional[str]) -> None:
         self._map[protoforge_protocol] = edgelite_protocol
 
 

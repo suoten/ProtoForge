@@ -1,12 +1,11 @@
 import asyncio
-import contextlib
 import hashlib
 import hmac
 import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -39,7 +38,7 @@ class WebhookConfig:
     events: list[str] = field(default_factory=lambda: ["rule_triggered"])
     headers: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
-    secret: str | None = None
+    secret: Optional[str] = None
     last_triggered: float = 0
     trigger_count: int = 0
     error_count: int = 0
@@ -47,7 +46,8 @@ class WebhookConfig:
     def to_dict(self) -> dict:
         return {
             "id": self.id, "name": self.name, "url": self.url,
-            "events": self.events, "enabled": self.enabled,
+            "events": self.events, "headers": self.headers,
+            "enabled": self.enabled, "secret": "***" if self.secret else None,
             "last_triggered": self.last_triggered,
             "trigger_count": self.trigger_count,
             "error_count": self.error_count,
@@ -57,9 +57,9 @@ class WebhookConfig:
 class WebhookManager:
     def __init__(self):
         self._webhooks: dict[str, WebhookConfig] = {}
-        self._client: httpx.AsyncClient | None = None
+        self._client: Optional[httpx.AsyncClient] = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=5000)
-        self._task: asyncio.Task | None = None
+        self._task: Optional[asyncio.Task] = None
         self._running = False
 
     async def start(self) -> None:
@@ -74,8 +74,10 @@ class WebhookManager:
         self._running = False
         if self._task:
             self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -106,13 +108,13 @@ class WebhookManager:
             return True
         return False
 
-    def get_webhook(self, wh_id: str) -> WebhookConfig | None:
+    def get_webhook(self, wh_id: str) -> Optional[WebhookConfig]:
         return self._webhooks.get(wh_id)
 
     def list_webhooks(self) -> list[dict]:
         return [wh.to_dict() for wh in self._webhooks.values()]
 
-    def update_webhook(self, wh_id: str, config: dict[str, Any]) -> WebhookConfig | None:
+    def update_webhook(self, wh_id: str, config: dict[str, Any]) -> Optional[WebhookConfig]:
         webhook = self._webhooks.get(wh_id)
         if not webhook:
             return None

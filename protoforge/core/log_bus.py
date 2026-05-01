@@ -1,10 +1,8 @@
 import asyncio
-import contextlib
 import time
 from collections import deque
-from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Coroutine
 
 
 @dataclass
@@ -42,10 +40,14 @@ class LogBus:
                 queue.put_nowait(entry)
             except asyncio.QueueFull:
                 self._dropped_count += 1
-                with contextlib.suppress(asyncio.QueueEmpty):
+                try:
                     queue.get_nowait()
-                with contextlib.suppress(asyncio.QueueFull):
+                except asyncio.QueueEmpty:
+                    pass
+                try:
                     queue.put_nowait(entry)
+                except asyncio.QueueFull:
+                    pass
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

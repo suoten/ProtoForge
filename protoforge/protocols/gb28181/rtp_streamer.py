@@ -1,7 +1,7 @@
-import asyncio
-import contextlib
-import logging
 import struct
+import time
+import logging
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,10 @@ class BitWriter:
         for i in range(0, len(self._bits), 8):
             byte_val = 0
             for j in range(8):
-                byte_val = byte_val << 1 | self._bits[i + j] if i + j < len(self._bits) else byte_val << 1
+                if i + j < len(self._bits):
+                    byte_val = (byte_val << 1) | self._bits[i + j]
+                else:
+                    byte_val = byte_val << 1
             result.append(byte_val)
         return bytes(result)
 
@@ -274,8 +277,10 @@ class RtpStreamer:
         self._running = False
         if self._task:
             self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._task
+            except asyncio.CancelledError:
+                pass
         if self._transport:
             self._transport.close()
             self._transport = None

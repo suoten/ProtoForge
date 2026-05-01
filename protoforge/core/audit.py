@@ -1,7 +1,8 @@
+import json
 import logging
 import time
-from dataclasses import asdict, dataclass
-from typing import Any
+from dataclasses import dataclass, field, asdict
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,11 +54,11 @@ class AuditLogger:
             except Exception as e:
                 logger.warning("Failed to persist audit entry: %s", e)
 
-    async def query(self, username: str | None = None,
-                    action: str | None = None,
-                    resource_type: str | None = None,
-                    start_time: float | None = None,
-                    end_time: float | None = None,
+    async def query(self, username: Optional[str] = None,
+                    action: Optional[str] = None,
+                    resource_type: Optional[str] = None,
+                    start_time: Optional[float] = None,
+                    end_time: Optional[float] = None,
                     limit: int = 100,
                     offset: int = 0) -> list[dict]:
         if self._database:
@@ -91,7 +92,7 @@ class AuditLogger:
     async def get_stats(self) -> dict[str, Any]:
         return {
             "total_entries": len(self._entries),
-            "actions": list({e.action for e in self._entries}) if self._entries else [],
+            "actions": list(set(e.action for e in self._entries)) if self._entries else [],
         }
 
     async def delete_entry(self, entry_id: int) -> bool:
@@ -103,7 +104,7 @@ class AuditLogger:
             logger.warning("Failed to delete audit entry %d: %s", entry_id, e)
             return False
 
-    async def clear_entries(self, before_timestamp: float | None = None) -> int:
+    async def clear_entries(self, before_timestamp: Optional[float] = None) -> int:
         if before_timestamp:
             self._entries = [e for e in self._entries if e.timestamp >= before_timestamp]
         else:

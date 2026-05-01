@@ -1,12 +1,12 @@
 import asyncio
-import contextlib
 import logging
+import struct
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +125,10 @@ class ToledoServer(ProtocolServer):
             self._continuous_mode = False
             if self._continuous_task:
                 self._continuous_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._continuous_task
+                except asyncio.CancelledError:
+                    pass
                 self._continuous_task = None
             for w in list(self._continuous_writers):
                 try:
@@ -136,8 +138,10 @@ class ToledoServer(ProtocolServer):
             self._continuous_writers.clear()
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._server_task
+                except asyncio.CancelledError:
+                    pass
         except Exception as e:
             logger.warning("Toledo server stop error: %s", e)
         finally:

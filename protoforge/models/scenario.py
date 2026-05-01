@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,9 +27,9 @@ class Rule(BaseModel):
     source_device_id: str
     source_point: str
     condition: dict[str, Any] = Field(default_factory=dict)
-    target_device_id: str | None = None
-    target_point: str | None = None
-    target_value: Any | None = None
+    target_device_id: Optional[str] = None
+    target_point: Optional[str] = None
+    target_value: Optional[Any] = None
     enabled: bool = True
 
 
@@ -42,11 +42,11 @@ class ScenarioConfig(BaseModel):
 
 
 class ScenarioConfigUpdate(BaseModel):
-    id: str | None = None
-    name: str | None = None
-    description: str | None = None
-    devices: list[DeviceConfig] | None = None
-    rules: list[Rule] | None = None
+    id: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    devices: Optional[list[DeviceConfig]] = None
+    rules: Optional[list[Rule]] = None
 
 
 class ScenarioInfo(BaseModel):
@@ -56,7 +56,7 @@ class ScenarioInfo(BaseModel):
     status: ScenarioStatus = ScenarioStatus.STOPPED
     device_count: int = 0
     rule_count: int = 0
-    created_at: str | None = None
+    created_at: Optional[str] = None
 
 
 class ScenarioDetail(ScenarioInfo):

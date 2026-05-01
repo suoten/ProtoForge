@@ -1,24 +1,24 @@
 import asyncio
-import contextlib
+import json
 import logging
 import os
 import time
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class FailoverManager:
     def __init__(self):
-        self._primary_url: str | None = None
-        self._standby_url: str | None = None
+        self._primary_url: Optional[str] = None
+        self._standby_url: Optional[str] = None
         self._is_primary = True
         self._health_check_interval = int(os.environ.get("PROTOFORGE_FAILOVER_INTERVAL", "10"))
-        self._health_check_task: asyncio.Task | None = None
+        self._health_check_task: Optional[asyncio.Task] = None
         self._on_failover_callbacks = []
         self._on_recovery_callbacks = []
         self._failover_count = 0
-        self._last_failover_time: float | None = None
+        self._last_failover_time: Optional[float] = None
         self._status = "primary"
 
     def configure(
@@ -50,8 +50,10 @@ class FailoverManager:
     async def stop(self) -> None:
         if self._health_check_task:
             self._health_check_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await self._health_check_task
+            except asyncio.CancelledError:
+                pass
         logger.info("Failover manager stopped")
 
     async def _health_check_loop(self) -> None:

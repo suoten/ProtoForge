@@ -1,11 +1,11 @@
 import asyncio
 import logging
 import time
-from typing import Any
+from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
 from protoforge.core.generator import DataGenerator
-from protoforge.models.device import DeviceStatus
+from protoforge.models.device import DeviceStatus, PointValue
 from protoforge.models.scenario import Rule, RuleType, ScenarioConfig, ScenarioStatus
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ class Scenario:
         self._status: ScenarioStatus = ScenarioStatus.STOPPED
         self._devices: dict[str, DeviceInstance] = {}
         self._generator = DataGenerator()
-        self._start_time: float | None = None
+        self._start_time: Optional[float] = None
         self._last_trigger: dict[str, float] = {}
         self._prev_values: dict[str, Any] = {}
 

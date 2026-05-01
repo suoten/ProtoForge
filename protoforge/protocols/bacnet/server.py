@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import logging
 import socket
 import struct
@@ -7,8 +6,8 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +105,10 @@ class BACnetServer(ProtocolServer):
         try:
             if self._task:
                 self._task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
+                try:
                     await self._task
+                except asyncio.CancelledError:
+                    pass
             if self._sock:
                 try:
                     self._sock.close()
@@ -365,7 +366,7 @@ class BACnetServer(ProtocolServer):
             return self._make_reject_response(invoke_id, 4)
         obj_id_bytes = data[5:9] if len(data) >= 9 else data[5:]
         obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes[:4] if len(obj_id_bytes) >= 4 else obj_id_bytes)
-        data[9] if len(data) > 9 else 85
+        prop_id = data[9] if len(data) > 9 else 85
 
         for device_id, device_obj in self._device_objects.items():
             behavior = self._behaviors.get(device_id)
@@ -442,18 +443,18 @@ class BACnetServer(ProtocolServer):
 
     def _make_who_is_response(self, data: bytes, addr: tuple) -> bytes:
         responses = b""
-        for _device_id, device_obj in self._device_objects.items():
+        for device_id, device_obj in self._device_objects.items():
             bacnet_id = device_obj.get("device_id", self._device_id_base)
             vendor_id = device_obj.get("vendor_id", 999)
-            max_apdu = min(device_obj.get("max_apdu_length_accepted", 1024), 255)
+            max_apdu = min(device_obj.get("max_apdu_length_accepted", 1024), 1476)
             resp = bytearray()
             resp += bytes([0x81, 0x0A, 0x00, 0x00])
             resp += bytes([0x01, 0x00])
             resp += bytes([0x10, 0x00])
             resp += bytes([0xC4])
             resp += self._encode_object_identifier(8, bacnet_id)
-            resp += bytes([0x21, max_apdu])
-            resp += bytes([0x22, 0x03])
+            resp += bytes([0x22, 0x04, 0x00, max_apdu & 0xFF])
+            resp += bytes([0x91, 0x03])
             resp += bytes([0x33])
             resp += struct.pack(">H", vendor_id)
             resp[2:4] = struct.pack(">H", len(resp))

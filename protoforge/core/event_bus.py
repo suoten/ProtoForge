@@ -1,11 +1,9 @@
 import asyncio
-import contextlib
 import logging
 import time
 from collections import deque
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +84,14 @@ class EventBus:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 self._dropped_count += 1
-                with contextlib.suppress(asyncio.QueueEmpty):
+                try:
                     queue.get_nowait()
-                with contextlib.suppress(asyncio.QueueFull):
+                except asyncio.QueueEmpty:
+                    pass
+                try:
                     queue.put_nowait(event)
+                except asyncio.QueueFull:
+                    pass
 
         for callback in self._callbacks.get(event_type, []):
             try:

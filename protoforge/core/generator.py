@@ -1,9 +1,9 @@
 import ast
-import logging
 import math
-import operator
 import random
 import time
+import logging
+import operator
 from typing import Any
 
 from protoforge.models.device import DataType, GeneratorType, PointConfig
@@ -126,7 +126,7 @@ class SafeEval:
             return op(self._eval_node(node.operand))
         elif isinstance(node, ast.Compare):
             left = self._eval_node(node.left)
-            for op, comparator in zip(node.ops, node.comparators, strict=False):
+            for op, comparator in zip(node.ops, node.comparators):
                 op_func = _SAFE_OPS.get(type(op))
                 if op_func is None:
                     raise ValueError(f"Unsupported comparison: {type(op).__name__}")

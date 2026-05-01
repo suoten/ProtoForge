@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 
@@ -94,8 +94,17 @@ async def stop_device_collect(device_id: str, _user: dict = Depends(require_oper
 @router.get("/protocols")
 async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
+    raw_map = manager.protocol_mapper.get_map()
+    protocol_map = {}
+    for source, target in raw_map.items():
+        result = manager.protocol_mapper.map(source)
+        protocol_map[source] = {
+            "protocol": target or "",
+            "driver": target or "",
+            "status": result.status,
+        }
     return {
-        "protocol_map": manager.protocol_mapper.get_map(),
+        "protocol_map": protocol_map,
         "supported_source_protocols": manager.protocol_mapper.get_supported_source_protocols(),
     }
 
@@ -179,7 +188,7 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
 @router.post("/message")
 async def handle_integration_message(request: dict[str, Any], _user: dict = Depends(require_operator)):
     msg_type = request.get("type", "")
-    request.get("payload", request)
+    payload = request.get("payload", request)
     logger.info("Integration message received: type=%s", msg_type)
     manager = _get_integration_manager()
     if manager.is_connected():

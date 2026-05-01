@@ -455,8 +455,9 @@ const severityOptions = [
 const actionOptions = [
   { label: '停止设备', value: 'stop_device' },
   { label: '启动设备', value: 'start_device' },
-  { label: '发送通知', value: 'send_notification' },
-  { label: '记录日志', value: 'log_only' },
+  { label: '注入故障', value: 'inject_fault' },
+  { label: '调整生成器', value: 'adjust_generator' },
+  { label: '仅记录日志', value: 'log_only' },
 ]
 
 const pipelineSteps = [
@@ -562,7 +563,7 @@ const protocolMapColumns = [
   { title: '目标协议', key: 'target_protocol', width: 160 },
   { title: '驱动类型', key: 'driver_type', width: 140 },
   { title: '状态', key: 'status', width: 100, render: (row) => {
-    const m = { available: ['success', '可用'], unsupported: ['warning', '不支持'], disabled: ['default', '已禁用'] }
+    const m = { ok: ['success', '可用'], available: ['success', '可用'], unsupported: ['warning', '不支持'], target_unavailable: ['warning', '目标不可用'], unknown: ['default', '未知'], disabled: ['default', '已禁用'] }
     const [t, l] = m[row.status] || ['info', row.status || '未知']
     return h(NTag, { size: 'tiny', type: t, bordered: false }, () => l)
   }},
@@ -700,8 +701,9 @@ async function loadProtocolMappings() {
     const pmap = res.protocol_map || {}
     protocolMappings.value = Object.entries(pmap).map(([source, target]) => ({
       source_protocol: source,
-      target_protocol: typeof target === 'string' ? target : target.protocol || JSON.stringify(target),
+      target_protocol: typeof target === 'string' ? target : target.protocol || '',
       driver_type: typeof target === 'object' ? target.driver || '' : '',
+      status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
     }))
   } catch (e) { console.warn('加载协议映射失败:', e) } finally { loadingProtocols.value = false }
 }
@@ -917,8 +919,8 @@ async function batchPushAndVerify() {
   try {
     const deviceIds = elDevices.value.map(d => d.id)
     const res = await api.batchPushDevices({ device_ids: deviceIds })
-    const pushed = res.pushed?.length || res.success_count || 0
-    const failed = res.failed?.length || res.fail_count || 0
+    const pushed = res.success ?? 0
+    const failed = res.failure ?? 0
     message.info(`已推送 ${pushed} 个设备${failed ? `，${failed} 个失败` : ''}，等待 ${elConfig.value.collect_interval || 5}s 让 EdgeLite 采集数据...`)
     await new Promise(r => setTimeout(r, (elConfig.value.collect_interval || 5) * 1000))
     let verified = 0

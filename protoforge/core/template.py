@@ -1,7 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from protoforge.models.device import DeviceConfig, PointConfig
 from protoforge.models.template import TemplateDetail, TemplateInfo
@@ -37,7 +37,7 @@ class TemplateManager:
         self._loaded = True
         logger.info("Loaded %d built-in templates", len(self._templates))
 
-    def list_templates(self, protocol: str | None = None) -> list[TemplateInfo]:
+    def list_templates(self, protocol: Optional[str] = None) -> list[TemplateInfo]:
         self.load_builtin_templates()
         result = []
         for t in self._templates.values():
@@ -67,11 +67,11 @@ class TemplateManager:
     def add_template(self, template: TemplateDetail) -> None:
         self._templates[template.id] = template
 
-    def remove_template(self, template_id: str) -> TemplateDetail | None:
+    def remove_template(self, template_id: str) -> Optional[TemplateDetail]:
         return self._templates.pop(template_id, None)
 
     def create_device_from_template(self, template_id: str, device_id: str, device_name: str,
-                                    protocol_config: dict[str, Any] | None = None) -> DeviceConfig:
+                                    protocol_config: Optional[dict[str, Any]] = None) -> DeviceConfig:
         template = self.get_template(template_id)
         return DeviceConfig(
             id=device_id,
