@@ -396,10 +396,11 @@ class IntegrationManager:
     def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> list[dict[str, Any]]:
         if device_id:
             data = self._backhaul_data.get(device_id, [])
-            return data[-limit:]
+            return [{**entry, "device_id": device_id} for entry in data[-limit:]]
         all_data = []
         for dev_id, entries in self._backhaul_data.items():
-            all_data.extend(entries[-limit:])
+            for entry in entries[-limit:]:
+                all_data.append({**entry, "device_id": dev_id})
         all_data.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         return all_data[:limit]
 
