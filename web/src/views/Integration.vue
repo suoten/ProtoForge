@@ -84,27 +84,27 @@
             <n-gi>
               <n-card size="small" style="text-align:center">
                 <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">连接状态</div>
-                <n-tag :type="intStatus.connected ? 'success' : 'error'" size="small" :bordered="false">
-                  {{ intStatus.connected ? '已连接' : '未连接' }}
+                <n-tag :type="intStatus.connection_state === 'connected' ? 'success' : 'error'" size="small" :bordered="false">
+                  {{ intStatus.connection_state === 'connected' ? '已连接' : '未连接' }}
                 </n-tag>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">已注册设备</div>
-                <div style="font-size:24px;font-weight:600;color:#6366f1">{{ intMetrics.registered_devices || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">推送成功</div>
+                <div style="font-size:24px;font-weight:600;color:#6366f1">{{ intMetrics.push_success_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">在线设备</div>
-                <div style="font-size:24px;font-weight:600;color:#10b981">{{ intMetrics.online_devices || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">推送失败</div>
+                <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.push_failure_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">数据推送次数</div>
-                <div style="font-size:24px;font-weight:600;color:#f59e0b">{{ intMetrics.push_count || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">平均推送延迟</div>
+                <div style="font-size:24px;font-weight:600;color:#f59e0b">{{ intMetrics.avg_push_latency_ms || 0 }}<span style="font-size:12px;font-weight:400">ms</span></div>
               </n-card>
             </n-gi>
           </n-grid>
@@ -112,26 +112,26 @@
           <n-grid :cols="4" :x-gap="12" :y-gap="12">
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">采集次数</div>
-                <div style="font-size:24px;font-weight:600;color:#3b82f6">{{ intMetrics.collect_count || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">回传数据</div>
+                <div style="font-size:24px;font-weight:600;color:#3b82f6">{{ intMetrics.data_backhaul_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">验证次数</div>
-                <div style="font-size:24px;font-weight:600;color:#8b5cf6">{{ intMetrics.verify_count || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">同步事件</div>
+                <div style="font-size:24px;font-weight:600;color:#8b5cf6">{{ intMetrics.sync_event_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">告警触发</div>
-                <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.alarm_count || 0 }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">告警转发</div>
+                <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.alarm_forward_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">最后活动</div>
-                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_activity || '无' }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">最后心跳</div>
+                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_heartbeat_at ? new Date(intMetrics.last_heartbeat_at * 1000).toLocaleString() : '无' }}</div>
               </n-card>
             </n-gi>
           </n-grid>
@@ -416,7 +416,7 @@ const pipelineDeviceId = ref('')
 
 const allDevices = ref([])
 
-const intStatus = ref({ connected: false })
+const intStatus = ref({ connection_state: 'disconnected' })
 const intMetrics = ref({})
 const loadingStatusCache = ref(false)
 const deviceStatusCache = ref([])
@@ -680,7 +680,17 @@ async function loadDeviceStatusCache() {
   loadingStatusCache.value = true
   try {
     const res = await api.getDeviceStatusCache()
-    deviceStatusCache.value = Array.isArray(res) ? res : (res.devices || [])
+    const raw = res.devices || res
+    if (Array.isArray(raw)) {
+      deviceStatusCache.value = raw
+    } else {
+      deviceStatusCache.value = Object.entries(raw).map(([device_id, status]) => ({
+        device_id,
+        status,
+        protocol: '',
+        last_updated: '',
+      }))
+    }
   } catch (e) { console.warn('加载设备状态缓存失败:', e); message.error('加载设备状态失败') } finally { loadingStatusCache.value = false }
 }
 

@@ -1374,7 +1374,7 @@ async def login(credentials: dict[str, Any]):
 
 @router.post("/auth/refresh")
 async def refresh_token(data: dict[str, Any]):
-    from protoforge.core.auth import verify_refresh_token, create_token, create_refresh_token, user_manager
+    from protoforge.core.auth import verify_refresh_token, create_token, user_manager
     refresh = data.get("refresh_token", "")
     user_id = verify_refresh_token(refresh)
 
@@ -1387,14 +1387,7 @@ async def refresh_token(data: dict[str, Any]):
         raise HTTPException(status_code=401, detail="User not found")
 
     access_token = create_token(user.id, user.username, user.role)
-    new_refresh_token = create_refresh_token(user.id)
-    return {
-        "access_token": access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer",
-        "username": user.username,
-        "role": user.role,
-    }
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/auth/register")
 async def register(user_data: dict[str, Any]):

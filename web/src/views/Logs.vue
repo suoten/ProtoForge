@@ -73,9 +73,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem } from 'naive-ui'
+import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { directionTagTypeMap, directionLabelMap } from '../constants.js'
+
+const message = useMessage()
 
 const logs = ref([])
 const protocols = ref([])

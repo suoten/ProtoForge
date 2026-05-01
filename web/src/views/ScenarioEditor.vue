@@ -349,6 +349,22 @@ async function saveScenarioLayout() {
       },
       enabled: true,
     })).filter(r => r.source_device_id && r.target_device_id)
+
+    for (const dc of deviceConfigs) {
+      if (!dc.id) continue
+      try {
+        await api.createDevice({
+          id: dc.id, name: dc.name, protocol: dc.protocol,
+          points: dc.points, protocol_config: dc.protocol_config,
+        })
+        try { await api.startDevice(dc.id) } catch {}
+      } catch (e) {
+        if (e.response?.status !== 400 || !String(e.response?.data?.detail).includes('already exists')) {
+          throw e
+        }
+      }
+    }
+
     const currentScenario = scenarios.value.find(s => s.id === selectedScenario.value)
     await api.updateScenario(selectedScenario.value, {
       id: selectedScenario.value,
@@ -356,7 +372,7 @@ async function saveScenarioLayout() {
       description: currentScenario?.description || '',
       devices: deviceConfigs, rules,
     })
-    message.success('场景布局已保存')
+    message.success('场景布局已保存，设备已创建并启动')
   } catch (e) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally {

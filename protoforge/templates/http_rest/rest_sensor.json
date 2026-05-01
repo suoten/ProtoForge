@@ -1,0 +1,54 @@
+{
+    "id": "http_rest_sensor",
+    "name": "HTTP REST传感器",
+    "protocol": "http",
+    "description": "HTTP RESTful API传感器，支持GET/POST读写工业传感器数据",
+    "manufacturer": "ProtoForge",
+    "model": "PF-HTTP-SENSOR",
+    "points": [
+        {
+            "name": "temperature",
+            "address": "/sensor/temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 20,
+            "max_value": 40
+        },
+        {
+            "name": "humidity",
+            "address": "/sensor/humidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30,
+            "max_value": 80
+        },
+        {
+            "name": "pressure",
+            "address": "/sensor/pressure",
+            "data_type": "float32",
+            "unit": "hPa",
+            "description": "气压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 900,
+            "max_value": 1100
+        },
+        {
+            "name": "status",
+            "address": "/sensor/status",
+            "data_type": "string",
+            "description": "状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": "normal"
+        }
+    ],
+    "protocol_config": {},
+    "tags": ["HTTP", "REST", "传感器", "Web API"]
+}

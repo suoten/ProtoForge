@@ -53,6 +53,42 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     except Exception as e:
         logger.warning("  ✗ EtherCAT 协议启动失败: %s", e)
 
+    try:
+        await engine.start_protocol("http", _cfg("http"))
+        logger.info("  ✓ HTTP REST 协议已启动 (端口 %s)", _cfg("http").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ HTTP REST 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("gb28181", _cfg("gb28181"))
+        logger.info("  ✓ GB28181 协议已启动 (端口 %s)", _cfg("gb28181").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ GB28181 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("opcua", _cfg("opcua"))
+        logger.info("  ✓ OPC-UA 协议已启动 (端口 %s)", _cfg("opcua").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ OPC-UA 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("s7", _cfg("s7"))
+        logger.info("  ✓ S7 协议已启动 (端口 %s)", _cfg("s7").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ S7 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("bacnet", _cfg("bacnet"))
+        logger.info("  ✓ BACnet 协议已启动 (端口 %s)", _cfg("bacnet").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ BACnet 协议启动失败: %s", e)
+
+    try:
+        await engine.start_protocol("ab", _cfg("ab"))
+        logger.info("  ✓ AB 协议已启动 (端口 %s)", _cfg("ab").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ AB 协议启动失败: %s", e)
+
     demo_devices = [
         {
             "id": "demo-temp-sensor",
@@ -153,6 +189,50 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
                 {"name": "actual_torque", "address": "10", "data_type": "int16", "generator_type": "random", "min_value": -500, "max_value": 500},
             ],
         },
+        {
+            "id": "demo-http-sensor",
+            "name": "HTTP温度传感器",
+            "protocol": "http",
+            "template_id": "http_rest_sensor",
+            "points": [
+                {"name": "temperature", "address": "/sensor/temperature", "data_type": "float32", "generator_type": "sine", "min_value": 20, "max_value": 40},
+                {"name": "pressure", "address": "/sensor/pressure", "data_type": "float32", "generator_type": "random", "min_value": 900, "max_value": 1100},
+                {"name": "status", "address": "/sensor/status", "data_type": "string", "generator_type": "fixed", "fixed_value": "normal"},
+            ],
+        },
+        {
+            "id": "demo-gb28181-camera",
+            "name": "GB28181摄像头",
+            "protocol": "gb28181",
+            "template_id": "gb28181_camera",
+            "points": [
+                {"name": "stream_status", "address": "stream", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+                {"name": "ptz_pan", "address": "ptz_pan", "data_type": "float32", "generator_type": "random", "min_value": -180, "max_value": 180},
+                {"name": "ptz_tilt", "address": "ptz_tilt", "data_type": "float32", "generator_type": "random", "min_value": -90, "max_value": 90},
+            ],
+        },
+        {
+            "id": "demo-opcua-motor",
+            "name": "OPC-UA电机控制器",
+            "protocol": "opcua",
+            "template_id": "opcua_motor_controller",
+            "points": [
+                {"name": "rpm", "address": "ns=2;s=motor.rpm", "data_type": "float32", "generator_type": "sine", "min_value": 500, "max_value": 3000},
+                {"name": "torque", "address": "ns=2;s=motor.torque", "data_type": "float32", "generator_type": "random", "min_value": 5, "max_value": 50},
+                {"name": "power", "address": "ns=2;s=motor.power", "data_type": "float32", "generator_type": "random", "min_value": 0.5, "max_value": 15},
+            ],
+        },
+        {
+            "id": "demo-bacnet-controller",
+            "name": "BACnet楼宇控制器",
+            "protocol": "bacnet",
+            "template_id": "bacnet_ahu",
+            "points": [
+                {"name": "room_temp", "address": "AI:1", "data_type": "float32", "generator_type": "sine", "min_value": 18, "max_value": 30},
+                {"name": "hvac_status", "address": "BI:1", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+                {"name": "fan_speed", "address": "AO:1", "data_type": "float32", "generator_type": "random", "min_value": 0, "max_value": 100},
+            ],
+        },
     ]
 
     for dev_config in demo_devices:
@@ -173,7 +253,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     demo_scenario = {
         "id": "demo-smart-factory",
         "name": "智慧工厂演示",
-        "description": "包含温湿度传感器、PLC、智能门锁和流量计的完整演示场景",
+        "description": "包含温湿度传感器、PLC、智能门锁、流量计、HTTP传感器、GB28181摄像头、OPC-UA电机、BACnet楼宇控制等16个设备的完整演示场景",
         "devices": demo_devices,
         "rules": [
             {
@@ -235,4 +315,4 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     except Exception as e:
         logger.warning("  ✗ 场景创建失败: %s", e)
 
-    logger.info("Demo data seeded! 9 devices + 1 scenario ready.")
+    logger.info("Demo data seeded! 16 devices + 1 scenario ready.")
