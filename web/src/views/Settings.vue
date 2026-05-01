@@ -910,7 +910,7 @@ async function addWebhook() {
   try {
     let headers = {}
     if (newWebhook.value.headers) {
-      try { headers = JSON.parse(newWebhook.value.headers) } catch { headers = {} }
+      try { headers = JSON.parse(newWebhook.value.headers) } catch { message.warning('请求头 JSON 格式无效，将使用空请求头'); headers = {} }
     }
     await api.addWebhook({
       name: newWebhook.value.name,
@@ -974,7 +974,7 @@ async function doUpdateWebhook() {
   try {
     let headers = {}
     if (editWebhookForm.value.headersStr) {
-      try { headers = JSON.parse(editWebhookForm.value.headersStr) } catch { headers = {} }
+      try { headers = JSON.parse(editWebhookForm.value.headersStr) } catch { message.warning('请求头 JSON 格式无效，将使用空请求头'); headers = {} }
     }
     await api.updateWebhook(editWebhookForm.value.id, {
       name: editWebhookForm.value.name,

@@ -49,7 +49,7 @@
                 </div>
                 <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
               </div>
-              <div style="margin-top:8px;font-size:11px;opacity:0.7">覆盖 {{ Object.keys(protocolLabels).length }} 种协议</div>
+              <div style="margin-top:8px;font-size:11px;opacity:0.7">覆盖 {{ protocols.length }} 种协议</div>
             </n-card>
           </n-gi>
         </n-grid>

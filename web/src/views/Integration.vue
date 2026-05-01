@@ -384,9 +384,11 @@
       </template>
     </n-modal>
 
-    <div class="pf-section-title" style="font-size:16px;margin-top:16px">导入结果</div>
-    <n-data-table :columns="resultColumns" :data="importResults" :bordered="false" size="small"
-      :pagination="{ pageSize: 10 }" />
+    <template v-if="importResults.length > 0">
+      <div class="pf-section-title" style="font-size:16px;margin-top:16px">导入结果</div>
+      <n-data-table :columns="resultColumns" :data="importResults" :bordered="false" size="small"
+        :pagination="{ pageSize: 10 }" />
+    </template>
   </n-space>
 </template>
 
@@ -781,10 +783,7 @@ async function loadDevices() {
   loadingDevices.value = true
   try {
     const devs = await api.getDevices()
-    allDevices.value = devs
-    for (const d of allDevices.value) {
-      d._el_status = null
-    }
+    allDevices.value = devs.map(d => ({ ...d, _el_status: null }))
   } catch (e) { message.error('加载设备失败') }
   finally { loadingDevices.value = false }
 }
