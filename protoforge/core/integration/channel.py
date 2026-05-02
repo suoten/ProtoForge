@@ -86,13 +86,17 @@ class HttpChannel(ChannelBase):
             if msg_type in ("push_device", "batch_push"):
                 resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
                 if resp.status_code in (200, 201):
-                    return {"ok": True, "data": resp.json()}
+                    resp_data = resp.json()
+                    inner = resp_data.get("data", resp_data)
+                    return {"ok": True, "data": inner}
                 if resp.status_code == 409:
                     device_id = payload.get("device_id", "")
                     update_payload = {k: v for k, v in payload.items() if k != "device_id"}
                     resp = await self._client.put(f"/api/v1/devices/{device_id}", json=update_payload, headers=headers)
                     if resp.status_code == 200:
-                        return {"ok": True, "updated": True, "data": resp.json()}
+                        resp_data = resp.json()
+                        inner = resp_data.get("data", resp_data)
+                        return {"ok": True, "updated": True, "data": inner}
                 if resp.status_code == 401 and self._auth:
                     await self._auth.refresh_token()
                     headers["Authorization"] = f"Bearer {self._auth.token}"
@@ -110,11 +114,46 @@ class HttpChannel(ChannelBase):
                 device_id = payload.get("device_id", "")
                 action = payload.get("action", "")
                 if action == "start_collect":
-                    resp = await self._client.post(f"/api/v1/devices/{device_id}/start", headers=headers)
+                    resp = await self._client.post(
+                        f"/api/v1/integration/message",
+                        json={"type": "device_control", "payload": {"device_id": device_id, "action": "start_collect"}},
+                        headers=headers,
+                    )
+                    if resp.status_code == 404:
+                        resp = await self._client.post(f"/api/v1/devices/{device_id}/start", headers=headers)
                 elif action == "stop_collect":
-                    resp = await self._client.post(f"/api/v1/devices/{device_id}/stop", headers=headers)
+                    resp = await self._client.post(
+                        f"/api/v1/integration/message",
+                        json={"type": "device_control", "payload": {"device_id": device_id, "action": "stop_collect"}},
+                        headers=headers,
+                    )
+                    if resp.status_code == 404:
+                        resp = await self._client.post(f"/api/v1/devices/{device_id}/stop", headers=headers)
                 else:
                     return {"ok": False, "error": f"Unknown action: {action}"}
+                if resp.status_code == 200:
+                    resp_data = resp.json()
+                    inner = resp_data.get("data", resp_data)
+                    return {"ok": True, "data": inner}
+                if resp.status_code == 401 and self._auth:
+                    await self._auth.refresh_token()
+                    headers["Authorization"] = f"Bearer {self._auth.token}"
+                    if action == "start_collect":
+                        resp = await self._client.post(
+                            f"/api/v1/integration/message",
+                            json={"type": "device_control", "payload": {"device_id": device_id, "action": "start_collect"}},
+                            headers=headers,
+                        )
+                    else:
+                        resp = await self._client.post(
+                            f"/api/v1/integration/message",
+                            json={"type": "device_control", "payload": {"device_id": device_id, "action": "stop_collect"}},
+                            headers=headers,
+                        )
+                    if resp.status_code == 200:
+                        resp_data = resp.json()
+                        inner = resp_data.get("data", resp_data)
+                        return {"ok": True, "data": inner}
                 return {"ok": resp.status_code == 200}
 
             else:
