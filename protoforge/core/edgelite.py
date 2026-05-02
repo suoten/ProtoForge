@@ -459,7 +459,8 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
             headers=headers,
         )
         if resp.status_code == 200:
-            data = resp.json().get("data", resp.json())
+            raw = resp.json()
+            data = raw.get("data", raw)
             return {
                 "ok": True,
                 "device_id": device_id,
@@ -493,7 +494,8 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
             headers=headers,
         )
         if resp.status_code == 200:
-            data = resp.json().get("data", resp.json())
+            raw = resp.json()
+            data = raw.get("data", raw)
             return {"ok": True, "device_id": device_id, "points": data}
         if resp.status_code == 404:
             return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
@@ -657,6 +659,12 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         if el_status == "offline":
             driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
+            if isinstance(driver_config, str):
+                try:
+                    import json
+                    driver_config = json.loads(driver_config)
+                except Exception:
+                    driver_config = {}
             device_protocol = getattr(device, "protocol", "") or ""
             protoforge_running = False
             try:
@@ -677,7 +685,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             headers=headers,
         )
         if points_resp.status_code == 200:
-            points_data = points_resp.json().get("data", points_resp.json())
+            raw_points = points_resp.json()
+            points_data = raw_points.get("data", raw_points)
             if isinstance(points_data, list):
                 has_data = len(points_data) > 0
                 points_dict = {}
@@ -715,8 +724,9 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
             if resp.status_code == 200:
-                data = resp.json().get("data", resp.json())
-                return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
+                raw = resp.json()
+                data = raw.get("data", raw)
+                return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
 
             needs_auth = resp.status_code in (401, 403)
             if not needs_auth:
@@ -735,8 +745,9 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
                 try:
                     status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
                     if status_resp.status_code == 200:
-                        data = status_resp.json().get("data", status_resp.json())
-                        return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", 0)}
+                        raw = status_resp.json()
+                        data = raw.get("data", raw)
+                        return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
                 except Exception as e:
                     logger.debug("EdgeLite connection test after auth failed: %s", e)
                 return {"ok": True, "version": "未知", "devices": 0}

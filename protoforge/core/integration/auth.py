@@ -61,9 +61,15 @@ class IntegrationAuth:
         except httpx.TimeoutException as e:
             from protoforge.core.integration.retry import NetworkError
             raise NetworkError(f"Login timeout: {e}") from e
-        self._token = data.get("access_token", "")
-        self._refresh_token = data.get("refresh_token", "")
-        expires_in = data.get("expires_in", 3600)
+        token_data = data.get("data", data)
+        if isinstance(token_data, dict):
+            self._token = token_data.get("access_token", "")
+            self._refresh_token = token_data.get("refresh_token", "")
+            expires_in = token_data.get("expires_in", 3600)
+        else:
+            self._token = data.get("access_token", "")
+            self._refresh_token = data.get("refresh_token", "")
+            expires_in = data.get("expires_in", 3600)
         self._token_expires = time.time() + expires_in
         logger.info("EdgeLite login successful, token expires in %ds", expires_in)
 
@@ -76,9 +82,15 @@ class IntegrationAuth:
             from protoforge.core.integration.retry import AuthError
             raise AuthError(f"Token refresh failed: HTTP {resp.status_code}")
         data = resp.json()
-        self._token = data.get("access_token", self._token)
-        self._refresh_token = data.get("refresh_token", self._refresh_token)
-        expires_in = data.get("expires_in", 3600)
+        token_data = data.get("data", data)
+        if isinstance(token_data, dict):
+            self._token = token_data.get("access_token", self._token)
+            self._refresh_token = token_data.get("refresh_token", self._refresh_token)
+            expires_in = token_data.get("expires_in", 3600)
+        else:
+            self._token = data.get("access_token", self._token)
+            self._refresh_token = data.get("refresh_token", self._refresh_token)
+            expires_in = data.get("expires_in", 3600)
         self._token_expires = time.time() + expires_in
         logger.info("EdgeLite token refreshed")
 

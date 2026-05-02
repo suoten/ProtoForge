@@ -67,6 +67,7 @@ class IntegrationManager:
         self._username = username
         self._password = password
         self._channel: Optional[ChannelBase] = None
+        self._ws_channel: Optional[WebSocketChannel] = None
         self._auth: Optional[IntegrationAuth] = None
         self._state = ConnectionStateMachine(on_change=self._on_state_change)
         self._retry = RetryPolicy()
@@ -134,6 +135,11 @@ class IntegrationManager:
             logger.warning("IntegrationManager initial connection failed, cleaned up: %s", e)
             return
 
+        try:
+            await self._connect_websocket()
+        except Exception as e:
+            logger.warning("IntegrationManager WebSocket connection failed (non-fatal): %s", e)
+
         logger.info("IntegrationManager started, target: %s", self._edgelite_url)
 
     def _cleanup_event_handlers(self) -> None:
@@ -146,6 +152,9 @@ class IntegrationManager:
         self._running = False
         self._cleanup_event_handlers()
 
+        if self._ws_channel:
+            await self._ws_channel.close()
+            self._ws_channel = None
         if self._channel:
             await self._channel.close()
             self._channel = None
@@ -166,6 +175,60 @@ class IntegrationManager:
         except Exception as e:
             await self._state.transition(ConnectionState.DISCONNECTED)
             logger.warning("Connection failed: %s", e)
+
+    async def _connect_websocket(self) -> None:
+        try:
+            import urllib.parse
+            parsed = urllib.parse.urlparse(self._edgelite_url)
+            ws_proto = "wss" if parsed.scheme == "https" else "ws"
+            ws_host = parsed.hostname or "localhost"
+            ws_port = f":{parsed.port}" if parsed.port else ""
+            ws_url = f"{ws_proto}://{ws_host}{ws_port}/ws/v1/integration"
+
+            if self._auth:
+                await self._auth.ensure_token()
+                token = self._auth.token
+                separator = "&" if "?" in ws_url else "?"
+                ws_url = f"{ws_url}{separator}token={token}"
+
+            ws_channel = WebSocketChannel(url=ws_url, heartbeat_interval=30.0)
+            ws_channel.on_message("point_data", self._on_ws_point_data)
+            ws_channel.on_message("device_status_changed", self._on_ws_device_status)
+            ws_channel.on_message("alarm_fired", self._on_ws_alarm)
+            ws_channel.on_message("alarm_recovered", self._on_ws_alarm)
+            ws_channel.on_message("handshake_ack", self._on_ws_handshake_ack)
+            await ws_channel.connect()
+            self._ws_channel = ws_channel
+
+            handshake_msg = {
+                "type": "handshake",
+                "version": "1.0",
+                "protocols": [],
+                "capabilities": ["push_device", "device_control", "delete_device", "backhaul", "alarm_forward"],
+                "heartbeat_interval": 30.0,
+            }
+            await ws_channel.send(handshake_msg)
+            logger.info("WebSocket integration channel connected to %s", ws_url)
+        except ImportError:
+            logger.warning("websockets library not installed, WebSocket integration channel unavailable")
+        except Exception as e:
+            logger.warning("WebSocket integration channel connection failed: %s", e)
+
+    async def _on_ws_handshake_ack(self, message: dict[str, Any]) -> None:
+        session_id = message.get("session_id", "")
+        protocols = message.get("protocols", [])
+        if protocols:
+            self._protocol_mapper.update_edgelite_protocols(protocols)
+        logger.info("WebSocket handshake acknowledged, session=%s protocols=%s", session_id, protocols)
+
+    async def _on_ws_point_data(self, message: dict[str, Any]) -> None:
+        await self.handle_backhaul_message(message)
+
+    async def _on_ws_device_status(self, message: dict[str, Any]) -> None:
+        await self.handle_backhaul_message(message)
+
+    async def _on_ws_alarm(self, message: dict[str, Any]) -> None:
+        await self.handle_backhaul_message(message)
 
     async def _ensure_connected(self) -> bool:
         if self._channel and self._channel.is_connected:
