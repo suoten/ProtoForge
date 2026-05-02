@@ -1264,4 +1264,14 @@ protoc --go_out=. --go-grpc_out=. protoforge/grpc/protoforge.proto
 # Java
 protoc --java_out=. --grpc-java_out=. protoforge/grpc/protoforge.proto
 
-#
+# C#
+protoc --csharp_out=. --grpc-csharp_out=. protoforge/grpc/protoforge.proto
+```
+
+***
+
+### 🔗 相关项目
+
+| 项目 | 说明 | 仓库地址 |
+|------|------|----------|
+| [EdgeLiteGateway](https://github.com/suoten/EdgeLiteGateway) | 轻量级边缘计算物联网网关，22 种工业协议开箱即用 | [Gitee](https://gitee.com/suoten/EdgeLiteGateway) · [GitHub](https://github.com/suoten/EdgeLiteGateway) |
