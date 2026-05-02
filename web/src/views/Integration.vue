@@ -476,10 +476,15 @@ const pipelineSteps = [
   { label: '验证', color: '#8b5cf6', key: 'verify' },
 ]
 
+const EL_UNSUPPORTED_PROTOCOLS = new Set(['gb28181', 'bacnet', 'profinet', 'ethercat'])
+
 const elDevices = computed(() => {
   return allDevices.value.filter(d => {
     const cfg = d.protocol_config || {}
-    return cfg.edgelite_url
+    if (cfg.edgelite_url) return true
+    if (cfg.edgelite_enabled) return true
+    if (!EL_UNSUPPORTED_PROTOCOLS.has(d.protocol)) return true
+    return false
   }).map(d => {
     const cfg = d.protocol_config || {}
     return {

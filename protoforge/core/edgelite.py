@@ -44,19 +44,24 @@ def is_edgelite_enabled_for_device(device: Any) -> bool:
 
 _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_tcp": {"host", "port", "slave_id", "timeout"},
-    "modbus_rtu": {"serial_port", "baudrate", "slave_id", "parity", "stop_bits", "timeout"},
+    "modbus_rtu": {"port", "baudrate", "slave_id", "parity", "stopbits", "timeout"},
     "opcua": {"endpoint", "security_mode", "timeout"},
-    "mqtt": {"broker", "port", "timeout"},
-    "http": {"url", "method", "timeout"},
-    "s7": {"host", "port", "rack", "slot", "timeout"},
-    "mc": {"host", "port", "timeout"},
-    "fins": {"host", "port", "timeout"},
-    "ab": {"host", "port", "timeout"},
-    "bacnet": {"host", "port", "device_id", "timeout"},
-    "fanuc": {"host", "port", "timeout"},
+    "mqtt": {"broker", "port", "subscribe_topic", "timeout"},
+    "http": {"path", "method", "timeout"},
+    "s7": {"ip", "port", "rack", "slot", "timeout"},
+    "mc": {"ip", "port", "plc_type", "timeout"},
+    "fins": {"ip", "port", "source_node", "dest_node", "timeout"},
+    "ab": {"ip", "slot", "micrologix", "timeout"},
+    "fanuc": {"ip", "port", "timeout"},
     "mtconnect": {"url", "timeout"},
-    "toledo": {"host", "port", "timeout"},
-    "opcda": {"prog_id", "timeout"},
+    "toledo": {"ip", "port", "serial_port", "baudrate", "protocol", "timeout"},
+    "opcda": {"server", "host", "gateway", "timeout"},
+    "onvif": {"ip", "port", "username", "password", "timeout"},
+    "dlt645": {"port", "baud_rate", "parity", "timeout"},
+    "iec104": {"ip", "port", "asdu_addr", "heartbeat_interval", "timeout"},
+    "kuka": {"ip", "port", "username", "password", "timeout"},
+    "abb_robot": {"ip", "port", "username", "password", "timeout"},
+    "sparkplug_b": {"group_id", "edge_node_id", "mqtt_broker", "mqtt_port", "timeout"},
     "profinet": {"host", "port", "device_name", "vendor_id", "device_id", "timeout"},
     "ethercat": {"host", "port", "slave_address", "timeout"},
 }
@@ -109,37 +114,64 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "baudrate": protocol_config.get("baudrate", 9600),
             "slave_id": protocol_config.get("slave_id", 1),
             "parity": protocol_config.get("parity", "N"),
-            "stop_bits": protocol_config.get("stop_bits", 1),
+            "stopbits": protocol_config.get("stopbits", protocol_config.get("stop_bits", 1)),
             "timeout": 5.0,
         }
     elif protocol == "opcua":
         base = {"endpoint": protocol_config.get("endpoint", f"opc.tcp://{host}:{port or 4840}"),
                 "security_mode": protocol_config.get("security_mode", "None"), "timeout": 5.0}
     elif protocol == "mqtt":
-        base = {"broker": host, "port": port or 1883, "timeout": 5.0}
+        base = {"broker": host, "port": port or 1883,
+                "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", f"protoforge/data")),
+                "timeout": 5.0}
     elif protocol == "http":
-        base = {"url": protocol_config.get("url", f"http://{host}:{port or 8080}"),
-                "method": protocol_config.get("method", "GET"), "timeout": 5.0}
+        base = {"path": protocol_config.get("path", "/webhook/data"),
+                "method": protocol_config.get("method", "POST"), "timeout": 5.0}
     elif protocol == "s7":
-        base = {"host": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
+        base = {"ip": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1), "timeout": 5.0}
     elif protocol == "mc":
-        base = {"host": host, "port": port or 5000, "timeout": 5.0}
+        base = {"ip": host, "port": port or 5007, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
     elif protocol == "fins":
-        base = {"host": host, "port": port or 9600, "timeout": 5.0}
+        base = {"ip": host, "port": port or 9600,
+                "source_node": protocol_config.get("source_node", 0),
+                "dest_node": protocol_config.get("dest_node", 1), "timeout": 5.0}
     elif protocol == "ab":
-        base = {"host": host, "port": port or 44818, "timeout": 5.0}
-    elif protocol == "bacnet":
-        base = {"host": host, "port": port or 47808,
-                "device_id": protocol_config.get("device_id", 0), "timeout": 5.0}
+        base = {"ip": host, "slot": protocol_config.get("slot", 0),
+                "micrologix": protocol_config.get("micrologix", False), "timeout": 5.0}
     elif protocol == "fanuc":
-        base = {"host": host, "port": port or 8193, "timeout": 5.0}
+        base = {"ip": host, "port": port or 8193, "timeout": 5.0}
     elif protocol == "mtconnect":
-        base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
+        base = {"url": protocol_config.get("url", f"http://{host}:{port or 5000}"), "timeout": 5.0}
     elif protocol == "toledo":
-        base = {"host": host, "port": port or 1701, "timeout": 5.0}
+        base = {"ip": host, "port": port or 8000, "timeout": 5.0}
     elif protocol == "opcda":
-        base = {"prog_id": protocol_config.get("prog_id", ""), "timeout": 5.0}
+        base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
+                "host": protocol_config.get("host", ""), "timeout": 5.0}
+    elif protocol == "onvif":
+        base = {"ip": host, "port": port or 80,
+                "username": protocol_config.get("username", "admin"),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "dlt645":
+        base = {"port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
+                "baud_rate": protocol_config.get("baud_rate", 2400),
+                "parity": protocol_config.get("parity", "E"), "timeout": 5.0}
+    elif protocol == "iec104":
+        base = {"ip": host, "port": port or 2404,
+                "asdu_addr": protocol_config.get("asdu_addr", 1),
+                "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": 5.0}
+    elif protocol == "kuka":
+        base = {"ip": host, "port": port or 54600,
+                "username": protocol_config.get("username", ""),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "abb_robot":
+        base = {"ip": host, "port": port or 80,
+                "username": protocol_config.get("username", "Default"),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "sparkplug_b":
+        base = {"group_id": protocol_config.get("group_id", "protoforge"),
+                "edge_node_id": protocol_config.get("edge_node_id", "pf-node"),
+                "mqtt_broker": host, "mqtt_port": port or 1883, "timeout": 5.0}
     elif protocol == "profinet":
         base = {"host": host, "port": port or 34964,
                 "device_name": protocol_config.get("device_name", "protoforge-device"),
@@ -149,12 +181,13 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         base = {"host": host, "port": port or 34980,
                 "slave_address": protocol_config.get("slave_address", 4097), "timeout": 5.0}
     else:
-        base = {"host": host, "port": port, "timeout": 5.0}
+        base = {"host": host, "ip": host, "port": port, "timeout": 5.0}
 
     known = _DRIVER_CONFIG_KNOWN_KEYS.get(protocol, set())
     for k, v in protocol_config.items():
         if k not in known and k not in base and k not in (
-            "edgelite_url", "edgelite_username", "edgelite_password", "collect_interval"
+            "edgelite_url", "edgelite_username", "edgelite_password", "collect_interval",
+            "edgelite_enabled",
         ):
             base[k] = v
 
@@ -438,17 +471,19 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
 
 _PROTOCOL_DISPLAY = {
     "modbus_tcp": "Modbus TCP", "modbus_rtu": "Modbus RTU", "opcua": "OPC-UA",
-    "mqtt": "MQTT", "http": "HTTP REST", "s7": "S7", "mc": "MC协议",
-    "fins": "FINS", "ab": "EtherNet/IP", "bacnet": "BACnet",
-    "fanuc": "FOCAS", "mtconnect": "MTConnect", "toledo": "Toledo",
-    "profinet": "PROFINET", "ethercat": "EtherCAT",
+    "mqtt": "MQTT", "http": "HTTP Webhook", "s7": "S7", "mc": "MC协议",
+    "fins": "FINS", "ab": "EtherNet/IP", "fanuc": "FOCAS", "mtconnect": "MTConnect",
+    "toledo": "Toledo", "opcda": "OPC DA", "onvif": "ONVIF", "dlt645": "DL/T 645",
+    "iec104": "IEC 104", "kuka": "KUKA EKRL", "abb_robot": "ABB RWS",
+    "sparkplug_b": "Sparkplug B", "profinet": "PROFINET", "ethercat": "EtherCAT",
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
     "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
-    "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "bacnet": 47808,
-    "fanuc": 8193, "mtconnect": 7878, "toledo": 1701,
-    "profinet": 34964, "ethercat": 34980,
+    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "fanuc": 8193,
+    "mtconnect": 5000, "toledo": 8000, "opcda": 0, "onvif": 80,
+    "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
+    "sparkplug_b": 1883, "profinet": 34964, "ethercat": 34980,
 }
 
 
@@ -501,7 +536,7 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
             host = driver_config.get("host", "")
             port = str(driver_config.get("port", ""))
     else:
-        host = driver_config.get("host", driver_config.get("ip", ""))
+        host = driver_config.get("ip", driver_config.get("host", driver_config.get("ip", "")))
         port = str(driver_config.get("port", ""))
     return (host, port)
 
