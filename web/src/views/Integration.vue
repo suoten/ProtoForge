@@ -476,7 +476,7 @@ const pipelineSteps = [
   { label: '验证', color: '#8b5cf6', key: 'verify' },
 ]
 
-const EL_UNSUPPORTED_PROTOCOLS = new Set(['gb28181', 'bacnet', 'profinet', 'ethercat'])
+const EL_UNSUPPORTED_PROTOCOLS = new Set(['gb28181', 'profinet', 'ethercat', 'onvif', 'dlt645', 'iec104', 'kuka', 'abb_robot', 'sparkplug_b'])
 
 const elDevices = computed(() => {
   return allDevices.value.filter(d => {
