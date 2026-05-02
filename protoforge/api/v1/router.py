@@ -1039,7 +1039,9 @@ async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict =
     if not existing:
         raise HTTPException(status_code=404, detail="Test case not found")
 
-    tc = TestCase.from_dict(case_def)
+    merged = existing.to_dict()
+    merged.update(case_def)
+    tc = TestCase.from_dict(merged)
     tc.id = case_id
     await runner.save_test_case(tc)
     return tc.to_dict()
