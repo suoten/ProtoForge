@@ -52,11 +52,16 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "mc": {"ip", "port", "plc_type", "timeout"},
     "fins": {"ip", "port", "source_node", "dest_node", "timeout"},
     "ab": {"ip", "slot", "micrologix", "timeout"},
-    "bacnet": {"ip", "port", "device_id", "subnet", "timeout"},
     "fanuc": {"ip", "port", "timeout"},
     "mtconnect": {"url", "timeout"},
     "toledo": {"ip", "port", "serial_port", "baudrate", "protocol", "timeout"},
     "opcda": {"server", "host", "gateway", "timeout"},
+    "onvif": {"ip", "port", "username", "password", "timeout"},
+    "dlt645": {"port", "baud_rate", "parity", "timeout"},
+    "iec104": {"ip", "port", "asdu_addr", "heartbeat_interval", "timeout"},
+    "kuka": {"ip", "port", "username", "password", "timeout"},
+    "abb_robot": {"ip", "port", "username", "password", "timeout"},
+    "sparkplug_b": {"group_id", "edge_node_id", "mqtt_broker", "mqtt_port", "timeout"},
     "serial": {"port", "baudrate", "bytesize", "parity", "stopbits", "timeout", "protocol"},
     "database": {"db_type", "host", "port", "database", "username", "password", "queries", "pool_size"},
     "barcode_scanner": {"port", "baudrate", "prefix", "suffix", "barcode_types"},
@@ -137,10 +142,6 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "ab":
         base = {"ip": host, "slot": protocol_config.get("slot", 0),
                 "micrologix": protocol_config.get("micrologix", False), "timeout": 5.0}
-    elif protocol == "bacnet":
-        base = {"ip": host, "port": port or 47808,
-                "device_id": protocol_config.get("device_id", 0),
-                "subnet": protocol_config.get("subnet", ""), "timeout": 5.0}
     elif protocol == "fanuc":
         base = {"ip": host, "port": port or 8193, "timeout": 5.0}
     elif protocol == "mtconnect":
@@ -150,6 +151,30 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
                 "host": protocol_config.get("host", ""), "timeout": 5.0}
+    elif protocol == "onvif":
+        base = {"ip": host, "port": port or 80,
+                "username": protocol_config.get("username", "admin"),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "dlt645":
+        base = {"port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
+                "baud_rate": protocol_config.get("baud_rate", 2400),
+                "parity": protocol_config.get("parity", "E"), "timeout": 5.0}
+    elif protocol == "iec104":
+        base = {"ip": host, "port": port or 2404,
+                "asdu_addr": protocol_config.get("asdu_addr", 1),
+                "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": 5.0}
+    elif protocol == "kuka":
+        base = {"ip": host, "port": port or 54600,
+                "username": protocol_config.get("username", ""),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "abb_robot":
+        base = {"ip": host, "port": port or 80,
+                "username": protocol_config.get("username", "Default"),
+                "password": protocol_config.get("password", ""), "timeout": 5.0}
+    elif protocol == "sparkplug_b":
+        base = {"group_id": protocol_config.get("group_id", "protoforge"),
+                "edge_node_id": protocol_config.get("edge_node_id", "pf-node"),
+                "mqtt_broker": host, "mqtt_port": port or 1883, "timeout": 5.0}
     elif protocol == "serial":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -478,17 +503,19 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
 _PROTOCOL_DISPLAY = {
     "modbus_tcp": "Modbus TCP", "modbus_rtu": "Modbus RTU", "opcua": "OPC-UA",
     "mqtt": "MQTT", "http": "HTTP Webhook", "s7": "S7", "mc": "MC协议",
-    "fins": "FINS", "ab": "EtherNet/IP", "bacnet": "BACnet",
-    "fanuc": "FOCAS", "mtconnect": "MTConnect", "toledo": "Toledo",
-    "opcda": "OPC DA", "serial": "串口设备", "database": "数据库接入",
+    "fins": "FINS", "ab": "EtherNet/IP", "fanuc": "FOCAS", "mtconnect": "MTConnect",
+    "toledo": "Toledo", "opcda": "OPC DA", "onvif": "ONVIF", "dlt645": "DL/T 645",
+    "iec104": "IEC 104", "kuka": "KUKA EKRL", "abb_robot": "ABB RWS",
+    "sparkplug_b": "Sparkplug B", "serial": "串口设备", "database": "数据库接入",
     "barcode_scanner": "扫码枪", "profinet": "PROFINET", "ethercat": "EtherCAT",
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
     "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
-    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "bacnet": 47808,
-    "fanuc": 8193, "mtconnect": 5000, "toledo": 8000, "opcda": 0,
-    "serial": 0, "database": 3306, "barcode_scanner": 0,
+    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "fanuc": 8193,
+    "mtconnect": 5000, "toledo": 8000, "opcda": 0, "onvif": 80,
+    "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
+    "sparkplug_b": 1883, "serial": 0, "database": 3306, "barcode_scanner": 0,
     "profinet": 34964, "ethercat": 34980,
 }
 
