@@ -13,8 +13,8 @@ PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "s7": "s7",
     "mc": "mc",
     "fins": "fins",
-    "ab": "allen_bradley",
-    "bacnet": "bacnet",
+    "ab": "ab",
+    "bacnet": None,
     "fanuc": "fanuc",
     "mtconnect": "mtconnect",
     "toledo": "toledo",
@@ -22,6 +22,16 @@ PROTOCOL_MAP_BASE: dict[str, Optional[str]] = {
     "profinet": None,
     "ethercat": None,
     "gb28181": None,
+    "onvif": "onvif",
+    "dlt645": "dlt645",
+    "iec104": "iec104",
+    "kuka": "kuka_ekrl",
+    "abb_robot": "abb_rws",
+    "sparkplug_b": "sparkplug_b",
+    "serial_port": "serial",
+    "database_source": "database_source",
+    "barcode_scanner": "barcode_scanner",
+    "simulator": "simulator",
 }
 
 DATA_TYPE_MAP: dict[str, str] = {
