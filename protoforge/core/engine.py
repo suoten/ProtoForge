@@ -293,6 +293,12 @@ class SimulationEngine:
     def get_all_protocol_servers(self) -> dict[str, ProtocolServer]:
         return dict(self._protocol_servers)
 
+    def get_protocol_running_port(self, protocol_name: str) -> int | None:
+        server = self._protocol_servers.get(protocol_name)
+        if server and server.status == ProtocolStatus.RUNNING:
+            return server.get_running_port()
+        return None
+
     def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
         result = []
         for instance in self._devices.values():

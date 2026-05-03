@@ -47,7 +47,7 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_rtu": {"port", "baudrate", "slave_id", "parity", "stopbits", "timeout"},
     "opcua": {"endpoint", "security_mode", "timeout"},
     "mqtt": {"broker", "port", "subscribe_topic", "timeout"},
-    "http": {"path", "method", "timeout"},
+    "http": {"url", "host", "port", "path", "method", "timeout"},
     "s7": {"ip", "port", "rack", "slot", "timeout"},
     "mc": {"ip", "port", "plc_type", "timeout"},
     "fins": {"ip", "port", "source_node", "dest_node", "timeout"},
@@ -101,13 +101,33 @@ def _is_edgelite_local(el_config: dict[str, str]) -> bool:
         return "127.0.0.1" in url or "localhost" in url
 
 
+def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) -> int | None:
+    device_port = protocol_config.get("port")
+    if device_port is not None:
+        return int(device_port)
+    try:
+        from protoforge.main import get_engine
+        engine = get_engine()
+        running_port = engine.get_protocol_running_port(protocol)
+        if running_port is not None:
+            return running_port
+    except Exception:
+        pass
+    from protoforge.config import get_protocol_port_map
+    port_map = get_protocol_port_map()
+    proto_info = port_map.get(protocol)
+    if proto_info and isinstance(proto_info.get("port"), int):
+        return proto_info["port"]
+    return None
+
+
 def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "", el_config: dict[str, str] | None = None) -> dict[str, Any]:
     if not protoforge_host:
         protoforge_host = get_protoforge_host()
     if el_config and _is_edgelite_local(el_config):
         protoforge_host = "127.0.0.1"
     host = protoforge_host
-    port = protocol_config.get("port")
+    port = _get_protocol_actual_port(protocol, protocol_config)
 
     if protocol == "modbus_tcp":
         base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
@@ -128,13 +148,17 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", f"protoforge/data")),
                 "timeout": 5.0}
     elif protocol == "http":
-        base = {"path": protocol_config.get("path", "/webhook/data"),
+        http_port = port or 8080
+        api_prefix = protocol_config.get("api_prefix", protocol_config.get("path", "/api"))
+        base = {"url": f"http://{host}:{http_port}{api_prefix}",
+                "host": host, "port": http_port,
+                "path": protocol_config.get("path", "/webhook/data"),
                 "method": protocol_config.get("method", "POST"), "timeout": 5.0}
     elif protocol == "s7":
         base = {"ip": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1), "timeout": 5.0}
     elif protocol == "mc":
-        base = {"ip": host, "port": port or 5007, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
+        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
     elif protocol == "fins":
         base = {"ip": host, "port": port or 9600,
                 "source_node": protocol_config.get("source_node", 0),
@@ -145,9 +169,9 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "fanuc":
         base = {"ip": host, "port": port or 8193, "timeout": 5.0}
     elif protocol == "mtconnect":
-        base = {"url": protocol_config.get("url", f"http://{host}:{port or 5000}"), "timeout": 5.0}
+        base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
     elif protocol == "toledo":
-        base = {"ip": host, "port": port or 8000, "timeout": 5.0}
+        base = {"ip": host, "port": port or 1701, "timeout": 5.0}
     elif protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
                 "host": protocol_config.get("host", ""), "timeout": 5.0}
@@ -514,11 +538,11 @@ _PROTOCOL_DISPLAY = {
 
 _PROTOCOL_DEFAULT_PORTS = {
     "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
-    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "fanuc": 8193,
-    "mtconnect": 5000, "toledo": 8000, "opcda": 0, "onvif": 80,
+    "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
+    "mtconnect": 7878, "toledo": 1701, "opcda": 51340, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
     "sparkplug_b": 1883, "serial": 0, "database": 3306, "barcode_scanner": 0,
-    "profinet": 34964, "ethercat": 34980,
+    "profinet": 34964, "ethercat": 34980, "bacnet": 47808, "gb28181": 5060,
 }
 
 
