@@ -45,12 +45,12 @@ def is_edgelite_enabled_for_device(device: Any) -> bool:
 _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_tcp": {"host", "port", "slave_id", "timeout"},
     "modbus_rtu": {"port", "baudrate", "slave_id", "parity", "stopbits", "timeout"},
-    "opcua": {"endpoint", "security_mode", "timeout"},
-    "mqtt": {"broker", "port", "subscribe_topic", "timeout"},
-    "http": {"url", "host", "port", "path", "method", "timeout"},
-    "s7": {"ip", "port", "rack", "slot", "timeout"},
+    "opcua": {"server_url", "username", "password", "security_mode", "use_subscription", "timeout"},
+    "mqtt": {"subscribe_topic", "publish_topic", "timeout"},
+    "http": {"push_url", "timeout"},
+    "s7": {"ip", "rack", "slot"},
     "mc": {"ip", "port", "plc_type", "timeout"},
-    "fins": {"ip", "port", "source_node", "dest_node", "timeout"},
+    "fins": {"ip", "port", "timeout"},
     "ab": {"ip", "slot", "micrologix", "timeout"},
     "fanuc": {"ip", "port", "timeout"},
     "mtconnect": {"url", "timeout"},
@@ -58,13 +58,13 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "opcda": {"server", "host", "gateway", "timeout"},
     "onvif": {"ip", "port", "username", "password", "timeout"},
     "dlt645": {"port", "baud_rate", "parity", "timeout"},
-    "iec104": {"ip", "port", "asdu_addr", "heartbeat_interval", "timeout"},
-    "kuka": {"ip", "port", "username", "password", "timeout"},
+    "iec104": {"host", "port", "asdu_addr", "heartbeat_interval", "timeout"},
+    "kuka": {"ip", "port", "reconnect", "timeout"},
     "abb_robot": {"ip", "port", "username", "password", "timeout"},
-    "sparkplug_b": {"group_id", "edge_node_id", "mqtt_broker", "mqtt_port", "timeout"},
-    "serial": {"port", "baudrate", "bytesize", "parity", "stopbits", "timeout", "protocol"},
-    "database": {"db_type", "host", "port", "database", "username", "password", "queries", "pool_size"},
-    "barcode_scanner": {"port", "baudrate", "prefix", "suffix", "barcode_types"},
+    "sparkplug_b": {"group_id", "edge_node_id", "timeout"},
+    "serial": {"port", "baudrate", "bytesize", "parity", "stopbits", "timeout", "protocol", "slave_id", "commands"},
+    "database": {"db_type", "host", "port", "database", "username", "password", "queries", "write_queries", "pool_size"},
+    "barcode_scanner": {"port", "baudrate", "prefix", "suffix"},
     "profinet": {"host", "port", "device_name", "vendor_id", "device_id", "timeout"},
     "ethercat": {"host", "port", "slave_address", "timeout"},
 }
@@ -130,7 +130,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     port = _get_protocol_actual_port(protocol, protocol_config)
 
     if protocol == "modbus_tcp":
-        base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
+        base = {"host": host, "port": port or 502, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
     elif protocol == "modbus_rtu":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -141,28 +141,27 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "timeout": 5.0,
         }
     elif protocol == "opcua":
-        base = {"endpoint": protocol_config.get("endpoint", f"opc.tcp://{host}:{port or 4840}"),
-                "security_mode": protocol_config.get("security_mode", "None"), "timeout": 5.0}
+        ua_port = port or 4840
+        base = {"server_url": protocol_config.get("server_url", protocol_config.get("endpoint", f"opc.tcp://{host}:{ua_port}")),
+                "username": protocol_config.get("username", ""),
+                "password": protocol_config.get("password", ""),
+                "security_mode": protocol_config.get("security_mode", "None"),
+                "use_subscription": protocol_config.get("use_subscription", True)}
     elif protocol == "mqtt":
-        base = {"broker": host, "port": port or 1883,
-                "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", f"protoforge/data")),
-                "timeout": 5.0}
+        base = {"subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", "protoforge/data")),
+                "publish_topic": protocol_config.get("publish_topic", "protoforge/command")}
     elif protocol == "http":
         http_port = port or 8080
-        api_prefix = protocol_config.get("api_prefix", protocol_config.get("path", "/api"))
-        base = {"url": f"http://{host}:{http_port}{api_prefix}",
-                "host": host, "port": http_port,
-                "path": protocol_config.get("path", "/webhook/data"),
-                "method": protocol_config.get("method", "POST"), "timeout": 5.0}
+        base = {"push_url": f"http://{host}:{http_port}/webhook/data",
+                "timeout": 5.0}
     elif protocol == "s7":
-        base = {"ip": host, "port": port or 102, "rack": protocol_config.get("rack", 0),
-                "slot": protocol_config.get("slot", 1), "timeout": 5.0}
+        base = {"ip": host,
+                "rack": protocol_config.get("rack", 0),
+                "slot": protocol_config.get("slot", 1)}
     elif protocol == "mc":
-        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
+        base = {"ip": host, "port": port or 5007, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
     elif protocol == "fins":
-        base = {"ip": host, "port": port or 9600,
-                "source_node": protocol_config.get("source_node", 0),
-                "dest_node": protocol_config.get("dest_node", 1), "timeout": 5.0}
+        base = {"ip": host, "port": port or 9600, "timeout": 5.0}
     elif protocol == "ab":
         base = {"ip": host, "slot": protocol_config.get("slot", 0),
                 "micrologix": protocol_config.get("micrologix", False), "timeout": 5.0}
@@ -171,10 +170,10 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "mtconnect":
         base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
     elif protocol == "toledo":
-        base = {"ip": host, "port": port or 1701, "timeout": 5.0}
+        base = {"ip": host, "port": port or 8000, "timeout": 5.0}
     elif protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
-                "host": protocol_config.get("host", ""), "timeout": 5.0}
+                "host": protocol_config.get("host", host), "timeout": 5.0}
     elif protocol == "onvif":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "admin"),
@@ -184,21 +183,19 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "baud_rate": protocol_config.get("baud_rate", 2400),
                 "parity": protocol_config.get("parity", "E"), "timeout": 5.0}
     elif protocol == "iec104":
-        base = {"ip": host, "port": port or 2404,
+        base = {"host": host, "port": port or 2404,
                 "asdu_addr": protocol_config.get("asdu_addr", 1),
                 "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": 5.0}
     elif protocol == "kuka":
         base = {"ip": host, "port": port or 54600,
-                "username": protocol_config.get("username", ""),
-                "password": protocol_config.get("password", ""), "timeout": 5.0}
+                "reconnect": protocol_config.get("reconnect", True), "timeout": 5.0}
     elif protocol == "abb_robot":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "Default"),
                 "password": protocol_config.get("password", ""), "timeout": 5.0}
     elif protocol == "sparkplug_b":
         base = {"group_id": protocol_config.get("group_id", "protoforge"),
-                "edge_node_id": protocol_config.get("edge_node_id", "pf-node"),
-                "mqtt_broker": host, "mqtt_port": port or 1883, "timeout": 5.0}
+                "edge_node_id": protocol_config.get("edge_node_id", "pf-node")}
     elif protocol == "serial":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -217,6 +214,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "username": protocol_config.get("username", ""),
             "password": protocol_config.get("password", ""),
             "queries": protocol_config.get("queries", []),
+            "write_queries": protocol_config.get("write_queries", []),
             "pool_size": protocol_config.get("pool_size", 5),
         }
     elif protocol == "barcode_scanner":
@@ -225,7 +223,6 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "baudrate": protocol_config.get("baudrate", 9600),
             "prefix": protocol_config.get("prefix", ""),
             "suffix": protocol_config.get("suffix", "\r"),
-            "barcode_types": protocol_config.get("barcode_types", []),
         }
     elif protocol == "profinet":
         base = {"host": host, "port": port or 34964,
@@ -242,7 +239,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     for k, v in protocol_config.items():
         if k not in known and k not in base and k not in (
             "edgelite_url", "edgelite_username", "edgelite_password", "collect_interval",
-            "edgelite_enabled",
+            "edgelite_enabled", "port",
         ):
             base[k] = v
 
@@ -537,9 +534,9 @@ _PROTOCOL_DISPLAY = {
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
-    "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
-    "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
-    "mtconnect": 7878, "toledo": 1701, "opcda": 51340, "onvif": 80,
+    "modbus_tcp": 502, "opcua": 4840, "mqtt": 1883, "http": 8080,
+    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "fanuc": 8193,
+    "mtconnect": 7878, "toledo": 8000, "opcda": 0, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
     "sparkplug_b": 1883, "serial": 0, "database": 3306, "barcode_scanner": 0,
     "profinet": 34964, "ethercat": 34980, "bacnet": 47808, "gb28181": 5060,
@@ -555,29 +552,29 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
         host = driver_config.get("broker", "")
         port = str(driver_config.get("port", ""))
     elif protocol == "http":
-        url = driver_config.get("url", "")
-        if url:
+        push_url = driver_config.get("push_url", driver_config.get("url", ""))
+        if push_url:
             import urllib.parse
             try:
-                parsed = urllib.parse.urlparse(url)
+                parsed = urllib.parse.urlparse(push_url)
                 host = parsed.hostname or ""
                 port = str(parsed.port) if parsed.port else ""
             except Exception:
-                host = url
+                host = push_url
         else:
-            host = driver_config.get("host", "")
+            host = driver_config.get("host", driver_config.get("ip", ""))
             port = str(driver_config.get("port", ""))
     elif protocol == "opcua":
-        endpoint = driver_config.get("endpoint", "")
-        if endpoint:
+        server_url = driver_config.get("server_url", driver_config.get("endpoint", ""))
+        if server_url:
             try:
                 import re
-                m = re.search(r'opc\.tcp://([^:]+):?(\d+)?', endpoint)
+                m = re.search(r'opc\.tcp://([^:]+):?(\d+)?', server_url)
                 if m:
                     host = m.group(1) or ""
                     port = m.group(2) or ""
             except Exception:
-                host = endpoint
+                host = server_url
         else:
             host = driver_config.get("host", "")
             port = str(driver_config.get("port", ""))
@@ -594,8 +591,11 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
         else:
             host = driver_config.get("host", "")
             port = str(driver_config.get("port", ""))
+    elif protocol in ("iec104", "modbus_tcp", "database", "opcda", "profinet", "ethercat"):
+        host = driver_config.get("host", driver_config.get("ip", ""))
+        port = str(driver_config.get("port", ""))
     else:
-        host = driver_config.get("ip", driver_config.get("host", driver_config.get("ip", "")))
+        host = driver_config.get("ip", driver_config.get("host", ""))
         port = str(driver_config.get("port", ""))
     return (host, port)
 
@@ -614,19 +614,32 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
         else:
             parts.append(f"driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
     else:
-        if same_server:
+        if protocol == "s7":
+            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host})")
+            parts.append(f"S7 协议使用固定端口 102 (ISO-on-TCP)，EdgeLite 的 S7 驱动不支持自定义端口")
+            parts.append(f"请确保 ProtoForge 的 S7 服务运行在标准端口 102 上")
+            if same_server and driver_host not in ("127.0.0.1", "localhost"):
+                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
+        elif protocol == "http":
             parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
-            if driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1，当前使用的是 {driver_host}")
-            if driver_port and default_port and str(driver_port) != str(default_port):
-                parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 ProtoForge 的 {proto_name} 服务是否在端口 {driver_port} 上运行")
-            parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) 端口 {driver_port} 是否正确")
-        else:
-            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
-            if driver_port and default_port and str(driver_port) != str(default_port):
-                parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 EdgeLite 侧 {proto_name} 服务是否在端口 {driver_port} 上运行")
+            parts.append(f"HTTP Webhook 为被动接收模式，请确认 ProtoForge 是否在向 EdgeLite 推送数据")
             parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
-            parts.append(f"如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
+            if same_server and driver_host not in ("127.0.0.1", "localhost"):
+                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
+        else:
+            if same_server:
+                parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+                if driver_host not in ("127.0.0.1", "localhost"):
+                    parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1，当前使用的是 {driver_host}")
+                if driver_port and default_port and str(driver_port) != str(default_port):
+                    parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 ProtoForge 的 {proto_name} 服务是否在端口 {driver_port} 上运行")
+                parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) 端口 {driver_port} 是否正确")
+            else:
+                parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+                if driver_port and default_port and str(driver_port) != str(default_port):
+                    parts.append(f"端口 {driver_port} 不是 {proto_name} 的默认端口 ({default_port})，请确认 ProtoForge 的 {proto_name} 服务是否在端口 {driver_port} 上运行")
+                parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
+                parts.append(f"如果 IP 不正确，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
 
     return {
         "ok": False,
