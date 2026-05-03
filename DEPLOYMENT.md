@@ -1,6 +1,6 @@
 # ProtoForge 部署指南
 
-本文档提�?ProtoForge 在不同环境下的详细部署步骤�?
+本文档提供 ProtoForge 在不同环境下的详细部署步骤。
 
 ## 目录
 
@@ -8,21 +8,21 @@
 - [单机部署](#单机部署)
 - [Docker 部署](#docker-部署)
 - [生产环境部署](#生产环境部署)
-- [数据库迁移](#数据库迁�?
+- [数据库迁移](#数据库迁移)
 - [故障排查](#故障排查)
 
 ## 系统要求
 
-### 最低配�?
+### 最低配置
 
-- CPU: 2 �?
+- CPU: 2 核
 - 内存: 4 GB
 - 磁盘: 10 GB 可用空间
-- Python: 3.10 或更高版�?
+- Python: 3.10 或更高版本
 
 ### 推荐配置
 
-- CPU: 4 �?
+- CPU: 4 核
 - 内存: 8 GB+
 - 磁盘: 50 GB+ SSD
 - PostgreSQL 14+
@@ -39,7 +39,7 @@ cd ProtoForge
 # 创建虚拟环境（推荐）
 python -m venv venv
 source venv/bin/activate  # Linux/macOS
-# �?venv\Scripts\activate  # Windows
+# .\venv\Scripts\activate  # Windows
 
 # 安装核心依赖
 pip install -e ".[all]"
@@ -68,16 +68,16 @@ cd ..
 # 复制示例配置文件
 cp .env.example .env
 
-# 编辑 .env 文件，至少修改以下项�?
+# 编辑 .env 文件，至少修改以下项目
 # - PROTOFORGE_JWT_SECRET（生产环境必须设置）
-# - PROTOFORGE_DB_PATH（如需使用 PostgreSQL�?
+# - PROTOFORGE_DB_PATH（如需使用 PostgreSQL）
 ```
 
 ### 4. 初始化数据库
 
-如果使用 SQLite（默认），系统会在首次启动时自动创建数据库�?
+如果使用 SQLite（默认），系统会在首次启动时自动创建数据库。
 
-如果使用 PostgreSQL�?
+如果使用 PostgreSQL：
 
 ```bash
 # 1. 创建数据库和用户
@@ -85,21 +85,21 @@ sudo -u postgres psql -c "CREATE DATABASE protoforge;"
 sudo -u postgres psql -c "CREATE USER protoforge WITH PASSWORD 'your_password';"
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE protoforge TO protoforge;"
 
-# 2. 运行数据库迁�?
+# 2. 运行数据库迁移
 alembic upgrade head
 ```
 
 ### 5. 启动服务
 
 ```bash
-# 生产模式启动（无演示数据�?
+# 生产模式启动（无演示数据）
 protoforge run
 
-# 或使�?Python 直接启动
+# 或使用 Python 直接启动
 python -m protoforge.main
 ```
 
-服务启动后，访问 http://localhost:8000 �?
+服务启动后，访问 http://localhost:8000 即可。
 
 ## Docker 部署
 
@@ -140,11 +140,11 @@ docker run -d \
 ### 使用 Nginx 反向代理（推荐）
 
 这是生产环境的标准部署方式：
-- **Nginx** 直接托管前端静态文件（高效�?
-- **Nginx** �?API �?WebSocket 请求代理到后�?
+- **Nginx** 直接托管前端静态文件（高效）
+- **Nginx** 将 API 和 WebSocket 请求代理到后端
 - 通过**域名**访问，可配置 HTTPS
 
-**部署示例�?*
+**部署示例：**
 - 域名：`http://your-domain.com`
 - 后端端口：`8200`（在 `.env` 中配置）
 - 前端路径：`/path/to/ProtoForge/web/dist`
@@ -154,14 +154,14 @@ server {
     listen 80;
     server_name your-domain.com;
 
-    # 前端静态文�?�?Nginx 直接返回（高效）
+    # 前端静态文件 — Nginx 直接返回（高效）
     location / {
         root /path/to/ProtoForge/web/dist;
         try_files $uri $uri/ /index.html;
         expires 1d;
     }
 
-    # API 请求 �?代理�?Python 后端
+    # API 请求 — 代理到 Python 后端
     location /api/ {
         proxy_pass http://127.0.0.1:8200;
         proxy_set_header Host $host;
@@ -173,7 +173,7 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # WebSocket �?代理�?Python 后端（需升级协议�?
+    # WebSocket — 代理到 Python 后端（需升级协议）
     location /api/v1/ws/ {
         proxy_pass http://127.0.0.1:8200;
         proxy_http_version 1.1;
@@ -184,9 +184,9 @@ server {
 }
 ```
 
-> �?`your-domain.com` 换成你的域名，`8200` 换成 `.env` 中配置的端口，`/path/to/ProtoForge` 换成实际路径�?
+> 将 `your-domain.com` 换成你的域名，`8200` 换成 `.env` 中配置的端口，`/path/to/ProtoForge` 换成实际路径。
 
-**配置 HTTPS（可选）�?*
+**配置 HTTPS（可选）：**
 
 ```nginx
 server {
@@ -207,9 +207,9 @@ server {
 }
 ```
 
-### 使用 systemd 管理（Linux�?
+### 使用 systemd 管理（Linux）
 
-创建 `/etc/systemd/system/protoforge.service`�?
+创建 `/etc/systemd/system/protoforge.service`：
 
 ```ini
 [Unit]
@@ -242,7 +242,7 @@ sudo systemctl status protoforge
 
 ### 使用 Supervisor（可选）
 
-创建 `/etc/supervisor/conf.d/protoforge.conf`�?
+创建 `/etc/supervisor/conf.d/protoforge.conf`：
 
 ```ini
 [program:protoforge]
@@ -256,9 +256,9 @@ stderr_logfile=/var/log/protoforge.err.log
 stdout_logfile=/var/log/protoforge.out.log
 ```
 
-## 数据库迁�?
+## 数据库迁移
 
-ProtoForge 使用 Alembic 管理数据库迁移�?
+ProtoForge 使用 Alembic 管理数据库迁移。
 
 ### 首次迁移
 
@@ -279,17 +279,17 @@ alembic current
 # 查看历史版本
 alembic history
 
-# 回滚到上一个版�?
+# 回滚到上一个版本
 alembic downgrade -1
 
-# 回滚到指定版�?
+# 回滚到指定版本
 alembic downgrade <revision_id>
 
-# 升级到最新版�?
+# 升级到最新版本
 alembic upgrade head
 ```
 
-### �?SQLite 迁移�?PostgreSQL
+### 从 SQLite 迁移到 PostgreSQL
 
 ```bash
 # 1. 导出 SQLite 数据
@@ -298,10 +298,10 @@ sqlite3 data/protoforge.db .dump > protoforge_backup.sql
 # 2. 配置 PostgreSQL 连接
 # 编辑 .env: PROTOFORGE_DB_PATH=postgresql://...
 
-# 3. 创建表结�?
+# 3. 创建表结构
 alembic upgrade head
 
-# 4. 导入数据（需要手动调�?SQL 语法差异�?
+# 4. 导入数据（需要手动调整 SQL 语法差异）
 # 建议使用 pgloader 或自定义脚本迁移
 ```
 
@@ -326,19 +326,19 @@ cd ..
 ### 服务无法启动
 
 ```bash
-# 检查端口占�?
+# 检查端口占用
 lsof -i :8000
 
-# 检查日�?
+# 检查日志
 tail -f logs/protoforge.log
 
 # 验证配置
 python -c "from protoforge.config import get_settings; print(get_settings().model_dump())"
 ```
 
-### 数据库连接失�?
+### 数据库连接失败
 
-- SQLite：检�?`data/` 目录是否有写入权�?
+- SQLite：检查 `data/` 目录是否有写入权限
 - PostgreSQL：检查连接字符串、网络连通性、防火墙规则
 
 ### 协议端口冲突
@@ -347,7 +347,7 @@ python -c "from protoforge.config import get_settings; print(get_settings().mode
 # 查看端口占用
 netstat -tlnp | grep 5020
 
-# 修改 .env 中的端口配置后重启服�?
+# 修改 .env 中的端口配置后重启服务
 ```
 
 ### 性能问题
@@ -355,15 +355,15 @@ netstat -tlnp | grep 5020
 - 检查日志级别是否为 `debug`，生产环境建议设置为 `warning`
 - 使用 PostgreSQL 替代 SQLite
 - 增加连接池大小（PostgreSQL 模式下自动配置）
-- 考虑使用�?worker 部署（配�?Gunicorn�?
+- 考虑使用多 worker 部署（配置 Gunicorn）
 
 ```bash
-# 使用 Gunicorn �?worker 部署
+# 使用 Gunicorn 多 worker 部署
 gunicorn protoforge.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 ## 相关文档
 
-- [README.md](README.md) �?项目概述
-- [SECURITY.md](SECURITY.md) �?安全加固指南
-- [CONTRIBUTING.md](CONTRIBUTING.md) �?开发贡献指�?
+- [README.md](README.md) — 项目概述
+- [SECURITY.md](SECURITY.md) — 安全加固指南
+- [CONTRIBUTING.md](CONTRIBUTING.md) — 开发贡献指南
