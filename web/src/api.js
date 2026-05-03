@@ -182,6 +182,7 @@ export default {
   getAlarmRules: () => d(api.get('/integration/alarm-rules')),
   addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
   deleteAlarmRule: (ruleId) => d(api.delete(`/integration/alarm-rules/${ruleId}`)),
+  sendIntegrationMessage: (data) => d(api.post('/integration/message', data)),
 
   createDeviceWs: () => {
     const token = localStorage.getItem('token')

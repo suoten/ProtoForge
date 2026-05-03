@@ -27,20 +27,6 @@ async def get_integration_metrics(_user: dict = Depends(require_viewer)):
     return manager.metrics.to_dict()
 
 
-@router.post("/push-device/{device_id}")
-async def push_device(device_id: str, _user: dict = Depends(require_operator)):
-    from protoforge.main import get_engine
-    engine = get_engine()
-    manager = _get_integration_manager()
-
-    instance = engine.get_device_instance(device_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
-
-    result = await manager.push_device(instance)
-    return result
-
-
 @router.post("/batch-push")
 async def batch_push(request: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.main import get_engine
@@ -63,13 +49,6 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
         raise HTTPException(status_code=400, detail="No matching devices found")
 
     result = await manager.batch_push(devices, concurrency=concurrency)
-    return result
-
-
-@router.delete("/device/{device_id}")
-async def delete_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
-    manager = _get_integration_manager()
-    result = await manager.delete_device(device_id)
     return result
 
 
@@ -125,17 +104,6 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict = D
         "warnings": report.warnings,
         "errors": report.errors,
     }
-
-
-@router.post("/test-connection")
-async def test_connection(request: dict[str, Any], _user: dict = Depends(require_operator)):
-    from protoforge.core.edgelite import test_edgelite_connection
-    result = await test_edgelite_connection(
-        url=request.get("url", ""),
-        username=request.get("username", "admin"),
-        password=request.get("password", ""),
-    )
-    return result
 
 
 @router.get("/backhaul-data")

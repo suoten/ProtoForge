@@ -185,7 +185,7 @@
             <n-space vertical>
               <n-form :model="validateForm" label-placement="left" label-width="100" inline>
                 <n-form-item label="设备ID">
-                  <n-input v-model:value="validateForm.device_id" placeholder="输入设备ID" style="width:180px" />
+                  <n-select v-model:value="validateForm.device_id" :options="elDeviceOptions" filterable placeholder="选择或输入设备ID" style="width:220px" />
                 </n-form-item>
                 <n-form-item label="协议">
                   <n-input v-model:value="validateForm.protocol" placeholder="如 modbus_tcp" style="width:140px" />
@@ -495,6 +495,10 @@ const elDevices = computed(() => {
   })
 })
 
+const elDeviceOptions = computed(() => {
+  return allDevices.value.map(d => ({ label: `${d.name || d.id} (${d.protocol})`, value: d.id }))
+})
+
 const resultColumns = [
   { title: '设备ID', key: 'id', width: 180 },
   { title: '名称', key: 'name', width: 180 },
@@ -774,7 +778,14 @@ async function validateDevice() {
   validating.value = true
   validateResult.value = null
   try {
-    validateResult.value = await api.validateDeviceCompatibility(validateForm.value)
+    const dev = allDevices.value.find(d => d.id === validateForm.value.device_id)
+    const payload = {
+      device_id: validateForm.value.device_id,
+      protocol: validateForm.value.protocol || (dev ? dev.protocol : ''),
+      points: dev ? (dev.points || []) : [],
+      config: dev ? (dev.protocol_config || {}) : {},
+    }
+    validateResult.value = await api.validateDeviceCompatibility(payload)
   } catch (e) {
     validateResult.value = { compatible: false, errors: [e.response?.data?.detail || e.message], warnings: [] }
   } finally { validating.value = false }
