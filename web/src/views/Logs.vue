@@ -73,11 +73,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
+import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { directionTagTypeMap, directionLabelMap } from '../constants.js'
 
 const message = useMessage()
+const dialog = useDialog()
 
 const logs = ref([])
 const protocols = ref([])
@@ -163,13 +164,22 @@ function togglePause() {
 }
 
 async function clearAllLogs() {
-  logs.value = []
-  try {
-    await api.clearLogs()
-  } catch (e) {
-    console.warn('清空日志失败:', e)
-    message.error('清空日志失败')
-  }
+  dialog.warning({
+    title: '确认清空日志',
+    content: '清空后所有日志将永久删除，此操作不可恢复。确定继续？',
+    positiveText: '清空',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      logs.value = []
+      try {
+        await api.clearLogs()
+        message.success('日志已清空')
+      } catch (e) {
+        console.warn('清空日志失败:', e)
+        message.error('清空日志失败')
+      }
+    }
+  })
 }
 
 function exportLogs() {

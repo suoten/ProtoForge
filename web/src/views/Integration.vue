@@ -402,10 +402,11 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NTabs, NTabPane, NCard, NInput, NButton, NButtonGroup, NAlert, NDataTable, NCode,
   NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, NGrid, NGi,
-  NSelect, NSwitch, NPopconfirm, NEmpty, useMessage } from 'naive-ui'
+  NSelect, NSwitch, NPopconfirm, NEmpty, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const edgeLiteJson = ref('')
 const pygbsentryJson = ref('')
 const importing = ref(false)
@@ -805,7 +806,7 @@ async function loadDevices() {
   loadingDevices.value = true
   try {
     const devs = await api.getDevices()
-    allDevices.value = devs.map(d => ({ ...d, _el_status: null }))
+    allDevices.value = (devs || []).map(d => ({ ...d, _el_status: null }))
   } catch (e) { message.error('加载设备失败') }
   finally { loadingDevices.value = false }
 }
@@ -827,14 +828,22 @@ async function pushDevice(deviceId) {
 }
 
 async function removeFromEdgelite(deviceId) {
-  try {
-    const res = await api.removeDeviceFromEdgelite(deviceId)
-    if (res.skipped) { message.warning('该设备未配置 EdgeLite 地址'); return }
-    message.success('设备已从 EdgeLite 移除')
-    await checkStatus(deviceId)
-  } catch (e) {
-    message.error('移除失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认移除设备',
+    content: `将从 EdgeLite 移除设备 ${deviceId}，移除后 EdgeLite 将停止采集该设备数据。确定继续？`,
+    positiveText: '移除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const res = await api.removeDeviceFromEdgelite(deviceId)
+        if (res.skipped) { message.warning('该设备未配置 EdgeLite 地址'); return }
+        message.success('设备已从 EdgeLite 移除')
+        await checkStatus(deviceId)
+      } catch (e) {
+        message.error('移除失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function startCollect(deviceId) {

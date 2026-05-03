@@ -97,11 +97,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage } from 'naive-ui'
+import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const protocols = ref([])
 const showAdvanced = ref(false)
 const starting = ref(false)
@@ -142,21 +143,31 @@ async function loadData() {
 }
 
 async function startAll() {
-  startingAll.value = true
   const stopped = protocols.value.filter(p => p.status !== 'running')
-  let portWarnings = []
-  for (const p of stopped) {
-    try {
-      const res = await api.startProtocol(p.name, null)
-      if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
-    } catch (e) { /* skip */ }
-  }
-  message.success(`已启动 ${stopped.length} 个协议`)
-  if (portWarnings.length > 0) {
-    message.warning(portWarnings.join('\n'), { duration: 8000 })
-  }
-  await loadData()
-  startingAll.value = false
+  if (!stopped.length) { message.info('所有协议已在运行中'); return }
+  dialog.warning({
+    title: '确认全部启动',
+    content: `将启动 ${stopped.length} 个已停止的协议，可能占用大量端口和资源。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      startingAll.value = true
+      let portWarnings = []
+      try {
+        for (const p of stopped) {
+          try {
+            const res = await api.startProtocol(p.name, null)
+            if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
+          } catch (e) { /* skip */ }
+        }
+        message.success(`已启动 ${stopped.length} 个协议`)
+        if (portWarnings.length > 0) {
+          message.warning(portWarnings.join('\n'), { duration: 8000 })
+        }
+        await loadData()
+      } finally { startingAll.value = false }
+    }
+  })
 }
 
 async function quickStart(name) {
@@ -174,13 +185,21 @@ async function quickStart(name) {
 }
 
 async function stopProtocol(name) {
-  try {
-    await api.stopProtocol(name)
-    message.success(`${name} 已停止`)
-    await loadData()
-  } catch (e) {
-    message.error('停止失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认停止协议',
+    content: `停止 ${name} 协议服务后，所有使用该协议的设备连接将断开。确定停止？`,
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.stopProtocol(name)
+        message.success(`${name} 已停止`)
+        await loadData()
+      } catch (e) {
+        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function showProtocolInfo(name) {

@@ -195,11 +195,11 @@ async function loadData() {
     const [devRes, protoRes, tmplRes, scRes, logRes] = await Promise.all([
       api.getDevices(), api.getProtocols(), api.getTemplates(), api.getScenarios(), api.getLogs({ count: 50 }),
     ])
-    devices.value = devRes
-    protocols.value = protoRes
-    templates.value = tmplRes
-    scenarios.value = scRes
-    recentLogs.value = Array.isArray(logRes) ? logRes : (logRes.logs || logRes.entries || [])
+    devices.value = devRes || []
+    protocols.value = protoRes || []
+    templates.value = tmplRes || []
+    scenarios.value = scRes || []
+    recentLogs.value = Array.isArray(logRes) ? logRes : (logRes?.logs || logRes?.entries || [])
   } catch (e) {
     loadError.value = e.response?.data?.detail || e.message || '未知错误'
   } finally {

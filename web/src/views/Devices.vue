@@ -563,36 +563,52 @@ async function onAdvancedProtocolChange(protocol) {
 async function loadData() {
   try {
     const [devRes, protoRes, tmplRes] = await Promise.all([api.getDevices(), api.getProtocols(), api.getTemplates()])
-    devices.value = devRes; protocols.value = protoRes; templates.value = tmplRes
+    devices.value = devRes || []; protocols.value = protoRes || []; templates.value = tmplRes || []
   } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function batchStart() {
-  batchLoading.value = true
-  try {
-    const res = await api.batchStartDevices(selectedIds.value)
-    const ok = res.started || 0
-    const fail = res.errors?.length || 0
-    selectedIds.value = []
-    message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-    loadData()
-  } catch (e) {
-    message.error('批量启动失败: ' + (e.response?.data?.detail || e.message))
-  } finally { batchLoading.value = false }
+  dialog.info({
+    title: '确认批量启动',
+    content: `将启动选中的 ${selectedIds.value.length} 个设备。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      try {
+        const res = await api.batchStartDevices(selectedIds.value)
+        const ok = res.started || 0
+        const fail = res.errors?.length || 0
+        selectedIds.value = []
+        message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        loadData()
+      } catch (e) {
+        message.error('批量启动失败: ' + (e.response?.data?.detail || e.message))
+      } finally { batchLoading.value = false }
+    }
+  })
 }
 
 async function batchStop() {
-  batchLoading.value = true
-  try {
-    const res = await api.batchStopDevices(selectedIds.value)
-    const ok = res.stopped || 0
-    const fail = res.errors?.length || 0
-    selectedIds.value = []
-    message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-    loadData()
-  } catch (e) {
-    message.error('批量停止失败: ' + (e.response?.data?.detail || e.message))
-  } finally { batchLoading.value = false }
+  dialog.warning({
+    title: '确认批量停止',
+    content: `将停止选中的 ${selectedIds.value.length} 个运行中的设备。确定继续？`,
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      try {
+        const res = await api.batchStopDevices(selectedIds.value)
+        const ok = res.stopped || 0
+        const fail = res.errors?.length || 0
+        selectedIds.value = []
+        message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        loadData()
+      } catch (e) {
+        message.error('批量停止失败: ' + (e.response?.data?.detail || e.message))
+      } finally { batchLoading.value = false }
+    }
+  })
 }
 
 async function batchDelete() {
@@ -618,25 +634,47 @@ async function batchDelete() {
 }
 
 async function startAllDevices() {
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const dev of filteredDevices.value) {
-    try { await api.startDevice(dev.id); ok++ } catch { fail++ }
-  }
-  batchLoading.value = false
-  message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-  loadData()
+  const toStart = filteredDevices.value.filter(d => d.status !== 'running')
+  if (!toStart.length) { message.info('所有设备已在运行中'); return }
+  dialog.warning({
+    title: '确认全部启动',
+    content: `将启动 ${toStart.length} 个设备，可能占用大量端口和资源。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      try {
+        for (const dev of toStart) {
+          try { await api.startDevice(dev.id); ok++ } catch { fail++ }
+        }
+        message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        loadData()
+      } finally { batchLoading.value = false }
+    }
+  })
 }
 
 async function stopAllDevices() {
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const dev of filteredDevices.value) {
-    try { await api.stopDevice(dev.id); ok++ } catch { fail++ }
-  }
-  batchLoading.value = false
-  message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
-  loadData()
+  const toStop = filteredDevices.value.filter(d => d.status === 'running')
+  if (!toStop.length) { message.info('没有运行中的设备'); return }
+  dialog.warning({
+    title: '确认全部停止',
+    content: `将停止 ${toStop.length} 个运行中的设备，所有客户端连接将断开。确定继续？`,
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      try {
+        for (const dev of toStop) {
+          try { await api.stopDevice(dev.id); ok++ } catch { fail++ }
+        }
+        message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        loadData()
+      } finally { batchLoading.value = false }
+    }
+  })
 }
 
 async function batchPushToEdgelite() {
@@ -688,7 +726,7 @@ async function createDevice() {
     let config = { ...newDevice.value, points: [], protocol_config: advancedProtocolConfig.value }
     if (selectedTemplate.value) {
       const tmplRes = await api.getTemplate(selectedTemplate.value)
-      config.points = tmplRes.points; config.protocol = tmplRes.protocol
+      config.points = tmplRes?.points || []; config.protocol = tmplRes?.protocol || config.protocol
     }
     if (!config.points.length) config.points = [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }]
     await api.createDevice(config)

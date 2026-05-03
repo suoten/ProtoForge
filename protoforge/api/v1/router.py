@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
 import uuid
 from typing import Any, Optional
@@ -185,6 +186,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
     device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("(", "").replace(")", "") or str(uuid.uuid4())[:8]
+    device_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', device_id).strip('-') or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
 
     if not template_id or not device_name:
@@ -1520,6 +1522,8 @@ async def add_forward_target(config: dict[str, Any], _user: dict = Depends(requi
     if "host" in config and "url" not in config:
         host = config.get("host", "localhost")
         port = config.get("port", 8086)
+        if not isinstance(port, int) or port < 1 or port > 65535:
+            raise HTTPException(status_code=400, detail="port 必须是 1-65535 之间的整数")
         protocol = config.get("protocol", "http")
         if protocol in ("influxdb",):
             config["url"] = f"http://{host}:{port}"
