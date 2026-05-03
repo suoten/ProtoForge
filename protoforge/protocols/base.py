@@ -65,6 +65,12 @@ class ProtocolServer(ABC):
             "properties": {},
         }
 
+    def get_running_port(self) -> int | None:
+        return getattr(self, "_port", None)
+
+    def get_running_host(self) -> str:
+        return getattr(self, "_host", "0.0.0.0")
+
     def _update_default_device(self, device_id: str) -> None:
         if self._default_device_id is None:
             self._default_device_id = device_id
