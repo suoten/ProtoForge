@@ -110,9 +110,9 @@ export default {
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
   writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
-  batchDeleteDevices: (ids) => d(api.request({ method: 'DELETE', url: '/devices/batch', data: ids })),
-  batchStartDevices: (ids) => d(api.post('/devices/batch/start', ids)),
-  batchStopDevices: (ids) => d(api.post('/devices/batch/stop', ids)),
+  batchDeleteDevices: (ids) => d(api.request({ method: 'DELETE', url: '/devices/batch', data: { device_ids: ids } })),
+  batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
+  batchStopDevices: (ids) => d(api.post('/devices/batch/stop', { device_ids: ids })),
 
   getTemplates: (protocol) => d(api.get('/templates', { params: { protocol } })),
   getTemplate: (id) => d(api.get(`/templates/${id}`)),

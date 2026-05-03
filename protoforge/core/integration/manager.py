@@ -426,7 +426,7 @@ class IntegrationManager:
                                     gt = GeneratorType(generator_type)
                                     behavior._generator_types[point_name] = gt
                                 except ValueError:
-                                    pass
+                                    logger.warning("Invalid generator type '%s' for point %s", generator_type, point_name)
                             if generator_config:
                                 behavior._generators[point_name].update(generator_config)
                             logger.info("Adjusted generator for %s/%s: type=%s config=%s",

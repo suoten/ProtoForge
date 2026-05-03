@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from protoforge.core.auth import verify_token
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate, ScenarioDetail, ScenarioInfo
@@ -244,7 +244,7 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
     return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
 
 @router.delete("/devices/batch")
-async def batch_delete_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
+async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     deleted = 0
@@ -264,7 +264,7 @@ async def batch_delete_devices(device_ids: list[str], _user: dict = Depends(requ
     return {"status": "ok", "deleted": deleted, "errors": errors}
 
 @router.post("/devices/batch/start")
-async def batch_start_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
+async def batch_start_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
     engine = _get_engine()
     started = 0
     errors = []
@@ -279,7 +279,7 @@ async def batch_start_devices(device_ids: list[str], _user: dict = Depends(requi
     return {"status": "ok", "started": started, "errors": errors}
 
 @router.post("/devices/batch/stop")
-async def batch_stop_devices(device_ids: list[str], _user: dict = Depends(require_operator)):
+async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
     engine = _get_engine()
     stopped = 0
     errors = []

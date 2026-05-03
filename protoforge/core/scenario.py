@@ -116,7 +116,7 @@ class Scenario:
                 if abs(float(current) - float(prev)) >= float(delta):
                     return self._check_cooldown(rule)
             except (ValueError, TypeError):
-                pass
+                logger.debug("Delta comparison failed for rule %s: current=%s prev=%s", rule.id, current, prev)
         elif current != prev:
             return self._check_cooldown(rule)
         return False

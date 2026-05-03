@@ -112,7 +112,7 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
         if running_port is not None:
             return running_port
     except Exception:
-        pass
+        logger.debug("Failed to get protocol running port for %s", protocol)
     from protoforge.config import get_protocol_port_map
     port_map = get_protocol_port_map()
     proto_info = port_map.get(protocol)
@@ -709,7 +709,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 engine = get_engine()
                 protoforge_running = engine.is_protocol_running(device_protocol)
             except Exception:
-                pass
+                logger.debug("Failed to check protocol running status for %s", device_protocol)
             same_server = _is_edgelite_local(el_config)
             connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running, same_server)
             result["steps"]["connect"] = connect_error
