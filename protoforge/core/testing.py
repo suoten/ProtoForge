@@ -803,7 +803,7 @@ class TestRunner:
             return params
 
         if not api_client:
-            return {}
+            return {"error": f"Cannot execute action '{action}': no API client available"}
 
         if action == "create_device":
             resp = await api_client.post("/api/v1/devices", json=params)
