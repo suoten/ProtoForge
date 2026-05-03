@@ -34,8 +34,14 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
     manager = _get_integration_manager()
 
     device_ids = request.get("device_ids", [])
+    if not isinstance(device_ids, list):
+        raise HTTPException(status_code=400, detail="device_ids 必须是数组")
     protocol_filter = request.get("protocol", "")
     concurrency = request.get("concurrency", 10)
+    if not isinstance(concurrency, int) or concurrency < 1:
+        concurrency = 10
+    elif concurrency > 50:
+        concurrency = 50
 
     devices = []
     for did in device_ids:
@@ -46,7 +52,7 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
             devices.append(instance)
 
     if not devices:
-        raise HTTPException(status_code=400, detail="No matching devices found")
+        raise HTTPException(status_code=400, detail="未找到匹配的设备，请检查 device_ids 和 protocol 参数")
 
     result = await manager.batch_push(devices, concurrency=concurrency)
     return result
@@ -133,12 +139,21 @@ async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
 async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.integration.manager import AlarmReactionRule
     manager = _get_integration_manager()
+    rule_id = request.get("rule_id", "")
+    source_device_id = request.get("source_device_id", "")
+    target_device_id = request.get("target_device_id", "")
+    if not rule_id or not source_device_id or not target_device_id:
+        raise HTTPException(status_code=400, detail="rule_id、source_device_id 和 target_device_id 为必填项")
+    valid_actions = {"stop_device", "start_device", "send_alarm", "custom"}
+    action = request.get("action", "stop_device")
+    if action not in valid_actions:
+        raise HTTPException(status_code=400, detail=f"无效的 action，可选值: {', '.join(valid_actions)}")
     rule = AlarmReactionRule(
-        rule_id=request.get("rule_id", ""),
-        source_device_id=request.get("source_device_id", ""),
-        alarm_severity=request.get("alarm_severity", ""),
-        action=request.get("action", "stop_device"),
-        target_device_id=request.get("target_device_id", ""),
+        rule_id=rule_id,
+        source_device_id=source_device_id,
+        alarm_severity=request.get("alarm_severity", "warning"),
+        action=action,
+        target_device_id=target_device_id,
         action_params=request.get("action_params", {}),
         enabled=request.get("enabled", True),
     )

@@ -35,10 +35,11 @@
 
 <script setup>
 import { ref } from 'vue'
-import { NCard, NGrid, NGi, NButton, NP, NUpload, NSpace, useMessage } from 'naive-ui'
+import { NCard, NGrid, NGi, NButton, NP, NUpload, NSpace, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const exporting = ref(false)
 const importing = ref(false)
 
@@ -62,7 +63,6 @@ async function handleExport() {
 }
 
 async function handleImport({ file }) {
-  importing.value = true
   try {
     const text = await file.file.text()
     const payload = JSON.parse(text)
@@ -70,12 +70,23 @@ async function handleImport({ file }) {
       message.error('无效的备份文件格式')
       return
     }
-    const result = await api.importBackup(payload)
-    message.success(`恢复成功，恢复了 ${result.restored || 0} 项数据`)
+    dialog.warning({
+      title: '确认恢复备份',
+      content: '恢复操作会覆盖现有数据，此操作不可撤销。确定继续？',
+      positiveText: '恢复',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        importing.value = true
+        try {
+          const result = await api.importBackup(payload)
+          message.success(`恢复成功，恢复了 ${result.restored || 0} 项数据`)
+        } catch (e) {
+          message.error('恢复备份失败: ' + (e.response?.data?.detail || e.message))
+        } finally { importing.value = false }
+      }
+    })
   } catch (e) {
-    message.error('恢复备份失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    importing.value = false
+    message.error('无法读取备份文件: ' + e.message)
   }
 }
 </script>
