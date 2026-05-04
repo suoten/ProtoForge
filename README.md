@@ -88,11 +88,11 @@ node --version      # 应显示 v18.x 或更高
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 2. 初始化配置（创建 data/ 目录和 .env 文件）
-protoforge init
-
-# 3. 安装后端依赖（FastAPI、Pydantic 等）
+# 2. 安装后端依赖（FastAPI、Pydantic 等）
 pip install -e .
+
+# 3. 初始化配置（创建 data/ 目录和 .env 文件）
+protoforge init
 
 # 4. 启动后端（默认端口 8000）
 protoforge demo

@@ -21,6 +21,7 @@ class APIResponse:
             "code": code,
             "data": data,
             "message": message,
+            "detail": message,
             "timestamp": int(time.time() * 1000),
         }
 
@@ -59,6 +60,15 @@ class ConflictException(ProtoForgeException):
 
 
 def setup_exception_handlers(app) -> None:
+    from fastapi.exceptions import HTTPException
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=APIResponse.error(message=str(exc.detail), code=exc.status_code),
+        )
+
     @app.exception_handler(ProtoForgeException)
     async def protoforge_exception_handler(request: Request, exc: ProtoForgeException):
         return JSONResponse(

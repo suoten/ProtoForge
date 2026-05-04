@@ -62,6 +62,9 @@ const messages = {
       logs: '调试日志',
       audit: '审计日志',
       backup: '备份恢复',
+      forward: '数据转发',
+      recorder: '录制回放',
+      webhook: 'Webhook',
     },
     header: {
       searchPlaceholder: '搜索设备、场景、模板...',
@@ -259,6 +262,9 @@ const messages = {
       logs: 'Debug Logs',
       audit: 'Audit Log',
       backup: 'Backup & Restore',
+      forward: 'Forward',
+      recorder: 'Recorder',
+      webhook: 'Webhook',
     },
     header: {
       searchPlaceholder: 'Search devices, scenarios, templates...',
