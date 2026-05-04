@@ -55,9 +55,27 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 
 #### 环境要求
 
-- Python 3.10 或更高版本
-- Node.js 18+（仅前端开发时需要）
-- PostgreSQL 14+（可选，生产环境推荐）
+| 依赖 | 版本要求 | 说明 |
+|------|---------|------|
+| Python | **3.10 或更高** | [下载 Python](https://www.python.org/downloads/)（Windows 安装时勾选 "Add Python to PATH"） |
+| Node.js | **18 或更高**（前端需要）| [下载 Node.js](https://nodejs.org/)（推荐 LTS 版本） |
+| PostgreSQL | 14+（可选）| 生产环境推荐，不装也能用内置的 SQLite |
+
+安装后验证：
+
+```bash
+python --version    # 应显示 3.10.x 或更高
+node --version      # 应显示 v18.x 或更高
+```
+
+> ⚠️ **强烈建议使用 Python 虚拟环境**，避免依赖冲突：
+> ```bash
+> python -m venv venv
+> # Windows:
+> .\venv\Scripts\activate
+> # macOS / Linux:
+> source venv/bin/activate
+> ```
 
 #### 方式一：本地快速体验（推荐）
 
@@ -70,20 +88,25 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 2. 安装后端依赖（FastAPI、Pydantic 等）
+# 2. 初始化配置（创建 data/ 目录和 .env 文件）
+protoforge init
+
+# 3. 安装后端依赖（FastAPI、Pydantic 等）
 pip install -e .
 
-# 3. 启动后端（默认端口 8000）
+# 4. 启动后端（默认端口 8000）
 protoforge demo
 ```
 
+> ✅ 看到 `ProtoForge started successfully` 说明后端启动成功。
+> 
 > `protoforge demo` 会自动创建 4 个演示设备和 1 个仿真场景。
 > 如果不想带演示数据，用 `protoforge run` 启动空白环境。
 > 端口冲突？修改 `.env` 中的 `PROTOFORGE_PORT` 即可。
 
 **Step 2 — 部署前端**
 
-另开一个终端窗口：
+另开一个终端窗口（保持后端运行）：
 
 ```bash
 cd ProtoForge/web
@@ -95,10 +118,14 @@ npm install
 npm run dev
 ```
 
+> ✅ 看到 `VITE v6.x  ready in xxx ms` 说明前端启动成功。
+
 **Step 3 — 访问系统**
 
-打开浏览器访问 **<http://localhost:5173**，用> `admin` / `admin` 登录。
+打开浏览器访问 **<http://localhost:5173>**，用 `admin` / `admin` 登录。
 
+> ⚠️ 不要访问 `http://localhost:8000`——那是后端 API 端口，打开会看到 Swagger 接口文档，不是网页。
+> 
 > 前端开发服务器（`npm run dev`）会自动代理 API 请求到后端的 8000 端口，无需额外配置。
 
 #### 方式二：服务器部署（Nginx + 域名）
@@ -210,6 +237,15 @@ docker-compose up -d
 # 停止
 docker-compose down
 ```
+
+> ⚠️ **注意**：`docker-compose up -d` 默认使用 PostgreSQL 数据库 + 自动运行测试，需要约 **2GB+ 内存**。
+>
+> 低配机器可以用纯 SQLite 模式（仅启动 ProtoForge，不启动 PostgreSQL）：
+> ```bash
+> docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data suoten/protoforge:latest
+> ```
+>
+> 构建时如果前端编译失败（Node.js 版本过低等），Dockerfile 会直接报错——不会像旧版那样静默跳过。
 
 #### 可选：安装更多协议
 
@@ -1266,6 +1302,109 @@ protoc --java_out=. --grpc-java_out=. protoforge/grpc/protoforge.proto
 
 # C#
 protoc --csharp_out=. --grpc-csharp_out=. protoforge/grpc/protoforge.proto
+```
+
+***
+
+### ❓ 常见问题排查
+
+#### 后端相关
+
+**Q: `pip install -e .` 报 `externally-managed-environment`？**
+
+A: 你没有激活虚拟环境。请先在项目目录执行：
+```bash
+python -m venv venv
+# Windows: .\venv\Scripts\activate
+# macOS/Linux: source venv/bin/activate
+pip install -e .
+```
+
+**Q: `protoforge run` 报 `No module named 'protoforge'`？**
+
+A: 依赖还没装，先执行 `pip install -e .`。
+
+**Q: 启动后打开 `http://localhost:8000` 看到 Swagger 文档？**
+
+A: 8000 是后端 API 端口，那个文档是给开发者看的。前端访问地址是：
+- 开发模式：`http://localhost:5173`
+- 生产模式 / Docker：`http://localhost:8000`（后端直接托管前端）
+
+**Q: 某些协议（OPC-UA / MQTT / BACnet / S7）启动失败？**
+
+A: 这些协议需要额外安装依赖，只用 `pip install -e .` 是不够的。请执行：
+```bash
+pip install -e ".[all]"    # 安装全部协议
+# 或按需安装：
+pip install -e ".[opcua]"  # OPC-UA
+pip install -e ".[mqtt]"   # MQTT
+pip install -e ".[s7]"     # Siemens S7
+pip install -e ".[bacnet]" # BACnet
+```
+
+**Q: 端口被占用（`port already in use`）？**
+
+A: 编辑项目根目录的 `.env` 文件，修改对应端口的配置。也可以运行：
+```bash
+# Windows 查看端口占用
+netstat -ano | findstr :8000
+# macOS / Linux
+lsof -i :8000
+```
+
+#### 前端相关
+
+**Q: `npm install` 报错或很慢？**
+
+A: 检查 Node.js 版本是否 ≥ 18：
+```bash
+node --version
+```
+如果版本太低，去 [nodejs.org](https://nodejs.org/) 下载 LTS 版。
+
+如果网络慢，可设置国内镜像：
+```bash
+npm config set registry https://registry.npmmirror.com
+```
+
+**Q: 前端页面空白？**
+
+A: 通常是 `web/dist/` 目录缺失（生产模式）或后端未启动（开发模式）：
+- 生产模式：执行 `cd web && npm install && npm run build`
+- 开发模式：确认后端已启动（另一个终端里 `protoforge run` 在运行）
+
+#### Docker 相关
+
+**Q: `docker-compose up -d` 启动后容器频繁重启？**
+
+A: 通常是内存不够。PostgreSQL + ProtoForge + 测试需要约 2GB+ 内存。尝试纯 SQLite 模式：
+```bash
+docker build -t protoforge .
+docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data protoforge
+```
+
+**Q: Docker 构建时 `npm run build` 失败？**
+
+A: Dockerfile 构建阶段的 `apt-get install nodejs npm` 装的是 Debian 仓库的 Node.js，可能版本过旧。可以在 Dockerfile 中改用 NodeSource 源安装新版。
+
+#### 其他
+
+**Q: 忘记管理员密码怎么办？**
+
+A: 删除 `data/protoforge.db` 文件（SQLite 模式）然后重启，系统会自动创建默认账号 `admin / admin`。
+> ⚠️ 这会清空所有数据！如果数据重要，请先备份 `data/` 目录。
+
+**Q: 怎么备份数据？**
+
+A: 浏览器登录后，通过 API 导出：
+```bash
+# 获取 token
+TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# 导出全库备份
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o backup.json
 ```
 
 ***
