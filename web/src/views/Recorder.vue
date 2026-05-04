@@ -198,7 +198,18 @@ async function loadRecordings() {
 
 async function loadStats() {
   try {
-    recorderStats.value = await api.getRecorderStats()
+    const res = await api.getRecorderStats()
+    recorderStats.value = res
+    if (res.is_recording) {
+      activeRecording.value = { name: res.active_name || '录制中', event_count: res.frames_captured || 0 }
+      if (!durationTimer) {
+        recordingDuration.value = Math.round(res.duration_seconds || 0)
+        durationTimer = setInterval(() => { recordingDuration.value++ }, 1000)
+      }
+    } else {
+      activeRecording.value = null
+      if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
+    }
   } catch (e) { console.warn('加载录制统计失败:', e) }
 }
 

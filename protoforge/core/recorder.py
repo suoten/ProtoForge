@@ -12,24 +12,51 @@ from protoforge.core.log_bus import LogBus, LogEntry
 
 logger = logging.getLogger(__name__)
 
+_AES_AVAILABLE = False
+try:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    _AES_AVAILABLE = True
+except ImportError:
+    pass
+
 
 def _encrypt_data(data: bytes, key: bytes) -> str:
-    from hashlib import sha256
-    derived_key = sha256(key).digest()
-    result = bytearray()
-    for i, b in enumerate(data):
-        result.append(b ^ derived_key[i % len(derived_key)])
-    return base64.b64encode(bytes(result)).decode("ascii")
+    if _AES_AVAILABLE:
+        derived_key = _derive_key(key)
+        nonce = os.urandom(12)
+        aesgcm = AESGCM(derived_key)
+        ct = aesgcm.encrypt(nonce, data, None)
+        return base64.b64encode(nonce + ct).decode("ascii")
+    else:
+        from hashlib import sha256
+        derived_key = sha256(key).digest()
+        result = bytearray()
+        for i, b in enumerate(data):
+            result.append(b ^ derived_key[i % len(derived_key)])
+        return base64.b64encode(bytes(result)).decode("ascii")
 
 
 def _decrypt_data(encrypted: str, key: bytes) -> bytes:
+    if _AES_AVAILABLE:
+        derived_key = _derive_key(key)
+        raw = base64.b64decode(encrypted)
+        nonce = raw[:12]
+        ct = raw[12:]
+        aesgcm = AESGCM(derived_key)
+        return aesgcm.decrypt(nonce, ct, None)
+    else:
+        from hashlib import sha256
+        derived_key = sha256(key).digest()
+        data = base64.b64decode(encrypted)
+        result = bytearray()
+        for i, b in enumerate(data):
+            result.append(b ^ derived_key[i % len(derived_key)])
+        return bytes(result)
+
+
+def _derive_key(key: bytes) -> bytes:
     from hashlib import sha256
-    derived_key = sha256(key).digest()
-    data = base64.b64decode(encrypted)
-    result = bytearray()
-    for i, b in enumerate(data):
-        result.append(b ^ derived_key[i % len(derived_key)])
-    return bytes(result)
+    return sha256(b"protoforge-recording-key-derivation-" + key).digest()
 
 
 @dataclass

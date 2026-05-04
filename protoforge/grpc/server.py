@@ -297,8 +297,18 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Database not initialized")
         try:
-            settings = dict(request.settings)
-            await db.import_all(settings)
+            from protoforge.config import get_settings, _settings_overrides, _save_env
+            settings_dict = dict(request.settings)
+            for key, value in settings_dict.items():
+                _settings_overrides[key] = value
+            _save_env()
+            current = get_settings()
+            for key, value in settings_dict.items():
+                if hasattr(current, key):
+                    try:
+                        setattr(current, key, type(getattr(current, key))(value))
+                    except (ValueError, TypeError):
+                        pass
             return pb2.OperationResponse(ok=True)
         except Exception as e:
             return pb2.OperationResponse(ok=False, error=str(e))

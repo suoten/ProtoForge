@@ -110,8 +110,9 @@ class AuditLogger:
         }
 
     async def delete_entry(self, entry_id: int) -> bool:
+        self._entries = [e for e in self._entries if e.id != entry_id]
         if not self._database:
-            return False
+            return True
         try:
             return await self._database.delete_audit_entry(entry_id)
         except Exception as e:

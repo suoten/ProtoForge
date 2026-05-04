@@ -253,7 +253,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     demo_scenario = {
         "id": "demo-smart-factory",
         "name": "智慧工厂演示",
-        "description": "包含温湿度传感器、PLC、智能门锁、流量计、HTTP传感器、GB28181摄像头、OPC-UA电机、BACnet楼宇控制等16个设备的完整演示场景",
+        "description": "包含温湿度传感器、PLC、智能门锁、流量计、HTTP传感器、GB28181摄像头、OPC-UA电机、BACnet楼宇控制等13个设备的完整演示场景",
         "devices": demo_devices,
         "rules": [
             {
@@ -315,4 +315,4 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     except Exception as e:
         logger.warning("  ✗ 场景创建失败: %s", e)
 
-    logger.info("Demo data seeded! 16 devices + 1 scenario ready.")
+    logger.info("Demo data seeded! %d devices + 1 scenario ready.", len(demo_devices))

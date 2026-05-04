@@ -66,10 +66,14 @@ class DeviceInstance:
     def read_point(self, point_name: str) -> Optional[PointValue]:
         if point_name not in self._point_values:
             return None
+        quality = "good"
+        if self._status != DeviceStatus.ONLINE:
+            quality = "uncertain"
         return PointValue(
             name=point_name,
             value=self._point_values.get(point_name),
             timestamp=time.time(),
+            quality=quality,
         )
 
     def read_all_points(self) -> list[PointValue]:
@@ -91,6 +95,16 @@ class DeviceInstance:
         point = self._point_configs[point_name]
         if point.access == "r":
             return False
+        if point.min_value is not None and point.max_value is not None:
+            try:
+                num_val = float(value)
+                if num_val < point.min_value or num_val > point.max_value:
+                    logger.warning(
+                        "Write value %s out of range [%s, %s] for point %s",
+                        value, point.min_value, point.max_value, point_name,
+                    )
+            except (ValueError, TypeError):
+                pass
         async with self._lock:
             self._point_values[point_name] = value
         return True

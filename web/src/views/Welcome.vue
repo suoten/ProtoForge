@@ -104,7 +104,9 @@ onMounted(async () => {
     const res = await api.getTemplates()
     templates.value = res
     showWelcome.value = true
-  } catch (e) { /* skip */ }
+  } catch (e) {
+    console.warn('加载模板列表失败:', e.message)
+  }
 })
 </script>
 

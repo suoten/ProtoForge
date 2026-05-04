@@ -121,3 +121,46 @@ export const directionLabelMap = {
   in: '← 收', out: '→ 发', system: '系统', write: '✎ 写',
   recv: '← 收', send: '→ 发', inbound: '← 入', outbound: '→ 出',
 }
+
+export function getProtocolLabel(name) {
+  return protocolLabels[name] || name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+export function getProtocolColor(name) {
+  const palette = ['#4f46e5', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0891b2', '#be185d', '#9333ea', '#c2410c', '#15803d', '#e11d48', '#0d9488', '#a16207', '#2563eb', '#7c2d12']
+  if (protocolColors[name]) return protocolColors[name]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return palette[Math.abs(hash) % palette.length]
+}
+
+export const defaultPointConfig = {
+  name: 'value',
+  address: '0',
+  data_type: 'float32',
+  generator_type: 'random',
+  min_value: 0,
+  max_value: 100,
+}
+
+export const dataTypeOptions = [
+  { label: 'BOOL', value: 'bool' },
+  { label: 'INT16', value: 'int16' },
+  { label: 'INT32', value: 'int32' },
+  { label: 'UINT16', value: 'uint16' },
+  { label: 'UINT32', value: 'uint32' },
+  { label: 'FLOAT32', value: 'float32' },
+  { label: 'FLOAT64', value: 'float64' },
+  { label: 'STRING', value: 'string' },
+]
+
+export const generatorTypeOptions = [
+  { label: '固定值', value: 'fixed' },
+  { label: '随机', value: 'random' },
+  { label: '正弦波', value: 'sine' },
+  { label: '三角波', value: 'triangle' },
+  { label: '锯齿波', value: 'sawtooth' },
+  { label: '方波', value: 'square' },
+  { label: '递增', value: 'increment' },
+  { label: '脚本', value: 'script' },
+]

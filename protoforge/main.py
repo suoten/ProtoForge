@@ -88,7 +88,7 @@ async def lifespan(app: FastAPI):
     _database = Database(db_path=settings.db_path)
     await _database.connect()
 
-    _engine = SimulationEngine(event_bus=_event_bus)
+    _engine = SimulationEngine(event_bus=_event_bus, tick_interval=getattr(settings, 'tick_interval', 1.0))
     for protocol_cls in PROTOCOL_REGISTRY.values():
         _engine.register_protocol(protocol_cls())
     _engine.setup_debug_callbacks(_log_bus)

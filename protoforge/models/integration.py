@@ -35,20 +35,20 @@ class IntegrationMessage(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:16])
     timestamp: float = Field(default_factory=time.time)
     source: str = "protoforge"
-    payload: dict[str, Any] = {}
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class HandshakeRequest(BaseModel):
     version: str = "1.0"
-    protocols: list[str] = []
-    capabilities: list[str] = []
+    protocols: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
     heartbeat_interval: float = 30.0
 
 
 class HandshakeResponse(BaseModel):
     version: str = "1.0"
-    protocols: list[str] = []
-    capabilities: list[str] = []
+    protocols: list[str] = Field(default_factory=list)
+    capabilities: list[str] = Field(default_factory=list)
     session_id: str = ""
 
 
@@ -103,7 +103,7 @@ class CompatibilityReportModel(BaseModel):
 
 
 class BatchPushRequest(BaseModel):
-    device_ids: list[str] = []
+    device_ids: list[str] = Field(default_factory=list)
     protocol: str = ""
     concurrency: int = Field(default=10, ge=1, le=50)
 

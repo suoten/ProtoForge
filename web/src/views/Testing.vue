@@ -343,7 +343,7 @@
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
-import { useMessage, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags } from 'naive-ui'
+import { useMessage, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags, NButton, NSpace } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
@@ -713,9 +713,16 @@ async function deleteSuite(suiteId) {
   }
 }
 
-function viewHtmlReport(id) {
-  const token = localStorage.getItem('token')
-  window.open(`/api/v1/tests/reports/${id}/html${token ? '?token=' + token : ''}`, '_blank')
+async function viewHtmlReport(id) {
+  try {
+    const html = await api.getTestReportHtml(id)
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch (e) {
+    message.error('获取HTML报告失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 async function createSuite() {
@@ -777,12 +784,12 @@ const caseColumns = [
   { title: '步骤数', key: 'steps', width: 70, render: (row) => (row.steps || []).length },
   {
     title: '操作', key: 'actions', width: 260,
-    render: (row) => [
-      h('button', { onClick: () => runCaseById(row.id), style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '执行'),
-      h('button', { onClick: () => openEditCase(row), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '编辑'),
-      h('button', { onClick: () => loadCaseToEditor(row.id), style: 'color:#6366f1;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '加载到编辑器'),
-      h('button', { onClick: () => deleteCase(row.id), style: 'color:#d03050;border:none;background:none;cursor:pointer;font-size:12px' }, '删除'),
-    ]
+    render: (row) => h(NSpace, { size: 4 }, () => [
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => runCaseById(row.id) }, () => '执行'),
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => openEditCase(row) }, () => '编辑'),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => loadCaseToEditor(row.id) }, () => '加载'),
+      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteCase(row.id) }, () => '删除'),
+    ])
   },
 ]
 
@@ -791,11 +798,11 @@ const suiteColumns = [
   { title: '用例数', key: 'test_case_ids', width: 80, render: (row) => (row.test_case_ids || []).length },
   {
     title: '操作', key: 'actions', width: 200,
-    render: (row) => [
-      h('button', { onClick: () => runSuiteById(row.id), style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '执行'),
-      h('button', { onClick: () => viewSuiteDetail(row.id), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '详情'),
-      h('button', { onClick: () => deleteSuite(row.id), style: 'color:#d03050;border:none;background:none;cursor:pointer;font-size:12px' }, '删除'),
-    ]
+    render: (row) => h(NSpace, { size: 4 }, () => [
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => runSuiteById(row.id) }, () => '执行'),
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewSuiteDetail(row.id) }, () => '详情'),
+      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteSuite(row.id) }, () => '删除'),
+    ])
   },
 ]
 
@@ -807,12 +814,12 @@ const reportColumns = [
   { title: '通过率', key: 'success_rate', width: 80, render: (row) => `${row.success_rate}%` },
   { title: '耗时', key: 'duration', width: 80, render: (row) => `${(row.duration || 0).toFixed(2)}s` },
   {
-    title: '操作', key: 'actions', width: 160,
-    render: (row) => [
-      h('button', { onClick: () => viewReportDetail(row.id), style: 'color:#2080f0;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '详情'),
-      h('button', { onClick: () => { lastReport.value = row }, style: 'color:#18a058;border:none;background:none;cursor:pointer;font-size:12px;margin-right:8px' }, '查看'),
-      h('button', { onClick: () => viewHtmlReport(row.id), style: 'color:#6366f1;border:none;background:none;cursor:pointer;font-size:12px' }, 'HTML'),
-    ]
+    title: '操作', key: 'actions', width: 200,
+    render: (row) => h(NSpace, { size: 4 }, () => [
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewReportDetail(row.id) }, () => '详情'),
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => { lastReport.value = row } }, () => '查看'),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => viewHtmlReport(row.id) }, () => 'HTML'),
+    ])
   },
 ]
 

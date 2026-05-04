@@ -344,7 +344,11 @@ class Database:
 
     async def save_device(self, config: DeviceConfig) -> None:
         points_json = json.dumps([p.model_dump() for p in config.points])
-        config_json = json.dumps(config.protocol_config)
+        config_dict = config.protocol_config
+        if config.position:
+            config_dict = dict(config_dict)
+            config_dict["_position"] = config.position
+        config_json = json.dumps(config_dict)
         sql = self._upsert_sql("devices", ["id", "name", "protocol", "template_id", "points", "protocol_config"])
         await self._execute(
             sql,
@@ -430,13 +434,16 @@ class Database:
 
     def _row_to_device(self, row: dict) -> DeviceConfig:
         points = [PointConfig(**p) for p in json.loads(row["points"])]
+        protocol_config = json.loads(row["protocol_config"])
+        position = protocol_config.pop("_position", None) if isinstance(protocol_config, dict) else None
         return DeviceConfig(
             id=row["id"],
             name=row["name"],
             protocol=row["protocol"],
             template_id=row.get("template_id"),
             points=points,
-            protocol_config=json.loads(row["protocol_config"]),
+            protocol_config=protocol_config,
+            position=position,
         )
 
     def _row_to_scenario(self, row: dict) -> ScenarioConfig:
@@ -832,12 +839,22 @@ class Database:
             "users": ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"],
             "recordings": ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"],
         }
+        numeric_defaults = {
+            "start_time": 0, "end_time": 0, "total": 0, "passed": 0,
+            "failed": 0, "errors": 0, "skipped": 0, "created_at": 0,
+            "updated_at": 0, "login_attempts": 0, "locked_until": 0,
+        }
         for table, columns in table_columns.items():
             rows = data.get(table, [])
             count = 0
             for row in rows:
                 try:
-                    values = [row.get(c, "") for c in columns]
+                    values = []
+                    for c in columns:
+                        v = row.get(c)
+                        if v is None or v == "":
+                            v = numeric_defaults.get(c, "")
+                        values.append(v)
                     sql = self._upsert_sql(table, columns)
                     await self._execute(sql, tuple(values))
                     count += 1

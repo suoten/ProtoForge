@@ -18,6 +18,8 @@ def _is_private_hostname(hostname: str) -> bool:
         return True
     if hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):
         return True
+    if hostname.endswith(".local") or hostname.endswith(".internal"):
+        return True
     if hostname.startswith("172."):
         parts = hostname.split(".")
         if len(parts) >= 2:
@@ -27,6 +29,13 @@ def _is_private_hostname(hostname: str) -> bool:
                     return True
             except ValueError:
                 pass
+    try:
+        import ipaddress
+        addr = ipaddress.ip_address(hostname)
+        if addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local:
+            return True
+    except ValueError:
+        pass
     return False
 
 
@@ -55,6 +64,8 @@ class WebhookConfig:
 
 
 class WebhookManager:
+    _PERSIST_FILE = "data/webhooks.json"
+
     def __init__(self):
         self._webhooks: dict[str, WebhookConfig] = {}
         self._client: Optional[httpx.AsyncClient] = None
@@ -62,10 +73,46 @@ class WebhookManager:
         self._task: Optional[asyncio.Task] = None
         self._running = False
 
+    def _persist(self) -> None:
+        try:
+            from pathlib import Path
+            path = Path(self._PERSIST_FILE)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = []
+            for wh in self._webhooks.values():
+                data.append({
+                    "id": wh.id, "name": wh.name, "url": wh.url,
+                    "events": wh.events, "headers": wh.headers,
+                    "enabled": wh.enabled, "secret": wh.secret,
+                })
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to persist webhooks: %s", e)
+
+    def _restore(self) -> None:
+        try:
+            from pathlib import Path
+            path = Path(self._PERSIST_FILE)
+            if not path.exists():
+                return
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for item in data:
+                wh = WebhookConfig(
+                    id=item["id"], name=item.get("name", item["id"]),
+                    url=item["url"], events=item.get("events", ["rule_triggered"]),
+                    headers=item.get("headers", {}), enabled=item.get("enabled", True),
+                    secret=item.get("secret"),
+                )
+                self._webhooks[wh.id] = wh
+            logger.info("Restored %d webhooks from persistence", len(self._webhooks))
+        except Exception as e:
+            logger.warning("Failed to restore webhooks: %s", e)
+
     async def start(self) -> None:
         if self._running:
             return
         self._running = True
+        self._restore()
         self._client = httpx.AsyncClient(timeout=10.0)
         self._task = asyncio.create_task(self._send_loop())
         logger.info("Webhook manager started with %d webhooks", len(self._webhooks))
@@ -99,12 +146,14 @@ class WebhookManager:
             secret=config.get("secret"),
         )
         self._webhooks[wh_id] = webhook
+        self._persist()
         logger.info("Webhook added: %s -> %s", wh_id, webhook.url)
         return webhook
 
     def remove_webhook(self, wh_id: str) -> bool:
         if wh_id in self._webhooks:
             del self._webhooks[wh_id]
+            self._persist()
             return True
         return False
 
@@ -137,6 +186,7 @@ class WebhookManager:
             webhook.enabled = config["enabled"]
         if "secret" in config:
             webhook.secret = config["secret"]
+        self._persist()
         return webhook
 
     async def trigger(self, event: str, payload: dict[str, Any]) -> None:
