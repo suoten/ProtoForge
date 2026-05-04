@@ -144,7 +144,7 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends
     target_device_id = request.get("target_device_id", "")
     if not rule_id or not source_device_id or not target_device_id:
         raise HTTPException(status_code=400, detail="rule_id、source_device_id 和 target_device_id 为必填项")
-    valid_actions = {"stop_device", "start_device", "send_alarm", "custom"}
+    valid_actions = {"stop_device", "start_device", "inject_fault", "adjust_generator", "log_only", "send_alarm", "custom"}
     action = request.get("action", "stop_device")
     if action not in valid_actions:
         raise HTTPException(status_code=400, detail=f"无效的 action，可选值: {', '.join(valid_actions)}")

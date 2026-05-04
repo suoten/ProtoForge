@@ -74,14 +74,18 @@ class SimulationEngine:
                 server.set_debug_callback(make_callback(name))
 
     def get_protocols(self) -> list[dict[str, Any]]:
+        from protoforge.config import get_protocol_port_map
+        port_map = get_protocol_port_map()
         result = []
         for name, server in self._protocol_servers.items():
+            port_info = port_map.get(name, {})
             result.append({
                 "name": server.protocol_name,
                 "display_name": server.protocol_display_name,
                 "description": getattr(server, 'protocol_description', ''),
                 "version": getattr(server, 'protocol_version', '1.0.0'),
                 "status": server.status.value,
+                "default_port": port_info.get("port", 0),
                 "config_schema": server.get_config_schema(),
             })
         return result
