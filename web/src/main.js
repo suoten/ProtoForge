@@ -20,6 +20,9 @@ const routes = [
   { path: '/settings', component: () => import('./views/Settings.vue'), meta: { roles: ['admin'] } },
   { path: '/audit', component: () => import('./views/Audit.vue'), meta: { roles: ['admin'] } },
   { path: '/backup', component: () => import('./views/Backup.vue'), meta: { roles: ['admin'] } },
+  { path: '/forward', component: () => import('./views/Forward.vue'), meta: { roles: ['admin', 'operator'] } },
+  { path: '/recorder', component: () => import('./views/Recorder.vue'), meta: { roles: ['admin', 'operator'] } },
+  { path: '/webhook', component: () => import('./views/Webhook.vue'), meta: { roles: ['admin', 'operator'] } },
   { path: '/:pathMatch(.*)*', component: NotFound },
 ]
 
