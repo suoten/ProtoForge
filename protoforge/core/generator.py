@@ -204,6 +204,8 @@ class DataGenerator:
 
         if point.generator_type == GeneratorType.FIXED:
             return self._generate_fixed(point)
+        elif point.generator_type == GeneratorType.CONSTANT:
+            return self._generate_fixed(point)
         elif point.generator_type == GeneratorType.RANDOM:
             return self._generate_random(point)
         elif point.generator_type == GeneratorType.SINE:
@@ -212,6 +214,10 @@ class DataGenerator:
             return self._generate_triangle(point, elapsed)
         elif point.generator_type == GeneratorType.SAWTOOTH:
             return self._generate_sawtooth(point, elapsed)
+        elif point.generator_type == GeneratorType.SQUARE:
+            return self._generate_square(point, elapsed)
+        elif point.generator_type == GeneratorType.INCREMENT:
+            return self._generate_increment(point, elapsed)
         elif point.generator_type == GeneratorType.SCRIPT:
             return self._generate_script(point, elapsed)
         else:
@@ -265,6 +271,34 @@ class DataGenerator:
         value = lo + (hi - lo) * t
         return self._cast_value(value, point.data_type)
 
+    def _generate_square(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
+        duty = point.generator_config.get("duty_cycle", 0.5)
+        duty = max(0.0, min(1.0, float(duty)))
+        t = (elapsed % period) / period
+        value = hi if t < duty else lo
+        return self._cast_value(value, point.data_type)
+
+    def _generate_increment(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        step = point.generator_config.get("step", 1)
+        period = point.generator_config.get("period", 1.0) or 1.0
+        if period <= 0:
+            period = 1.0
+        wrap = point.generator_config.get("wrap", True)
+        count = int(elapsed / period)
+        value = lo + step * count
+        if wrap and hi > lo:
+            value = lo + (value - lo) % (hi - lo)
+        elif hi > lo:
+            value = min(value, hi)
+        return self._cast_value(value, point.data_type)
+
     def _generate_script(self, point: PointConfig, elapsed: float) -> Any:
         script = point.generator_config.get("script", "result = 0")
         context = {
@@ -278,16 +312,23 @@ class DataGenerator:
         return self._cast_value(value, point.data_type)
 
     def _cast_value(self, value: Any, data_type: DataType) -> Any:
-        if data_type == DataType.BOOL:
-            return bool(value)
-        elif data_type in (DataType.INT16, DataType.INT32):
-            return int(value)
-        elif data_type == DataType.UINT16:
-            return int(abs(value)) & 0xFFFF
-        elif data_type == DataType.UINT32:
-            return int(abs(value)) & 0xFFFFFFFF
-        elif data_type in (DataType.FLOAT32, DataType.FLOAT64):
-            return float(value)
-        elif data_type == DataType.STRING:
-            return str(value)
+        try:
+            if data_type == DataType.BOOL:
+                return bool(value)
+            elif data_type == DataType.INT16:
+                v = int(value)
+                return max(-32768, min(32767, v))
+            elif data_type == DataType.INT32:
+                v = int(value)
+                return max(-2147483648, min(2147483647, v))
+            elif data_type == DataType.UINT16:
+                return int(abs(value)) & 0xFFFF
+            elif data_type == DataType.UINT32:
+                return int(abs(value)) & 0xFFFFFFFF
+            elif data_type in (DataType.FLOAT32, DataType.FLOAT64):
+                return float(value)
+            elif data_type == DataType.STRING:
+                return str(value)
+        except (ValueError, TypeError) as e:
+            logger.debug("Cast value error for %s: %s", data_type, e)
         return value

@@ -40,7 +40,7 @@ def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100
 
 
 class SimulationEngine:
-    def __init__(self, event_bus: EventBus | None = None):
+    def __init__(self, event_bus: EventBus | None = None, tick_interval: float = 1.0):
         self._protocol_servers: dict[str, ProtocolServer] = {}
         self._devices: dict[str, DeviceInstance] = {}
         self._scenarios: dict[str, ScenarioConfig] = {}
@@ -50,6 +50,7 @@ class SimulationEngine:
         self._tick_task: Optional[asyncio.Task] = None
         self._running = False
         self._event_bus = event_bus
+        self._tick_interval = tick_interval
 
     def register_protocol(self, server: ProtocolServer) -> None:
         if server.protocol_name in self._protocol_servers:
@@ -530,7 +531,7 @@ class SimulationEngine:
                     await scenario.tick()
                 except Exception as e:
                     logger.warning("Tick error for scenario %s: %s", scenario.config.id, e)
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(self._tick_interval)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:
         return DeviceInfo(

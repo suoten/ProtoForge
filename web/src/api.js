@@ -69,7 +69,7 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      if (window.location.pathname !== '/login') {
+      if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
     }
@@ -204,7 +204,15 @@ export default {
     try {
       const parts = token.split('.')
       if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]))
+        let payload
+        try {
+          const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+          payload = JSON.parse(decodeURIComponent(atob(base64).split('').map(c =>
+            '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+          ).join('')))
+        } catch {
+          return true
+        }
         const exp = payload.exp || 0
         const now = Math.floor(Date.now() / 1000)
         if (exp - now < 300) {

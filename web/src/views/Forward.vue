@@ -179,7 +179,9 @@ async function loadTargets() {
 
 async function loadStats() {
   try {
-    stats.value = await api.getForwardStats()
+    const res = await api.getForwardStats()
+    stats.value = res
+    forwardRunning.value = res.running || false
   } catch (e) { console.warn('加载转发统计失败:', e) }
 }
 

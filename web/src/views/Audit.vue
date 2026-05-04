@@ -82,7 +82,7 @@ async function loadData() {
     if (filterResource.value) params.resource_type = filterResource.value
     entries.value = await api.queryAuditLog(params)
   } catch (e) {
-    message.error('加载审计日志失败')
+    message.error('加载审计日志失败: ' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
   }
@@ -93,7 +93,7 @@ async function loadAuditStats() {
     auditStats.value = await api.getAuditStats()
   } catch (e) {
     auditStats.value = null
-    message.error('加载审计统计失败')
+    message.error('加载审计统计失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

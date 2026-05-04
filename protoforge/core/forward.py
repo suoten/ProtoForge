@@ -237,6 +237,7 @@ class ForwardEngine:
         if self._running:
             return
         self._running = True
+        self._queue = asyncio.Queue(maxsize=10000)
         self._log_bus.subscribe(self._queue)
         self._task = asyncio.create_task(self._forward_loop())
         logger.info("Forward engine started with %d targets", len(self._targets))
@@ -300,7 +301,7 @@ class ForwardEngine:
             "running": self._running,
             "targets": len(self._targets),
             "queue_size": self._queue.qsize(),
-            "total_forwards": self._sent_count,
+            "total_forwards": self._sent_count + self._failed_count,
             "success_count": self._sent_count,
             "fail_count": self._failed_count,
             "dropped_count": self._dropped_count,

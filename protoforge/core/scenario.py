@@ -174,15 +174,29 @@ class Scenario:
         action_type = rule.condition.get("action", "set")
         if action_type == "toggle":
             current = target.read_point(rule.target_point)
-            value = not current.value if current else True
+            if current and isinstance(current.value, bool):
+                value = not current.value
+            elif current:
+                logger.warning("Toggle action on non-boolean point %s.%s", rule.target_device_id, rule.target_point)
+                return
+            else:
+                value = True
         elif action_type == "increment":
             current = target.read_point(rule.target_point)
             step = rule.condition.get("step", 1)
-            value = (current.value if current else 0) + step
+            try:
+                value = (float(current.value) if current else 0) + step
+            except (ValueError, TypeError):
+                logger.warning("Increment action on non-numeric point %s.%s", rule.target_device_id, rule.target_point)
+                return
         elif action_type == "decrement":
             current = target.read_point(rule.target_point)
             step = rule.condition.get("step", 1)
-            value = (current.value if current else 0) - step
+            try:
+                value = (float(current.value) if current else 0) - step
+            except (ValueError, TypeError):
+                logger.warning("Decrement action on non-numeric point %s.%s", rule.target_device_id, rule.target_point)
+                return
         success = await target.write_point(rule.target_point, value)
         if success:
             logger.info("Rule %s triggered: %s.%s = %s", rule.id, rule.target_device_id, rule.target_point, value)

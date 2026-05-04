@@ -28,7 +28,7 @@
     </n-space>
 
     <n-data-table v-if="scenarios.length > 0" :columns="columns" :data="scenarios" :bordered="false"
-      :pagination="{ pageSize: 15 }" :row-key="row => row.id"
+      :pagination="{ pageSize: 15 }" :row-key="row => row.id" :loading="dataLoading"
       v-model:checked-row-keys="selectedIds" :single-line="false" />
 
     <n-card v-else style="text-align:center;padding:40px">
@@ -96,6 +96,7 @@ const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const scenarios = ref([])
+const dataLoading = ref(false)
 const selectedIds = ref([])
 const batchLoading = ref(false)
 const showCreateModal = ref(false)
@@ -152,12 +153,13 @@ function editScene(id) {
 }
 
 async function loadData() {
+  dataLoading.value = true
   try {
     const res = await api.getScenarios()
     scenarios.value = res
   } catch (e) {
     message.error('加载场景失败: ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { dataLoading.value = false }
 }
 
 async function batchStart() {

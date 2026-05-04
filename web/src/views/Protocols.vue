@@ -12,6 +12,7 @@
         </n-button>
       </n-space>
 
+      <n-spin :show="dataLoading">
       <n-grid :cols="3" :x-gap="16" :y-gap="16">
         <n-gi v-for="p in protocols" :key="p.name">
           <n-card size="small" hoverable>
@@ -51,6 +52,7 @@
           </n-card>
         </n-gi>
       </n-grid>
+      </n-spin>
 
       <n-modal v-model:show="showAdvanced" preset="card" :title="`高级配置 - ${advancedProtocol.display_name || advancedProtocol.name}`" style="width: 500px">
         <n-alert type="info" :bordered="false" style="margin-bottom: 12px">留空将使用默认值，无需全部填写</n-alert>
@@ -104,6 +106,7 @@ import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
 const message = useMessage()
 const dialog = useDialog()
 const protocols = ref([])
+const dataLoading = ref(false)
 const showAdvanced = ref(false)
 const starting = ref(false)
 const startingAll = ref(false)
@@ -134,12 +137,13 @@ const configInfoRows = computed(() => {
 })
 
 async function loadData() {
+  dataLoading.value = true
   try {
     const res = await api.getProtocols()
     protocols.value = res
   } catch (e) {
-    message.error('加载协议列表失败')
-  }
+    message.error('加载协议列表失败: ' + (e.response?.data?.detail || e.message))
+  } finally { dataLoading.value = false }
 }
 
 async function startAll() {

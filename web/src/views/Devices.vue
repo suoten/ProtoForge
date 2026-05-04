@@ -52,7 +52,7 @@
       </n-alert>
 
       <n-data-table :columns="columns" :data="filteredDevices" :bordered="false"
-        :pagination="{ pageSize: 15 }" :row-key="row => row.id"
+        :pagination="{ pageSize: 15 }" :row-key="row => row.id" :loading="dataLoading"
         v-model:checked-row-keys="selectedIds" :single-line="false" />
 
       <n-modal v-model:show="showQuickCreateModal" preset="card" title="快速创建设备" style="width:560px">
@@ -360,6 +360,7 @@ const dialog = useDialog()
 const devices = ref([])
 const selectedIds = ref([])
 const batchLoading = ref(false)
+const dataLoading = ref(false)
 const pushLoading = ref(false)
 const protocols = ref([])
 const templates = ref([])
@@ -561,10 +562,12 @@ async function onAdvancedProtocolChange(protocol) {
 }
 
 async function loadData() {
+  dataLoading.value = true
   try {
     const [devRes, protoRes, tmplRes] = await Promise.all([api.getDevices(), api.getProtocols(), api.getTemplates()])
     devices.value = devRes || []; protocols.value = protoRes || []; templates.value = tmplRes || []
   } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
+  finally { dataLoading.value = false }
 }
 
 async function batchStart() {

@@ -1,5 +1,7 @@
 import json
 import logging
+import secrets
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,7 @@ class Settings(BaseSettings):
     edgelite_username: str = "admin"
     edgelite_password: str = ""
     protoforge_public_host: str = ""
+    tick_interval: float = 1.0
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
@@ -57,16 +60,21 @@ class Settings(BaseSettings):
 
 _settings: Settings | None = None
 _settings_overrides: dict[str, Any] = {}
+_settings_lock = threading.Lock()
 
 
 def get_settings() -> Settings:
     global _settings
-    if _settings is None:
-        _settings = Settings()
-        if _settings_overrides:
-            for key, value in _settings_overrides.items():
-                if hasattr(_settings, key):
-                    setattr(_settings, key, value)
+    with _settings_lock:
+        if _settings is None:
+            _settings = Settings()
+            if not _settings.jwt_secret:
+                _settings.jwt_secret = secrets.token_urlsafe(32)
+                logger.warning("JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.")
+            if _settings_overrides:
+                for key, value in _settings_overrides.items():
+                    if hasattr(_settings, key):
+                        setattr(_settings, key, value)
     return _settings
 
 
@@ -98,31 +106,35 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
 def _save_env() -> None:
     prefix = "PROTOFORGE_"
     lines = []
-    if _ENV_FILE.exists():
-        content = _ENV_FILE.read_text(encoding="utf-8")
-        content = content.replace("\r\n", "\n")
-        for line in content.splitlines():
-            if "=" in line:
-                key = line.split("=", 1)[0].strip()
-                field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
-                if field_name in _settings_overrides:
-                    lines.append(f"{key}={_settings_overrides[field_name]}")
+    try:
+        if _ENV_FILE.exists():
+            content = _ENV_FILE.read_text(encoding="utf-8")
+            content = content.replace("\r\n", "\n")
+            for line in content.splitlines():
+                if "=" in line:
+                    key = line.split("=", 1)[0].strip()
+                    field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
+                    if field_name in _settings_overrides:
+                        lines.append(f"{key}={_settings_overrides[field_name]}")
+                    else:
+                        lines.append(line)
                 else:
                     lines.append(line)
-            else:
-                lines.append(line)
 
-    existing_keys = set()
-    for line in lines:
-        if "=" in line:
-            existing_keys.add(line.split("=", 1)[0].strip())
+        existing_keys = set()
+        for line in lines:
+            if "=" in line:
+                existing_keys.add(line.split("=", 1)[0].strip())
 
-    for key, value in _settings_overrides.items():
-        env_key = f"{prefix}{key.upper()}"
-        if env_key not in existing_keys:
-            lines.append(f"{env_key}={value}")
+        for key, value in _settings_overrides.items():
+            env_key = f"{prefix}{key.upper()}"
+            if env_key not in existing_keys:
+                lines.append(f"{env_key}={value}")
 
-    _ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        _ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except (OSError, PermissionError) as e:
+        logger.warning("Failed to save .env file: %s", e)
 
 
 def get_protocol_port_map() -> dict[str, Any]:
