@@ -11,7 +11,7 @@ COPY protoforge/ protoforge/
 RUN pip install --no-cache-dir ".[all]"
 
 COPY web/ web/
-RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/ || true
+RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
 
 FROM python:3.12-slim
 
