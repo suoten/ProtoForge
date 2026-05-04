@@ -79,7 +79,7 @@ export const protocolModes = {
 }
 
 export const defaultPorts = {
-  modbus_tcp: 502,
+  modbus_tcp: 5020,
   modbus_rtu: '/dev/ttyUSB0',
   opcua: 4840,
   mqtt: 1883,
@@ -87,14 +87,14 @@ export const defaultPorts = {
   gb28181: 5060,
   bacnet: 47808,
   s7: 102,
-  mc: 5007,
+  mc: 5000,
   fins: 9600,
   ab: 44818,
-  opcda: 135,
+  opcda: 51340,
   fanuc: 8193,
-  mtconnect: 5000,
+  mtconnect: 7878,
   toledo: 1701,
-  profinet: 30000,
+  profinet: 34964,
   ethercat: 34980,
 }
 

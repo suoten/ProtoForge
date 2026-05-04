@@ -83,6 +83,8 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     }
     for key, value in updates.items():
         if key.endswith("_port") or key in allowed_keys:
+            if value == "***":
+                continue
             _settings_overrides[key] = value
             if hasattr(s, key):
                 old_val = getattr(s, key)
@@ -156,7 +158,7 @@ def get_all_settings_dict() -> dict[str, Any]:
         "log_level": s.log_level,
         "cors_origins": s.cors_origins,
         "influxdb_url": s.influxdb_url,
-        "influxdb_token": s.influxdb_token[:8] + "..." if s.influxdb_token and len(s.influxdb_token) > 8 else s.influxdb_token,
+        "influxdb_token": "***" if s.influxdb_token else "",
         "influxdb_org": s.influxdb_org,
         "influxdb_bucket": s.influxdb_bucket,
         "edgelite_url": s.edgelite_url,

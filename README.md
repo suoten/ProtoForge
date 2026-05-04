@@ -91,10 +91,16 @@ cd ProtoForge
 # 2. 安装后端依赖（FastAPI、Pydantic 等）
 pip install -e .
 
-# 3. 初始化配置（创建 data/ 目录和 .env 文件）
+# 3. 构建前端（需要 Node.js ≥18）
+cd web
+npm install
+npm run build
+cd ..
+
+# 4. 初始化配置（创建 data/ 目录和 .env 文件）
 protoforge init
 
-# 4. 启动后端（默认端口 8000）
+# 5. 启动后端（默认端口 8000）
 protoforge demo
 ```
 

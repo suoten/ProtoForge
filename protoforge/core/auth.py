@@ -290,7 +290,13 @@ class UserManager:
 
     def list_users(self) -> list[dict]:
         return [
-            {"id": u.id, "username": u.username, "role": u.role, "created_at": u.created_at}
+            {
+                "id": u.id,
+                "username": u.username,
+                "role": u.role,
+                "created_at": u.created_at,
+                "locked": bool(u.locked_until and u.locked_until > time.time()),
+            }
             for u in self._users.values()
         ]
 
