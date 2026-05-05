@@ -135,7 +135,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     port = _get_protocol_actual_port(protocol, protocol_config)
 
     if protocol == "modbus_tcp":
-        base = {"host": host, "port": port or 502, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
+        base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
     elif protocol == "modbus_rtu":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -539,7 +539,7 @@ _PROTOCOL_DISPLAY = {
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
-    "modbus_tcp": 502, "opcua": 4840, "mqtt": 1883, "http": 8080,
+    "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
     "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
     "mtconnect": 7878, "toledo": 1701, "opcda": 0, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,

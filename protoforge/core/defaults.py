@@ -407,7 +407,7 @@ ERROR_MESSAGES = {
     "Protocol already running": "该协议已在运行中，无需重复启动。",
     "Protocol not running": "该协议未启动。请先启动协议后再操作设备。",
     "Device already exists": "设备ID已存在。请更换一个唯一的设备ID。",
-    "Invalid credentials": "用户名或密码错误。默认账号: admin / admin",
+    "Invalid credentials": "用户名或密码错误",
     "Username already exists": "该用户名已被注册，请换一个。",
     "Password must be at least 6 characters": "密码至少需要6个字符，请设置更安全的密码。",
     "Cannot delete this user": "无法删除管理员账号。",

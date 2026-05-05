@@ -761,7 +761,7 @@ async function loadSuggestions() {
   loadingSuggestions.value = true
   try {
     suggestions.value = await api.getTestSuggestions()
-  } catch (e) { message.error('加载测试建议失败') } finally {
+  } catch (e) { message.error('加载测试建议失败: ' + (e.response?.data?.detail || e.message)) } finally {
     loadingSuggestions.value = false
   }
 }
@@ -780,19 +780,19 @@ async function loadMetadata() {
     devices.value = dev || []
     scenarios.value = sc || []
     protocols.value = proto || []
-  } catch (e) { message.error('加载测试元数据失败') }
+  } catch (e) { message.error('加载测试元数据失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadReports() {
-  try { reports.value = await api.listTestReports() } catch (e) { message.error('加载测试报告失败') }
+  try { reports.value = await api.listTestReports() } catch (e) { message.error('加载测试报告失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadCases() {
-  try { testCases.value = await api.listTestCases() } catch (e) { message.error('加载测试用例失败') }
+  try { testCases.value = await api.listTestCases() } catch (e) { message.error('加载测试用例失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadSuites() {
-  try { suites.value = await api.listTestSuites() } catch (e) { message.error('加载测试套件失败') }
+  try { suites.value = await api.listTestSuites() } catch (e) { message.error('加载测试套件失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 const caseColumns = [

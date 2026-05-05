@@ -218,13 +218,13 @@ function connectDeviceWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         devices.value = msg.data
       }
-    } catch (e) { console.warn('Device WebSocket消息解析失败:', e) }
+    } catch (e) { console.debug('Device WebSocket消息解析失败:', e) }
   }
 }
 
 function connectLogWs() {
   logWs = api.createLogWs()
-  logWs.onerror = () => {}
+  logWs.onerror = () => { console.debug('Log WebSocket connection error') }
   logWs.onclose = () => {
     if (logWs) { setTimeout(connectLogWs, 5000) }
   }
@@ -235,7 +235,7 @@ function connectLogWs() {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }
-    } catch (e) { console.warn('Log WebSocket消息解析失败:', e) }
+    } catch (e) { console.debug('Log WebSocket消息解析失败:', e) }
   }
 }
 

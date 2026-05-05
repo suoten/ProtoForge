@@ -879,6 +879,14 @@ class TestRunner:
         elif action == "http_request":
             method = params.get("method", "GET").upper()
             url = params.get("url", "")
+            if url.startswith("http://") or url.startswith("https://"):
+                from urllib.parse import urlparse
+                parsed = urlparse(url)
+                hostname = parsed.hostname or ""
+                if hostname not in ("localhost", "127.0.0.1", "::1") and not hostname.endswith(".local"):
+                    return {"error": f"SSRF protection: external URL not allowed (hostname={hostname}). Use relative paths for internal API calls."}
+            elif not url.startswith("/"):
+                url = f"/{url}"
             if not url.startswith("http"):
                 url = f"{api_client.base_url}{url}" if hasattr(api_client, 'base_url') else url
             headers = params.get("headers", {})

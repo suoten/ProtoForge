@@ -230,7 +230,7 @@ async function connectWebSocket() {
         scrollToBottom()
       }
     } catch (e) {
-      console.warn('WebSocket日志消息解析失败:', e)
+      console.debug('WebSocket日志消息解析失败:', e)
     }
   }
 

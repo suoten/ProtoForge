@@ -219,8 +219,8 @@ async function showProtocolInfo(name) {
   protocolConfigData.value = null
   try {
     const [infoRes, configRes] = await Promise.all([
-      api.getProtocolInfo().catch((e) => { console.warn('获取协议信息失败:', e.message); return {} }),
-      api.getProtocolConfig(name).catch((e) => { console.warn('获取协议配置失败:', e.message); return {} }),
+      api.getProtocolInfo().catch((e) => { console.debug('获取协议信息失败:', e.message); return {} }),
+      api.getProtocolConfig(name).catch((e) => { console.debug('获取协议配置失败:', e.message); return {} }),
     ])
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
@@ -287,7 +287,7 @@ function connectWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         loadData()
       }
-    } catch (e) { console.warn('WebSocket消息解析失败:', e) }
+    } catch (e) { console.debug('WebSocket消息解析失败:', e) }
   }
   ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   ws.onclose = () => { if (ws) setTimeout(connectWs, wsReconnectDelay) }

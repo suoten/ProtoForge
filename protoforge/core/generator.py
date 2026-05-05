@@ -42,6 +42,8 @@ _SAFE_NAMES = {
     "sin": math.sin, "cos": math.cos, "tan": math.tan,
     "sqrt": math.sqrt, "log": math.log, "log10": math.log10,
     "ceil": math.ceil, "floor": math.floor, "fabs": math.fabs,
+    "random": random.random, "randint": random.randint, "uniform": random.uniform,
+    "choice": random.choice,
 }
 
 _DANGEROUS_NAMES = {

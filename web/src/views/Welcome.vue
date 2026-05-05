@@ -105,7 +105,7 @@ onMounted(async () => {
     templates.value = res
     showWelcome.value = true
   } catch (e) {
-    console.warn('加载模板列表失败:', e.message)
+    console.debug('加载模板列表失败:', e.message)
   }
 })
 </script>

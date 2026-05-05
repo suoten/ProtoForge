@@ -9,8 +9,8 @@
         <n-select v-model:value="selectedScenario" :options="scenarioOptions" placeholder="选择场景" style="width: 200px" @update:value="loadScenario" />
         <n-button type="primary" @click="saveScenarioLayout" :loading="saving">保存布局</n-button>
         <n-button @click="addDeviceNode">添加设备</n-button>
-        <n-button type="success" @click="startScenario" v-if="selectedScenario">启动场景</n-button>
-        <n-button type="warning" @click="stopScenario" v-if="selectedScenario">停止场景</n-button>
+        <n-button type="success" @click="startScenario" :loading="scenarioLoading" v-if="selectedScenario">启动场景</n-button>
+        <n-button type="warning" @click="stopScenario" :loading="scenarioLoading" v-if="selectedScenario">停止场景</n-button>
       </n-space>
     </n-space>
 
@@ -166,6 +166,7 @@ const showAddDeviceModal = ref(false)
 const showRuleModal = ref(false)
 const showPointsModal = ref(false)
 const saving = ref(false)
+const scenarioLoading = ref(false)
 const devices = ref([])
 const templates = ref([])
 const protocols = ref([])
@@ -389,23 +390,29 @@ async function saveScenarioLayout() {
 
 async function startScenario() {
   if (!selectedScenario.value) return
+  scenarioLoading.value = true
   try {
     await api.startScenario(selectedScenario.value)
     message.success('场景已启动')
     await loadScenario(selectedScenario.value)
   } catch (e) {
     message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    scenarioLoading.value = false
   }
 }
 
 async function stopScenario() {
   if (!selectedScenario.value) return
+  scenarioLoading.value = true
   try {
     await api.stopScenario(selectedScenario.value)
     message.success('场景已停止')
     await loadScenario(selectedScenario.value)
   } catch (e) {
     message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    scenarioLoading.value = false
   }
 }
 
