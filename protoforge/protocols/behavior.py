@@ -182,7 +182,9 @@ class DefaultDeviceBehavior(DeviceBehavior):
         gen = self._generators.get(point_name)
         if gen and self._points.get(point_name):
             pt = self._points[point_name]
-            if pt.generator_type != GeneratorType.FIXED:
+            if point_name in self._written_values:
+                return self._written_values[point_name]
+            if pt.generator_type != GeneratorType.FIXED or gen._noise > 0:
                 value = gen.generate()
                 self._values[point_name] = value
                 return value

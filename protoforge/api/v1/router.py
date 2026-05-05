@@ -38,11 +38,14 @@ async def list_protocols(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
     protocols = engine.get_protocols()
     from protoforge.core.defaults import get_protocol_defaults, PROTOCOL_DEFAULTS
+    result = []
     for p in protocols:
-        defaults = get_protocol_defaults(p.get("name", ""))
-        p["description"] = PROTOCOL_DEFAULTS.get(p.get("name", ""), {}).get("description", "")
-        p["default_port"] = defaults.get("port", 0)
-    return protocols
+        entry = dict(p)
+        defaults = get_protocol_defaults(entry.get("name", ""))
+        entry["description"] = PROTOCOL_DEFAULTS.get(entry.get("name", ""), {}).get("description", "")
+        entry["default_port"] = defaults.get("port", 0)
+        result.append(entry)
+    return result
 
 @router.get("/protocols/info")
 async def get_protocols_info(_user: dict = Depends(require_viewer)):
@@ -53,8 +56,8 @@ async def get_protocols_info(_user: dict = Depends(require_viewer)):
 async def get_protocol_config(protocol_name: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     for p in engine.get_protocols():
-        if p["name"] == protocol_name:
-            return p["config_schema"]
+        if p.get("name") == protocol_name:
+            return p.get("config_schema", {})
 
     raise HTTPException(status_code=404, detail=f"Protocol not found: {protocol_name}")
 
@@ -647,6 +650,10 @@ async def get_logs(
     message_type: Optional[str] = None,
     _user: dict = Depends(require_viewer),
 ):
+    if count < 1:
+        count = 1
+    elif count > 1000:
+        count = 1000
 
     log_bus = _get_log_bus()
     entries = log_bus.get_recent(count=count * 5, protocol=protocol, device_id=device_id)
@@ -1162,9 +1169,8 @@ async def get_test_report(report_id: str, _user: dict = Depends(require_viewer))
 async def get_test_report_html(report_id: str, request: Request, _user: dict = Depends(require_viewer)):
     token = request.query_params.get("token")
     if token and not _user:
-        from protoforge.core.auth import UserManager
-        user = UserManager.verify_token(token)
-        if not user:
+        payload = verify_token(token)
+        if not payload:
             raise HTTPException(status_code=401, detail="Invalid token")
     from fastapi.responses import HTMLResponse
     runner = _get_test_runner()
@@ -1544,14 +1550,20 @@ async def remove_forward_target(name: str, _user: dict = Depends(require_operato
 @router.post("/forward/start")
 async def start_forward(_user: dict = Depends(require_operator)):
     engine = _get_forward_engine()
-    await engine.start()
-    return {"status": "ok"}
+    try:
+        await engine.start()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start forward: {str(e)}")
 
 @router.post("/forward/stop")
 async def stop_forward(_user: dict = Depends(require_operator)):
     engine = _get_forward_engine()
-    await engine.stop()
-    return {"status": "ok"}
+    try:
+        await engine.stop()
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to stop forward: {str(e)}")
 
 @router.get("/forward/stats")
 async def forward_stats(_user: dict = Depends(require_viewer)):
@@ -1606,15 +1618,20 @@ async def delete_recording(rec_id: str, _user: dict = Depends(require_operator))
     recorder = _get_recorder()
     if not recorder.get_recording(rec_id):
         raise HTTPException(status_code=404, detail="Recording not found")
-    await recorder.delete_recording_persisted(rec_id)
-
-    return {"status": "ok"}
+    try:
+        await recorder.delete_recording_persisted(rec_id)
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {str(e)}")
 
 @router.post("/recorder/recordings/{rec_id}/replay")
 async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     recorder = _get_recorder()
     cfg = config or {}
     speed = cfg.get("speed", 1.0)
+
+    if not isinstance(speed, (int, float)) or speed <= 0 or speed > 100:
+        raise HTTPException(status_code=400, detail="speed 必须是 0-100 之间的正数")
 
     try:
         result = await recorder.replay_recording(rec_id, speed=speed, target_engine=_get_engine())
@@ -1649,6 +1666,14 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
     if "url" not in config:
         raise HTTPException(status_code=400, detail="url is required")
 
+    url = config.get("url", "")
+    try:
+        parsed = re.match(r'^https?://', url)
+        if not parsed:
+            raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
+    except Exception:
+        raise HTTPException(status_code=400, detail="url 格式无效")
+
     webhook = webhook_manager.add_webhook(config)
     return webhook.to_dict()
 
@@ -1673,8 +1698,11 @@ async def test_webhook(wh_id: str, _user: dict = Depends(require_operator)):
     webhook = webhook_manager.get_webhook(wh_id)
     if not webhook:
         raise HTTPException(status_code=404, detail="Webhook not found")
-    await webhook_manager.trigger("test", {"message": "Test webhook from ProtoForge", "webhook_id": wh_id})
-    return {"status": "ok"}
+    try:
+        await webhook_manager._send_single(webhook, {"event": "test", "message": "Test webhook from ProtoForge", "webhook_id": wh_id, "timestamp": time.time()})
+        return {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Webhook test failed: {str(e)}")
 
 @router.get("/webhooks/stats")
 async def webhook_stats(_user: dict = Depends(require_viewer)):

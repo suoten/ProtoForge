@@ -202,6 +202,22 @@ class WebhookManager:
             except asyncio.CancelledError:
                 break
 
+    async def _send_single(self, webhook: WebhookConfig, body: dict[str, Any]) -> None:
+        headers = {"Content-Type": "application/json", **webhook.headers}
+        if webhook.secret:
+            body_bytes = json.dumps(body).encode()
+            sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+            headers["X-ProtoForge-Signature"] = sig
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=10.0)
+        resp = await self._client.post(webhook.url, json=body, headers=headers)
+        if resp.status_code >= 400:
+            webhook.error_count += 1
+            raise RuntimeError(f"Webhook returned HTTP {resp.status_code}")
+        webhook.trigger_count += 1
+        webhook.last_triggered = time.time()
+        self._persist()
+
     async def _dispatch(self, msg: dict) -> None:
         event = msg["event"]
         payload = msg["payload"]
