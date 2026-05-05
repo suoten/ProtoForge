@@ -72,6 +72,14 @@ api.interceptors.response.use(
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login'
       }
+    } else if (status === 403) {
+      console.error('Permission denied:', error.response?.data?.detail || '无权限执行此操作')
+    } else if (status === 404) {
+      console.error('Resource not found:', error.response?.data?.detail || '请求的资源不存在')
+    } else if (status >= 500) {
+      console.error('Server error:', error.response?.data?.detail || '服务器内部错误，请稍后重试')
+    } else if (!error.response) {
+      console.error('Network error: 无法连接到服务器，请检查网络连接')
     }
     return Promise.reject(error)
   }
