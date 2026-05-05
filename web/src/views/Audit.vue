@@ -103,7 +103,7 @@ async function handleDelete(id) {
     message.success('已删除')
     await loadData()
   } catch (e) {
-    message.error('删除失败')
+    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -113,7 +113,7 @@ async function handleClearAll() {
     message.success('已清空')
     await loadData()
   } catch (e) {
-    message.error('清空失败')
+    message.error('清空失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

@@ -178,7 +178,7 @@ async function startAllProtocols() {
   if (!stopped.length) { message.info('所有协议已在运行中'); return }
   let failCount = 0
   for (const p of stopped) {
-    try { await api.startProtocol(p.name, null) } catch (e) { failCount++ }
+    try { await api.startProtocol(p.name, null) } catch (e) { failCount++; console.warn(`协议 ${p.name} 启动失败:`, e.message) }
   }
   if (failCount > 0) {
     message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个启动失败`)
@@ -217,7 +217,7 @@ function connectDeviceWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         devices.value = msg.data
       }
-    } catch {}
+    } catch { /* WebSocket消息格式异常，忽略 */ }
   }
 }
 
@@ -233,7 +233,7 @@ function connectLogWs() {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }
-    } catch {}
+    } catch { /* WebSocket消息格式异常，忽略 */ }
   }
 }
 

@@ -157,14 +157,19 @@ async function startAll() {
     onPositiveClick: async () => {
       startingAll.value = true
       let portWarnings = []
+      let failCount = 0
       try {
         for (const p of stopped) {
           try {
             const res = await api.startProtocol(p.name, null)
             if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
-          } catch (e) { /* skip */ }
+          } catch (e) { failCount++; console.warn(`协议 ${p.name} 启动失败:`, e.message) }
         }
-        message.success(`已启动 ${stopped.length} 个协议`)
+        if (failCount > 0) {
+          message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个失败`)
+        } else {
+          message.success(`已启动 ${stopped.length} 个协议`)
+        }
         if (portWarnings.length > 0) {
           message.warning(portWarnings.join('\n'), { duration: 8000 })
         }
@@ -214,8 +219,8 @@ async function showProtocolInfo(name) {
   protocolConfigData.value = null
   try {
     const [infoRes, configRes] = await Promise.all([
-      api.getProtocolInfo().catch(() => ({})),
-      api.getProtocolConfig(name).catch(() => ({})),
+      api.getProtocolInfo().catch((e) => { console.warn('获取协议信息失败:', e.message); return {} }),
+      api.getProtocolConfig(name).catch((e) => { console.warn('获取协议配置失败:', e.message); return {} }),
     ])
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }

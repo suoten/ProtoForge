@@ -649,9 +649,9 @@ async function startAllDevices() {
       let ok = 0, fail = 0
       try {
         for (const dev of toStart) {
-          try { await api.startDevice(dev.id); ok++ } catch { fail++ }
+          try { await api.startDevice(dev.id); ok++ } catch (e) { fail++; console.warn(`设备 ${dev.id} 启动失败:`, e.message) }
         }
-        message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        if (fail > 0) { message.warning(`已启动 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个设备`) }
         loadData()
       } finally { batchLoading.value = false }
     }
@@ -671,9 +671,9 @@ async function stopAllDevices() {
       let ok = 0, fail = 0
       try {
         for (const dev of toStop) {
-          try { await api.stopDevice(dev.id); ok++ } catch { fail++ }
+          try { await api.stopDevice(dev.id); ok++ } catch (e) { fail++; console.warn(`设备 ${dev.id} 停止失败:`, e.message) }
         }
-        message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        if (fail > 0) { message.warning(`已停止 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个设备`) }
         loadData()
       } finally { batchLoading.value = false }
     }
@@ -700,7 +700,7 @@ async function batchPushToEdgelite() {
           errorDetails.push(res.suggestion)
         }
       }
-    } catch { fail++ }
+    } catch (e) { fail++; console.warn(`推送设备失败:`, e.message) }
   }
   pushLoading.value = false
   selectedIds.value = []
@@ -962,7 +962,7 @@ async function batchVerifyPipeline() {
       if (res.skipped) { skip++ }
       else if (res.ok) { ok++ }
       else { fail++ }
-    } catch { fail++ }
+    } catch (e) { fail++; console.warn(`链路验证失败:`, e.message) }
   }
   pipelineLoading.value = false
   selectedIds.value = []

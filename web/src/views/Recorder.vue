@@ -189,7 +189,7 @@ const eventColumns = [
 async function loadRecordings() {
   loading.value = true
   try {
-    const res = await api.getRecordings()
+    const res = await api.listRecordings()
     recordings.value = res || []
   } catch (e) {
     message.error('加载录制列表失败: ' + (e.response?.data?.detail || e.message))
@@ -210,7 +210,7 @@ async function loadStats() {
       activeRecording.value = null
       if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
     }
-  } catch (e) { console.warn('加载录制统计失败:', e) }
+  } catch (e) { console.warn('加载录制统计失败:', e); recorderStats.value = recorderStats.value || {} }
 }
 
 async function doStartRecording() {

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <n-space vertical>
     <n-space justify="space-between">
       <n-space>
@@ -284,7 +284,7 @@ async function loadData() {
 }
 
 async function loadTags() {
-  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch { allTags.value = [] }
+  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch (e) { allTags.value = []; console.warn('加载标签失败:', e.message) }
 }
 
 async function doSearch() {

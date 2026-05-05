@@ -167,7 +167,7 @@ const targetColumns = [
 async function loadTargets() {
   loadingTargets.value = true
   try {
-    const res = await api.getForwardTargets()
+    const res = await api.listForwardTargets()
     targets.value = (res || []).map(t => ({
       ...t,
       display_url: t.url || t.path || (t.host ? `${t.host}:${t.port}` : ''),
@@ -182,7 +182,7 @@ async function loadStats() {
     const res = await api.getForwardStats()
     stats.value = res
     forwardRunning.value = res.running || false
-  } catch (e) { console.warn('加载转发统计失败:', e) }
+  } catch (e) { console.warn('加载转发统计失败:', e); stats.value = stats.value || {} }
 }
 
 async function addTarget() {

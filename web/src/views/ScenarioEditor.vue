@@ -278,7 +278,7 @@ async function confirmAddNode() {
     try {
       const tmplRes = await api.getTemplate(newNode.value.templateId)
       points = tmplRes.points || points
-    } catch (e) { /* use default */ }
+    } catch (e) { console.warn('加载模板失败，使用默认测点:', e.message) }
   }
   nodes.value.push({
     id, type: 'device', position: { x, y },
@@ -423,7 +423,7 @@ async function loadData() {
       await loadScenario(scenarioId)
     }
   } catch (e) {
-    message.error('加载数据失败')
+    message.error('加载数据失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

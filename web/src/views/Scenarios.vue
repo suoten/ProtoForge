@@ -196,10 +196,10 @@ async function startAllScenes() {
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const sc of scenarios.value) {
-    try { await api.startScenario(sc.id); ok++ } catch { fail++ }
+    try { await api.startScenario(sc.id); ok++ } catch (e) { fail++; console.warn(`场景 ${sc.id} 启动失败:`, e.message) }
   }
   batchLoading.value = false
-  message.success(`已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
   loadData()
 }
 
@@ -207,10 +207,10 @@ async function stopAllScenes() {
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const sc of scenarios.value) {
-    try { await api.stopScenario(sc.id); ok++ } catch { fail++ }
+    try { await api.stopScenario(sc.id); ok++ } catch (e) { fail++; console.warn(`场景 ${sc.id} 停止失败:`, e.message) }
   }
   batchLoading.value = false
-  message.success(`已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : ''))
+  if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }
   loadData()
 }
 

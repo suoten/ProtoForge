@@ -153,7 +153,7 @@ async function loadData() {
     templates.value = tRes
     protocols.value = pRes
   } catch (e) {
-    message.error('加载模板失败')
+    message.error('加载模板失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
