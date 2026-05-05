@@ -25,7 +25,6 @@ class DynamicValueGenerator:
         self._step_index = 0
         self._last_step_time = self._start_time
         self._script_code = self._config.get("script", "")
-        self._script_globals = {"math": math, "random": random, "time": time, "abs": abs, "min": min, "max": max}
 
     def generate(self) -> Any:
         gt = self._point.generator_type
@@ -50,6 +49,8 @@ class DynamicValueGenerator:
         return self._generate_fixed()
 
     def _clamp(self, value: float) -> Any:
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            value = self._last_value if hasattr(self, '_last_value') else 0
         dt = self._point.data_type.value
         if dt == "bool":
             return bool(value)
@@ -134,14 +135,19 @@ class DynamicValueGenerator:
         if not self._script_code:
             return self._last_value
         try:
-            local_vars = {"t": time.time() - self._start_time, "value": self._last_value,
-                          "min_val": self._min, "max_val": self._max, "result": None}
-            exec(self._script_code, self._script_globals, local_vars)
-            result = local_vars.get("result", self._last_value)
+            from protoforge.core.generator import SafeEval
+            evaluator = SafeEval({
+                "t": time.time() - self._start_time,
+                "value": self._last_value,
+                "min_val": self._min,
+                "max_val": self._max,
+            })
+            result = evaluator.eval_expr(self._script_code)
             if result is not None:
                 self._last_value = result
             return self._clamp(self._last_value)
-        except Exception:
+        except Exception as e:
+            logger.debug("Script generator error: %s", e)
             return self._last_value
 
 

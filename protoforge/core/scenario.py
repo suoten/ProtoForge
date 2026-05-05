@@ -125,6 +125,8 @@ class Scenario:
         if not self._start_time:
             return False
         interval = rule.condition.get("interval", 60)
+        if not isinstance(interval, (int, float)) or interval <= 0:
+            interval = 60
         elapsed = time.time() - self._start_time
         key = f"timer_{rule.id}"
         last = self._last_trigger.get(key, 0)
@@ -166,6 +168,7 @@ class Scenario:
 
     async def _execute_action(self, rule: Rule) -> None:
         if not rule.target_device_id or not rule.target_point:
+            logger.debug("Rule %s has no target_device_id or target_point, skipping action", rule.id)
             return
         target = self._devices.get(rule.target_device_id)
         if not target or target.status != DeviceStatus.ONLINE:

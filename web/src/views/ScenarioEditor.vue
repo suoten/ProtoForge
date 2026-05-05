@@ -364,7 +364,7 @@ async function saveScenarioLayout() {
           id: dc.id, name: dc.name, protocol: dc.protocol,
           points: dc.points, protocol_config: dc.protocol_config,
         })
-        try { await api.startDevice(dc.id) } catch (e) { console.warn('设备启动失败:', dc.id, e) }
+        try { await api.startDevice(dc.id) } catch (e) { message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
       } catch (e) {
         if (e.response?.status !== 400 || !(typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')).includes('already exists')) {
           throw e

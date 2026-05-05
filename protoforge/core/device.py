@@ -103,9 +103,10 @@ class DeviceInstance:
                 num_val = float(value)
                 if num_val < point.min_value or num_val > point.max_value:
                     logger.warning(
-                        "Write value %s out of range [%s, %s] for point %s",
+                        "Write value %s out of range [%s, %s] for point %s, clamping",
                         value, point.min_value, point.max_value, point_name,
                     )
+                    value = max(point.min_value, min(point.max_value, num_val))
             except (ValueError, TypeError):
                 pass
         async with self._lock:

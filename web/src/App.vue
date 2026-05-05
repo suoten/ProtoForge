@@ -313,7 +313,10 @@ function connectWebSocket() {
       wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
     }
   }
-  ws.onerror = () => { wsConnected.value = false }
+  ws.onerror = () => {
+    wsConnected.value = false
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+  }
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)

@@ -901,7 +901,8 @@ class TestRunner:
                     else:
                         result = {"data": result, "status_code": resp.status_code}
                 return result
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to parse test response JSON: %s", e)
                 return {"status_code": getattr(resp, 'status_code', 0), "text": str(resp)}
         return resp
 

@@ -80,11 +80,15 @@ def get_protoforge_host() -> str:
         import socket
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(2)
                 s.connect(("8.8.8.8", 80))
                 host = s.getsockname()[0]
         except Exception:
-            logger.debug("Failed to detect local IP, using 127.0.0.1")
-            host = "127.0.0.1"
+            try:
+                host = socket.gethostbyname(socket.gethostname())
+            except Exception:
+                logger.debug("Failed to detect local IP, using 127.0.0.1")
+                host = "127.0.0.1"
     return host
 
 
@@ -97,7 +101,8 @@ def _is_edgelite_local(el_config: dict[str, str]) -> bool:
         parsed = urllib.parse.urlparse(url)
         hostname = (parsed.hostname or "").lower()
         return hostname in ("127.0.0.1", "localhost", "[::1]", "::1", "")
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to parse URL for local check: %s", e)
         return "127.0.0.1" in url or "localhost" in url
 
 
@@ -159,7 +164,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1)}
     elif protocol == "mc":
-        base = {"ip": host, "port": port or 5007, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
+        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
     elif protocol == "fins":
         base = {"ip": host, "port": port or 9600, "timeout": 5.0}
     elif protocol == "ab":
@@ -170,7 +175,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "mtconnect":
         base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
     elif protocol == "toledo":
-        base = {"ip": host, "port": port or 8000, "timeout": 5.0}
+        base = {"ip": host, "port": port or 1701, "timeout": 5.0}
     elif protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
                 "host": protocol_config.get("host", host), "timeout": 5.0}
@@ -535,8 +540,8 @@ _PROTOCOL_DISPLAY = {
 
 _PROTOCOL_DEFAULT_PORTS = {
     "modbus_tcp": 502, "opcua": 4840, "mqtt": 1883, "http": 8080,
-    "s7": 102, "mc": 5007, "fins": 9600, "ab": 44818, "fanuc": 8193,
-    "mtconnect": 7878, "toledo": 8000, "opcda": 0, "onvif": 80,
+    "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
+    "mtconnect": 7878, "toledo": 1701, "opcda": 0, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
     "sparkplug_b": 1883, "serial": 0, "database": 3306, "barcode_scanner": 0,
     "profinet": 34964, "ethercat": 34980, "bacnet": 47808, "gb28181": 5060,
@@ -559,7 +564,8 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
                 parsed = urllib.parse.urlparse(push_url)
                 host = parsed.hostname or ""
                 port = str(parsed.port) if parsed.port else ""
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to parse HTTP push URL: %s", e)
                 host = push_url
         else:
             host = driver_config.get("host", driver_config.get("ip", ""))
@@ -573,7 +579,8 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
                 if m:
                     host = m.group(1) or ""
                     port = m.group(2) or ""
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to parse OPC-UA server URL: %s", e)
                 host = server_url
         else:
             host = driver_config.get("host", "")
@@ -586,7 +593,8 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
                 parsed = urllib.parse.urlparse(url)
                 host = parsed.hostname or ""
                 port = str(parsed.port) if parsed.port else ""
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to parse MTConnect URL: %s", e)
                 host = url
         else:
             host = driver_config.get("host", "")
@@ -700,7 +708,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 try:
                     import json
                     driver_config = json.loads(driver_config)
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to parse driver_config JSON: %s", e)
                     driver_config = {}
             device_protocol = getattr(device, "protocol", "") or ""
             protoforge_running = False

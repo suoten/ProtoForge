@@ -26,10 +26,15 @@ function isLoginRequest(url) {
 }
 
 api.interceptors.response.use(
-  response => response,
+  response => {
+    if (response?.data === undefined || response?.data === null) {
+      return { data: {} }
+    }
+    return response
+  },
   async error => {
-    const originalRequest = error.config
-    const status = error.response?.status
+    const originalRequest = error?.config
+    const status = error?.response?.status
 
     if (status === 401 && !originalRequest._retry && !isLoginRequest(originalRequest.url)) {
       const refreshToken = localStorage.getItem('refresh_token')

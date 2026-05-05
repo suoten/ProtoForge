@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class DataType(str, Enum):
@@ -41,6 +41,12 @@ class PointConfig(BaseModel):
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     fixed_value: Optional[Any] = None
+
+    @model_validator(mode="after")
+    def validate_min_max(self):
+        if self.min_value is not None and self.max_value is not None and self.min_value > self.max_value:
+            raise ValueError(f"min_value ({self.min_value}) must be <= max_value ({self.max_value}) for point '{self.name}'")
+        return self
 
 
 class DeviceConfig(BaseModel):

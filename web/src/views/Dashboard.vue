@@ -210,6 +210,7 @@ async function loadData() {
 function connectDeviceWs() {
   deviceWs = api.createDeviceWs()
   deviceWs.onopen = () => { wsReconnectDelay = 1000 }
+  deviceWs.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   deviceWs.onclose = () => { setTimeout(connectDeviceWs, wsReconnectDelay); wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   deviceWs.onmessage = (event) => {
     try {
@@ -217,12 +218,13 @@ function connectDeviceWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         devices.value = msg.data
       }
-    } catch { /* WebSocket消息格式异常，忽略 */ }
+    } catch (e) { console.warn('Device WebSocket消息解析失败:', e) }
   }
 }
 
 function connectLogWs() {
   logWs = api.createLogWs()
+  logWs.onerror = () => {}
   logWs.onclose = () => {
     if (logWs) { setTimeout(connectLogWs, 5000) }
   }
@@ -233,7 +235,7 @@ function connectLogWs() {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }
-    } catch { /* WebSocket消息格式异常，忽略 */ }
+    } catch (e) { console.warn('Log WebSocket消息解析失败:', e) }
   }
 }
 

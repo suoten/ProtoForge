@@ -54,7 +54,8 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             try:
                 await db.load_all_devices()
                 db_status = "ok"
-            except Exception:
+            except Exception as e:
+                logger.debug("gRPC DB health check error: %s", e)
                 db_status = "error"
         return pb2.HealthResponse(
             status="ok",

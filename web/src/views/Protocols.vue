@@ -276,16 +276,20 @@ onUnmounted(() => {
 })
 
 let ws = null
+let wsReconnectDelay = 1000
+const WS_MAX_RECONNECT_DELAY = 30000
 function connectWs() {
   ws = api.createDeviceWs()
+  ws.onopen = () => { wsReconnectDelay = 1000 }
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         loadData()
       }
-    } catch {}
+    } catch (e) { console.warn('WebSocket消息解析失败:', e) }
   }
-  ws.onclose = () => { if (ws) setTimeout(connectWs, 5000) }
+  ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
+  ws.onclose = () => { if (ws) setTimeout(connectWs, wsReconnectDelay) }
 }
 </script>

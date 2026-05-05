@@ -270,7 +270,11 @@ class ForwardEngine:
             try:
                 while len(records) < self._batch_size:
                     timeout = 0.1 if records else self._flush_interval
-                    msg: LogEntry = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+                    try:
+                        msg: LogEntry = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+                    except asyncio.QueueFull:
+                        self._dropped_count += 1
+                        continue
                     records.append({
                         "timestamp": msg.timestamp,
                         "protocol": msg.protocol,

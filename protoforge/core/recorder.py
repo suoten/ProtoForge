@@ -17,7 +17,7 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     _AES_AVAILABLE = True
 except ImportError:
-    pass
+    logger.warning("cryptography library not available, recording encryption will use insecure XOR fallback. Install with: pip install cryptography")
 
 
 def _encrypt_data(data: bytes, key: bytes) -> str:
@@ -291,7 +291,9 @@ class Recorder:
         if self._filter_device and msg.device_id != self._filter_device:
             return
         if len(self._active.messages) >= self._MAX_MESSAGES:
-            logger.warning("Recording reached max messages limit (%d)", self._MAX_MESSAGES)
+            if not getattr(self._active, '_max_warned', False):
+                logger.warning("Recording reached max messages limit (%d), new messages will be dropped", self._MAX_MESSAGES)
+                self._active._max_warned = True
             return
         data = {
             "summary": msg.summary,

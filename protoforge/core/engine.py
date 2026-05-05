@@ -100,6 +100,8 @@ class SimulationEngine:
         if not server:
             raise ValueError(f"Unknown protocol: {protocol_name}")
         if "port" in config and isinstance(config["port"], int):
+            if config["port"] < 1 or config["port"] > 65535:
+                raise ValueError(f"Invalid port {config['port']}, must be between 1 and 65535")
             host = config.get("host", "0.0.0.0")
             if host and not _is_serial_path(host) and _is_port_in_use(config["port"], host):
                 original_port = config["port"]

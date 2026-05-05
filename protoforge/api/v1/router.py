@@ -515,8 +515,13 @@ async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer
         if not config:
             raise HTTPException(status_code=404, detail="Scenario not found")
         return config.model_dump()
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to export scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail="导出场景失败")
 
 @router.post("/scenarios/import")
 async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
@@ -531,8 +536,11 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
             except Exception as db_err:
                 logger.warning("Failed to persist scenario %s: %s", config.id, db_err)
         return result
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to import scenario: %s", e)
+        raise HTTPException(status_code=500, detail="导入场景失败")
 
 @router.get("/templates", response_model=list[TemplateInfo])
 async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
