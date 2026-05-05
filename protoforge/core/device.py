@@ -1,9 +1,12 @@
 import asyncio
+import logging
 import time
 from typing import Any, Optional
 
 from protoforge.core.generator import DataGenerator
 from protoforge.models.device import DeviceConfig, DeviceStatus, GeneratorType, PointConfig, PointValue
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceInstance:

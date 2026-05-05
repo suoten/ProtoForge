@@ -323,8 +323,7 @@ class SimulationEngine:
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
 
-        _SENTINEL = object()
-        old_value = _SENTINEL
+        old_value = None
         found = False
         for pv in instance.read_all_points():
             if pv.name == point_name:
@@ -340,12 +339,18 @@ class SimulationEngine:
                     proto_success = await server.write_point(device_id, point_name, value)
                     if not proto_success:
                         if found:
-                            await instance.write_point(point_name, old_value)
+                            try:
+                                await instance.write_point(point_name, old_value)
+                            except Exception as rollback_err:
+                                logger.error("Rollback failed for %s/%s: %s", device_id, point_name, rollback_err)
                         logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
                         return False
                 except Exception as e:
                     if found:
-                        await instance.write_point(point_name, old_value)
+                        try:
+                            await instance.write_point(point_name, old_value)
+                        except Exception as rollback_err:
+                            logger.error("Rollback failed for %s/%s: %s", device_id, point_name, rollback_err)
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
         return success

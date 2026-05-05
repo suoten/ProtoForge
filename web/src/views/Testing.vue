@@ -343,10 +343,11 @@
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
-import { useMessage, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags, NButton, NSpace } from 'naive-ui'
+import { useMessage, useDialog, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags, NButton, NSpace } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
+const dialog = useDialog()
 
 const suggestions = ref([])
 const loadingSuggestions = ref(false)
@@ -694,23 +695,39 @@ async function loadCaseToEditor(caseId) {
 }
 
 async function deleteCase(caseId) {
-  try {
-    await api.deleteTestCase(caseId)
-    await loadCases()
-    message.success('用例已删除')
-  } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认删除',
+    content: '确定删除此测试用例？此操作不可撤销。',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.deleteTestCase(caseId)
+        await loadCases()
+        message.success('用例已删除')
+      } catch (e) {
+        message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function deleteSuite(suiteId) {
-  try {
-    await api.deleteTestSuite(suiteId)
-    await loadSuites()
-    message.success('套件已删除')
-  } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认删除',
+    content: '确定删除此测试套件？此操作不可撤销。',
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.deleteTestSuite(suiteId)
+        await loadSuites()
+        message.success('套件已删除')
+      } catch (e) {
+        message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function viewHtmlReport(id) {

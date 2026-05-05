@@ -206,7 +206,7 @@ const columns = [
 async function loadWebhooks() {
   loading.value = true
   try {
-    const res = await api.getWebhooks()
+    const res = await api.listWebhooks()
     webhooks.value = (res || []).map(w => ({
       ...w,
       events: w.events || [],
@@ -220,7 +220,7 @@ async function loadWebhooks() {
 async function loadStats() {
   try {
     webhookStats.value = await api.getWebhookStats()
-  } catch (e) { console.warn('加载 Webhook 统计失败:', e) }
+  } catch (e) { console.warn('加载 Webhook 统计失败:', e); webhookStats.value = webhookStats.value || {} }
 }
 
 async function addWebhook() {

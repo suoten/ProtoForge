@@ -1067,7 +1067,7 @@ async function loadSettings() {
     protocols.value = protoRes
     saveResult.value = ''
   } catch (e) {
-    message.error('加载设置失败')
+    message.error('加载设置失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
