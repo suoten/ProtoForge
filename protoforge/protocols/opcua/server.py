@@ -371,6 +371,9 @@ class OpcUaServer(ProtocolServer):
             self._idx, config.name
         )
         point_nodes = {}
+        if not ASYNCUA_AVAILABLE:
+            logger.warning("asyncua not available, cannot create OPC-UA device nodes")
+            return
         from asyncua import ua
         type_map = {
             "bool": ua.VariantType.Boolean,

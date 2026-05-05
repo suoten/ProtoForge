@@ -269,7 +269,7 @@ class ModbusTcpServer(ProtocolServer):
         self._port = config.get("port", 5020)
 
         if not StartAsyncTcpServer:
-            raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
+            raise RuntimeError("pymodbus is not installed. Install with: pip install pymodbus")
 
         try:
             if self._use_simdata:

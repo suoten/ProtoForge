@@ -1,61 +1,49 @@
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus, DeviceBehavior
-from protoforge.protocols.modbus import ModbusTcpServer, ModbusRtuServer
-from protoforge.protocols.opcua import OpcUaServer
-from protoforge.protocols.s7 import S7Server
-from protoforge.protocols.fins import FinsServer
-from protoforge.protocols.mc import McServer
-from protoforge.protocols.mqtt import MqttBroker
-from protoforge.protocols.http import HttpSimulatorServer
-from protoforge.protocols.gb28181 import GB28181Server
-from protoforge.protocols.bacnet import BACnetServer
-from protoforge.protocols.ab import AbServer
-from protoforge.protocols.fanuc import FanucServer
-from protoforge.protocols.opcda import OpcDaServer
-from protoforge.protocols.toledo import ToledoServer
-from protoforge.protocols.mtconnect import MtConnectServer
-from protoforge.protocols.ethercat import EtherCATServer
-from protoforge.protocols.profinet import ProfinetServer
 
-PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {
-    "modbus_tcp": ModbusTcpServer,
-    "modbus_rtu": ModbusRtuServer,
-    "opcua": OpcUaServer,
-    "s7": S7Server,
-    "fins": FinsServer,
-    "mc": McServer,
-    "mqtt": MqttBroker,
-    "http": HttpSimulatorServer,
-    "gb28181": GB28181Server,
-    "bacnet": BACnetServer,
-    "ab": AbServer,
-    "fanuc": FanucServer,
-    "opcda": OpcDaServer,
-    "toledo": ToledoServer,
-    "mtconnect": MtConnectServer,
-    "ethercat": EtherCATServer,
-    "profinet": ProfinetServer,
+_PROTOCOL_CLASSES: dict[str, str] = {
+    "modbus_tcp": "protoforge.protocols.modbus:ModbusTcpServer",
+    "modbus_rtu": "protoforge.protocols.modbus:ModbusRtuServer",
+    "opcua": "protoforge.protocols.opcua:OpcUaServer",
+    "s7": "protoforge.protocols.s7:S7Server",
+    "fins": "protoforge.protocols.fins:FinsServer",
+    "mc": "protoforge.protocols.mc:McServer",
+    "mqtt": "protoforge.protocols.mqtt:MqttBroker",
+    "http": "protoforge.protocols.http:HttpSimulatorServer",
+    "gb28181": "protoforge.protocols.gb28181:GB28181Server",
+    "bacnet": "protoforge.protocols.bacnet:BACnetServer",
+    "ab": "protoforge.protocols.ab:AbServer",
+    "fanuc": "protoforge.protocols.fanuc:FanucServer",
+    "opcda": "protoforge.protocols.opcda:OpcDaServer",
+    "toledo": "protoforge.protocols.toledo:ToledoServer",
+    "mtconnect": "protoforge.protocols.mtconnect:MtConnectServer",
+    "ethercat": "protoforge.protocols.ethercat:EtherCATServer",
+    "profinet": "protoforge.protocols.profinet:ProfinetServer",
 }
+
+PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {}
+
+
+def _load_protocols() -> None:
+    import importlib
+    import logging
+    logger = logging.getLogger(__name__)
+    for name, qual in _PROTOCOL_CLASSES.items():
+        if name in PROTOCOL_REGISTRY:
+            continue
+        module_path, _, class_name = qual.partition(":")
+        try:
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+            PROTOCOL_REGISTRY[name] = cls
+        except Exception as e:
+            logger.warning("Failed to load protocol %s (%s): %s", name, qual, e)
+
+
+_load_protocols()
 
 __all__ = [
     "ProtocolServer",
     "ProtocolStatus",
     "DeviceBehavior",
     "PROTOCOL_REGISTRY",
-    "ModbusTcpServer",
-    "ModbusRtuServer",
-    "OpcUaServer",
-    "S7Server",
-    "FinsServer",
-    "McServer",
-    "MqttBroker",
-    "HttpSimulatorServer",
-    "GB28181Server",
-    "BACnetServer",
-    "AbServer",
-    "FanucServer",
-    "OpcDaServer",
-    "ToledoServer",
-    "MtConnectServer",
-    "EtherCATServer",
-    "ProfinetServer",
 ]
