@@ -574,8 +574,8 @@ class ProfinetServer(ProtocolServer):
             for w in writers:
                 try:
                     w.write(frame)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("PROFINET frame write failed: %s", exc)
 
     def _handle_rt_tunnel(self, data: bytes) -> bytes | None:
         behavior = self._behaviors.get(self._default_device_id)

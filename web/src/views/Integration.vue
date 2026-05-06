@@ -910,7 +910,7 @@ async function batchPushAndVerify() {
         const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
         dev._el_status = statusRes.status
         if (statusRes.status === 'online') verified++
-      } catch (e) { console.warn('获取EdgeLite设备状态失败:', dev.id, e) }
+      } catch (e) { console.warn('获取EdgeLite设备状态失败:', dev.id, e); message.warning(`获取设备 ${dev.id} 状态失败`) }
     }
     message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
   } catch (e) {

@@ -106,6 +106,7 @@ onMounted(async () => {
     showWelcome.value = true
   } catch (e) {
     console.debug('加载模板列表失败:', e.message)
+    message.error('加载模板列表失败，请刷新重试')
   }
 })
 </script>

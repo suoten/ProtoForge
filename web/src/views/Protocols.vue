@@ -219,8 +219,8 @@ async function showProtocolInfo(name) {
   protocolConfigData.value = null
   try {
     const [infoRes, configRes] = await Promise.all([
-      api.getProtocolInfo().catch((e) => { console.debug('获取协议信息失败:', e.message); return {} }),
-      api.getProtocolConfig(name).catch((e) => { console.debug('获取协议配置失败:', e.message); return {} }),
+      api.getProtocolInfo().catch((e) => { console.debug('获取协议信息失败:', e.message); message.warning('获取协议信息失败'); return {} }),
+      api.getProtocolConfig(name).catch((e) => { console.debug('获取协议配置失败:', e.message); message.warning('获取协议配置失败'); return {} }),
     ])
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }

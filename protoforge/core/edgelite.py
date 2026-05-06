@@ -8,7 +8,6 @@ import httpx
 from protoforge.config import get_settings
 from protoforge.core.integration.protocol import (
     ACCESS_MODE_MAP,
-    DATA_TYPE_MAP,
     PROTOCOL_MAP_BASE,
     DataTypeMapper,
     ProtocolMapper,
@@ -84,11 +83,12 @@ def get_protoforge_host() -> str:
                 s.settimeout(2)
                 s.connect(("8.8.8.8", 80))
                 host = s.getsockname()[0]
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to detect local IP via UDP: %s", e)
             try:
                 host = socket.gethostbyname(socket.gethostname())
-            except Exception:
-                logger.debug("Failed to detect local IP, using 127.0.0.1")
+            except Exception as e2:
+                logger.debug("Failed to detect local IP via hostname: %s, using 127.0.0.1", e2)
                 host = "127.0.0.1"
     return host
 
@@ -117,8 +117,8 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
         running_port = engine.get_protocol_running_port(protocol)
         if running_port is not None:
             return running_port
-    except Exception:
-        logger.debug("Failed to get protocol running port for %s", protocol)
+    except Exception as e:
+        logger.debug("Failed to get protocol running port for %s: %s", protocol, e)
     from protoforge.config import get_protocol_port_map
     port_map = get_protocol_port_map()
     proto_info = port_map.get(protocol)
@@ -621,20 +621,20 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
         if same_server:
             parts.append(f"driver_config 中未指定 ProtoForge 地址。由于 EdgeLite 和 ProtoForge 在同一台服务器，请确保「系统设置 > EdgeLite配置 > ProtoForge地址」填写了 127.0.0.1")
         else:
-            parts.append(f"driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
+            parts.append("driver_config 中未指定 ProtoForge 的 IP 地址。请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 EdgeLite 可达的 IP")
     else:
         if protocol == "s7":
             parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host})")
-            parts.append(f"S7 协议使用固定端口 102 (ISO-on-TCP)，EdgeLite 的 S7 驱动不支持自定义端口")
-            parts.append(f"请确保 ProtoForge 的 S7 服务运行在标准端口 102 上")
+            parts.append("S7 协议使用固定端口 102 (ISO-on-TCP)，EdgeLite 的 S7 驱动不支持自定义端口")
+            parts.append("请确保 ProtoForge 的 S7 服务运行在标准端口 102 上")
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
+                parts.append("EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
         elif protocol == "http":
             parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
-            parts.append(f"HTTP Webhook 为被动接收模式，请确认 ProtoForge 是否在向 EdgeLite 推送数据")
+            parts.append("HTTP Webhook 为被动接收模式，请确认 ProtoForge 是否在向 EdgeLite 推送数据")
             parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(f"EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
+                parts.append("EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
         else:
             if same_server:
                 parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
@@ -718,8 +718,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 from protoforge.main import get_engine
                 engine = get_engine()
                 protoforge_running = engine.is_protocol_running(device_protocol)
-            except Exception:
-                logger.debug("Failed to check protocol running status for %s", device_protocol)
+            except Exception as e:
+                logger.debug("Failed to check protocol running status for %s: %s", device_protocol, e)
             same_server = _is_edgelite_local(el_config)
             connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running, same_server)
             result["steps"]["connect"] = connect_error

@@ -264,13 +264,14 @@ class UserManager:
             password_hash=hash_password(password),
             role=role,
         )
-        self._users[username] = user
-        self._users_by_id[user.id] = user
         if self._db:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.warning("Failed to persist user: %s", e)
+                logger.error("Failed to persist user %s: %s", username, e)
+                raise RuntimeError(f"Failed to create user: {e}") from e
+        self._users[username] = user
+        self._users_by_id[user.id] = user
         return user
 
     async def delete_user(self, username: str) -> bool:
@@ -278,13 +279,14 @@ class UserManager:
             return False
         if username in self._users:
             user = self._users[username]
-            del self._users[username]
-            self._users_by_id.pop(user.id, None)
             if self._db:
                 try:
                     await self._db.delete_user(username)
                 except Exception as e:
-                    logger.warning("Failed to delete user from DB: %s", e)
+                    logger.error("Failed to delete user %s from DB: %s", username, e)
+                    raise RuntimeError(f"Failed to delete user: {e}") from e
+            del self._users[username]
+            self._users_by_id.pop(user.id, None)
             return True
         return False
 
@@ -307,12 +309,15 @@ class UserManager:
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
+        old_hash = user.password_hash
         user.password_hash = hash_password(new_password)
         if self._db:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.warning("Failed to update user password: %s", e)
+                logger.error("Failed to update user password for %s: %s", username, e)
+                user.password_hash = old_hash
+                return False, "密码更新失败，请稍后重试"
         return True, ""
 
     async def reset_login_attempts(self, username: str) -> bool:
@@ -335,6 +340,9 @@ class UserManager:
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
+        old_hash = user.password_hash
+        old_attempts = user.login_attempts
+        old_locked = user.locked_until
         user.password_hash = hash_password(new_password)
         user.login_attempts = 0
         user.locked_until = 0.0
@@ -342,7 +350,11 @@ class UserManager:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.warning("Failed to reset user password: %s", e)
+                logger.error("Failed to reset user password for %s: %s", username, e)
+                user.password_hash = old_hash
+                user.login_attempts = old_attempts
+                user.locked_until = old_locked
+                return False, "密码重置失败，请稍后重试"
         return True, ""
 
     async def update_user_role(self, username: str, new_role: str) -> bool:
@@ -351,12 +363,15 @@ class UserManager:
             return False
         if new_role not in ("admin", "operator", "viewer", "user"):
             return False
+        old_role = user.role
         user.role = new_role
         if self._db:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.warning("Failed to update user role: %s", e)
+                logger.error("Failed to update user role for %s: %s", username, e)
+                user.role = old_role
+                return False
         return True
 
 

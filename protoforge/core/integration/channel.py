@@ -252,7 +252,7 @@ class WebSocketChannel(ChannelBase):
         data = json.dumps(message)
         await self._ws.send(data)
         if msg_id and hasattr(self, '_pending_responses'):
-            future = asyncio.get_event_loop().create_future()
+            future = asyncio.get_running_loop().create_future()
             self._pending_responses[msg_id] = future
             try:
                 return await asyncio.wait_for(future, timeout=10.0)

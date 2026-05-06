@@ -81,3 +81,4 @@ class DeviceInfo(BaseModel):
     points: list[PointValue] = Field(default_factory=list)
     created_at: Optional[str] = None
     protocol_config: Optional[dict[str, Any]] = None
+    edgelite_status: Optional[dict[str, Any]] = None

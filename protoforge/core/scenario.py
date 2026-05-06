@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
 from protoforge.core.generator import DataGenerator
-from protoforge.models.device import DeviceStatus, PointValue
+from protoforge.models.device import DeviceStatus
 from protoforge.models.scenario import Rule, RuleType, ScenarioConfig, ScenarioStatus
 
 logger = logging.getLogger(__name__)
@@ -230,17 +230,23 @@ class Scenario:
             v = float(value)
             t = float(threshold)
         except (ValueError, TypeError):
-            v, t = value, threshold
-        if operator == ">":
-            return v > t
-        elif operator == ">=":
-            return v >= t
-        elif operator == "<":
-            return v < t
-        elif operator == "<=":
-            return v <= t
-        elif operator == "==":
-            return v == t
-        elif operator == "!=":
-            return v != t
+            try:
+                v, t = value, threshold
+            except Exception:
+                return False
+        try:
+            if operator == ">":
+                return v > t
+            elif operator == ">=":
+                return v >= t
+            elif operator == "<":
+                return v < t
+            elif operator == "<=":
+                return v <= t
+            elif operator == "==":
+                return v == t
+            elif operator == "!=":
+                return v != t
+        except TypeError:
+            return False
         return False

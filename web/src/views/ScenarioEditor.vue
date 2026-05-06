@@ -279,7 +279,7 @@ async function confirmAddNode() {
     try {
       const tmplRes = await api.getTemplate(newNode.value.templateId)
       points = tmplRes.points || points
-    } catch (e) { console.warn('加载模板失败，使用默认测点:', e.message) }
+    } catch (e) { console.warn('加载模板失败，使用默认测点:', e.message); message.warning('加载模板失败，使用默认测点') }
   }
   nodes.value.push({
     id, type: 'device', position: { x, y },
@@ -297,7 +297,7 @@ async function loadScenario(scenarioId) {
   try {
     const [scenario, allDevices] = await Promise.all([
       api.getScenario(scenarioId),
-      api.getDevices().catch(() => []),
+      api.getDevices().catch((e) => { console.debug('加载设备列表失败:', e.message); message.warning('加载设备列表失败，在线状态可能不准确'); return [] }),
     ])
     const deviceMap = {}
     for (const d of allDevices) {

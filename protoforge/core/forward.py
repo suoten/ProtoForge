@@ -213,10 +213,12 @@ class ForwardEngine:
         target = self._targets.pop(name, None)
         if target and hasattr(target, 'close'):
             try:
-                import asyncio
-                asyncio.get_event_loop().create_task(target.close())
+                asyncio.get_running_loop().create_task(target.close())
             except RuntimeError:
-                pass
+                try:
+                    asyncio.ensure_future(target.close())
+                except Exception as exc:
+                    logger.debug("Failed to schedule target close: %s", exc)
         logger.info("Forward target removed: %s", name)
 
     def list_targets(self) -> list[dict[str, Any]]:

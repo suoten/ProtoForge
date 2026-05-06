@@ -210,7 +210,7 @@ async function loadStats() {
       activeRecording.value = null
       if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
     }
-  } catch (e) { console.debug('加载录制统计失败:', e); recorderStats.value = recorderStats.value || {} }
+  } catch (e) { console.debug('加载录制统计失败:', e); recorderStats.value = recorderStats.value || {}; message.warning('加载录制统计失败') }
 }
 
 async function doStartRecording() {

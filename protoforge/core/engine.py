@@ -159,10 +159,10 @@ class SimulationEngine:
             try:
                 from protoforge.core.edgelite import push_device_to_edgelite
                 edgelite_result = await push_device_to_edgelite(config)
-                if result.get("ok"):
+                if edgelite_result.get("ok"):
                     logger.info("Device %s auto-pushed to EdgeLite", config.id)
                 else:
-                    logger.warning("Device %s EdgeLite push failed: %s", config.id, result.get("error") or result.get("reason", "unknown"))
+                    logger.warning("Device %s EdgeLite push failed: %s", config.id, edgelite_result.get("error") or edgelite_result.get("reason", "unknown"))
             except Exception as e:
                 logger.warning("Device %s EdgeLite push error: %s", config.id, e)
 

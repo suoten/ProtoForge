@@ -285,7 +285,8 @@ class ToledoServer(ProtocolServer):
                         try:
                             w.write(weight_str)
                             await w.drain()
-                        except Exception:
+                        except Exception as exc:
+                            logger.debug("Toledo continuous write failed: %s", exc)
                             dead_writers.append(w)
                     for w in dead_writers:
                         self._continuous_writers.discard(w)
