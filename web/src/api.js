@@ -135,10 +135,9 @@ export default {
   searchTemplates: (params) => d(api.get('/templates/search', { params })),
   listTemplateTags: () => d(api.get('/templates/tags')),
   instantiateTemplate: (id, params) => {
-    // params: { device_id, device_name, protocol_config }
-    if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: id, device_name: '' } }))
+    if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: 'dev-' + Date.now(), device_name: 'Device' } }))
     const { device_id, device_name, protocol_config, ...rest } = params
-    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id, device_name, ...rest } }))
+    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || 'dev-' + Date.now(), device_name: device_name || 'Device', ...rest } }))
   },
 
   getScenarios: () => d(api.get('/scenarios')),
