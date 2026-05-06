@@ -158,8 +158,7 @@ class SimulationEngine:
         if should_push:
             try:
                 from protoforge.core.edgelite import push_device_to_edgelite
-                result = await push_device_to_edgelite(config)
-                edgelite_result = result
+                edgelite_result = await push_device_to_edgelite(config)
                 if result.get("ok"):
                     logger.info("Device %s auto-pushed to EdgeLite", config.id)
                 else:

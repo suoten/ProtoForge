@@ -36,6 +36,8 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
     device_ids = request.get("device_ids", [])
     if not isinstance(device_ids, list):
         raise HTTPException(status_code=400, detail="device_ids 必须是数组")
+    if not device_ids:
+        raise HTTPException(status_code=400, detail="device_ids 不能为空")
     protocol_filter = request.get("protocol", "")
     concurrency = request.get("concurrency", 10)
     if not isinstance(concurrency, int) or concurrency < 1:
@@ -60,6 +62,8 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
 
 @router.post("/device/{device_id}/start")
 async def start_device_collect(device_id: str, _user: dict = Depends(require_operator)):
+    if not device_id or not device_id.strip():
+        raise HTTPException(status_code=400, detail="device_id 不能为空")
     manager = _get_integration_manager()
     if not manager.is_connected():
         raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
@@ -69,6 +73,8 @@ async def start_device_collect(device_id: str, _user: dict = Depends(require_ope
 
 @router.post("/device/{device_id}/stop")
 async def stop_device_collect(device_id: str, _user: dict = Depends(require_operator)):
+    if not device_id or not device_id.strip():
+        raise HTTPException(status_code=400, detail="device_id 不能为空")
     manager = _get_integration_manager()
     if not manager.is_connected():
         raise HTTPException(status_code=503, detail="Not connected to EdgeLite")

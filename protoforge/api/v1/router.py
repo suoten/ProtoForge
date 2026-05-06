@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -137,11 +136,12 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
         return result
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=get_friendly_error(str(e)))
+        raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=get_friendly_error(str(e)))
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
+        logger.error("Failed to start protocol %s: %s", protocol_name, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/protocols/{protocol_name}/stop")
 async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operator)):
@@ -166,6 +166,16 @@ async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(req
 
 @router.post("/devices", response_model=DeviceInfo)
 async def create_device(config: DeviceConfig, _user: dict = Depends(require_operator)):
+    if not config.name or not config.name.strip():
+        raise HTTPException(status_code=400, detail="设备名称不能为空")
+    if not config.id or not config.id.strip():
+        raise HTTPException(status_code=400, detail="设备ID不能为空")
+    if len(config.id) > 64:
+        raise HTTPException(status_code=400, detail="设备ID长度不能超过64个字符")
+    if len(config.name) > 128:
+        raise HTTPException(status_code=400, detail="设备名称长度不能超过128个字符")
+    config.name = config.name.strip()
+    config.id = config.id.strip()
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -192,8 +202,10 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
     device_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', device_id).strip('-') or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
 
-    if not template_id or not device_name:
-        raise HTTPException(status_code=400, detail="template_id 和 name 为必填项")
+    if not template_id or not template_id.strip():
+        raise HTTPException(status_code=400, detail="template_id 为必填项")
+    if not device_name or not device_name.strip():
+        raise HTTPException(status_code=400, detail="name 为必填项")
     tm = _get_template_manager()
     template = tm.get_template(template_id)
 
@@ -229,6 +241,8 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 
 @router.post("/devices/batch")
 async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depends(require_operator)):
+    if not configs:
+        raise HTTPException(status_code=400, detail="configs 不能为空")
     engine = _get_engine()
     db = _get_database()
     results = []
@@ -413,6 +427,10 @@ async def list_scenarios(_user: dict = Depends(require_viewer)):
 
 @router.post("/scenarios", response_model=ScenarioInfo)
 async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
+    if not config.name or not config.name.strip():
+        raise HTTPException(status_code=400, detail="场景名称不能为空")
+    if not config.id or not config.id.strip():
+        raise HTTPException(status_code=400, detail="场景ID不能为空")
     engine = _get_engine()
     db = _get_database()
 
@@ -618,7 +636,7 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict = 
     tm = _get_template_manager()
     db = _get_database()
     try:
-        existing = tm.get_template(template_id)
+        tm.get_template(template_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     data["id"] = template_id
@@ -685,38 +703,49 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
         return token
     return None
 
+
+async def _ws_authenticate(websocket: WebSocket) -> tuple[bool, str]:
+    """Authenticate WebSocket connection. Returns (success, role)."""
+    from protoforge.api.v1.auth import is_no_auth
+
+    if is_no_auth():
+        return True, "admin"
+
+    token = _extract_ws_token(websocket)
+    if not token:
+        try:
+            msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
+            try:
+                msg_data = json.loads(msg)
+                token = msg_data.get("token", "")
+            except (ValueError, TypeError):
+                token = msg
+        except asyncio.TimeoutError:
+            await websocket.close(code=4001, reason="Authentication timeout")
+            return False, ""
+
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return False, ""
+
+    payload = verify_token(token)
+    if payload is None:
+        await websocket.close(code=4001, reason="Invalid token")
+        return False, ""
+
+    role = payload.get("role", "user")
+    if role not in ("admin", "operator", "user", "viewer"):
+        await websocket.close(code=4003, reason="Insufficient permissions")
+        return False, ""
+
+    return True, role
+
+
 @router.websocket("/ws/devices")
 async def ws_devices(websocket: WebSocket):
-    from protoforge.api.v1.auth import is_no_auth
-    token = None
-    role = "viewer"
-
-    if not is_no_auth():
-        token = _extract_ws_token(websocket)
-        if not token:
-            try:
-                msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-                try:
-                    msg_data = json.loads(msg)
-                    token = msg_data.get("token", "")
-                except (ValueError, TypeError):
-                    token = msg
-            except asyncio.TimeoutError:
-                await websocket.close(code=4001, reason="Authentication timeout")
-                return
-
-        if not token:
-            await websocket.close(code=4001, reason="Authentication required")
-            return
-        payload = verify_token(token)
-        if payload is None:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-        role = payload.get("role", "user")
-        if role not in ("admin", "operator", "user", "viewer"):
-            await websocket.close(code=4003, reason="Insufficient permissions")
-            return
-
+    ok, role = await _ws_authenticate(websocket)
+    if not ok:
+        return
     await websocket.accept()
     engine = _get_engine()
 
@@ -745,38 +774,12 @@ async def ws_devices(websocket: WebSocket):
     except Exception as e:
         logger.warning("WebSocket /ws/devices error: %s", e)
 
+
 @router.websocket("/ws/logs")
 async def ws_logs(websocket: WebSocket):
-    from protoforge.api.v1.auth import is_no_auth
-    token = None
-    role = "viewer"
-
-    if not is_no_auth():
-        token = _extract_ws_token(websocket)
-        if not token:
-            try:
-                msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-                try:
-                    msg_data = json.loads(msg)
-                    token = msg_data.get("token", "")
-                except (ValueError, TypeError):
-                    token = msg
-            except asyncio.TimeoutError:
-                await websocket.close(code=4001, reason="Authentication timeout")
-                return
-
-        if not token:
-            await websocket.close(code=4001, reason="Authentication required")
-            return
-        payload = verify_token(token)
-        if payload is None:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-        role = payload.get("role", "user")
-        if role not in ("admin", "operator", "user", "viewer"):
-            await websocket.close(code=4003, reason="Insufficient permissions")
-            return
-
+    ok, role = await _ws_authenticate(websocket)
+    if not ok:
+        return
     await websocket.accept()
     log_bus = _get_log_bus()
     queue = log_bus.subscribe()
@@ -1248,7 +1251,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
                 steps=[
                     TestStep(name=f"验证协议 {proto_name} 运行状态", action="http_request",
                              params={"method": "GET", "url": "/api/v1/protocols"},
-                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"协议列表应可访问")]),
+                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="协议列表应可访问")]),
                 ],
             ))
 
