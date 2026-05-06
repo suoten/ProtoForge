@@ -180,18 +180,26 @@ async function batchStart() {
 
 async function batchStop() {
   if (!selectedIds.value.length) { message.info('请先选择要停止的场景'); return }
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const id of selectedIds.value) {
-    try { await api.stopScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 停止失败: ${e.response?.data?.detail || e.message}`) }
-  }
-  batchLoading.value = false
-  selectedIds.value = []
-  const msg = `已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
-  if (fail > 0 && ok === 0) message.error(msg)
-  else if (fail > 0) message.warning(msg)
-  else message.success(msg)
-  loadData()
+  dialog.warning({
+    title: '确认批量停止',
+    content: `将停止 ${selectedIds.value.length} 个场景，所有设备连接将断开。确定继续？`,
+    positiveText: '确定停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      for (const id of selectedIds.value) {
+        try { await api.stopScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 停止失败: ${e.response?.data?.detail || e.message}`) }
+      }
+      batchLoading.value = false
+      selectedIds.value = []
+      const msg = `已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+      if (fail > 0 && ok === 0) message.error(msg)
+      else if (fail > 0) message.warning(msg)
+      else message.success(msg)
+      loadData()
+    }
+  })
 }
 
 async function startAllScenes() {
@@ -210,14 +218,22 @@ async function startAllScenes() {
 async function stopAllScenes() {
   const running = scenarios.value.filter(s => s.status === 'running')
   if (!running.length) { message.info('没有运行中的场景'); return }
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const sc of running) {
-    try { await api.stopScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 停止失败: ${e.response?.data?.detail || e.message}`) }
-  }
-  batchLoading.value = false
-  if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }
-  loadData()
+  dialog.warning({
+    title: '确认全部停止',
+    content: `将停止 ${running.length} 个运行中的场景，所有设备连接将断开。确定继续？`,
+    positiveText: '确定停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      for (const sc of running) {
+        try { await api.stopScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 停止失败: ${e.response?.data?.detail || e.message}`) }
+      }
+      batchLoading.value = false
+      if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }
+      loadData()
+    }
+  })
 }
 
 async function createScenario() {
