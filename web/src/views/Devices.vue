@@ -217,7 +217,7 @@
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                 <div style="font-weight:600">💻 代码示例</div>
                 <n-button-group size="tiny">
-                  <n-button v-for="(_, lang) in guideData.code_examples" :key="lang"
+                  <n-button v-for="(_, lang) in (guideData.code_examples || {})" :key="lang"
                     :type="guideLang === lang ? 'primary' : 'default'"
                     @click="guideLang = lang">
                     {{ {python:'Python',csharp:'C#',java:'Java',go:'Go'}[lang] || lang }}
@@ -225,7 +225,7 @@
                 </n-button-group>
               </div>
               <n-card size="small" embedded>
-                <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ guideData.code_examples[guideLang] || guideData.code_example }}</pre>
+                <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ (guideData.code_examples || {})[guideLang] || guideData.code_example }}</pre>
               </n-card>
             </div>
             <div v-else-if="guideData.code_example">
@@ -644,7 +644,7 @@ async function batchDelete() {
 }
 
 async function startAllDevices() {
-  const toStart = filteredDevices.value.filter(d => d.status !== 'running')
+  const toStart = filteredDevices.value.filter(d => d.status !== 'online')
   if (!toStart.length) { message.info('所有设备已在运行中'); return }
   dialog.warning({
     title: '确认全部启动',
@@ -666,7 +666,7 @@ async function startAllDevices() {
 }
 
 async function stopAllDevices() {
-  const toStop = filteredDevices.value.filter(d => d.status === 'running')
+  const toStop = filteredDevices.value.filter(d => d.status === 'online')
   if (!toStop.length) { message.info('没有运行中的设备'); return }
   dialog.warning({
     title: '确认全部停止',

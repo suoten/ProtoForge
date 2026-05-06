@@ -102,8 +102,8 @@
       </n-spin>
       <template #action>
         <n-button @click="showDetailModal = false">关闭</n-button>
-        <n-button type="primary" @click="replayRecording(detailRec.id)" :loading="replaying">回放</n-button>
-        <n-button @click="exportRecordingFile(detailRec.id)">导出</n-button>
+        <n-button type="primary" @click="detailRec && replayRecording(detailRec.id)" :loading="replaying" :disabled="!detailRec">回放</n-button>
+        <n-button @click="detailRec && exportRecordingFile(detailRec.id)" :disabled="!detailRec">导出</n-button>
       </template>
     </n-modal>
 

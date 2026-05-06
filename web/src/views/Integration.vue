@@ -296,7 +296,7 @@
             :bordered="false" size="small" />
         </n-card>
 
-        <n-card v-if="pipelineResult.steps.collect && pipelineResult.steps.collect.data"
+        <n-card v-if="pipelineResult?.steps?.collect?.data"
           size="small" title="EdgeLite 采集数据">
           <n-descriptions label-placement="left" :column="2" bordered size="small">
             <n-descriptions-item v-for="(val, key) in pipelineResult.steps.collect.data" :key="key" :label="key">
@@ -313,7 +313,7 @@
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
           <div style="font-weight:600;margin-bottom:4px">认证失败</div>
-          <div>{{ pipelineResult.steps.auth.error }}</div>
+          <div>{{ pipelineResult?.steps?.auth?.error || '认证失败' }}</div>
           <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查 EdgeLite 网关地址是否正确、用户名密码是否正确</div>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
@@ -325,8 +325,8 @@
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
           <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
-          <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
-          <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
+          <div style="white-space:pre-line">{{ pipelineResult?.steps?.connect?.error || '连接失败' }}</div>
+          <div v-if="pipelineResult?.steps?.connect?.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
             <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
             <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
           </div>
