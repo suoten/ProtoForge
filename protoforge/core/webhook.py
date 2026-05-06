@@ -132,7 +132,9 @@ class WebhookManager:
 
     def add_webhook(self, config: dict[str, Any]) -> WebhookConfig:
         wh_id = config.get("id", f"wh-{int(time.time())}")
-        url = config["url"]
+        url = config.get("url", "")
+        if not url:
+            raise ValueError("Webhook URL is required")
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")

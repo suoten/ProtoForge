@@ -501,6 +501,13 @@ class SimulationEngine:
         )
 
     async def start(self) -> None:
+        if self._tick_task and not self._tick_task.done():
+            logger.warning("Engine already running, cancelling old tick task")
+            self._tick_task.cancel()
+            try:
+                await self._tick_task
+            except asyncio.CancelledError:
+                pass
         self._running = True
         self._tick_task = asyncio.create_task(self._tick_loop())
         logger.info("Simulation engine started")

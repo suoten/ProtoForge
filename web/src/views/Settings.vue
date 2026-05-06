@@ -598,7 +598,7 @@ const recordingColumns = [
   { title: '设备', key: 'device_id', width: 140 },
   {
     title: '时长', key: 'duration', width: 100,
-    render: (row) => row.duration_seconds ? `${row.duration_seconds.toFixed(1)}s` : '-',
+    render: (row) => row.duration_seconds != null ? `${row.duration_seconds.toFixed(1)}s` : '-',
   },
   {
     title: '帧数', key: 'frame_count', width: 80,

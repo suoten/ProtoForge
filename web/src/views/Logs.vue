@@ -133,6 +133,7 @@ const filteredLogs = computed(() => {
 })
 
 function formatTime(ts) {
+  if (!ts || isNaN(ts)) return '--:--:--.---'
   const d = new Date(ts * 1000)
   return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
 }

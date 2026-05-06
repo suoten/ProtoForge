@@ -18,7 +18,7 @@
           <n-descriptions label-placement="left" :column="1" size="small">
             <n-descriptions-item label="厂商">{{ t.manufacturer || '-' }}</n-descriptions-item>
             <n-descriptions-item label="型号">{{ t.model || '-' }}</n-descriptions-item>
-            <n-descriptions-item label="测点数">{{ t.point_count }}</n-descriptions-item>
+            <n-descriptions-item label="测点数">{{ t.point_count ?? (t.points?.length ?? 0) }}</n-descriptions-item>
             <n-descriptions-item label="描述">{{ t.description || '-' }}</n-descriptions-item>
           </n-descriptions>
           <template #action>

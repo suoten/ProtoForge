@@ -1,3 +1,4 @@
+import logging
 import math
 import random
 import time
@@ -5,6 +6,8 @@ from typing import Any
 
 from protoforge.models.device import PointConfig, GeneratorType
 from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
+
+logger = logging.getLogger(__name__)
 
 
 class DynamicValueGenerator:

@@ -881,9 +881,20 @@ class TestRunner:
             url = params.get("url", "")
             if url.startswith("http://") or url.startswith("https://"):
                 from urllib.parse import urlparse
+                import ipaddress
                 parsed = urlparse(url)
                 hostname = parsed.hostname or ""
-                if hostname not in ("localhost", "127.0.0.1", "::1") and not hostname.endswith(".local"):
+                allowed = False
+                if hostname in ("localhost", "127.0.0.1", "::1") or hostname.endswith(".local"):
+                    allowed = True
+                else:
+                    try:
+                        ip = ipaddress.ip_address(hostname)
+                        if ip.is_loopback or ip.is_private:
+                            allowed = True
+                    except ValueError:
+                        pass
+                if not allowed:
                     return {"error": f"SSRF protection: external URL not allowed (hostname={hostname}). Use relative paths for internal API calls."}
             elif not url.startswith("/"):
                 url = f"/{url}"

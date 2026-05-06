@@ -249,6 +249,8 @@ class Recorder:
             logger.warning("Failed to restore recordings: %s", e)
 
     async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict:
+        if not isinstance(speed, (int, float)) or speed <= 0:
+            raise ValueError(f"Speed must be a positive number, got: {speed}")
         recording = self._recordings.get(rec_id)
         if not recording:
             raise ValueError(f"Recording not found: {rec_id}")

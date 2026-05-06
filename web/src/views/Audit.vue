@@ -60,7 +60,7 @@ const auditStats = ref(null)
 const columns = [
   { title: '时间', key: 'timestamp', width: 170, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
   { title: '用户', key: 'username', width: 120 },
-  { title: '操作', key: 'action', width: 120, render: (row) => h(NTag, { size: 'tiny', type: row.action?.includes('delete') ? 'error' : row.action?.includes('create') ? 'success' : 'info', bordered: false }, () => row.action) },
+  { title: '操作', key: 'action', width: 120, render: (row) => h(NTag, { size: 'tiny', type: (row.action || '').includes('delete') ? 'error' : (row.action || '').includes('create') ? 'success' : 'info', bordered: false }, () => row.action || '-') },
   { title: '资源类型', key: 'resource_type', width: 100 },
   { title: '资源ID', key: 'resource_id', width: 140, ellipsis: { tooltip: true } },
   { title: '详情', key: 'detail', ellipsis: { tooltip: true } },
