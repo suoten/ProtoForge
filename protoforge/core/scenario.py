@@ -232,7 +232,8 @@ class Scenario:
         except (ValueError, TypeError):
             try:
                 v, t = value, threshold
-            except Exception:
+            except Exception as exc:
+                logger.debug("Scenario _compare fallback failed for value=%s threshold=%s: %s", value, threshold, exc)
                 return False
         try:
             if operator == ">":

@@ -978,8 +978,8 @@ def _get_test_runner():
         try:
             db = _get_database()
             _test_runner.set_database(db)
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.debug("Test runner database not available: %s", e)
     return _test_runner
 
 _internal_client = None
@@ -1682,8 +1682,8 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
         parsed = re.match(r'^https?://', url)
         if not parsed:
             raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
-    except Exception:
-        raise HTTPException(status_code=400, detail="url 格式无效")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"url 格式无效: {e}")
 
     webhook = webhook_manager.add_webhook(config)
     return webhook.to_dict()

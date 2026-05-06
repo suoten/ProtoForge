@@ -225,7 +225,7 @@ function connectDeviceWs() {
         devices.value = msg.data
       }
     } catch (e) {
-      // Silently ignore non-device WebSocket messages
+      if (event.data !== 'ping') console.debug('Device WS non-JSON message:', event.data)
     }
   }
 }

@@ -24,7 +24,7 @@ _CIP_TYPE_MAP = {
 
 
 class AbDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list = None):
+    def __init__(self, points: list | None = None):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._generators: dict[str, DynamicValueGenerator] = {}

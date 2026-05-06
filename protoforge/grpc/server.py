@@ -308,8 +308,8 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
                 if hasattr(current, key):
                     try:
                         setattr(current, key, type(getattr(current, key))(value))
-                    except (ValueError, TypeError):
-                        pass
+                    except (ValueError, TypeError) as e:
+                        logger.debug("gRPC config apply skipped key=%s value=%s: %s", key, value, e)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
             return pb2.OperationResponse(ok=False, error=str(e))

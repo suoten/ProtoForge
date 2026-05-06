@@ -28,14 +28,14 @@ def _is_private_hostname(hostname: str) -> bool:
                 if 16 <= second <= 31:
                     return True
             except ValueError:
-                pass
+                logger.debug("IP octet parse failed for '%s'", parts[1])
     try:
         import ipaddress
         addr = ipaddress.ip_address(hostname)
         if addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local:
             return True
     except ValueError:
-        pass
+        logger.debug("IP address parse failed for '%s'", hostname)
     return False
 
 

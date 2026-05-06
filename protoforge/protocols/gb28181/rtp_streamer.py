@@ -238,7 +238,7 @@ class RtpStreamer:
     def set_debug_callback(self, callback):
         self._on_debug_log = callback
 
-    def _log(self, direction: str, msg_type: str, summary: str, detail: dict = None):
+    def _log(self, direction: str, msg_type: str, summary: str, detail: dict | None = None):
         if self._on_debug_log:
             self._on_debug_log(direction, msg_type, summary, detail)
 

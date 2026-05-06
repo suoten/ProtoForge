@@ -30,7 +30,8 @@ def parse_node_id(address: str):
     try:
         from opcua import NodeId
         return NodeId.from_string(address)
-    except Exception:
+    except Exception as exc:
+        logger.debug("OPC-UA NodeId parse failed for '%s', using raw string: %s", address, exc)
         return address
 
 

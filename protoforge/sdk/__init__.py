@@ -654,7 +654,8 @@ class AsyncProtoForgeClient:
             raise ValueError(f"Device not found: {device_id}") from e
         try:
             config = await self._get(f"/devices/{device_id}/config")
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to load device config for %s, using empty config: %s", device_id, exc)
             config = {}
         merged = {**config, **updates}
         if "points" not in merged and "points" in current:

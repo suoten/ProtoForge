@@ -19,7 +19,7 @@ class S7DeviceBehavior(DeviceBehavior):
     S7_AREA_TIMERS = 0x1D
     S7_AREA_COUNTERS = 0x1C
 
-    def __init__(self, points: list = None):
+    def __init__(self, points: list | None = None):
         self._points: dict[str, Any] = {}
         self._values: dict[str, Any] = {}
         self._generators: dict[str, DynamicValueGenerator] = {}
