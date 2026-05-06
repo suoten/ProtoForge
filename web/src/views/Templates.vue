@@ -284,7 +284,7 @@ async function loadData() {
 }
 
 async function loadTags() {
-  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch (e) { allTags.value = []; message.warning('加载标签失败: ' + (e.response?.data?.detail || e.message)) }
+  try { const res = await api.listTemplateTags(); allTags.value = res || [] } catch (e) { allTags.value = []; message.warning('加载标签失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function doSearch() {
@@ -295,7 +295,7 @@ async function doSearch() {
     if (filterProtocol.value) params.protocol = filterProtocol.value
     if (filterTag.value) params.tag = filterTag.value
     const res = await api.searchTemplates(params)
-    templates.value = (res?.templates || res || [])
+    templates.value = res || []
   } catch (e) {
     message.error('搜索失败: ' + (e.response?.data?.detail || e.message))
   } finally { searching.value = false }

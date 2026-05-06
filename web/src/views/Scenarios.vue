@@ -164,18 +164,26 @@ async function loadData() {
 
 async function batchStart() {
   if (!selectedIds.value.length) { message.info('请先选择要启动的场景'); return }
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const id of selectedIds.value) {
-    try { await api.startScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 启动失败: ${e.response?.data?.detail || e.message}`) }
-  }
-  batchLoading.value = false
-  selectedIds.value = []
-  const msg = `已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
-  if (fail > 0 && ok === 0) message.error(msg)
-  else if (fail > 0) message.warning(msg)
-  else message.success(msg)
-  loadData()
+  dialog.info({
+    title: '确认批量启动',
+    content: `将启动选中的 ${selectedIds.value.length} 个场景。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      for (const id of selectedIds.value) {
+        try { await api.startScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 启动失败: ${e.response?.data?.detail || e.message}`) }
+      }
+      batchLoading.value = false
+      selectedIds.value = []
+      const msg = `已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+      if (fail > 0 && ok === 0) message.error(msg)
+      else if (fail > 0) message.warning(msg)
+      else message.success(msg)
+      loadData()
+    }
+  })
 }
 
 async function batchStop() {
@@ -205,14 +213,22 @@ async function batchStop() {
 async function startAllScenes() {
   const running = scenarios.value.filter(s => s.status !== 'running')
   if (!running.length) { message.info('所有场景已在运行中'); return }
-  batchLoading.value = true
-  let ok = 0, fail = 0
-  for (const sc of running) {
-    try { await api.startScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
-  }
-  batchLoading.value = false
-  if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
-  loadData()
+  dialog.warning({
+    title: '确认全部启动',
+    content: `将启动 ${running.length} 个场景，可能占用大量资源。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchLoading.value = true
+      let ok = 0, fail = 0
+      for (const sc of running) {
+        try { await api.startScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
+      }
+      batchLoading.value = false
+      if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
+      loadData()
+    }
+  })
 }
 
 async function stopAllScenes() {
