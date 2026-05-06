@@ -17,6 +17,12 @@ PROTOCOL_DEFAULTS = {
         "description": "OPC统一架构(OPC UA) — 工业4.0标准互联协议，基于面向对象信息模型，支持安全证书认证与加密通信，跨平台互操作",
         "icon": "🌐",
     },
+    "opcua_client": {
+        "endpoint": "opc.tcp://localhost:4840",
+        "display_name": "OPC-UA 客户端",
+        "description": "OPC-UA 客户端模式 — 连接到外部 OPC-UA 服务器，读取/写入节点数据",
+        "icon": "🔗",
+    },
     "mqtt": {
         "host": "0.0.0.0", "port": 1883,
         "display_name": "MQTT",

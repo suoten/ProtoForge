@@ -324,8 +324,11 @@
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
             <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
-            <div>{{ pipelineResult.steps.connect.error }}</div>
-            <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查：1) ProtoForge 协议服务是否在运行 2) ProtoForge 的 IP 地址 EdgeLite 是否可达 3) 端口是否正确</div>
+            <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
+            <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
+              <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
+              <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+            </div>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
             <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
@@ -438,9 +441,13 @@ const templateOptions = computed(() =>
 )
 
 const quickTemplateOptions = computed(() => {
-  const popular = ['modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
-    'mc_fx5u', 'fanuc_0if_plus', 'ab_controllogix', 'fins_cp1h',
-    'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'ptz_camera', 'hvac_controller']
+  // IMPORTANT: Template IDs must match actual template .json files in protoforge/templates/{protocol}/
+  // Run GET /api/v1/templates to get all available template IDs
+  const popular = [
+    'modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
+    'modbus_mitsubishi_fx5u', 'modbus_fanuc_cnc', 'ab_controllogix', 'fins_cp1h',
+    'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'gb28181_ptz_camera', 'mqtt_hvac_controller',
+  ]
   const popularSet = new Set(popular)
   const popularItems = templates.value
     .filter(t => popularSet.has(t.id))
@@ -649,7 +656,7 @@ async function startAllDevices() {
       let ok = 0, fail = 0
       try {
         for (const dev of toStart) {
-          try { await api.startDevice(dev.id); ok++ } catch (e) { fail++; console.warn(`设备 ${dev.id} 启动失败:`, e.message) }
+          try { await api.startDevice(dev.id); ok++ } catch (e) { fail++; message.warning(`设备 ${dev.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
         }
         if (fail > 0) { message.warning(`已启动 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个设备`) }
         loadData()
@@ -671,7 +678,7 @@ async function stopAllDevices() {
       let ok = 0, fail = 0
       try {
         for (const dev of toStop) {
-          try { await api.stopDevice(dev.id); ok++ } catch (e) { fail++; console.warn(`设备 ${dev.id} 停止失败:`, e.message) }
+          try { await api.stopDevice(dev.id); ok++ } catch (e) { fail++; message.warning(`设备 ${dev.id} 停止失败: ${e.response?.data?.detail || e.message}`) }
         }
         if (fail > 0) { message.warning(`已停止 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个设备`) }
         loadData()
@@ -700,7 +707,7 @@ async function batchPushToEdgelite() {
           errorDetails.push(res.suggestion)
         }
       }
-    } catch (e) { fail++; console.warn(`推送设备失败:`, e.message) }
+    } catch (e) { fail++; message.warning(`推送设备 ${id} 失败: ${e.response?.data?.detail || e.message}`) }
   }
   pushLoading.value = false
   selectedIds.value = []
@@ -962,7 +969,7 @@ async function batchVerifyPipeline() {
       if (res.skipped) { skip++ }
       else if (res.ok) { ok++ }
       else { fail++ }
-    } catch (e) { fail++; console.warn(`链路验证失败:`, e.message) }
+    } catch (e) { fail++; message.warning(`设备 ${id} 链路验证失败: ${e.response?.data?.detail || e.message}`) }
   }
   pipelineLoading.value = false
   selectedIds.value = []

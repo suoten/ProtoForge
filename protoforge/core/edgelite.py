@@ -46,7 +46,7 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_tcp": {"host", "port", "slave_id", "timeout"},
     "modbus_rtu": {"port", "baudrate", "slave_id", "parity", "stopbits", "timeout"},
     "opcua": {"server_url", "username", "password", "security_mode", "use_subscription", "timeout"},
-    "mqtt": {"subscribe_topic", "publish_topic", "timeout"},
+    "mqtt": {"broker", "port", "subscribe_topic", "publish_topic", "client_id", "username", "password", "tls_enabled", "tls_insecure", "timeout"},
     "http": {"push_url", "timeout"},
     "s7": {"ip", "rack", "slot"},
     "mc": {"ip", "port", "plc_type", "timeout"},
@@ -61,7 +61,7 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "iec104": {"host", "port", "asdu_addr", "heartbeat_interval", "timeout"},
     "kuka": {"ip", "port", "reconnect", "timeout"},
     "abb_robot": {"ip", "port", "username", "password", "timeout"},
-    "sparkplug_b": {"group_id", "edge_node_id", "timeout"},
+    "sparkplug_b": {"broker", "port", "group_id", "edge_node_id", "device_id", "username", "password", "timeout"},
     "serial": {"port", "baudrate", "bytesize", "parity", "stopbits", "timeout", "protocol", "slave_id", "commands"},
     "database": {"db_type", "host", "port", "database", "username", "password", "queries", "write_queries", "pool_size"},
     "barcode_scanner": {"port", "baudrate", "prefix", "suffix"},
@@ -154,8 +154,20 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "security_mode": protocol_config.get("security_mode", "None"),
                 "use_subscription": protocol_config.get("use_subscription", True)}
     elif protocol == "mqtt":
-        base = {"subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", "protoforge/data")),
-                "publish_topic": protocol_config.get("publish_topic", "protoforge/command")}
+        mqtt_port = port or 1883
+        base = {
+            "broker": host,
+            "port": mqtt_port,
+            "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", "protoforge/data")),
+            "publish_topic": protocol_config.get("publish_topic", "protoforge/command"),
+            "client_id": protocol_config.get("client_id", "edgelite-mqtt-client"),
+        }
+        if protocol_config.get("username"):
+            base["username"] = protocol_config.get("username")
+            base["password"] = protocol_config.get("password", "")
+        if protocol_config.get("tls_enabled"):
+            base["tls_enabled"] = True
+            base["tls_insecure"] = protocol_config.get("tls_insecure", True)
     elif protocol == "http":
         http_port = port or 8080
         base = {"push_url": f"http://{host}:{http_port}/webhook/data",
@@ -200,8 +212,17 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "username": protocol_config.get("username", "Default"),
                 "password": protocol_config.get("password", ""), "timeout": 5.0}
     elif protocol == "sparkplug_b":
-        base = {"group_id": protocol_config.get("group_id", "protoforge"),
-                "edge_node_id": protocol_config.get("edge_node_id", "pf-node")}
+        sparkplug_port = port or 1883
+        base = {
+            "broker": host,
+            "port": sparkplug_port,
+            "group_id": protocol_config.get("group_id", "protoforge"),
+            "edge_node_id": protocol_config.get("edge_node_id", "pf-node"),
+            "device_id": protocol_config.get("device_id", "pf-device"),
+        }
+        if protocol_config.get("username"):
+            base["username"] = protocol_config.get("username")
+            base["password"] = protocol_config.get("password", "")
     elif protocol == "serial":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -554,7 +575,7 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
         return ("", "")
     host = ""
     port = ""
-    if protocol == "mqtt":
+    if protocol == "mqtt" or protocol == "sparkplug_b":
         host = driver_config.get("broker", "")
         port = str(driver_config.get("port", ""))
     elif protocol == "http":
@@ -635,6 +656,25 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
             parts.append(f"请检查：1) {proto_name} 协议服务是否在运行  2) IP {driver_host} 从 EdgeLite 是否可达  3) 端口 {driver_port} 是否正确")
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
                 parts.append("EdgeLite 和 ProtoForge 在同一台服务器，建议在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1")
+        elif protocol == "mqtt":
+            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+            if same_server and driver_host not in ("127.0.0.1", "localhost"):
+                parts.append("★ 最重要：请先尝试这个 → EdgeLite 和 ProtoForge 在同一台服务器，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1（当前使用的是 " + str(driver_host) + "）")
+            parts.append("1) 在 ProtoForge「协议管理」中确认 MQTT Broker 已启动（状态为 Running）")
+            if driver_port and default_port and str(driver_port) != str(default_port):
+                parts.append(f"2) 端口 {driver_port} 不是默认端口 {default_port}，请确认 ProtoForge MQTT 服务端口配置")
+            else:
+                parts.append(f"2) 确认 ProtoForge 的 MQTT Broker 端口为 {driver_port or 1883}")
+            parts.append(f"3) 在 EdgeLite 机器上测试网络：telnet {driver_host} {driver_port or 1883}")
+            if same_server:
+                parts.append("4) 如果 telnet 失败，请检查 ProtoForge 进程是否正常启动")
+        elif protocol == "sparkplug_b":
+            parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")
+            if same_server and driver_host not in ("127.0.0.1", "localhost"):
+                parts.append("★ 最重要：请先尝试这个 → EdgeLite 和 ProtoForge 在同一台服务器，请在「系统设置 > EdgeLite配置 > ProtoForge地址」中填写 127.0.0.1（当前使用的是 " + str(driver_host) + "）")
+            parts.append("1) Sparkplug B 基于 MQTT 传输，请在 ProtoForge「协议管理」中确认 MQTT Broker 已启动")
+            parts.append(f"2) 确认端口为 {driver_port or 1883}")
+            parts.append(f"3) 在 EdgeLite 机器上测试网络：telnet {driver_host} {driver_port or 1883}")
         else:
             if same_server:
                 parts.append(f"EdgeLite 的 {proto_name} 驱动无法连接 ProtoForge ({driver_host}:{driver_port})")

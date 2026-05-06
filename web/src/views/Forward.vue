@@ -182,7 +182,11 @@ async function loadStats() {
     const res = await api.getForwardStats()
     stats.value = res
     forwardRunning.value = res.running || false
-  } catch (e) { console.debug('加载转发统计失败:', e); stats.value = stats.value || {}; message.warning('加载转发统计失败') }
+  } catch (e) {
+    // Stats are non-critical - show warning but don't block UI
+    stats.value = stats.value || {}
+    message.warning('加载转发统计失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 async function addTarget() {

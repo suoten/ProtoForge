@@ -93,7 +93,7 @@ async function loadAuditStats() {
     auditStats.value = await api.getAuditStats()
   } catch (e) {
     auditStats.value = null
-    message.error('加载审计统计失败: ' + (e.response?.data?.detail || e.message))
+    message.warning('加载审计统计失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

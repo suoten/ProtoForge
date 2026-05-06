@@ -284,7 +284,7 @@ async function loadData() {
 }
 
 async function loadTags() {
-  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch (e) { allTags.value = []; console.debug('加载标签失败:', e.message); message.warning('加载标签失败') }
+  try { const res = await api.listTemplateTags(); allTags.value = res?.tags || res || [] } catch (e) { allTags.value = []; message.warning('加载标签失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function doSearch() {

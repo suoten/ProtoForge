@@ -178,7 +178,7 @@ async function startAllProtocols() {
   if (!stopped.length) { message.info('所有协议已在运行中'); return }
   let failCount = 0
   for (const p of stopped) {
-    try { await api.startProtocol(p.name, null) } catch (e) { failCount++; console.warn(`协议 ${p.name} 启动失败:`, e.message) }
+    try { await api.startProtocol(p.name, null) } catch (e) { failCount++; message.warning(`协议 ${p.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
   }
   if (failCount > 0) {
     message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个启动失败`)
@@ -218,13 +218,17 @@ function connectDeviceWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         devices.value = msg.data
       }
-    } catch (e) { console.debug('Device WebSocket消息解析失败:', e) }
+    } catch (e) {
+      // Silently ignore non-device WebSocket messages
+    }
   }
 }
 
 function connectLogWs() {
   logWs = api.createLogWs()
-  logWs.onerror = () => { console.debug('Log WebSocket connection error') }
+  logWs.onerror = () => {
+    // Log WebSocket error handled silently with auto-reconnect
+  }
   logWs.onclose = () => {
     if (logWs) { setTimeout(connectLogWs, 5000) }
   }
@@ -235,7 +239,9 @@ function connectLogWs() {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }
-    } catch (e) { console.debug('Log WebSocket消息解析失败:', e) }
+    } catch (e) {
+      // Silently ignore non-log WebSocket messages
+    }
   }
 }
 

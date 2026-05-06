@@ -171,13 +171,12 @@ async function clearAllLogs() {
     positiveText: '清空',
     negativeText: '取消',
     onPositiveClick: async () => {
-      logs.value = []
       try {
         await api.clearLogs()
+        logs.value = []
         message.success('日志已清空')
       } catch (e) {
-        console.warn('清空日志失败:', e)
-        message.error('清空日志失败')
+        message.error('清空日志失败: ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -230,9 +229,9 @@ async function connectWebSocket() {
         }
         scrollToBottom()
       }
-    } catch (e) {
-      console.debug('WebSocket日志消息解析失败:', e)
-    }
+      } catch (e) {
+        // Silently ignore non-log WebSocket messages (ping, etc.)
+      }
   }
 
   ws.onclose = () => {
@@ -262,8 +261,7 @@ async function loadProtocols() {
     const res = await api.getProtocols()
     protocols.value = res
   } catch (e) {
-    console.warn('加载协议列表失败:', e)
-    message.error('加载协议列表失败')
+    message.error('加载协议列表失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -272,8 +270,7 @@ async function loadHistory() {
     const res = await api.getLogs({ count: 200 })
     logs.value = Array.isArray(res) ? res : (res.logs || res.entries || [])
   } catch (e) {
-    console.warn('加载历史日志失败:', e)
-    message.error('加载历史日志失败')
+    message.error('加载历史日志失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

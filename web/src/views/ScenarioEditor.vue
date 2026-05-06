@@ -240,6 +240,10 @@ function addPoint() {
   editingPoints.value.push({ name: '', address: String(editingPoints.value.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
 }
 
+// Note: savePoints() updates node.data locally (in-memory VueFlow state).
+// The entire layout (including updated points) is persisted to backend
+// when saveScenarioLayout() is called - which calls updateScenario with
+// the full nodes config including updated points data.
 function savePoints() {
   const node = nodes.value.find(n => n.id === editingDevice.value.nodeId)
   if (node) {
@@ -247,9 +251,12 @@ function savePoints() {
     node.data.pointCount = editingPoints.value.length
   }
   showPointsModal.value = false
-  message.success('测点已更新')
+  message.success('测点已更新（保存场景时将同步到后端）')
 }
 
+// Note: confirmRule() adds edge to VueFlow locally.
+// The edge rule is serialized into the scenario config when saveScenarioLayout()
+// calls updateScenario with the full edges array.
 function confirmRule() {
   if (pendingConnection.value) {
     addEdges([{
@@ -279,7 +286,7 @@ async function confirmAddNode() {
     try {
       const tmplRes = await api.getTemplate(newNode.value.templateId)
       points = tmplRes.points || points
-    } catch (e) { console.warn('加载模板失败，使用默认测点:', e.message); message.warning('加载模板失败，使用默认测点') }
+    } catch (e) { message.warning('加载模板失败，使用默认测点') }
   }
   nodes.value.push({
     id, type: 'device', position: { x, y },
@@ -297,7 +304,7 @@ async function loadScenario(scenarioId) {
   try {
     const [scenario, allDevices] = await Promise.all([
       api.getScenario(scenarioId),
-      api.getDevices().catch((e) => { console.debug('加载设备列表失败:', e.message); message.warning('加载设备列表失败，在线状态可能不准确'); return [] }),
+      api.getDevices().catch((e) => { message.warning('加载设备列表失败，在线状态可能不准确'); return [] }),
     ])
     const deviceMap = {}
     for (const d of allDevices) {
@@ -367,7 +374,20 @@ async function saveScenarioLayout() {
         })
         try { await api.startDevice(dc.id) } catch (e) { message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
       } catch (e) {
-        if (e.response?.status !== 400 || !(typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')).includes('already exists')) {
+        const status = e.response?.status
+        const detail = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')
+        if (status === 400 && (detail.includes('already exists') || detail.includes('已存在'))) {
+          // Device already exists, try to update it
+          try {
+            await api.updateDevice(dc.id, {
+              id: dc.id, name: dc.name, protocol: dc.protocol,
+              points: dc.points, protocol_config: dc.protocol_config,
+            })
+            try { await api.startDevice(dc.id) } catch (e2) { message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e2.response?.data?.detail || e2.message}`) }
+          } catch (e2) {
+            message.warning(`设备 ${dc.name || dc.id} 更新失败: ${e2.response?.data?.detail || e2.message}`)
+          }
+        } else {
           throw e
         }
       }

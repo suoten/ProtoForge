@@ -163,7 +163,7 @@ async function startAll() {
           try {
             const res = await api.startProtocol(p.name, null)
             if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
-          } catch (e) { failCount++; console.warn(`协议 ${p.name} 启动失败:`, e.message) }
+          } catch (e) { failCount++; message.warning(`协议 ${p.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
         }
         if (failCount > 0) {
           message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个失败`)
@@ -219,8 +219,8 @@ async function showProtocolInfo(name) {
   protocolConfigData.value = null
   try {
     const [infoRes, configRes] = await Promise.all([
-      api.getProtocolInfo().catch((e) => { console.debug('获取协议信息失败:', e.message); message.warning('获取协议信息失败'); return {} }),
-      api.getProtocolConfig(name).catch((e) => { console.debug('获取协议配置失败:', e.message); message.warning('获取协议配置失败'); return {} }),
+      api.getProtocolInfo().catch((e) => { message.warning('获取协议信息失败'); return {} }),
+      api.getProtocolConfig(name).catch((e) => { message.warning('获取协议配置失败'); return {} }),
     ])
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
@@ -287,7 +287,9 @@ function connectWs() {
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
         loadData()
       }
-    } catch (e) { console.debug('WebSocket消息解析失败:', e) }
+    } catch (e) {
+      // Silently ignore non-device WebSocket messages
+    }
   }
   ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   ws.onclose = () => { if (ws) setTimeout(connectWs, wsReconnectDelay) }

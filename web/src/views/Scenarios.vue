@@ -163,10 +163,11 @@ async function loadData() {
 }
 
 async function batchStart() {
+  if (!selectedIds.value.length) { message.info('请先选择要启动的场景'); return }
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const id of selectedIds.value) {
-    try { await api.startScenario(id); ok++ } catch (e) { fail++; console.warn('启动场景失败:', id, e) }
+    try { await api.startScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 启动失败: ${e.response?.data?.detail || e.message}`) }
   }
   batchLoading.value = false
   selectedIds.value = []
@@ -178,10 +179,11 @@ async function batchStart() {
 }
 
 async function batchStop() {
+  if (!selectedIds.value.length) { message.info('请先选择要停止的场景'); return }
   batchLoading.value = true
   let ok = 0, fail = 0
   for (const id of selectedIds.value) {
-    try { await api.stopScenario(id); ok++ } catch (e) { fail++; console.warn('停止场景失败:', id, e) }
+    try { await api.stopScenario(id); ok++ } catch (e) { fail++; message.warning(`场景 ${id} 停止失败: ${e.response?.data?.detail || e.message}`) }
   }
   batchLoading.value = false
   selectedIds.value = []
@@ -193,10 +195,12 @@ async function batchStop() {
 }
 
 async function startAllScenes() {
+  const running = scenarios.value.filter(s => s.status !== 'running')
+  if (!running.length) { message.info('所有场景已在运行中'); return }
   batchLoading.value = true
   let ok = 0, fail = 0
-  for (const sc of scenarios.value) {
-    try { await api.startScenario(sc.id); ok++ } catch (e) { fail++; console.warn(`场景 ${sc.id} 启动失败:`, e.message) }
+  for (const sc of running) {
+    try { await api.startScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
   }
   batchLoading.value = false
   if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
@@ -204,10 +208,12 @@ async function startAllScenes() {
 }
 
 async function stopAllScenes() {
+  const running = scenarios.value.filter(s => s.status === 'running')
+  if (!running.length) { message.info('没有运行中的场景'); return }
   batchLoading.value = true
   let ok = 0, fail = 0
-  for (const sc of scenarios.value) {
-    try { await api.stopScenario(sc.id); ok++ } catch (e) { fail++; console.warn(`场景 ${sc.id} 停止失败:`, e.message) }
+  for (const sc of running) {
+    try { await api.stopScenario(sc.id); ok++ } catch (e) { fail++; message.warning(`场景 ${sc.name} 停止失败: ${e.response?.data?.detail || e.message}`) }
   }
   batchLoading.value = false
   if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }

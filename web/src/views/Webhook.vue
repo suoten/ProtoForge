@@ -220,7 +220,10 @@ async function loadWebhooks() {
 async function loadStats() {
   try {
     webhookStats.value = await api.getWebhookStats()
-  } catch (e) { console.debug('加载 Webhook 统计失败:', e); webhookStats.value = webhookStats.value || {}; message.warning('加载 Webhook 统计失败') }
+  } catch (e) {
+    webhookStats.value = webhookStats.value || {}
+    message.warning('加载 Webhook 统计失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 async function addWebhook() {

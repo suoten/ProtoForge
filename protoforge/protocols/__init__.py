@@ -4,6 +4,7 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "modbus_tcp": "protoforge.protocols.modbus:ModbusTcpServer",
     "modbus_rtu": "protoforge.protocols.modbus:ModbusRtuServer",
     "opcua": "protoforge.protocols.opcua:OpcUaServer",
+    "opcua_client": "protoforge.protocols.opcua:OpcUaClientProtocol",
     "s7": "protoforge.protocols.s7:S7Server",
     "fins": "protoforge.protocols.fins:FinsServer",
     "mc": "protoforge.protocols.mc:McServer",

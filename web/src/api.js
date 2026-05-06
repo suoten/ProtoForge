@@ -135,7 +135,9 @@ export default {
   searchTemplates: (params) => d(api.get('/templates/search', { params })),
   listTemplateTags: () => d(api.get('/templates/tags')),
   instantiateTemplate: (id, params) => {
-    const { device_id, device_name, protocol_config, ...rest } = params || {}
+    // params: { device_id, device_name, protocol_config }
+    if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: id, device_name: '' } }))
+    const { device_id, device_name, protocol_config, ...rest } = params
     return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id, device_name, ...rest } }))
   },
 
@@ -199,15 +201,17 @@ export default {
 
   createDeviceWs: () => {
     const token = localStorage.getItem('token')
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${proto}//${window.location.host}/api/v1/ws/devices${token ? '?token=' + token : ''}`
+    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const host = window.location.host
+    const url = `${wsProto}://${host}/api/v1/ws/devices${token ? '?token=' + token : ''}`
     return new WebSocket(url)
   },
 
   createLogWs: () => {
     const token = localStorage.getItem('token')
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = `${proto}//${window.location.host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
+    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const host = window.location.host
+    const url = `${wsProto}://${host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
     return new WebSocket(url)
   },
 

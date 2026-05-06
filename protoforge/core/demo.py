@@ -217,9 +217,9 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
             "protocol": "opcua",
             "template_id": "opcua_motor_controller",
             "points": [
-                {"name": "rpm", "address": "ns=2;s=motor.rpm", "data_type": "float32", "generator_type": "sine", "min_value": 500, "max_value": 3000},
-                {"name": "torque", "address": "ns=2;s=motor.torque", "data_type": "float32", "generator_type": "random", "min_value": 5, "max_value": 50},
-                {"name": "power", "address": "ns=2;s=motor.power", "data_type": "float32", "generator_type": "random", "min_value": 0.5, "max_value": 15},
+                {"name": "rpm", "address": "ns=2;i=2", "data_type": "float32", "generator_type": "sine", "min_value": 500, "max_value": 3000},
+                {"name": "torque", "address": "ns=2;i=3", "data_type": "float32", "generator_type": "random", "min_value": 5, "max_value": 50},
+                {"name": "power", "address": "ns=2;i=4", "data_type": "float32", "generator_type": "random", "min_value": 0.5, "max_value": 15},
             ],
         },
         {
