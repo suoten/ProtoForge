@@ -199,6 +199,7 @@ function exportLogs() {
   a.download = `protoforge-debug-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
   a.click()
   URL.revokeObjectURL(url)
+  message.success(`已导出 ${data.length} 条日志`)
 }
 
 function scrollToBottom() {
@@ -210,8 +211,18 @@ function scrollToBottom() {
 }
 
 async function connectWebSocket() {
-  await api.ensureValidToken()
-  ws = api.createLogWs()
+  try {
+    await api.ensureValidToken()
+  } catch (e) {
+    console.warn('Token validation failed, attempting WebSocket anyway:', e.message)
+  }
+  try {
+    ws = api.createLogWs()
+  } catch (e) {
+    console.error('Failed to create log WebSocket:', e.message)
+    setTimeout(connectWebSocket, 5000)
+    return
+  }
 
   ws.onopen = () => {
     wsConnected.value = true

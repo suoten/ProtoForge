@@ -271,6 +271,7 @@ function confirmRule() {
   }
   showRuleModal.value = false
   pendingConnection.value = null
+  message.success('联动规则已添加')
 }
 
 function addDeviceNode() {
@@ -297,10 +298,10 @@ async function confirmAddNode() {
   })
   showAddDeviceModal.value = false
   newNode.value = { deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null }
+  message.success('设备节点已添加')
 }
 
 async function loadScenario(scenarioId) {
-  if (!scenarioId) return
   try {
     const [scenario, allDevices] = await Promise.all([
       api.getScenario(scenarioId),
@@ -424,16 +425,24 @@ async function startScenario() {
 
 async function stopScenario() {
   if (!selectedScenario.value) return
-  scenarioLoading.value = true
-  try {
-    await api.stopScenario(selectedScenario.value)
-    message.success('场景已停止')
-    await loadScenario(selectedScenario.value)
-  } catch (e) {
-    message.error('停止失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    scenarioLoading.value = false
-  }
+  dialog.warning({
+    title: '确认停止场景',
+    content: '停止场景将断开所有设备连接，确定继续？',
+    positiveText: '确定停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      scenarioLoading.value = true
+      try {
+        await api.stopScenario(selectedScenario.value)
+        message.success('场景已停止')
+        await loadScenario(selectedScenario.value)
+      } catch (e) {
+        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+      } finally {
+        scenarioLoading.value = false
+      }
+    }
+  })
 }
 
 async function loadData() {

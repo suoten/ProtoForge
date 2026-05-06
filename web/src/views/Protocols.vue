@@ -279,7 +279,13 @@ let ws = null
 let wsReconnectDelay = 1000
 const WS_MAX_RECONNECT_DELAY = 30000
 function connectWs() {
-  ws = api.createDeviceWs()
+  try {
+    ws = api.createDeviceWs()
+  } catch (e) {
+    console.error('Failed to create device WebSocket:', e.message)
+    setTimeout(connectWs, 5000)
+    return
+  }
   ws.onopen = () => { wsReconnectDelay = 1000 }
   ws.onmessage = (event) => {
     try {

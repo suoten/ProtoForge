@@ -686,6 +686,7 @@ async function loadUsers() {
   } catch (e) {
     if (e.response?.status === 403) {
       users.value = []
+      message.warning('您没有查看用户列表的权限')
     } else {
       message.error('加载用户列表失败')
     }

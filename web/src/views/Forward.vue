@@ -242,14 +242,22 @@ async function startForward() {
 }
 
 async function stopForward() {
-  stopping.value = true
-  try {
-    await api.stopForward()
-    forwardRunning.value = false
-    message.success('转发已停止')
-  } catch (e) {
-    message.error('停止失败: ' + (e.response?.data?.detail || e.message))
-  } finally { stopping.value = false }
+  dialog.warning({
+    title: '确认停止转发',
+    content: '停止转发将中断所有数据推送，确定继续？',
+    positiveText: '确定停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      stopping.value = true
+      try {
+        await api.stopForward()
+        forwardRunning.value = false
+        message.success('转发已停止')
+      } catch (e) {
+        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+      } finally { stopping.value = false }
+    }
+  })
 }
 
 onMounted(() => {

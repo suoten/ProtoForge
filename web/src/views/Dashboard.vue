@@ -208,7 +208,13 @@ async function loadData() {
 }
 
 function connectDeviceWs() {
-  deviceWs = api.createDeviceWs()
+  try {
+    deviceWs = api.createDeviceWs()
+  } catch (e) {
+    console.error('Failed to create device WebSocket:', e.message)
+    setTimeout(connectDeviceWs, 5000)
+    return
+  }
   deviceWs.onopen = () => { wsReconnectDelay = 1000 }
   deviceWs.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   deviceWs.onclose = () => { setTimeout(connectDeviceWs, wsReconnectDelay); wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
@@ -225,9 +231,15 @@ function connectDeviceWs() {
 }
 
 function connectLogWs() {
-  logWs = api.createLogWs()
+  try {
+    logWs = api.createLogWs()
+  } catch (e) {
+    console.error('Failed to create log WebSocket:', e.message)
+    setTimeout(connectLogWs, 5000)
+    return
+  }
   logWs.onerror = () => {
-    // Log WebSocket error handled silently with auto-reconnect
+    console.debug('Log WebSocket error, will auto-reconnect')
   }
   logWs.onclose = () => {
     if (logWs) { setTimeout(connectLogWs, 5000) }

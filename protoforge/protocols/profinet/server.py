@@ -366,11 +366,18 @@ class ProfinetServer(ProtocolServer):
         resp += name_bytes
         resp += b"\x00" * ((4 - len(name_bytes) % 4) % 4)
 
+        try:
+            ip_int = self._ip_to_int(self._ip_address)
+            mask_int = self._ip_to_int(self._subnet_mask)
+            gw_int = self._ip_to_int(self._gateway)
+        except ValueError:
+            ip_int = mask_int = gw_int = 0
+
         resp += struct.pack(">BHIHII",
                             DCP_BLOCK_IP, 14,
-                            self._ip_to_int(self._ip_address),
-                            self._ip_to_int(self._subnet_mask),
-                            self._ip_to_int(self._gateway),
+                            ip_int,
+                            mask_int,
+                            gw_int,
                             0)
 
         header = bytearray()
@@ -711,4 +718,4 @@ class ProfinetServer(ProtocolServer):
                 return (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]
         except (ValueError, IndexError) as e:
             logger.warning("PROFINET IP parse error for '%s': %s", ip_str, e)
-        return 0xC0A80101
+        raise ValueError(f"Invalid IP address: {ip_str}")
