@@ -115,13 +115,14 @@ import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import {
   NSpace, NButton, NSelect, NModal, NForm, NFormItem, NInput, NInputNumber,
-  NTag, NCard, NDataTable, useMessage
+  NTag, NCard, NDataTable, useMessage, useDialog
 } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import api from '../api.js'
 import { protocolColors } from '../constants.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const route = useRoute()
 
 const DeviceNode = defineComponent({

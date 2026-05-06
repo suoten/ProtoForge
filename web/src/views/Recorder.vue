@@ -267,6 +267,7 @@ async function replayRecording(id) {
     const res = await api.replayRecording(id, { speed: 1.0 })
     replayResult.value = res
     showReplayModal.value = true
+    message.success('回放已启动')
   } catch (e) {
     message.error('回放失败: ' + (e.response?.data?.detail || e.message))
   } finally { replaying.value = false }
