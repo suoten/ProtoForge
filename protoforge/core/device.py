@@ -108,7 +108,7 @@ class DeviceInstance:
                     )
                     value = max(point.min_value, min(point.max_value, num_val))
             except (ValueError, TypeError):
-                pass
+                logger.debug("Range check skipped for point %s: value=%s is not numeric", point_name, value)
         async with self._lock:
             self._point_values[point_name] = value
         return True
