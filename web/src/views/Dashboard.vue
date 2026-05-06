@@ -212,6 +212,7 @@ function connectDeviceWs() {
     deviceWs = api.createDeviceWs()
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
+    message.warning('设备实时连接失败，5秒后重试')
     setTimeout(connectDeviceWs, 5000)
     return
   }
@@ -235,6 +236,7 @@ function connectLogWs() {
     logWs = api.createLogWs()
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
+    message.warning('日志实时连接失败，5秒后重试')
     setTimeout(connectLogWs, 5000)
     return
   }

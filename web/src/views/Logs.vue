@@ -215,11 +215,13 @@ async function connectWebSocket() {
     await api.ensureValidToken()
   } catch (e) {
     console.warn('Token validation failed, attempting WebSocket anyway:', e.message)
+    message.warning('登录凭证可能已过期，正在尝试重连...')
   }
   try {
     ws = api.createLogWs()
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
+    message.warning('日志实时连接失败，5秒后重试')
     setTimeout(connectWebSocket, 5000)
     return
   }

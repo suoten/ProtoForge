@@ -116,15 +116,15 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
     engine = _get_engine()
     log_bus = _get_log_bus()
     from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
-    if not config:
+    if config is None:
         config = get_protocol_defaults(protocol_name)
-    original_port = config.get("port") if config else None
+    original_port = config.get("port")
 
     try:
         await engine.start_protocol(protocol_name, config)
-        actual_port = config.get("port", original_port) if config else original_port
+        actual_port = config.get("port", original_port)
         port_changed = original_port and actual_port != original_port
-        log_bus.emit(protocol_name, "system", "", "protocol_start", f"Protocol {protocol_name} started on port {actual_port}", config or {})
+        log_bus.emit(protocol_name, "system", "", "protocol_start", f"Protocol {protocol_name} started on port {actual_port}", config)
         result = {"status": "ok"}
 
         if port_changed:
@@ -846,7 +846,7 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
 @router.post("/integration/edgelite/test")
 async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import test_edgelite_connection as _test
-    if not config:
+    if config is None:
         config = {}
 
     url = config.get("url", "")

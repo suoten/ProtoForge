@@ -83,6 +83,22 @@ def setup_exception_handlers(app) -> None:
             content=APIResponse.error(message=str(exc), code=400),
         )
 
+    @app.exception_handler(RuntimeError)
+    async def runtime_error_handler(request: Request, exc: RuntimeError):
+        import logging
+        logger = logging.getLogger("protoforge.api")
+        logger.error("RuntimeError in API: %s", exc)
+        msg = str(exc)
+        if "not initialized" in msg.lower():
+            return JSONResponse(
+                status_code=503,
+                content=APIResponse.error(message="服务正在启动中，请稍后重试", code=503),
+            )
+        return JSONResponse(
+            status_code=500,
+            content=APIResponse.error(message=msg, code=500),
+        )
+
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception):
         import logging
