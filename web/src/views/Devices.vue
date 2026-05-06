@@ -475,8 +475,8 @@ async function loadDeviceConfig(protocol) {
   try {
     const res = await api.getProtocolDeviceConfig(protocol)
     const defaults = {}
-    res.fields.forEach(f => { defaults[f.key] = f.default })
-    return { fields: res.fields, defaults }
+    ;(res.fields || []).forEach(f => { defaults[f.key] = f.default })
+    return { fields: res.fields || [], defaults }
   } catch (e) { message.warning('加载协议配置失败，使用默认值'); return { fields: [], defaults: {} } }
 }
 

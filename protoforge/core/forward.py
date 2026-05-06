@@ -210,7 +210,13 @@ class ForwardEngine:
         logger.info("Forward target added: %s", name)
 
     def remove_target(self, name: str) -> None:
-        self._targets.pop(name, None)
+        target = self._targets.pop(name, None)
+        if target and hasattr(target, 'close'):
+            try:
+                import asyncio
+                asyncio.get_event_loop().create_task(target.close())
+            except RuntimeError:
+                pass
         logger.info("Forward target removed: %s", name)
 
     def list_targets(self) -> list[dict[str, Any]]:
@@ -256,6 +262,7 @@ class ForwardEngine:
                 await target.close()
             except Exception as e:
                 logger.warning("Error closing target: %s", e)
+        self._targets.clear()
         logger.info("Forward engine stopped")
 
     async def _forward_loop(self) -> None:

@@ -756,6 +756,7 @@ async function pushDevice(deviceId) {
     const dc = res.driver_config
     const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
     message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
+    await checkStatus(deviceId)
   } catch (e) {
     message.error('推送失败: ' + (e.response?.data?.detail || e.message))
   }

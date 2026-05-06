@@ -1,6 +1,7 @@
 import logging
 import os
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -414,7 +415,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
         if create_resp.status_code == 409:
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
             update_resp = await client.put(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{payload['device_id']}",
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
                 json=update_payload, headers=headers,
             )
             if update_resp.status_code == 200:
@@ -457,7 +458,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.delete(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
             headers=headers,
         )
         if resp.status_code in (200, 204, 404):
@@ -481,7 +482,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
             headers=headers,
         )
         if resp.status_code == 200:
@@ -516,7 +517,7 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
 
         headers = {"Authorization": f"Bearer {token}"}
         resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}/points",
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
             headers=headers,
         )
         if resp.status_code == 200:
@@ -541,7 +542,7 @@ _PROTOCOL_DISPLAY = {
 _PROTOCOL_DEFAULT_PORTS = {
     "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
     "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
-    "mtconnect": 7878, "toledo": 1701, "opcda": 0, "onvif": 80,
+    "mtconnect": 7878, "toledo": 1701, "opcda": 51340, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
     "sparkplug_b": 1883, "serial": 0, "database": 3306, "barcode_scanner": 0,
     "profinet": 34964, "ethercat": 34980, "bacnet": 47808, "gb28181": 5060,
@@ -686,7 +687,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {token}"}
 
         dev_resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}",
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
             headers=headers,
         )
         if dev_resp.status_code == 404:
@@ -727,7 +728,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["steps"]["connect"] = {"ok": True, "status": el_status}
 
         points_resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{device_id}/points",
+            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
             headers=headers,
         )
         if points_resp.status_code == 200:
@@ -766,6 +767,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 async def test_edgelite_connection(url: str, username: str = "admin", password: str = "") -> dict[str, Any]:
     if not url:
         return {"ok": False, "error": "URL is empty"}
+    if not url.startswith("http://") and not url.startswith("https://"):
+        return {"ok": False, "error": "URL must start with http:// or https://"}
     async with httpx.AsyncClient(timeout=5.0) as client:
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
