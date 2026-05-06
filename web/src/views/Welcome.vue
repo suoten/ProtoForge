@@ -54,6 +54,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NDivider, NSteps, NStep, NSelect, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { popularTemplateIds } from '../constants.js'
 
 const message = useMessage()
 const showWelcome = ref(false)
@@ -64,13 +65,7 @@ const creating = ref(false)
 const templates = ref([])
 
 const quickTemplateOptions = computed(() => {
-  // IMPORTANT: Template IDs must match actual template .json files in protoforge/templates/{protocol}/
-  // Run GET /api/v1/templates to get all available template IDs
-  const popular = [
-    'modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
-    'modbus_mitsubishi_fx5u', 'modbus_fanuc_cnc', 'gb28181_ptz_camera', 'mqtt_hvac_controller',
-  ]
-  const popularSet = new Set(popular)
+  const popularSet = new Set(popularTemplateIds)
   const popularItems = templates.value
     .filter(t => popularSet.has(t.id))
     .map(t => ({ label: `${t.name} (${t.protocol})`, value: t.id }))

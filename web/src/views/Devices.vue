@@ -355,7 +355,7 @@ import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFor
   NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
-import { protocolLabels, deviceStatusMap } from '../constants.js'
+import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol } from '../constants.js'
 
 const router = useRouter()
 const message = useMessage()
@@ -382,7 +382,7 @@ const selectedTemplate = ref(null)
 const editDevice = ref({ id: '', name: '', protocol: '', protocol_config: {} })
 const editProtocolConfig = ref({})
 const editConfigFields = ref([])
-const newDevice = ref({ id: '', name: '', protocol: 'modbus_tcp', points: [] })
+const newDevice = ref({ id: '', name: '', protocol: defaultProtocol, points: [] })
 const advancedProtocolConfig = ref({})
 const advancedConfigFields = ref([])
 const quickStep = ref(1)
@@ -441,14 +441,7 @@ const templateOptions = computed(() =>
 )
 
 const quickTemplateOptions = computed(() => {
-  // IMPORTANT: Template IDs must match actual template .json files in protoforge/templates/{protocol}/
-  // Run GET /api/v1/templates to get all available template IDs
-  const popular = [
-    'modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
-    'modbus_mitsubishi_fx5u', 'modbus_fanuc_cnc', 'ab_controllogix', 'fins_cp1h',
-    'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'gb28181_ptz_camera', 'mqtt_hvac_controller',
-  ]
-  const popularSet = new Set(popular)
+  const popularSet = new Set(popularTemplateIds)
   const popularItems = templates.value
     .filter(t => popularSet.has(t.id))
     .map(t => ({ label: `${t.name} (${t.protocol})`, value: t.id }))
@@ -556,7 +549,7 @@ async function doQuickCreate() {
 }
 
 function openAdvancedCreate() {
-  newDevice.value = { id: '', name: '', protocol: 'modbus_tcp', points: [] }
+  newDevice.value = { id: '', name: '', protocol: defaultProtocol, points: [] }
   advancedProtocolConfig.value = {}; advancedConfigFields.value = []
   selectedTemplate.value = null
   showCreateModal.value = true
@@ -738,10 +731,10 @@ async function createDevice() {
       const tmplRes = await api.getTemplate(selectedTemplate.value)
       config.points = tmplRes?.points || []; config.protocol = tmplRes?.protocol || config.protocol
     }
-    if (!config.points.length) config.points = [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }]
+    if (!config.points.length) config.points = [{ ...defaultPointConfig }]
     await api.createDevice(config)
     showCreateModal.value = false
-    newDevice.value = { id: '', name: '', protocol: 'modbus_tcp', points: [] }
+    newDevice.value = { id: '', name: '', protocol: defaultProtocol, points: [] }
     selectedTemplate.value = null
     message.success('设备创建成功')
     await loadData()
@@ -844,8 +837,8 @@ async function doBatchCreate() {
       configs.push({
         id: `${batchForm.value.idPrefix}-${String(i).padStart(3, '0')}`,
         name: `${batchForm.value.namePrefix}-${i}`,
-        protocol: tmpl?.protocol || 'modbus_tcp',
-        points: tmpl?.points || [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }],
+        protocol: tmpl?.protocol || defaultProtocol,
+        points: tmpl?.points || [{ ...defaultPointConfig }],
       })
     }
     const res = await api.batchCreateDevices(configs)

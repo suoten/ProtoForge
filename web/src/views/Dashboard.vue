@@ -199,7 +199,7 @@ async function loadData() {
     protocols.value = protoRes || []
     templates.value = tmplRes || []
     scenarios.value = scRes || []
-    recentLogs.value = Array.isArray(logRes) ? logRes : (logRes?.logs || logRes?.entries || [])
+    recentLogs.value = logRes || []
   } catch (e) {
     loadError.value = e.response?.data?.detail || e.message || '未知错误'
   } finally {

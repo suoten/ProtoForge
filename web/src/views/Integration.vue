@@ -10,7 +10,7 @@
             <n-space vertical>
               <n-form :model="elConfig" label-placement="left" label-width="140" inline>
                 <n-form-item label="EdgeLite地址">
-                  <n-input v-model:value="elConfig.url" placeholder="http://edgelite.jjtt.net" style="width:260px" />
+                  <n-input v-model:value="elConfig.url" placeholder="http://edgelite-host:8100" style="width:260px" />
                 </n-form-item>
                 <n-form-item label="用户名">
                   <n-input v-model:value="elConfig.username" placeholder="admin" style="width:120px" />
@@ -684,7 +684,7 @@ async function loadAlarmRules() {
   loadingAlarmRules.value = true
   try {
     const res = await api.getAlarmRules()
-    alarmRules.value = Array.isArray(res) ? res : (res.rules || [])
+    alarmRules.value = res || []
   } catch (e) {
     message.error('加载告警规则失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingAlarmRules.value = false }
@@ -936,7 +936,7 @@ async function readEdgelitePoints(deviceId) {
   edgelitePoints.value = []
   try {
     const res = await api.readEdgeliteDevicePoints(deviceId)
-    edgelitePoints.value = res.points || res || []
+    edgelitePoints.value = res || []
   } catch (e) {
     message.error('读取EdgeLite测点失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingElPoints.value = false }

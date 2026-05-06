@@ -1006,7 +1006,7 @@ async def _get_internal_client():
     from protoforge.api.v1.auth import is_no_auth
 
     transport = ASGITransport(app=app)
-    _internal_client = AsyncClient(transport=transport, base_url="http://localhost")
+    _internal_client = AsyncClient(transport=transport, base_url="http://testserver")
 
     if not is_no_auth():
         try:

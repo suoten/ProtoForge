@@ -25,6 +25,17 @@ function isLoginRequest(url) {
   return url && (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/register'))
 }
 
+function extractErrorDetail(data) {
+  if (!data) return ''
+  if (typeof data.detail === 'string') return data.detail
+  if (typeof data.message === 'string') return data.message
+  if (typeof data.detail === 'object') {
+    try { return JSON.stringify(data.detail) } catch { return String(data.detail) }
+  }
+  if (typeof data === 'string') return data
+  try { return JSON.stringify(data) } catch { return String(data) }
+}
+
 api.interceptors.response.use(
   response => {
     if (response?.data === undefined || response?.data === null) {
@@ -35,6 +46,7 @@ api.interceptors.response.use(
   async error => {
     const originalRequest = error?.config
     const status = error?.response?.status
+    const detail = extractErrorDetail(error?.response?.data)
 
     if (status === 401 && !originalRequest._retry && !isLoginRequest(originalRequest.url)) {
       const refreshToken = localStorage.getItem('refresh_token')
@@ -78,11 +90,11 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     } else if (status === 403) {
-      console.error('Permission denied:', error.response?.data?.detail || '无权限执行此操作')
+      console.error('Permission denied:', detail)
     } else if (status === 404) {
-      console.error('Resource not found:', error.response?.data?.detail || '请求的资源不存在')
+      console.error('Resource not found:', detail)
     } else if (status >= 500) {
-      console.error('Server error:', error.response?.data?.detail || '服务器内部错误，请稍后重试')
+      console.error('Server error:', detail)
     } else if (!error.response) {
       console.error('Network error: 无法连接到服务器，请检查网络连接')
     }
@@ -91,6 +103,16 @@ api.interceptors.response.use(
 )
 
 const d = (promise) => promise.then(r => r.data)
+
+function normalizeList(data, ...keys) {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    for (const k of keys) {
+      if (Array.isArray(data[k])) return data[k]
+    }
+  }
+  return []
+}
 
 export default {
   login: (username, password) => d(api.post('/auth/login', { username, password })),
@@ -132,8 +154,12 @@ export default {
   createTemplate: (template) => d(api.post('/templates', template)),
   deleteTemplate: (id) => d(api.delete(`/templates/${id}`)),
   updateTemplate: (id, data) => d(api.put(`/templates/${id}`, data)),
-  searchTemplates: (params) => d(api.get('/templates/search', { params })),
-  listTemplateTags: () => d(api.get('/templates/tags')),
+  searchTemplates: (params) => d(api.get('/templates/search', { params })).then(r => normalizeList(r, 'templates')),
+  listTemplateTags: () => d(api.get('/templates/tags')).then(r => {
+    if (Array.isArray(r)) return r
+    if (r && Array.isArray(r.tags)) return r.tags
+    return []
+  }),
   instantiateTemplate: (id, params) => {
     if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: 'dev-' + Date.now(), device_name: 'Device' } }))
     const { device_id, device_name, protocol_config, ...rest } = params
@@ -151,7 +177,7 @@ export default {
   importScenario: (config) => d(api.post('/scenarios/import', config)),
   getScenarioSnapshot: (id) => d(api.get(`/scenarios/${id}/snapshot`)),
 
-  getLogs: (params) => d(api.get('/logs', { params })),
+  getLogs: (params) => d(api.get('/logs', { params })).then(r => normalizeList(r, 'logs', 'entries')),
   clearLogs: () => d(api.delete('/logs')),
 
   createTestCase: (data) => d(api.post('/tests/cases', data)),
@@ -180,7 +206,11 @@ export default {
   pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
   removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/integration/edgelite/push/${deviceId}`)),
   getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/integration/edgelite/status/${deviceId}`)),
-  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)).then(r => {
+    if (Array.isArray(r)) return r
+    if (r && Array.isArray(r.points)) return r.points
+    return []
+  }),
   verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
@@ -191,12 +221,11 @@ export default {
   batchPushDevices: (data) => d(api.post('/integration/batch-push', data)),
   startIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
   stopIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),
-  getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })),
+  getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })).then(r => normalizeList(r, 'data')),
   getDeviceStatusCache: () => d(api.get('/integration/device-status')),
-  getAlarmRules: () => d(api.get('/integration/alarm-rules')),
+  getAlarmRules: () => d(api.get('/integration/alarm-rules')).then(r => normalizeList(r, 'rules')),
   addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
   deleteAlarmRule: (ruleId) => d(api.delete(`/integration/alarm-rules/${ruleId}`)),
-  sendIntegrationMessage: (data) => d(api.post('/integration/message', data)),
 
   createDeviceWs: () => {
     const token = localStorage.getItem('token')

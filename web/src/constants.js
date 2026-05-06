@@ -143,6 +143,16 @@ export const defaultPointConfig = {
   max_value: 100,
 }
 
+export const popularTemplateIds = [
+  'modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
+  'modbus_mitsubishi_fx5u', 'modbus_fanuc_cnc', 'ab_controllogix', 'fins_cp1h',
+  'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'gb28181_ptz_camera', 'mqtt_hvac_controller',
+]
+
+export const defaultProtocol = 'modbus_tcp'
+
+export const PASSWORD_MASK = '***'
+
 export const dataTypeOptions = [
   { label: 'BOOL', value: 'bool' },
   { label: 'INT16', value: 'int16' },

@@ -46,10 +46,11 @@
 
 <script setup>
 import { ref, h, onMounted } from 'vue'
-import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage } from 'naive-ui'
+import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const entries = ref([])
 const loading = ref(false)
 const filterUsername = ref('')
@@ -108,13 +109,21 @@ async function handleDelete(id) {
 }
 
 async function handleClearAll() {
-  try {
-    await api.clearAuditLog()
-    message.success('已清空')
-    await loadData()
-  } catch (e) {
-    message.error('清空失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认清空审计日志',
+    content: '清空后所有审计记录将永久删除，此操作不可恢复。确定继续？',
+    positiveText: '清空',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.clearAuditLog()
+        message.success('已清空')
+        await loadData()
+      } catch (e) {
+        message.error('清空失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 onMounted(() => {

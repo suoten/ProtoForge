@@ -455,7 +455,7 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NGrid, NGi, NTag, NText, NAlert, NSelect, NDataTable, NModal, NPopconfirm, NTabs, NTabPane, NStatistic, NSwitch, NDescriptions, NDescriptionsItem, useMessage } from 'naive-ui'
 import api from '../api.js'
-import { protocolLabels, defaultPorts } from '../constants.js'
+import { protocolLabels, defaultPorts, PASSWORD_MASK } from '../constants.js'
 
 const message = useMessage()
 const saving = ref(false)
@@ -1053,10 +1053,10 @@ async function loadSettings() {
     influxdbConfig.value.bucket = settings.influxdb_bucket || 'protoforge'
     edgeliteConfig.value.url = settings.edgelite_url || ''
     edgeliteConfig.value.username = settings.edgelite_username || 'admin'
-    if (settings.edgelite_password && settings.edgelite_password !== '***') {
+    if (settings.edgelite_password && settings.edgelite_password !== PASSWORD_MASK) {
       edgeliteConfig.value.password = settings.edgelite_password
       passwordPreviouslySet.value = false
-    } else if (settings.edgelite_password === '***') {
+    } else if (settings.edgelite_password === PASSWORD_MASK) {
       edgeliteConfig.value.password = ''
       passwordPreviouslySet.value = true
     } else {
