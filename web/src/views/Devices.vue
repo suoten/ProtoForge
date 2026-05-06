@@ -646,11 +646,13 @@ async function startAllDevices() {
     negativeText: '取消',
     onPositiveClick: async () => {
       batchLoading.value = true
-      let ok = 0, fail = 0
       try {
-        for (const dev of toStart) {
-          try { await api.startDevice(dev.id); ok++ } catch (e) { fail++; message.warning(`设备 ${dev.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
-        }
+        const results = await Promise.allSettled(toStart.map(dev => api.startDevice(dev.id)))
+        let ok = 0, fail = 0
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') ok++
+          else { fail++; message.warning(`设备 ${toStart[i].id} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        })
         if (fail > 0) { message.warning(`已启动 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个设备`) }
         loadData()
       } finally { batchLoading.value = false }
@@ -668,11 +670,13 @@ async function stopAllDevices() {
     negativeText: '取消',
     onPositiveClick: async () => {
       batchLoading.value = true
-      let ok = 0, fail = 0
       try {
-        for (const dev of toStop) {
-          try { await api.stopDevice(dev.id); ok++ } catch (e) { fail++; message.warning(`设备 ${dev.id} 停止失败: ${e.response?.data?.detail || e.message}`) }
-        }
+        const results = await Promise.allSettled(toStop.map(dev => api.stopDevice(dev.id)))
+        let ok = 0, fail = 0
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') ok++
+          else { fail++; message.warning(`设备 ${toStop[i].id} 停止失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        })
         if (fail > 0) { message.warning(`已停止 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个设备`) }
         loadData()
       } finally { batchLoading.value = false }
@@ -684,24 +688,29 @@ async function batchPushToEdgelite() {
   pushLoading.value = true
   let ok = 0, fail = 0, skip = 0, unsupported = 0, notConfigured = 0
   const errorDetails = []
-  for (const id of selectedIds.value) {
-    try {
-      const res = await api.pushToEdgelite(id)
-      if (res.skipped) {
-        const reason = res.reason || ''
-        if (reason.includes('not supported') || reason.includes('不支持')) { unsupported++ }
-        else if (res.error_type === 'not_configured') { notConfigured++ }
-        else { skip++ }
-      } else if (res.ok) {
-        ok++
-      } else {
-        fail++
-        if (res.suggestion) {
-          errorDetails.push(res.suggestion)
-        }
+  const results = await Promise.allSettled(selectedIds.value.map(id => api.pushToEdgelite(id)))
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      fail++
+      const e = r.reason
+      message.warning(`推送设备 ${selectedIds.value[i]} 失败: ${e?.response?.data?.detail || e?.message || '未知错误'}`)
+      return
+    }
+    const res = r.value
+    if (res.skipped) {
+      const reason = res.reason || ''
+      if (reason.includes('not supported') || reason.includes('不支持')) { unsupported++ }
+      else if (res.error_type === 'not_configured') { notConfigured++ }
+      else { skip++ }
+    } else if (res.ok) {
+      ok++
+    } else {
+      fail++
+      if (res.suggestion) {
+        errorDetails.push(res.suggestion)
       }
-    } catch (e) { fail++; message.warning(`推送设备 ${id} 失败: ${e.response?.data?.detail || e.message}`) }
-  }
+    }
+  })
   pushLoading.value = false
   selectedIds.value = []
 

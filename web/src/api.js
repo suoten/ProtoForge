@@ -135,7 +135,6 @@ export default {
   getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })),
   createDevice: (config) => d(api.post('/devices', config)),
   quickCreateDevice: (templateId, name, id, protocolConfig) => d(api.post('/devices/quick-create', { template_id: templateId, name, id, protocol_config: protocolConfig || {} })),
-  getDevice: (id) => d(api.get(`/devices/${id}`)),
   getDeviceConfig: (id) => d(api.get(`/devices/${id}/config`)),
   updateDevice: (id, config) => d(api.put(`/devices/${id}`, config)),
   deleteDevice: (id) => d(api.delete(`/devices/${id}`)),
@@ -231,16 +230,28 @@ export default {
     const token = localStorage.getItem('token')
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/devices${token ? '?token=' + token : ''}`
-    return new WebSocket(url)
+    const url = `${wsProto}://${host}/api/v1/ws/devices`
+    const ws = new WebSocket(url)
+    if (token) {
+      ws.addEventListener('open', () => {
+        try { ws.send(JSON.stringify({ token })) } catch {}
+      }, { once: true })
+    }
+    return ws
   },
 
   createLogWs: () => {
     const token = localStorage.getItem('token')
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/logs${token ? '?token=' + token : ''}`
-    return new WebSocket(url)
+    const url = `${wsProto}://${host}/api/v1/ws/logs`
+    const ws = new WebSocket(url)
+    if (token) {
+      ws.addEventListener('open', () => {
+        try { ws.send(JSON.stringify({ token })) } catch {}
+      }, { once: true })
+    }
+    return ws
   },
 
   ensureValidToken: async () => {
