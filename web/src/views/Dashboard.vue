@@ -138,6 +138,7 @@ import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
 
 const message = useMessage()
+const dialog = useDialog()
 const devices = ref([])
 const protocols = ref([])
 const templates = ref([])
@@ -149,7 +150,10 @@ const loadError = ref('')
 let deviceWs = null
 let logWs = null
 let wsReconnectDelay = 1000
+let wsReconnectAttempts = 0
+let manualClose = false
 const WS_MAX_RECONNECT_DELAY = 30000
+const WS_MAX_RECONNECT_ATTEMPTS = 20
 
 const onlineDevices = computed(() => devices.value.filter(d => d.status === 'online' || d.status === 'running').length)
 const runningProtocols = computed(() => protocols.value.filter(p => p.status === 'running').length)
@@ -176,16 +180,22 @@ function formatTime(ts) {
 async function startAllProtocols() {
   const stopped = protocols.value.filter(p => p.status !== 'running')
   if (!stopped.length) { message.info('所有协议已在运行中'); return }
-  let failCount = 0
-  for (const p of stopped) {
-    try { await api.startProtocol(p.name, null) } catch (e) { failCount++; message.warning(`协议 ${p.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
-  }
-  if (failCount > 0) {
-    message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个启动失败`)
-  } else {
-    message.success(`已启动 ${stopped.length} 个协议`)
-  }
-  await loadData()
+  dialog.warning({
+    title: '确认启动全部协议',
+    content: `将启动 ${stopped.length} 个协议，可能占用大量端口和系统资源。确定继续？`,
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      const results = await Promise.allSettled(stopped.map(p => api.startProtocol(p.name, null)))
+      let ok = 0, fail = 0
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') ok++
+        else { fail++; message.warning(`协议 ${stopped[i].name} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+      })
+      if (fail > 0) { message.warning(`已启动 ${ok} 个协议，${fail} 个启动失败`) } else { message.success(`已启动 ${ok} 个协议`) }
+      await loadData()
+    }
+  })
 }
 
 async function loadData() {
@@ -208,17 +218,32 @@ async function loadData() {
 }
 
 function connectDeviceWs() {
+  if (manualClose) return
   try {
     deviceWs = api.createDeviceWs()
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
     message.warning('设备实时连接失败，5秒后重试')
-    setTimeout(connectDeviceWs, 5000)
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectDeviceWs, 5000)
+    } else {
+      message.error('设备实时连接重试次数过多，请刷新页面重试')
+    }
     return
   }
-  deviceWs.onopen = () => { wsReconnectDelay = 1000 }
+  deviceWs.onopen = () => { wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
   deviceWs.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
-  deviceWs.onclose = () => { setTimeout(connectDeviceWs, wsReconnectDelay); wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
+  deviceWs.onclose = () => {
+    if (manualClose) return
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectDeviceWs, wsReconnectDelay)
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+    } else {
+      message.error('设备实时连接重试次数过多，请刷新页面重试')
+    }
+  }
   deviceWs.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
@@ -232,19 +257,28 @@ function connectDeviceWs() {
 }
 
 function connectLogWs() {
+  if (manualClose) return
   try {
     logWs = api.createLogWs()
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
     message.warning('日志实时连接失败，5秒后重试')
-    setTimeout(connectLogWs, 5000)
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectLogWs, 5000)
+    }
     return
   }
+  logWs.onopen = () => { wsReconnectAttempts = 0 }
   logWs.onerror = () => {
     console.debug('Log WebSocket error, will auto-reconnect')
   }
   logWs.onclose = () => {
-    if (logWs) { setTimeout(connectLogWs, 5000) }
+    if (manualClose || !logWs) return
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(wsReconnectAttempts, 5)), 60000))
+    }
   }
   logWs.onmessage = (event) => {
     try {
@@ -266,6 +300,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  manualClose = true
   if (deviceWs) { deviceWs.close(); deviceWs = null }
   if (logWs) { logWs.close(); logWs = null }
 })

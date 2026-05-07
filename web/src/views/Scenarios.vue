@@ -156,7 +156,7 @@ async function loadData() {
   dataLoading.value = true
   try {
     const res = await api.getScenarios()
-    scenarios.value = res
+    scenarios.value = res || []
   } catch (e) {
     message.error('加载场景失败: ' + (e.response?.data?.detail || e.message))
   } finally { dataLoading.value = false }

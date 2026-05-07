@@ -753,7 +753,7 @@ async function loadDevices() {
   try {
     const devs = await api.getDevices()
     allDevices.value = (devs || []).map(d => ({ ...d, _el_status: null }))
-  } catch (e) { message.error('加载设备失败') }
+  } catch (e) { message.error('加载设备失败: ' + (e.response?.data?.detail || e.message)) }
   finally { loadingDevices.value = false }
 }
 

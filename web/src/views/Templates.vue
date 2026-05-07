@@ -275,8 +275,8 @@ function goMarketplace() { router.push('/marketplace') }
 async function loadData() {
   try {
     const [tmplRes, protoRes] = await Promise.all([api.getTemplates(), api.getProtocols()])
-    templates.value = tmplRes
-    protocols.value = protoRes
+    templates.value = tmplRes || []
+    protocols.value = protoRes || []
     await loadTags()
   } catch (e) {
     message.error('加载数据失败: ' + (e.response?.data?.detail || e.message))

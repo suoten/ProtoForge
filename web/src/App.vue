@@ -147,7 +147,8 @@ import Welcome from './views/Welcome.vue'
 
 const router = useRouter()
 const route = useRoute()
-const message = createDiscreteApi(['message']).message
+const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
+const message = discreteMessage
 const { t, locale, setLocale } = useI18n()
 const loggedIn = ref(!!localStorage.getItem('token'))
 const collapsed = ref(false)
@@ -216,12 +217,20 @@ const changePasswordLoading = ref(false)
 
 function onUserMenuSelect(key) {
   if (key === 'logout') {
-    if (ws) { ws.close(); ws = null }
-    localStorage.removeItem('token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('username')
-    localStorage.removeItem('role')
-    loggedIn.value = false
+    discreteDialog.warning({
+      title: '确认退出',
+      content: '确定要退出登录吗？',
+      positiveText: '退出',
+      negativeText: '取消',
+      onPositiveClick: () => {
+        if (ws) { ws.close(); ws = null }
+        localStorage.removeItem('token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('username')
+        localStorage.removeItem('role')
+        loggedIn.value = false
+      }
+    })
   } else if (key === 'change-password') {
     showChangePassword.value = true
     oldPassword.value = ''
@@ -300,17 +309,31 @@ function onSearchSelect(val) {
 }
 
 let wsReconnectDelay = 1000
+let wsReconnectAttempts = 0
 const WS_MAX_RECONNECT_DELAY = 30000
+const WS_MAX_RECONNECT_ATTEMPTS = 20
 
 function connectWebSocket() {
   if (!loggedIn.value) return
-  ws = api.createLogWs()
-  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000 }
+  try {
+    ws = api.createLogWs()
+  } catch (e) {
+    console.error('Failed to create log WebSocket:', e.message)
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectWebSocket, 5000)
+    }
+    return
+  }
+  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
   ws.onclose = () => {
     wsConnected.value = false
     if (loggedIn.value) {
-      setTimeout(connectWebSocket, wsReconnectDelay)
-      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+      wsReconnectAttempts++
+      if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+        setTimeout(connectWebSocket, wsReconnectDelay)
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+      }
     }
   }
   ws.onerror = () => {

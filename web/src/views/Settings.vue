@@ -1042,10 +1042,10 @@ async function viewRecordingDetail(id) {
 async function loadSettings() {
   try {
     const [settings, protoRes] = await Promise.all([api.getSettings(), api.getProtocols()])
-    serverConfig.value.host = settings.host || '0.0.0.0'
-    serverConfig.value.port = settings.port || 8000
-    serverConfig.value.db_path = settings.db_path || 'data/protoforge.db'
-    serverConfig.value.log_level = settings.log_level || 'info'
+    serverConfig.value.host = settings.host ?? '0.0.0.0'
+    serverConfig.value.port = settings.port ?? 8000
+    serverConfig.value.db_path = settings.db_path ?? 'data/protoforge.db'
+    serverConfig.value.log_level = settings.log_level ?? 'info'
     serverConfig.value.cors_origins = settings.cors_origins || '*'
     influxdbConfig.value.url = settings.influxdb_url || ''
     influxdbConfig.value.token = settings.influxdb_token || ''

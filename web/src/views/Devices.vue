@@ -686,6 +686,7 @@ async function stopAllDevices() {
 
 async function batchPushToEdgelite() {
   pushLoading.value = true
+  try {
   let ok = 0, fail = 0, skip = 0, unsupported = 0, notConfigured = 0
   const errorDetails = []
   const results = await Promise.allSettled(selectedIds.value.map(id => api.pushToEdgelite(id)))
@@ -730,6 +731,7 @@ async function batchPushToEdgelite() {
   if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
     message.success(parts.join('，'))
   }
+  } finally { pushLoading.value = false }
 }
 
 async function createDevice() {
