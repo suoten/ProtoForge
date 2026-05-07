@@ -410,7 +410,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             "suggestion": "该协议暂不支持 EdgeLite 联调",
         }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except EdgeLiteError as e:
@@ -469,7 +469,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except EdgeLiteError as e:
@@ -493,7 +493,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except EdgeLiteError as e:
@@ -528,7 +528,7 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except EdgeLiteError as e:
@@ -712,7 +712,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     device_id = getattr(device, "id", "")
     result: dict[str, Any] = {"device_id": device_id, "steps": {}}
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
             token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
         except EdgeLiteError as e:
@@ -809,7 +809,7 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
         return {"ok": False, "error": "URL is empty"}
     if not url.startswith("http://") and not url.startswith("https://"):
         return {"ok": False, "error": "URL must start with http:// or https://"}
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
             if resp.status_code == 200:

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional
