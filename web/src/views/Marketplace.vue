@@ -150,8 +150,8 @@ async function doCreate() {
 async function loadData() {
   try {
     const [tRes, pRes] = await Promise.all([api.getTemplates(), api.getProtocols()])
-    templates.value = tRes
-    protocols.value = pRes
+    templates.value = tRes || []
+    protocols.value = pRes || []
   } catch (e) {
     message.error('加载模板失败: ' + (e.response?.data?.detail || e.message))
   }

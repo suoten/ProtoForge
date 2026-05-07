@@ -140,7 +140,7 @@ async function loadData() {
   dataLoading.value = true
   try {
     const res = await api.getProtocols()
-    protocols.value = res
+    protocols.value = res || []
   } catch (e) {
     message.error('加载协议列表失败: ' + (e.response?.data?.detail || e.message))
   } finally { dataLoading.value = false }
@@ -272,22 +272,30 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  wsManualClose = true
   if (ws) { ws.close(); ws = null }
 })
 
 let ws = null
 let wsReconnectDelay = 1000
+let wsReconnectAttempts = 0
+let wsManualClose = false
 const WS_MAX_RECONNECT_DELAY = 30000
+const WS_MAX_RECONNECT_ATTEMPTS = 20
 function connectWs() {
+  if (wsManualClose) return
   try {
     ws = api.createDeviceWs()
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
     message.warning('设备实时连接失败，5秒后重试')
-    setTimeout(connectWs, 5000)
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectWs, 5000)
+    }
     return
   }
-  ws.onopen = () => { wsReconnectDelay = 1000 }
+  ws.onopen = () => { wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
@@ -299,6 +307,13 @@ function connectWs() {
     }
   }
   ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
-  ws.onclose = () => { if (ws) setTimeout(connectWs, wsReconnectDelay) }
+  ws.onclose = () => {
+    if (wsManualClose) return
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectWs, wsReconnectDelay)
+      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+    }
+  }
 }
 </script>
