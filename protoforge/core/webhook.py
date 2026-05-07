@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -113,7 +114,7 @@ class WebhookManager:
             return
         self._running = True
         self._restore()
-        self._client = httpx.AsyncClient(timeout=10.0)
+        self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
         self._task = asyncio.create_task(self._send_loop())
         logger.info("Webhook manager started with %d webhooks", len(self._webhooks))
 
@@ -211,7 +212,7 @@ class WebhookManager:
             sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
             headers["X-ProtoForge-Signature"] = sig
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
         resp = await self._client.post(webhook.url, json=body, headers=headers)
         if resp.status_code >= 400:
             webhook.error_count += 1

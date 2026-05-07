@@ -405,6 +405,10 @@ for _proto_name, _proto_usage in PROTOCOL_USAGE.items():
     if "code_examples" in _proto_usage and "code_example" not in _proto_usage:
         _proto_usage["code_example"] = _proto_usage["code_examples"].get("python", "")
 
+HTTP_TIMEOUT_DEFAULT = 10.0
+HTTP_TIMEOUT_SHORT = 5.0
+HTTP_TIMEOUT_LONG = 30.0
+
 ERROR_MESSAGES = {
     "Device not found": "找不到该设备，可能已被删除或ID输入错误。请检查设备列表。",
     "Scenario not found": "找不到该场景，可能已被删除。请检查场景列表。",

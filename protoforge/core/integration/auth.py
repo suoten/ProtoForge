@@ -1,4 +1,5 @@
 import logging
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from typing import Any
 
@@ -22,7 +23,7 @@ class IntegrationAuth:
         self._token: str = ""
         self._refresh_token: str = ""
         self._token_expires: float = 0.0
-        self._client = httpx.AsyncClient(timeout=10.0)
+        self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
 
     @property
     def token(self) -> str:

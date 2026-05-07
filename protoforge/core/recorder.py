@@ -17,41 +17,28 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     _AES_AVAILABLE = True
 except ImportError:
-    logger.warning("cryptography library not available, recording encryption will use insecure XOR fallback. Install with: pip install cryptography")
+    logger.error("cryptography library not available. Recording encryption requires cryptography. Install with: pip install cryptography")
 
 
 def _encrypt_data(data: bytes, key: bytes) -> str:
-    if _AES_AVAILABLE:
-        derived_key = _derive_key(key)
-        nonce = os.urandom(12)
-        aesgcm = AESGCM(derived_key)
-        ct = aesgcm.encrypt(nonce, data, None)
-        return base64.b64encode(nonce + ct).decode("ascii")
-    else:
-        from hashlib import sha256
-        derived_key = sha256(key).digest()
-        result = bytearray()
-        for i, b in enumerate(data):
-            result.append(b ^ derived_key[i % len(derived_key)])
-        return base64.b64encode(bytes(result)).decode("ascii")
+    if not _AES_AVAILABLE:
+        raise RuntimeError("Recording encryption requires the 'cryptography' library. Install with: pip install cryptography")
+    derived_key = _derive_key(key)
+    nonce = os.urandom(12)
+    aesgcm = AESGCM(derived_key)
+    ct = aesgcm.encrypt(nonce, data, None)
+    return base64.b64encode(nonce + ct).decode("ascii")
 
 
 def _decrypt_data(encrypted: str, key: bytes) -> bytes:
-    if _AES_AVAILABLE:
-        derived_key = _derive_key(key)
-        raw = base64.b64decode(encrypted)
-        nonce = raw[:12]
-        ct = raw[12:]
-        aesgcm = AESGCM(derived_key)
-        return aesgcm.decrypt(nonce, ct, None)
-    else:
-        from hashlib import sha256
-        derived_key = sha256(key).digest()
-        data = base64.b64decode(encrypted)
-        result = bytearray()
-        for i, b in enumerate(data):
-            result.append(b ^ derived_key[i % len(derived_key)])
-        return bytes(result)
+    if not _AES_AVAILABLE:
+        raise RuntimeError("Recording decryption requires the 'cryptography' library. Install with: pip install cryptography")
+    derived_key = _derive_key(key)
+    raw = base64.b64decode(encrypted)
+    nonce = raw[:12]
+    ct = raw[12:]
+    aesgcm = AESGCM(derived_key)
+    return aesgcm.decrypt(nonce, ct, None)
 
 
 def _derive_key(key: bytes) -> bytes:

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from protoforge.core.defaults import HTTP_TIMEOUT_SHORT
 import os
 import time
 from typing import Any, Optional
@@ -83,7 +84,7 @@ class FailoverManager:
     async def _check_peer_health(self, url: str) -> bool:
         try:
             import httpx
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
                 resp = await client.get(f"{url}/health")
                 return resp.status_code == 200
         except Exception as e:

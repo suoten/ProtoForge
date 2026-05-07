@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional
@@ -118,7 +119,7 @@ class HTTPTarget(ForwardTarget):
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=10.0)
+            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
         return self._client
 
     async def send(self, records: list[dict[str, Any]]) -> None:
