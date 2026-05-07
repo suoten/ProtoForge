@@ -109,6 +109,8 @@ const protocols = ref([])
 const dataLoading = ref(false)
 const showAdvanced = ref(false)
 const starting = ref(false)
+const startingProtocol = ref(null)
+const stoppingProtocol = ref(null)
 const startingAll = ref(false)
 const advancedProtocol = ref({})
 const advancedConfig = ref({})
@@ -180,6 +182,7 @@ async function startAll() {
 }
 
 async function quickStart(name) {
+  startingProtocol.value = name
   try {
     const res = await api.startProtocol(name, null)
     if (res.port_changed) {
@@ -190,6 +193,8 @@ async function quickStart(name) {
     await loadData()
   } catch (e) {
     message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    startingProtocol.value = null
   }
 }
 
@@ -200,12 +205,15 @@ async function stopProtocol(name) {
     positiveText: '停止',
     negativeText: '取消',
     onPositiveClick: async () => {
+      stoppingProtocol.value = name
       try {
         await api.stopProtocol(name)
         message.success(`${name} 已停止`)
         await loadData()
       } catch (e) {
         message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+      } finally {
+        stoppingProtocol.value = null
       }
     }
   })

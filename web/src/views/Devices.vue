@@ -966,8 +966,8 @@ function getPipelineStepDesc(idx) {
 
 async function batchVerifyPipeline() {
   pipelineLoading.value = true
-  try {
   let ok = 0, fail = 0, skip = 0
+  try {
   for (const id of selectedIds.value) {
     try {
       const res = await api.verifyEdgelitePipeline(id)

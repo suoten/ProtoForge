@@ -186,14 +186,21 @@ async function startAllProtocols() {
     positiveText: '启动',
     negativeText: '取消',
     onPositiveClick: async () => {
-      const results = await Promise.allSettled(stopped.map(p => api.startProtocol(p.name, null)))
-      let ok = 0, fail = 0
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled') ok++
-        else { fail++; message.warning(`协议 ${stopped[i].name} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
-      })
-      if (fail > 0) { message.warning(`已启动 ${ok} 个协议，${fail} 个启动失败`) } else { message.success(`已启动 ${ok} 个协议`) }
-      await loadData()
+      startingAll.value = true
+      try {
+        const results = await Promise.allSettled(stopped.map(p => api.startProtocol(p.name, null)))
+        let ok = 0, fail = 0
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') ok++
+          else { fail++; message.warning(`协议 ${stopped[i].name} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        })
+        if (fail > 0) { message.warning(`已启动 ${ok} 个协议，${fail} 个启动失败`) } else { message.success(`已启动 ${ok} 个协议`) }
+        await loadData()
+      } catch (e) {
+        message.error('启动协议失败: ' + (e.response?.data?.detail || e.message))
+      } finally {
+        startingAll.value = false
+      }
     }
   })
 }

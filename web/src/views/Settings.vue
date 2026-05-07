@@ -637,6 +637,14 @@ const settingUpDemo = ref(false)
 
 const showRecordingDetailModal = ref(false)
 const recordingDetail = ref(null)
+const changingRole = ref(null)
+const unlockingUser = ref(null)
+const deletingUser = ref(null)
+const removingFwdTarget = ref(null)
+const replayingRecId = ref(null)
+const deletingRecId = ref(null)
+const testingWhId = ref(null)
+const deletingWhId = ref(null)
 
 const recordingFrameColumns = [
   { title: '序号', key: 'index', width: 60 },
@@ -718,22 +726,28 @@ async function addUser() {
 }
 
 async function changeRole(username, role) {
+  changingRole.value = username
   try {
     await api.adminUpdateRole(username, role)
     message.success(`已将 ${username} 角色修改为 ${role}`)
     await loadUsers()
   } catch (e) {
     message.error('修改角色失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    changingRole.value = null
   }
 }
 
 async function unlockUser(username) {
+  unlockingUser.value = username
   try {
     await api.adminUnlockUser(username)
     message.success(`用户 ${username} 已解锁`)
     await loadUsers()
   } catch (e) {
     message.error('解锁失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    unlockingUser.value = null
   }
 }
 
@@ -760,12 +774,15 @@ async function doResetPassword() {
 }
 
 async function deleteUser(username) {
+  deletingUser.value = username
   try {
     await api.deleteUser(username)
     message.success(`用户 ${username} 已删除`)
     await loadUsers()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    deletingUser.value = null
   }
 }
 
@@ -805,12 +822,15 @@ async function addForwardTarget() {
 }
 
 async function removeForwardTarget(name) {
+  removingFwdTarget.value = name
   try {
     await api.removeForwardTarget(name)
     message.success('转发目标已删除')
     await loadForwardTargets()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    removingFwdTarget.value = null
   }
 }
 
@@ -865,11 +885,14 @@ async function toggleRecorder() {
 }
 
 async function replayRecording(id) {
+  replayingRecId.value = id
   try {
     await api.replayRecording(id)
     message.success('回放已启动')
   } catch (e) {
     message.error('回放失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    replayingRecId.value = null
   }
 }
 
@@ -890,12 +913,15 @@ async function exportRecording(id) {
 }
 
 async function deleteRecording(id) {
+  deletingRecId.value = id
   try {
     await api.deleteRecording(id)
     message.success('录制已删除')
     await loadRecordings()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    deletingRecId.value = null
   }
 }
 
@@ -946,21 +972,27 @@ async function addWebhook() {
 }
 
 async function testWebhook(id) {
+  testingWhId.value = id
   try {
     await api.testWebhook(id)
     message.success('Webhook 测试成功')
   } catch (e) {
     message.error('测试失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    testingWhId.value = null
   }
 }
 
 async function deleteWebhook(id) {
+  deletingWhId.value = id
   try {
     await api.deleteWebhook(id)
     message.success('Webhook 已删除')
     await loadWebhooks()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    deletingWhId.value = null
   }
 }
 
