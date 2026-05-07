@@ -230,28 +230,20 @@ export default {
     const token = localStorage.getItem('token')
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/devices`
-    const ws = new WebSocket(url)
-    if (token) {
-      ws.addEventListener('open', () => {
-        try { ws.send(JSON.stringify({ token })) } catch {}
-      }, { once: true })
-    }
-    return ws
+    const url = token
+      ? `${wsProto}://${host}/api/v1/ws/devices?token=${encodeURIComponent(token)}`
+      : `${wsProto}://${host}/api/v1/ws/devices`
+    return new WebSocket(url)
   },
 
   createLogWs: () => {
     const token = localStorage.getItem('token')
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/logs`
-    const ws = new WebSocket(url)
-    if (token) {
-      ws.addEventListener('open', () => {
-        try { ws.send(JSON.stringify({ token })) } catch {}
-      }, { once: true })
-    }
-    return ws
+    const url = token
+      ? `${wsProto}://${host}/api/v1/ws/logs?token=${encodeURIComponent(token)}`
+      : `${wsProto}://${host}/api/v1/ws/logs`
+    return new WebSocket(url)
   },
 
   ensureValidToken: async () => {
