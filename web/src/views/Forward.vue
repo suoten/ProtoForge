@@ -134,6 +134,7 @@ const starting = ref(false)
 const stopping = ref(false)
 const showAddModal = ref(false)
 const adding = ref(false)
+const removingTarget = ref(null)
 
 const addForm = ref({
   name: '', type: 'influxdb', host: 'localhost', port: 8086,
