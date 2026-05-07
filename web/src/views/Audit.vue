@@ -52,6 +52,8 @@ import api from '../api.js'
 const message = useMessage()
 const entries = ref([])
 const loading = ref(false)
+const clearing = ref(false)
+const clearing = ref(false)
 const filterUsername = ref('')
 const filterAction = ref('')
 const filterResource = ref('')

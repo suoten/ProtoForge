@@ -54,6 +54,10 @@ api.interceptors.response.use(
         if (isRefreshing) {
           return new Promise(resolve => {
             refreshSubscribers.push(newToken => {
+              if (!newToken) {
+                resolve(Promise.reject(error))
+                return
+              }
               originalRequest.headers.Authorization = `Bearer ${newToken}`
               originalRequest._retry = true
               resolve(api(originalRequest))
@@ -77,6 +81,7 @@ api.interceptors.response.use(
           }
         } catch (e) {
           console.warn('Token refresh failed:', e.message)
+          onTokenRefreshed(null)
         } finally {
           isRefreshing = false
           refreshSubscribers = []

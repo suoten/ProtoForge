@@ -46,6 +46,7 @@ router.beforeEach((to, from, next) => {
   }
 
   if (to.meta?.roles && !to.meta.roles.includes(userRole)) {
+    console.warn(`访问 ${to.path} 需要角色: ${to.meta.roles.join(', ')}，当前角色: ${userRole}`)
     next('/')
     return
   }

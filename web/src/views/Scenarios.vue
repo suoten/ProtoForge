@@ -266,6 +266,11 @@ async function stopAllScenes() {
   })
 }
 
+function cancelCreateScenario() {
+  showCreateModal.value = false
+  newScenario.value = { id: '', name: '', description: '', devices: [], rules: [] }
+}
+
 async function createScenario() {
   if (!newScenario.value.id || !newScenario.value.name) {
     message.warning('请填写场景ID和名称')
@@ -283,6 +288,11 @@ async function createScenario() {
   } finally {
     creating.value = false
   }
+}
+
+function cancelImportScenario() {
+  showImportModal.value = false
+  importJson.value = ''
 }
 
 async function importScenario() {

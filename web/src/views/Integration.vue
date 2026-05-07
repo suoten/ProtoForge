@@ -690,6 +690,11 @@ async function loadAlarmRules() {
   } finally { loadingAlarmRules.value = false }
 }
 
+function cancelAddAlarm() {
+  showAddAlarmModal.value = false
+  alarmForm.value = { source_device_id: '', alarm_severity: 'warning', action: 'notify', target_device_id: '', enabled: true }
+}
+
 async function addAlarmRule() {
   if (!alarmForm.value.rule_id || !alarmForm.value.source_device_id || !alarmForm.value.target_device_id) {
     message.warning('请填写规则ID、源设备ID和目标设备ID')

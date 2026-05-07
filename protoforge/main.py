@@ -283,10 +283,12 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)
 
+    cors_origins_list = settings.cors_origins.split(",")
+    is_wildcard = cors_origins_list == ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins.split(","),
-        allow_credentials=True,
+        allow_origins=cors_origins_list,
+        allow_credentials=not is_wildcard,
         allow_methods=["*"],
         allow_headers=["*"],
     )
