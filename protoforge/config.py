@@ -78,10 +78,36 @@ def get_settings() -> Settings:
     return _settings
 
 
+def _validate_setting(key: str, value: Any) -> str | None:
+    if key == "port" or key == "http_port":
+        try:
+            p = int(value)
+            if not (1 <= p <= 65535):
+                return f"端口号必须在 1-65535 之间，当前值: {p}"
+        except (ValueError, TypeError):
+            return f"端口号必须为整数，当前值: {value}"
+    if key.endswith("_port") and key != "modbus_rtu_port":
+        try:
+            p = int(value)
+            if not (1 <= p <= 65535):
+                return f"端口号必须在 1-65535 之间，当前值: {p}"
+        except (ValueError, TypeError):
+            return f"端口号必须为整数，当前值: {value}"
+    if key == "log_level":
+        valid_levels = {"debug", "info", "warning", "error", "critical"}
+        if str(value).lower() not in valid_levels:
+            return f"日志级别必须为 {', '.join(valid_levels)} 之一，当前值: {value}"
+    if key == "host" and value:
+        if not isinstance(value, str) or not value.strip():
+            return "主机地址不能为空"
+    return None
+
+
 def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     global _settings, _settings_overrides
     s = get_settings()
     changed = {}
+    errors = []
     allowed_keys = {
         "host", "port", "db_path", "demo_mode",
         "log_level", "cors_origins",
@@ -93,12 +119,19 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
         if key.endswith("_port") or key in allowed_keys:
             if value == "***":
                 continue
+            validation_error = _validate_setting(key, value)
+            if validation_error:
+                errors.append(validation_error)
+                continue
             _settings_overrides[key] = value
             if hasattr(s, key):
                 old_val = getattr(s, key)
                 if old_val != value:
                     setattr(s, key, value)
                     changed[key] = {"old": old_val, "new": value}
+    if errors:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail="; ".join(errors))
     _save_env()
     return changed
 

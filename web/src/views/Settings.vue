@@ -1137,6 +1137,11 @@ async function testEdgeliteConnection() {
 }
 
 async function saveServerConfig() {
+  const port = Number(serverConfig.value.port)
+  if (!port || port < 1 || port > 65535) {
+    message.error('端口号必须在 1-65535 之间')
+    return
+  }
   savingServer.value = true
   serverSaveResult.value = null
   try {
@@ -1180,6 +1185,13 @@ async function saveInfluxdbConfig() {
 }
 
 async function saveProtocolPorts() {
+  for (const [key, value] of Object.entries(protocolPorts.value)) {
+    const p = Number(value)
+    if (key !== 'modbus_rtu' && (!p || p < 1 || p > 65535)) {
+      message.error(`协议端口 ${key} 必须在 1-65535 之间`)
+      return
+    }
+  }
   savingPorts.value = true
   portsSaveResult.value = null
   try {
