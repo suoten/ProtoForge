@@ -108,12 +108,15 @@ async function handleDelete(id) {
 }
 
 async function handleClearAll() {
+  clearing.value = true
   try {
     await api.clearAuditLog()
     message.success('已清空')
     await loadData()
   } catch (e) {
     message.error('清空失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    clearing.value = false
   }
 }
 

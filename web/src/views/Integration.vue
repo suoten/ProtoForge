@@ -943,6 +943,10 @@ async function readEdgelitePoints(deviceId) {
 }
 
 async function importEdgeLite() {
+  if (!edgeLiteJson.value.trim()) {
+    message.warning('请输入 EdgeLite 设备配置 JSON')
+    return
+  }
   importing.value = true
   try {
     const config = JSON.parse(edgeLiteJson.value)
@@ -956,6 +960,10 @@ async function importEdgeLite() {
 }
 
 async function importPyGBSentry() {
+  if (!pygbsentryJson.value.trim()) {
+    message.warning('请输入 PyGBSentry 摄像头配置 JSON')
+    return
+  }
   importing.value = true
   try {
     const config = JSON.parse(pygbsentryJson.value)

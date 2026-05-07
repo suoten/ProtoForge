@@ -966,6 +966,7 @@ function getPipelineStepDesc(idx) {
 
 async function batchVerifyPipeline() {
   pipelineLoading.value = true
+  try {
   let ok = 0, fail = 0, skip = 0
   for (const id of selectedIds.value) {
     try {
@@ -975,7 +976,9 @@ async function batchVerifyPipeline() {
       else { fail++ }
     } catch (e) { fail++; message.warning(`设备 ${id} 链路验证失败: ${e.response?.data?.detail || e.message}`) }
   }
-  pipelineLoading.value = false
+  } finally {
+    pipelineLoading.value = false
+  }
   selectedIds.value = []
   const parts = []
   if (ok) parts.push(`${ok} 个链路正常`)

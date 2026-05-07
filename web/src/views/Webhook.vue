@@ -133,6 +133,8 @@ const loading = ref(false)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const adding = ref(false)
+const testingWhId = ref(null)
+const deletingWhId = ref(null)
 const saving = ref(false)
 const editingId = ref('')
 
