@@ -224,13 +224,16 @@ async function startAllScenes() {
     negativeText: '取消',
     onPositiveClick: async () => {
       batchLoading.value = true
-      const results = await Promise.allSettled(running.map(sc => api.startScenario(sc.id)))
       let ok = 0, fail = 0
+      try {
+      const results = await Promise.allSettled(running.map(sc => api.startScenario(sc.id)))
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
         else { fail++; message.warning(`场景 ${running[i].name} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
       })
-      batchLoading.value = false
+      } finally {
+        batchLoading.value = false
+      }
       if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
       loadData()
     }
@@ -247,13 +250,16 @@ async function stopAllScenes() {
     negativeText: '取消',
     onPositiveClick: async () => {
       batchLoading.value = true
-      const results = await Promise.allSettled(running.map(sc => api.stopScenario(sc.id)))
       let ok = 0, fail = 0
+      try {
+      const results = await Promise.allSettled(running.map(sc => api.stopScenario(sc.id)))
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
         else { fail++; message.warning(`场景 ${running[i].name} 停止失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
       })
-      batchLoading.value = false
+      } finally {
+        batchLoading.value = false
+      }
       if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }
       loadData()
     }
