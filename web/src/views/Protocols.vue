@@ -101,7 +101,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
-import { protocolLabels, protocolColors, protocolModes } from '../constants.js'
+import { protocolColors, protocolModes } from '../constants.js'
 
 const message = useMessage()
 const dialog = useDialog()

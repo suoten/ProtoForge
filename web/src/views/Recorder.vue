@@ -127,7 +127,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, h } from 'vue'
 import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
-  NInput, NSelect, NGrid, NGi, NText, NTag, NEmpty, NDescriptions, NDescriptionsItem,
+  NInput, NGrid, NGi, NText, NTag, NEmpty, NDescriptions, NDescriptionsItem,
   NSpin, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 

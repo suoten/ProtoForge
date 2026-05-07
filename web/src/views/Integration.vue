@@ -551,7 +551,7 @@ const deviceColumns = [
     title: '操作', key: 'actions', width: 400,
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => '推送注册'),
-      h(NButton, { size: 'tiny', type: 'success', secondary: true, onClick: () => startCollect(row.id) }, () => '启动采集'),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => startCollect(row.id) }, () => '启动采集'),
       h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => '停止采集'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => readEdgelitePoints(row.id) }, () => '读测点'),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => '验证链路'),

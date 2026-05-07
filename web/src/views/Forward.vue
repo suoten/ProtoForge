@@ -120,7 +120,7 @@
 <script setup>
 import { ref, onMounted, h } from 'vue'
 import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
-  NInput, NInputNumber, NSelect, NGrid, NGi, NText, NTag, NEmpty, NPopconfirm, useMessage, useDialog } from 'naive-ui'
+  NInput, NInputNumber, NSelect, NGrid, NGi, NTag, NEmpty, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 
 const message = useMessage()

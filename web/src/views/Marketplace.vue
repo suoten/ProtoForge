@@ -75,8 +75,7 @@ import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
   NCard, NTag, NButton, NModal, NDescriptions, NDescriptionsItem, NEmpty, useMessage } from 'naive-ui'
 import api from '../api.js'
-import { protocolTagTypes } from '../constants.js'
-import { protocolLabels } from '../constants.js'
+import { protocolTagTypes, protocolLabels } from '../constants.js'
 
 const message = useMessage()
 const templates = ref([])

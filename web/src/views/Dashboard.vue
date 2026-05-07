@@ -133,7 +133,7 @@
 
 <script setup>
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
-import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, useMessage } from 'naive-ui'
+import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
 
