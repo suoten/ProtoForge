@@ -216,10 +216,10 @@ const changePasswordLoading = ref(false)
 function onUserMenuSelect(key) {
   if (key === 'logout') {
     discreteDialog.warning({
-      title: '确认退出',
-      content: '确定要退出登录吗？',
-      positiveText: '退出',
-      negativeText: '取消',
+      title: t('common.confirm'),
+      content: t('header.logoutConfirm'),
+      positiveText: t('header.logout'),
+      negativeText: t('common.cancel'),
       onPositiveClick: () => {
         if (ws) { ws.close(); ws = null }
         localStorage.removeItem('token')
@@ -288,15 +288,15 @@ function onSearchInput(query) {
   const results = []
   for (const d of searchData.value.devices) {
     if ((d.name || '').toLowerCase().includes(q) || (d.id || '').toLowerCase().includes(q))
-      results.push({ label: `[设备] ${d.name || d.id}`, value: `/devices` })
+      results.push({ label: `[${t('nav.devices')}] ${d.name || d.id}`, value: `/devices` })
   }
   for (const tmpl of searchData.value.templates) {
     if ((tmpl.name || '').toLowerCase().includes(q))
-      results.push({ label: `[模板] ${tmpl.name}`, value: `/marketplace` })
+      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/marketplace` })
   }
   for (const s of searchData.value.scenarios) {
     if ((s.name || '').toLowerCase().includes(q))
-      results.push({ label: `[场景] ${s.name}`, value: `/scenarios` })
+      results.push({ label: `[${t('nav.scenarios')}] ${s.name}`, value: `/scenarios` })
   }
   searchResults.value = results.slice(0, 10)
 }

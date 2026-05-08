@@ -14,11 +14,17 @@ async def login(credentials: dict[str, Any]):
     from protoforge.core.auth import user_manager, create_token, create_refresh_token
     username = credentials.get("username", "")
     password = credentials.get("password", "")
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise HTTPException(status_code=400, detail="用户名和密码必须为字符串")
+    username = username.strip()
+    password = password.strip()
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
     user, error_code = await user_manager.authenticate(username, password)
 
     if not user:
-        if error_code.startswith("account_locked:"):
-            remaining = error_code.split(":")[1]
+        if isinstance(error_code, str) and error_code.startswith("account_locked:"):
+            remaining = error_code.split(":")[1] if ":" in error_code else ""
             raise HTTPException(status_code=423, detail=f"账户已锁定，请{remaining}秒后重试")
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     access_token = create_token(user.id, user.username, user.role)
@@ -36,15 +42,17 @@ async def login(credentials: dict[str, Any]):
 async def refresh_token(data: dict[str, Any]):
     from protoforge.core.auth import verify_refresh_token, create_token, create_refresh_token, user_manager
     refresh = data.get("refresh_token", "")
+    if not isinstance(refresh, str) or not refresh.strip():
+        raise HTTPException(status_code=401, detail="refresh_token 无效或已过期")
     user_id = verify_refresh_token(refresh)
 
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+        raise HTTPException(status_code=401, detail="refresh_token 无效或已过期")
 
     user = user_manager.get_user_by_id(user_id)
 
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise HTTPException(status_code=401, detail="用户不存在")
 
     access_token = create_token(user.id, user.username, user.role)
     new_refresh_token = create_refresh_token(user.id)
@@ -63,8 +71,12 @@ async def register(user_data: dict[str, Any]):
     username = user_data.get("username", "")
     password = user_data.get("password", "")
 
+    if not isinstance(username, str) or not isinstance(password, str):
+        raise HTTPException(status_code=400, detail="用户名和密码必须为字符串")
+    username = username.strip()
+    password = password.strip()
     if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and password required")
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
 
     try:
         user = await user_manager.create_user(username, password, role="user")
@@ -72,7 +84,7 @@ async def register(user_data: dict[str, Any]):
         raise HTTPException(status_code=400, detail=str(e))
 
     if not user:
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="用户名已存在")
 
     return {"id": user.id, "username": user.username, "role": user.role}
 
@@ -91,7 +103,7 @@ async def change_password(data: dict[str, Any], _user: dict = Depends(require_us
     new_password = data.get("new_password", "")
 
     if _user.get("role") != "admin" and username != _user.get("username", ""):
-        raise HTTPException(status_code=403, detail="Can only change your own password")
+        raise HTTPException(status_code=403, detail="只能修改自己的密码")
 
     ok, msg = await user_manager.change_password(username, old_password, new_password)
     if not ok:
@@ -108,7 +120,7 @@ async def admin_reset_password(data: dict[str, Any], _user: dict = Depends(requi
     new_password = data.get("new_password", "")
 
     if not username or not new_password:
-        raise HTTPException(status_code=400, detail="username and new_password required")
+        raise HTTPException(status_code=400, detail="用户名和新密码不能为空")
 
     ok, msg = await user_manager.admin_reset_password(username, new_password)
 
@@ -123,9 +135,12 @@ async def update_user_role(username: str, data: dict[str, Any], _user: dict = De
     from protoforge.core.auth import user_manager
     new_role = data.get("role", "")
     if not new_role:
-        raise HTTPException(status_code=400, detail="role is required")
+        raise HTTPException(status_code=400, detail="角色不能为空")
+    valid_roles = {"admin", "operator", "user", "viewer"}
+    if new_role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"无效的角色: {new_role}，有效值为: {', '.join(valid_roles)}")
     if not await user_manager.update_user_role(username, new_role):
-        raise HTTPException(status_code=400, detail="Failed to update role")
+        raise HTTPException(status_code=400, detail="更新角色失败")
     return {"status": "ok"}
 
 
@@ -133,7 +148,7 @@ async def update_user_role(username: str, data: dict[str, Any], _user: dict = De
 async def admin_unlock_user(username: str, _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.reset_login_attempts(username):
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="用户不存在")
     return {"status": "ok"}
 
 
@@ -141,5 +156,5 @@ async def admin_unlock_user(username: str, _user: dict = Depends(require_admin))
 async def delete_user(username: str, _user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
     if not await user_manager.delete_user(username):
-        raise HTTPException(status_code=400, detail="Cannot delete this user")
+        raise HTTPException(status_code=400, detail="无法删除该用户")
     return {"status": "ok"}

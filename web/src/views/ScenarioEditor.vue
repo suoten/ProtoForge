@@ -451,9 +451,9 @@ async function loadData() {
     const [sRes, tRes, pRes] = await Promise.all([
       api.getScenarios(), api.getTemplates(), api.getProtocols()
     ])
-    scenarios.value = sRes
-    templates.value = tRes
-    protocols.value = pRes
+    scenarios.value = sRes || []
+    templates.value = tRes || []
+    protocols.value = pRes || []
     const scenarioId = route.params.id
     if (scenarioId) {
       selectedScenario.value = scenarioId
