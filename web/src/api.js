@@ -39,7 +39,7 @@ function extractErrorDetail(data) {
 api.interceptors.response.use(
   response => {
     if (response?.data === undefined || response?.data === null) {
-      return { data: {} }
+      response.data = {}
     }
     return response
   },

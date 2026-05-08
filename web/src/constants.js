@@ -1,3 +1,7 @@
+import { useI18n } from './i18n.js'
+
+const { t } = useI18n()
+
 export const protocolLabels = {
   modbus_tcp: 'Modbus TCP',
   modbus_rtu: 'Modbus RTU',
@@ -99,12 +103,12 @@ export const defaultPorts = {
 }
 
 export const deviceStatusMap = {
-  online: ['success', '在线'],
-  running: ['success', '运行中'],
-  error: ['error', '错误'],
-  stopped: ['default', '已停止'],
-  offline: ['default', '离线'],
-  disabled: ['default', '已禁用'],
+  online: ['success', 'Online'],
+  running: ['success', 'Running'],
+  error: ['error', 'Error'],
+  stopped: ['default', 'Stopped'],
+  offline: ['default', 'Offline'],
+  disabled: ['default', 'Disabled'],
 }
 
 export const directionColorMap = {
@@ -118,8 +122,8 @@ export const directionTagTypeMap = {
 }
 
 export const directionLabelMap = {
-  in: '\u2190收', out: '\u2192发', system: '系统', write: '\u270e写',
-  recv: '\u2190收', send: '\u2192发', inbound: '\u2190入', outbound: '\u2192出',
+  in: '\u2190Recv', out: 'Send\u2192', system: 'System', write: '\u270eWrite',
+  recv: '\u2190Recv', send: 'Send\u2192', inbound: '\u2190In', outbound: 'Out\u2192',
 }
 
 export function getProtocolLabel(name) {
@@ -165,12 +169,12 @@ export const dataTypeOptions = [
 ]
 
 export const generatorTypeOptions = [
-  { label: '固定值', value: 'fixed' },
-  { label: '随机', value: 'random' },
-  { label: '正弦波', value: 'sine' },
-  { label: '三角波', value: 'triangle' },
-  { label: '锯齿波', value: 'sawtooth' },
-  { label: '方波', value: 'square' },
-  { label: '递增', value: 'increment' },
-  { label: '脚本', value: 'script' },
+  { label: 'Fixed', value: 'fixed' },
+  { label: 'Random', value: 'random' },
+  { label: 'Sine', value: 'sine' },
+  { label: 'Triangle', value: 'triangle' },
+  { label: 'Sawtooth', value: 'sawtooth' },
+  { label: 'Square', value: 'square' },
+  { label: 'Increment', value: 'increment' },
+  { label: 'Script', value: 'script' },
 ]

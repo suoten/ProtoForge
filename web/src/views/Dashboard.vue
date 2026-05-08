@@ -64,7 +64,7 @@
                 </n-space>
               </template>
               <n-space vertical size="small">
-                <n-button type="primary" block size="large" @click="startAllProtocols">
+                <n-button type="primary" block size="large" @click="startAllProtocols" :loading="startingAll">
                   <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
                   启动全部协议
                 </n-button>
@@ -166,7 +166,7 @@ const deviceColumns = [
   {
     title: '状态', key: 'status', width: 100,
     render: (row) => {
-      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || '离线']
+      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || 'offline']
       return h(NTag, { size: 'tiny', type, bordered: false }, () => label)
     }
   },

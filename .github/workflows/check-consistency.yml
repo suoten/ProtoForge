@@ -1,0 +1,98 @@
+name: API Consistency Check
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  check-api-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Export OpenAPI spec
+        run: python scripts/export-openapi.py
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm install
+
+      - name: Copy OpenAPI spec to web directory
+        run: cp openapi.json web/openapi.json
+
+      - name: Validate API consistency
+        working-directory: web
+        run: npm run validate-api
+
+  check-not-implemented:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Search for NotImplementedError
+        run: |
+          echo "=== Searching for NotImplementedError in backend code ==="
+          FOUND=0
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "NotImplementedError" protoforge/ --include="*.py" || true)
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "⚠️  Warning: Found NotImplementedError in backend code."
+            echo "   These endpoints may not be fully implemented."
+          else
+            echo "✅ No NotImplementedError found."
+          fi
+
+  check-hardcoded-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Search for hardcoded ports and URLs
+        run: |
+          echo "=== Searching for hardcoded ports and URLs in frontend code ==="
+          FOUND=0
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "localhost:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" || true)
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "127\.0\.0\.1:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" || true)
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "http://[^'\"]*:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" | grep -v "ws://" | grep -v "wss://" || true)
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "⚠️  Warning: Found hardcoded ports/URLs in frontend code."
+            echo "   Consider using environment variables or config files instead."
+          else
+            echo "✅ No hardcoded ports/URLs found."
+          fi

@@ -490,7 +490,7 @@ const columns = [
   {
     title: '状态', key: 'status', width: 100,
     render: (row) => {
-      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || '离线']
+      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || 'offline']
       return h(NTag, { type, size: 'small', bordered: false }, () => label)
     }
   },
@@ -637,7 +637,7 @@ async function batchDelete() {
 }
 
 async function startAllDevices() {
-  const toStart = filteredDevices.value.filter(d => d.status !== 'online')
+  const toStart = filteredDevices.value.filter(d => d.status !== 'online' && d.status !== 'running')
   if (!toStart.length) { message.info('所有设备已在运行中'); return }
   dialog.warning({
     title: '确认全部启动',
@@ -661,7 +661,7 @@ async function startAllDevices() {
 }
 
 async function stopAllDevices() {
-  const toStop = filteredDevices.value.filter(d => d.status === 'online')
+  const toStop = filteredDevices.value.filter(d => d.status === 'online' || d.status === 'running')
   if (!toStop.length) { message.info('没有运行中的设备'); return }
   dialog.warning({
     title: '确认全部停止',
@@ -805,7 +805,7 @@ async function deleteDevice(id) {
 async function viewPoints(id) {
   try {
     const res = await api.getDevicePoints(id)
-    currentPoints.value = res
+    currentPoints.value = res || []
     currentViewDeviceId.value = id
     writePointName.value = ''
     writePointValue.value = ''

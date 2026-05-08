@@ -148,14 +148,13 @@ const route = useRoute()
 const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
 const message = discreteMessage
 const { t, locale, setLocale } = useI18n()
-const loggedIn = ref(!!localStorage.getItem('token'))
+const loggedIn = ref(false)
 const collapsed = ref(false)
-const username = ref(localStorage.getItem('username') || 'admin')
+const username = ref(localStorage.getItem('username') || '')
 const searchQuery = ref('')
 const searchResults = ref([])
 const searchData = ref({ devices: [], templates: [], scenarios: [] })
 const wsConnected = ref(false)
-const logMessages = ref([])
 let ws = null
 
 const currentRoute = computed(() => route.path)
@@ -204,7 +203,9 @@ function navigate(key) {
 
 function onLogin() {
   loggedIn.value = true
-  username.value = localStorage.getItem('username') || 'admin'
+  username.value = localStorage.getItem('username') || ''
+  loadSearchData()
+  connectWebSocket()
 }
 
 const showChangePassword = ref(false)
@@ -237,10 +238,21 @@ function onUserMenuSelect(key) {
   }
 }
 
-onMounted(() => {
-  if (loggedIn.value) {
-    loadSearchData()
-    connectWebSocket()
+onMounted(async () => {
+  const token = localStorage.getItem('token')
+  if (token) {
+    const valid = await api.ensureValidToken()
+    if (valid) {
+      loggedIn.value = true
+      username.value = localStorage.getItem('username') || ''
+      loadSearchData()
+      connectWebSocket()
+    } else {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
+    }
   }
 })
 
@@ -341,11 +353,7 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
-      if (msg.type === 'log') {
-        logMessages.value.push(msg.data)
-        if (logMessages.value.length > 500) logMessages.value = logMessages.value.slice(-500)
-      }
-    } catch (e) { console.warn('WebSocket日志消息解析失败:', e) }
+    } catch (e) { /* ignore non-JSON messages */ }
   }
 }
 
