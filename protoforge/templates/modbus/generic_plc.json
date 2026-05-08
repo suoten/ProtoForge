@@ -1,0 +1,82 @@
+{
+    "id": "modbus_generic_plc",
+    "name": "通用Modbus PLC",
+    "protocol": "modbus",
+    "description": "通用Modbus TCP PLC仿真设备，支持线圈和寄存器读写",
+    "manufacturer": "Generic",
+    "model": "Modbus-PLC-01",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "0",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "cpu_load",
+            "address": "1",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 80
+        },
+        {
+            "name": "temperature",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "机箱温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 60.0
+        },
+        {
+            "name": "voltage_a",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "A相电压",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 218,
+            "max_value": 222
+        },
+        {
+            "name": "current_a",
+            "address": "11",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "A相电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 15.0
+        },
+        {
+            "name": "power_factor",
+            "address": "12",
+            "data_type": "float32",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.99
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": [
+        "PLC",
+        "Modbus",
+        "通用",
+        "工业控制"
+    ]
+}

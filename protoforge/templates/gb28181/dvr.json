@@ -1,0 +1,60 @@
+{
+    "id": "gb28181_dvr",
+    "name": "DVR硬盘录像机",
+    "protocol": "gb28181",
+    "description": "GB28181 DVR硬盘录像机，支持多路视频接入和存储",
+    "manufacturer": "Generic",
+    "model": "DVR-8CH",
+    "points": [
+        {
+            "name": "online",
+            "address": "status",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "channel_count",
+            "address": "channel_count",
+            "data_type": "uint16",
+            "description": "通道数",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 8
+        },
+        {
+            "name": "storage_used",
+            "address": "storage_used",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "存储使用率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 85.0
+        },
+        {
+            "name": "recording",
+            "address": "recording",
+            "data_type": "bool",
+            "description": "录像状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "server_id": "34020000002000000002",
+        "username": "34020000002000000002",
+        "password": "12345678",
+        "realm": "3402000000"
+    },
+    "tags": [
+        "DVR",
+        "GB28181",
+        "录像机",
+        "视频监控"
+    ]
+}

@@ -1,113 +1,79 @@
 {
     "id": "ethercat_servo_drive",
-    "name": "EtherCAT-伺服驱动器",
+    "name": "EtherCAT伺服驱动器",
     "protocol": "ethercat",
-    "description": "EtherCAT伺服驱动器从站，支持CSP/CSV/CST运动控制模式，PDO过程数据交换与CoE参数配置",
-    "manufacturer": "Beckhoff",
-    "model": "AX5206",
+    "description": "EtherCAT总线伺服驱动器仿真(CiA 402)",
+    "manufacturer": "Generic",
+    "model": "EC-Servo-400W",
     "points": [
         {
-            "name": "status_word",
-            "address": "0",
-            "data_type": "uint16",
-            "description": "状态字(DS402状态机: Ready/Enabled/Fault等)",
-            "access": "r",
-            "generator_type": "fixed",
-            "fixed_value": 6371
-        },
-        {
-            "name": "actual_position",
-            "address": "2",
-            "data_type": "int32",
-            "unit": "inc",
-            "description": "实际位置(编码器增量)",
+            "name": "position_actual",
+            "address": "0x6064",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "实际位置",
             "access": "r",
             "generator_type": "random",
-            "min_value": -100000,
-            "max_value": 100000
+            "min_value": 0,
+            "max_value": 360
         },
         {
-            "name": "actual_velocity",
-            "address": "6",
-            "data_type": "int32",
-            "unit": "rpm",
+            "name": "velocity_actual",
+            "address": "0x606C",
+            "data_type": "float32",
+            "unit": "RPM",
             "description": "实际速度",
             "access": "r",
             "generator_type": "random",
-            "min_value": -3000,
+            "min_value": 0,
             "max_value": 3000
         },
         {
-            "name": "actual_torque",
-            "address": "10",
-            "data_type": "int16",
-            "unit": "‰",
-            "description": "实际转矩(额定转矩千分比)",
+            "name": "torque_actual",
+            "address": "0x6077",
+            "data_type": "float32",
+            "unit": "Nm",
+            "description": "实际扭矩",
             "access": "r",
             "generator_type": "random",
-            "min_value": -500,
-            "max_value": 500
+            "min_value": 0,
+            "max_value": 5.0
+        },
+        {
+            "name": "status_word",
+            "address": "0x6041",
+            "data_type": "uint16",
+            "description": "状态字",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 39
         },
         {
             "name": "control_word",
-            "address": "14",
+            "address": "0x6040",
             "data_type": "uint16",
-            "description": "控制字(DS402命令: Shutdown/Enable/FaultReset等)",
+            "description": "控制字",
             "access": "rw",
             "generator_type": "fixed",
             "fixed_value": 15
         },
         {
-            "name": "target_position",
-            "address": "16",
-            "data_type": "int32",
-            "unit": "inc",
-            "description": "目标位置(CSP模式)",
-            "access": "rw",
-            "generator_type": "fixed",
-            "fixed_value": 0
-        },
-        {
-            "name": "target_velocity",
-            "address": "20",
-            "data_type": "int32",
-            "unit": "rpm",
-            "description": "目标速度(CSV模式)",
-            "access": "rw",
-            "generator_type": "fixed",
-            "fixed_value": 0
-        },
-        {
-            "name": "target_torque",
-            "address": "24",
-            "data_type": "int16",
-            "unit": "‰",
-            "description": "目标转矩(CST模式)",
-            "access": "rw",
-            "generator_type": "fixed",
-            "fixed_value": 0
-        },
-        {
-            "name": "mode_of_operation",
-            "address": "26",
-            "data_type": "int16",
-            "description": "运行模式(8=CSP 9=CSV 10=CST)",
-            "access": "rw",
-            "generator_type": "fixed",
-            "fixed_value": 8
-        },
-        {
-            "name": "error_code",
-            "address": "28",
-            "data_type": "uint16",
-            "description": "故障代码(0=无故障)",
+            "name": "motor_temp",
+            "address": "0x2030",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "电机温度",
             "access": "r",
-            "generator_type": "fixed",
-            "fixed_value": 0
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 75.0
         }
     ],
-    "protocol_config": {
-        "slave_address": 4097
-    },
-    "tags": ["EtherCAT", "伺服", "运动控制", "Beckhoff", "倍福", "DS402", "实时以太网"]
+    "protocol_config": {},
+    "tags": [
+        "EtherCAT",
+        "伺服",
+        "驱动器",
+        "CiA402"
+    ]
 }

@@ -1,0 +1,60 @@
+{
+    "id": "mtconnect_lathe",
+    "name": "MTConnect车床",
+    "protocol": "mtconnect",
+    "description": "MTConnect协议车床设备仿真",
+    "manufacturer": "Generic",
+    "model": "CNC-Lathe-200",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "//Spindle/Speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 500,
+            "max_value": 3000
+        },
+        {
+            "name": "x_position",
+            "address": "//Axes/X/Position",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴位置(直径)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "z_position",
+            "address": "//Axes/Z/Position",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -200,
+            "max_value": 200
+        },
+        {
+            "name": "part_count",
+            "address": "//Part/Count",
+            "data_type": "uint32",
+            "description": "零件计数",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "MTConnect",
+        "车床",
+        "CNC",
+        "数控"
+    ]
+}

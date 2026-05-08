@@ -93,7 +93,9 @@ class Recording:
         return {
             "id": self.id, "name": self.name, "protocol": self.protocol,
             "start_time": self.start_time, "end_time": self.end_time,
-            "frame_count": len(self.messages),
+            "started_at": self.start_time, "stopped_at": self.end_time,
+            "frame_count": len(self.messages), "event_count": len(self.messages),
+            "is_active": self.end_time == 0,
             "metadata": self.metadata,
             "device_id": self.metadata.get("device_id", ""),
             "duration_seconds": round(duration, 1),
@@ -103,6 +105,7 @@ class Recording:
     def to_full_dict(self) -> dict:
         d = self.to_dict()
         d["frames"] = [{**m.to_dict(), "index": i} for i, m in enumerate(self.messages)]
+        d["events"] = d["frames"]
         return d
 
     def export_json(self) -> str:
@@ -241,9 +244,13 @@ class Recorder:
         recording = self._recordings.get(rec_id)
         if not recording:
             raise ValueError(f"Recording not found: {rec_id}")
-        if len(recording.messages) < 2:
-            return {"status": "ok", "replayed": 0}
+        total = len(recording.messages)
+        if total < 2:
+            return {"status": "ok", "replayed": 0, "replayed_events": 0, "total_events": total,
+                    "success_count": 0, "error_count": 0, "duration_seconds": 0, "recording_id": rec_id}
         replayed = 0
+        errors = 0
+        start_ts = time.time()
         for i, msg in enumerate(recording.messages):
             if i > 0:
                 prev_time = recording.messages[i - 1].timestamp
@@ -259,8 +266,13 @@ class Recorder:
                             await target_engine.write_device_point(msg.device_id, point_name, point_value)
                 except Exception as e:
                     logger.debug("Replay write error: %s", e)
+                    errors += 1
             replayed += 1
-        return {"status": "ok", "replayed": replayed, "recording_id": rec_id}
+        elapsed = round(time.time() - start_ts, 2)
+        return {"status": "ok", "replayed": replayed, "recording_id": rec_id,
+                "replayed_events": replayed, "total_events": total,
+                "success_count": replayed - errors, "error_count": errors,
+                "duration_seconds": elapsed}
 
     async def _collect_loop(self) -> None:
         while self._running:
@@ -304,11 +316,25 @@ class Recorder:
 
     def get_stats(self) -> dict[str, Any]:
         is_rec = self._active is not None
+        total_events = sum(len(r.messages) for r in self._recordings.values())
+        if is_rec and self._active:
+            total_events += len(self._active.messages)
+        total_bytes = 0
+        for r in self._recordings.values():
+            for msg in r.messages:
+                total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
+        if is_rec and self._active:
+            for msg in self._active.messages:
+                total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
+        avg_events = round(total_events / max(len(self._recordings), 1), 1)
         return {
             "is_recording": is_rec,
             "active_name": self._active.name if self._active else None,
             "frames_captured": len(self._active.messages) if self._active else 0,
             "total_recordings": len(self._recordings),
+            "total_events": total_events,
+            "total_bytes": total_bytes,
+            "avg_events_per_recording": avg_events,
             "encryption_enabled": self._encryption_key is not None,
             "duration_seconds": (time.time() - self._active.start_time) if is_rec and hasattr(self._active, 'start_time') else 0,
         }

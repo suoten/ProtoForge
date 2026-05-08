@@ -255,6 +255,52 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             context.set_code(grpc.StatusCode.INTERNAL)
             return pb2.ListScenariosResponse()
 
+    async def GetScenario(self, request, context):
+        db = _get_database()
+        if not db:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.ScenarioDetailResponse(ok=False, error="Database not initialized")
+        try:
+            scenarios = await db.load_all_scenarios()
+            target = None
+            for s in scenarios:
+                s_id = s.id if hasattr(s, 'id') else s.get("id", "")
+                if s_id == request.scenario_id:
+                    target = s
+                    break
+            if not target:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                return pb2.ScenarioDetailResponse(ok=False, error=f"Scenario not found: {request.scenario_id}")
+            s_id = target.id if hasattr(target, 'id') else target.get("id", "")
+            s_name = target.name if hasattr(target, 'name') else target.get("name", "")
+            s_desc = target.description if hasattr(target, 'description') else target.get("description", "")
+            s_devices = target.devices if hasattr(target, 'devices') else target.get("devices", [])
+            s_status = "stopped"
+            engine = _get_engine()
+            if engine:
+                try:
+                    scenario_obj = engine.get_scenario(s_id)
+                    if scenario_obj:
+                        s_status = scenario_obj.status.value if hasattr(scenario_obj.status, 'value') else str(scenario_obj.status)
+                except Exception as e:
+                    logger.debug("gRPC GetScenario status error: %s", e)
+            device_ids = []
+            for d in s_devices:
+                if isinstance(d, dict):
+                    device_ids.append(d.get("id", ""))
+                elif hasattr(d, 'id'):
+                    device_ids.append(d.id)
+            detail = pb2.ScenarioDetail(
+                id=s_id, name=s_name, status=s_status,
+                device_count=len(s_devices), description=s_desc,
+                device_ids=device_ids,
+            )
+            return pb2.ScenarioDetailResponse(scenario=detail, ok=True)
+        except Exception as e:
+            logger.warning("GetScenario failed: %s", e)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return pb2.ScenarioDetailResponse(ok=False, error=str(e))
+
     async def StartScenario(self, request, context):
         engine = _get_engine()
         if not engine:

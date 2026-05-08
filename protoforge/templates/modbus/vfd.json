@@ -1,0 +1,80 @@
+{
+    "id": "modbus_vfd",
+    "name": "变频器",
+    "protocol": "modbus",
+    "description": "通用变频器，支持频率设定、运行状态监控",
+    "manufacturer": "Generic",
+    "model": "VFD-200",
+    "points": [
+        {
+            "name": "run_command",
+            "address": "0",
+            "data_type": "uint16",
+            "description": "运行命令(1=正转 2=反转 3=停止)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "frequency_set",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "Hz",
+            "description": "设定频率",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 50.0
+        },
+        {
+            "name": "frequency_out",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "Hz",
+            "description": "输出频率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 45.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "current",
+            "address": "3",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "输出电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "voltage",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "输出电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 370,
+            "max_value": 390
+        },
+        {
+            "name": "fault_code",
+            "address": "5",
+            "data_type": "uint16",
+            "description": "故障代码(0=正常)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": [
+        "变频器",
+        "VFD",
+        "Modbus",
+        "电机控制"
+    ]
+}

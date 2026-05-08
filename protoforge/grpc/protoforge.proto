@@ -13,6 +13,7 @@ service ProtoForgeService {
   rpc ReadPoints(DeviceIdRequest) returns (ReadPointsResponse);
   rpc WritePoint(WritePointRequest) returns (OperationResponse);
   rpc ListScenarios(ListScenariosRequest) returns (ListScenariosResponse);
+  rpc GetScenario(GetScenarioRequest) returns (ScenarioDetailResponse);
   rpc StartScenario(ScenarioIdRequest) returns (OperationResponse);
   rpc StopScenario(ScenarioIdRequest) returns (OperationResponse);
   rpc GetSettings(SettingsRequest) returns (SettingsResponse);
@@ -117,6 +118,25 @@ message ScenarioInfo {
 
 message ScenarioIdRequest {
   string scenario_id = 1;
+}
+
+message GetScenarioRequest {
+  string scenario_id = 1;
+}
+
+message ScenarioDetail {
+  string id = 1;
+  string name = 2;
+  string status = 3;
+  int32 device_count = 4;
+  string description = 5;
+  repeated string device_ids = 6;
+}
+
+message ScenarioDetailResponse {
+  ScenarioDetail scenario = 1;
+  bool ok = 2;
+  string error = 3;
 }
 
 message SettingsRequest {}

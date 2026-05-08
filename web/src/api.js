@@ -138,6 +138,7 @@ export default {
   stopProtocol: (name) => d(api.post(`/protocols/${name}/stop`)),
 
   getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })),
+  getDevice: (id) => d(api.get(`/devices/${id}`)),
   createDevice: (config) => d(api.post('/devices', config)),
   quickCreateDevice: (templateId, name, id, protocolConfig) => d(api.post('/devices/quick-create', { template_id: templateId, name, id, protocol_config: protocolConfig || {} })),
   getDeviceConfig: (id) => d(api.get(`/devices/${id}/config`)),
@@ -230,6 +231,7 @@ export default {
   getAlarmRules: () => d(api.get('/integration/alarm-rules')).then(r => normalizeList(r, 'rules')),
   addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
   deleteAlarmRule: (ruleId) => d(api.delete(`/integration/alarm-rules/${ruleId}`)),
+  sendIntegrationMessage: (type, payload) => d(api.post('/integration/message', { type, payload })),
 
   createDeviceWs: () => {
     const token = localStorage.getItem('token')

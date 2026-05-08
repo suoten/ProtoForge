@@ -854,7 +854,7 @@ async function doBatchCreate() {
     }
     const res = await api.batchCreateDevices(configs)
     showBatchCreateModal.value = false
-    message.success(`成功创建 ${res.created || res.success_count || configs.length} 个设备`)
+    message.success(`成功创建 ${res.created || configs.length} 个设备`)
     await loadData()
   } catch (e) {
     message.error('批量创建失败: ' + (e.response?.data?.detail || e.message))

@@ -1,79 +1,60 @@
 {
     "id": "opcda_scada_server",
-    "name": "OPC-DA SCADA服务器",
+    "name": "SCADA OPC-DA服务器",
     "protocol": "opcda",
-    "description": "OPC-DA经典数据访问服务器，模拟传统SCADA/DCS系统的OPC数据源",
+    "description": "传统SCADA系统OPC-DA接口仿真",
     "manufacturer": "Generic",
-    "model": "OPC-DA-Server-1.0",
+    "model": "SCADA-DA-01",
     "points": [
         {
-            "name": "reactor_temp",
-            "address": "Reactor.Temperature",
-            "data_type": "float32",
-            "unit": "°C",
-            "description": "反应釜温度",
+            "name": "plant_status",
+            "address": "Plant.Status",
+            "data_type": "uint16",
+            "description": "工厂状态(0=停机 1=运行 2=维护)",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 180.0,
-            "max_value": 220.0
+            "generator_type": "fixed",
+            "fixed_value": 1
         },
         {
-            "name": "reactor_pressure",
-            "address": "Reactor.Pressure",
+            "name": "total_output",
+            "address": "Plant.TotalOutput",
             "data_type": "float32",
-            "unit": "MPa",
-            "description": "反应釜压力",
+            "unit": "t/h",
+            "description": "总产量",
             "access": "r",
             "generator_type": "random",
-            "min_value": 1.0,
-            "max_value": 3.5
-        },
-        {
-            "name": "feed_rate",
-            "address": "Feed.Rate",
-            "data_type": "float32",
-            "unit": "L/h",
-            "description": "进料流量",
-            "access": "rw",
-            "generator_type": "sine",
             "min_value": 50,
             "max_value": 200
         },
         {
-            "name": "level",
-            "address": "Tank.Level",
+            "name": "energy_consumption",
+            "address": "Plant.Energy",
             "data_type": "float32",
-            "unit": "%",
-            "description": "液位",
+            "unit": "MWh",
+            "description": "能耗",
             "access": "r",
-            "generator_type": "sine",
-            "min_value": 20,
-            "max_value": 90
-        },
-        {
-            "name": "product_quality",
-            "address": "Quality.Index",
-            "data_type": "float32",
-            "unit": "%",
-            "description": "产品质量指标",
-            "access": "r",
-            "generator_type": "random",
-            "min_value": 95.0,
-            "max_value": 99.9
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
         },
         {
             "name": "alarm_count",
-            "address": "System.AlarmCount",
-            "data_type": "int32",
-            "description": "活动报警数",
+            "address": "Plant.AlarmCount",
+            "data_type": "uint16",
+            "description": "活跃告警数",
             "access": "r",
-            "generator_type": "fixed",
-            "fixed_value": 0
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 10
         }
     ],
     "protocol_config": {
-        "server_name": "ProtoForge.OPCDA.Simulator",
-        "update_rate": 1000
+        "prog_id": "Matrikon.OPC.Simulation"
     },
-    "tags": ["OPC-DA", "SCADA", "DCS", "化工", "过程控制"]
+    "tags": [
+        "SCADA",
+        "OPC-DA",
+        "工厂数据",
+        "传统系统"
+    ]
 }

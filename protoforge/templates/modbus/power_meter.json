@@ -1,10 +1,10 @@
 {
     "id": "modbus_power_meter",
-    "name": "三相电表",
-    "protocol": "modbus_tcp",
-    "description": "三相电表，支持电压、电流、功率、电能等参数采集",
+    "name": "智能电力仪表",
+    "protocol": "modbus",
+    "description": "三相智能电力仪表，支持电压/电流/功率/电能等参数监测",
     "manufacturer": "Generic",
-    "model": "PM-300",
+    "model": "PM-3100",
     "points": [
         {
             "name": "voltage_a",
@@ -13,9 +13,9 @@
             "unit": "V",
             "description": "A相电压",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 215.0,
-            "max_value": 225.0
+            "generator_type": "sine",
+            "min_value": 218,
+            "max_value": 222
         },
         {
             "name": "voltage_b",
@@ -24,9 +24,9 @@
             "unit": "V",
             "description": "B相电压",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 215.0,
-            "max_value": 225.0
+            "generator_type": "sine",
+            "min_value": 218,
+            "max_value": 222
         },
         {
             "name": "voltage_c",
@@ -35,9 +35,9 @@
             "unit": "V",
             "description": "C相电压",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 215.0,
-            "max_value": 225.0
+            "generator_type": "sine",
+            "min_value": 218,
+            "max_value": 222
         },
         {
             "name": "current_a",
@@ -46,10 +46,9 @@
             "unit": "A",
             "description": "A相电流",
             "access": "r",
-            "generator_type": "sine",
-            "min_value": 0.0,
-            "max_value": 50.0,
-            "generator_config": {"period": 60.0}
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 50.0
         },
         {
             "name": "current_b",
@@ -58,10 +57,9 @@
             "unit": "A",
             "description": "B相电流",
             "access": "r",
-            "generator_type": "sine",
-            "min_value": 0.0,
-            "max_value": 50.0,
-            "generator_config": {"period": 60.0, "phase": 2.094}
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 50.0
         },
         {
             "name": "current_c",
@@ -70,10 +68,9 @@
             "unit": "A",
             "description": "C相电流",
             "access": "r",
-            "generator_type": "sine",
-            "min_value": 0.0,
-            "max_value": 50.0,
-            "generator_config": {"period": 60.0, "phase": 4.189}
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 50.0
         },
         {
             "name": "active_power",
@@ -84,23 +81,48 @@
             "access": "r",
             "generator_type": "random",
             "min_value": 0.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "reactive_power",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "kVar",
+            "description": "无功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
             "max_value": 30.0
         },
         {
+            "name": "power_factor",
+            "address": "16",
+            "data_type": "float32",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.99
+        },
+        {
             "name": "total_energy",
-            "address": "14",
+            "address": "18",
             "data_type": "float32",
             "unit": "kWh",
-            "description": "总有功电能",
+            "description": "累计电能",
             "access": "r",
-            "generator_type": "sawtooth",
-            "min_value": 0.0,
-            "max_value": 99999.0,
-            "generator_config": {"period": 86400.0}
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
         }
     ],
     "protocol_config": {
         "slave_id": 1
     },
-    "tags": ["能耗监测", "电表", "电力"]
+    "tags": [
+        "电力仪表",
+        "Modbus",
+        "三相电",
+        "电能监测"
+    ]
 }

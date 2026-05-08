@@ -895,7 +895,7 @@ async function loadReportTrend() {
   loadingTrend.value = true
   try {
     const res = await api.getReportTrend({ count: 10 })
-    trendData.value = res.trends || res || []
+    trendData.value = Array.isArray(res) ? res : (res.trends || [])
   } catch (e) {
     message.error('加载趋势数据失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingTrend.value = false }
