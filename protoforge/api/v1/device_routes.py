@@ -54,9 +54,15 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
 async def quick_create_device(params: dict[str, Any], _user: dict = Depends(require_operator)):
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
+    if not isinstance(template_id, str) or not isinstance(device_name, str):
+        raise HTTPException(status_code=400, detail="template_id 和 name 必须为字符串")
+    template_id = template_id.strip()
+    device_name = device_name.strip()
     device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("(", "").replace(")", "") or str(uuid.uuid4())[:8]
     device_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', device_id).strip('-') or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
+    if not isinstance(protocol_config, dict):
+        raise HTTPException(status_code=400, detail="protocol_config 必须为对象")
 
     if not template_id or not template_id.strip():
         raise HTTPException(status_code=400, detail="template_id 为必填项")
@@ -113,7 +119,7 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
                     await db.save_device(config)
                 except Exception as db_err:
                     logger.warning("Failed to persist device %s: %s", config.id, db_err)
-            results.append(info.model_dump() if hasattr(info, 'model_dump') else {"id": config.id, "name": config.name})
+            results.append(info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump) else {"id": config.id, "name": config.name, "protocol": config.protocol})
         except Exception as e:
             results.append({"id": config.id, "error": str(e)})
 
@@ -270,7 +276,7 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
         except Exception as db_err:
             logger.warning("Failed to update device in DB: %s", db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
-        response = result.model_dump() if hasattr(result, 'model_dump') else {"id": device_id, "name": config.name}
+        response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else {"id": device_id, "name": config.name, "protocol": config.protocol}
         return response
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
