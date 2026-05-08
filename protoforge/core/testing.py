@@ -893,7 +893,7 @@ class TestRunner:
                         if ip.is_loopback or ip.is_private:
                             allowed = True
                     except ValueError:
-                        pass
+                        logger.debug("SSRF check: could not parse hostname %r as IP address, treating as external", hostname)
                 if not allowed:
                     return {"error": f"SSRF protection: external URL not allowed (hostname={hostname}). Use relative paths for internal API calls."}
             elif not url.startswith("/"):

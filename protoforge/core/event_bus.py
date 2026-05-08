@@ -54,6 +54,7 @@ class EventBus:
         self._callbacks: dict[str, list[Callable]] = {}
         self._history: deque[Event] = deque(maxlen=max_history)
         self._dropped_count: int = 0
+        self._last_drop_warning: float = 0.0
         self._lock = asyncio.Lock()
 
     def subscribe(self, event_type: str, queue: asyncio.Queue | None = None) -> asyncio.Queue:
@@ -92,6 +93,10 @@ class EventBus:
                     queue.put_nowait(event)
                 except asyncio.QueueFull:
                     pass
+                now = time.time()
+                if now - self._last_drop_warning > 60:
+                    self._last_drop_warning = now
+                    logger.warning("EventBus dropped %d events (subscribers too slow)", self._dropped_count)
 
         for callback in self._callbacks.get(event_type, []):
             try:

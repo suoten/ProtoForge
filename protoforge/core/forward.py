@@ -193,18 +193,21 @@ class FileTarget(ForwardTarget):
 
 
 class ForwardEngine:
-    def __init__(self, log_bus: LogBus):
+    def __init__(self, log_bus: LogBus, queue_maxsize: int = 10000,
+                 batch_size: int = 100, flush_interval: float = 5.0,
+                 retry_count: int = 3):
         self._log_bus = log_bus
         self._targets: dict[str, ForwardTarget] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
-        self._batch_size = 100
-        self._flush_interval = 5.0
+        self._queue_maxsize = queue_maxsize
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
+        self._batch_size = batch_size
+        self._flush_interval = flush_interval
         self._sent_count: int = 0
         self._failed_count: int = 0
         self._dropped_count: int = 0
-        self._retry_count: int = 3
+        self._retry_count = retry_count
 
     def add_target(self, name: str, target: ForwardTarget) -> None:
         self._targets[name] = target
@@ -246,7 +249,7 @@ class ForwardEngine:
         if self._running:
             return
         self._running = True
-        self._queue = asyncio.Queue(maxsize=10000)
+        self._queue = asyncio.Queue(maxsize=self._queue_maxsize)
         self._log_bus.subscribe(self._queue)
         self._task = asyncio.create_task(self._forward_loop())
         logger.info("Forward engine started with %d targets", len(self._targets))

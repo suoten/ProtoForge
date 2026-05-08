@@ -91,8 +91,15 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      if (!window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
-        window.location.href = '/'
+      const reason = error.response?.data?.reason
+      if (reason === 'token_expired') {
+        if (window.location.pathname !== '/') {
+          window.location.href = '/'
+        }
+      } else {
+        if (window.location.pathname !== '/') {
+          window.location.href = '/'
+        }
       }
     } else if (status === 403) {
       console.error('Permission denied:', detail)

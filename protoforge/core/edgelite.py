@@ -110,7 +110,10 @@ def _is_edgelite_local(el_config: dict[str, str]) -> bool:
 def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) -> int | None:
     device_port = protocol_config.get("port")
     if device_port is not None:
-        return int(device_port)
+        try:
+            return int(device_port)
+        except (ValueError, TypeError):
+            logger.warning("Invalid port value %r for protocol %s, ignoring", device_port, protocol)
     try:
         from protoforge.main import get_engine
         engine = get_engine()
@@ -380,7 +383,8 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
         raise EdgeLiteError("http", f"EdgeLite 登录失败: HTTP {login_resp.status_code}", f"网关返回错误状态码 {login_resp.status_code}")
 
     data = login_resp.json()
-    token = data.get("data", {}).get("access_token", "") or data.get("access_token", "")
+    inner = data.get("data")
+    token = (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
     if not token:
         raise EdgeLiteError("token", "EdgeLite 登录成功但未返回 Token", "请检查 EdgeLite 网关版本是否兼容")
     return token
@@ -388,7 +392,8 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
 
 def _extract_token(login_resp: httpx.Response) -> str:
     data = login_resp.json()
-    return data.get("data", {}).get("access_token", "") or data.get("access_token", "")
+    inner = data.get("data")
+    return (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
 
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:

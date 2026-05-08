@@ -1,8 +1,11 @@
 import asyncio
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable, Coroutine
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,6 +25,7 @@ class LogBus:
         self._subscribers: list[asyncio.Queue] = []
         self._callbacks: list[Callable[[LogEntry], Coroutine]] = []
         self._dropped_count: int = 0
+        self._last_drop_warning: float = 0.0
 
     def emit(self, protocol: str, direction: str, device_id: str,
              message_type: str, summary: str, detail: dict[str, Any] | None = None) -> None:
@@ -48,6 +52,10 @@ class LogBus:
                     queue.put_nowait(entry)
                 except asyncio.QueueFull:
                     pass
+                now = time.time()
+                if now - self._last_drop_warning > 60:
+                    self._last_drop_warning = now
+                    logger.warning("LogBus dropped %d entries (subscribers too slow)", self._dropped_count)
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:

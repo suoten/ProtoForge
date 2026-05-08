@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from protoforge.core.auth import verify_token
+from protoforge.core.auth import verify_token, verify_token_with_reason
 
 logger = logging.getLogger(__name__)
 
@@ -131,11 +131,12 @@ async def auth_middleware(request: Request, call_next):
         )
 
     token = auth_header[7:]
-    payload = verify_token(token)
+    payload, reason = verify_token_with_reason(token)
     if payload is None:
+        detail = "Token已过期，请重新登录" if reason == "token_expired" else "无效的认证令牌"
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Invalid or expired token"},
+            content={"detail": detail, "reason": reason},
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -105,6 +105,16 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
+def verify_token_with_reason(token: str) -> tuple[Optional[dict], Optional[str]]:
+    try:
+        payload = jwt.decode(token, get_secret_key(), algorithms=["HS256"])
+        return payload, None
+    except jwt.ExpiredSignatureError:
+        return None, "token_expired"
+    except jwt.InvalidTokenError as e:
+        return None, f"token_invalid:{e}"
+
+
 def verify_refresh_token(token: str) -> Optional[str]:
     payload = verify_token(token)
     if not payload:

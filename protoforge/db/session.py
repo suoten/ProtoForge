@@ -10,6 +10,14 @@ from protoforge.models.device import DeviceConfig, PointConfig
 from protoforge.models.scenario import Rule, ScenarioConfig
 from protoforge.models.template import TemplateDetail
 
+
+def _safe_json_loads(value: str, default=None):
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError, ValueError) as e:
+        logger.warning("Failed to parse JSON value: %s, using default", e)
+        return default if default is not None else []
+
 logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
@@ -295,6 +303,8 @@ class Database:
 
     async def _execute(self, sql: str, params: tuple = ()) -> None:
         if self._is_postgres:
+            if self._pg_pool is None:
+                raise RuntimeError("PostgreSQL connection pool not initialized")
             async with self._pg_pool.acquire() as conn:
                 await conn.execute(sql, *params)
         else:
@@ -303,6 +313,8 @@ class Database:
 
     async def _fetchone(self, sql: str, params: tuple = ()) -> Optional[dict]:
         if self._is_postgres:
+            if self._pg_pool is None:
+                raise RuntimeError("PostgreSQL connection pool not initialized")
             async with self._pg_pool.acquire() as conn:
                 row = await conn.fetchrow(sql, *params)
                 return dict(row) if row else None
@@ -313,6 +325,8 @@ class Database:
 
     async def _fetchall(self, sql: str, params: tuple = ()) -> list[dict]:
         if self._is_postgres:
+            if self._pg_pool is None:
+                raise RuntimeError("PostgreSQL connection pool not initialized")
             async with self._pg_pool.acquire() as conn:
                 rows = await conn.fetch(sql, *params)
                 return [dict(r) for r in rows]
@@ -433,8 +447,8 @@ class Database:
         )
 
     def _row_to_device(self, row: dict) -> DeviceConfig:
-        points = [PointConfig(**p) for p in json.loads(row["points"])]
-        protocol_config = json.loads(row["protocol_config"])
+        points = [PointConfig(**p) for p in _safe_json_loads(row["points"], [])]
+        protocol_config = _safe_json_loads(row["protocol_config"], {})
         position = protocol_config.pop("_position", None) if isinstance(protocol_config, dict) else None
         return DeviceConfig(
             id=row["id"],
@@ -447,8 +461,8 @@ class Database:
         )
 
     def _row_to_scenario(self, row: dict) -> ScenarioConfig:
-        devices = [DeviceConfig(**d) for d in json.loads(row["devices"])]
-        rules = [Rule(**r) for r in json.loads(row["rules"])]
+        devices = [DeviceConfig(**d) for d in _safe_json_loads(row["devices"], [])]
+        rules = [Rule(**r) for r in _safe_json_loads(row["rules"], [])]
         return ScenarioConfig(
             id=row["id"],
             name=row["name"],
@@ -458,7 +472,7 @@ class Database:
         )
 
     def _row_to_template(self, row: dict) -> TemplateDetail:
-        points = [PointConfig(**p) for p in json.loads(row["points"])]
+        points = [PointConfig(**p) for p in _safe_json_loads(row["points"], [])]
         return TemplateDetail(
             id=row["id"],
             name=row["name"],
@@ -467,8 +481,8 @@ class Database:
             manufacturer=row["manufacturer"],
             model=row["model"],
             points=points,
-            protocol_config=json.loads(row["protocol_config"]),
-            tags=json.loads(row["tags"]),
+            protocol_config=_safe_json_loads(row["protocol_config"], {}),
+            tags=_safe_json_loads(row["tags"], []),
         )
 
     async def save_test_case(self, case_data: dict[str, Any]) -> None:
@@ -489,18 +503,18 @@ class Database:
             return None
         return {
             "id": row["id"], "name": row["name"], "description": row["description"],
-            "tags": json.loads(row["tags"]), "steps": json.loads(row["steps"]),
-            "setup_steps": json.loads(row["setup_steps"]),
-            "teardown_steps": json.loads(row["teardown_steps"]),
+            "tags": _safe_json_loads(row["tags"], []), "steps": _safe_json_loads(row["steps"], []),
+            "setup_steps": _safe_json_loads(row["setup_steps"], []),
+            "teardown_steps": _safe_json_loads(row["teardown_steps"], []),
         }
 
     async def load_all_test_cases(self) -> list[dict[str, Any]]:
         rows = await self._fetchall("SELECT * FROM test_cases")
         return [{
             "id": r["id"], "name": r["name"], "description": r["description"],
-            "tags": json.loads(r["tags"]), "steps": json.loads(r["steps"]),
-            "setup_steps": json.loads(r["setup_steps"]),
-            "teardown_steps": json.loads(r["teardown_steps"]),
+            "tags": _safe_json_loads(r["tags"], []), "steps": _safe_json_loads(r["steps"], []),
+            "setup_steps": _safe_json_loads(r["setup_steps"], []),
+            "teardown_steps": _safe_json_loads(r["teardown_steps"], []),
         } for r in rows]
 
     async def delete_test_case(self, case_id: str) -> None:
@@ -522,7 +536,7 @@ class Database:
         rows = await self._fetchall("SELECT * FROM test_suites")
         return [{
             "id": r["id"], "name": r["name"], "description": r["description"],
-            "test_case_ids": json.loads(r["test_case_ids"]), "tags": json.loads(r["tags"]),
+            "test_case_ids": _safe_json_loads(r["test_case_ids"], []), "tags": _safe_json_loads(r["tags"], []),
             "created_at": r["created_at"], "updated_at": r["updated_at"],
         } for r in rows]
 
@@ -541,7 +555,7 @@ class Database:
             return None
         return {
             "id": row["id"], "name": row["name"], "description": row["description"],
-            "test_case_ids": json.loads(row["test_case_ids"]), "tags": json.loads(row["tags"]),
+            "test_case_ids": _safe_json_loads(row["test_case_ids"], []), "tags": _safe_json_loads(row["tags"], []),
             "created_at": row["created_at"], "updated_at": row["updated_at"],
         }
 
@@ -569,8 +583,8 @@ class Database:
             "start_time": r["start_time"], "end_time": r["end_time"],
             "total": r["total"], "passed": r["passed"], "failed": r["failed"],
             "errors": r["errors"], "skipped": r["skipped"],
-            "environment": json.loads(r["environment"]),
-            "test_cases": json.loads(r["test_cases"]),
+            "environment": _safe_json_loads(r["environment"], {}),
+            "test_cases": _safe_json_loads(r["test_cases"], []),
         } for r in rows]
 
     async def delete_test_report(self, report_id: str) -> None:
@@ -591,8 +605,8 @@ class Database:
             "start_time": row["start_time"], "end_time": row["end_time"],
             "total": row["total"], "passed": row["passed"], "failed": row["failed"],
             "errors": row["errors"], "skipped": row["skipped"],
-            "environment": json.loads(row["environment"]),
-            "test_cases": json.loads(row["test_cases"]),
+            "environment": _safe_json_loads(row["environment"], {}),
+            "test_cases": _safe_json_loads(row["test_cases"], []),
         }
 
     async def save_user(self, user_data: dict[str, Any]) -> None:
@@ -786,8 +800,8 @@ class Database:
         return {
             "id": row["id"], "name": row["name"], "protocol": row["protocol"],
             "start_time": row["start_time"], "end_time": row["end_time"],
-            "messages": json.loads(row["messages"]),
-            "metadata": json.loads(row["metadata"]),
+            "messages": _safe_json_loads(row["messages"], []),
+            "metadata": _safe_json_loads(row["metadata"], {}),
         }
 
     async def load_all_recordings(self) -> list[dict[str, Any]]:
@@ -795,7 +809,7 @@ class Database:
         return [{
             "id": r["id"], "name": r["name"], "protocol": r["protocol"],
             "start_time": r["start_time"], "end_time": r["end_time"],
-            "metadata": json.loads(r["metadata"]),
+            "metadata": _safe_json_loads(r["metadata"], {}),
         } for r in rows]
 
     async def delete_recording(self, rec_id: str) -> None:

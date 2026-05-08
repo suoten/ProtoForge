@@ -67,12 +67,16 @@ class WebhookConfig:
 class WebhookManager:
     _PERSIST_FILE = "data/webhooks.json"
 
-    def __init__(self):
+    def __init__(self, queue_maxsize: int = 5000,
+                 rate_limit_seconds: float = 5.0,
+                 auto_disable_threshold: int = 50):
         self._webhooks: dict[str, WebhookConfig] = {}
         self._client: Optional[httpx.AsyncClient] = None
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=5000)
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
         self._task: Optional[asyncio.Task] = None
         self._running = False
+        self._rate_limit_seconds = rate_limit_seconds
+        self._auto_disable_threshold = auto_disable_threshold
 
     def _persist(self) -> None:
         try:
@@ -232,11 +236,11 @@ class WebhookManager:
                 continue
 
             # Rate limiting: max 1 trigger per 5 seconds per webhook
-            if timestamp - webhook.last_triggered < 5.0:
+            if timestamp - webhook.last_triggered < self._rate_limit_seconds:
                 continue
 
             # Auto-disable webhook after too many errors
-            if webhook.error_count >= 50:
+            if webhook.error_count >= self._auto_disable_threshold:
                 webhook.enabled = False
                 logger.warning("Webhook %s auto-disabled due to %d errors", webhook.id, webhook.error_count)
                 continue
