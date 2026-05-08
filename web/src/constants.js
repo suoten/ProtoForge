@@ -118,8 +118,8 @@ export const directionTagTypeMap = {
 }
 
 export const directionLabelMap = {
-  in: '← 收', out: '→ 发', system: '系统', write: '✎ 写',
-  recv: '← 收', send: '→ 发', inbound: '← 入', outbound: '→ 出',
+  in: '\u2190收', out: '\u2192发', system: '系统', write: '\u270e写',
+  recv: '\u2190收', send: '\u2192发', inbound: '\u2190入', outbound: '\u2192出',
 }
 
 export function getProtocolLabel(name) {
@@ -146,7 +146,7 @@ export const defaultPointConfig = {
 export const popularTemplateIds = [
   'modbus_temperature_sensor', 'siemens_s7_1200', 'smart_lock', 'flow_meter',
   'modbus_mitsubishi_fx5u', 'modbus_fanuc_cnc', 'ab_controllogix', 'fins_cp1h',
-  'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'gb28181_ptz_camera', 'mqtt_hvac_controller',
+  'toledo_scale', 'opcda_scada_server', 'mtconnect_mill', 'gb28181_ptz_camera',
 ]
 
 export const defaultProtocol = 'modbus_tcp'

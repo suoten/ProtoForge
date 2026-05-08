@@ -163,14 +163,8 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def _is_password_strong(password: str) -> tuple[bool, str]:
-    if len(password) < 8:
-        return False, "密码长度至少8位"
-    if not any(c.isupper() for c in password):
-        return False, "密码必须包含大写字母"
-    if not any(c.islower() for c in password):
-        return False, "密码必须包含小写字母"
-    if not any(c.isdigit() for c in password):
-        return False, "密码必须包含数字"
+    if len(password) < 6:
+        return False, "密码长度至少6位"
     return True, ""
 
 

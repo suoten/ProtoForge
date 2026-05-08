@@ -92,7 +92,6 @@
           </n-layout-header>
           <n-layout-content class="app-content">
             <router-view />
-            <Welcome />
           </n-layout-content>
         </n-layout>
       </n-layout>
@@ -143,7 +142,6 @@ import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api from './api.js'
 import Login from './views/Login.vue'
-import Welcome from './views/Welcome.vue'
 
 const router = useRouter()
 const route = useRoute()
