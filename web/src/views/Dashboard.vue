@@ -146,6 +146,7 @@ const scenarios = ref([])
 const recentLogs = ref([])
 const loading = ref(true)
 const loadError = ref('')
+const startingAll = ref(false)
 
 let deviceWs = null
 let logWs = null

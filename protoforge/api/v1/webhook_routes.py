@@ -25,12 +25,8 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
         raise HTTPException(status_code=400, detail="url is required")
 
     url = config.get("url", "")
-    try:
-        parsed = re.match(r'^https?://', url)
-        if not parsed:
-            raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=f"url 格式无效: {e}")
+    if not re.match(r'^https?://', url):
+        raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
 
     webhook = webhook_manager.add_webhook(config)
     return webhook.to_dict()

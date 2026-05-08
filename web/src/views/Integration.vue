@@ -639,13 +639,15 @@ async function loadDeviceStatusCache() {
     const raw = res.devices || res
     if (Array.isArray(raw)) {
       deviceStatusCache.value = raw
-    } else {
+    } else if (raw && typeof raw === 'object') {
       deviceStatusCache.value = Object.entries(raw).map(([device_id, status]) => ({
         device_id,
         status,
         protocol: '',
         last_updated: '',
       }))
+    } else {
+      deviceStatusCache.value = []
     }
   } catch (e) {
     message.error('加载设备状态失败: ' + (e.response?.data?.detail || e.message))
@@ -669,12 +671,16 @@ async function loadProtocolMappings() {
   try {
     const res = await api.getIntegrationProtocols()
     const pmap = res.protocol_map || {}
-    protocolMappings.value = Object.entries(pmap).map(([source, target]) => ({
-      source_protocol: source,
-      target_protocol: typeof target === 'string' ? target : target.protocol || '',
-      driver_type: typeof target === 'object' ? target.driver || '' : '',
-      status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
-    }))
+    if (pmap && typeof pmap === 'object') {
+      protocolMappings.value = Object.entries(pmap).map(([source, target]) => ({
+        source_protocol: source,
+        target_protocol: typeof target === 'string' ? target : target.protocol || '',
+        driver_type: typeof target === 'object' ? target.driver || '' : '',
+        status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
+      }))
+    } else {
+      protocolMappings.value = []
+    }
   } catch (e) {
     message.error('加载协议映射失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingProtocols.value = false }

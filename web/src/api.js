@@ -91,15 +91,8 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      const reason = error.response?.data?.reason
-      if (reason === 'token_expired') {
-        if (window.location.pathname !== '/') {
-          window.location.href = '/'
-        }
-      } else {
-        if (window.location.pathname !== '/') {
-          window.location.href = '/'
-        }
+      if (window.location.pathname !== '/') {
+        window.location.href = '/'
       }
     } else if (status === 403) {
       console.error('Permission denied:', detail)
@@ -108,7 +101,7 @@ api.interceptors.response.use(
     } else if (status >= 500) {
       console.error('Server error:', detail)
     } else if (!error.response) {
-      console.error('Network error: 无法连接到服务器，请检查网络连接')
+      console.error('Network error: Unable to connect to server')
     }
     return Promise.reject(error)
   }
