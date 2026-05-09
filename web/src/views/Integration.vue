@@ -577,6 +577,7 @@ const deviceColumns = [
     render: (row) => {
       const s = row._el_status
       if (!s) return h(NText, { depth: 3, style: 'font-size:12px' }, () => '未查询')
+      if (s === 'error') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '错误')
       if (s === 'not_registered') return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '未注册')
       if (s === 'online') return h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '在线')
       if (s === 'offline') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '离线')
@@ -840,6 +841,12 @@ async function pushDevice(deviceId) {
       if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
       message.warning('该设备未配置 EdgeLite 地址'); return
     }
+    if (!res.ok) {
+      const errMsg = res.error || '未知错误'
+      const hint = res.suggestion ? ` (${res.suggestion})` : ''
+      message.error('推送失败: ' + errMsg + hint)
+      return
+    }
     const dc = res.driver_config
     const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
     message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
@@ -859,6 +866,7 @@ async function removeFromEdgelite(deviceId) {
       try {
         const res = await api.removeDeviceFromEdgelite(deviceId)
         if (res.skipped) { message.warning('该设备未配置 EdgeLite 地址'); return }
+        if (!res.ok) { message.error('移除失败: ' + (res.error || '未知错误')); return }
         message.success('设备已从 EdgeLite 移除')
         await checkStatus(deviceId)
       } catch (e) {
@@ -890,8 +898,10 @@ async function checkStatus(deviceId) {
   try {
     const res = await api.getEdgeliteDeviceStatus(deviceId)
     const dev = allDevices.value.find(d => d.id === deviceId)
-    if (dev) dev._el_status = res.status
-    if (res.status === 'not_registered') message.info('设备未在 EdgeLite 注册')
+    if (dev) dev._el_status = res.ok ? res.status : 'error'
+    if (!res.ok) {
+      message.error('查询失败: ' + (res.error || '未知错误'))
+    } else if (res.status === 'not_registered') message.info('设备未在 EdgeLite 注册')
     else if (res.status === 'online') message.success('EdgeLite 设备在线')
     else if (res.status === 'offline') message.warning('EdgeLite 设备离线（驱动未连接到 ProtoForge）')
     else message.info(`EdgeLite 状态: ${res.status}`)
@@ -995,8 +1005,8 @@ async function batchPushAndVerify() {
     for (const dev of elDevices.value) {
       try {
         const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
-        dev._el_status = statusRes.status
-        if (statusRes.status === 'online') verified++
+        dev._el_status = statusRes.ok ? statusRes.status : 'error'
+        if (statusRes.ok && statusRes.status === 'online') verified++
       } catch (e) { message.warning(`获取设备 ${dev.id} 状态失败: ${e.response?.data?.detail || e.message}`) }
     }
     message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
