@@ -168,6 +168,7 @@ const showRuleModal = ref(false)
 const showPointsModal = ref(false)
 const saving = ref(false)
 const scenarioLoading = ref(false)
+const hasUnsavedChanges = ref(false)
 const devices = ref([])
 const templates = ref([])
 const protocols = ref([])
@@ -252,6 +253,7 @@ function savePoints() {
     node.data.pointCount = editingPoints.value.length
   }
   showPointsModal.value = false
+  hasUnsavedChanges.value = true
   message.success('测点已更新（保存场景时将同步到后端）')
 }
 
@@ -272,6 +274,7 @@ function confirmRule() {
   }
   showRuleModal.value = false
   pendingConnection.value = null
+  hasUnsavedChanges.value = true
   message.success('联动规则已添加')
 }
 

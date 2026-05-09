@@ -98,7 +98,7 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         return points
     except Exception as e:
         logger.error("EdgeLite read points exception for %s: %s", device_id, e)
-        return {"ok": False, "error": str(e), "error_type": "unknown"}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 测点读取失败: {e}")
 
 
 @router.get("/integration/edgelite/pipeline/{device_id}")
@@ -146,7 +146,7 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         return result
     except Exception as e:
         logger.error("EdgeLite pipeline verification exception for %s: %s", device_id, e)
-        return {"ok": False, "steps": {"auth": {"ok": False, "error": str(e), "error_type": "unknown"}}}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 管道验证失败: {e}")
 
 
 @router.delete("/integration/edgelite/push/{device_id}")
@@ -163,7 +163,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
         return await _remove(instance)
     except Exception as e:
         logger.error("EdgeLite remove device exception for %s: %s", device_id, e)
-        return {"ok": False, "error": str(e), "error_type": "unknown"}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 移除设备失败: {e}")
 
 
 @router.post("/integration/pygbsentry")
