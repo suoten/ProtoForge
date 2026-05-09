@@ -908,7 +908,8 @@ class TestRunner:
             resp = await api_client.request(method, url, **kwargs)
             return self._resp_to_dict(resp)
 
-        return None
+        logger.warning("Unknown test action: %s", action)
+        return {"error": f"Unknown action: {action}"}
 
     def _resp_to_dict(self, resp: Any) -> Any:
         if hasattr(resp, 'json'):

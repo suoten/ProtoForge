@@ -17,7 +17,10 @@ try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     _AES_AVAILABLE = True
 except ImportError:
-    logger.error("cryptography library not available. Recording encryption requires cryptography. Install with: pip install cryptography")
+    logger.warning(
+        "cryptography library not available. Recording encryption will not work. "
+        "Install with: pip install cryptography"
+    )
 
 
 def _encrypt_data(data: bytes, key: bytes) -> str:

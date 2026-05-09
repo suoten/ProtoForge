@@ -7,6 +7,9 @@
       <n-tab-pane name="edgelite-pipeline" tab="EdgeLite 联调">
         <n-space vertical size="large">
           <n-card size="small" title="EdgeLite 连接配置">
+            <template #header-extra>
+              <n-button text type="info" size="tiny" @click="$router.push('/settings')">在系统设置中管理</n-button>
+            </template>
             <n-space vertical>
               <n-form :model="elConfig" label-placement="left" label-width="140" inline>
                 <n-form-item label="EdgeLite地址">
@@ -396,7 +399,7 @@
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showAddAlarmModal = false">取消</n-button>
+          <n-button @click="cancelAddAlarm">取消</n-button>
           <n-button type="primary" @click="addAlarmRule" :loading="addingAlarm">添加</n-button>
         </n-space>
       </template>
@@ -732,7 +735,7 @@ async function loadAlarmRules() {
 
 function cancelAddAlarm() {
   showAddAlarmModal.value = false
-  alarmForm.value = { source_device_id: '', alarm_severity: 'warning', action: 'notify', target_device_id: '', enabled: true }
+  alarmForm.value = { rule_id: '', source_device_id: '', alarm_severity: 'critical', action: 'stop_device', target_device_id: '', enabled: true }
 }
 
 async function addAlarmRule() {
@@ -783,11 +786,35 @@ async function validateDevice() {
   } finally { validating.value = false }
 }
 
+async function loadElConfig() {
+  try {
+    const settings = await api.getSettings()
+    elConfig.value = {
+      url: settings.edgelite_url || '',
+      username: settings.edgelite_username || 'admin',
+      password: settings.edgelite_password || '',
+    }
+  } catch (e) {
+    // Use defaults
+  }
+}
+
 async function testConnection() {
   if (!elConfig.value.url) { message.warning('请填写 EdgeLite 地址'); return }
   testingConn.value = true
   try {
     connResult.value = await api.testEdgeliteConnection(elConfig.value)
+    if (connResult.value.ok) {
+      try {
+        await api.updateSettings({
+          edgelite_url: elConfig.value.url,
+          edgelite_username: elConfig.value.username,
+          edgelite_password: elConfig.value.password,
+        })
+      } catch (e) {
+        // Silently fail - settings sync is best effort
+      }
+    }
   } catch (e) {
     connResult.value = { ok: false, error: e.response?.data?.detail || e.message }
   } finally { testingConn.value = false }
@@ -1046,6 +1073,7 @@ async function sendIntMessage() {
 }
 
 onMounted(() => {
+  loadElConfig()
   loadDevices()
   loadIntStatus()
   loadIntMetrics()

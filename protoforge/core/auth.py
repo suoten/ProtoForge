@@ -67,7 +67,10 @@ def get_secret_key() -> str:
     return _SECRET_KEY
 
 
-def create_token(user_id: str, username: str, role: str = "user", expires_in: int = 86400) -> str:
+def create_token(user_id: str, username: str, role: str = "user", expires_in: int = None) -> str:
+    if expires_in is None:
+        from protoforge.config import get_settings
+        expires_in = get_settings().access_token_expires
     now = time.time()
     payload = {
         "sub": user_id,
@@ -81,7 +84,10 @@ def create_token(user_id: str, username: str, role: str = "user", expires_in: in
     return jwt.encode(payload, get_secret_key(), algorithm="HS256")
 
 
-def create_refresh_token(user_id: str, expires_in: int = 604800) -> str:
+def create_refresh_token(user_id: str, expires_in: int = None) -> str:
+    if expires_in is None:
+        from protoforge.config import get_settings
+        expires_in = get_settings().refresh_token_expires
     now = time.time()
     payload = {
         "sub": user_id,
@@ -173,13 +179,47 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def _is_password_strong(password: str) -> tuple[bool, str]:
-    if len(password) < 6:
-        return False, "密码长度至少6位"
+    from protoforge.config import get_settings
+    min_length = get_settings().min_password_length
+    if len(password) < min_length:
+        return False, f"密码长度至少{min_length}位"
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    has_special = any(not c.isalnum() for c in password)
+    categories = sum([has_upper, has_lower, has_digit, has_special])
+    if categories < 3:
+        missing = []
+        if not has_upper:
+            missing.append("大写字母")
+        if not has_lower:
+            missing.append("小写字母")
+        if not has_digit:
+            missing.append("数字")
+        if not has_special:
+            missing.append("特殊字符")
+        return False, f"密码需包含大写字母、小写字母、数字、特殊字符中的至少3种，当前缺少：{'、'.join(missing)}"
     return True, ""
 
 
-_MAX_LOGIN_ATTEMPTS = 5
-_LOCKOUT_DURATION = 300
+_MAX_LOGIN_ATTEMPTS = None
+_LOCKOUT_DURATION = None
+
+
+def _get_max_login_attempts() -> int:
+    global _MAX_LOGIN_ATTEMPTS
+    if _MAX_LOGIN_ATTEMPTS is None:
+        from protoforge.config import get_settings
+        _MAX_LOGIN_ATTEMPTS = get_settings().max_login_attempts
+    return _MAX_LOGIN_ATTEMPTS
+
+
+def _get_lockout_duration() -> int:
+    global _LOCKOUT_DURATION
+    if _LOCKOUT_DURATION is None:
+        from protoforge.config import get_settings
+        _LOCKOUT_DURATION = get_settings().lockout_duration
+    return _LOCKOUT_DURATION
 
 
 class UserManager:
@@ -235,9 +275,11 @@ class UserManager:
 
         if not verify_password(password, user.password_hash):
             user.login_attempts += 1
-            if user.login_attempts >= _MAX_LOGIN_ATTEMPTS:
-                user.locked_until = time.time() + _LOCKOUT_DURATION
-                logger.warning("User %s locked for %d seconds due to failed logins", username, _LOCKOUT_DURATION)
+            max_attempts = _get_max_login_attempts()
+            lockout_dur = _get_lockout_duration()
+            if user.login_attempts >= max_attempts:
+                user.locked_until = time.time() + lockout_dur
+                logger.warning("User %s locked for %d seconds due to failed logins", username, lockout_dur)
             await self._persist_user(user)
             return None, "invalid_credentials"
 

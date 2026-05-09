@@ -235,50 +235,38 @@ class WebhookManager:
             if event not in webhook.events and "*" not in webhook.events:
                 continue
 
-            # Rate limiting: max 1 trigger per 5 seconds per webhook
             if timestamp - webhook.last_triggered < self._rate_limit_seconds:
                 continue
 
-            # Auto-disable webhook after too many errors
             if webhook.error_count >= self._auto_disable_threshold:
                 webhook.enabled = False
                 logger.warning("Webhook %s auto-disabled due to %d errors", webhook.id, webhook.error_count)
                 continue
 
+            body = {
+                "event": event,
+                "timestamp": timestamp,
+                "webhook_id": webhook.id,
+                "data": payload,
+            }
             try:
-                body = {
-                    "event": event,
-                    "timestamp": timestamp,
-                    "webhook_id": webhook.id,
-                    "data": payload,
-                }
-                headers = {"Content-Type": "application/json", **webhook.headers}
-                if webhook.secret:
-                    body_bytes = json.dumps(body).encode()
-                    sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
-                    headers["X-ProtoForge-Signature"] = sig
-                if self._client:
-                    resp = await self._client.post(webhook.url, json=body, headers=headers)
-                    if resp.status_code >= 400:
-                        logger.warning("Webhook %s returned %d", webhook.id, resp.status_code)
-                        webhook.error_count += 1
-                    else:
-                        webhook.trigger_count += 1
-                        webhook.last_triggered = time.time()
+                await self._send_single(webhook, body)
             except Exception as e:
                 logger.warning("Webhook %s dispatch error: %s", webhook.id, e)
-                webhook.error_count += 1
 
     def get_stats(self) -> dict[str, Any]:
         total_triggers = sum(w.trigger_count for w in self._webhooks.values())
         total_errors = sum(w.error_count for w in self._webhooks.values())
+        error_rate = total_errors / total_triggers if total_triggers > 0 else 0.0
         return {
             "running": self._running,
             "webhooks": len(self._webhooks),
             "queue_size": self._queue.qsize(),
             "total_calls": total_triggers,
+            "total_triggers": total_triggers,
             "success_count": total_triggers - total_errors,
             "fail_count": total_errors,
+            "error_rate": error_rate,
         }
 
 
