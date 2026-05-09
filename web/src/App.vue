@@ -257,6 +257,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   if (ws) { ws.close(); ws = null }
 })
 
@@ -327,6 +328,7 @@ function onSearchSelect(val) {
   searchQuery.value = ''
 }
 
+let wsReconnectTimer = null
 let wsReconnectDelay = 1000
 let wsReconnectAttempts = 0
 const WS_MAX_RECONNECT_DELAY = 30000
@@ -340,7 +342,7 @@ function connectWebSocket() {
     console.error('Failed to create log WebSocket:', e.message)
     wsReconnectAttempts++
     if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectWebSocket, 5000)
+      wsReconnectTimer = setTimeout(connectWebSocket, 5000)
     }
     return
   }
@@ -350,7 +352,7 @@ function connectWebSocket() {
     if (loggedIn.value) {
       wsReconnectAttempts++
       if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-        setTimeout(connectWebSocket, wsReconnectDelay)
+        wsReconnectTimer = setTimeout(connectWebSocket, wsReconnectDelay)
         wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
       }
     }

@@ -189,4 +189,4 @@ async def handle_integration_message(request: dict[str, Any], _user: dict = Depe
     if manager.is_connected():
         result = await manager.send_message(request)
         return {"status": "ok", "data": result}
-    return {"status": "error", "error": "Not connected to integration target"}
+    raise HTTPException(status_code=503, detail="未连接到集成目标，请先配置并测试 EdgeLite 连接")

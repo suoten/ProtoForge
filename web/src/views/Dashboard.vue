@@ -178,6 +178,8 @@ const startingAll = ref(false)
 
 let deviceWs = null
 let logWs = null
+let devWsReconnectTimer = null
+let logWsReconnectTimer = null
 let devWsReconnectDelay = 1000
 let devWsReconnectAttempts = 0
 let logWsReconnectDelay = 1000
@@ -284,7 +286,7 @@ function connectDeviceWs() {
     if (manualClose) return
     devWsReconnectAttempts++
     if (devWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectDeviceWs, devWsReconnectDelay)
+      devWsReconnectTimer = setTimeout(connectDeviceWs, devWsReconnectDelay)
       devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
     } else {
       message.error('设备实时连接重试次数过多，请刷新页面重试')
@@ -325,7 +327,7 @@ function connectLogWs() {
     if (manualClose || !logWs) return
     logWsReconnectAttempts++
     if (logWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(logWsReconnectAttempts, 5)), 60000))
+      logWsReconnectTimer = setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(logWsReconnectAttempts, 5)), 60000))
     } else {
       message.error('日志实时连接重试次数过多，请刷新页面重试')
     }
@@ -351,6 +353,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   manualClose = true
+  if (devWsReconnectTimer) { clearTimeout(devWsReconnectTimer); devWsReconnectTimer = null }
+  if (logWsReconnectTimer) { clearTimeout(logWsReconnectTimer); logWsReconnectTimer = null }
   if (deviceWs) { deviceWs.close(); deviceWs = null }
   if (logWs) { logWs.close(); logWs = null }
 })
