@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 

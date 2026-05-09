@@ -1,16 +1,14 @@
 import logging
 import os
+import time
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from protoforge.core.auth import verify_token, verify_token_with_reason
 
 logger = logging.getLogger(__name__)
-
-_bearer_scheme = HTTPBearer(auto_error=False)
 
 _NO_AUTH = os.environ.get("PROTOFORGE_NO_AUTH", "").lower() in ("1", "true", "yes")
 
@@ -23,23 +21,15 @@ class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self._allowed_roles = allowed_roles
 
-    async def __call__(
-        self,
-        credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
-    ) -> dict:
+    async def __call__(self, request: Request) -> dict:
         if _NO_AUTH:
             return {"sub": "no-auth", "username": "admin", "role": "admin"}
-        if credentials is None:
+        payload = getattr(request.state, "user", None)
+        if payload is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
-        payload = verify_token(credentials.credentials)
-        if payload is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
             )
         user_role = payload.get("role", "user")
         if user_role not in self._allowed_roles:
@@ -126,7 +116,7 @@ async def auth_middleware(request: Request, call_next):
     if not auth_header.startswith("Bearer "):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": "Not authenticated"},
+            content={"code": 401, "data": None, "message": "Not authenticated", "detail": "Not authenticated", "reason": "no_token", "timestamp": int(time.time() * 1000)},
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -136,7 +126,7 @@ async def auth_middleware(request: Request, call_next):
         detail = "Token已过期，请重新登录" if reason == "token_expired" else "无效的认证令牌"
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"detail": detail, "reason": reason},
+            content={"code": 401, "data": None, "message": detail, "detail": detail, "reason": reason, "timestamp": int(time.time() * 1000)},
             headers={"WWW-Authenticate": "Bearer"},
         )
 

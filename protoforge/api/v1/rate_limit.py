@@ -90,8 +90,10 @@ async def rate_limit_middleware(request: Request, call_next):
             content={
                 "code": 429,
                 "message": "请求过于频繁，请稍后再试",
+                "detail": "请求过于频繁，请稍后再试",
                 "data": None,
                 "retry_after": retry_after,
+                "timestamp": int(time.time() * 1000),
             },
             headers={"Retry-After": str(retry_after)},
         )

@@ -96,6 +96,10 @@ api.interceptors.response.use(
       }
     } else if (status === 403) {
       console.error('Permission denied:', detail)
+    } else if (status === 429) {
+      const retryAfter = error?.response?.data?.retry_after
+      const msg = retryAfter ? `请求过于频繁，请${retryAfter}秒后重试` : '请求过于频繁，请稍后再试'
+      console.warn('Rate limited:', msg)
     } else if (status === 404) {
       console.error('Resource not found:', detail)
     } else if (status >= 500) {
