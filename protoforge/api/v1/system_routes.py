@@ -112,7 +112,7 @@ async def export_backup(_user: dict = Depends(require_admin)):
     db = _get_database()
     data = await db.export_all()
     backup = {
-        "version": "0.1.0",
+        "version": getattr(__import__('protoforge'), '__version__', '0.1.0'),
         "timestamp": time.time(),
         "data": data,
     }

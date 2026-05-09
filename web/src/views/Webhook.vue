@@ -240,7 +240,7 @@ async function addWebhook() {
     }
     if (addForm.value.headers_json) {
       try { cfg.headers = JSON.parse(addForm.value.headers_json) }
-      catch { message.warning('请求头JSON格式错误'); return }
+      catch { message.warning('请求头JSON格式错误'); adding.value = false; return }
     }
     await api.addWebhook(cfg)
     showAddModal.value = false
@@ -280,7 +280,7 @@ async function updateWebhook() {
     }
     if (editForm.value.headers_json) {
       try { cfg.headers = JSON.parse(editForm.value.headers_json) }
-      catch { message.warning('请求头JSON格式错误'); return }
+      catch { message.warning('请求头JSON格式错误'); saving.value = false; return }
     }
     await api.updateWebhook(editingId.value, cfg)
     showEditModal.value = false

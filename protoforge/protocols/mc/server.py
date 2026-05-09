@@ -166,7 +166,7 @@ class McServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("MC task cancelled")
         except Exception as e:
             logger.warning("MC server stop error: %s", e)
         finally:
@@ -182,7 +182,7 @@ class McServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("MC server task cancelled")
         except Exception as e:
             logger.error("MC server error: %s", e)
             self._status = ProtocolStatus.ERROR

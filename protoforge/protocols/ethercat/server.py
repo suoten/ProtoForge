@@ -252,7 +252,7 @@ class EtherCATServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("EtherCAT task cancelled")
         except Exception as e:
             logger.warning("EtherCAT server stop error: %s", e)
         finally:
@@ -472,7 +472,7 @@ class EtherCATServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("EtherCAT server task cancelled")
         except Exception as e:
             logger.error("EtherCAT server error: %s", e)
             self._status = ProtocolStatus.ERROR

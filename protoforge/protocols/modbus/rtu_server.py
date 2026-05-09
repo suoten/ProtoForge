@@ -167,7 +167,7 @@ class ModbusRtuServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("Modbus RTU server task cancelled")
         except Exception as e:
             logger.error("Modbus RTU TCP bridge server error: %s", e)
             self._status = ProtocolStatus.ERROR
@@ -311,7 +311,7 @@ class ModbusRtuServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("Modbus RTU task cancelled")
                 except Exception as e:
                     logger.warning("Modbus RTU server task error: %s", e)
         except Exception as e:

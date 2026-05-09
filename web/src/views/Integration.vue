@@ -792,10 +792,10 @@ async function loadElConfig() {
     elConfig.value = {
       url: settings.edgelite_url || '',
       username: settings.edgelite_username || 'admin',
-      password: settings.edgelite_password || '',
+      password: (settings.edgelite_password && settings.edgelite_password !== '***') ? settings.edgelite_password : '',
     }
   } catch (e) {
-    // Use defaults
+    message.warning('加载 EdgeLite 配置失败，使用默认值')
   }
 }
 
@@ -806,13 +806,16 @@ async function testConnection() {
     connResult.value = await api.testEdgeliteConnection(elConfig.value)
     if (connResult.value.ok) {
       try {
-        await api.updateSettings({
+        const syncPayload = {
           edgelite_url: elConfig.value.url,
           edgelite_username: elConfig.value.username,
-          edgelite_password: elConfig.value.password,
-        })
+        }
+        if (elConfig.value.password) {
+          syncPayload.edgelite_password = elConfig.value.password
+        }
+        await api.updateSettings(syncPayload)
       } catch (e) {
-        // Silently fail - settings sync is best effort
+        message.warning('EdgeLite 配置同步到系统设置失败，请手动保存')
       }
     }
   } catch (e) {
@@ -1062,6 +1065,7 @@ async function sendIntMessage() {
         payload = JSON.parse(msgForm.value.payloadJson)
       } catch {
         message.error('载荷 JSON 格式错误')
+        sendingMsg.value = false
         return
       }
     }

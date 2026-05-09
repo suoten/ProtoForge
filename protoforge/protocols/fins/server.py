@@ -150,7 +150,7 @@ class FinsServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("FINS task cancelled")
         except Exception as e:
             logger.warning("FINS server stop error: %s", e)
         finally:
@@ -171,7 +171,7 @@ class FinsServer(ProtocolServer):
             async with tcp_server:
                 await tcp_server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("FINS server task cancelled")
         except Exception as e:
             logger.error("FINS server error: %s", e)
             self._status = ProtocolStatus.ERROR

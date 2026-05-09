@@ -261,7 +261,10 @@ async function connectWebSocket() {
 
 function scheduleReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
-  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    message.error('日志实时连接重试次数过多，请刷新页面重试')
+    return
+  }
   const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), 60000)
   reconnectAttempts++
   reconnectTimer = setTimeout(() => {

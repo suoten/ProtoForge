@@ -95,7 +95,7 @@ class MtConnectServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("MTConnect task cancelled")
         except Exception as e:
             logger.warning("MTConnect server stop error: %s", e)
         finally:
@@ -111,7 +111,7 @@ class MtConnectServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("MTConnect server task cancelled")
         except Exception as e:
             logger.error("MTConnect server error: %s", e)
             self._status = ProtocolStatus.ERROR

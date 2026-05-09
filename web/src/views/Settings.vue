@@ -173,11 +173,12 @@
 
 <script setup>
 import { ref, h, onMounted } from 'vue'
-import { NButton, NSpace, NTag, NPopconfirm, NSelect, useMessage } from 'naive-ui'
+import { NButton, NSpace, NTag, NPopconfirm, NSelect, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { getProtocolLabel, PASSWORD_MASK } from '../constants.js'
 
 const message = useMessage()
+const dialog = useDialog()
 
 const settingsLoading = ref(false)
 const saveLoading = ref(false)
@@ -308,11 +309,14 @@ async function testEdgeLiteConnection() {
   testEdgeLiteLoading.value = true
   testEdgeLiteResult.value = null
   try {
-    const res = await api.testEdgeliteConnection({
+    const testPayload = {
       url: form.value.edgelite_url,
       username: form.value.edgelite_username || 'admin',
-      password: form.value.edgelite_password || '',
-    })
+    }
+    if (form.value.edgelite_password && form.value.edgelite_password !== PASSWORD_MASK) {
+      testPayload.password = form.value.edgelite_password
+    }
+    const res = await api.testEdgeliteConnection(testPayload)
     testEdgeLiteResult.value = res
   } catch (e) {
     testEdgeLiteResult.value = { ok: false, error: e.response?.data?.detail || e.message }
@@ -335,7 +339,7 @@ async function loadSetupStatus() {
   try {
     setupStatus.value = await api.getSetupStatus()
   } catch (e) {
-    console.warn('加载系统状态失败:', e.message)
+    message.warning('加载系统状态失败')
   } finally {
     setupLoading.value = false
   }
@@ -416,13 +420,22 @@ async function unlockUser(row) {
 }
 
 async function changeRole(row, newRole) {
-  try {
-    await api.adminUpdateRole(row.username, newRole)
-    message.success('角色已更新')
-    await loadUsers()
-  } catch (e) {
-    message.error('更新角色失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认更改角色',
+    content: `将用户 ${row.username} 的角色从 ${row.role} 更改为 ${newRole}，确定继续？`,
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.adminUpdateRole(row.username, newRole)
+        message.success('角色已更新')
+        await loadUsers()
+      } catch (e) {
+        message.error('更新角色失败: ' + (e.response?.data?.detail || e.message))
+      }
+    },
+    onNegativeClick: () => { loadUsers() },
+  })
 }
 
 async function deleteUser(row) {

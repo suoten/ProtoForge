@@ -125,7 +125,7 @@ class AbServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("AB task cancelled")
         except Exception as e:
             logger.warning("AB server stop error: %s", e)
         finally:
@@ -141,7 +141,7 @@ class AbServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("AB server task cancelled")
         except Exception as e:
             logger.error("AB server error: %s", e)
             self._status = ProtocolStatus.ERROR

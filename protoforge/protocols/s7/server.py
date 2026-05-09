@@ -223,7 +223,7 @@ class S7Server(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("S7 task cancelled")
         except Exception as e:
             logger.warning("S7 server stop error: %s", e)
         finally:
@@ -239,7 +239,7 @@ class S7Server(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("S7 server task cancelled")
         except Exception as e:
             logger.error("S7 server error: %s", e)
             self._status = ProtocolStatus.ERROR

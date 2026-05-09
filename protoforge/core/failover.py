@@ -54,7 +54,7 @@ class FailoverManager:
             try:
                 await self._health_check_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("Failover health check task cancelled")
         logger.info("Failover manager stopped")
 
     async def _health_check_loop(self) -> None:

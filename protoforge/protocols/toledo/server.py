@@ -128,7 +128,7 @@ class ToledoServer(ProtocolServer):
                 try:
                     await self._continuous_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("Toledo task cancelled")
                 self._continuous_task = None
             for w in list(self._continuous_writers):
                 try:
@@ -141,7 +141,7 @@ class ToledoServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("Toledo task cancelled")
         except Exception as e:
             logger.warning("Toledo server stop error: %s", e)
         finally:
@@ -157,7 +157,7 @@ class ToledoServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("Toledo server task cancelled")
         except Exception as e:
             logger.error("Toledo server error: %s", e)
             self._status = ProtocolStatus.ERROR
@@ -296,7 +296,7 @@ class ToledoServer(ProtocolServer):
                             logger.debug("Dead writer close error: %s", e)
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:
-            pass
+            logger.debug("Toledo task cancelled")
         except Exception as e:
             logger.error("Toledo continuous send error: %s", e)
 

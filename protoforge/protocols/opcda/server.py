@@ -115,13 +115,13 @@ class OpcDaServer(ProtocolServer):
                 try:
                     await self._sub_push_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("OPC-DA task cancelled")
             if self._server_task:
                 self._server_task.cancel()
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("OPC-DA task cancelled")
             for sid, writer in list(self._sub_clients.items()):
                 try:
                     writer.close()
@@ -144,7 +144,7 @@ class OpcDaServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("OPC-DA server task cancelled")
         except Exception as e:
             logger.error("OPC-DA server error: %s", e)
             self._status = ProtocolStatus.ERROR
@@ -411,7 +411,7 @@ class OpcDaServer(ProtocolServer):
                     self._sub_clients.pop(sid, None)
                     self._subscriptions.pop(sid, None)
         except asyncio.CancelledError:
-            pass
+            logger.debug("OPC-DA task cancelled")
         except Exception as e:
             logger.error("OPC-DA subscription push error: %s", e)
 
