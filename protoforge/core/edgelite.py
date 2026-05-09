@@ -892,21 +892,32 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
             if not password:
                 return {"ok": False, "error": "EdgeLite 需要认证，请输入用户名和密码"}
 
-            login_resp = await client.post(
-                f"{url.rstrip('/')}/api/v1/auth/login",
-                json={"username": username, "password": password},
-            )
+            try:
+                login_resp = await client.post(
+                    f"{url.rstrip('/')}/api/v1/auth/login",
+                    json={"username": username, "password": password},
+                )
+            except httpx.ConnectError:
+                return {"ok": False, "error": "认证时无法连接到 EdgeLite，请检查网关是否在线"}
+            except httpx.TimeoutException:
+                return {"ok": False, "error": "认证请求超时，EdgeLite 响应过慢"}
+
             if login_resp.status_code == 200:
                 token = _extract_token(login_resp)
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 try:
                     status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
-                    if status_resp.status_code == 200:
-                        raw = status_resp.json()
-                        data = raw.get("data", raw)
-                        return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
+                except httpx.ConnectError:
+                    return {"ok": False, "error": "认证成功但查询状态时连接中断"}
+                except httpx.TimeoutException:
+                    return {"ok": False, "error": "认证成功但查询状态超时"}
                 except Exception as e:
-                    logger.debug("EdgeLite connection test after auth failed: %s", e)
+                    logger.debug("EdgeLite status query after auth failed: %s", e)
+                    return {"ok": True, "version": "未知", "devices": 0}
+                if status_resp.status_code == 200:
+                    raw = status_resp.json()
+                    data = raw.get("data", raw)
+                    return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
                 return {"ok": True, "version": "未知", "devices": 0}
 
             if login_resp.status_code == 401:

@@ -81,6 +81,7 @@ async function quickCreate() {
   try {
     let deviceId = deviceName.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     if (!deviceId) deviceId = 'dev-' + Date.now().toString(36)
+    message.info(`设备ID: ${deviceId}`)
     await api.quickCreateDevice(selectedTemplate.value, deviceName.value, deviceId)
     message.success(`设备 "${deviceName.value}" 创建成功并已启动！`)
     showWelcome.value = false

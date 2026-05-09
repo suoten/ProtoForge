@@ -1011,7 +1011,15 @@ async function readEdgelitePoints(deviceId) {
   edgelitePoints.value = []
   try {
     const res = await api.readEdgeliteDevicePoints(deviceId)
-    edgelitePoints.value = res || []
+    if (Array.isArray(res)) {
+      edgelitePoints.value = res
+    } else if (res && Array.isArray(res.points)) {
+      edgelitePoints.value = res.points
+    } else if (res && !res.ok) {
+      message.error('读取EdgeLite测点失败: ' + (res.error || '未知错误'))
+    } else {
+      edgelitePoints.value = []
+    }
   } catch (e) {
     message.error('读取EdgeLite测点失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingElPoints.value = false }

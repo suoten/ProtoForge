@@ -104,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h, defineComponent } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, h, defineComponent } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -117,7 +117,7 @@ import {
   NSpace, NButton, NSelect, NModal, NForm, NFormItem, NInput, NInputNumber,
   NTag, NDataTable, useMessage, useDialog
 } from 'naive-ui'
-import { useRoute } from 'vue-router'
+import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import api from '../api.js'
 import { protocolColors } from '../constants.js'
 
@@ -302,6 +302,7 @@ async function confirmAddNode() {
   })
   showAddDeviceModal.value = false
   newNode.value = { deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null }
+  hasUnsavedChanges.value = true
   message.success('设备节点已添加')
 }
 
@@ -406,6 +407,7 @@ async function saveScenarioLayout() {
       devices: deviceConfigs, rules,
     })
     message.success('场景布局已保存，设备已创建并启动')
+    hasUnsavedChanges.value = false
   } catch (e) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally {
@@ -468,4 +470,29 @@ async function loadData() {
 }
 
 onMounted(loadData)
+
+onBeforeRouteLeave((_to, _from, next) => {
+  if (hasUnsavedChanges.value) {
+    dialog.warning({
+      title: '未保存的更改',
+      content: '场景有未保存的更改，确定离开吗？离开后修改将丢失。',
+      positiveText: '离开',
+      negativeText: '留下',
+      onPositiveClick: () => next(),
+      onNegativeClick: () => next(false),
+    })
+  } else {
+    next()
+  }
+})
+
+function handleBeforeUnload(e) {
+  if (hasUnsavedChanges.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
+onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', handleBeforeUnload))
 </script>

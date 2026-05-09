@@ -59,7 +59,7 @@
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showCreateModal = false">取消</n-button>
+          <n-button @click="cancelCreateScenario">取消</n-button>
           <n-button type="primary" @click="createScenario" :loading="creating">创建</n-button>
         </n-space>
       </template>
@@ -320,23 +320,39 @@ async function importScenario() {
 }
 
 async function startScene(id) {
-  try {
-    await api.startScenario(id)
-    message.success('场景已启动')
-    await loadData()
-  } catch (e) {
-    message.error('启动失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.info({
+    title: '确认启动场景',
+    content: '确定启动该场景？将启动场景内所有设备。',
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.startScenario(id)
+        message.success('场景已启动')
+        await loadData()
+      } catch (e) {
+        message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+      }
+    },
+  })
 }
 
 async function stopScene(id) {
-  try {
-    await api.stopScenario(id)
-    message.success('场景已停止')
-    await loadData()
-  } catch (e) {
-    message.error('停止失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认停止场景',
+    content: '停止场景将断开所有设备连接，确定继续？',
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.stopScenario(id)
+        message.success('场景已停止')
+        await loadData()
+      } catch (e) {
+        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+      }
+    },
+  })
 }
 
 async function exportScene(id) {
