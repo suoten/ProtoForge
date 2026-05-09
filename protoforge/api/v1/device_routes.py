@@ -6,7 +6,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_log_bus, _get_database
+from protoforge.api.v1._helpers import _get_engine, _get_log_bus, _trigger_webhook_safe, _get_database
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
 
 router = APIRouter()
@@ -300,11 +300,13 @@ async def start_device(device_id: str, _user: dict = Depends(require_operator)):
 
     try:
         await engine.start_device(device_id)
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("device_online", {"device_id": device_id})
+        await _trigger_webhook_safe("device_online", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to start device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/devices/{device_id}/stop")
@@ -312,11 +314,13 @@ async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     try:
         await engine.stop_device(device_id)
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("device_offline", {"device_id": device_id})
+        await _trigger_webhook_safe("device_offline", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to stop device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/devices/{device_id}/points/{point_name}")
@@ -332,8 +336,7 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         if not success:
             raise HTTPException(status_code=400, detail="Write failed")
         log_bus.emit("", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("data_change", {"device_id": device_id, "point": point_name, "value": value})
+        await _trigger_webhook_safe("data_change", {"device_id": device_id, "point": point_name, "value": value})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

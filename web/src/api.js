@@ -170,9 +170,10 @@ export default {
     return []
   }),
   instantiateTemplate: (id, params) => {
-    if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: 'dev-' + Date.now(), device_name: 'Device' } }))
+    const genId = () => 'dev-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+    if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: genId(), device_name: 'Device' } }))
     const { device_id, device_name, protocol_config, ...rest } = params
-    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || 'dev-' + Date.now(), device_name: device_name || 'Device', ...rest } }))
+    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || genId(), device_name: device_name || 'Device', ...rest } }))
   },
 
   getScenarios: () => d(api.get('/scenarios')).then(r => normalizeList(r, 'scenarios')),
@@ -276,7 +277,8 @@ export default {
             '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
           ).join('')))
         } catch {
-          return true
+          console.warn('JWT payload parse failed, treating token as invalid')
+          return false
         }
         const exp = payload.exp || 0
         const now = Math.floor(Date.now() / 1000)
@@ -297,7 +299,8 @@ export default {
       }
       return true
     } catch {
-      return true
+      console.warn('Token validation failed, treating as invalid')
+      return false
     }
   },
 

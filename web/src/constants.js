@@ -1,7 +1,3 @@
-import { useI18n } from './i18n.js'
-
-const { t } = useI18n()
-
 export const protocolLabels = {
   modbus_tcp: 'Modbus TCP',
   modbus_rtu: 'Modbus RTU',

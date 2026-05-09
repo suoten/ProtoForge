@@ -27,7 +27,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 })
 
@@ -55,6 +55,9 @@ router.beforeEach((to, from, next) => {
 })
 
 const app = createApp(App)
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Vue error:', err, info)
+}
 app.use(router)
 app.use(naive)
 app.mount('#app')

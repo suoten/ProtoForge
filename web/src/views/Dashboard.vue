@@ -178,8 +178,10 @@ const startingAll = ref(false)
 
 let deviceWs = null
 let logWs = null
-let wsReconnectDelay = 1000
-let wsReconnectAttempts = 0
+let devWsReconnectDelay = 1000
+let devWsReconnectAttempts = 0
+let logWsReconnectDelay = 1000
+let logWsReconnectAttempts = 0
 let manualClose = false
 const WS_MAX_RECONNECT_DELAY = 30000
 const WS_MAX_RECONNECT_ATTEMPTS = 20
@@ -238,14 +240,16 @@ async function loadData() {
   loading.value = true
   loadError.value = ''
   try {
-    const [devRes, protoRes, tmplRes, scRes, logRes] = await Promise.all([
-      api.getDevices(), api.getProtocols(), api.getTemplates(), api.getScenarios(), api.getLogs({ count: 50 }),
-    ])
-    devices.value = devRes || []
-    protocols.value = protoRes || []
-    templates.value = tmplRes || []
-    scenarios.value = scRes || []
-    recentLogs.value = logRes || []
+    const results = await Promise.allSettled([
+    api.getDevices(), api.getProtocols(), api.getTemplates(), api.getScenarios(), api.getLogs({ count: 20 }),
+  ])
+  devices.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
+  protocols.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+  templates.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
+  scenarios.value = results[3].status === 'fulfilled' ? (results[3].value || []) : []
+  recentLogs.value = results[4].status === 'fulfilled' ? (results[4].value || []) : []
+  const errors = results.filter(r => r.status === 'rejected')
+  if (errors.length > 0) message.warning(`${errors.length} 项数据加载失败`)
   } catch (e) {
     loadError.value = e.response?.data?.detail || e.message || '未知错误'
   } finally {
@@ -264,22 +268,22 @@ function connectDeviceWs() {
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
     message.warning('设备实时连接失败，5秒后重试')
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+    devWsReconnectAttempts++
+    if (devWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
       setTimeout(connectDeviceWs, 5000)
     } else {
       message.error('设备实时连接重试次数过多，请刷新页面重试')
     }
     return
   }
-  deviceWs.onopen = () => { wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
-  deviceWs.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
+  deviceWs.onopen = () => { devWsReconnectDelay = 1000; devWsReconnectAttempts = 0 }
+  deviceWs.onerror = () => { devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   deviceWs.onclose = () => {
     if (manualClose) return
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectDeviceWs, wsReconnectDelay)
-      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+    devWsReconnectAttempts++
+    if (devWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectDeviceWs, devWsReconnectDelay)
+      devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
     } else {
       message.error('设备实时连接重试次数过多，请刷新页面重试')
     }
@@ -303,21 +307,25 @@ function connectLogWs() {
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
     message.warning('日志实时连接失败，5秒后重试')
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+    logWsReconnectAttempts++
+    if (logWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
       setTimeout(connectLogWs, 5000)
+    } else {
+      message.error('日志实时连接重试次数过多，请刷新页面重试')
     }
     return
   }
-  logWs.onopen = () => { wsReconnectAttempts = 0 }
+  logWs.onopen = () => { logWsReconnectDelay = 1000; logWsReconnectAttempts = 0 }
   logWs.onerror = () => {
     console.debug('Log WebSocket error, will auto-reconnect')
   }
   logWs.onclose = () => {
     if (manualClose || !logWs) return
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(wsReconnectAttempts, 5)), 60000))
+    logWsReconnectAttempts++
+    if (logWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(logWsReconnectAttempts, 5)), 60000))
+    } else {
+      message.error('日志实时连接重试次数过多，请刷新页面重试')
     }
   }
   logWs.onmessage = (event) => {

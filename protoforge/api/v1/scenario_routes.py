@@ -5,7 +5,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_database
+from protoforge.api.v1._helpers import _get_engine, _get_database, _trigger_webhook_safe
 from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate, ScenarioDetail, ScenarioInfo
 
 router = APIRouter()
@@ -55,11 +55,13 @@ async def start_scenario(scenario_id: str, _user: dict = Depends(require_operato
     try:
         await engine.start_scenario(scenario_id)
         log_bus.emit("", "system", "", "scenario_start", f"Scenario {scenario_id} started", {"scenario_id": scenario_id})
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("scenario_start", {"scenario_id": scenario_id})
+        await _trigger_webhook_safe("scenario_start", {"scenario_id": scenario_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to start scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/scenarios/{scenario_id}/stop")
@@ -71,11 +73,13 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
     try:
         await engine.stop_scenario(scenario_id)
         log_bus.emit("", "system", "", "scenario_stop", f"Scenario {scenario_id} stopped", {"scenario_id": scenario_id})
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("scenario_stop", {"scenario_id": scenario_id})
+        await _trigger_webhook_safe("scenario_stop", {"scenario_id": scenario_id})
         return {"status": "ok"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to stop scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/scenarios/{scenario_id}", response_model=ScenarioInfo)
@@ -166,7 +170,10 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 @router.get("/scenarios/{scenario_id}/snapshot")
 async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
-    config = engine.get_scenario_config(scenario_id)
+    try:
+        config = engine.get_scenario_config(scenario_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     if not config:
         raise HTTPException(status_code=404, detail="Scenario not found")
 
@@ -180,12 +187,22 @@ async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_
     for device_config in config.devices:
         instance = engine.get_device_instance(device_config.id)
         if instance:
-            points = instance.read_all_points()
-            snapshot["devices"].append({
-                "id": device_config.id,
-                "name": device_config.name,
-                "protocol": device_config.protocol,
-                "status": instance.status.value,
-                "points": [{"name": p.name, "value": p.value, "timestamp": p.timestamp} for p in points],
-            })
+            try:
+                points = instance.read_all_points()
+                snapshot["devices"].append({
+                    "id": device_config.id,
+                    "name": device_config.name,
+                    "protocol": device_config.protocol,
+                    "status": instance.status.value,
+                    "points": [{"name": p.name, "value": p.value, "timestamp": p.timestamp} for p in points],
+                })
+            except Exception as e:
+                logger.warning("Failed to read points for device %s in snapshot: %s", device_config.id, e)
+                snapshot["devices"].append({
+                    "id": device_config.id,
+                    "name": device_config.name,
+                    "protocol": device_config.protocol,
+                    "status": "error",
+                    "points": [],
+                })
     return snapshot

@@ -6,7 +6,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from protoforge.api.v1.auth import require_user, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_database
+from protoforge.api.v1._helpers import _get_engine, _get_database, _trigger_webhook_safe
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -183,8 +183,7 @@ async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(requi
 
     api_client = await _get_internal_client()
     report = await runner.run_test_suite("API Test", cases, api_client=api_client)
-    from protoforge.core.webhook import webhook_manager
-    await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
+    await _trigger_webhook_safe("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
     return report.to_dict()
 
 
@@ -198,8 +197,7 @@ async def run_test_case_by_id(case_id: str, _user: dict = Depends(require_user))
 
     api_client = await _get_internal_client()
     report = await runner.run_test_suite(f"Single: {tc.name}", [tc], api_client=api_client)
-    from protoforge.core.webhook import webhook_manager
-    await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
+    await _trigger_webhook_safe("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
     return report.to_dict()
 
 
@@ -210,8 +208,7 @@ async def run_test_suite_by_id(suite_id: str, _user: dict = Depends(require_user
 
     try:
         report = await runner.run_test_suite_by_id(suite_id, api_client=api_client)
-        from protoforge.core.webhook import webhook_manager
-        await webhook_manager.trigger("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
+        await _trigger_webhook_safe("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
         return report.to_dict()
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
