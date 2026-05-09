@@ -174,6 +174,22 @@ class Database:
                 metadata TEXT NOT NULL DEFAULT '{}'
             );
             CREATE INDEX IF NOT EXISTS idx_recordings_protocol ON recordings(protocol);
+
+            CREATE TABLE IF NOT EXISTS integration_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '{}',
+                updated_at REAL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS alarm_reaction_rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                condition TEXT NOT NULL DEFAULT '{}',
+                actions TEXT NOT NULL DEFAULT '[]',
+                enabled INTEGER DEFAULT 1,
+                created_at REAL DEFAULT 0
+            );
         """)
         await self._db.commit()
 
@@ -300,6 +316,26 @@ class Database:
             )
         """)
         await conn.execute("CREATE INDEX IF NOT EXISTS idx_recordings_protocol ON recordings(protocol)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS integration_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT '{}',
+                updated_at REAL DEFAULT 0
+            )
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS alarm_reaction_rules (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                condition TEXT NOT NULL DEFAULT '{}',
+                actions TEXT NOT NULL DEFAULT '[]',
+                enabled INTEGER DEFAULT 1,
+                created_at REAL DEFAULT 0
+            )
+        """)
 
     async def _execute(self, sql: str, params: tuple = ()) -> None:
         if self._is_postgres:
