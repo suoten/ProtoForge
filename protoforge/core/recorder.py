@@ -116,7 +116,17 @@ class Recording:
 
 
 class Recorder:
-    _MAX_MESSAGES = 100000
+    _MAX_MESSAGES = None
+
+    @classmethod
+    def _get_max_messages(cls) -> int:
+        if cls._MAX_MESSAGES is None:
+            try:
+                from protoforge.config import get_settings
+                cls._MAX_MESSAGES = get_settings().recorder_max_messages
+            except Exception:
+                cls._MAX_MESSAGES = 100000
+        return cls._MAX_MESSAGES
 
     def __init__(self, log_bus: LogBus):
         self._log_bus = log_bus
@@ -129,6 +139,7 @@ class Recorder:
         self._running = False
         self._database = None
         self._encryption_key: Optional[bytes] = None
+        self._max_warned_active: bool = False
 
     def set_database(self, database) -> None:
         self._database = database
@@ -151,6 +162,7 @@ class Recorder:
             id=rec_id, name=name, protocol=protocol or "*",
             start_time=time.time(), metadata=metadata or {},
         )
+        self._max_warned_active = False
         self._filter_protocol = protocol
         self._filter_device = device_id
         self._running = True
@@ -205,6 +217,8 @@ class Recorder:
         return False
 
     async def delete_recording_persisted(self, rec_id: str) -> bool:
+        if rec_id not in self._recordings and not self._database:
+            return False
         if rec_id in self._recordings:
             del self._recordings[rec_id]
         if self._database:
@@ -212,6 +226,7 @@ class Recorder:
                 await self._database.delete_recording(rec_id)
             except Exception as e:
                 logger.warning("Failed to delete recording from db: %s", e)
+                return False
         return True
 
     async def restore_from_db(self) -> None:
@@ -294,10 +309,10 @@ class Recorder:
             return
         if self._filter_device and msg.device_id != self._filter_device:
             return
-        if len(self._active.messages) >= self._MAX_MESSAGES:
-            if not getattr(self._active, '_max_warned', False):
-                logger.warning("Recording reached max messages limit (%d), new messages will be dropped", self._MAX_MESSAGES)
-                self._active._max_warned = True
+        if len(self._active.messages) >= self._get_max_messages():
+            if not self._max_warned_active:
+                logger.warning("Recording reached max messages limit (%d), new messages will be dropped", self._get_max_messages())
+                self._max_warned_active = True
             return
         data = {
             "summary": msg.summary,

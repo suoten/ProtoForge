@@ -24,7 +24,17 @@ class AuditEntry:
 
 
 class AuditLogger:
-    _MAX_ENTRIES = 50000
+    _MAX_ENTRIES = None
+
+    @classmethod
+    def _get_max_entries(cls) -> int:
+        if cls._MAX_ENTRIES is None:
+            try:
+                from protoforge.config import get_settings
+                cls._MAX_ENTRIES = get_settings().audit_max_entries
+            except Exception:
+                cls._MAX_ENTRIES = 50000
+        return cls._MAX_ENTRIES
 
     def __init__(self):
         self._entries: list[AuditEntry] = []
@@ -50,8 +60,8 @@ class AuditLogger:
         )
         self._next_id += 1
         self._entries.append(entry)
-        if len(self._entries) > self._MAX_ENTRIES:
-            self._entries = self._entries[-self._MAX_ENTRIES:]
+        if len(self._entries) > self._get_max_entries():
+            self._entries = self._entries[-self._get_max_entries():]
         if self._database:
             try:
                 await self._database.save_audit_entry(entry.to_dict())
@@ -121,16 +131,19 @@ class AuditLogger:
 
     async def clear_entries(self, before_timestamp: Optional[float] = None) -> int:
         if before_timestamp:
+            original_count = len(self._entries)
             self._entries = [e for e in self._entries if e.timestamp >= before_timestamp]
+            cleared = original_count - len(self._entries)
         else:
+            cleared = len(self._entries)
             self._entries = []
         if not self._database:
-            return 0
+            return cleared
         try:
             return await self._database.clear_audit_entries(before_timestamp)
         except Exception as e:
             logger.warning("Failed to clear audit entries: %s", e)
-            return 0
+            return cleared
 
     async def restore_from_db(self) -> None:
         if not self._database:

@@ -512,7 +512,17 @@ class AssertionEngine:
 
 
 class TestRunner:
-    _MAX_REPORTS = 1000
+    _MAX_REPORTS = None
+
+    @classmethod
+    def _get_max_reports(cls) -> int:
+        if cls._MAX_REPORTS is None:
+            try:
+                from protoforge.config import get_settings
+                cls._MAX_REPORTS = get_settings().test_max_reports
+            except Exception:
+                cls._MAX_REPORTS = 1000
+        return cls._MAX_REPORTS
 
     def __init__(self):
         self._reports: list[TestReport] = []
@@ -746,8 +756,8 @@ class TestRunner:
         report.skipped = sum(1 for tc in test_cases if tc.status == TestStatus.SKIPPED)
 
         self._reports.append(report)
-        if len(self._reports) > self._MAX_REPORTS:
-            self._reports = self._reports[-self._MAX_REPORTS:]
+        if len(self._reports) > self._get_max_reports():
+            self._reports = self._reports[-self._get_max_reports():]
         if self._db:
             try:
                 await self._db.save_test_report(report.to_dict())

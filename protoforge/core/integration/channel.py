@@ -66,7 +66,8 @@ class HttpChannel(ChannelBase):
 
     async def connect(self) -> None:
         import httpx
-        self._client = httpx.AsyncClient(timeout=10.0, base_url=self._base_url)
+        from protoforge.core.defaults import get_http_timeout_default
+        self._client = httpx.AsyncClient(timeout=get_http_timeout_default(), base_url=self._base_url)
         if self._auth:
             await self._auth.ensure_token()
         self._connected = True

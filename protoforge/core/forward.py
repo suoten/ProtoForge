@@ -49,10 +49,11 @@ class InfluxDBTarget(ForwardTarget):
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
+            from protoforge.core.defaults import get_http_timeout_default
             self._client = httpx.AsyncClient(
                 base_url=self._url,
                 headers={"Authorization": f"Token {self._token}"},
-                timeout=10.0,
+                timeout=get_http_timeout_default(),
             )
         return self._client
 

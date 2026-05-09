@@ -149,7 +149,7 @@ class Scenario:
             from protoforge.core.generator import SafeEval
             evaluator = SafeEval({"value": point_value.value, "point": point_value.value})
             result = evaluator.eval_expr(script)
-            if result:
+            if result is not None and result:
                 return self._check_cooldown(rule)
         except Exception as e:
             logger.debug("Script rule %s error: %s", rule.id, e)
@@ -220,9 +220,17 @@ class Scenario:
             task = asyncio.get_running_loop().create_task(
                 webhook_manager.trigger("rule_triggered", payload)
             )
-            task.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
+
+            def _on_webhook_done(t: asyncio.Task) -> None:
+                if t.cancelled():
+                    return
+                exc = t.exception()
+                if exc:
+                    logger.warning("Webhook trigger failed for rule %s: %s", rule.id, exc)
+
+            task.add_done_callback(_on_webhook_done)
         except Exception as e:
-            logger.debug("Webhook notify error: %s", e)
+            logger.warning("Webhook notify error for rule %s: %s", rule.id, e)
 
     @staticmethod
     def _compare(value: Any, operator: str, threshold: Any) -> bool:
@@ -230,11 +238,7 @@ class Scenario:
             v = float(value)
             t = float(threshold)
         except (ValueError, TypeError):
-            try:
-                v, t = value, threshold
-            except Exception as exc:
-                logger.debug("Scenario _compare fallback failed for value=%s threshold=%s: %s", value, threshold, exc)
-                return False
+            v, t = value, threshold
         try:
             if operator == ">":
                 return v > t

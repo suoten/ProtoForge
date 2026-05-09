@@ -191,7 +191,8 @@ class IntegrationManager:
                 separator = "&" if "?" in ws_url else "?"
                 ws_url = f"{ws_url}{separator}token={token}"
 
-            ws_channel = WebSocketChannel(url=ws_url, heartbeat_interval=30.0)
+            ws_heartbeat_interval = 30.0
+            ws_channel = WebSocketChannel(url=ws_url, heartbeat_interval=ws_heartbeat_interval)
             ws_channel.on_message("point_data", self._on_ws_point_data)
             ws_channel.on_message("device_status_changed", self._on_ws_device_status)
             ws_channel.on_message("alarm_fired", self._on_ws_alarm)
@@ -205,7 +206,7 @@ class IntegrationManager:
                 "version": "1.0",
                 "protocols": [],
                 "capabilities": ["push_device", "device_control", "delete_device", "backhaul", "alarm_forward"],
-                "heartbeat_interval": 30.0,
+                "heartbeat_interval": ws_heartbeat_interval,
             }
             await ws_channel.send(handshake_msg)
             logger.info("WebSocket integration channel connected to %s", ws_url)
@@ -416,19 +417,27 @@ class IntegrationManager:
                     point_name = params.get("point", "")
                     generator_type = params.get("generator_type", "")
                     generator_config = params.get("generator_config", {})
-                    instance = engine._devices.get(target_id)
+                    instance = engine.get_device_instance(target_id)
                     if instance and point_name:
-                        behavior = instance.behavior
-                        if behavior and hasattr(behavior, '_generators') and point_name in behavior._generators:
-                            if generator_type:
-                                from protoforge.protocols.behavior import GeneratorType
+                        if generator_config:
+                            point_cfg = instance._point_configs.get(point_name)
+                            if point_cfg:
+                                for k, v in generator_config.items():
+                                    if hasattr(point_cfg, k):
+                                        try:
+                                            setattr(point_cfg, k, v)
+                                        except (AttributeError, TypeError) as attr_err:
+                                            logger.debug("Cannot set %s on point config: %s", k, attr_err)
+                        if generator_type:
+                            point_cfg = instance._point_configs.get(point_name) if instance else None
+                            if point_cfg:
                                 try:
+                                    from protoforge.models.device import GeneratorType
                                     gt = GeneratorType(generator_type)
-                                    behavior._generator_types[point_name] = gt
+                                    point_cfg.generator_type = gt
                                 except ValueError:
                                     logger.warning("Invalid generator type '%s' for point %s", generator_type, point_name)
-                            if generator_config:
-                                behavior._generators[point_name].update(generator_config)
+                        if generator_type or generator_config:
                             logger.info("Adjusted generator for %s/%s: type=%s config=%s",
                                         target_id, point_name, generator_type, generator_config)
                     elif self._channel and self._channel.is_connected:
@@ -474,9 +483,23 @@ class IntegrationManager:
     async def _on_device_created(self, event: DeviceCreatedEvent) -> None:
         proto_config = event.protocol_config or {}
         el_url = proto_config.get("edgelite_url", "")
-        if not el_url:
+        if not el_url and not self._edgelite_url:
             return
         logger.info("IntegrationManager: handling DeviceCreatedEvent for %s", event.device_id)
+        try:
+            from protoforge.main import get_engine
+            engine = get_engine()
+            if engine:
+                instance = engine.get_device_instance(event.device_id)
+                if instance:
+                    protoforge_host = proto_config.get("protoforge_host", "127.0.0.1")
+                    result = await self.push_device(instance, protoforge_host)
+                    if result.get("ok"):
+                        logger.info("Auto-pushed device %s to EdgeLite", event.device_id)
+                    else:
+                        logger.debug("Auto-push for device %s skipped or failed: %s", event.device_id, result.get("reason", result.get("error", "")))
+        except Exception as e:
+            logger.warning("IntegrationManager auto-push failed for %s: %s", event.device_id, e)
 
     async def _on_device_started(self, event: DeviceStartedEvent) -> None:
         if self._channel and self._channel.is_connected:

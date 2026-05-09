@@ -217,7 +217,11 @@ class WebhookManager:
             headers["X-ProtoForge-Signature"] = sig
         if self._client is None:
             self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
-        resp = await self._client.post(webhook.url, json=body, headers=headers)
+        try:
+            resp = await self._client.post(webhook.url, json=body, headers=headers)
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError, OSError) as e:
+            webhook.error_count += 1
+            raise RuntimeError(f"Webhook network error: {e}") from e
         if resp.status_code >= 400:
             webhook.error_count += 1
             raise RuntimeError(f"Webhook returned HTTP {resp.status_code}")
