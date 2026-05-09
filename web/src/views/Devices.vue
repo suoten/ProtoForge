@@ -170,6 +170,10 @@
       </n-modal>
 
       <n-modal v-model:show="showPointsModal" preset="card" title="设备测点" style="width:700px">
+        <n-space v-if="currentViewDeviceInfo" align="center" size="small" style="margin-bottom:8px">
+          <n-tag :type="currentViewDeviceInfo.status === 'online' ? 'success' : currentViewDeviceInfo.status === 'error' ? 'error' : 'default'" size="small" :bordered="false">{{ currentViewDeviceInfo.status || 'offline' }}</n-tag>
+          <n-text depth="3" style="font-size:12px">{{ currentViewDeviceInfo.name }} ({{ currentViewDeviceInfo.protocol }})</n-text>
+        </n-space>
         <n-data-table :columns="pointColumns" :data="currentPoints" :bordered="false" size="small" />
         <n-space vertical style="margin-top:12px">
           <n-text strong style="font-size:13px">快速写入测点值</n-text>
@@ -407,6 +411,7 @@ const writePointName = ref('')
 const writePointValue = ref('')
 const writeLoading = ref(false)
 const currentViewDeviceId = ref('')
+const currentViewDeviceInfo = ref(null)
 
 const pipelineSteps = [
   { label: '认证', key: 'auth' },
@@ -804,9 +809,13 @@ async function deleteDevice(id) {
 
 async function viewPoints(id) {
   try {
-    const res = await api.getDevicePoints(id)
+    const [res, deviceInfo] = await Promise.all([
+      api.getDevicePoints(id),
+      api.getDevice(id).catch(() => null),
+    ])
     currentPoints.value = res || []
     currentViewDeviceId.value = id
+    currentViewDeviceInfo.value = deviceInfo
     writePointName.value = ''
     writePointValue.value = ''
     showPointsModal.value = true

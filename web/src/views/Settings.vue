@@ -79,6 +79,7 @@
       <n-tab-pane name="users" tab="用户管理">
         <n-space style="margin: 16px 0">
           <n-button type="primary" @click="openAddUser">添加用户</n-button>
+          <n-button @click="openChangePassword">修改密码</n-button>
         </n-space>
         <n-data-table :columns="userColumns" :data="users" :bordered="false" size="small" />
       </n-tab-pane>
@@ -136,6 +137,20 @@
         </n-space>
       </template>
     </n-modal>
+
+    <n-modal v-model:show="showChangePassword" title="修改密码" preset="card" style="width: 420px" :mask-closable="false">
+      <n-space vertical>
+        <n-input v-model:value="changePwdForm.username" placeholder="用户名" disabled />
+        <n-input v-model:value="changePwdForm.old_password" type="password" placeholder="当前密码" show-password-on="click" />
+        <n-input v-model:value="changePwdForm.new_password" type="password" placeholder="新密码（至少6位）" show-password-on="click" />
+      </n-space>
+      <template #footer>
+        <n-space justify="end">
+          <n-button @click="showChangePassword = false">取消</n-button>
+          <n-button type="primary" :loading="changePwdLoading" @click="handleChangePassword">确认修改</n-button>
+        </n-space>
+      </template>
+    </n-modal>
   </div>
 </template>
 
@@ -189,8 +204,11 @@ const users = ref([])
 const setupStatus = ref({})
 const showAddUser = ref(false)
 const showResetPassword = ref(false)
+const showChangePassword = ref(false)
 const newUser = ref({ username: '', password: '', role: 'user' })
 const resetTarget = ref({ username: '', new_password: '' })
+const changePwdForm = ref({ username: '', old_password: '', new_password: '' })
+const changePwdLoading = ref(false)
 
 const userColumns = [
   { title: '用户名', key: 'username', width: 150 },
@@ -360,6 +378,33 @@ async function deleteUser(row) {
     await loadUsers()
   } catch (e) {
     message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+function openChangePassword() {
+  const currentUser = localStorage.getItem('username') || ''
+  changePwdForm.value = { username: currentUser, old_password: '', new_password: '' }
+  showChangePassword.value = true
+}
+
+async function handleChangePassword() {
+  if (!changePwdForm.value.old_password || !changePwdForm.value.new_password) {
+    message.warning('请填写当前密码和新密码')
+    return
+  }
+  if (changePwdForm.value.new_password.length < 6) {
+    message.warning('新密码至少6位')
+    return
+  }
+  changePwdLoading.value = true
+  try {
+    await api.changePassword(changePwdForm.value.username, changePwdForm.value.old_password, changePwdForm.value.new_password)
+    message.success('密码修改成功')
+    showChangePassword.value = false
+  } catch (e) {
+    message.error('修改失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    changePwdLoading.value = false
   }
 }
 

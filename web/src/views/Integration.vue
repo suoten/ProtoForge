@@ -162,6 +162,29 @@
             <n-data-table :columns="protocolMapColumns" :data="protocolMappings" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
           </n-card>
+
+          <n-card size="small" title="发送集成消息">
+            <n-space vertical>
+              <n-alert type="info" :bordered="false">
+                向集成管理器发送自定义消息，触发特定动作或查询状态。支持自定义消息类型和载荷。
+              </n-alert>
+              <n-form :model="msgForm" label-placement="left" label-width="100" inline>
+                <n-form-item label="消息类型">
+                  <n-select v-model:value="msgForm.type" :options="msgTypeOptions" filterable tag placeholder="选择或输入消息类型" style="width:220px" />
+                </n-form-item>
+                <n-form-item>
+                  <n-button type="primary" @click="sendIntMessage" :loading="sendingMsg">发送</n-button>
+                </n-form-item>
+              </n-form>
+              <n-input v-model:value="msgForm.payloadJson" type="textarea" :rows="3"
+                placeholder='消息载荷 JSON（可选），如 {"device_id":"dev-001","action":"sync"}' />
+              <n-alert v-if="msgResult" :type="msgResult.status === 'ok' ? 'success' : 'error'" :bordered="false">
+                <div style="font-weight:600;margin-bottom:4px">{{ msgResult.status === 'ok' ? '发送成功' : '发送失败' }}</div>
+                <div v-if="msgResult.data" style="font-size:12px;color:#94a3b8">{{ JSON.stringify(msgResult.data) }}</div>
+                <div v-if="msgResult.error" style="font-size:12px;color:#ef4444">{{ msgResult.error }}</div>
+              </n-alert>
+            </n-space>
+          </n-card>
         </n-space>
       </n-tab-pane>
 
@@ -445,6 +468,17 @@ const alarmForm = ref({ rule_id: '', source_device_id: '', alarm_severity: 'crit
 const validateForm = ref({ device_id: '', protocol: '' })
 const validating = ref(false)
 const validateResult = ref(null)
+
+const msgForm = ref({ type: 'sync', payloadJson: '' })
+const sendingMsg = ref(false)
+const msgResult = ref(null)
+const msgTypeOptions = [
+  { label: '同步 (sync)', value: 'sync' },
+  { label: '心跳 (heartbeat)', value: 'heartbeat' },
+  { label: '状态查询 (status_query)', value: 'status_query' },
+  { label: '重新连接 (reconnect)', value: 'reconnect' },
+  { label: '刷新配置 (reload_config)', value: 'reload_config' },
+]
 
 const showEdgelitePointsModal = ref(false)
 const loadingElPoints = ref(false)
@@ -985,6 +1019,30 @@ async function importPyGBSentry() {
     if (e instanceof SyntaxError) message.error('JSON 格式错误: ' + e.message)
     else message.error('导入失败: ' + (e.response?.data?.detail || e.message))
   } finally { importing.value = false }
+}
+
+async function sendIntMessage() {
+  if (!msgForm.value.type) {
+    message.warning('请选择或输入消息类型')
+    return
+  }
+  sendingMsg.value = true
+  msgResult.value = null
+  try {
+    let payload = {}
+    if (msgForm.value.payloadJson.trim()) {
+      try {
+        payload = JSON.parse(msgForm.value.payloadJson)
+      } catch {
+        message.error('载荷 JSON 格式错误')
+        return
+      }
+    }
+    msgResult.value = await api.sendIntegrationMessage(msgForm.value.type, payload)
+    message.success('消息已发送')
+  } catch (e) {
+    msgResult.value = { status: 'error', error: e.response?.data?.detail || e.message }
+  } finally { sendingMsg.value = false }
 }
 
 onMounted(() => {

@@ -106,6 +106,33 @@
           <n-button size="tiny" @click="loadData" style="margin-left:8px">重试</n-button>
         </n-alert>
 
+        <n-card size="small" v-if="healthInfo">
+          <template #header>
+            <n-space align="center" size="small">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#6366f1" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span class="pf-section-title" style="font-size:16px">系统健康</span>
+            </n-space>
+          </template>
+          <n-space size="large" align="center">
+            <n-tag :type="healthInfo.status === 'ok' ? 'success' : 'warning'" size="small" :bordered="false">
+              {{ healthInfo.status === 'ok' ? '正常' : '降级' }}
+            </n-tag>
+            <n-text depth="3" style="font-size:12px">
+              数据库: <n-tag :type="healthInfo.database ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.database ? '正常' : '异常' }}</n-tag>
+            </n-text>
+            <n-text depth="3" style="font-size:12px">
+              引擎: <n-tag :type="healthInfo.engine ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.engine ? '正常' : '异常' }}</n-tag>
+            </n-text>
+            <n-text depth="3" style="font-size:12px" v-if="healthInfo.protocols">
+              协议: {{ healthInfo.protocols.running || 0 }}/{{ healthInfo.protocols.total || 0 }} 运行中
+            </n-text>
+            <n-button size="tiny" quaternary @click="window.open('/metrics','_blank')">
+              <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/></svg></template>
+              Prometheus 指标
+            </n-button>
+          </n-space>
+        </n-card>
+
         <n-card v-if="devices.length === 0 && !loading" size="small">
           <n-space vertical align="center" style="padding:32px 0">
             <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
@@ -144,6 +171,7 @@ const protocols = ref([])
 const templates = ref([])
 const scenarios = ref([])
 const recentLogs = ref([])
+const healthInfo = ref(null)
 const loading = ref(true)
 const loadError = ref('')
 const startingAll = ref(false)
@@ -223,6 +251,10 @@ async function loadData() {
   } finally {
     loading.value = false
   }
+  try {
+    const res = await fetch('/health')
+    if (res.ok) healthInfo.value = await res.json()
+  } catch { }
 }
 
 function connectDeviceWs() {
