@@ -32,7 +32,7 @@ async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Opt
 
     if tag:
         templates = [t for t in templates if tag in (t.tags or [])]
-    return templates
+    return {"templates": templates}
 
 
 @router.get("/templates/tags")
@@ -44,7 +44,7 @@ async def list_template_tags(_user: dict = Depends(require_viewer)):
     for t in templates:
         for tag in (t.tags or []):
             tags.add(tag)
-    return sorted(list(tags))
+    return {"tags": sorted(list(tags))}
 
 
 @router.get("/templates/{template_id}", response_model=TemplateDetail)

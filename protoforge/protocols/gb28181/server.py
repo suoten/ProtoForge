@@ -100,15 +100,23 @@ class GB28181Device:
         return xml_body
 
     def make_sdp_answer(self, media_ip: str, media_port: int, ssrc: str,
-                        stream_type: str = "Play") -> str:
+                        stream_type: str = "Play",
+                        srtp_enabled: bool = False,
+                        srtp_crypto_suite: str = "AES_CM_128_HMAC_SHA1_80",
+                        srtp_key_salt: str = "") -> str:
         ssrc_full = ssrc if len(ssrc) == 10 else f"0{ssrc}"
+        proto = "RTP/SAVP" if srtp_enabled else "RTP/AVP"
         sdp = (
             f"v=0\r\n"
             f"o=- 0 0 IN IP4 {media_ip}\r\n"
             f"s={stream_type}\r\n"
             f"c=IN IP4 {media_ip}\r\n"
             f"t=0 0\r\n"
-            f"m=video {media_port} RTP/AVP 96 97 98\r\n"
+            f"m=video {media_port} {proto} 96 97 98\r\n"
+        )
+        if srtp_enabled and srtp_key_salt:
+            sdp += f"a=crypto:1 {srtp_crypto_suite} inline:{srtp_key_salt}\r\n"
+        sdp += (
             f"a=sendonly\r\n"
             f"a=rtpmap:96 PS/90000\r\n"
             f"a=rtpmap:97 MPEG4/90000\r\n"
@@ -221,6 +229,8 @@ class GB28181Server(ProtocolServer):
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 5060)
         self._server_id = config.get("server_id", "34020000002000000001")
+        self._srtp_enabled = config.get("srtp_enabled", False)
+        self._srtp_crypto_suite = config.get("srtp_crypto_suite", "AES_CM_128_HMAC_SHA1_80")
 
         try:
             loop = asyncio.get_running_loop()
@@ -652,7 +662,23 @@ class GB28181Server(ProtocolServer):
         self._allocated_media_ports.add(media_port + 1)
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
 
-        sdp_body = gb_device.make_sdp_answer(media_ip, media_port, ssrc)
+        srtp_key_salt_b64 = ""
+        srtp_context = None
+        if getattr(self, '_srtp_enabled', False):
+            from protoforge.protocols.gb28181.rtp_streamer import SrtpContext, SrtpCryptoSuite
+            import base64
+            master_key, master_salt = SrtpContext.generate_master_key_salt()
+            crypto_suite = getattr(self, '_srtp_crypto_suite', SrtpCryptoSuite.AES_CM_128_HMAC_SHA1_80)
+            srtp_context = SrtpContext(master_key, master_salt, crypto_suite)
+            key_salt_raw = master_key + master_salt
+            srtp_key_salt_b64 = base64.b64encode(key_salt_raw).decode("ascii")
+
+        sdp_body = gb_device.make_sdp_answer(
+            media_ip, media_port, ssrc,
+            srtp_enabled=getattr(self, '_srtp_enabled', False),
+            srtp_crypto_suite=getattr(self, '_srtp_crypto_suite', 'AES_CM_128_HMAC_SHA1_80'),
+            srtp_key_salt=srtp_key_salt_b64,
+        )
         sdp_bytes = sdp_body.encode("utf-8")
 
         response = (
@@ -672,6 +698,7 @@ class GB28181Server(ProtocolServer):
         gb_device._invite_call_id = call_id
         gb_device._invite_media_ip = sdp_info["media_ip"]
         gb_device._invite_media_port = sdp_info["media_port"]
+        gb_device._srtp_context = srtp_context
 
         self._log_debug("out", "sip_invite_ok",
                         f"发送INVITE 200 OK + SDP (媒体: {media_ip}:{media_port})",
@@ -712,6 +739,7 @@ class GB28181Server(ProtocolServer):
                             width=352,
                             height=288,
                             fps=25,
+                            srtp_context=getattr(gb_device, '_srtp_context', None),
                         )
                         streamer.set_debug_callback(
                             lambda direction, msg_type, summary, detail=None, did=pf_id:
