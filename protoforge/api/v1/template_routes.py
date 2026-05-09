@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_template_manager, _get_database
-from protoforge.models.template import TemplateDetail, TemplateInfo
+from protoforge.models.template import TemplateDetail
 from protoforge.models.device import DeviceConfig
 
 router = APIRouter()

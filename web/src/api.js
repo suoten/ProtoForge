@@ -216,11 +216,7 @@ export default {
   pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
   removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/integration/edgelite/push/${deviceId}`)),
   getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/integration/edgelite/status/${deviceId}`)),
-  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)).then(r => {
-    if (Array.isArray(r)) return r
-    if (r && Array.isArray(r.points)) return r.points
-    return []
-  }),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)),
   verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
