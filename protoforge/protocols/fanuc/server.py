@@ -159,7 +159,7 @@ class FanucServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("FANUC task cancelled")
         except Exception as e:
             logger.warning("FANUC server stop error: %s", e)
         finally:
@@ -175,7 +175,7 @@ class FanucServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("FANUC server task cancelled")
         except Exception as e:
             logger.error("FANUC server error: %s", e)
             self._status = ProtocolStatus.ERROR

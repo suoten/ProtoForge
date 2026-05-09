@@ -258,7 +258,9 @@ async function loadData() {
   try {
     const res = await fetch('/health')
     if (res.ok) healthInfo.value = await res.json()
-  } catch { }
+  } catch {
+    console.debug('Health endpoint unavailable')
+  }
 }
 
 function connectDeviceWs() {
@@ -335,8 +337,8 @@ function connectLogWs() {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }
-    } catch (e) {
-      // Silently ignore non-log WebSocket messages
+    } catch {
+      if (event.data !== 'ping') console.debug('Log WS: non-JSON message ignored')
     }
   }
 }

@@ -57,7 +57,7 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
             .add_extension(
                 x509.SubjectAlternativeName([
                     x509.DNSName("localhost"),
-                    x509.IPAddress(__import__("ipaddress").IPAddress("127.0.0.1")),
+                    x509.IPAddress(__import__("ipaddress").IPAddress("0.0.0.0")),
                 ]),
                 critical=False,
             )
@@ -227,7 +227,7 @@ class OpcUaServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("OPC-UA task cancelled")
                 except Exception as e:
                     logger.warning("OPC-UA server task error: %s", e)
         except Exception as e:

@@ -431,20 +431,35 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
         headers = {"Authorization": f"Bearer {token}"}
 
-        create_resp = await client.post(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices",
-            json=payload, headers=headers,
-        )
+        try:
+            create_resp = await client.post(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices",
+                json=payload, headers=headers,
+            )
+        except httpx.ConnectError:
+            return {"ok": False, "error": "推送时无法连接到 EdgeLite，请检查网关是否在线", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "推送请求超时，EdgeLite 响应过慢", "error_type": "timeout"}
+        except Exception as e:
+            return {"ok": False, "error": f"推送请求异常: {e}", "error_type": "unknown"}
+
         if create_resp.status_code in (200, 201):
             logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
             return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
 
         if create_resp.status_code == 409:
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
-            update_resp = await client.put(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
-                json=update_payload, headers=headers,
-            )
+            try:
+                update_resp = await client.put(
+                    f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
+                    json=update_payload, headers=headers,
+                )
+            except httpx.ConnectError:
+                return {"ok": False, "error": "更新时无法连接到 EdgeLite，请检查网关是否在线", "error_type": "connection"}
+            except httpx.TimeoutException:
+                return {"ok": False, "error": "更新请求超时，EdgeLite 响应过慢", "error_type": "timeout"}
+            except Exception as e:
+                return {"ok": False, "error": f"更新请求异常: {e}", "error_type": "unknown"}
             if update_resp.status_code == 200:
                 logger.info("Device %s updated on EdgeLite", payload["device_id"])
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
@@ -484,10 +499,17 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
-        resp = await client.delete(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-            headers=headers,
-        )
+        try:
+            resp = await client.delete(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            return {"ok": False, "error": "移除时无法连接到 EdgeLite", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "移除请求超时", "error_type": "timeout"}
+        except Exception as e:
+            return {"ok": False, "error": f"移除请求异常: {e}", "error_type": "unknown"}
         if resp.status_code in (200, 204, 404):
             return {"ok": True, "action": "deleted", "device_id": device_id}
         return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}", "error_type": "delete_failed"}
@@ -508,10 +530,17 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
-        resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-            headers=headers,
-        )
+        try:
+            resp = await client.get(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            return {"ok": False, "error": "查询状态时无法连接到 EdgeLite", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "查询状态请求超时", "error_type": "timeout"}
+        except Exception as e:
+            return {"ok": False, "error": f"查询状态请求异常: {e}", "error_type": "unknown"}
         if resp.status_code == 200:
             raw = resp.json()
             data = raw.get("data", raw)
@@ -543,10 +572,17 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
         headers = {"Authorization": f"Bearer {token}"}
-        resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
-            headers=headers,
-        )
+        try:
+            resp = await client.get(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            return {"ok": False, "error": "读取测点时无法连接到 EdgeLite", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "读取测点请求超时", "error_type": "timeout"}
+        except Exception as e:
+            return {"ok": False, "error": f"读取测点请求异常: {e}", "error_type": "unknown"}
         if resp.status_code == 200:
             raw = resp.json()
             data = raw.get("data", raw)
@@ -732,10 +768,23 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["steps"]["auth"] = {"ok": True}
         headers = {"Authorization": f"Bearer {token}"}
 
-        dev_resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-            headers=headers,
-        )
+        try:
+            dev_resp = await client.get(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            result["steps"]["register"] = {"ok": False, "error": "查询设备时无法连接到 EdgeLite"}
+            result["ok"] = False
+            return result
+        except httpx.TimeoutException:
+            result["steps"]["register"] = {"ok": False, "error": "查询设备请求超时"}
+            result["ok"] = False
+            return result
+        except Exception as e:
+            result["steps"]["register"] = {"ok": False, "error": f"查询设备请求异常: {e}"}
+            result["ok"] = False
+            return result
         if dev_resp.status_code == 404:
             result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
             result["ok"] = False
@@ -773,10 +822,23 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             return result
         result["steps"]["connect"] = {"ok": True, "status": el_status}
 
-        points_resp = await client.get(
-            f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
-            headers=headers,
-        )
+        try:
+            points_resp = await client.get(
+                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                headers=headers,
+            )
+        except httpx.ConnectError:
+            result["steps"]["collect"] = {"ok": False, "error": "读取测点时无法连接到 EdgeLite"}
+            result["ok"] = False
+            return result
+        except httpx.TimeoutException:
+            result["steps"]["collect"] = {"ok": False, "error": "读取测点请求超时"}
+            result["ok"] = False
+            return result
+        except Exception as e:
+            result["steps"]["collect"] = {"ok": False, "error": f"读取测点请求异常: {e}"}
+            result["ok"] = False
+            return result
         if points_resp.status_code == 200:
             raw_points = points_resp.json()
             points_data = raw_points.get("data", raw_points)

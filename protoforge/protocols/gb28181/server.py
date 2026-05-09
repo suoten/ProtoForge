@@ -262,7 +262,7 @@ class GB28181Server(ProtocolServer):
                 try:
                     await self._heartbeat_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("GB28181 task cancelled")
                 except Exception as e:
                     logger.warning("GB28181 heartbeat task error: %s", e)
             for t in self._rtp_tasks:

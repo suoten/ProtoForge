@@ -47,7 +47,7 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 - **K8s/Helm 部署** — 完整 Kubernetes 部署方案 + Helm Chart
 - **故障切换** — 主备健康检查，自动晋升，回调通知
 - **前端国际化** — 中英文双语，一键切换
-- **Docker 多架构** — 支持 amd64/arm64，CI 自动推送 Docker Hub + PyPI
+- **Docker 多架构** — 支持 amd64/arm64（通过 docker buildx 构建），CI 自动推送 Docker Hub + PyPI
 
 ***
 

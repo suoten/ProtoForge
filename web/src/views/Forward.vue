@@ -204,7 +204,7 @@ async function addTarget() {
       cfg.url = addForm.value.url
       if (addForm.value.headers_json) {
         try { cfg.headers = JSON.parse(addForm.value.headers_json) }
-        catch { message.warning('请求头JSON格式错误'); return }
+        catch { message.warning('请求头JSON格式错误'); adding.value = false; return }
       }
     } else if (addForm.value.type === 'file') {
       cfg.path = addForm.value.path

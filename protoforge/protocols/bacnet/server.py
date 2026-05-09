@@ -108,7 +108,7 @@ class BACnetServer(ProtocolServer):
                 try:
                     await self._task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("BACnet task cancelled")
             if self._sock:
                 try:
                     self._sock.close()

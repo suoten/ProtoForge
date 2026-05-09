@@ -147,7 +147,7 @@ class MqttBroker(ProtocolServer):
                 try:
                     await self._publish_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("MQTT task cancelled")
                 except Exception as e:
                     logger.warning("MQTT publish task error: %s", e)
             if self._broker:

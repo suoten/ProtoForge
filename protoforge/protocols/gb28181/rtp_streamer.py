@@ -380,7 +380,7 @@ class RtpStreamer:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                logger.debug("RTP streamer task cancelled")
         if self._transport:
             self._transport.close()
             self._transport = None
@@ -448,7 +448,7 @@ class RtpStreamer:
 
                 await asyncio.sleep(frame_interval)
         except asyncio.CancelledError:
-            pass
+            logger.debug("RTP streamer task cancelled")
         except Exception as e:
             self._log("out", "rtp_error", f"RTP流异常: {e}")
             logger.error("RTP stream error: %s", e)

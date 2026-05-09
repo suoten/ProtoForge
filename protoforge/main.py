@@ -330,13 +330,13 @@ def create_app() -> FastAPI:
             engine = get_engine()
             metrics.collect_from_engine(engine)
         except RuntimeError:
-            pass
+            logger.debug("Metrics: engine not available")
         try:
             from protoforge.api.v1.router import _get_test_runner
             runner = _get_test_runner()
             metrics.collect_from_test_runner(runner)
         except RuntimeError:
-            pass
+            logger.debug("Metrics: test runner not available")
         return metrics.generate_prometheus_output()
 
     static_dir = Path(__file__).parent.parent / "web" / "dist"

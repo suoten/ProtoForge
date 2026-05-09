@@ -42,7 +42,7 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         return result
     except Exception as e:
         logger.error("EdgeLite push exception for %s: %s", device_id, e)
-        return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 推送失败: {e}")
 
 
 @router.post("/integration/edgelite/test")
@@ -78,7 +78,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
         return await _status(instance)
     except Exception as e:
         logger.error("EdgeLite status check exception for %s: %s", device_id, e)
-        return {"ok": False, "error": str(e), "error_type": "unknown"}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 状态查询失败: {e}")
 
 
 @router.get("/integration/edgelite/points/{device_id}")

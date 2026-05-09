@@ -92,7 +92,7 @@ class ModbusTcpServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("Modbus server task cancelled")
         except Exception as e:
             logger.error("Modbus native frame server error: %s", e)
             self._status = ProtocolStatus.ERROR
@@ -324,7 +324,7 @@ class ModbusTcpServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("Modbus TCP task cancelled")
                 except Exception as e:
                     logger.warning("Modbus TCP server task error: %s", e)
         except Exception as e:

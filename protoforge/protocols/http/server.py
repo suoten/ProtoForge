@@ -57,7 +57,7 @@ class HttpSimulatorServer(ProtocolServer):
                 try:
                     await self._server_task
                 except asyncio.CancelledError:
-                    pass
+                    logger.debug("HTTP task cancelled")
         except Exception as e:
             logger.warning("HTTP server stop error: %s", e)
         finally:
@@ -73,7 +73,7 @@ class HttpSimulatorServer(ProtocolServer):
             async with server:
                 await server.serve_forever()
         except asyncio.CancelledError:
-            pass
+            logger.debug("HTTP server task cancelled")
         except Exception as e:
             logger.error("HTTP server error: %s", e)
             self._status = ProtocolStatus.ERROR
