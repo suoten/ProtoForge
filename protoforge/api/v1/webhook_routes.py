@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @router.get("/webhooks")
 async def list_webhooks(_user: dict = Depends(require_viewer)):
     from protoforge.core.webhook import webhook_manager
-    return webhook_manager.list_webhooks()
+    return {"webhooks": webhook_manager.list_webhooks()}
 
 
 @router.post("/webhooks")

@@ -73,11 +73,12 @@ async def query_audit_log(
     _user: dict = Depends(require_admin),
 ):
     from protoforge.core.audit import audit_logger
-    return await audit_logger.query(
+    entries = await audit_logger.query(
         username=username, action=action, resource_type=resource_type,
         start_time=start_time, end_time=end_time,
         limit=limit, offset=offset,
     )
+    return {"entries": entries}
 
 
 @router.get("/audit/stats")

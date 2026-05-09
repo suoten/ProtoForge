@@ -45,7 +45,7 @@ async def stop_recording(_user: dict = Depends(require_operator)):
 @router.get("/recorder/recordings")
 async def list_recordings(_user: dict = Depends(require_viewer)):
     recorder = _get_recorder()
-    return recorder.list_recordings()
+    return {"recordings": recorder.list_recordings()}
 
 
 @router.get("/recorder/recordings/{rec_id}")

@@ -12,10 +12,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/templates", response_model=list[TemplateInfo])
+@router.get("/templates")
 async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
-    return tm.list_templates(protocol=protocol)
+    return {"templates": tm.list_templates(protocol=protocol)}
 
 
 @router.get("/templates/search")

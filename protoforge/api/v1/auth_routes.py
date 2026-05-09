@@ -92,7 +92,7 @@ async def register(user_data: dict[str, Any]):
 @router.get("/auth/users")
 async def list_users(_user: dict = Depends(require_admin)):
     from protoforge.core.auth import user_manager
-    return user_manager.list_users()
+    return {"users": user_manager.list_users()}
 
 
 @router.post("/auth/change-password")

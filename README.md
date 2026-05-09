@@ -40,7 +40,7 @@ ProtoForge 是一个开箱即用的物联网协议仿真与测试平台。你不
 - **双数据库支持** — SQLite 开箱即用，PostgreSQL 生产级支持
 - **EdgeLite 网关对接** — 设备配置中填写网关地址，自动注册到 EdgeLite
 - **可视化系统设置** — 前端直接修改端口和配置，无需改代码
-- **多语言 SDK** — Python（同步/异步 70+ 方法）、Java、Go、C#，覆盖全部 API
+- **多语言 SDK** — Python（同步/异步 90+ 方法，覆盖全部 API）、Java / Go / C#（核心方法：设备/场景/协议管理）
 - **gRPC 远程管理** — 15 个 RPC 方法，支持跨语言远程调用
 - **数据库备份恢复** — 一键导出/导入全库数据 JSON
 - **协议安全增强** — OPC-UA 证书自动生成、MQTT TLS 加密、GB28181 SRTP、录制报文加密
@@ -671,7 +671,7 @@ ProtoForge/
 │       ├── i18n.js           # 国际化框架（中英文）
 │       ├── api.js            # API 调用
 │       ├── main.js           # 入口
-│       └── e2e/              # Playwright E2E 测试
+│       └── views/           # 页面组件
 ├── k8s/                       # Kubernetes 部署
 │   ├── deployment.yaml       # ProtoForge + PostgreSQL
 │   ├── ingress.yaml          # Ingress（WebSocket支持）
@@ -1061,7 +1061,7 @@ ProtoForge/
 │       ├── i18n.js           # 国际化框架（中英文）
 │       ├── api.js            # API 调用
 │       ├── main.js           # 入口
-│       └── e2e/              # Playwright E2E 测试
+│       └── views/           # 页面组件
 ├── k8s/                       # Kubernetes 部署
 │   ├── deployment.yaml       # ProtoForge + PostgreSQL
 │   ├── ingress.yaml          # Ingress（WebSocket支持）

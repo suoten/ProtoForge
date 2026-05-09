@@ -12,10 +12,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/scenarios", response_model=list[ScenarioInfo])
+@router.get("/scenarios")
 async def list_scenarios(_user: dict = Depends(require_viewer)):
     engine = _get_engine()
-    return engine.list_scenarios()
+    return {"scenarios": engine.list_scenarios()}
 
 
 @router.post("/scenarios", response_model=ScenarioInfo)

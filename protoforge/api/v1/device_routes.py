@@ -13,10 +13,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/devices", response_model=list[DeviceInfo])
+@router.get("/devices")
 async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
-    return engine.list_devices(protocol=protocol)
+    return {"devices": engine.list_devices(protocol=protocol)}
 
 
 @router.post("/devices", response_model=DeviceInfo)
@@ -284,12 +284,12 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/devices/{device_id}/points", response_model=list[PointValue])
+@router.get("/devices/{device_id}/points")
 async def get_device_points(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
 
     try:
-        return await engine.read_device_points(device_id)
+        return {"points": await engine.read_device_points(device_id)}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

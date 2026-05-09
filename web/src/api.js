@@ -123,14 +123,14 @@ export default {
   login: (username, password) => d(api.post('/auth/login', { username, password })),
   refreshToken: (refresh_token) => d(api.post('/auth/refresh', { refresh_token })),
   register: (username, password) => d(api.post('/auth/register', { username, password })),
-  listUsers: () => d(api.get('/auth/users')),
+  listUsers: () => d(api.get('/auth/users')).then(r => normalizeList(r, 'users')),
   changePassword: (username, old_password, new_password) => d(api.post('/auth/change-password', { username, old_password, new_password })),
   adminResetPassword: (username, new_password) => d(api.post(`/auth/admin/reset-password`, { username, new_password })),
   adminUnlockUser: (username) => d(api.post(`/auth/admin/unlock/${username}`)),
   adminUpdateRole: (username, role) => d(api.put(`/auth/users/${username}/role`, { role })),
   deleteUser: (username) => d(api.delete(`/auth/users/${username}`)),
 
-  getProtocols: () => d(api.get('/protocols')),
+  getProtocols: () => d(api.get('/protocols')).then(r => normalizeList(r, 'protocols')),
   getProtocolInfo: () => d(api.get('/protocols/info')).then(r => {
     if (Array.isArray(r)) return r
     if (r && Array.isArray(r.protocols)) return r.protocols
@@ -141,7 +141,7 @@ export default {
   startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config)),
   stopProtocol: (name) => d(api.post(`/protocols/${name}/stop`)),
 
-  getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })),
+  getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })).then(r => normalizeList(r, 'devices')),
   getDevice: (id) => d(api.get(`/devices/${id}`)),
   createDevice: (config) => d(api.post('/devices', config)),
   quickCreateDevice: (templateId, name, id, protocolConfig) => d(api.post('/devices/quick-create', { template_id: templateId, name, id, protocol_config: protocolConfig || {} })),
@@ -150,7 +150,7 @@ export default {
   deleteDevice: (id) => d(api.delete(`/devices/${id}`)),
   startDevice: (id) => d(api.post(`/devices/${id}/start`)),
   stopDevice: (id) => d(api.post(`/devices/${id}/stop`)),
-  getDevicePoints: (id) => d(api.get(`/devices/${id}/points`)),
+  getDevicePoints: (id) => d(api.get(`/devices/${id}/points`)).then(r => normalizeList(r, 'points')),
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
   writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
@@ -158,7 +158,7 @@ export default {
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
   batchStopDevices: (ids) => d(api.post('/devices/batch/stop', { device_ids: ids })),
 
-  getTemplates: (protocol) => d(api.get('/templates', { params: { protocol } })),
+  getTemplates: (protocol) => d(api.get('/templates', { params: { protocol } })).then(r => normalizeList(r, 'templates')),
   getTemplate: (id) => d(api.get(`/templates/${id}`)),
   createTemplate: (template) => d(api.post('/templates', template)),
   deleteTemplate: (id) => d(api.delete(`/templates/${id}`)),
@@ -175,7 +175,7 @@ export default {
     return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || 'dev-' + Date.now(), device_name: device_name || 'Device', ...rest } }))
   },
 
-  getScenarios: () => d(api.get('/scenarios')),
+  getScenarios: () => d(api.get('/scenarios')).then(r => normalizeList(r, 'scenarios')),
   createScenario: (config) => d(api.post('/scenarios', config)),
   getScenario: (id) => d(api.get(`/scenarios/${id}`)),
   updateScenario: (id, config) => d(api.put(`/scenarios/${id}`, config)),
@@ -190,25 +190,25 @@ export default {
   clearLogs: () => d(api.delete('/logs')),
 
   createTestCase: (data) => d(api.post('/tests/cases', data)),
-  listTestCases: (params) => d(api.get('/tests/cases', { params })),
+  listTestCases: (params) => d(api.get('/tests/cases', { params })).then(r => normalizeList(r, 'cases')),
   getTestCase: (id) => d(api.get(`/tests/cases/${id}`)),
   updateTestCase: (id, data) => d(api.put(`/tests/cases/${id}`, data)),
   deleteTestCase: (id) => d(api.delete(`/tests/cases/${id}`)),
   createTestSuite: (data) => d(api.post('/tests/suites', data)),
-  listTestSuites: () => d(api.get('/tests/suites')),
+  listTestSuites: () => d(api.get('/tests/suites')).then(r => normalizeList(r, 'suites')),
   getTestSuite: (id) => d(api.get(`/tests/suites/${id}`)),
   deleteTestSuite: (id) => d(api.delete(`/tests/suites/${id}`)),
   runTests: (cases) => d(api.post('/tests/run', cases)),
   runTestCase: (id) => d(api.post(`/tests/run/case/${id}`)),
   runTestSuite: (id) => d(api.post(`/tests/run/suite/${id}`)),
   quickTest: (scope, targetId) => d(api.post('/tests/quick-test', null, { params: { scope, target_id: targetId || undefined } })),
-  getTestSuggestions: () => d(api.get('/tests/suggestions')),
-  getTestActionTypes: () => d(api.get('/tests/action-types')),
-  getTestAssertionTypes: () => d(api.get('/tests/assertion-types')),
-  listTestReports: () => d(api.get('/tests/reports')),
+  getTestSuggestions: () => d(api.get('/tests/suggestions')).then(r => normalizeList(r, 'suggestions')),
+  getTestActionTypes: () => d(api.get('/tests/action-types')).then(r => normalizeList(r, 'action_types')),
+  getTestAssertionTypes: () => d(api.get('/tests/assertion-types')).then(r => normalizeList(r, 'assertion_types')),
+  listTestReports: () => d(api.get('/tests/reports')).then(r => normalizeList(r, 'reports')),
   getTestReport: (id) => d(api.get(`/tests/reports/${id}`)),
   getTestReportHtml: (id) => d(api.get(`/tests/reports/${id}/html`)),
-  getReportTrend: (params) => d(api.get('/tests/reports/trend', { params })),
+  getReportTrend: (params) => d(api.get('/tests/reports/trend', { params })).then(r => normalizeList(r, 'trends')),
 
   importEdgelite: (config) => d(api.post('/integration/edgelite', config)),
   importPygbsentry: (config) => d(api.post('/integration/pygbsentry', config)),
@@ -301,7 +301,7 @@ export default {
     }
   },
 
-  listForwardTargets: () => d(api.get('/forward/targets')),
+  listForwardTargets: () => d(api.get('/forward/targets')).then(r => normalizeList(r, 'targets')),
   addForwardTarget: (config) => d(api.post('/forward/targets', config)),
   removeForwardTarget: (name) => d(api.delete(`/forward/targets/${name}`)),
   startForward: () => d(api.post('/forward/start')),
@@ -310,14 +310,14 @@ export default {
 
   startRecording: (config) => d(api.post('/recorder/start', config)),
   stopRecording: () => d(api.post('/recorder/stop')),
-  listRecordings: () => d(api.get('/recorder/recordings')),
+  listRecordings: () => d(api.get('/recorder/recordings')).then(r => normalizeList(r, 'recordings')),
   getRecording: (id) => d(api.get(`/recorder/recordings/${id}`)),
   deleteRecording: (id) => d(api.delete(`/recorder/recordings/${id}`)),
   replayRecording: (id, config) => d(api.post(`/recorder/recordings/${id}/replay`, config)),
   exportRecording: (id) => d(api.get(`/recorder/recordings/${id}/export`)),
   getRecorderStats: () => d(api.get('/recorder/stats')),
 
-  listWebhooks: () => d(api.get('/webhooks')),
+  listWebhooks: () => d(api.get('/webhooks')).then(r => normalizeList(r, 'webhooks')),
   addWebhook: (config) => d(api.post('/webhooks', config)),
   updateWebhook: (id, config) => d(api.put(`/webhooks/${id}`, config)),
   deleteWebhook: (id) => d(api.delete(`/webhooks/${id}`)),
@@ -330,7 +330,7 @@ export default {
   getSettings: () => d(api.get('/settings')),
   updateSettings: (updates) => d(api.put('/settings', updates)),
 
-  queryAuditLog: (params) => d(api.get('/audit', { params })),
+  queryAuditLog: (params) => d(api.get('/audit', { params })).then(r => normalizeList(r, 'entries')),
   getAuditStats: () => d(api.get('/audit/stats')),
   deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
   clearAuditLog: (params) => d(api.delete('/audit', { params })),

@@ -87,7 +87,7 @@ async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(requi
 async def list_test_cases(tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     cases = runner.list_test_cases(tag=tag)
-    return [c.to_dict() for c in cases]
+    return {"cases": [c.to_dict() for c in cases]}
 
 
 @router.get("/tests/cases/{case_id}")
@@ -150,7 +150,7 @@ async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(req
 async def list_test_suites(_user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
     suites = runner.list_test_suites()
-    return [s.to_dict() for s in suites]
+    return {"suites": [s.to_dict() for s in suites]}
 
 
 @router.get("/tests/suites/{suite_id}")
@@ -220,13 +220,13 @@ async def run_test_suite_by_id(suite_id: str, _user: dict = Depends(require_user
 @router.get("/tests/reports")
 async def list_test_reports(_user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
-    return runner.get_reports()
+    return {"reports": runner.get_reports()}
 
 
 @router.get("/tests/reports/trend")
 async def get_report_trend(count: int = 20, _user: dict = Depends(require_viewer)):
     runner = _get_test_runner()
-    return runner.get_report_trend(count=count)
+    return {"trends": runner.get_report_trend(count=count)}
 
 
 @router.get("/tests/reports/{report_id}")
@@ -382,13 +382,12 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
             "priority": "high",
         })
 
-    return suggestions
+    return {"suggestions": suggestions}
 
 
 @router.get("/tests/action-types")
 async def get_test_action_types(_user: dict = Depends(require_viewer)):
-
-    return [
+    return {"action_types": [
         {"value": "create_device", "label": "创建设备", "category": "设备", "params": ["id", "name", "protocol", "points"]},
         {"value": "get_device", "label": "获取设备", "category": "设备", "params": ["device_id"]},
         {"value": "delete_device", "label": "删除设备", "category": "设备", "params": ["device_id"]},
@@ -408,12 +407,12 @@ async def get_test_action_types(_user: dict = Depends(require_viewer)):
         {"value": "http_request", "label": "HTTP请求", "category": "通用", "params": ["method", "url", "headers", "body"]},
         {"value": "wait", "label": "等待", "category": "通用", "params": ["seconds"]},
         {"value": "assert_value", "label": "断言值", "category": "通用", "params": []},
-    ]
+    ]}
 
 
 @router.get("/tests/assertion-types")
 async def get_test_assertion_types(_user: dict = Depends(require_viewer)):
-    return [
+    return {"assertion_types": [
         {"value": "status_code", "label": "请求应成功", "description": "验证HTTP状态码", "simple": True},
         {"value": "not_null", "label": "值不应为空", "description": "验证返回值非空", "simple": True},
         {"value": "length_greater", "label": "列表不应为空", "description": "验证列表长度>0", "simple": True},
@@ -428,4 +427,4 @@ async def get_test_assertion_types(_user: dict = Depends(require_viewer)):
         {"value": "type_check", "label": "类型检查", "description": "验证值的类型", "simple": False},
         {"value": "length_equals", "label": "长度等于", "description": "验证列表长度等于指定值", "simple": False},
         {"value": "length_less", "label": "长度小于", "description": "验证列表长度小于指定值", "simple": False},
-    ]
+    ]}

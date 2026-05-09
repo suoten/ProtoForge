@@ -128,7 +128,10 @@ async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict =
 @router.get("/device-status")
 async def get_device_status_cache(_user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
-    return {"devices": manager.get_device_status_cache()}
+    status = manager.get_device_status_cache()
+    if isinstance(status, dict):
+        return {"devices": list(status.values())}
+    return {"devices": status if isinstance(status, list) else []}
 
 
 @router.get("/alarm-rules")

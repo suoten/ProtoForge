@@ -22,7 +22,7 @@ async def list_protocols(_user: dict = Depends(require_viewer)):
         entry["description"] = PROTOCOL_DEFAULTS.get(entry.get("name", ""), {}).get("description", "")
         entry["default_port"] = defaults.get("port", 0)
         result.append(entry)
-    return result
+    return {"protocols": result}
 
 
 @router.get("/protocols/info")

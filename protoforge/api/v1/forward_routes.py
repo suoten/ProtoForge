@@ -24,7 +24,7 @@ def _get_forward_engine():
 @router.get("/forward/targets")
 async def list_forward_targets(_user: dict = Depends(require_viewer)):
     engine = _get_forward_engine()
-    return engine.list_targets()
+    return {"targets": engine.list_targets()}
 
 
 @router.post("/forward/targets")
