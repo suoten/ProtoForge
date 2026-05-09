@@ -1,7 +1,7 @@
 import logging
-from typing import Any
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine
@@ -36,13 +36,17 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        return await _push(instance)
+        result = await _push(instance)
+        if result.get("ok") is False and not result.get("skipped"):
+            logger.warning("EdgeLite push failed for %s: %s", device_id, result.get("error", ""))
+        return result
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
+        logger.error("EdgeLite push exception for %s: %s", device_id, e)
+        return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "请检查网络连接和网关配置"}
 
 
 @router.post("/integration/edgelite/test")
-async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = Depends(require_operator)):
+async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(default=None), _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import test_edgelite_connection as _test
     if config is None:
         config = {}
@@ -52,8 +56,12 @@ async def test_edgelite_connection(config: dict[str, Any] = None, _user: dict = 
     password = config.get("password", "")
 
     if not url:
-        raise HTTPException(status_code=400, detail="url is required")
-    return await _test(url, username, password)
+        return {"ok": False, "error": "请填写 EdgeLite 地址"}
+    try:
+        return await _test(url, username, password)
+    except Exception as e:
+        logger.error("EdgeLite connection test failed: %s", e)
+        return {"ok": False, "error": f"连接测试异常: {e}"}
 
 
 @router.get("/integration/edgelite/status/{device_id}")
@@ -69,7 +77,8 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
     try:
         return await _status(instance)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"EdgeLite status check failed: {e}")
+        logger.error("EdgeLite status check exception for %s: %s", device_id, e)
+        return {"ok": False, "error": str(e), "error_type": "unknown"}
 
 
 @router.get("/integration/edgelite/points/{device_id}")
@@ -88,7 +97,8 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
             return {"points": points}
         return points
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"EdgeLite read points failed: {e}")
+        logger.error("EdgeLite read points exception for %s: %s", device_id, e)
+        return {"ok": False, "error": str(e), "error_type": "unknown"}
 
 
 @router.get("/integration/edgelite/pipeline/{device_id}")
@@ -135,7 +145,8 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
                     logger.debug("Data comparison failed: %s", exc)
         return result
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
+        logger.error("EdgeLite pipeline verification exception for %s: %s", device_id, e)
+        return {"ok": False, "steps": {"auth": {"ok": False, "error": str(e), "error_type": "unknown"}}}
 
 
 @router.delete("/integration/edgelite/push/{device_id}")
@@ -151,7 +162,8 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
     try:
         return await _remove(instance)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"EdgeLite remove device failed: {e}")
+        logger.error("EdgeLite remove device exception for %s: %s", device_id, e)
+        return {"ok": False, "error": str(e), "error_type": "unknown"}
 
 
 @router.post("/integration/pygbsentry")

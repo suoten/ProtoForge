@@ -32,6 +32,33 @@ class Settings(BaseSettings):
     protoforge_public_host: str = ""
     tick_interval: float = 1.0
 
+    access_token_expires: int = 86400
+    refresh_token_expires: int = 604800
+    max_login_attempts: int = 5
+    lockout_duration: int = 300
+    min_password_length: int = 8
+
+    http_timeout: float = 10.0
+    http_timeout_short: float = 5.0
+    http_timeout_long: float = 30.0
+
+    audit_max_entries: int = 50000
+    event_bus_max_history: int = 5000
+    event_bus_subscriber_queue: int = 1000
+    log_bus_max_entries: int = 10000
+    log_bus_subscriber_queue: int = 1000
+    recorder_max_messages: int = 100000
+    recorder_queue_size: int = 50000
+    webhook_queue_size: int = 5000
+    webhook_rate_limit_seconds: float = 5.0
+    webhook_auto_disable_threshold: int = 50
+    forward_queue_size: int = 10000
+    forward_batch_size: int = 100
+    forward_flush_interval: float = 5.0
+    forward_retry_count: int = 3
+    failover_max_failures: int = 3
+    test_max_reports: int = 1000
+
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
     opcua_port: int = 4840

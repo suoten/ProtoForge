@@ -6,6 +6,7 @@ from urllib.parse import quote
 import httpx
 
 from protoforge.config import get_settings
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT, HTTP_TIMEOUT_SHORT
 from protoforge.core.integration.protocol import (
     ACCESS_MODE_MAP,
     PROTOCOL_MAP_BASE,
@@ -811,9 +812,9 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
 async def test_edgelite_connection(url: str, username: str = "admin", password: str = "") -> dict[str, Any]:
     if not url:
-        return {"ok": False, "error": "URL is empty"}
+        return {"ok": False, "error": "EdgeLite 地址不能为空"}
     if not url.startswith("http://") and not url.startswith("https://"):
-        return {"ok": False, "error": "URL must start with http:// or https://"}
+        return {"ok": False, "error": "EdgeLite 地址必须以 http:// 或 https:// 开头"}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
@@ -853,8 +854,8 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
             return {"ok": False, "error": f"EdgeLite 登录失败: HTTP {login_resp.status_code}"}
 
         except httpx.ConnectError:
-            return {"ok": False, "error": "Connection refused"}
+            return {"ok": False, "error": "无法连接到 EdgeLite，请检查地址是否正确、网关是否在线"}
         except httpx.TimeoutException:
-            return {"ok": False, "error": "Connection timeout"}
+            return {"ok": False, "error": "连接 EdgeLite 超时，请检查网络是否通畅"}
         except Exception as e:
             return {"ok": False, "error": str(e)}

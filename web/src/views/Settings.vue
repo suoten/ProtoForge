@@ -40,6 +40,23 @@
             <n-form-item label="EdgeLite 密码">
               <n-input v-model:value="form.edgelite_password" type="password" show-password-on="click" :placeholder="form.edgelite_password ? PASSWORD_MASK : ''" />
             </n-form-item>
+            <n-form-item>
+              <n-space>
+                <n-button type="primary" :loading="saveLoading" @click="saveSettings">保存设置</n-button>
+                <n-button :loading="testEdgeLiteLoading" @click="testEdgeLiteConnection">测试连接</n-button>
+              </n-space>
+            </n-form-item>
+            <n-alert v-if="testEdgeLiteResult" :type="testEdgeLiteResult.ok ? 'success' : 'error'" :bordered="false" style="margin-bottom:12px">
+              <template v-if="testEdgeLiteResult.ok">
+                连接成功！EdgeLite 版本: {{ testEdgeLiteResult.version || '未知' }}，设备总数: {{ testEdgeLiteResult.devices || 0 }}
+              </template>
+              <template v-else>
+                连接失败: {{ testEdgeLiteResult.error }}
+              </template>
+            </n-alert>
+          </n-form>
+          <n-divider style="max-width: 600px" />
+          <n-form label-placement="left" label-width="140" style="max-width: 600px">
             <n-form-item label="InfluxDB URL">
               <n-input v-model:value="form.influxdb_url" placeholder="http://influxdb:8086" />
             </n-form-item>
@@ -114,7 +131,7 @@
     <n-modal v-model:show="showAddUser" title="添加用户" preset="card" style="width: 420px" :mask-closable="false">
       <n-space vertical>
         <n-input v-model:value="newUser.username" placeholder="用户名" />
-        <n-input v-model:value="newUser.password" type="password" placeholder="密码（至少6位）" show-password-on="click" />
+        <n-input v-model:value="newUser.password" type="password" placeholder="密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
         <n-select v-model:value="newUser.role" :options="roleOptions" placeholder="角色" />
       </n-space>
       <template #footer>
@@ -128,7 +145,7 @@
     <n-modal v-model:show="showResetPassword" title="重置密码" preset="card" style="width: 420px" :mask-closable="false">
       <n-space vertical>
         <n-text>为用户 <n-text strong>{{ resetTarget.username }}</n-text> 设置新密码</n-text>
-        <n-input v-model:value="resetTarget.new_password" type="password" placeholder="新密码（至少6位）" show-password-on="click" />
+        <n-input v-model:value="resetTarget.new_password" type="password" placeholder="新密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
       </n-space>
       <template #footer>
         <n-space justify="end">
@@ -142,7 +159,7 @@
       <n-space vertical>
         <n-input v-model:value="changePwdForm.username" placeholder="用户名" disabled />
         <n-input v-model:value="changePwdForm.old_password" type="password" placeholder="当前密码" show-password-on="click" />
-        <n-input v-model:value="changePwdForm.new_password" type="password" placeholder="新密码（至少6位）" show-password-on="click" />
+        <n-input v-model:value="changePwdForm.new_password" type="password" placeholder="新密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
       </n-space>
       <template #footer>
         <n-space justify="end">
@@ -168,6 +185,8 @@ const setupLoading = ref(false)
 const demoLoading = ref(false)
 const addUserLoading = ref(false)
 const resetLoading = ref(false)
+const testEdgeLiteLoading = ref(false)
+const testEdgeLiteResult = ref(null)
 
 const form = ref({
   port: 8000,
@@ -279,6 +298,27 @@ async function saveSettings() {
   }
 }
 
+async function testEdgeLiteConnection() {
+  if (!form.value.edgelite_url) {
+    message.warning('请先填写 EdgeLite URL')
+    return
+  }
+  testEdgeLiteLoading.value = true
+  testEdgeLiteResult.value = null
+  try {
+    const res = await api.testEdgeliteConnection({
+      url: form.value.edgelite_url,
+      username: form.value.edgelite_username || 'admin',
+      password: form.value.edgelite_password || '',
+    })
+    testEdgeLiteResult.value = res
+  } catch (e) {
+    testEdgeLiteResult.value = { ok: false, error: e.response?.data?.detail || e.message }
+  } finally {
+    testEdgeLiteLoading.value = false
+  }
+}
+
 async function loadUsers() {
   try {
     const data = await api.listUsers()
@@ -309,8 +349,8 @@ async function handleAddUser() {
     message.warning('请填写用户名和密码')
     return
   }
-  if (newUser.value.password.length < 6) {
-    message.warning('密码至少6位')
+  if (newUser.value.password.length < 8) {
+    message.warning('密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }
   addUserLoading.value = true
@@ -335,8 +375,8 @@ function openResetPassword(row) {
 }
 
 async function handleResetPassword() {
-  if (!resetTarget.value.new_password || resetTarget.value.new_password.length < 6) {
-    message.warning('新密码至少6位')
+  if (!resetTarget.value.new_password || resetTarget.value.new_password.length < 8) {
+    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }
   resetLoading.value = true
@@ -392,8 +432,8 @@ async function handleChangePassword() {
     message.warning('请填写当前密码和新密码')
     return
   }
-  if (changePwdForm.value.new_password.length < 6) {
-    message.warning('新密码至少6位')
+  if (changePwdForm.value.new_password.length < 8) {
+    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }
   changePwdLoading.value = true

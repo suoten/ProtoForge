@@ -409,6 +409,30 @@ HTTP_TIMEOUT_DEFAULT = 10.0
 HTTP_TIMEOUT_SHORT = 5.0
 HTTP_TIMEOUT_LONG = 30.0
 
+
+def get_http_timeout_default() -> float:
+    try:
+        from protoforge.config import get_settings
+        return get_settings().http_timeout
+    except Exception:
+        return HTTP_TIMEOUT_DEFAULT
+
+
+def get_http_timeout_short() -> float:
+    try:
+        from protoforge.config import get_settings
+        return get_settings().http_timeout_short
+    except Exception:
+        return HTTP_TIMEOUT_SHORT
+
+
+def get_http_timeout_long() -> float:
+    try:
+        from protoforge.config import get_settings
+        return get_settings().http_timeout_long
+    except Exception:
+        return HTTP_TIMEOUT_LONG
+
 ERROR_MESSAGES = {
     "Device not found": "找不到该设备，可能已被删除或ID输入错误。请检查设备列表。",
     "Scenario not found": "找不到该场景，可能已被删除。请检查场景列表。",
@@ -419,7 +443,7 @@ ERROR_MESSAGES = {
     "Device already exists": "设备ID已存在。请更换一个唯一的设备ID。",
     "Invalid credentials": "用户名或密码错误",
     "Username already exists": "该用户名已被注册，请换一个。",
-    "Password must be at least 6 characters": "密码至少需要6个字符，请设置更安全的密码。",
+    "Password must be at least 6 characters": "密码不符合强度要求，请设置包含大小写字母、数字、特殊字符中至少3种的8位以上密码。",
     "Cannot delete this user": "无法删除管理员账号。",
     "url is required": "请填写Webhook的URL地址。",
     "No active recording": "当前没有正在进行的录制。请先开始录制。",
