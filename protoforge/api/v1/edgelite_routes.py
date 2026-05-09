@@ -83,7 +83,10 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        return await _read(instance)
+        points = await _read(instance)
+        if isinstance(points, list):
+            return {"points": points}
+        return points
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"EdgeLite read points failed: {e}")
 

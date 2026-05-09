@@ -131,7 +131,11 @@ export default {
   deleteUser: (username) => d(api.delete(`/auth/users/${username}`)),
 
   getProtocols: () => d(api.get('/protocols')),
-  getProtocolInfo: () => d(api.get('/protocols/info')),
+  getProtocolInfo: () => d(api.get('/protocols/info')).then(r => {
+    if (Array.isArray(r)) return r
+    if (r && Array.isArray(r.protocols)) return r.protocols
+    return []
+  }),
   getProtocolConfig: (name) => d(api.get(`/protocols/${name}/config`)),
   getProtocolDeviceConfig: (name) => d(api.get(`/protocols/${name}/device-config`)),
   startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config)),
@@ -222,7 +226,13 @@ export default {
   getIntegrationStatus: () => d(api.get('/integration/status')),
   getIntegrationMetrics: () => d(api.get('/integration/metrics')),
   getIntegrationProtocols: () => d(api.get('/integration/protocols')),
-  validateDeviceCompatibility: (data) => d(api.post('/integration/validate', data)),
+  validateDeviceCompatibility: (data) => {
+    const payload = { ...data }
+    if (payload.config && !payload.driver_config) {
+      payload.driver_config = payload.config
+    }
+    return d(api.post('/integration/validate', payload))
+  },
   batchPushDevices: (data) => d(api.post('/integration/batch-push', data)),
   startIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
   stopIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),

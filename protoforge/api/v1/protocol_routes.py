@@ -28,7 +28,7 @@ async def list_protocols(_user: dict = Depends(require_viewer)):
 @router.get("/protocols/info")
 async def get_protocols_info(_user: dict = Depends(require_viewer)):
     from protoforge.core.defaults import get_all_protocol_info
-    return get_all_protocol_info()
+    return {"protocols": get_all_protocol_info()}
 
 
 @router.get("/protocols/{protocol_name}/config")

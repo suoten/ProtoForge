@@ -33,7 +33,7 @@ async def get_logs(
         entries = [e for e in entries if e.get("direction") == direction]
     if message_type:
         entries = [e for e in entries if message_type in e.get("message_type", "")]
-    return entries[-count:]
+    return {"entries": entries[-count:]}
 
 
 @router.delete("/logs")

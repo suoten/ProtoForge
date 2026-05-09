@@ -103,11 +103,12 @@ async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
 @router.post("/validate")
 async def validate_device_compatibility(request: dict[str, Any], _user: dict = Depends(require_viewer)):
     manager = _get_integration_manager()
+    driver_config = request.get("driver_config") or request.get("config") or {}
     report = manager.validator.validate(
         device_id=request.get("device_id", ""),
         protocol=request.get("protocol", ""),
         points=request.get("points", []),
-        driver_config=request.get("config", {}),
+        driver_config=driver_config,
     )
     return {
         "compatible": report.compatible,
@@ -177,7 +178,9 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
 @router.post("/message")
 async def handle_integration_message(request: dict[str, Any], _user: dict = Depends(require_operator)):
     msg_type = request.get("type", "")
-    payload = request.get("payload", request)
+    payload = request.get("payload", {})
+    if not isinstance(payload, dict):
+        payload = {}
     logger.info("Integration message received: type=%s", msg_type)
     manager = _get_integration_manager()
     if manager.is_connected():

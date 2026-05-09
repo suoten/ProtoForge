@@ -2,8 +2,102 @@ import struct
 import time
 import logging
 import asyncio
+import os
+import hashlib
+import hmac
 
 logger = logging.getLogger(__name__)
+
+
+class SrtpCryptoSuite:
+    AES_CM_128_HMAC_SHA1_80 = "AES_CM_128_HMAC_SHA1_80"
+    AES_CM_128_HMAC_SHA1_32 = "AES_CM_128_HMAC_SHA1_32"
+
+
+class SrtpContext:
+    SRTP_AES_128_KEY_LEN = 16
+    SRTP_SALT_LEN = 14
+    SRTP_AUTH_TAG_LEN_80 = 10
+    SRTP_AUTH_TAG_LEN_32 = 4
+
+    def __init__(self, master_key: bytes, master_salt: bytes,
+                 crypto_suite: str = SrtpCryptoSuite.AES_CM_128_HMAC_SHA1_80):
+        self._master_key = master_key[:self.SRTP_AES_128_KEY_LEN]
+        self._master_salt = master_salt[:self.SRTP_SALT_LEN]
+        self._crypto_suite = crypto_suite
+        self._auth_tag_len = (
+            self.SRTP_AUTH_TAG_LEN_80
+            if crypto_suite == SrtpCryptoSuite.AES_CM_128_HMAC_SHA1_80
+            else self.SRTP_AUTH_TAG_LEN_32
+        )
+        self._enc_key = self._derive_key(0x00)
+        self._auth_key = self._derive_key(0x01)
+        self._salt = self._derive_key(0x02)
+        self._aes_cipher = None
+        try:
+            from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+            self._aes_cipher = Cipher
+            self._aes_algo = algorithms
+            self._aes_mode = modes
+        except ImportError:
+            logger.warning("cryptography library not installed, SRTP encryption disabled")
+
+    def _derive_key(self, label: int) -> bytes:
+        key_id = bytes([label]) + self._master_salt
+        prf_input = key_id + bytes(16 - len(key_id))
+        return hmac.new(self._master_key, prf_input, hashlib.sha1).digest()[:16]
+
+    def _compute_iv(self, ssrc: int, roc: int, seq: int) -> bytes:
+        salt = self._salt[:14]
+        iv = bytearray(16)
+        ssrc_bytes = struct.pack(">I", ssrc)
+        roc_bytes = struct.pack(">I", roc)
+        seq_bytes = struct.pack(">H", seq)
+        iv[0:4] = ssrc_bytes
+        iv[4:6] = roc_bytes
+        iv[6:8] = seq_bytes
+        for i in range(14):
+            iv[i] ^= salt[i]
+        return bytes(iv)
+
+    def _get_roc(self, seq: int) -> int:
+        return 0
+
+    def encrypt_rtp(self, rtp_packet: bytes) -> bytes:
+        if not self._aes_cipher:
+            return rtp_packet
+        header = rtp_packet[:12]
+        payload = rtp_packet[12:]
+        byte0 = rtp_packet[0]
+        csrc_count = byte0 & 0x0F
+        header_len = 12 + csrc_count * 4
+        header = rtp_packet[:header_len]
+        payload = rtp_packet[header_len:]
+        seq = struct.unpack(">H", rtp_packet[2:4])[0]
+        ssrc = struct.unpack(">I", rtp_packet[8:12])[0]
+        roc = self._get_roc(seq)
+        iv = self._compute_iv(ssrc, roc, seq)
+        cipher = self._aes_cipher(self._aes_algo.AES(self._enc_key), self._aes_mode.CTR(iv))
+        encryptor = cipher.encryptor()
+        encrypted_payload = encryptor.update(payload) + encryptor.finalize()
+        encrypted_packet = header + encrypted_payload
+        auth_input = encrypted_packet + struct.pack(">I", roc)
+        auth_tag = hmac.new(self._auth_key, auth_input, hashlib.sha1).digest()[:self._auth_tag_len]
+        return encrypted_packet + auth_tag
+
+    @property
+    def auth_tag_len(self) -> int:
+        return self._auth_tag_len
+
+    @property
+    def crypto_suite_name(self) -> str:
+        return self._crypto_suite
+
+    @staticmethod
+    def generate_master_key_salt() -> tuple[bytes, bytes]:
+        master_key = os.urandom(16)
+        master_salt = os.urandom(14)
+        return master_key, master_salt
 
 
 class BitWriter:
@@ -219,7 +313,8 @@ def build_rtp_packet(payload: bytes, seq: int, timestamp: int, ssrc: int,
 
 class RtpStreamer:
     def __init__(self, dest_ip: str, dest_port: int, ssrc: int,
-                 width: int = 352, height: int = 288, fps: int = 25):
+                 width: int = 352, height: int = 288, fps: int = 25,
+                 srtp_context: SrtpContext | None = None):
         self._dest_ip = dest_ip
         self._dest_port = dest_port
         self._ssrc = ssrc
@@ -234,6 +329,7 @@ class RtpStreamer:
         self._h264_iframe = generate_h264_iframe(width, height)
         self._frame_count = 0
         self._on_debug_log = None
+        self._srtp_context = srtp_context
 
     def set_debug_callback(self, callback):
         self._on_debug_log = callback
@@ -268,10 +364,14 @@ class RtpStreamer:
             raise
         self._running = True
         self._task = asyncio.create_task(self._stream_loop())
+        srtp_info = ""
+        if self._srtp_context:
+            srtp_info = f", SRTP={self._srtp_context.crypto_suite_name}"
         self._log("out", "rtp_start",
-                  f"RTP视频流开始推送 → {self._dest_ip}:{self._dest_port}",
+                  f"RTP视频流开始推送 → {self._dest_ip}:{self._dest_port}{srtp_info}",
                   {"ssrc": self._ssrc, "fps": self._fps,
-                   "resolution": f"{self._width}x{self._height}"})
+                   "resolution": f"{self._width}x{self._height}",
+                   "srtp": self._srtp_context is not None})
 
     async def stop(self) -> None:
         self._running = False
@@ -308,6 +408,8 @@ class RtpStreamer:
                         self._ssrc, marker=True,
                     )
                     self._seq = (self._seq + 1) & 0xFFFF
+                    if self._srtp_context:
+                        packet = self._srtp_context.encrypt_rtp(packet)
                     if self._transport:
                         try:
                             self._transport.sendto(packet, (self._dest_ip, self._dest_port))
@@ -323,6 +425,8 @@ class RtpStreamer:
                             self._ssrc, marker=is_last,
                         )
                         self._seq = (self._seq + 1) & 0xFFFF
+                        if self._srtp_context:
+                            packet = self._srtp_context.encrypt_rtp(packet)
                         if self._transport:
                             try:
                                 self._transport.sendto(packet, (self._dest_ip, self._dest_port))
