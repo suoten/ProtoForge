@@ -383,7 +383,10 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     if login_resp.status_code != 200:
         raise EdgeLiteError("http", f"EdgeLite 登录失败: HTTP {login_resp.status_code}", f"网关返回错误状态码 {login_resp.status_code}")
 
-    data = login_resp.json()
+    try:
+        data = login_resp.json()
+    except Exception as e:
+        raise EdgeLiteError("parse_error", f"EdgeLite 登录返回了无效的 JSON: {e}", "请检查 EdgeLite 网关版本是否兼容")
     inner = data.get("data")
     token = (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
     if not token:
@@ -542,7 +545,10 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         except Exception as e:
             return {"ok": False, "error": f"查询状态请求异常: {e}", "error_type": "unknown"}
         if resp.status_code == 200:
-            raw = resp.json()
+            try:
+                raw = resp.json()
+            except Exception as e:
+                return {"ok": False, "error": f"EdgeLite 返回了无效的 JSON: {e}", "error_type": "parse_error"}
             data = raw.get("data", raw)
             return {
                 "ok": True,
@@ -584,7 +590,10 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         except Exception as e:
             return {"ok": False, "error": f"读取测点请求异常: {e}", "error_type": "unknown"}
         if resp.status_code == 200:
-            raw = resp.json()
+            try:
+                raw = resp.json()
+            except Exception as e:
+                return {"ok": False, "error": f"EdgeLite 返回了无效的 JSON: {e}", "error_type": "parse_error"}
             data = raw.get("data", raw)
             return {"ok": True, "device_id": device_id, "points": data}
         if resp.status_code == 404:
@@ -794,7 +803,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["ok"] = False
             return result
 
-        dev_data = dev_resp.json().get("data", dev_resp.json())
+        dev_data_raw = dev_resp.json()
+        dev_data = dev_data_raw.get("data", dev_data_raw)
         el_status = dev_data.get("status", "unknown")
         result["steps"]["register"] = {"ok": True, "status": el_status}
 
@@ -840,7 +850,12 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["ok"] = False
             return result
         if points_resp.status_code == 200:
-            raw_points = points_resp.json()
+            try:
+                raw_points = points_resp.json()
+            except Exception as e:
+                result["steps"]["collect"] = {"ok": False, "error": f"EdgeLite 返回了无效的 JSON: {e}"}
+                result["ok"] = False
+                return result
             points_data = raw_points.get("data", raw_points)
             if isinstance(points_data, list):
                 has_data = len(points_data) > 0
@@ -881,7 +896,10 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
             if resp.status_code == 200:
-                raw = resp.json()
+                try:
+                    raw = resp.json()
+                except Exception:
+                    return {"ok": True, "version": "未知", "devices": 0}
                 data = raw.get("data", raw)
                 return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
 
@@ -915,7 +933,10 @@ async def test_edgelite_connection(url: str, username: str = "admin", password: 
                     logger.debug("EdgeLite status query after auth failed: %s", e)
                     return {"ok": True, "version": "未知", "devices": 0}
                 if status_resp.status_code == 200:
-                    raw = status_resp.json()
+                    try:
+                        raw = status_resp.json()
+                    except Exception:
+                        return {"ok": True, "version": "未知", "devices": 0}
                     data = raw.get("data", raw)
                     return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
                 return {"ok": True, "version": "未知", "devices": 0}

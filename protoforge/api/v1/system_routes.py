@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from protoforge.api.v1.auth import require_admin, require_operator, require_viewer
+from protoforge.api.v1.auth import require_admin, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_template_manager, _get_database
 
 router = APIRouter()

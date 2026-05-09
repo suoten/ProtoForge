@@ -730,16 +730,12 @@ async function deleteSuite(suiteId) {
   })
 }
 
-async function viewHtmlReport(id) {
-  try {
-    const html = await api.getTestReportHtml(id)
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-    setTimeout(() => URL.revokeObjectURL(url), 60000)
-  } catch (e) {
-    message.error('获取HTML报告失败: ' + (e.response?.data?.detail || e.message))
-  }
+function viewHtmlReport(id) {
+  const token = localStorage.getItem('token')
+  const url = token
+    ? `/api/v1/tests/reports/${id}/html?token=${encodeURIComponent(token)}`
+    : `/api/v1/tests/reports/${id}/html`
+  window.open(url, '_blank')
 }
 
 async function createSuite() {

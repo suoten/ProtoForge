@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_log_bus, _trigger_webhook_safe, _get_database
-from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
+from protoforge.models.device import DeviceConfig, DeviceInfo
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
