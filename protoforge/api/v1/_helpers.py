@@ -21,3 +21,11 @@ def _get_log_bus():
 def _get_database():
     from protoforge.main import get_database
     return get_database()
+
+
+async def _trigger_webhook_safe(event: str, payload: dict) -> None:
+    try:
+        from protoforge.core.webhook import webhook_manager
+        await webhook_manager.trigger(event, payload)
+    except Exception as e:
+        logger.warning("Webhook trigger failed for event '%s': %s", event, e)

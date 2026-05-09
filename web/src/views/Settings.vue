@@ -289,6 +289,8 @@ async function saveSettings() {
   saveLoading.value = true
   try {
     const updates = { ...form.value }
+    if (updates.edgelite_password === PASSWORD_MASK) delete updates.edgelite_password
+    if (updates.influxdb_token === PASSWORD_MASK) delete updates.influxdb_token
     await api.updateSettings(updates)
     message.success('设置已保存，部分配置需重启生效')
   } catch (e) {
@@ -349,7 +351,13 @@ async function handleAddUser() {
     message.warning('请填写用户名和密码')
     return
   }
-  if (newUser.value.password.length < 8) {
+  const pwd = newUser.value.password
+  if (pwd.length < 8) {
+    message.warning('密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+    return
+  }
+  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
+  if (types < 3) {
     message.warning('密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }
@@ -375,7 +383,13 @@ function openResetPassword(row) {
 }
 
 async function handleResetPassword() {
-  if (!resetTarget.value.new_password || resetTarget.value.new_password.length < 8) {
+  const pwd = resetTarget.value.new_password
+  if (!pwd || pwd.length < 8) {
+    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+    return
+  }
+  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
+  if (types < 3) {
     message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }
@@ -432,7 +446,13 @@ async function handleChangePassword() {
     message.warning('请填写当前密码和新密码')
     return
   }
-  if (changePwdForm.value.new_password.length < 8) {
+  const pwd = changePwdForm.value.new_password
+  if (pwd.length < 8) {
+    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+    return
+  }
+  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
+  if (types < 3) {
     message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
     return
   }

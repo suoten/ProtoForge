@@ -269,13 +269,22 @@ async function handleChangePassword() {
     message.error(t('password.mismatch'))
     return
   }
-  if (newPassword.value.length < 6) {
+  if (newPassword.value.length < 8) {
     message.error(t('password.tooShort'))
+    return
+  }
+  const types = [/[a-z]/.test(newPassword.value), /[A-Z]/.test(newPassword.value), /[0-9]/.test(newPassword.value), /[^a-zA-Z0-9]/.test(newPassword.value)].filter(Boolean).length
+  if (types < 3) {
+    message.error(t('password.tooWeak'))
     return
   }
   changePasswordLoading.value = true
   try {
-    const currentUser = localStorage.getItem('username') || 'admin'
+    const currentUser = localStorage.getItem('username')
+    if (!currentUser) {
+      message.error(t('password.noUser'))
+      return
+    }
     await api.changePassword(currentUser, oldPassword.value, newPassword.value)
     message.success(t('password.success'))
     showChangePassword.value = false
@@ -353,21 +362,23 @@ function connectWebSocket() {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
-    } catch (e) { /* ignore non-JSON messages */ }
+      if (msg.type === 'ping') return
+      if (msg.type === 'log' && msg.data) {
+        console.debug('[WS] log event received:', msg.data.summary || msg.data.message_type)
+      }
+    } catch { }
   }
 }
 
 async function loadSearchData() {
-  try {
-    const [devRes, tmplRes, scRes] = await Promise.all([
-      api.getDevices(), api.getTemplates(), api.getScenarios(),
-    ])
-    searchData.value = {
-      devices: devRes || [],
-      templates: tmplRes || [],
-      scenarios: scRes || [],
-    }
-  } catch (e) { console.warn('加载搜索数据失败:', e) }
+  const results = await Promise.allSettled([
+    api.getDevices(), api.getTemplates(), api.getScenarios(),
+  ])
+  searchData.value = {
+    devices: results[0].status === 'fulfilled' ? (results[0].value || []) : [],
+    templates: results[1].status === 'fulfilled' ? (results[1].value || []) : [],
+    scenarios: results[2].status === 'fulfilled' ? (results[2].value || []) : [],
+  }
 }
 </script>
 
