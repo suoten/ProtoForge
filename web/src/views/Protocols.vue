@@ -281,10 +281,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   wsManualClose = true
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   if (ws) { ws.close(); ws = null }
 })
 
 let ws = null
+let wsReconnectTimer = null
 let wsReconnectDelay = 1000
 let wsReconnectAttempts = 0
 let wsManualClose = false
@@ -299,7 +301,7 @@ function connectWs() {
     message.warning('设备实时连接失败，5秒后重试')
     wsReconnectAttempts++
     if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectWs, 5000)
+      wsReconnectTimer = setTimeout(connectWs, 5000)
     }
     return
   }
@@ -311,7 +313,6 @@ function connectWs() {
         loadData()
       }
     } catch (e) {
-      // Silently ignore non-device WebSocket messages
     }
   }
   ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
@@ -319,7 +320,7 @@ function connectWs() {
     if (wsManualClose) return
     wsReconnectAttempts++
     if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectWs, wsReconnectDelay)
+      wsReconnectTimer = setTimeout(connectWs, wsReconnectDelay)
       wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
     }
   }

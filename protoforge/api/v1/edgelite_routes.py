@@ -56,12 +56,12 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
     password = config.get("password", "")
 
     if not url:
-        return {"ok": False, "error": "请填写 EdgeLite 地址"}
+        raise HTTPException(status_code=400, detail="请填写 EdgeLite 地址")
     try:
         return await _test(url, username, password)
     except Exception as e:
         logger.error("EdgeLite connection test failed: %s", e)
-        return {"ok": False, "error": f"连接测试异常: {e}"}
+        raise HTTPException(status_code=502, detail=f"EdgeLite 连接测试失败: {e}")
 
 
 @router.get("/integration/edgelite/status/{device_id}")
