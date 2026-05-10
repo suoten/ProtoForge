@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 from protoforge.core.defaults import HTTP_TIMEOUT_SHORT
-import os
 import time
 from typing import Any, Optional
 
@@ -14,7 +13,11 @@ class FailoverManager:
         self._primary_url: Optional[str] = None
         self._standby_url: Optional[str] = None
         self._is_primary = True
-        self._health_check_interval = int(os.environ.get("PROTOFORGE_FAILOVER_INTERVAL", "10"))
+        try:
+            from protoforge.config import get_settings
+            self._health_check_interval = get_settings().failover_interval
+        except Exception:
+            self._health_check_interval = 10
         self._health_check_task: Optional[asyncio.Task] = None
         self._on_failover_callbacks = []
         self._on_recovery_callbacks = []

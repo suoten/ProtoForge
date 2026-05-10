@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 COPY protoforge/ protoforge/
-RUN pip install --no-cache-dir ".[all]"
+RUN pip install --no-cache-dir ".[all]" alembic>=1.13.0
 
 COPY web/ web/
 RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
@@ -18,7 +18,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libffi-dev && \
+    libffi7 curl && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
@@ -31,5 +31,7 @@ COPY migrations/ migrations/
 RUN mkdir -p data
 
 EXPOSE 8000 5020 4840 1883 5060 5060/udp 47808/udp 102 8080 5000 9600 44818 51340 8193 7878 1701 34964 34980
+
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:8000/health || exit 1
 
 CMD ["sh", "-c", "alembic upgrade head || echo 'WARNING: Database migration failed, continuing with auto-create tables'; python -m protoforge.cli run"]

@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from contextlib import asynccontextmanager
 
@@ -339,10 +338,10 @@ def create_app() -> FastAPI:
         except RuntimeError:
             logger.debug("Metrics: engine not available")
         try:
-            from protoforge.api.v1.router import _get_test_runner
+            from protoforge.api.v1.test_routes import _get_test_runner
             runner = _get_test_runner()
             metrics.collect_from_test_runner(runner)
-        except RuntimeError:
+        except (RuntimeError, ImportError):
             logger.debug("Metrics: test runner not available")
         return metrics.generate_prometheus_output()
 

@@ -231,7 +231,7 @@ class UserManager:
             from protoforge.config import get_settings
             default_password = get_settings().admin_password or "admin"
         except Exception:
-            default_password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "admin")
+            default_password = "admin"
         if default_password == "admin":
             logger.warning(
                 "Admin account is using the default password 'admin'. "

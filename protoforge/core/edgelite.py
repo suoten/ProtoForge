@@ -76,7 +76,7 @@ def get_protoforge_host() -> str:
     if s.protoforge_public_host:
         return s.protoforge_public_host
 
-    host = os.environ.get("PROTOFORGE_HOST", "0.0.0.0")
+    host = s.host
     if host in ("0.0.0.0", ""):
         import socket
         try:
