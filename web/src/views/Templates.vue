@@ -160,6 +160,7 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions } from '../constants.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -216,19 +217,9 @@ const filteredTemplates = computed(() => {
   return result
 })
 
-const dataTypeOptions = [
-  { label: 'float32', value: 'float32' }, { label: 'float64', value: 'float64' },
-  { label: 'int16', value: 'int16' }, { label: 'int32', value: 'int32' },
-  { label: 'uint16', value: 'uint16' }, { label: 'bool', value: 'bool' },
-  { label: 'string', value: 'string' },
-]
+const dataTypeOptions = _dataTypeOptions
 
-const generatorOptions = [
-  { label: '随机', value: 'random' }, { label: '正弦波', value: 'sine' },
-  { label: '锯齿波', value: 'sawtooth' }, { label: '方波', value: 'square' },
-  { label: '递增', value: 'increment' }, { label: '常量', value: 'constant' },
-  { label: '固定值', value: 'fixed' },
-]
+const generatorOptions = _generatorTypeOptions
 
 const pointEditColumns = [
   { title: '名称', key: 'name', width: 100, render: makeEditRenderer('name', newTemplate, NInput) },

@@ -39,7 +39,7 @@ function extractErrorDetail(data) {
 let _notifyFn = null
 function _notifyUser(msg, type = 'warning') {
   if (_notifyFn) {
-    _notifyFn({ type, message: msg, duration: 4000 })
+    _notifyFn(type, msg)
   }
 }
 export function setNotifyFunction(fn) {

@@ -218,6 +218,13 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
 
         old_config = instance.config
+        was_running = instance.status == DeviceStatus.ONLINE
+        if was_running:
+            try:
+                await self.stop_device(device_id)
+            except Exception as e:
+                logger.warning("Failed to stop device %s before update: %s", device_id, e)
+
         try:
             await self.remove_device(device_id)
         except Exception as e:
@@ -225,7 +232,13 @@ class SimulationEngine:
             raise
         config.id = device_id
         try:
-            return await self.create_device(config)
+            result = await self.create_device(config)
+            if was_running:
+                try:
+                    await self.start_device(device_id)
+                except Exception as e:
+                    logger.warning("Failed to restart device %s after update: %s", device_id, e)
+            return result
         except Exception as e:
             logger.error("Failed to create new device %s during update: %s, restoring old", device_id, e)
             try:

@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from dataclasses import dataclass, field
@@ -217,13 +218,13 @@ class WebhookManager:
                 break
 
     async def _send_single(self, webhook: WebhookConfig, body: dict[str, Any]) -> None:
+        if self._client is None:
+            raise RuntimeError("WebhookManager is not running. Call start() first.")
         headers = {"Content-Type": "application/json", **webhook.headers}
         if webhook.secret:
             body_bytes = json.dumps(body).encode()
             sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
             headers["X-ProtoForge-Signature"] = sig
-        if self._client is None:
-            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
         try:
             resp = await self._client.post(webhook.url, json=body, headers=headers)
         except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError, OSError) as e:

@@ -1431,6 +1431,28 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.3 — 2026-05-10
+
+**致命修复：**
+
+- 修复 `webhook.py` 缺少 `import os` 导致模块无法加载、所有 Webhook 功能完全不可用的致命 Bug
+- 修复 `webhook.py` 的 `_send_single()` 在 `stop()` 后会自动重建 `httpx.AsyncClient` 导致资源泄漏的问题，改为抛出明确错误
+- 修复 `api.js` 的 `_notifyUser()` 调用签名与 Naive UI `discreteMessage` 不匹配，导致全局错误通知静默失败（`TypeError: _notifyFn is not a function`）
+- 修复 `App.vue` 中 `setNotifyFunction` 传入整个 `discreteMessage` 对象而非可调用函数的问题
+
+**后端关键修复：**
+
+- 修复 `engine.py` 的 `update_device()` 竞态条件：更新设备前先停止运行中的设备，更新后自动恢复运行状态，避免删除-创建间隙设备不可用
+- 修复 `retry.py` 的 `should_retry()` 对编程错误（TypeError/KeyError 等）也进行重试的问题：仅对 `IntegrationError`（retryable=True）和网络错误（ConnectionError/OSError/TimeoutError）重试，其他异常直接抛出
+- 修复 `validator.py` 的 `driver_config_result` 永远返回空字典的问题：新增 `_validate_driver_config()` 方法，按协议类型验证必填字段和端口范围
+
+**前端关键修复：**
+
+- 统一 `dataTypeOptions` 和 `generatorTypeOptions`：消除 ScenarioEditor.vue 和 Templates.vue 中的重复定义，统一使用 constants.js 中的标准定义（含 uint32、triangle、script 等完整选项）
+- 修复 `Testing.vue` 的 `saveJsonAsCase()` 中 JSON 解析失败时显示"undefined"的错误信息，改为区分 SyntaxError 和 API 错误
+
+***
+
 #### v0.1.2 — 2026-05-10
 
 **后端关键修复：**
