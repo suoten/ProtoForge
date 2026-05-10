@@ -371,7 +371,9 @@ function connectWebSocket() {
       if (msg.type === 'log' && msg.data) {
         console.debug('[WS] log event received:', msg.data.summary || msg.data.message_type)
       }
-    } catch { }
+    } catch (e) {
+      console.debug('[WS] Non-JSON message ignored:', typeof event.data === 'string' ? event.data.substring(0, 100) : event.data)
+    }
   }
 }
 

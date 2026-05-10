@@ -18,20 +18,20 @@ class ChannelBase(ABC):
 
     @abstractmethod
     async def connect(self) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def send(self, message: dict[str, Any]) -> dict[str, Any] | None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def close(self) -> None:
-        pass
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def is_connected(self) -> bool:
-        pass
+        raise NotImplementedError
 
     @property
     def channel_type(self) -> str:

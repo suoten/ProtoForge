@@ -62,7 +62,11 @@ class FailoverManager:
 
     async def _health_check_loop(self) -> None:
         consecutive_failures = 0
-        max_failures = 3
+        try:
+            from protoforge.config import get_settings
+            max_failures = get_settings().failover_max_failures
+        except Exception:
+            max_failures = 3
         while True:
             try:
                 await asyncio.sleep(self._health_check_interval)

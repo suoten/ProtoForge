@@ -1431,6 +1431,26 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.4 — 2026-05-10
+
+**后端健壮性修复：**
+
+- 修复 `protocols/base.py` 和 `integration/channel.py` 抽象方法使用 `pass` 而非 `raise NotImplementedError` 的问题：子类忘记实现时不会静默通过，而是立即抛出明确错误
+- 修复 `auth.py` 配置读取失败时默认密码回退为 `"admin"` 的安全隐患：改为仅在未配置 `PROTOFORGE_ADMIN_PASSWORD` 时使用默认密码并输出警告
+- 修复 `failover.py` 的 `max_failures` 硬编码为 3 而未使用 `config.py` 中已定义的 `failover_max_failures` 配置项
+- 修复 `recorder.py` 队列大小硬编码为 50000 而未使用 `config.py` 中已定义的 `recorder_queue_size` 配置项
+- 修复 `forward.py` 重试退避策略使用线性增长（`0.5 * (attempt+1)`），改为指数退避（`0.5 * 2^attempt`，上限 30s），避免高频重试加重服务端压力
+- 修复 `config.py` 的 `get_protocol_port_map()` 中协议绑定地址全部硬编码为 `"0.0.0.0"`，改为读取 `PROTOFORGE_HOST` 配置
+- 修复 `db/session.py` 的 `import_all()` 缺少白名单验证：导入备份数据时未校验表名，存在潜在安全风险，现增加 `_VALID_TABLES` 白名单过滤
+
+**前端用户体验修复：**
+
+- 修复 `api.js` 中 404 错误仅 `console.error` 不通知用户的问题：新增 `_notifyUser('请求的资源不存在', 'warning')` 提示
+- 修复 Token 刷新失败后直接跳转登录页无任何提示的问题：新增 `_notifyUser('登录已过期，请重新登录', 'warning')` 提示
+- 修复 `App.vue` 和 `Protocols.vue` 中 WebSocket `onmessage` 的空 `catch` 块：静默吞掉所有 JSON 解析错误，改为 `console.debug` 记录非 JSON 消息
+
+***
+
 #### v0.1.3 — 2026-05-10
 
 **致命修复：**

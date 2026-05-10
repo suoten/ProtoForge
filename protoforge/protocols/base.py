@@ -37,27 +37,27 @@ class ProtocolServer(ABC):
 
     @abstractmethod
     async def start(self, config: dict[str, Any]) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def stop(self) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def create_device(self, device_config: DeviceConfig) -> str:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def remove_device(self, device_id: str) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def read_points(self, device_id: str) -> list[PointValue]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
-        pass
+        raise NotImplementedError
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -83,8 +83,8 @@ class ProtocolServer(ABC):
 class DeviceBehavior(ABC):
     @abstractmethod
     def generate_value(self, point_config: dict[str, Any]) -> Any:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_write(self, point_name: str, value: Any) -> bool:
-        pass
+        raise NotImplementedError

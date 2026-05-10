@@ -134,7 +134,12 @@ class Recorder:
         self._active: Optional[Recording] = None
         self._filter_protocol: Optional[str] = None
         self._filter_device: Optional[str] = None
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=50000)
+        try:
+            from protoforge.config import get_settings
+            queue_size = get_settings().recorder_queue_size
+        except Exception:
+            queue_size = 50000
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._task: Optional[asyncio.Task] = None
         self._running = False
         self._database = None

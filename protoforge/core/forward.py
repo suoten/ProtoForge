@@ -308,7 +308,7 @@ class ForwardEngine:
                             break
                         except Exception as e:
                             if attempt < self._retry_count - 1:
-                                await asyncio.sleep(0.5 * (attempt + 1))
+                                await asyncio.sleep(min(0.5 * (2 ** attempt), 30.0))
                             else:
                                 self._failed_count += len(records)
                                 logger.warning("Forward to %s failed after %d retries: %s", name, self._retry_count, e)

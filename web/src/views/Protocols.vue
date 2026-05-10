@@ -321,6 +321,7 @@ function connectWs() {
         loadData()
       }
     } catch (e) {
+      console.debug('[WS] Non-JSON message ignored:', typeof event.data === 'string' ? event.data.substring(0, 100) : event.data)
     }
   }
   ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }

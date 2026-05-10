@@ -210,24 +210,25 @@ def _save_env() -> None:
 
 def get_protocol_port_map() -> dict[str, Any]:
     s = get_settings()
+    bind_host = s.host if s.host else "0.0.0.0"
     return {
-        "modbus_tcp": {"port": s.modbus_tcp_port, "host": "0.0.0.0"},
+        "modbus_tcp": {"port": s.modbus_tcp_port, "host": bind_host},
         "modbus_rtu": {"port": s.modbus_rtu_port, "host": "/dev/ttyUSB0"},
-        "opcua": {"port": s.opcua_port, "host": "0.0.0.0"},
-        "mqtt": {"port": s.mqtt_port, "host": "0.0.0.0"},
-        "http": {"port": s.http_port, "host": "0.0.0.0"},
-        "gb28181": {"port": s.gb28181_port, "host": "0.0.0.0"},
-        "bacnet": {"port": s.bacnet_port, "host": "0.0.0.0"},
-        "s7": {"port": s.s7_port, "host": "0.0.0.0"},
-        "mc": {"port": s.mc_port, "host": "0.0.0.0"},
-        "fins": {"port": s.fins_port, "host": "0.0.0.0"},
-        "ab": {"port": s.ab_port, "host": "0.0.0.0"},
-        "opcda": {"port": s.opcda_port, "host": "0.0.0.0"},
-        "fanuc": {"port": s.fanuc_port, "host": "0.0.0.0"},
-        "mtconnect": {"port": s.mtconnect_port, "host": "0.0.0.0"},
-        "toledo": {"port": s.toledo_port, "host": "0.0.0.0"},
-        "profinet": {"port": s.profinet_port, "host": "0.0.0.0"},
-        "ethercat": {"port": s.ethercat_port, "host": "0.0.0.0"},
+        "opcua": {"port": s.opcua_port, "host": bind_host},
+        "mqtt": {"port": s.mqtt_port, "host": bind_host},
+        "http": {"port": s.http_port, "host": bind_host},
+        "gb28181": {"port": s.gb28181_port, "host": bind_host},
+        "bacnet": {"port": s.bacnet_port, "host": bind_host},
+        "s7": {"port": s.s7_port, "host": bind_host},
+        "mc": {"port": s.mc_port, "host": bind_host},
+        "fins": {"port": s.fins_port, "host": bind_host},
+        "ab": {"port": s.ab_port, "host": bind_host},
+        "opcda": {"port": s.opcda_port, "host": bind_host},
+        "fanuc": {"port": s.fanuc_port, "host": bind_host},
+        "mtconnect": {"port": s.mtconnect_port, "host": bind_host},
+        "toledo": {"port": s.toledo_port, "host": bind_host},
+        "profinet": {"port": s.profinet_port, "host": bind_host},
+        "ethercat": {"port": s.ethercat_port, "host": bind_host},
     }
 
 

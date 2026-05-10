@@ -895,6 +895,10 @@ class Database:
             "users": ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"],
             "recordings": ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"],
         }
+        for table in list(data.keys()):
+            if table not in self._VALID_TABLES:
+                logger.warning("Skipping unknown table during import: %s", table)
+                del data[table]
         numeric_defaults = {
             "start_time": 0, "end_time": 0, "total": 0, "passed": 0,
             "failed": 0, "errors": 0, "skipped": 0, "created_at": 0,

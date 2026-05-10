@@ -229,10 +229,13 @@ class UserManager:
         self._db = None
         try:
             from protoforge.config import get_settings
-            default_password = get_settings().admin_password or "admin"
+            default_password = get_settings().admin_password
+            if not default_password:
+                default_password = None
         except Exception:
+            default_password = None
+        if not default_password:
             default_password = "admin"
-        if default_password == "admin":
             logger.warning(
                 "Admin account is using the default password 'admin'. "
                 "Set the PROTOFORGE_ADMIN_PASSWORD environment variable to a strong password before deployment."

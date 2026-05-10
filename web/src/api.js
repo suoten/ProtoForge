@@ -101,6 +101,7 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
+      _notifyUser('登录已过期，请重新登录', 'warning')
       if (window.location.pathname !== '/') {
         window.location.href = '/'
       }
@@ -114,6 +115,7 @@ api.interceptors.response.use(
       _notifyUser(msg, 'warning')
     } else if (status === 404) {
       console.error('Resource not found:', detail)
+      _notifyUser('请求的资源不存在：' + (detail || '未找到'), 'warning')
     } else if (status >= 500) {
       console.error('Server error:', detail)
       _notifyUser('服务器内部错误，请稍后重试', 'error')
