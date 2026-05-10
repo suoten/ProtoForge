@@ -73,20 +73,21 @@ def _get_user_from_request(request: Request) -> Optional[dict]:
     return getattr(request.state, "user", None)
 
 
-def _check_role(request: Request, allowed_roles: list[str]) -> None:
+def _check_role(request: Request, allowed_roles: list[str]) -> Optional[JSONResponse]:
     user = _get_user_from_request(request)
     if not user:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            content={"code": 401, "data": None, "message": "Not authenticated", "detail": "Not authenticated", "reason": "no_token", "timestamp": int(time.time() * 1000)},
             headers={"WWW-Authenticate": "Bearer"},
         )
     user_role = user.get("role", "user")
     if user_role not in allowed_roles:
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Role '{user_role}' not allowed for this operation",
+            content={"code": 403, "data": None, "message": f"角色 '{user_role}' 无权执行此操作", "detail": f"Role '{user_role}' not allowed for this operation", "timestamp": int(time.time() * 1000)},
         )
+    return None
 
 
 _ADMIN_PATHS = {
@@ -134,10 +135,14 @@ async def auth_middleware(request: Request, call_next):
 
     for admin_path, roles in _ADMIN_PATHS.items():
         if path.startswith(admin_path):
-            _check_role(request, roles)
+            resp = _check_role(request, roles)
+            if resp:
+                return resp
             break
 
     if path.startswith(_ADMIN_ROLE_PATH) and path.endswith(_ADMIN_ROLE_SUFFIX):
-        _check_role(request, ["admin"])
+        resp = _check_role(request, ["admin"])
+        if resp:
+            return resp
 
     return await call_next(request)

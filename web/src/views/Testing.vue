@@ -43,10 +43,10 @@
       <n-card v-if="lastReport" size="small">
         <template #header>
           <n-space align="center" size="small">
-            <span :style="{ fontSize: '24px', color: lastReport.failed > 0 || lastReport.errors > 0 ? '#ef4444' : '#10b981' }">●</span>
+            <span :style="{ fontSize: '24px', color: (lastReport.failed || 0) > 0 || (lastReport.errors || 0) > 0 ? '#ef4444' : '#10b981' }">●</span>
             <span>测试结果</span>
-            <n-tag :type="lastReport.success_rate >= 100 ? 'success' : lastReport.success_rate >= 50 ? 'warning' : 'error'" size="small">
-              通过率 {{ lastReport.success_rate }}%
+            <n-tag :type="(lastReport.success_rate || 0) >= 100 ? 'success' : (lastReport.success_rate || 0) >= 50 ? 'warning' : 'error'" size="small">
+              通过率 {{ lastReport.success_rate ?? 0 }}%
             </n-tag>
           </n-space>
         </template>
@@ -58,24 +58,24 @@
         </template>
         <n-space vertical size="small">
           <n-space size="large">
-            <n-statistic label="总数" :value="lastReport.total" />
-            <n-statistic label="通过" :value="lastReport.passed">
-              <template #default><span style="color:#18a058">{{ lastReport.passed }}</span></template>
+            <n-statistic label="总数" :value="lastReport.total || 0" />
+            <n-statistic label="通过" :value="lastReport.passed || 0">
+              <template #default><span style="color:#18a058">{{ lastReport.passed || 0 }}</span></template>
             </n-statistic>
-            <n-statistic label="失败" :value="lastReport.failed">
-              <template #default><span style="color:#d03050">{{ lastReport.failed }}</span></template>
+            <n-statistic label="失败" :value="lastReport.failed || 0">
+              <template #default><span style="color:#d03050">{{ lastReport.failed || 0 }}</span></template>
             </n-statistic>
-            <n-statistic label="错误" :value="lastReport.errors">
-              <template #default><span style="color:#f0a020">{{ lastReport.errors }}</span></template>
+            <n-statistic label="错误" :value="lastReport.errors || 0">
+              <template #default><span style="color:#f0a020">{{ lastReport.errors || 0 }}</span></template>
             </n-statistic>
           </n-space>
           <n-progress
-            :percentage="lastReport.success_rate"
-            :color="lastReport.success_rate >= 100 ? '#18a058' : lastReport.success_rate >= 50 ? '#f0a020' : '#d03050'"
+            :percentage="lastReport.success_rate || 0"
+            :color="(lastReport.success_rate || 0) >= 100 ? '#18a058' : (lastReport.success_rate || 0) >= 50 ? '#f0a020' : '#d03050'"
             :height="8" :show-indicator="false" />
 
           <n-collapse>
-            <n-collapse-item v-for="tc in lastReport.test_cases" :key="tc.id"
+            <n-collapse-item v-for="tc in (lastReport.test_cases || [])" :key="tc.id"
               :name="tc.id">
               <template #header>
                 <n-space align="center" size="small">
@@ -245,12 +245,12 @@
                     <n-card size="small" embedded>
                       <n-statistic :label="item.name || `报告 ${idx + 1}`">
                         <template #default>
-                          <span :style="{ color: item.success_rate >= 100 ? '#18a058' : item.success_rate >= 50 ? '#f0a020' : '#d03050' }">
-                            {{ item.success_rate }}%
+                          <span :style="{ color: (item.success_rate || 0) >= 100 ? '#18a058' : (item.success_rate || 0) >= 50 ? '#f0a020' : '#d03050' }">
+                            {{ item.success_rate ?? 0 }}%
                           </span>
                         </template>
                       </n-statistic>
-                      <n-text depth="3" style="font-size:12px">{{ item.passed }}/{{ item.total }} 通过</n-text>
+                      <n-text depth="3" style="font-size:12px">{{ item.passed || 0 }}/{{ item.total || 0 }} 通过</n-text>
                     </n-card>
                   </n-gi>
                 </n-grid>
@@ -308,10 +308,10 @@
       <n-modal v-model:show="showReportDetailModal" preset="card" title="报告详情" style="width: 700px">
         <n-space vertical v-if="reportDetail">
           <n-grid :cols="4" :x-gap="12">
-            <n-gi><n-statistic label="总数" :value="reportDetail.total" /></n-gi>
-            <n-gi><n-statistic label="通过" :value="reportDetail.passed" /></n-gi>
-            <n-gi><n-statistic label="失败" :value="reportDetail.failed" /></n-gi>
-            <n-gi><n-statistic label="通过率" :value="reportDetail.success_rate + '%'" /></n-gi>
+            <n-gi><n-statistic label="总数" :value="reportDetail.total || 0" /></n-gi>
+            <n-gi><n-statistic label="通过" :value="reportDetail.passed || 0" /></n-gi>
+            <n-gi><n-statistic label="失败" :value="reportDetail.failed || 0" /></n-gi>
+            <n-gi><n-statistic label="通过率" :value="(reportDetail.success_rate ?? 0) + '%'" /></n-gi>
           </n-grid>
           <n-collapse v-if="reportDetail.test_cases">
             <n-collapse-item v-for="tc in reportDetail.test_cases" :key="tc.id" :name="tc.id">
@@ -595,10 +595,10 @@ async function runQuickTest(scope, targetId) {
     const res = await api.quickTest(scope, targetId)
     lastReport.value = res
     await loadReports()
-    if (res.success_rate >= 100) {
-      message.success(`一键测试完成：全部 ${res.total} 项通过！`)
+    if ((res.success_rate || 0) >= 100) {
+      message.success(`一键测试完成：全部 ${res.total || 0} 项通过！`)
     } else {
-      message.warning(`一键测试完成：${res.passed}/${res.total} 通过，${res.failed} 项失败`)
+      message.warning(`一键测试完成：${res.passed || 0}/${res.total || 0} 通过，${res.failed || 0} 项失败`)
     }
   } catch (e) {
     message.error('一键测试失败: ' + (e.response?.data?.detail || e.message))
@@ -764,18 +764,23 @@ async function loadSuggestions() {
 
 async function loadMetadata() {
   try {
-    const [at, ast, dev, sc, proto] = await Promise.all([
+    const results = await Promise.allSettled([
       api.getTestActionTypes(),
       api.getTestAssertionTypes(),
       api.getDevices(),
       api.getScenarios(),
       api.getProtocols(),
     ])
-    actionTypes.value = at
-    assertionTypes.value = ast
-    devices.value = dev || []
-    scenarios.value = sc || []
-    protocols.value = proto || []
+    actionTypes.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
+    assertionTypes.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+    devices.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
+    scenarios.value = results[3].status === 'fulfilled' ? (results[3].value || []) : []
+    protocols.value = results[4].status === 'fulfilled' ? (results[4].value || []) : []
+    const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
+    if (failedIdx.length > 0) {
+      const names = ['操作类型', '断言类型', '设备', '场景', '协议']
+      message.warning(`部分元数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+    }
   } catch (e) { message.error('加载测试元数据失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
@@ -824,7 +829,7 @@ const reportColumns = [
   { title: '总数', key: 'total', width: 60 },
   { title: '通过', key: 'passed', width: 60 },
   { title: '失败', key: 'failed', width: 60 },
-  { title: '通过率', key: 'success_rate', width: 80, render: (row) => `${row.success_rate}%` },
+  { title: '通过率', key: 'success_rate', width: 80, render: (row) => `${row.success_rate ?? 0}%` },
   { title: '耗时', key: 'duration', width: 80, render: (row) => `${(row.duration || 0).toFixed(2)}s` },
   {
     title: '操作', key: 'actions', width: 200,

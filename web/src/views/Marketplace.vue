@@ -148,9 +148,11 @@ async function doCreate() {
 
 async function loadData() {
   try {
-    const [tRes, pRes] = await Promise.all([api.getTemplates(), api.getProtocols()])
-    templates.value = tRes || []
-    protocols.value = pRes || []
+    const results = await Promise.allSettled([api.getTemplates(), api.getProtocols()])
+    templates.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
+    protocols.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+    if (results[0].status === 'rejected') message.warning('加载模板失败')
+    if (results[1].status === 'rejected') message.warning('加载协议列表失败')
   } catch (e) {
     message.error('加载模板失败: ' + (e.response?.data?.detail || e.message))
   }
