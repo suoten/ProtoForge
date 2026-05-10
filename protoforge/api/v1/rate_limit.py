@@ -61,8 +61,18 @@ class RateLimiter:
             return max(0, retry)
 
 
-_default_limiter = RateLimiter(max_requests=100, window_seconds=60)
-_auth_limiter = RateLimiter(max_requests=10, window_seconds=60)
+def _get_rate_limits():
+    try:
+        from protoforge.config import get_settings
+        s = get_settings()
+        return (
+            RateLimiter(max_requests=getattr(s, 'rate_limit_max_requests', 100), window_seconds=getattr(s, 'rate_limit_window_seconds', 60)),
+            RateLimiter(max_requests=getattr(s, 'rate_limit_auth_max_requests', 10), window_seconds=getattr(s, 'rate_limit_auth_window_seconds', 60)),
+        )
+    except Exception:
+        return RateLimiter(max_requests=100, window_seconds=60), RateLimiter(max_requests=10, window_seconds=60)
+
+_default_limiter, _auth_limiter = _get_rate_limits()
 
 
 def get_client_ip(request: Request) -> str:

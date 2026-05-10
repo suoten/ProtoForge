@@ -335,7 +335,7 @@ function connectLogWs() {
   logWs.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data)
-      if (msg.type === 'log') {
+      if (msg.type === 'log' && msg.data && typeof msg.data === 'object') {
         recentLogs.value.unshift(msg.data)
         if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
       }

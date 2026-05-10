@@ -1,5 +1,4 @@
 import logging
-import os
 import time
 from typing import Optional
 
@@ -10,11 +9,10 @@ from protoforge.core.auth import verify_token, verify_token_with_reason
 
 logger = logging.getLogger(__name__)
 
-_NO_AUTH = os.environ.get("PROTOFORGE_NO_AUTH", "").lower() in ("1", "true", "yes")
-
 
 def is_no_auth() -> bool:
-    return _NO_AUTH
+    from protoforge.config import get_settings
+    return get_settings().no_auth
 
 
 class RoleChecker:

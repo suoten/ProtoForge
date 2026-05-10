@@ -95,9 +95,9 @@ async def lifespan(app: FastAPI):
     await _engine.start()
 
     _integration_manager = IntegrationManager(event_bus=_event_bus)
-    integration_url = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_URL", "")
-    integration_user = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_USERNAME", "admin")
-    integration_pass = os.environ.get("PROTOFORGE_INTEGRATION_EDGELITE_PASSWORD", "")
+    integration_url = settings.edgelite_url
+    integration_user = settings.edgelite_username
+    integration_pass = settings.edgelite_password
     if integration_url:
         _integration_manager.configure(integration_url, integration_user, integration_pass)
     await _integration_manager.start()
@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI):
         logger.error("Failed to load templates from database: %s", e)
 
     try:
-        from protoforge.api.v1.router import _get_test_runner
+        from protoforge.api.v1.test_routes import _get_test_runner
         runner = _get_test_runner()
         runner.set_database(_database)
         await runner.restore_from_db()
@@ -185,7 +185,7 @@ async def lifespan(app: FastAPI):
 
     try:
         from protoforge.core.recorder import Recorder
-        from protoforge.api.v1.router import _get_recorder
+        from protoforge.api.v1.recorder_routes import _get_recorder
         recorder = _get_recorder()
         recorder.set_database(_database)
         await recorder.restore_from_db()
@@ -196,9 +196,9 @@ async def lifespan(app: FastAPI):
 
     try:
         from protoforge.core.failover import failover_manager
-        primary_url = os.environ.get("PROTOFORGE_FAILOVER_PRIMARY", "")
-        standby_url = os.environ.get("PROTOFORGE_FAILOVER_STANDBY", "")
-        is_primary = os.environ.get("PROTOFORGE_FAILOVER_ROLE", "primary") == "primary"
+        primary_url = settings.failover_primary
+        standby_url = settings.failover_standby
+        is_primary = settings.failover_role != "standby"
         if primary_url:
             failover_manager.configure(primary_url, standby_url, is_primary)
             await failover_manager.start()
@@ -207,7 +207,7 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"failover: {e}")
         logger.error("Failed to start failover manager: %s", e)
 
-    if os.environ.get("PROTOFORGE_DEMO_MODE"):
+    if settings.demo_mode:
         try:
             from protoforge.core.demo import seed_demo_data
             await seed_demo_data(_engine, _template_manager)
@@ -216,7 +216,7 @@ async def lifespan(app: FastAPI):
             logger.error("Failed to seed demo data: %s", e)
 
     grpc_server = None
-    grpc_port = int(os.environ.get("PROTOFORGE_GRPC_PORT", "0"))
+    grpc_port = settings.grpc_port
     if grpc_port > 0:
         try:
             from protoforge.grpc.server import start_grpc_server
@@ -256,7 +256,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Error closing database: %s", e)
     try:
-        from protoforge.api.v1.router import _close_internal_client
+        from protoforge.api.v1.test_routes import _close_internal_client
         await _close_internal_client()
     except Exception as e:
         logger.debug("Error closing internal client: %s", e)
@@ -283,7 +283,14 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)
 
-    cors_origins_list = settings.cors_origins.split(",")
+    cors_origins_list = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    has_wildcard = "*" in cors_origins_list
+    if has_wildcard and len(cors_origins_list) > 1:
+        logger.warning(
+            "CORS origins contains both '*' and specific domains. "
+            "Removing specific domains as '*' already allows all origins."
+        )
+        cors_origins_list = ["*"]
     is_wildcard = cors_origins_list == ["*"]
     app.add_middleware(
         CORSMiddleware,
@@ -293,7 +300,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    if settings.cors_origins == "*":
+    if is_wildcard:
         logger.warning(
             "CORS is configured to allow all origins (*). "
             "This is appropriate for development only. "

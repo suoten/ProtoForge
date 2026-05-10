@@ -40,7 +40,7 @@
           {{ log.protocol }}
         </n-tag>
         <span v-if="log.device_id" style="color: #8b8bcd; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0;">
-          {{ log.device_id.substring(0, 8) }}
+          {{ (log.device_id || '').substring(0, 8) }}
         </span>
         <n-tag v-if="log.message_type" :type="getTypeColor(log.message_type)" size="tiny" round style="flex-shrink: 0;">
           {{ log.message_type }}
@@ -63,7 +63,7 @@
         <n-descriptions-item label="设备ID">{{ selectedLog.device_id || '-' }}</n-descriptions-item>
         <n-descriptions-item label="消息类型">{{ selectedLog.message_type }}</n-descriptions-item>
         <n-descriptions-item label="摘要">{{ selectedLog.summary }}</n-descriptions-item>
-        <n-descriptions-item label="详细信息" v-if="selectedLog.detail && Object.keys(selectedLog.detail).length > 0">
+        <n-descriptions-item label="详细信息" v-if="selectedLog.detail && typeof selectedLog.detail === 'object' && Object.keys(selectedLog.detail).length > 0">
           <pre style="margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #aaa; background: #1a1a2e; padding: 8px; border-radius: 4px;">{{ JSON.stringify(selectedLog.detail, null, 2) }}</pre>
         </n-descriptions-item>
       </n-descriptions>

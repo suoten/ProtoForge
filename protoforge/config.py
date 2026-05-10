@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     demo_mode: bool = False
     log_level: str = "info"
     cors_origins: str = "*"
+    no_auth: bool = False
+    admin_password: str = ""
+    grpc_port: int = 50051
+    failover_role: str = ""
+    failover_primary: str = ""
+    failover_standby: str = ""
 
     influxdb_url: str = ""
     influxdb_token: str = ""
@@ -58,6 +64,10 @@ class Settings(BaseSettings):
     forward_retry_count: int = 3
     failover_max_failures: int = 3
     test_max_reports: int = 1000
+    rate_limit_max_requests: int = 100
+    rate_limit_window_seconds: int = 60
+    rate_limit_auth_max_requests: int = 10
+    rate_limit_auth_window_seconds: int = 60
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
