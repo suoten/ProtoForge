@@ -88,16 +88,16 @@ class HttpChannel(ChannelBase):
             if msg_type in ("push_device", "batch_push"):
                 resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
                 if resp.status_code in (200, 201):
-                    resp_data = resp.json()
-                    inner = resp_data.get("data", resp_data)
+                    resp_data = self._safe_json(resp)
+                    inner = resp_data.get("data", resp_data) if resp_data else {}
                     return {"ok": True, "data": inner}
                 if resp.status_code == 409:
                     device_id = payload.get("device_id", "")
                     update_payload = {k: v for k, v in payload.items() if k != "device_id"}
                     resp = await self._client.put(f"/api/v1/devices/{device_id}", json=update_payload, headers=headers)
                     if resp.status_code == 200:
-                        resp_data = resp.json()
-                        inner = resp_data.get("data", resp_data)
+                        resp_data = self._safe_json(resp)
+                        inner = resp_data.get("data", resp_data) if resp_data else {}
                         return {"ok": True, "updated": True, "data": inner}
                 if resp.status_code == 401 and self._auth:
                     refreshed = await self._safe_refresh_token()
@@ -105,7 +105,7 @@ class HttpChannel(ChannelBase):
                         headers["Authorization"] = f"Bearer {self._auth.token}"
                         resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
                         if resp.status_code in (200, 201):
-                            return {"ok": True, "data": resp.json()}
+                            return {"ok": True, "data": self._safe_json(resp) or {}}
                 return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
 
             elif msg_type == "delete_device":
@@ -132,8 +132,8 @@ class HttpChannel(ChannelBase):
                     endpoint = "start" if action == "start_collect" else "stop"
                     resp = await self._client.post(f"/api/v1/devices/{device_id}/{endpoint}", headers=headers)
                 if resp.status_code == 200:
-                    resp_data = resp.json()
-                    inner = resp_data.get("data", resp_data)
+                    resp_data = self._safe_json(resp)
+                    inner = resp_data.get("data", resp_data) if resp_data else {}
                     return {"ok": True, "data": inner}
                 if resp.status_code == 401 and self._auth:
                     refreshed = await self._safe_refresh_token()
@@ -145,8 +145,8 @@ class HttpChannel(ChannelBase):
                             headers=headers,
                         )
                         if resp.status_code == 200:
-                            resp_data = resp.json()
-                            inner = resp_data.get("data", resp_data)
+                            resp_data = self._safe_json(resp)
+                            inner = resp_data.get("data", resp_data) if resp_data else {}
                             return {"ok": True, "data": inner}
                 return {"ok": resp.status_code == 200, "error": None if resp.status_code == 200 else f"HTTP {resp.status_code}"}
 
@@ -157,11 +157,19 @@ class HttpChannel(ChannelBase):
                     if refreshed:
                         headers["Authorization"] = f"Bearer {self._auth.token}"
                         resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
-                return {"ok": resp.status_code == 200, "data": resp.json() if resp.status_code == 200 else None}
+                return {"ok": resp.status_code == 200, "data": self._safe_json(resp) if resp.status_code == 200 else None}
 
         except Exception as e:
             self._connected = False
             raise
+
+    @staticmethod
+    def _safe_json(resp) -> dict | None:
+        try:
+            return resp.json()
+        except Exception as e:
+            logger.debug("Failed to parse JSON response: %s", e)
+            return None
 
     async def _safe_refresh_token(self) -> bool:
         try:

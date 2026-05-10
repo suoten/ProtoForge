@@ -73,6 +73,9 @@ const messages = {
       confirmDelete: '确定要删除吗？此操作不可恢复。',
       confirmStop: '确定要停止吗？',
       noRecords: '暂无记录',
+      deleted: '已删除',
+      deleteFailed: '删除失败',
+      time: '时间',
     },
     nav: {
       dashboard: '仪表盘',
@@ -431,6 +434,13 @@ const messages = {
       todayOperations: '今日操作',
       activeUsers: '活跃用户',
       recentOperations: '最近操作',
+      resourceType: '资源类型',
+      resourceId: '资源ID',
+      actionType: '操作类型',
+      loadFailed: '加载审计日志失败',
+      statsFailed: '加载审计统计失败',
+      cleared: '已清空',
+      clearFailed: '清空失败',
     },
     backup: {
       title: '备份与恢复',
@@ -492,6 +502,10 @@ const messages = {
       send: '→发',
       system: '系统',
       write: '✎写',
+    },
+    notFound: {
+      pageNotExist: '页面不存在',
+      backToHome: '返回首页',
     },
   },
   en: {
@@ -566,6 +580,9 @@ const messages = {
       confirmDelete: 'Are you sure? This action cannot be undone.',
       confirmStop: 'Are you sure you want to stop?',
       noRecords: 'No records',
+      deleted: 'Deleted',
+      deleteFailed: 'Delete failed',
+      time: 'Time',
     },
     nav: {
       dashboard: 'Dashboard',
@@ -924,6 +941,13 @@ const messages = {
       todayOperations: 'Today Operations',
       activeUsers: 'Active Users',
       recentOperations: 'Recent Operations',
+      resourceType: 'Resource Type',
+      resourceId: 'Resource ID',
+      actionType: 'Action Type',
+      loadFailed: 'Failed to load audit log',
+      statsFailed: 'Failed to load audit stats',
+      cleared: 'Cleared',
+      clearFailed: 'Failed to clear',
     },
     backup: {
       title: 'Backup & Restore',
@@ -985,6 +1009,10 @@ const messages = {
       send: 'Send→',
       system: 'System',
       write: '✎Write',
+    },
+    notFound: {
+      pageNotExist: 'Page not found',
+      backToHome: 'Back to Home',
     },
   },
 }

@@ -5,37 +5,37 @@
         <n-space align="center" justify="space-between">
           <n-space align="center" size="small">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#6366f1" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8"/></svg>
-            <span style="font-weight:600">审计日志</span>
+            <span style="font-weight:600">{{ t('audit.title') }}</span>
           </n-space>
           <n-space size="small">
-            <n-button size="small" @click="loadData" :loading="loading">刷新</n-button>
+            <n-button size="small" @click="loadData" :loading="loading">{{ t('audit.refresh') }}</n-button>
             <n-popconfirm @positive-click="handleClearAll">
-              <template #trigger><n-button size="small" type="warning" :loading="clearing">清空日志</n-button></template>
-              确定要清空所有审计日志吗？此操作不可恢复。
+              <template #trigger><n-button size="small" type="warning" :loading="clearing">{{ t('audit.clearLog') }}</n-button></template>
+              {{ t('audit.confirmClear') }}
             </n-popconfirm>
           </n-space>
         </n-space>
       </template>
       <n-grid :cols="4" :x-gap="12" :y-gap="8" style="margin-bottom:12px" v-if="auditStats">
         <n-gi>
-          <n-statistic label="总记录数" :value="auditStats.total_entries || 0" />
+          <n-statistic :label="t('audit.totalRecords')" :value="auditStats.total_entries || 0" />
         </n-gi>
         <n-gi>
-          <n-statistic label="今日操作" :value="auditStats.today_count || 0" />
+          <n-statistic :label="t('audit.todayOperations')" :value="auditStats.today_count || 0" />
         </n-gi>
         <n-gi>
-          <n-statistic label="活跃用户" :value="Array.isArray(auditStats.active_users) ? auditStats.active_users.length : (auditStats.active_users || 0)" />
+          <n-statistic :label="t('audit.activeUsers')" :value="Array.isArray(auditStats.active_users) ? auditStats.active_users.length : (auditStats.active_users || 0)" />
         </n-gi>
         <n-gi>
-          <n-statistic label="最近操作" :value="auditStats.last_action || '-'" />
+          <n-statistic :label="t('audit.recentOperations')" :value="auditStats.last_action || '-'" />
         </n-gi>
       </n-grid>
       <n-space vertical size="small" style="margin-bottom:12px">
         <n-space size="small" align="center">
-          <n-input v-model:value="filterUsername" placeholder="用户名" size="small" style="width:140px" clearable />
-          <n-input v-model:value="filterAction" placeholder="操作类型" size="small" style="width:140px" clearable />
-          <n-input v-model:value="filterResource" placeholder="资源类型" size="small" style="width:140px" clearable />
-          <n-button size="small" type="primary" @click="loadData">筛选</n-button>
+          <n-input v-model:value="filterUsername" :placeholder="t('common.username')" size="small" style="width:140px" clearable />
+          <n-input v-model:value="filterAction" :placeholder="t('audit.actionType')" size="small" style="width:140px" clearable />
+          <n-input v-model:value="filterResource" :placeholder="t('audit.resourceType')" size="small" style="width:140px" clearable />
+          <n-button size="small" type="primary" @click="loadData">{{ t('common.search') }}</n-button>
         </n-space>
       </n-space>
       <n-data-table :columns="columns" :data="entries" :bordered="false" size="small"
@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -60,25 +60,25 @@ const filterAction = ref('')
 const filterResource = ref('')
 const auditStats = ref(null)
 
-const columns = [
-  { title: '时间', key: 'timestamp', width: 170, render: (row) => {
+const columns = computed(() => [
+  { title: t('common.time'), key: 'timestamp', width: 170, render: (row) => {
     if (!row.timestamp) return '-'
     const ts = row.timestamp > 1e12 ? row.timestamp : row.timestamp * 1000
     return new Date(ts).toLocaleString()
   }},
-  { title: '用户', key: 'username', width: 120 },
-  { title: '操作', key: 'action', width: 120, render: (row) => h(NTag, { size: 'tiny', type: (row.action || '').includes('delete') ? 'error' : (row.action || '').includes('create') ? 'success' : 'info', bordered: false }, () => row.action || '-') },
-  { title: '资源类型', key: 'resource_type', width: 100 },
-  { title: '资源ID', key: 'resource_id', width: 140, ellipsis: { tooltip: true } },
-  { title: '详情', key: 'detail', ellipsis: { tooltip: true } },
+  { title: t('common.username'), key: 'username', width: 120 },
+  { title: t('common.action'), key: 'action', width: 120, render: (row) => h(NTag, { size: 'tiny', type: (row.action || '').includes('delete') ? 'error' : (row.action || '').includes('create') ? 'success' : 'info', bordered: false }, () => row.action || '-') },
+  { title: t('audit.resourceType'), key: 'resource_type', width: 100 },
+  { title: t('audit.resourceId'), key: 'resource_id', width: 140, ellipsis: { tooltip: true } },
+  { title: t('common.detail'), key: 'detail', ellipsis: { tooltip: true } },
   {
-    title: '操作', key: 'actions', width: 70,
+    title: t('common.action'), key: 'actions', width: 70,
     render: (row) => h(NPopconfirm, { onPositiveClick: () => handleDelete(row.id) }, {
-      trigger: () => h(NButton, { size: 'tiny', type: 'error', tertiary: true }, () => '删除'),
-      default: () => '确定删除此条记录？'
+      trigger: () => h(NButton, { size: 'tiny', type: 'error', tertiary: true }, () => t('common.delete')),
+      default: () => t('common.confirmDelete')
     }),
   },
-]
+])
 
 async function loadData() {
   loading.value = true
@@ -89,7 +89,7 @@ async function loadData() {
     if (filterResource.value) params.resource_type = filterResource.value
     entries.value = await api.queryAuditLog(params)
   } catch (e) {
-    message.error('加载审计日志失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('audit.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
   }
@@ -100,17 +100,17 @@ async function loadAuditStats() {
     auditStats.value = await api.getAuditStats()
   } catch (e) {
     auditStats.value = null
-    message.warning('加载审计统计失败: ' + (e.response?.data?.detail || e.message))
+    message.warning(t('audit.statsFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function handleDelete(id) {
   try {
     await api.deleteAuditEntry(id)
-    message.success('已删除')
+    message.success(t('common.deleted'))
     await loadData()
   } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -118,10 +118,10 @@ async function handleClearAll() {
   clearing.value = true
   try {
     await api.clearAuditLog()
-    message.success('已清空')
+    message.success(t('audit.cleared'))
     await loadData()
   } catch (e) {
-    message.error('清空失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('audit.clearFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     clearing.value = false
   }
