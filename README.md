@@ -1431,6 +1431,33 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.9 — 2026-05-10
+
+**前端关键Bug修复：**
+
+- 修复 `App.vue` 登出时 `searchRefreshTimer` 未清理，导致每次登录登出循环多出一个60秒定时器（内存泄漏+重复请求）
+- 修复 `ScenarioEditor.vue` 离开页面确认对话框 `maskClosable` 默认为 true，点击遮罩关闭后路由导航永久卡死
+- 修复 `Devices.vue` 批量推送 EdgeLite 时 `pushLoading` 提前置 false，存在竞态条件导致重复推送
+- 修复 `Login.vue` 无防重复提交保护，快速按 Enter 可触发双重登录请求
+- 修复 `App.vue` WebSocket 重连时不刷新 Token，Token 过期后无限重连循环
+- 修复 `Scenarios.vue` 导入场景不验证 JSON 结构，畸形 JSON 可创建无效场景
+- 修复 `Forward.vue` 和 `Webhook.vue` URL 格式未验证，可输入非 HTTP URL
+- 修复 `main.js` 路由守卫不检查 Token 过期时间，过期 Token 通过守卫后 API 调用失败
+- 修复 `Dashboard.vue` 和 `Recorder.vue` `formatTime()` 假设时间戳为秒级，毫秒级时间戳显示错误日期
+
+**后端健壮性修复：**
+
+- 修复 `engine.py` 场景全部设备启动失败时静默返回，路由层返回 `{"status":"ok"}` 但场景实际为 ERROR 状态
+- 修复 `webhook.py` `_dispatch()` 迭代字典时可能被路由层并发修改，导致 `RuntimeError: dictionary changed size during iteration`
+- 修复 `session.py` SQLite 未启用 WAL 模式，并发读写时易发生 "database is locked" 错误
+
+**i18n 补全：**
+
+- 补充 `forward.httpUrlInvalid` 翻译键（中英文）
+- 补充 `webhook.urlRequired`/`urlInvalid` 翻译键（中英文）
+
+***
+
 #### v0.1.8 — 2026-05-10
 
 **前端安全与流程完整性修复：**

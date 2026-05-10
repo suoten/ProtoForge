@@ -209,7 +209,8 @@ const deviceColumns = computed(() => [
 
 function formatTime(ts) {
   if (!ts) return ''
-  return new Date(ts * 1000).toLocaleTimeString()
+  const ms = ts > 1e12 ? ts : ts * 1000
+  return new Date(ms).toLocaleTimeString()
 }
 
 async function startAllProtocols() {

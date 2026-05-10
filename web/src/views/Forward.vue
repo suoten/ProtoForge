@@ -199,6 +199,7 @@ async function addTarget() {
     if (!addForm.value.database?.trim()) { message.warning(t('forward.influxdbDbRequired')); return }
   } else if (addForm.value.type === 'http') {
     if (!addForm.value.url?.trim()) { message.warning(t('forward.httpUrlRequired')); return }
+    try { const u = new URL(addForm.value.url); if (!['http:','https:'].includes(u.protocol)) throw new Error() } catch { message.warning(t('forward.httpUrlInvalid')); return }
   } else if (addForm.value.type === 'file') {
     if (!addForm.value.path?.trim()) { message.warning(t('forward.filePathRequired')); return }
   }

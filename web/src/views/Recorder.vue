@@ -310,7 +310,8 @@ async function deleteRec(id) {
 
 function formatTime(ts) {
   if (!ts) return '-'
-  const d = new Date(ts * 1000)
+  const ms = ts > 1e12 ? ts : ts * 1000
+  const d = new Date(ms)
   return d.toLocaleString()
 }
 

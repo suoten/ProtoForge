@@ -305,6 +305,14 @@ async function importScenario() {
   importing.value = true
   try {
     const config = JSON.parse(importJson.value)
+    if (!config || typeof config !== 'object') {
+      message.error(t('scenarios.jsonFormatError') + ': expected object')
+      return
+    }
+    if (!config.id || !config.name) {
+      message.error(t('scenarios.jsonFormatError') + ': missing required fields (id, name)')
+      return
+    }
     await api.importScenario(config)
     showImportModal.value = false
     importJson.value = ''

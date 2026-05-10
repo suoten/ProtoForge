@@ -486,6 +486,7 @@ onBeforeRouteLeave((_to, _from, next) => {
       content: t('scenarioEditor.unsavedChangesDesc'),
       positiveText: t('scenarioEditor.leave'),
       negativeText: t('scenarioEditor.stay'),
+      maskClosable: false,
       onPositiveClick: () => next(),
       onNegativeClick: () => next(false),
     })

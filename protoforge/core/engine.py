@@ -466,7 +466,10 @@ class SimulationEngine:
             if failed_devices and len(failed_devices) == len(config.devices):
                 self._scenario_status[scenario_id] = ScenarioStatus.ERROR
                 logger.error("All devices failed in scenario %s", scenario_id)
-                return
+                raise RuntimeError(
+                    f"All {len(config.devices)} devices failed to start in scenario '{scenario_id}'. "
+                    f"Failed device IDs: {failed_devices}"
+                )
 
             if failed_devices:
                 logger.warning(

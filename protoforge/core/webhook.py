@@ -241,7 +241,7 @@ class WebhookManager:
         event = msg["event"]
         payload = msg["payload"]
         timestamp = msg["timestamp"]
-        for webhook in self._webhooks.values():
+        for webhook in list(self._webhooks.values()):
             if not webhook.enabled:
                 continue
             if event not in webhook.events and "*" not in webhook.events:

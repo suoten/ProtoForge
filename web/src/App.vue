@@ -227,6 +227,7 @@ function onUserMenuSelect(key) {
       negativeText: t('common.cancel'),
       onPositiveClick: () => {
         if (ws) { ws.close(); ws = null }
+        if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
         localStorage.removeItem('token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('username')
@@ -347,6 +348,8 @@ const WS_MAX_RECONNECT_ATTEMPTS = 20
 
 function connectWebSocket() {
   if (!loggedIn.value) return
+  const token = localStorage.getItem('token')
+  if (!token) return
   try {
     ws = api.createLogWs()
     if (!ws) return
@@ -364,8 +367,12 @@ function connectWebSocket() {
     if (loggedIn.value) {
       wsReconnectAttempts++
       if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-        wsReconnectTimer = setTimeout(connectWebSocket, wsReconnectDelay)
+        const delay = wsReconnectDelay
         wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+        wsReconnectTimer = setTimeout(async () => {
+          await api.ensureValidToken().catch(() => {})
+          connectWebSocket()
+        }, delay)
       }
     }
   }

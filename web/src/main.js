@@ -46,6 +46,22 @@ router.beforeEach((to, from, next) => {
     return
   }
 
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
+      next('/')
+      return
+    }
+  } catch {
+    localStorage.removeItem('token')
+    next('/')
+    return
+  }
+
   if (to.meta?.roles && !to.meta.roles.includes(userRole)) {
     console.warn(`访问 ${to.path} 需要角色: ${to.meta.roles.join(', ')}，当前角色: ${userRole}`)
     next('/')

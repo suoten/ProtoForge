@@ -233,6 +233,8 @@ async function addWebhook() {
   if (!addForm.value.events?.length) { message.warning(t('webhook.selectOneEvent')); return }
   adding.value = true
   try {
+    if (!addForm.value.url?.trim()) { message.warning(t('webhook.urlRequired')); adding.value = false; return }
+    try { const u = new URL(addForm.value.url); if (!['http:','https:'].includes(u.protocol)) throw new Error() } catch { message.warning(t('webhook.urlInvalid')); adding.value = false; return }
     const cfg = {
       name: addForm.value.name || `webhook-${Date.now()}`,
       url: addForm.value.url,

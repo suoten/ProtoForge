@@ -3,11 +3,11 @@
     <n-space vertical size="large">
       <n-space justify="space-between" align="center">
         <div>
-          <div class="pf-section-title">设备管理</div>
-          <div class="pf-section-desc">管理所有仿真设备，支持快速创建和高级配置</div>
+          <div class="pf-section-title">{{ t('devices.title') }}</div>
+          <div class="pf-section-desc">{{ t('devices.subtitle') }}</div>
         </div>
         <n-space>
-          <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议筛选" clearable style="width:160px" />
+          <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('devices.filterByProtocol')" clearable style="width:160px" />
           <n-button v-if="selectedIds.length > 0" type="error" @click="batchDelete" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></template>
             批量删除({{ selectedIds.length }})
@@ -730,8 +730,6 @@ async function batchPushToEdgelite() {
       }
     }
   })
-  pushLoading.value = false
-  selectedIds.value = []
 
   if (notConfigured > 0) {
     message.warning(`${notConfigured} 个设备未配置 EdgeLite 网关，请先在「系统设置」中配置网关地址`)
@@ -749,7 +747,8 @@ async function batchPushToEdgelite() {
   if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
     message.success(parts.join('，'))
   }
-  loadData()
+  await loadData()
+  selectedIds.value = []
   } finally { pushLoading.value = false }
 }
 

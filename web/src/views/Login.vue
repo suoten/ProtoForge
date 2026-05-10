@@ -58,6 +58,7 @@ const isDev = ref(import.meta.env.DEV)
 const emit = defineEmits(['login-success'])
 
 async function handleLogin() {
+  if (loading.value) return
   if (!form.value.username || !form.value.password) {
     message.warning(t('login.usernameRequired'))
     return
