@@ -613,6 +613,7 @@ class Database:
         )
 
     async def load_test_reports(self, count: int = 50) -> list[dict[str, Any]]:
+        count = max(1, min(count, 10000))
         limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
         rows = await self._fetchall(
             f"SELECT * FROM test_reports ORDER BY created_at DESC {limit_clause}",
@@ -712,6 +713,8 @@ class Database:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
+        limit = max(1, min(limit, 10000))
+        offset = max(0, min(offset, 1000000))
         conditions = []
         params: list[Any] = []
         idx = 1

@@ -7,6 +7,7 @@ const NotFound = () => import('./views/NotFound.vue')
 
 const routes = [
   { path: '/', component: () => import('./views/Dashboard.vue'), meta: { public: true } },
+  { path: '/welcome', component: () => import('./views/Welcome.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
   { path: '/devices', component: () => import('./views/Devices.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
   { path: '/protocols', component: () => import('./views/Protocols.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },
   { path: '/templates', component: () => import('./views/Templates.vue'), meta: { roles: ['admin', 'operator', 'user', 'viewer'] } },

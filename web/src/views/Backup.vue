@@ -89,6 +89,7 @@ async function handleImport({ file }) {
         try {
           const result = await api.importBackup(payload)
           message.success(t('backup.restoreSuccess', { n: result.restored || 0 }))
+          setTimeout(() => { window.location.reload() }, 1500)
         } catch (e) {
           message.error(t('backup.restoreFailed') + ': ' + (e.response?.data?.detail || e.message))
         } finally { importing.value = false }

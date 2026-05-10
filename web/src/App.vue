@@ -261,6 +261,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
   if (ws) { ws.close(); ws = null }
 })
 
@@ -292,14 +293,19 @@ async function handleChangePassword() {
     await api.changePassword(currentUser, oldPassword.value, newPassword.value)
     message.success(t('password.success'))
     showChangePassword.value = false
-    setTimeout(() => {
-      if (ws) { ws.close(); ws = null }
-      localStorage.removeItem('token')
-      localStorage.removeItem('refresh_token')
-      localStorage.removeItem('username')
-      localStorage.removeItem('role')
-      loggedIn.value = false
-    }, 1500)
+    discreteDialog.info({
+      title: t('password.success'),
+      content: t('password.reloginRequired'),
+      positiveText: t('header.logout'),
+      onPositiveClick: () => {
+        if (ws) { ws.close(); ws = null }
+        localStorage.removeItem('token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('username')
+        localStorage.removeItem('role')
+        loggedIn.value = false
+      }
+    })
   } catch (e) {
     message.error(e.response?.data?.detail || t('password.failed'))
   } finally {
@@ -313,15 +319,15 @@ function onSearchInput(query) {
   const results = []
   for (const d of searchData.value.devices) {
     if ((d.name || '').toLowerCase().includes(q) || (d.id || '').toLowerCase().includes(q))
-      results.push({ label: `[${t('nav.devices')}] ${d.name || d.id}`, value: `/devices` })
+      results.push({ label: `[${t('nav.devices')}] ${d.name || d.id}`, value: `/devices?highlight=${encodeURIComponent(d.id)}` })
   }
   for (const tmpl of searchData.value.templates) {
     if ((tmpl.name || '').toLowerCase().includes(q))
-      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/templates` })
+      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/templates?highlight=${encodeURIComponent(tmpl.id)}` })
   }
   for (const s of searchData.value.scenarios) {
     if ((s.name || '').toLowerCase().includes(q))
-      results.push({ label: `[${t('nav.scenarios')}] ${s.name}`, value: `/scenarios` })
+      results.push({ label: `[${t('nav.scenarios')}] ${s.name}`, value: `/scenario/${encodeURIComponent(s.id)}` })
   }
   searchResults.value = results.slice(0, 10)
 }
@@ -334,6 +340,7 @@ function onSearchSelect(val) {
 let wsReconnectTimer = null
 let wsReconnectDelay = 1000
 let wsReconnectAttempts = 0
+let searchRefreshTimer = null
 const WS_MAX_RECONNECT_DELAY = 30000
 const WS_MAX_RECONNECT_ATTEMPTS = 20
 
@@ -372,8 +379,11 @@ function connectWebSocket() {
       if (msg.type === 'log' && msg.data) {
         console.debug('[WS] log event received:', msg.data.summary || msg.data.message_type)
       }
+      if (msg.type === 'devices' && Array.isArray(msg.data)) {
+        console.debug('[WS] devices update received, count:', msg.data.length)
+      }
     } catch (e) {
-      console.debug('[WS] Non-JSON message ignored:', typeof event.data === 'string' ? event.data.substring(0, 100) : event.data)
+      console.debug('[WS] Message parse error, skipping:', e.message)
     }
   }
 }
@@ -386,6 +396,9 @@ async function loadSearchData() {
     devices: results[0].status === 'fulfilled' ? (results[0].value || []) : [],
     templates: results[1].status === 'fulfilled' ? (results[1].value || []) : [],
     scenarios: results[2].status === 'fulfilled' ? (results[2].value || []) : [],
+  }
+  if (!searchRefreshTimer) {
+    searchRefreshTimer = setInterval(loadSearchData, 60000)
   }
 }
 </script>

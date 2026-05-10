@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import socket
 from typing import Any, Optional
 
@@ -13,9 +14,21 @@ from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
 logger = logging.getLogger(__name__)
 
+_VALID_ID_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_\-.]{0,127}$')
+
+
+def _validate_entity_id(entity_id: str, entity_type: str = "Entity") -> None:
+    if not entity_id or not isinstance(entity_id, str):
+        raise ValueError(f"{entity_type} ID must be a non-empty string")
+    if not _VALID_ID_PATTERN.match(entity_id):
+        raise ValueError(
+            f"{entity_type} ID '{entity_id}' is invalid. "
+            "Must start with alphanumeric, contain only letters, digits, '_', '-', '.', max 128 chars"
+        )
+
 
 def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
-    for sock_type in (socket.SOCK_STREAM,):
+    for sock_type in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
         try:
             with socket.socket(socket.AF_INET, sock_type) as s:
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -111,17 +124,26 @@ class SimulationEngine:
                     original_port, protocol_name, new_port,
                 )
                 config["port"] = new_port
-        await server.start(config)
-        logger.info("Protocol %s started", protocol_name)
+        try:
+            await server.start(config)
+            logger.info("Protocol %s started", protocol_name)
+        except Exception as e:
+            logger.error("Failed to start protocol %s: %s", protocol_name, e)
+            raise RuntimeError(f"Failed to start protocol {protocol_name}: {e}") from e
 
     async def stop_protocol(self, protocol_name: str) -> None:
         server = self._protocol_servers.get(protocol_name)
         if not server:
             raise ValueError(f"Unknown protocol: {protocol_name}")
-        await server.stop()
-        logger.info("Protocol %s stopped", protocol_name)
+        try:
+            await server.stop()
+            logger.info("Protocol %s stopped", protocol_name)
+        except Exception as e:
+            logger.error("Failed to stop protocol %s: %s", protocol_name, e)
+            raise RuntimeError(f"Failed to stop protocol {protocol_name}: {e}") from e
 
     async def create_device(self, config: DeviceConfig) -> DeviceInfo:
+        _validate_entity_id(config.id, "Device")
         if config.id in self._devices:
             raise ValueError(f"Device '{config.id}' already exists. Use update_device() to modify it, or delete it first.")
         instance = DeviceInstance(config, self._generator)
@@ -369,6 +391,7 @@ class SimulationEngine:
         return success
 
     def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:
+        _validate_entity_id(config.id, "Scenario")
         self._scenarios[config.id] = config
         self._scenario_status[config.id] = ScenarioStatus.STOPPED
         logger.info("Scenario created: %s", config.id)
