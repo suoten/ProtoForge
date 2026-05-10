@@ -2,14 +2,14 @@
   <n-space vertical size="large">
     <n-space justify="space-between" align="center">
       <div>
-        <div class="pf-section-title">Webhook 管理</div>
-        <div class="pf-section-desc">配置事件回调，将系统事件实时推送到外部服务</div>
+        <div class="pf-section-title">{{ t('webhook.title') }}</div>
+        <div class="pf-section-desc">{{ t('webhook.subtitle') }}</div>
       </div>
       <n-space>
-        <n-button @click="loadWebhooks" :loading="loading">刷新</n-button>
+        <n-button @click="loadWebhooks" :loading="loading">{{ t('common.refresh') }}</n-button>
         <n-button type="primary" @click="showAddModal = true">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></template>
-          添加 Webhook
+          {{ t('webhook.addWebhook') }}
         </n-button>
       </n-space>
     </n-space>
@@ -18,99 +18,99 @@
       <n-gi>
         <n-card size="small" class="pf-gradient-card">
           <div class="pf-stat-value">{{ webhooks.length }}</div>
-          <div style="font-size:13px;opacity:0.9">总数</div>
+          <div style="font-size:13px;opacity:0.9">{{ t('webhook.totalCount') }}</div>
         </n-card>
       </n-gi>
       <n-gi>
         <n-card size="small" class="pf-gradient-card-green">
           <div class="pf-stat-value">{{ enabledCount }}</div>
-          <div style="font-size:13px;opacity:0.9">已启用</div>
+          <div style="font-size:13px;opacity:0.9">{{ t('webhook.enabledCount') }}</div>
         </n-card>
       </n-gi>
       <n-gi>
         <n-card size="small" class="pf-gradient-card-orange">
           <div class="pf-stat-value">{{ webhookStats.total_triggers || 0 }}</div>
-          <div style="font-size:13px;opacity:0.9">触发次数</div>
+          <div style="font-size:13px;opacity:0.9">{{ t('webhook.triggerCount') }}</div>
         </n-card>
       </n-gi>
       <n-gi>
         <n-card size="small" class="pf-gradient-card-rose">
           <div class="pf-stat-value">{{ webhookStats.error_rate ? (webhookStats.error_rate * 100).toFixed(1) + '%' : '0%' }}</div>
-          <div style="font-size:13px;opacity:0.9">错误率</div>
+          <div style="font-size:13px;opacity:0.9">{{ t('webhook.errorRate') }}</div>
         </n-card>
       </n-gi>
     </n-grid>
 
-    <n-card size="small" title="Webhook 列表">
+    <n-card size="small" :title="t('webhook.webhookList')">
       <n-data-table v-if="webhooks.length > 0" :columns="columns" :data="webhooks" :bordered="false" size="small"
         :pagination="{ pageSize: 10 }" :row-key="row => row.id" />
-      <n-empty v-else description="暂无 Webhook，点击添加配置回调">
+      <n-empty v-else :description="t('webhook.noWebhooks')">
         <template #extra>
-          <n-button @click="showAddModal = true">添加 Webhook</n-button>
+          <n-button @click="showAddModal = true">{{ t('webhook.addWebhook') }}</n-button>
         </template>
       </n-empty>
     </n-card>
 
-    <n-modal v-model:show="showAddModal" preset="card" title="添加 Webhook" style="width:560px">
+    <n-modal v-model:show="showAddModal" preset="card" :title="t('webhook.addTitle')" style="width:560px">
       <n-form :model="addForm" label-placement="left" label-width="120">
-        <n-form-item label="名称">
-          <n-input v-model:value="addForm.name" placeholder="如 告警通知" />
+        <n-form-item :label="t('webhook.webhookName')">
+          <n-input v-model:value="addForm.name" :placeholder="t('webhook.namePlaceholder')" />
         </n-form-item>
-        <n-form-item label="回调URL">
-          <n-input v-model:value="addForm.url" placeholder="https://example.com/webhook" />
+        <n-form-item :label="t('webhook.callbackUrl')">
+          <n-input v-model:value="addForm.url" :placeholder="t('webhook.callbackUrlPlaceholder')" />
         </n-form-item>
-        <n-form-item label="触发事件">
-          <n-select v-model:value="addForm.events" :options="eventOptions" multiple filterable placeholder="选择触发事件" />
+        <n-form-item :label="t('webhook.triggerEvents')">
+          <n-select v-model:value="addForm.events" :options="eventOptions" multiple filterable :placeholder="t('webhook.selectEvents')" />
         </n-form-item>
-        <n-form-item label="HTTP方法">
+        <n-form-item :label="t('webhook.httpMethod')">
           <n-select v-model:value="addForm.method" :options="methodOptions" />
         </n-form-item>
-        <n-form-item label="请求头(JSON)">
-          <n-input v-model:value="addForm.headers_json" type="textarea" :rows="3" placeholder='{"Authorization": "Bearer xxx"}' />
+        <n-form-item :label="t('webhook.headers')">
+          <n-input v-model:value="addForm.headers_json" type="textarea" :rows="3" :placeholder="t('webhook.headersPlaceholder')" />
         </n-form-item>
-        <n-form-item label="启用">
+        <n-form-item :label="t('webhook.enabledLabel')">
           <n-switch v-model:value="addForm.enabled" />
         </n-form-item>
-        <n-form-item label="描述">
-          <n-input v-model:value="addForm.description" type="textarea" :rows="2" placeholder="Webhook 描述（可选）" />
+        <n-form-item :label="t('webhook.descriptionLabel')">
+          <n-input v-model:value="addForm.description" type="textarea" :rows="2" :placeholder="t('webhook.descriptionPlaceholder')" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showAddModal = false">取消</n-button>
-          <n-button type="primary" @click="addWebhook" :loading="adding">添加</n-button>
+          <n-button @click="showAddModal = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="addWebhook" :loading="adding">{{ t('common.add') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showEditModal" preset="card" title="编辑 Webhook" style="width:560px">
+    <n-modal v-model:show="showEditModal" preset="card" :title="t('webhook.editTitle')" style="width:560px">
       <n-form :model="editForm" label-placement="left" label-width="120">
-        <n-form-item label="名称">
-          <n-input v-model:value="editForm.name" placeholder="如 告警通知" />
+        <n-form-item :label="t('webhook.webhookName')">
+          <n-input v-model:value="editForm.name" :placeholder="t('webhook.namePlaceholder')" />
         </n-form-item>
-        <n-form-item label="回调URL">
-          <n-input v-model:value="editForm.url" placeholder="https://example.com/webhook" />
+        <n-form-item :label="t('webhook.callbackUrl')">
+          <n-input v-model:value="editForm.url" :placeholder="t('webhook.callbackUrlPlaceholder')" />
         </n-form-item>
-        <n-form-item label="触发事件">
-          <n-select v-model:value="editForm.events" :options="eventOptions" multiple filterable placeholder="选择触发事件" />
+        <n-form-item :label="t('webhook.triggerEvents')">
+          <n-select v-model:value="editForm.events" :options="eventOptions" multiple filterable :placeholder="t('webhook.selectEvents')" />
         </n-form-item>
-        <n-form-item label="HTTP方法">
+        <n-form-item :label="t('webhook.httpMethod')">
           <n-select v-model:value="editForm.method" :options="methodOptions" />
         </n-form-item>
-        <n-form-item label="请求头(JSON)">
+        <n-form-item :label="t('webhook.headers')">
           <n-input v-model:value="editForm.headers_json" type="textarea" :rows="3" />
         </n-form-item>
-        <n-form-item label="启用">
+        <n-form-item :label="t('webhook.enabledLabel')">
           <n-switch v-model:value="editForm.enabled" />
         </n-form-item>
-        <n-form-item label="描述">
+        <n-form-item :label="t('webhook.descriptionLabel')">
           <n-input v-model:value="editForm.description" type="textarea" :rows="2" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showEditModal = false">取消</n-button>
-          <n-button type="primary" @click="updateWebhook" :loading="saving">保存</n-button>
+          <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="updateWebhook" :loading="saving">{{ t('common.save') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -150,17 +150,17 @@ const editForm = ref({
 
 const enabledCount = computed(() => webhooks.value.filter(w => w.enabled !== false).length)
 
-const eventOptions = [
-  { label: '设备上线 (device_online)', value: 'device_online' },
-  { label: '设备下线 (device_offline)', value: 'device_offline' },
-  { label: '数据变化 (data_change)', value: 'data_change' },
-  { label: '场景启动 (scenario_start)', value: 'scenario_start' },
-  { label: '场景停止 (scenario_stop)', value: 'scenario_stop' },
-  { label: '测试完成 (test_complete)', value: 'test_complete' },
-  { label: '告警触发 (alarm_triggered)', value: 'alarm_triggered' },
-  { label: '系统错误 (system_error)', value: 'system_error' },
-  { label: '测试事件 (test)', value: 'test' },
-]
+const eventOptions = computed(() => [
+  { label: t('webhook.deviceOnline'), value: 'device_online' },
+  { label: t('webhook.deviceOffline'), value: 'device_offline' },
+  { label: t('webhook.dataChange'), value: 'data_change' },
+  { label: t('webhook.scenarioStart'), value: 'scenario_start' },
+  { label: t('webhook.scenarioStop'), value: 'scenario_stop' },
+  { label: t('webhook.testComplete'), value: 'test_complete' },
+  { label: t('webhook.alarmTriggered'), value: 'alarm_triggered' },
+  { label: t('webhook.systemError'), value: 'system_error' },
+  { label: t('webhook.testEvent'), value: 'test' },
+])
 
 const methodOptions = [
   { label: 'POST', value: 'POST' },
@@ -168,14 +168,14 @@ const methodOptions = [
   { label: 'PATCH', value: 'PATCH' },
 ]
 
-const columns = [
-  { title: '名称', key: 'name', width: 150, ellipsis: { tooltip: true } },
+const columns = computed(() => [
+  { title: t('common.name'), key: 'name', width: 150, ellipsis: { tooltip: true } },
   { title: 'URL', key: 'url', width: 280, ellipsis: { tooltip: true } },
   {
-    title: '触发事件', key: 'events', width: 200,
+    title: t('webhook.triggerEvents'), key: 'events', width: 200,
     render: (row) => {
       const evts = row.events || []
-      if (evts.length === 0) return h(NText, { depth: 3, style: 'font-size:12px' }, () => '未选择')
+      if (evts.length === 0) return h(NText, { depth: 3, style: 'font-size:12px' }, () => t('common.noSelection'))
       if (evts.length <= 2) {
         return evts.map(e => h(NTag, { size: 'tiny', type: 'info', bordered: false, style: 'margin-right:4px' }, () => e))
       }
@@ -185,25 +185,25 @@ const columns = [
       ])
     }
   },
-  { title: '方法', key: 'method', width: 80 },
+  { title: t('webhook.httpMethod'), key: 'method', width: 80 },
   {
-    title: '状态', key: 'enabled', width: 80,
+    title: t('common.status'), key: 'enabled', width: 80,
     render: (row) => row.enabled !== false
-      ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '启用')
-      : h(NTag, { size: 'tiny', type: 'default', bordered: false }, () => '禁用')
+      ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => t('common.enabled'))
+      : h(NTag, { size: 'tiny', type: 'default', bordered: false }, () => t('common.disabled'))
   },
   {
-    title: '操作', key: 'actions', width: 200,
+    title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => testWebhookAction(row.id) }, () => '测试'),
-      h(NButton, { size: 'tiny', secondary: true, onClick: () => openEdit(row) }, () => '编辑'),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => testWebhookAction(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', secondary: true, onClick: () => openEdit(row) }, () => t('common.edit')),
       h(NPopconfirm, { onPositiveClick: () => deleteWebhookAction(row.id) }, {
-        trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => '删除'),
-        default: () => `确定删除 "${row.name}" 吗？`,
+        trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => t('common.delete')),
+        default: () => t('webhook.confirmDelete', { name: row.name }),
       })
     ])
   },
-]
+])
 
 async function loadWebhooks() {
   loading.value = true
@@ -215,7 +215,7 @@ async function loadWebhooks() {
       enabled: w.enabled !== false,
     }))
   } catch (e) {
-    message.error('加载 Webhook 失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('webhook.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loading.value = false }
 }
 
@@ -224,13 +224,13 @@ async function loadStats() {
     webhookStats.value = await api.getWebhookStats()
   } catch (e) {
     webhookStats.value = webhookStats.value || {}
-    message.warning('加载 Webhook 统计失败: ' + (e.response?.data?.detail || e.message))
+    message.warning(t('webhook.loadStatsFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function addWebhook() {
-  if (!addForm.value.url?.trim()) { message.warning('请输入回调URL'); return }
-  if (!addForm.value.events?.length) { message.warning('请至少选择一个触发事件'); return }
+  if (!addForm.value.url?.trim()) { message.warning(t('webhook.callbackUrlRequired')); return }
+  if (!addForm.value.events?.length) { message.warning(t('webhook.selectOneEvent')); return }
   adding.value = true
   try {
     const cfg = {
@@ -243,15 +243,15 @@ async function addWebhook() {
     }
     if (addForm.value.headers_json) {
       try { cfg.headers = JSON.parse(addForm.value.headers_json) }
-      catch { message.warning('请求头JSON格式错误'); adding.value = false; return }
+      catch { message.warning(t('webhook.headersJsonError')); adding.value = false; return }
     }
     await api.addWebhook(cfg)
     showAddModal.value = false
     addForm.value = { name: '', url: '', events: [], method: 'POST', headers_json: '', enabled: true, description: '' }
-    message.success('Webhook 已添加')
+    message.success(t('webhook.webhookAdded'))
     await loadWebhooks()
   } catch (e) {
-    message.error('添加失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('webhook.addFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { adding.value = false }
 }
 
@@ -270,7 +270,7 @@ function openEdit(row) {
 }
 
 async function updateWebhook() {
-  if (!editForm.value.url) { message.warning('请输入回调URL'); return }
+  if (!editForm.value.url) { message.warning(t('webhook.callbackUrlRequired')); return }
   saving.value = true
   try {
     const cfg = {
@@ -283,33 +283,33 @@ async function updateWebhook() {
     }
     if (editForm.value.headers_json) {
       try { cfg.headers = JSON.parse(editForm.value.headers_json) }
-      catch { message.warning('请求头JSON格式错误'); saving.value = false; return }
+      catch { message.warning(t('webhook.headersJsonError')); saving.value = false; return }
     }
     await api.updateWebhook(editingId.value, cfg)
     showEditModal.value = false
-    message.success('Webhook 已更新')
+    message.success(t('webhook.webhookUpdated'))
     await loadWebhooks()
   } catch (e) {
-    message.error('更新失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('webhook.updateFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { saving.value = false }
 }
 
 async function testWebhookAction(id) {
   try {
     await api.testWebhook(id)
-    message.success('测试已触发，请检查目标服务')
+    message.success(t('webhook.testTriggered'))
   } catch (e) {
-    message.error('测试失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('webhook.testFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function deleteWebhookAction(id) {
   try {
     await api.deleteWebhook(id)
-    message.success('已删除')
+    message.success(t('common.deleted'))
     await loadWebhooks()
   } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 

@@ -123,8 +123,7 @@ class SimulationEngine:
 
     async def create_device(self, config: DeviceConfig) -> DeviceInfo:
         if config.id in self._devices:
-            logger.warning("Device %s already exists, removing old instance first", config.id)
-            await self.remove_device(config.id)
+            raise ValueError(f"Device '{config.id}' already exists. Use update_device() to modify it, or delete it first.")
         instance = DeviceInstance(config, self._generator)
         self._devices[config.id] = instance
 

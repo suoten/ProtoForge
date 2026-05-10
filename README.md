@@ -1431,6 +1431,29 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.6 — 2026-05-10
+
+**部署关键修复（Docker 构建失败）：**
+
+- 修复 `Dockerfile` 第 11 行 `pip install` 语法错误：`alembic>=1.13.0` 未加引号，shell 中 `>=` 被解释为重定向，导致 Docker 构建必然失败
+- 修复 `Dockerfile` 缺少 gRPC 端口 50051 的 EXPOSE 声明，Docker 中 gRPC 服务无法从外部访问
+- 修复 `pyproject.toml` 中 `alembic` 仅在 `[dev]` 可选依赖中，但 Dockerfile CMD 运行 `alembic upgrade head`，生产镜像缺少此依赖
+- 修复 `docker-compose.yml` 缺少 `PROTOFORGE_ADMIN_PASSWORD` 环境变量，Docker 部署后管理员密码为空无法登录
+- 修复 `docker-compose.yml` 缺少 `PROTOFORGE_JWT_SECRET` 默认值，容器重启后所有 Token 失效
+- 修复 `docker-compose.yml` 缺少 gRPC 端口 50051 映射
+
+**后端健壮性修复：**
+
+- 修复 `scenario.py` 的 `_check_threshold()` 中 `rule.condition` 为 None 时 `AttributeError` 崩溃，增加 None 和类型检查
+- 修复 `webhook_routes.py` 的 `update_webhook` 缺少 URL 格式验证（`add_webhook` 有但 `update_webhook` 没有），可更新为无效 URL
+- 修复 `engine.py` 的 `create_device()` 已存在设备时静默删除再重建，可能导致数据丢失，改为抛出 `ValueError` 提示调用方
+
+**前端健壮性修复：**
+
+- 修复 `api.js` 的 `normalizeList()` 对非预期格式响应静默返回空数组，增加 `console.warn` 警告
+
+***
+
 #### v0.1.5 — 2026-05-10
 
 **后端关键 Bug 修复：**

@@ -136,6 +136,7 @@ function normalizeList(data, ...keys) {
       if (Array.isArray(data[k])) return data[k]
     }
   }
+  console.warn('[API] normalizeList: unexpected response format, keys tried:', keys, 'data:', data)
   return []
 }
 

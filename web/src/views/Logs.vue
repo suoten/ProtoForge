@@ -2,31 +2,31 @@
   <n-space vertical>
     <n-space justify="space-between" align="center">
       <div>
-        <div class="pf-section-title">协议调试日志</div>
-        <div class="pf-section-desc">实时查看协议通信全链路日志，快速定位开发问题</div>
+        <div class="pf-section-title">{{ t('logs.title') }}</div>
+        <div class="pf-section-desc">{{ t('logs.subtitle') }}</div>
       </div>
       <n-space>
         <n-tag :type="wsConnected ? 'success' : 'error'" size="small" round>
-          {{ wsConnected ? '实时连接' : '连接断开' }}
+          {{ wsConnected ? t('logs.realtimeConnected') : t('logs.disconnected') }}
         </n-tag>
       </n-space>
     </n-space>
 
     <n-space align="center">
-      <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议筛选" clearable style="width: 150px" />
-      <n-select v-model:value="filterDirection" :options="directionOptions" placeholder="按方向筛选" clearable style="width: 130px" />
-      <n-input v-model:value="searchText" placeholder="搜索日志内容..." clearable style="width: 200px" />
+      <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('logs.filterByProtocol')" clearable style="width: 150px" />
+      <n-select v-model:value="filterDirection" :options="directionOptions" :placeholder="t('logs.filterByDirection')" clearable style="width: 130px" />
+      <n-input v-model:value="searchText" :placeholder="t('logs.searchPlaceholder')" clearable style="width: 200px" />
       <n-button @click="togglePause" :type="paused ? 'warning' : 'default'" size="small">
-        {{ paused ? '继续' : '暂停' }}
+        {{ paused ? t('logs.resume') : t('logs.pause') }}
       </n-button>
-      <n-button @click="clearAllLogs" type="error" size="small" ghost>清空</n-button>
-      <n-button @click="exportLogs" size="small" ghost>导出</n-button>
-      <span style="color: #999; font-size: 12px">共 {{ filteredLogs.length }} 条</span>
+      <n-button @click="clearAllLogs" type="error" size="small" ghost>{{ t('logs.clear') }}</n-button>
+      <n-button @click="exportLogs" size="small" ghost>{{ t('common.export') }}</n-button>
+      <span style="color: #999; font-size: 12px">{{ t('common.total', { n: filteredLogs.length }) }}</span>
     </n-space>
 
     <div ref="logContainer" style="height: calc(100vh - 240px); overflow-y: auto; border: 1px solid #333; border-radius: 8px; background: #1a1a2e; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
       <div v-if="filteredLogs.length === 0" style="padding: 40px; text-align: center; color: #666">
-        暂无日志，启动协议并创建设备后将自动记录通信过程
+        {{ t('logs.noLogs') }}
       </div>
       <div v-for="(log, idx) in filteredLogs" :key="idx"
            @click="showDetail(log)"
@@ -51,19 +51,19 @@
       </div>
     </div>
 
-    <n-modal v-model:show="detailVisible" preset="card" title="日志详情" style="width: 700px;">
+    <n-modal v-model:show="detailVisible" preset="card" :title="t('logs.detailTitle')" style="width: 700px;">
       <n-descriptions v-if="selectedLog" bordered :column="1" label-placement="left" size="small">
-        <n-descriptions-item label="时间">{{ new Date(selectedLog.timestamp * 1000).toLocaleString() }}</n-descriptions-item>
-        <n-descriptions-item label="协议">{{ selectedLog.protocol }}</n-descriptions-item>
-        <n-descriptions-item label="方向">
+        <n-descriptions-item :label="t('logs.time')">{{ new Date(selectedLog.timestamp * 1000).toLocaleString() }}</n-descriptions-item>
+        <n-descriptions-item :label="t('common.protocol')">{{ selectedLog.protocol }}</n-descriptions-item>
+        <n-descriptions-item :label="t('logs.direction')">
           <n-tag :type="getDirectionColor(selectedLog.direction)" size="small">
             {{ getDirectionLabel(selectedLog.direction) }}
           </n-tag>
         </n-descriptions-item>
-        <n-descriptions-item label="设备ID">{{ selectedLog.device_id || '-' }}</n-descriptions-item>
-        <n-descriptions-item label="消息类型">{{ selectedLog.message_type }}</n-descriptions-item>
-        <n-descriptions-item label="摘要">{{ selectedLog.summary }}</n-descriptions-item>
-        <n-descriptions-item label="详细信息" v-if="selectedLog.detail && typeof selectedLog.detail === 'object' && Object.keys(selectedLog.detail).length > 0">
+        <n-descriptions-item :label="t('logs.deviceId')">{{ selectedLog.device_id || '-' }}</n-descriptions-item>
+        <n-descriptions-item :label="t('logs.messageType')">{{ selectedLog.message_type }}</n-descriptions-item>
+        <n-descriptions-item :label="t('logs.summary')">{{ selectedLog.summary }}</n-descriptions-item>
+        <n-descriptions-item :label="t('logs.detailInfo')" v-if="selectedLog.detail && typeof selectedLog.detail === 'object' && Object.keys(selectedLog.detail).length > 0">
           <pre style="margin: 0; white-space: pre-wrap; word-break: break-all; font-size: 12px; color: #aaa; background: #1a1a2e; padding: 8px; border-radius: 4px;">{{ JSON.stringify(selectedLog.detail, null, 2) }}</pre>
         </n-descriptions-item>
       </n-descriptions>
@@ -100,19 +100,19 @@ const MAX_RECONNECT_ATTEMPTS = 10
 const MAX_LOGS = 2000
 
 const protocolOptions = computed(() => [
-  { label: '全部协议', value: null },
+  { label: t('logs.allProtocols'), value: null },
   ...protocols.value.map(p => ({ label: p.display_name || p.name, value: p.name })),
 ])
 
-const directionOptions = [
-  { label: '全部方向', value: null },
-  { label: '← 接收', value: 'in' },
-  { label: '→ 发送', value: 'out' },
-  { label: '⚡ 系统', value: 'system' },
-  { label: '✎ 写入', value: 'write' },
-  { label: '← 入站', value: 'inbound' },
-  { label: '→ 出站', value: 'outbound' },
-]
+const directionOptions = computed(() => [
+  { label: t('logs.allDirections'), value: null },
+  { label: t('logs.receive'), value: 'in' },
+  { label: t('logs.send'), value: 'out' },
+  { label: t('logs.system'), value: 'system' },
+  { label: t('logs.write'), value: 'write' },
+  { label: t('logs.inbound'), value: 'inbound' },
+  { label: t('logs.outbound'), value: 'outbound' },
+])
 
 const filteredLogs = computed(() => {
   let result = logs.value
@@ -168,17 +168,17 @@ function togglePause() {
 
 async function clearAllLogs() {
   dialog.warning({
-    title: '确认清空日志',
-    content: '清空后所有日志将永久删除，此操作不可恢复。确定继续？',
-    positiveText: '清空',
-    negativeText: '取消',
+    title: t('logs.confirmClear'),
+    content: t('logs.confirmClearDesc'),
+    positiveText: t('logs.clear'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.clearLogs()
         logs.value = []
-        message.success('日志已清空')
+        message.success(t('logs.logsCleared'))
       } catch (e) {
-        message.error('清空日志失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('logs.clearFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -201,7 +201,7 @@ function exportLogs() {
   a.download = `protoforge-debug-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
   a.click()
   URL.revokeObjectURL(url)
-  message.success(`已导出 ${data.length} 条日志`)
+  message.success(t('logs.exported', { count: data.length }))
 }
 
 function scrollToBottom() {
@@ -217,14 +217,14 @@ async function connectWebSocket() {
     await api.ensureValidToken()
   } catch (e) {
     console.warn('Token validation failed, attempting WebSocket anyway:', e.message)
-    message.warning('登录凭证可能已过期，正在尝试重连...')
+    message.warning(t('logs.tokenExpired'))
   }
   try {
     ws = api.createLogWs()
-    if (!ws) { message.warning('未登录，无法建立实时连接'); return }
+    if (!ws) { message.warning(t('logs.notLoggedIn')); return }
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
-    message.warning('日志实时连接失败，5秒后重试')
+    message.warning(t('logs.wsConnectFailed'))
     setTimeout(connectWebSocket, 5000)
     return
   }
@@ -265,7 +265,7 @@ async function connectWebSocket() {
 function scheduleReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-    message.error('日志实时连接重试次数过多，请刷新页面重试')
+    message.error(t('logs.reconnectFailed'))
     return
   }
   const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), 60000)
@@ -280,7 +280,7 @@ async function loadProtocols() {
     const res = await api.getProtocols()
     protocols.value = res
   } catch (e) {
-    message.error('加载协议列表失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('logs.loadProtocolsFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -289,7 +289,7 @@ async function loadHistory() {
     const res = await api.getLogs({ count: 200 })
     logs.value = res || []
   } catch (e) {
-    message.error('加载历史日志失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('logs.loadHistoryFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
