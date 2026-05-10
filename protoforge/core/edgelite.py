@@ -1,5 +1,6 @@
 import logging
 import os
+import uuid
 from typing import Any
 from urllib.parse import quote
 
@@ -138,9 +139,10 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         protoforge_host = "127.0.0.1"
     host = protoforge_host
     port = _get_protocol_actual_port(protocol, protocol_config)
+    timeout = protocol_config.get("timeout", 5.0)
 
     if protocol == "modbus_tcp":
-        base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": 5.0}
+        base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": timeout}
     elif protocol == "modbus_rtu":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
@@ -148,7 +150,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "slave_id": protocol_config.get("slave_id", 1),
             "parity": protocol_config.get("parity", "N"),
             "stopbits": protocol_config.get("stopbits", protocol_config.get("stop_bits", 1)),
-            "timeout": 5.0,
+            "timeout": timeout,
         }
     elif protocol == "opcua":
         ua_port = port or 4840
@@ -164,18 +166,18 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "port": mqtt_port,
             "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", "protoforge/data")),
             "publish_topic": protocol_config.get("publish_topic", "protoforge/command"),
-            "client_id": protocol_config.get("client_id", "edgelite-mqtt-client"),
+            "client_id": protocol_config.get("client_id", f"protoforge-mqtt-{uuid.uuid4().hex[:8]}"),
         }
         if protocol_config.get("username"):
             base["username"] = protocol_config.get("username")
             base["password"] = protocol_config.get("password", "")
         if protocol_config.get("tls_enabled"):
             base["tls_enabled"] = True
-            base["tls_insecure"] = protocol_config.get("tls_insecure", True)
+            base["tls_insecure"] = protocol_config.get("tls_insecure", False)
     elif protocol == "http":
         http_port = port or 8080
         base = {"push_url": f"http://{host}:{http_port}/webhook/data",
-                "timeout": 5.0}
+                "timeout": timeout}
     elif protocol == "s7":
         base = {"ip": host,
                 "rack": protocol_config.get("rack", 0),
@@ -395,7 +397,10 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
 
 
 def _extract_token(login_resp: httpx.Response) -> str:
-    data = login_resp.json()
+    try:
+        data = login_resp.json()
+    except Exception as e:
+        raise EdgeLiteError("token", f"EdgeLite 登录响应非 JSON 格式: {e}", "请检查 EdgeLite 网关版本是否兼容") from e
     inner = data.get("data")
     return (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
 
@@ -803,7 +808,12 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["ok"] = False
             return result
 
-        dev_data_raw = dev_resp.json()
+        try:
+            dev_data_raw = dev_resp.json()
+        except Exception as e:
+            result["steps"]["register"] = {"ok": False, "error": f"EdgeLite 响应非 JSON: {e}"}
+            result["ok"] = False
+            return result
         dev_data = dev_data_raw.get("data", dev_data_raw)
         el_status = dev_data.get("status", "unknown")
         result["steps"]["register"] = {"ok": True, "status": el_status}

@@ -53,3 +53,8 @@ class ConnectionStateMachine:
 
     def reset(self) -> None:
         self._state = ConnectionState.DISCONNECTED
+        if self._on_change:
+            try:
+                self._on_change(ConnectionState.DISCONNECTED, ConnectionState.DISCONNECTED)
+            except Exception as e:
+                logger.debug("State change callback error in reset: %s", e)

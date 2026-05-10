@@ -267,16 +267,17 @@ class WebhookManager:
                 logger.warning("Webhook %s dispatch error: %s", webhook.id, e)
 
     def get_stats(self) -> dict[str, Any]:
-        total_triggers = sum(w.trigger_count for w in self._webhooks.values())
+        total_success = sum(w.trigger_count for w in self._webhooks.values())
         total_errors = sum(w.error_count for w in self._webhooks.values())
-        error_rate = total_errors / total_triggers if total_triggers > 0 else 0.0
+        total_calls = total_success + total_errors
+        error_rate = total_errors / total_calls if total_calls > 0 else 0.0
         return {
             "running": self._running,
             "webhooks": len(self._webhooks),
             "queue_size": self._queue.qsize(),
-            "total_calls": total_triggers,
-            "total_triggers": total_triggers,
-            "success_count": total_triggers - total_errors,
+            "total_calls": total_calls,
+            "total_triggers": total_calls,
+            "success_count": total_success,
             "fail_count": total_errors,
             "error_rate": error_rate,
         }

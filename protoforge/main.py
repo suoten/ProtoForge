@@ -282,7 +282,8 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)
 
-    cors_origins_list = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    cors_origins_raw = settings.cors_origins or "*"
+    cors_origins_list = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
     has_wildcard = "*" in cors_origins_list
     if has_wildcard and len(cors_origins_list) > 1:
         logger.warning(
