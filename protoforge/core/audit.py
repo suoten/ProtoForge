@@ -74,15 +74,15 @@ class AuditLogger:
                     start_time: Optional[float] = None,
                     end_time: Optional[float] = None,
                     limit: int = 100,
-                    offset: int = 0) -> list[dict]:
+                    offset: int = 0) -> tuple[list[dict], int]:
         if self._database:
             try:
-                entries, _ = await self._database.query_audit_entries(
+                entries, total = await self._database.query_audit_entries(
                     username=username, action=action, resource_type=resource_type,
                     start_time=start_time, end_time=end_time,
                     limit=limit, offset=offset,
                 )
-                return entries
+                return entries, total
             except Exception as e:
                 logger.warning("Audit DB query failed, falling back to memory: %s", e)
 
@@ -99,9 +99,8 @@ class AuditLogger:
             if end_time and entry.timestamp > end_time:
                 continue
             results.append(entry.to_dict())
-            if len(results) >= limit + offset:
-                break
-        return results[offset:offset + limit]
+        total = len(results)
+        return results[offset:offset + limit], total
 
     async def get_stats(self) -> dict[str, Any]:
         now = time.time()

@@ -37,12 +37,19 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
 
     try:
         result = await engine.create_device(config)
+        db_ok = True
+        db_err_msg = ""
         try:
             await db.save_device(config)
         except Exception as db_err:
-            logger.warning("Failed to save device to DB: %s", db_err)
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to save device %s to DB: %s", config.id, db_err)
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {config.name} created", {"device_id": config.id})
-        return result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        if not db_ok:
+            resp["_persistence_warning"] = f"设备已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+        return resp
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -88,17 +95,24 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 
     try:
         result = await engine.create_device(config)
+        db_ok = True
+        db_err_msg = ""
         try:
             await db.save_device(config)
         except Exception as db_err:
-            logger.warning("Failed to save device to DB: %s", db_err)
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to save device %s to DB (quick-create): %s", config.id, db_err)
         try:
             await engine.start_device(device_id)
         except Exception as start_err:
             logger.warning("quick-create: device %s created but start failed: %s", device_id, start_err)
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {device_name} created via quick-create", {"device_id": config.id})
 
-        return result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        if not db_ok:
+            resp["_persistence_warning"] = f"设备已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+        return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -114,12 +128,17 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
     for config in configs:
         try:
             info = await engine.create_device(config)
+            db_ok = True
             if db:
                 try:
                     await db.save_device(config)
                 except Exception as db_err:
-                    logger.warning("Failed to persist device %s: %s", config.id, db_err)
-            results.append(info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump) else {"id": config.id, "name": config.name, "protocol": config.protocol})
+                    db_ok = False
+                    logger.error("Failed to persist device %s: %s", config.id, db_err)
+            item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
+            if not db_ok:
+                item["_persistence_warning"] = "数据持久化失败，重启后数据将丢失"
+            results.append(item)
         except Exception as e:
             results.append({"id": config.id, "error": str(e)})
 
@@ -141,7 +160,9 @@ async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _u
                 try:
                     await db.delete_device(device_id)
                 except Exception as db_err:
-                    logger.warning("Failed to delete device %s from DB: %s", device_id, db_err)
+                    logger.error("Failed to delete device %s from DB: %s", device_id, db_err)
+                    errors.append({"id": device_id, "error": f"内存已删除但数据库删除失败: {db_err}"})
+                    continue
             deleted += 1
         except ValueError as e:
             errors.append({"id": device_id, "error": str(e)})
@@ -251,12 +272,19 @@ async def delete_device(device_id: str, _user: dict = Depends(require_operator))
     try:
         info = engine.get_device(device_id)
         await engine.remove_device(device_id)
+        db_ok = True
+        db_err_msg = ""
         try:
             await db.delete_device(device_id)
         except Exception as db_err:
-            logger.warning("Failed to delete device from DB: %s", db_err)
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to delete device %s from DB: %s", device_id, db_err)
         log_bus.emit(info.protocol, "system", device_id, "device_removed", f"Device {info.name} removed")
-        return {"status": "ok"}
+        resp = {"status": "ok"}
+        if not db_ok:
+            resp["_persistence_warning"] = f"设备已从内存中删除，但数据库删除失败: {db_err_msg}。重启后设备可能重新出现。"
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -271,12 +299,18 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
 
     try:
         result = await engine.update_device(device_id, config)
+        db_ok = True
+        db_err_msg = ""
         try:
             await db.save_device(config)
         except Exception as db_err:
-            logger.warning("Failed to update device in DB: %s", db_err)
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to update device %s in DB: %s", device_id, db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
-        response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else {"id": device_id, "name": config.name, "protocol": config.protocol}
+        response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else {"id": device_id, "name": config.name, "protocol": config.protocol}
+        if not db_ok:
+            response["_persistence_warning"] = f"设备已在内存中更新，但数据持久化失败: {db_err_msg}。重启后更改将丢失。"
         return response
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -335,7 +369,7 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         success = await engine.write_device_point(device_id, point_name, value)
         if not success:
             raise HTTPException(status_code=400, detail="Write failed")
-        log_bus.emit("", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
+        log_bus.emit(instance.protocol if (instance := engine.get_device_instance(device_id)) else "", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
         await _trigger_webhook_safe("data_change", {"device_id": device_id, "point": point_name, "value": value})
         return {"status": "ok"}
     except ValueError as e:

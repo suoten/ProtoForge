@@ -90,12 +90,12 @@ async def query_audit_log(
         if offset < 0:
             offset = 0
         from protoforge.core.audit import audit_logger
-        entries = await audit_logger.query(
+        entries, total = await audit_logger.query(
             username=username, action=action, resource_type=resource_type,
             start_time=start_time, end_time=end_time,
             limit=limit, offset=offset,
         )
-        return {"entries": entries}
+        return {"entries": entries, "total": total}
     except Exception as e:
         logger.error("Failed to query audit log: %s", e)
         raise HTTPException(status_code=500, detail=f"查询审计日志失败: {e}") from e

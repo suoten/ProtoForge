@@ -51,6 +51,18 @@ api.interceptors.response.use(
     if (response?.data === undefined || response?.data === null) {
       response.data = {}
     }
+    if (response.data && response.data._persistence_warning) {
+      _notifyUser(response.data._persistence_warning, 'warning')
+      delete response.data._persistence_warning
+    }
+    if (Array.isArray(response.data)) {
+      for (let i = response.data.length - 1; i >= 0; i--) {
+        if (response.data[i] && response.data[i]._persistence_warning) {
+          _notifyUser(response.data[i]._persistence_warning, 'warning')
+          delete response.data[i]._persistence_warning
+        }
+      }
+    }
     return response
   },
   async error => {
@@ -133,6 +145,10 @@ function normalizeList(data, ...keys) {
   if (Array.isArray(data)) return data
   if (data && typeof data === 'object') {
     for (const k of keys) {
+      if (Array.isArray(data[k])) return data[k]
+    }
+    const commonKeys = ['data', 'items', 'results', 'records', 'list', 'rows']
+    for (const k of commonKeys) {
       if (Array.isArray(data[k])) return data[k]
     }
   }

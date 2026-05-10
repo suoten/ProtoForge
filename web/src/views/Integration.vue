@@ -425,7 +425,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { NSpace, NTabs, NTabPane, NCard, NInput, NButton, NButtonGroup, NAlert, NDataTable, NCode,
   NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, NGrid, NGi,
   NSelect, NSwitch, NPopconfirm, NEmpty, useMessage, useDialog } from 'naive-ui'
@@ -655,6 +655,7 @@ const alarmRuleColumns = [
 
 const sdkLang = ref('python')
 const sdkExamples = config.sdk.examples
+let _batchPollTimer = null
 
 async function loadIntStatus() {
   try {
@@ -1005,17 +1006,31 @@ async function batchPushAndVerify() {
     const res = await api.batchPushDevices({ device_ids: deviceIds })
     const pushed = res.success ?? 0
     const failed = res.failure ?? 0
-    message.info(`已推送 ${pushed} 个设备${failed ? `，${failed} 个失败` : ''}，等待 ${elConfig.value.collect_interval || 5}s 让 EdgeLite 采集数据...`)
-    await new Promise(r => setTimeout(r, (elConfig.value.collect_interval || 5) * 1000))
-    let verified = 0
-    for (const dev of elDevices.value) {
-      try {
-        const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
-        dev._el_status = statusRes.ok ? statusRes.status : 'error'
-        if (statusRes.ok && statusRes.status === 'online') verified++
-      } catch (e) { message.warning(`获取设备 ${dev.id} 状态失败: ${e.response?.data?.detail || e.message}`) }
-    }
-    message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
+    message.info(`已推送 ${pushed} 个设备${failed ? `，${failed} 个失败` : ''}，等待 EdgeLite 采集数据...`)
+
+    const pollInterval = (elConfig.value.collect_interval || 5) * 1000
+    const maxPolls = 6
+    let pollCount = 0
+
+    await new Promise((resolve) => {
+      _batchPollTimer = setInterval(async () => {
+        pollCount++
+        let verified = 0
+        for (const dev of elDevices.value) {
+          try {
+            const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
+            dev._el_status = statusRes.ok ? statusRes.status : 'error'
+            if (statusRes.ok && statusRes.status === 'online') verified++
+          } catch (e) { /* ignore individual status errors during polling */ }
+        }
+        if (verified > 0 || pollCount >= maxPolls) {
+          clearInterval(_batchPollTimer)
+          _batchPollTimer = null
+          message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
+          resolve()
+        }
+      }, pollInterval)
+    })
   } catch (e) {
     message.error('批量推送失败: ' + (e.response?.data?.detail || e.message))
   } finally { batchPipelineLoading.value = false }
@@ -1107,5 +1122,12 @@ onMounted(() => {
   loadIntMetrics()
   loadAlarmRules()
   loadProtocolMappings()
+})
+
+onUnmounted(() => {
+  if (_batchPollTimer) {
+    clearInterval(_batchPollTimer)
+    _batchPollTimer = null
+  }
 })
 </script>

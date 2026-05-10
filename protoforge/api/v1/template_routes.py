@@ -63,12 +63,19 @@ async def create_template(template: TemplateDetail, _user: dict = Depends(requir
     db = _get_database()
     tm.add_template(template)
 
+    db_ok = True
+    db_err_msg = ""
     if db:
         try:
             await db.save_template(template)
         except Exception as db_err:
-            logger.warning("Failed to persist template %s: %s", template.id, db_err)
-    return template
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to persist template %s: %s", template.id, db_err)
+    resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    if not db_ok:
+        resp["_persistence_warning"] = f"模板已创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+    return resp
 
 
 @router.delete("/templates/{template_id}")
@@ -80,12 +87,19 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     tm.remove_template(template_id)
+    db_ok = True
+    db_err_msg = ""
     if db:
         try:
             await db.delete_template(template_id)
         except Exception as db_err:
-            logger.warning("Failed to delete template %s from DB: %s", template_id, db_err)
-    return {"status": "ok"}
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to delete template %s from DB: %s", template_id, db_err)
+    resp = {"status": "ok"}
+    if not db_ok:
+        resp["_persistence_warning"] = f"模板已从内存中删除，但数据库删除失败: {db_err_msg}。重启后模板可能重新出现。"
+    return resp
 
 
 @router.put("/templates/{template_id}")
@@ -98,12 +112,19 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict = 
         raise HTTPException(status_code=404, detail=str(e))
     data["id"] = template_id
     updated = tm.update_template(template_id, data)
+    db_ok = True
+    db_err_msg = ""
     if db:
         try:
             await db.save_template(updated)
         except Exception as db_err:
-            logger.warning("Failed to update template %s in DB: %s", template_id, db_err)
-    return updated
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to update template %s in DB: %s", template_id, db_err)
+    resp = updated.model_dump() if hasattr(updated, 'model_dump') and callable(updated.model_dump()) else updated
+    if not db_ok:
+        resp["_persistence_warning"] = f"模板已在内存中更新，但数据持久化失败: {db_err_msg}。重启后更改将丢失。"
+    return resp
 
 
 @router.post("/templates/{template_id}/instantiate", response_model=DeviceConfig)

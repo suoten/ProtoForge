@@ -28,11 +28,18 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
     try:
         result = engine.create_scenario(config)
+        db_ok = True
+        db_err_msg = ""
         try:
             await db.save_scenario(config)
         except Exception as db_err:
-            logger.warning("Failed to persist scenario %s: %s", config.id, db_err)
-        return result
+            db_ok = False
+            db_err_msg = str(db_err)
+            logger.error("Failed to persist scenario %s: %s", config.id, db_err)
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        if not db_ok:
+            resp["_persistence_warning"] = f"场景已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+        return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -98,12 +105,19 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
             rules=update.rules if update.rules is not None else existing.rules,
         )
         result = engine.update_scenario(scenario_id, merged)
+        db_ok = True
+        db_err_msg = ""
         if db:
             try:
                 await db.save_scenario(merged)
             except Exception as db_err:
-                logger.warning("Failed to persist scenario %s: %s", scenario_id, db_err)
-        return result
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to persist scenario %s: %s", scenario_id, db_err)
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        if not db_ok:
+            resp["_persistence_warning"] = f"场景已在内存中更新，但数据持久化失败: {db_err_msg}。重启后更改将丢失。"
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -115,12 +129,19 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
 
     try:
         engine.remove_scenario(scenario_id)
+        db_ok = True
+        db_err_msg = ""
         if db:
             try:
                 await db.delete_scenario(scenario_id)
             except Exception as db_err:
-                logger.warning("Failed to delete scenario %s from DB: %s", scenario_id, db_err)
-        return {"status": "ok"}
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to delete scenario %s from DB: %s", scenario_id, db_err)
+        resp = {"status": "ok"}
+        if not db_ok:
+            resp["_persistence_warning"] = f"场景已从内存中删除，但数据库删除失败: {db_err_msg}。重启后场景可能重新出现。"
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -153,12 +174,19 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
     try:
         result = engine.create_scenario(config)
+        db_ok = True
+        db_err_msg = ""
         if db:
             try:
                 await db.save_scenario(config)
             except Exception as db_err:
-                logger.warning("Failed to persist scenario %s: %s", config.id, db_err)
-        return result
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to persist imported scenario %s: %s", config.id, db_err)
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        if not db_ok:
+            resp["_persistence_warning"] = f"场景已导入到内存，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

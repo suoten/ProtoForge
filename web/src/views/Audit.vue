@@ -39,14 +39,19 @@
         </n-space>
       </n-space>
       <n-data-table :columns="columns" :data="entries" :bordered="false" size="small"
-        :pagination="{ pageSize: 20 }" :loading="loading" />
+        :loading="loading" />
+      <n-space justify="end" style="margin-top:12px" v-if="totalEntries > 0">
+        <n-pagination v-model:page="currentPage" v-model:page-size="pageSize"
+          :item-count="totalEntries" :page-sizes="[20, 50, 100, 200]"
+          show-size-picker @update:page="loadData" @update:page-size="onPageSizeChange" />
+      </n-space>
     </n-card>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, h, onMounted } from 'vue'
-import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage } from 'naive-ui'
+import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, NPagination, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 
@@ -59,6 +64,9 @@ const filterUsername = ref('')
 const filterAction = ref('')
 const filterResource = ref('')
 const auditStats = ref(null)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const totalEntries = ref(0)
 
 const columns = computed(() => [
   { title: t('common.time'), key: 'timestamp', width: 170, render: (row) => {
@@ -83,16 +91,26 @@ const columns = computed(() => [
 async function loadData() {
   loading.value = true
   try {
-    const params = { limit: 200 }
+    const params = {
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value,
+    }
     if (filterUsername.value) params.username = filterUsername.value
     if (filterAction.value) params.action = filterAction.value
     if (filterResource.value) params.resource_type = filterResource.value
-    entries.value = await api.queryAuditLog(params)
+    const res = await api.queryAuditLog(params)
+    entries.value = Array.isArray(res) ? res : (res.entries || res.data || [])
+    totalEntries.value = res.total || res.total_entries || (auditStats.value?.total_entries || entries.value.length)
   } catch (e) {
     message.error(t('audit.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
   }
+}
+
+function onPageSizeChange() {
+  currentPage.value = 1
+  loadData()
 }
 
 async function loadAuditStats() {

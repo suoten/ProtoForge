@@ -1431,6 +1431,30 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.2.0 — 2026-05-10
+
+**后端数据持久化修复（关键）：**
+
+- 修复 `device_routes.py` 6 处 DB 持久化失败被静默吞没（创建/快速创建/批量创建/批量删除/删除/更新设备），用户无感知数据可能丢失
+- 修复 `scenario_routes.py` 4 处 DB 持久化失败被静默吞没（创建/更新/删除/导入场景）
+- 修复 `template_routes.py` 3 处 DB 持久化失败被静默吞没（创建/删除/更新模板）
+- 所有 DB 持久化失败现在返回 `_persistence_warning` 字段，前端自动弹窗提醒用户
+- 修复 `device_routes.py` `write_point` 日志 `protocol` 字段为空，导致日志无法按协议筛选
+
+**前端功能完善：**
+
+- 修复 `Audit.vue` 审计日志硬编码 `limit:200` 无分页，改为服务端分页（支持翻页和每页条数选择）
+- 修复 `Integration.vue` `batchPushAndVerify` 使用阻塞 `setTimeout` 冻结 UI，改为可取消轮询机制
+- 修复 `Integration.vue` 组件卸载时轮询定时器未清理（内存泄漏）
+- 修复 `Testing.vue` `saveJsonAsCase` 不验证 JSON 结构，畸形数据可创建无效测试用例
+- 增强 `api.js` `normalizeList` 自动检测 `data/items/results/records/list/rows` 等常见响应格式
+- 增强 `api.js` 响应拦截器自动检测并提示 `_persistence_warning` 持久化警告
+
+**后端审计分页增强：**
+
+- 修复 `audit.py` `query()` 方法不返回 `total` 总数，前端无法计算总页数
+- 修复 `system_routes.py` 审计查询端点不返回 `total` 字段
+
 #### v0.1.9 — 2026-05-10
 
 **前端关键Bug修复：**

@@ -645,13 +645,39 @@ function formatJson() {
 async function saveJsonAsCase() {
   try {
     const cases = JSON.parse(testJson.value)
+    if (!Array.isArray(cases)) {
+      message.error(t('testing.jsonMustBeArray') || '测试数据必须是数组格式')
+      return
+    }
+    for (let i = 0; i < cases.length; i++) {
+      const c = cases[i]
+      if (!c.id || typeof c.id !== 'string') {
+        message.error(`第 ${i + 1} 个用例缺少有效的 id 字段`)
+        return
+      }
+      if (!c.steps || !Array.isArray(c.steps) || c.steps.length === 0) {
+        message.error(`用例 "${c.id}" 缺少 steps 字段或 steps 为空`)
+        return
+      }
+      for (let j = 0; j < c.steps.length; j++) {
+        const s = c.steps[j]
+        if (!s.action || typeof s.action !== 'string') {
+          message.error(`用例 "${c.id}" 的第 ${j + 1} 步缺少 action 字段`)
+          return
+        }
+      }
+    }
     for (const c of cases) {
       await api.createTestCase(c)
     }
     await loadCases()
     message.success(t('testing.caseSaved'))
   } catch (e) {
-    message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
+    if (e instanceof SyntaxError) {
+      message.error(t('testing.jsonParseError') + ': ' + e.message)
+    } else {
+      message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
+    }
   }
 }
 
