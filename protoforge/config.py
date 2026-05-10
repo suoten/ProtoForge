@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     failover_role: str = ""
     failover_primary: str = ""
     failover_standby: str = ""
+    failover_interval: int = 10
 
     influxdb_url: str = ""
     influxdb_token: str = ""

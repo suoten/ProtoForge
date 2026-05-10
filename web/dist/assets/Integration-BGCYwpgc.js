@@ -1,4 +1,4 @@
-import{f as Nt,g as $t,h as Ft,v as x,w as a,u as l,k as S,j as b,r as p,o as u,e as n,b as s,ay as At,az as W,n as w,L as ye,M as E,K as $,B as g,d,z as D,c as _,F as j,t as y,y as z,x as K,p as Q,q as Te,A as T,l as Ge,m as G,s as L,G as ge,aA as It,P as Ot,H as $e,R as Ut,S as Jt,N as Ke,aB as Mt,au as Rt,C as Ve,D as m,aC as Bt}from"./index-BxCjN-is.js";const qe={edgeLite:{unsupportedProtocols:["gb28181","bacnet","profinet","ethercat"]},sdk:{examples:{python:`# ProtoForge Python SDK
+import{f as Nt,g as $t,h as Ft,v as x,w as a,u as l,k as S,j as b,r as p,o as u,e as n,b as s,ay as At,az as W,n as w,L as ye,M as E,K as $,B as g,d,z as D,c as _,F as j,t as y,y as z,x as K,p as Q,q as Te,A as T,l as Ge,m as G,s as L,G as ge,aA as It,P as Ot,H as $e,R as Ut,S as Jt,N as Ke,aB as Mt,au as Rt,C as Ve,D as m,aC as Bt}from"./index-R1-AEEoa.js";const qe={edgeLite:{unsupportedProtocols:["gb28181","bacnet","profinet","ethercat"]},sdk:{examples:{python:`# ProtoForge Python SDK
 from protoforge.sdk import ProtoForgeClient
 
 with ProtoForgeClient("http://localhost:8000") as c:

@@ -20,7 +20,7 @@ class RoleChecker:
         self._allowed_roles = allowed_roles
 
     async def __call__(self, request: Request) -> dict:
-        if _NO_AUTH:
+        if is_no_auth():
             return {"sub": "no-auth", "username": "admin", "role": "admin"}
         payload = getattr(request.state, "user", None)
         if payload is None:
@@ -108,7 +108,7 @@ async def auth_middleware(request: Request, call_next):
     if not path.startswith("/api/v1/"):
         return await call_next(request)
 
-    if _NO_AUTH:
+    if is_no_auth():
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")
