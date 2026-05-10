@@ -48,6 +48,11 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
 async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):
     try:
         from protoforge.core.webhook import webhook_manager
+
+        url = config.get("url", "")
+        if url and not re.match(r'^https?://', url):
+            raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
+
         webhook = webhook_manager.update_webhook(wh_id, config)
         if not webhook:
             raise HTTPException(status_code=404, detail="Webhook not found")

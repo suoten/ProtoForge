@@ -83,6 +83,8 @@ class Scenario:
         point_value = source.read_point(rule.source_point)
         if not point_value:
             return False
+        if not rule.condition or not isinstance(rule.condition, dict):
+            return False
         conditions = rule.condition.get("conditions", [rule.condition])
         operator = rule.condition.get("logic", "and")
         results = []

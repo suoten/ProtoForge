@@ -3,12 +3,12 @@
     <n-space vertical size="large">
       <n-space justify="space-between" align="center">
         <div>
-          <div class="pf-section-title">协议服务</div>
-          <div class="pf-section-desc">点击「一键启动」即可使用默认配置启动协议</div>
+          <div class="pf-section-title">{{ t('protocols.title') }}</div>
+          <div class="pf-section-desc">{{ t('protocols.subtitle') }}</div>
         </div>
         <n-button type="primary" @click="startAll" :loading="startingAll">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-          全部启动
+          {{ t('protocols.startAll') }}
         </n-button>
       </n-space>
 
@@ -23,7 +23,7 @@
                 </div>
                 <div>
                   <div style="font-weight:600;font-size:14px">{{ p.display_name || p.name }}</div>
-                  <div style="font-size:11px;color:#94a3b8">{{ p.description || '物联网协议服务' }}</div>
+                  <div style="font-size:11px;color:#94a3b8">{{ p.description || t('protocols.defaultDesc') }}</div>
                 </div>
               </n-space>
             </template>
@@ -32,21 +32,21 @@
                 <template #icon v-if="p.status === 'running'">
                   <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 </template>
-                {{ p.status === 'running' ? '运行中' : '已停止' }}
+                {{ p.status === 'running' ? t('common.running') : t('common.stopped') }}
               </n-tag>
             </template>
             <n-space justify="space-between" align="center">
               <n-space size="small" align="center">
-                <n-text depth="3" style="font-size:12px">{{ p.default_port ? `端口 ${p.default_port}` : '' }}</n-text>
+                <n-text depth="3" style="font-size:12px">{{ p.default_port ? t('common.port') + ' ' + p.default_port : '' }}</n-text>
                 <n-tag size="tiny" :type="protocolModes[p.name] === 'Broker' || protocolModes[p.name] === 'SIP' || protocolModes[p.name] === 'Agent' ? 'warning' : 'info'" :bordered="false">
                   {{ protocolModes[p.name] || 'Server' }}
                 </n-tag>
               </n-space>
               <n-space size="small">
-                <n-button v-if="p.status !== 'running'" type="primary" size="small" :loading="startingProtocol === p.name" @click="quickStart(p.name)">一键启动</n-button>
-                <n-button v-else type="warning" size="small" :loading="stoppingProtocol === p.name" @click="stopProtocol(p.name)">停止</n-button>
-                <n-button size="small" tertiary @click="openAdvanced(p)">高级配置</n-button>
-                <n-button size="small" tertiary @click="showProtocolInfo(p.name)">详情</n-button>
+                <n-button v-if="p.status !== 'running'" type="primary" size="small" :loading="startingProtocol === p.name" @click="quickStart(p.name)">{{ t('protocols.quickStart') }}</n-button>
+                <n-button v-else type="warning" size="small" :loading="stoppingProtocol === p.name" @click="stopProtocol(p.name)">{{ t('common.stop') }}</n-button>
+                <n-button size="small" tertiary @click="openAdvanced(p)">{{ t('protocols.advancedConfig') }}</n-button>
+                <n-button size="small" tertiary @click="showProtocolInfo(p.name)">{{ t('common.detail') }}</n-button>
               </n-space>
             </n-space>
           </n-card>
@@ -54,8 +54,8 @@
       </n-grid>
       </n-spin>
 
-      <n-modal v-model:show="showAdvanced" preset="card" :title="`高级配置 - ${advancedProtocol.display_name || advancedProtocol.name}`" style="width: 500px">
-        <n-alert type="info" :bordered="false" style="margin-bottom: 12px">留空将使用默认值，无需全部填写</n-alert>
+      <n-modal v-model:show="showAdvanced" preset="card" :title="t('protocols.advancedConfigTitle', { name: advancedProtocol.display_name || advancedProtocol.name })" style="width: 500px">
+        <n-alert type="info" :bordered="false" style="margin-bottom: 12px">{{ t('protocols.advancedConfigHint') }}</n-alert>
         <n-form :model="advancedConfig" label-placement="left" label-width="80">
           <n-form-item v-for="(value, key) in advancedConfig" :key="key" :label="key">
             <n-input v-model:value="advancedConfig[key]" :placeholder="String(value)" />
@@ -63,34 +63,34 @@
         </n-form>
         <template #action>
           <n-space>
-            <n-button @click="showAdvanced = false">取消</n-button>
-            <n-button type="primary" @click="startWithConfig" :loading="starting">启动</n-button>
+            <n-button @click="showAdvanced = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="startWithConfig" :loading="starting">{{ t('common.start') }}</n-button>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showInfoModal" preset="card" :title="`协议详情 - ${protocolInfoName}`" style="width: 600px">
+      <n-modal v-model:show="showInfoModal" preset="card" :title="t('protocols.protocolDetailTitle', { name: protocolInfoName })" style="width: 600px">
         <n-spin :show="loadingInfo">
           <n-space vertical v-if="protocolInfoData">
             <n-descriptions label-placement="left" :column="1" bordered size="small">
-              <n-descriptions-item label="协议名称">{{ protocolInfoData.name || protocolInfoName }}</n-descriptions-item>
-              <n-descriptions-item label="显示名称">{{ protocolInfoData.display_name || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="描述">{{ protocolInfoData.description || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="默认端口">{{ protocolInfoData.default_port || '-' }}</n-descriptions-item>
-              <n-descriptions-item label="模式">{{ protocolInfoData.mode || 'Server' }}</n-descriptions-item>
-              <n-descriptions-item label="版本">{{ protocolInfoData.version || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('protocols.protocolName')">{{ protocolInfoData.name || protocolInfoName }}</n-descriptions-item>
+              <n-descriptions-item :label="t('protocols.displayName')">{{ protocolInfoData.display_name || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.description')">{{ protocolInfoData.description || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('protocols.defaultPort')">{{ protocolInfoData.default_port || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('protocols.mode')">{{ protocolInfoData.mode || 'Server' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('protocols.version')">{{ protocolInfoData.version || '-' }}</n-descriptions-item>
             </n-descriptions>
-            <n-text strong v-if="protocolInfoData.features && protocolInfoData.features.length > 0" style="font-size:13px">支持功能:</n-text>
+            <n-text strong v-if="protocolInfoData.features && protocolInfoData.features.length > 0" style="font-size:13px">{{ t('protocols.supportedFeatures') }}:</n-text>
             <n-space v-if="protocolInfoData.features && protocolInfoData.features.length > 0" size="small">
               <n-tag v-for="f in protocolInfoData.features" :key="f" size="tiny" type="info" :bordered="false">{{ f }}</n-tag>
             </n-space>
-            <n-text strong v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0" style="font-size:13px">配置参数:</n-text>
+            <n-text strong v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0" style="font-size:13px">{{ t('protocols.configParams') }}:</n-text>
             <n-data-table v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0"
               :columns="configInfoColumns" :data="configInfoRows" :bordered="false" size="small" />
           </n-space>
         </n-spin>
         <template #action>
-          <n-button @click="showInfoModal = false">关闭</n-button>
+          <n-button @click="showInfoModal = false">{{ t('common.close') }}</n-button>
         </template>
       </n-modal>
     </n-space>
@@ -123,12 +123,12 @@ const protocolInfoData = ref(null)
 const protocolConfigData = ref(null)
 const loadingInfo = ref(false)
 
-const configInfoColumns = [
-  { title: '参数', key: 'key', width: 140 },
-  { title: '类型', key: 'type', width: 100 },
-  { title: '默认值', key: 'default', width: 120 },
-  { title: '说明', key: 'description' },
-]
+const configInfoColumns = computed(() => [
+  { title: t('protocols.param'), key: 'key', width: 140 },
+  { title: t('common.type'), key: 'type', width: 100 },
+  { title: t('protocols.defaultValue'), key: 'default', width: 120 },
+  { title: t('common.description'), key: 'description' },
+])
 
 const configInfoRows = computed(() => {
   if (!protocolConfigData.value) return []
@@ -148,18 +148,18 @@ async function loadData() {
     const res = await api.getProtocols()
     protocols.value = res || []
   } catch (e) {
-    message.error('加载协议列表失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('protocols.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { dataLoading.value = false }
 }
 
 async function startAll() {
   const stopped = protocols.value.filter(p => p.status !== 'running')
-  if (!stopped.length) { message.info('所有协议已在运行中'); return }
+  if (!stopped.length) { message.info(t('protocols.allRunning')); return }
   dialog.warning({
-    title: '确认全部启动',
-    content: `将启动 ${stopped.length} 个已停止的协议，可能占用大量端口和资源。确定继续？`,
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('protocols.confirmStartAll'),
+    content: t('protocols.confirmStartAllDesc', { count: stopped.length }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       startingAll.value = true
       let portWarnings = []
@@ -169,12 +169,12 @@ async function startAll() {
           try {
             const res = await api.startProtocol(p.name, null)
             if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
-          } catch (e) { failCount++; message.warning(`协议 ${p.name} 启动失败: ${e.response?.data?.detail || e.message}`) }
+          } catch (e) { failCount++; message.warning(t('protocols.protocolStartFailed', { name: p.name }) + ': ' + (e.response?.data?.detail || e.message)) }
         }
         if (failCount > 0) {
-          message.warning(`已启动 ${stopped.length - failCount} 个协议，${failCount} 个失败`)
+          message.warning(t('protocols.startAllPartial', { success: stopped.length - failCount, fail: failCount }))
         } else {
-          message.success(`已启动 ${stopped.length} 个协议`)
+          message.success(t('protocols.startAllSuccess', { count: stopped.length }))
         }
         if (portWarnings.length > 0) {
           message.warning(portWarnings.join('\n'), { duration: 8000 })
@@ -192,11 +192,11 @@ async function quickStart(name) {
     if (res.port_changed) {
       message.warning(res.message, { duration: 6000 })
     } else {
-      message.success(`${name} 已启动（使用默认配置）`)
+      message.success(t('protocols.protocolStarted', { name }))
     }
     await loadData()
   } catch (e) {
-    message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('protocols.startFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     startingProtocol.value = null
   }
@@ -204,18 +204,18 @@ async function quickStart(name) {
 
 async function stopProtocol(name) {
   dialog.warning({
-    title: '确认停止协议',
-    content: `停止 ${name} 协议服务后，所有使用该协议的设备连接将断开。确定停止？`,
-    positiveText: '停止',
-    negativeText: '取消',
+    title: t('protocols.confirmStop'),
+    content: t('protocols.confirmStopDesc', { name }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       stoppingProtocol.value = name
       try {
         await api.stopProtocol(name)
-        message.success(`${name} 已停止`)
+        message.success(t('protocols.protocolStopped', { name }))
         await loadData()
       } catch (e) {
-        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('protocols.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally {
         stoppingProtocol.value = null
       }
@@ -236,8 +236,8 @@ async function showProtocolInfo(name) {
     ])
     const infoRes = results[0].status === 'fulfilled' ? results[0].value : {}
     const configRes = results[1].status === 'fulfilled' ? results[1].value : {}
-    if (results[0].status === 'rejected') message.warning('获取协议信息失败')
-    if (results[1].status === 'rejected') message.warning('获取协议配置失败')
+    if (results[0].status === 'rejected') message.warning(t('protocols.infoLoadFailed'))
+    if (results[1].status === 'rejected') message.warning(t('protocols.configLoadFailed'))
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
     protocolInfoData.value = found
@@ -275,10 +275,10 @@ async function startWithConfig() {
     }
     await api.startProtocol(advancedProtocol.value.name, config)
     showAdvanced.value = false
-    message.success(`${advancedProtocol.value.name} 已启动`)
+    message.success(t('protocols.protocolStarted', { name: advancedProtocol.value.name }))
     await loadData()
   } catch (e) {
-    message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('protocols.startFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     starting.value = false
   }
@@ -309,7 +309,7 @@ function connectWs() {
     if (!ws) return
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
-    message.warning('设备实时连接失败，5秒后重试')
+    message.warning(t('protocols.wsConnectFailed'))
     wsReconnectAttempts++
     if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
       wsReconnectTimer = setTimeout(connectWs, 5000)

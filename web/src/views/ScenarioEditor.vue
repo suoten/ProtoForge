@@ -2,15 +2,15 @@
   <n-space vertical>
     <n-space justify="space-between" align="center">
       <div>
-        <div class="pf-section-title">场景编排器</div>
-        <div class="pf-section-desc">可视化编排设备与联动规则</div>
+        <div class="pf-section-title">{{ t('scenarioEditor.title') }}</div>
+        <div class="pf-section-desc">{{ t('scenarioEditor.subtitle') }}</div>
       </div>
       <n-space>
-        <n-select v-model:value="selectedScenario" :options="scenarioOptions" placeholder="选择场景" style="width: 200px" @update:value="loadScenario" />
-        <n-button type="primary" @click="saveScenarioLayout" :loading="saving">保存布局</n-button>
-        <n-button @click="addDeviceNode">添加设备</n-button>
-        <n-button type="success" @click="startScenario" :loading="scenarioLoading" v-if="selectedScenario">启动场景</n-button>
-        <n-button type="warning" @click="stopScenario" :loading="scenarioLoading" v-if="selectedScenario">停止场景</n-button>
+        <n-select v-model:value="selectedScenario" :options="scenarioOptions" :placeholder="t('scenarioEditor.selectScenario')" style="width: 200px" @update:value="loadScenario" />
+        <n-button type="primary" @click="saveScenarioLayout" :loading="saving">{{ t('scenarioEditor.saveLayout') }}</n-button>
+        <n-button @click="addDeviceNode">{{ t('scenarioEditor.addDevice') }}</n-button>
+        <n-button type="success" @click="startScenario" :loading="scenarioLoading" v-if="selectedScenario">{{ t('common.start') }}</n-button>
+        <n-button type="warning" @click="stopScenario" :loading="scenarioLoading" v-if="selectedScenario">{{ t('common.stop') }}</n-button>
       </n-space>
     </n-space>
 
@@ -32,71 +32,71 @@
       </VueFlow>
     </div>
 
-    <n-modal v-model:show="showAddDeviceModal" preset="card" title="添加设备节点" style="width: 500px">
+    <n-modal v-model:show="showAddDeviceModal" preset="card" :title="t('scenarioEditor.addDeviceNode')" style="width: 500px">
       <n-form :model="newNode" label-placement="left" label-width="80">
-        <n-form-item label="设备ID">
-          <n-input v-model:value="newNode.deviceId" placeholder="如: sensor-001" />
+        <n-form-item :label="t('scenarioEditor.deviceId')">
+          <n-input v-model:value="newNode.deviceId" :placeholder="t('scenarioEditor.deviceIdPlaceholder')" />
         </n-form-item>
-        <n-form-item label="设备名称">
-          <n-input v-model:value="newNode.deviceName" placeholder="如: 温湿度传感器" />
+        <n-form-item :label="t('scenarioEditor.deviceName')">
+          <n-input v-model:value="newNode.deviceName" :placeholder="t('scenarioEditor.deviceNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="协议">
+        <n-form-item :label="t('common.protocol')">
           <n-select v-model:value="newNode.protocol" :options="protocolTypeOptions" />
         </n-form-item>
-        <n-form-item label="从模板">
-          <n-select v-model:value="newNode.templateId" :options="templateOptions" clearable placeholder="可选" />
+        <n-form-item :label="t('scenarioEditor.fromTemplate')">
+          <n-select v-model:value="newNode.templateId" :options="templateOptions" clearable :placeholder="t('scenarioEditor.optional')" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showAddDeviceModal = false">取消</n-button>
-          <n-button type="primary" @click="confirmAddNode">添加</n-button>
+          <n-button @click="showAddDeviceModal = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="confirmAddNode">{{ t('common.add') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showRuleModal" preset="card" title="配置联动规则" style="width: 500px">
+    <n-modal v-model:show="showRuleModal" preset="card" :title="t('scenarioEditor.configureRule')" style="width: 500px">
       <n-form :model="newRule" label-placement="left" label-width="80">
-        <n-form-item label="规则名称">
+        <n-form-item :label="t('scenarioEditor.ruleName')">
           <n-input v-model:value="newRule.name" />
         </n-form-item>
-        <n-form-item label="规则类型">
+        <n-form-item :label="t('scenarioEditor.ruleType')">
           <n-select v-model:value="newRule.ruleType" :options="ruleTypeOptions" />
         </n-form-item>
-        <n-form-item label="源测点">
-          <n-input v-model:value="newRule.sourcePoint" placeholder="如: temperature" />
+        <n-form-item :label="t('scenarioEditor.sourcePoint')">
+          <n-input v-model:value="newRule.sourcePoint" :placeholder="t('scenarioEditor.sourcePointPlaceholder')" />
         </n-form-item>
-        <n-form-item label="条件">
+        <n-form-item :label="t('scenarioEditor.condition')">
           <n-select v-model:value="newRule.operator" :options="operatorOptions" style="width: 140px" />
           <n-input-number v-model:value="newRule.threshold" style="width: 150px" />
         </n-form-item>
-        <n-form-item label="目标测点">
-          <n-input v-model:value="newRule.targetPoint" placeholder="如: alarm" />
+        <n-form-item :label="t('scenarioEditor.targetPoint')">
+          <n-input v-model:value="newRule.targetPoint" :placeholder="t('scenarioEditor.targetPointPlaceholder')" />
         </n-form-item>
-        <n-form-item label="目标值">
-          <n-input v-model:value="newRule.targetValue" placeholder="如: true 或 1" />
+        <n-form-item :label="t('scenarioEditor.targetValue')">
+          <n-input v-model:value="newRule.targetValue" :placeholder="t('scenarioEditor.targetValuePlaceholder')" />
         </n-form-item>
-        <n-form-item label="冷却(秒)">
+        <n-form-item :label="t('scenarioEditor.cooldown')">
           <n-input-number v-model:value="newRule.cooldown" :min="0" style="width: 120px" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="showRuleModal = false">取消</n-button>
-          <n-button type="primary" @click="confirmRule">确认</n-button>
+          <n-button @click="showRuleModal = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="confirmRule">{{ t('common.confirm') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showPointsModal" preset="card" :title="`测点编辑 - ${editingDevice.label || ''}`" style="width: 700px">
+    <n-modal v-model:show="showPointsModal" preset="card" :title="t('scenarioEditor.pointEditTitle', { name: editingDevice.label || '' })" style="width: 700px">
       <n-space vertical>
-        <n-button size="small" type="primary" @click="addPoint">添加测点</n-button>
+        <n-button size="small" type="primary" @click="addPoint">{{ t('scenarioEditor.addPoint') }}</n-button>
         <n-data-table :columns="pointEditColumns" :data="editingPoints" :bordered="false" size="small" />
       </n-space>
       <template #action>
         <n-space>
-          <n-button @click="showPointsModal = false">取消</n-button>
-          <n-button type="primary" @click="savePoints">保存测点</n-button>
+          <n-button @click="showPointsModal = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="savePoints">{{ t('scenarioEditor.savePoints') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -145,7 +145,7 @@ const DeviceNode = defineComponent({
           position: 'absolute', top: '8px', right: '8px' }
       }),
       h('div', { style: { fontSize: '10px', color: '#999', marginTop: '4px' } },
-        `${props.data?.pointCount || 0} 测点`),
+        `${props.data?.pointCount || 0} ${t('common.pointCount')}`),
     ])
   }
 })
@@ -183,31 +183,31 @@ const pendingConnection = ref(null)
 
 const scenarioOptions = computed(() => scenarios.value.map(s => ({ label: s.name, value: s.id })))
 const protocolTypeOptions = computed(() => protocols.value.map(p => ({ label: p.display_name, value: p.name })))
-const templateOptions = computed(() => templates.value.map(t => ({ label: `${t.name} (${t.protocol})`, value: t.id })))
-const operatorOptions = [
-  { label: '大于 (>)', value: '>' },
-  { label: '大于等于 (>=)', value: '>=' },
-  { label: '小于 (<)', value: '<' },
-  { label: '小于等于 (<=)', value: '<=' },
-  { label: '等于 (==)', value: '==' },
-  { label: '不等于 (!=)', value: '!=' },
-]
-const ruleTypeOptions = [
-  { label: '阈值触发', value: 'threshold' },
-  { label: '值变化触发', value: 'value_change' },
-  { label: '定时触发', value: 'timer' },
-  { label: '脚本触发', value: 'script' },
-]
+const templateOptions = computed(() => templates.value.map(tmpl => ({ label: `${tmpl.name} (${tmpl.protocol})`, value: tmpl.id })))
+const operatorOptions = computed(() => [
+  { label: t('scenarioEditor.greaterThan'), value: '>' },
+  { label: t('scenarioEditor.greaterEqual'), value: '>=' },
+  { label: t('scenarioEditor.lessThan'), value: '<' },
+  { label: t('scenarioEditor.lessEqual'), value: '<=' },
+  { label: t('scenarioEditor.equal'), value: '==' },
+  { label: t('scenarioEditor.notEqual'), value: '!=' },
+])
+const ruleTypeOptions = computed(() => [
+  { label: t('scenarioEditor.thresholdTrigger'), value: 'threshold' },
+  { label: t('scenarioEditor.valueChangeTrigger'), value: 'value_change' },
+  { label: t('scenarioEditor.timerTrigger'), value: 'timer' },
+  { label: t('scenarioEditor.scriptTrigger'), value: 'script' },
+])
 
-const pointEditColumns = [
-  { title: '名称', key: 'name', width: 120, render: (row, idx) => h(NInput, { value: row.name, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].name = v } }) },
-  { title: '地址', key: 'address', width: 80, render: (row, idx) => h(NInput, { value: row.address, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].address = v } }) },
-  { title: '数据类型', key: 'data_type', width: 100, render: (row, idx) => h(NSelect, { value: row.data_type, size: 'tiny', options: dataTypeOptions, onUpdateValue: v => { editingPoints.value[idx].data_type = v } }) },
-  { title: '生成器', key: 'generator_type', width: 100, render: (row, idx) => h(NSelect, { value: row.generator_type, size: 'tiny', options: generatorOptions, onUpdateValue: v => { editingPoints.value[idx].generator_type = v } }) },
-  { title: '最小值', key: 'min_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.min_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].min_value = v } }) },
-  { title: '最大值', key: 'max_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.max_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].max_value = v } }) },
-  { title: '操作', key: 'actions', width: 60, render: (row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editingPoints.value.splice(idx, 1) }, () => '删') },
-]
+const pointEditColumns = computed(() => [
+  { title: t('common.name'), key: 'name', width: 120, render: (row, idx) => h(NInput, { value: row.name, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].name = v } }) },
+  { title: t('common.address'), key: 'address', width: 80, render: (row, idx) => h(NInput, { value: row.address, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].address = v } }) },
+  { title: t('common.dataType'), key: 'data_type', width: 100, render: (row, idx) => h(NSelect, { value: row.data_type, size: 'tiny', options: dataTypeOptions, onUpdateValue: v => { editingPoints.value[idx].data_type = v } }) },
+  { title: t('common.generator'), key: 'generator_type', width: 100, render: (row, idx) => h(NSelect, { value: row.generator_type, size: 'tiny', options: generatorOptions, onUpdateValue: v => { editingPoints.value[idx].generator_type = v } }) },
+  { title: t('common.minValue'), key: 'min_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.min_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].min_value = v } }) },
+  { title: t('common.maxValue'), key: 'max_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.max_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].max_value = v } }) },
+  { title: t('common.action'), key: 'actions', width: 60, render: (row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editingPoints.value.splice(idx, 1) }, () => t('common.delete')) },
+])
 
 const generatorOptions = generatorTypeOptions
 
@@ -227,10 +227,6 @@ function addPoint() {
   editingPoints.value.push({ name: '', address: String(editingPoints.value.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
 }
 
-// Note: savePoints() updates node.data locally (in-memory VueFlow state).
-// The entire layout (including updated points) is persisted to backend
-// when saveScenarioLayout() is called - which calls updateScenario with
-// the full nodes config including updated points data.
 function savePoints() {
   const node = nodes.value.find(n => n.id === editingDevice.value.nodeId)
   if (node) {
@@ -239,12 +235,9 @@ function savePoints() {
   }
   showPointsModal.value = false
   hasUnsavedChanges.value = true
-  message.success('测点已更新（保存场景时将同步到后端）')
+  message.success(t('scenarioEditor.pointsUpdated'))
 }
 
-// Note: confirmRule() adds edge to VueFlow locally.
-// The edge rule is serialized into the scenario config when saveScenarioLayout()
-// calls updateScenario with the full edges array.
 function confirmRule() {
   if (pendingConnection.value) {
     addEdges([{
@@ -260,7 +253,7 @@ function confirmRule() {
   showRuleModal.value = false
   pendingConnection.value = null
   hasUnsavedChanges.value = true
-  message.success('联动规则已添加')
+  message.success(t('scenarioEditor.ruleAdded'))
 }
 
 function addDeviceNode() {
@@ -268,8 +261,8 @@ function addDeviceNode() {
 }
 
 async function confirmAddNode() {
-  if (!newNode.value.deviceId?.trim()) { message.warning('请输入设备 ID'); return }
-  if (!newNode.value.deviceName?.trim()) { message.warning('请输入设备名称'); return }
+  if (!newNode.value.deviceId?.trim()) { message.warning(t('scenarioEditor.deviceIdRequired')); return }
+  if (!newNode.value.deviceName?.trim()) { message.warning(t('scenarioEditor.deviceNameRequired')); return }
   const id = `node-${Date.now()}`
   const x = 100 + Math.random() * 400
   const y = 100 + Math.random() * 300
@@ -278,7 +271,7 @@ async function confirmAddNode() {
     try {
       const tmplRes = await api.getTemplate(newNode.value.templateId)
       points = tmplRes.points || points
-    } catch (e) { message.warning('加载模板失败，使用默认测点') }
+    } catch (e) { message.warning(t('scenarioEditor.templateLoadFailed')) }
   }
   nodes.value.push({
     id, type: 'device', position: { x, y },
@@ -290,7 +283,7 @@ async function confirmAddNode() {
   showAddDeviceModal.value = false
   newNode.value = { deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null }
   hasUnsavedChanges.value = true
-  message.success('设备节点已添加')
+  message.success(t('scenarioEditor.deviceNodeAdded'))
 }
 
 async function loadScenario(scenarioId) {
@@ -302,11 +295,11 @@ async function loadScenario(scenarioId) {
     const scenario = results[0].status === 'fulfilled' ? results[0].value : null
     const allDevices = results[1].status === 'fulfilled' ? (results[1].value || []) : []
     if (results[0].status === 'rejected') {
-      message.error('加载场景详情失败')
+      message.error(t('scenarioEditor.loadScenarioFailed'))
       return
     }
     if (results[1].status === 'rejected') {
-      message.warning('加载设备列表失败，在线状态可能不准确')
+      message.warning(t('scenarioEditor.devicesLoadFailed'))
     }
     const deviceMap = {}
     for (const d of allDevices) {
@@ -326,13 +319,13 @@ async function loadScenario(scenarioId) {
       animated: true,
     })).filter(e => e.source && e.target)
   } catch (e) {
-    message.error('加载场景失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarioEditor.loadScenarioFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function saveScenarioLayout() {
   if (!selectedScenario.value) {
-    message.warning('请先选择一个场景')
+    message.warning(t('scenarioEditor.selectScenarioFirst'))
     return
   }
   saving.value = true
@@ -375,7 +368,7 @@ async function saveScenarioLayout() {
           id: dc.id, name: dc.name, protocol: dc.protocol,
           points: dc.points, protocol_config: dc.protocol_config,
         })
-        try { await api.startDevice(dc.id) } catch (e) { failedDevices.push(dc.name || dc.id); message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
+        try { await api.startDevice(dc.id) } catch (e) { failedDevices.push(dc.name || dc.id); message.warning(t('scenarioEditor.deviceStartFailed', { name: dc.name || dc.id }) + ': ' + (e.response?.data?.detail || e.message)) }
       } catch (e) {
         const status = e.response?.status
         const detail = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')
@@ -385,10 +378,10 @@ async function saveScenarioLayout() {
               id: dc.id, name: dc.name, protocol: dc.protocol,
               points: dc.points, protocol_config: dc.protocol_config,
             })
-            try { await api.startDevice(dc.id) } catch (e2) { failedDevices.push(dc.name || dc.id); message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e2.response?.data?.detail || e2.message}`) }
+            try { await api.startDevice(dc.id) } catch (e2) { failedDevices.push(dc.name || dc.id); message.warning(t('scenarioEditor.deviceStartFailed', { name: dc.name || dc.id }) + ': ' + (e2.response?.data?.detail || e2.message)) }
           } catch (e2) {
             failedDevices.push(dc.name || dc.id)
-            message.warning(`设备 ${dc.name || dc.id} 更新失败: ${e2.response?.data?.detail || e2.message}`)
+            message.warning(t('scenarioEditor.deviceUpdateFailed', { name: dc.name || dc.id }) + ': ' + (e2.response?.data?.detail || e2.message))
           }
         } else {
           failedDevices.push(dc.name || dc.id)
@@ -405,13 +398,13 @@ async function saveScenarioLayout() {
       devices: deviceConfigs, rules,
     })
     if (failedDevices.length > 0) {
-      message.warning(`场景布局已保存，但 ${failedDevices.length} 个设备创建/启动失败，请检查设备配置`)
+      message.warning(t('scenarioEditor.savePartialFailed', { count: failedDevices.length }))
     } else {
-      message.success('场景布局已保存，设备已创建并启动')
+      message.success(t('scenarioEditor.saveSuccess'))
     }
     hasUnsavedChanges.value = false
   } catch (e) {
-    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarioEditor.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     saving.value = false
   }
@@ -420,18 +413,18 @@ async function saveScenarioLayout() {
 async function startScenario() {
   if (!selectedScenario.value) return
   dialog.warning({
-    title: '确认启动场景',
-    content: '启动场景将启动其中所有设备，可能占用较多系统资源，确定继续？',
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('scenarioEditor.confirmStart'),
+    content: t('scenarioEditor.confirmStartDesc'),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       scenarioLoading.value = true
       try {
         await api.startScenario(selectedScenario.value)
-        message.success('场景已启动')
+        message.success(t('scenarioEditor.scenarioStarted'))
         await loadScenario(selectedScenario.value)
       } catch (e) {
-        message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('scenarioEditor.startFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally {
         scenarioLoading.value = false
       }
@@ -442,18 +435,18 @@ async function startScenario() {
 async function stopScenario() {
   if (!selectedScenario.value) return
   dialog.warning({
-    title: '确认停止场景',
-    content: '停止场景将断开所有设备连接，确定继续？',
-    positiveText: '确定停止',
-    negativeText: '取消',
+    title: t('scenarioEditor.confirmStop'),
+    content: t('scenarioEditor.confirmStopDesc'),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       scenarioLoading.value = true
       try {
         await api.stopScenario(selectedScenario.value)
-        message.success('场景已停止')
+        message.success(t('scenarioEditor.scenarioStopped'))
         await loadScenario(selectedScenario.value)
       } catch (e) {
-        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('scenarioEditor.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally {
         scenarioLoading.value = false
       }
@@ -471,8 +464,8 @@ async function loadData() {
     protocols.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
     const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
     if (failedIdx.length > 0) {
-      const names = ['场景', '模板', '协议']
-      message.warning(`部分数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+      const names = [t('scenarios.title'), t('templates.title'), t('protocols.title')]
+      message.warning(t('scenarioEditor.partialLoadFailed') + ': ' + failedIdx.map(i => names[i]).join('、'))
     }
     const scenarioId = route.params.id
     if (scenarioId) {
@@ -480,7 +473,7 @@ async function loadData() {
       await loadScenario(scenarioId)
     }
   } catch (e) {
-    message.error('加载数据失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarioEditor.loadDataFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -489,10 +482,10 @@ onMounted(loadData)
 onBeforeRouteLeave((_to, _from, next) => {
   if (hasUnsavedChanges.value) {
     dialog.warning({
-      title: '未保存的更改',
-      content: '场景有未保存的更改，确定离开吗？离开后修改将丢失。',
-      positiveText: '离开',
-      negativeText: '留下',
+      title: t('scenarioEditor.unsavedChanges'),
+      content: t('scenarioEditor.unsavedChangesDesc'),
+      positiveText: t('scenarioEditor.leave'),
+      negativeText: t('scenarioEditor.stay'),
       onPositiveClick: () => next(),
       onNegativeClick: () => next(false),
     })

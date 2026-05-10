@@ -2,28 +2,28 @@
   <n-space vertical>
     <n-space justify="space-between" align="center">
       <div>
-        <div class="pf-section-title">仿真场景</div>
-        <div class="pf-section-desc">组合多个设备并定义联动规则</div>
+        <div class="pf-section-title">{{ t('scenarios.title') }}</div>
+        <div class="pf-section-desc">{{ t('scenarios.subtitle') }}</div>
       </div>
       <n-space>
         <n-button v-if="selectedIds.length > 0" type="primary" @click="batchStart" :loading="batchLoading">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-          启动选中({{ selectedIds.length }})
+          {{ t('scenarios.startSelected', { count: selectedIds.length }) }}
         </n-button>
         <n-button v-if="selectedIds.length > 0" type="warning" @click="batchStop" :loading="batchLoading">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
-          停止选中({{ selectedIds.length }})
+          {{ t('scenarios.stopSelected', { count: selectedIds.length }) }}
         </n-button>
         <n-button @click="startAllScenes" :loading="batchLoading">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-          全部启动
+          {{ t('scenarios.startAll') }}
         </n-button>
         <n-button @click="stopAllScenes" :loading="batchLoading">
           <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
-          全部停止
+          {{ t('scenarios.stopAll') }}
         </n-button>
-        <n-button tertiary @click="showImportModal = true">导入场景</n-button>
-        <n-button type="primary" @click="showCreateModal = true">创建场景</n-button>
+        <n-button tertiary @click="showImportModal = true">{{ t('scenarios.importScene') }}</n-button>
+        <n-button type="primary" @click="showCreateModal = true">{{ t('scenarios.createScene') }}</n-button>
       </n-space>
     </n-space>
 
@@ -33,52 +33,52 @@
 
     <n-card v-else style="text-align:center;padding:40px">
       <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="1.5" style="margin-bottom:16px"><path d="M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9"/></svg>
-      <div class="pf-section-title" style="font-size:16px">还没有仿真场景</div>
+      <div class="pf-section-title" style="font-size:16px">{{ t('scenarios.noScenarios') }}</div>
       <div style="margin-top: 12px">
-        <n-text depth="3">场景可以组合多个设备并定义联动规则</n-text>
+        <n-text depth="3">{{ t('scenarios.noScenariosDesc') }}</n-text>
       </div>
       <div style="margin-top: 16px">
         <n-space justify="center">
-          <n-button type="primary" @click="showCreateModal = true">创建场景</n-button>
-          <n-button @click="goDashboard">返回仪表盘快速创建</n-button>
+          <n-button type="primary" @click="showCreateModal = true">{{ t('scenarios.createScene') }}</n-button>
+          <n-button @click="goDashboard">{{ t('scenarios.backToDashboard') }}</n-button>
         </n-space>
       </div>
     </n-card>
 
-    <n-modal v-model:show="showCreateModal" preset="card" title="创建场景" style="width: 500px">
+    <n-modal v-model:show="showCreateModal" preset="card" :title="t('scenarios.createScene')" style="width: 500px">
       <n-form :model="newScenario" label-placement="left" label-width="80">
-        <n-form-item label="场景ID">
-          <n-input v-model:value="newScenario.id" placeholder="如: factory-001" />
+        <n-form-item :label="t('scenarios.sceneId')">
+          <n-input v-model:value="newScenario.id" :placeholder="t('scenarios.sceneIdPlaceholder')" />
         </n-form-item>
-        <n-form-item label="场景名称">
-          <n-input v-model:value="newScenario.name" placeholder="如: 智慧工厂" />
+        <n-form-item :label="t('scenarios.sceneName')">
+          <n-input v-model:value="newScenario.name" :placeholder="t('scenarios.sceneNamePlaceholder')" />
         </n-form-item>
-        <n-form-item label="描述">
+        <n-form-item :label="t('common.description')">
           <n-input v-model:value="newScenario.description" type="textarea" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="cancelCreateScenario">取消</n-button>
-          <n-button type="primary" @click="createScenario" :loading="creating">创建</n-button>
+          <n-button @click="cancelCreateScenario">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="createScenario" :loading="creating">{{ t('common.create') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showImportModal" preset="card" title="导入场景" style="width: 500px">
+    <n-modal v-model:show="showImportModal" preset="card" :title="t('scenarios.importScene')" style="width: 500px">
       <n-space vertical>
-        <n-alert type="info" :bordered="false">粘贴场景配置 JSON 进行导入</n-alert>
-        <n-input v-model:value="importJson" type="textarea" :rows="8" placeholder="粘贴场景 JSON..." />
+        <n-alert type="info" :bordered="false">{{ t('scenarios.importHint') }}</n-alert>
+        <n-input v-model:value="importJson" type="textarea" :rows="8" :placeholder="t('scenarios.importPlaceholder')" />
       </n-space>
       <template #action>
         <n-space>
-          <n-button @click="cancelImportScenario">取消</n-button>
-          <n-button type="primary" @click="importScenario" :loading="importing">导入</n-button>
+          <n-button @click="cancelImportScenario">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="importScenario" :loading="importing">{{ t('common.import') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showSnapshotModal" preset="card" title="场景快照" style="width: 700px">
+    <n-modal v-model:show="showSnapshotModal" preset="card" :title="t('scenarios.snapshot')" style="width: 700px">
       <n-data-table :columns="snapshotColumns" :data="snapshotDevices" :bordered="false" size="small"
         :pagination="{ pageSize: 10 }" />
     </n-modal>
@@ -86,8 +86,8 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
-import { NSpace, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag, NAlert, useMessage, useDialog } from 'naive-ui'
+import { ref, computed, h, onMounted } from 'vue'
+import { NSpace, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag, NAlert, NCard, NText, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 
@@ -110,41 +110,41 @@ const importJson = ref('')
 const snapshotDevices = ref([])
 const newScenario = ref({ id: '', name: '', description: '', devices: [], rules: [] })
 
-const columns = [
+const columns = computed(() => [
   { type: 'selection' },
   { title: 'ID', key: 'id', width: 150 },
-  { title: '名称', key: 'name', width: 180 },
-  { title: '设备数', key: 'device_count', width: 80, render: (row) => row.device_count ?? (row.devices || []).length },
-  { title: '规则数', key: 'rule_count', width: 80, render: (row) => row.rule_count ?? (row.rules || []).length },
+  { title: t('common.name'), key: 'name', width: 180 },
+  { title: t('scenarios.deviceCount'), key: 'device_count', width: 80, render: (row) => row.device_count ?? (row.devices || []).length },
+  { title: t('scenarios.ruleCount'), key: 'rule_count', width: 80, render: (row) => row.rule_count ?? (row.rules || []).length },
   {
-    title: '状态', key: 'status', width: 100,
+    title: t('common.status'), key: 'status', width: 100,
     render: (row) => {
       const map = { running: 'success', stopped: 'default', error: 'error' }
-      const labels = { running: '运行中', stopped: '已停止', error: '错误' }
+      const labels = { running: t('common.running'), stopped: t('common.stopped'), error: t('common.error') }
       return h(NTag, { type: map[row.status] || 'default', size: 'small' }, () => labels[row.status] || row.status)
     }
   },
   {
-    title: '操作', key: 'actions', width: 380,
+    title: t('common.action'), key: 'actions', width: 380,
     render: (row) => h(NSpace, { size: 'small' }, () => [
       row.status !== 'running'
-        ? h(NButton, { size: 'small', type: 'primary', onClick: () => startScene(row.id) }, () => '启动')
-        : h(NButton, { size: 'small', type: 'warning', onClick: () => stopScene(row.id) }, () => '停止'),
-      h(NButton, { size: 'small', onClick: () => editScene(row.id) }, () => '编辑'),
-      h(NButton, { size: 'small', onClick: () => exportScene(row.id) }, () => '导出'),
-      h(NButton, { size: 'small', onClick: () => viewSnapshot(row.id) }, () => '快照'),
-      h(NButton, { size: 'small', type: 'error', onClick: () => confirmDelete(row) }, () => '删除'),
+        ? h(NButton, { size: 'small', type: 'primary', onClick: () => startScene(row.id) }, () => t('common.start'))
+        : h(NButton, { size: 'small', type: 'warning', onClick: () => stopScene(row.id) }, () => t('common.stop')),
+      h(NButton, { size: 'small', onClick: () => editScene(row.id) }, () => t('common.edit')),
+      h(NButton, { size: 'small', onClick: () => exportScene(row.id) }, () => t('common.export')),
+      h(NButton, { size: 'small', onClick: () => viewSnapshot(row.id) }, () => t('scenarios.snapshot')),
+      h(NButton, { size: 'small', type: 'error', onClick: () => confirmDelete(row) }, () => t('common.delete')),
     ])
   },
-]
+])
 
-const snapshotColumns = [
-  { title: '设备ID', key: 'id', width: 150 },
-  { title: '名称', key: 'name', width: 150 },
-  { title: '协议', key: 'protocol', width: 100 },
-  { title: '状态', key: 'status', width: 80 },
-  { title: '测点数', key: 'points', width: 80, render: (row) => row.points?.length || 0 },
-]
+const snapshotColumns = computed(() => [
+  { title: t('scenarios.deviceId'), key: 'id', width: 150 },
+  { title: t('common.name'), key: 'name', width: 150 },
+  { title: t('common.protocol'), key: 'protocol', width: 100 },
+  { title: t('common.status'), key: 'status', width: 80 },
+  { title: t('common.pointCount'), key: 'points', width: 80, render: (row) => row.points?.length || 0 },
+])
 
 function goDashboard() {
   router.push('/')
@@ -160,28 +160,28 @@ async function loadData() {
     const res = await api.getScenarios()
     scenarios.value = res || []
   } catch (e) {
-    message.error('加载场景失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarios.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { dataLoading.value = false }
 }
 
 async function batchStart() {
-  if (!selectedIds.value.length) { message.info('请先选择要启动的场景'); return }
+  if (!selectedIds.value.length) { message.info(t('scenarios.selectToStart')); return }
   dialog.info({
-    title: '确认批量启动',
-    content: `将启动选中的 ${selectedIds.value.length} 个场景。确定继续？`,
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('scenarios.confirmBatchStart'),
+    content: t('scenarios.confirmBatchStartDesc', { count: selectedIds.value.length }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       const results = await Promise.allSettled(selectedIds.value.map(id => api.startScenario(id)))
       let ok = 0, fail = 0
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
-        else { fail++; message.warning(`场景 ${selectedIds.value[i]} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        else { fail++; message.warning(t('scenarios.sceneStartFailed', { id: selectedIds.value[i] }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
       batchLoading.value = false
       selectedIds.value = []
-      const msg = `已启动 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+      const msg = t('scenarios.startedCount', { count: ok }) + (fail ? '，' + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
@@ -191,23 +191,23 @@ async function batchStart() {
 }
 
 async function batchStop() {
-  if (!selectedIds.value.length) { message.info('请先选择要停止的场景'); return }
+  if (!selectedIds.value.length) { message.info(t('scenarios.selectToStop')); return }
   dialog.warning({
-    title: '确认批量停止',
-    content: `将停止 ${selectedIds.value.length} 个场景，所有设备连接将断开。确定继续？`,
-    positiveText: '确定停止',
-    negativeText: '取消',
+    title: t('scenarios.confirmBatchStop'),
+    content: t('scenarios.confirmBatchStopDesc', { count: selectedIds.value.length }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       const results = await Promise.allSettled(selectedIds.value.map(id => api.stopScenario(id)))
       let ok = 0, fail = 0
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
-        else { fail++; message.warning(`场景 ${selectedIds.value[i]} 停止失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        else { fail++; message.warning(t('scenarios.sceneStopFailed', { id: selectedIds.value[i] }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
       batchLoading.value = false
       selectedIds.value = []
-      const msg = `已停止 ${ok} 个场景` + (fail ? `，${fail} 个失败` : '')
+      const msg = t('scenarios.stoppedCount', { count: ok }) + (fail ? '，' + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
@@ -218,12 +218,12 @@ async function batchStop() {
 
 async function startAllScenes() {
   const running = scenarios.value.filter(s => s.status !== 'running')
-  if (!running.length) { message.info('所有场景已在运行中'); return }
+  if (!running.length) { message.info(t('scenarios.allRunning')); return }
   dialog.warning({
-    title: '确认全部启动',
-    content: `将启动 ${running.length} 个场景，可能占用大量资源。确定继续？`,
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('scenarios.confirmStartAll'),
+    content: t('scenarios.confirmStartAllDesc', { count: running.length }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       let ok = 0, fail = 0
@@ -231,12 +231,12 @@ async function startAllScenes() {
       const results = await Promise.allSettled(running.map(sc => api.startScenario(sc.id)))
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
-        else { fail++; message.warning(`场景 ${running[i].name} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        else { fail++; message.warning(t('scenarios.sceneStartFailed', { id: running[i].name }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
       } finally {
         batchLoading.value = false
       }
-      if (fail > 0) { message.warning(`已启动 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个场景`) }
+      if (fail > 0) { message.warning(t('scenarios.startAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.startedCount', { count: ok })) }
       loadData()
     }
   })
@@ -244,12 +244,12 @@ async function startAllScenes() {
 
 async function stopAllScenes() {
   const running = scenarios.value.filter(s => s.status === 'running')
-  if (!running.length) { message.info('没有运行中的场景'); return }
+  if (!running.length) { message.info(t('scenarios.noRunning')); return }
   dialog.warning({
-    title: '确认全部停止',
-    content: `将停止 ${running.length} 个运行中的场景，所有设备连接将断开。确定继续？`,
-    positiveText: '确定停止',
-    negativeText: '取消',
+    title: t('scenarios.confirmStopAll'),
+    content: t('scenarios.confirmStopAllDesc', { count: running.length }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       let ok = 0, fail = 0
@@ -257,12 +257,12 @@ async function stopAllScenes() {
       const results = await Promise.allSettled(running.map(sc => api.stopScenario(sc.id)))
       results.forEach((r, i) => {
         if (r.status === 'fulfilled') ok++
-        else { fail++; message.warning(`场景 ${running[i].name} 停止失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+        else { fail++; message.warning(t('scenarios.sceneStopFailed', { id: running[i].name }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
       } finally {
         batchLoading.value = false
       }
-      if (fail > 0) { message.warning(`已停止 ${ok} 个场景，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个场景`) }
+      if (fail > 0) { message.warning(t('scenarios.stopAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.stoppedCount', { count: ok })) }
       loadData()
     }
   })
@@ -275,7 +275,7 @@ function cancelCreateScenario() {
 
 async function createScenario() {
   if (!newScenario.value.id || !newScenario.value.name) {
-    message.warning('请填写场景ID和名称')
+    message.warning(t('scenarios.idNameRequired'))
     return
   }
   creating.value = true
@@ -283,10 +283,10 @@ async function createScenario() {
     await api.createScenario(newScenario.value)
     showCreateModal.value = false
     newScenario.value = { id: '', name: '', description: '', devices: [], rules: [] }
-    message.success('场景创建成功')
+    message.success(t('scenarios.createSuccess'))
     await loadData()
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarios.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     creating.value = false
   }
@@ -299,7 +299,7 @@ function cancelImportScenario() {
 
 async function importScenario() {
   if (!importJson.value.trim()) {
-    message.warning('请输入场景配置JSON')
+    message.warning(t('scenarios.importJsonRequired'))
     return
   }
   importing.value = true
@@ -308,13 +308,13 @@ async function importScenario() {
     await api.importScenario(config)
     showImportModal.value = false
     importJson.value = ''
-    message.success('场景导入成功')
+    message.success(t('scenarios.importSuccess'))
     await loadData()
   } catch (e) {
     if (e instanceof SyntaxError) {
-      message.error('JSON 格式错误: ' + e.message)
+      message.error(t('scenarios.jsonFormatError') + ': ' + e.message)
     } else {
-      message.error('导入失败: ' + (e.response?.data?.detail || e.message))
+      message.error(t('scenarios.importFailed') + ': ' + (e.response?.data?.detail || e.message))
     }
   } finally {
     importing.value = false
@@ -323,17 +323,17 @@ async function importScenario() {
 
 async function startScene(id) {
   dialog.info({
-    title: '确认启动场景',
-    content: '确定启动该场景？将启动场景内所有设备。',
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('scenarios.confirmStart'),
+    content: t('scenarios.confirmStartDesc'),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.startScenario(id)
-        message.success('场景已启动')
+        message.success(t('scenarios.sceneStarted'))
         await loadData()
       } catch (e) {
-        message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('scenarios.startFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     },
   })
@@ -341,17 +341,17 @@ async function startScene(id) {
 
 async function stopScene(id) {
   dialog.warning({
-    title: '确认停止场景',
-    content: '停止场景将断开所有设备连接，确定继续？',
-    positiveText: '停止',
-    negativeText: '取消',
+    title: t('scenarios.confirmStopScene'),
+    content: t('scenarios.confirmStopSceneDesc'),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.stopScenario(id)
-        message.success('场景已停止')
+        message.success(t('scenarios.sceneStopped'))
         await loadData()
       } catch (e) {
-        message.error('停止失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('scenarios.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     },
   })
@@ -367,9 +367,9 @@ async function exportScene(id) {
     a.download = `scenario_${id}.json`
     a.click()
     URL.revokeObjectURL(url)
-    message.success('场景已导出')
+    message.success(t('scenarios.exportSuccess'))
   } catch (e) {
-    message.error('导出失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarios.exportFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -379,16 +379,16 @@ async function viewSnapshot(id) {
     snapshotDevices.value = res.devices || []
     showSnapshotModal.value = true
   } catch (e) {
-    message.error('获取快照失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('scenarios.snapshotFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 function confirmDelete(row) {
   dialog.warning({
-    title: '确认删除',
-    content: `确定要删除场景 "${row.name}" (${row.id}) 吗？此操作不可撤销。`,
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('common.delete'),
+    content: t('scenarios.confirmDelete', { name: row.name, id: row.id }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: () => deleteScenario(row.id),
   })
 }
@@ -396,10 +396,10 @@ function confirmDelete(row) {
 async function deleteScenario(id) {
   try {
     await api.deleteScenario(id)
-    message.success('场景已删除')
+    message.success(t('scenarios.sceneDeleted'))
     await loadData()
   } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
