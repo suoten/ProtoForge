@@ -171,6 +171,7 @@ const menuOptions = computed(() => [
   { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
   { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
   { label: t('nav.scenarioEditor'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
+  { label: t('nav.templates'), key: '/templates', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6') },
   { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
   { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
   { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
@@ -314,7 +315,7 @@ function onSearchInput(query) {
   }
   for (const tmpl of searchData.value.templates) {
     if ((tmpl.name || '').toLowerCase().includes(q))
-      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/marketplace` })
+      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/templates` })
   }
   for (const s of searchData.value.scenarios) {
     if ((s.name || '').toLowerCase().includes(q))
