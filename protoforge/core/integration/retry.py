@@ -63,9 +63,13 @@ class RetryPolicy:
 
     def should_retry(self, error: Exception) -> bool:
         self._last_error = error
-        if isinstance(error, IntegrationError) and not error.retryable:
-            return False
-        return not self._attempt >= self.max_retries
+        if isinstance(error, IntegrationError):
+            if not error.retryable:
+                return False
+            return self._attempt < self.max_retries
+        if isinstance(error, (ConnectionError, OSError, asyncio.TimeoutError)):
+            return self._attempt < self.max_retries
+        return False
 
     async def wait(self) -> None:
         delay = self.get_delay()

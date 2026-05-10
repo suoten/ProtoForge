@@ -67,9 +67,35 @@ class MappingValidator:
 
         if not driver_config:
             report.warnings.append("Driver config is empty")
+        else:
+            report.driver_config_result = self._validate_driver_config(driver_config, protocol)
 
         if report.warnings:
             logger.info("Compatibility report for %s: compatible=%s, warnings=%d",
                        device_id, report.compatible, len(report.warnings))
 
         return report
+
+    def _validate_driver_config(self, config: dict[str, Any], protocol: str) -> dict[str, Any]:
+        result: dict[str, Any] = {"valid": True, "fields_checked": 0, "issues": []}
+        required_fields_map = {
+            "modbus_tcp": ["host", "port", "unit_id"],
+            "modbus_rtu": ["port", "baud_rate", "unit_id"],
+            "opcua": ["endpoint"],
+            "mqtt": ["broker", "port"],
+            "bacnet": ["device_id"],
+            "s7": ["host", "rack", "slot"],
+            "mc": ["host", "port"],
+        }
+        required = required_fields_map.get(protocol, [])
+        for field_name in required:
+            result["fields_checked"] += 1
+            if field_name not in config or config[field_name] is None:
+                result["valid"] = False
+                result["issues"].append(f"Missing required field: {field_name}")
+        if "port" in config:
+            port = config["port"]
+            if not isinstance(port, int) or port < 1 or port > 65535:
+                result["valid"] = False
+                result["issues"].append(f"Invalid port: {port} (must be 1-65535)")
+        return result

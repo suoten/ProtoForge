@@ -574,7 +574,11 @@ async function saveBuilderCase() {
     await loadCases()
     message.success('用例已保存')
   } catch (e) {
-    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    if (e instanceof SyntaxError) {
+      message.error('JSON 格式错误: ' + e.message)
+    } else {
+      message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    }
   }
 }
 

@@ -119,7 +119,7 @@ import {
 } from 'naive-ui'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import api from '../api.js'
-import { protocolColors } from '../constants.js'
+import { protocolColors, dataTypeOptions, generatorTypeOptions } from '../constants.js'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -207,24 +207,7 @@ const pointEditColumns = [
   { title: '操作', key: 'actions', width: 60, render: (row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editingPoints.value.splice(idx, 1) }, () => '删') },
 ]
 
-const dataTypeOptions = [
-  { label: 'float32', value: 'float32' },
-  { label: 'float64', value: 'float64' },
-  { label: 'int16', value: 'int16' },
-  { label: 'int32', value: 'int32' },
-  { label: 'uint16', value: 'uint16' },
-  { label: 'bool', value: 'bool' },
-  { label: 'string', value: 'string' },
-]
-
-const generatorOptions = [
-  { label: '随机', value: 'random' },
-  { label: '正弦波', value: 'sine' },
-  { label: '锯齿波', value: 'sawtooth' },
-  { label: '方波', value: 'square' },
-  { label: '递增', value: 'increment' },
-  { label: '常量', value: 'constant' },
-]
+const generatorOptions = generatorTypeOptions
 
 function onConnect(params) {
   pendingConnection.value = params

@@ -148,7 +148,7 @@ const route = useRoute()
 const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
 const message = discreteMessage
 
-setNotifyFunction(discreteMessage)
+setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }))
 const { t, locale, setLocale } = useI18n()
 const loggedIn = ref(false)
 const collapsed = ref(false)
