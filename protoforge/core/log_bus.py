@@ -39,7 +39,7 @@ class LogBus:
             detail=detail or {},
         )
         self._entries.append(entry)
-        for queue in self._subscribers:
+        for queue in list(self._subscribers):
             try:
                 queue.put_nowait(entry)
             except asyncio.QueueFull:

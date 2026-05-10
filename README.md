@@ -1431,6 +1431,27 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.2 — 2026-05-10
+
+**后端关键修复：**
+
+- 修复 `ConnectionStateMachine` 状态转换逻辑 Bug：`CONNECTING -> CONNECTED` 不是合法转换，导致 `IntegrationManager` 永远无法进入 CONNECTED 状态。已将 `CONNECTED` 加入 `CONNECTING` 的合法目标状态
+- 修复 `HttpChannel.send()` 中 401 重试可能无限循环的问题：提取 `_safe_refresh_token()` 方法，刷新失败时不再重试，避免死循环
+- 修复 `HttpChannel.send()` 中 `device_control` 分支 401 重试时 action 变量可能错误的问题：统一使用 `action` 变量而非硬编码
+- 修复 `EventBus.publish()` 遍历订阅者列表时可能因并发修改导致 `RuntimeError` 的问题：改用 `list()` 快照遍历
+- 修复 `LogBus.emit()` 同样的并发遍历问题
+- 修复 `ForwardEngine.stop()` 清空所有转发目标的问题：停止转发不再删除已配置的目标，重启后可继续使用
+- 消除 `IntegrationManager` 中 `protoforge_host` 的硬编码默认值 `"127.0.0.1"`：改为从 `get_settings().protoforge_public_host` 配置读取
+
+**前端关键修复：**
+
+- 修复 `ScenarioEditor.vue` 保存场景时即使部分设备创建/启动失败仍显示"已创建并启动"的误导性反馈：新增 `failedDevices` 追踪，区分全部成功/部分失败
+- 修复 `Protocols.vue` 协议启动/停止按钮缺少 loading 状态的问题：绑定 `:loading` 到 `startingProtocol`/`stoppingProtocol`
+- 修复 `api.js` 响应拦截器中 403/429/500+/网络错误只打印 console 不通知用户的问题：新增 `_notifyUser()` 机制，通过 `setNotifyFunction()` 注册全局消息通知
+- 在 `App.vue` 中注册 `discreteMessage` 为全局通知函数，确保所有 HTTP 错误都有用户可见反馈
+
+***
+
 #### v0.1.1 — 2026-05-10
 
 **后端修复：**

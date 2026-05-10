@@ -16,7 +16,7 @@ class ConnectionState(str, Enum):
 
 _VALID_TRANSITIONS: dict[ConnectionState, set[ConnectionState]] = {
     ConnectionState.DISCONNECTED: {ConnectionState.CONNECTING},
-    ConnectionState.CONNECTING: {ConnectionState.HANDSHAKING, ConnectionState.DISCONNECTED},
+    ConnectionState.CONNECTING: {ConnectionState.HANDSHAKING, ConnectionState.CONNECTED, ConnectionState.DISCONNECTED},
     ConnectionState.HANDSHAKING: {ConnectionState.CONNECTED, ConnectionState.DISCONNECTED},
     ConnectionState.CONNECTED: {ConnectionState.DISCONNECTED, ConnectionState.RECONNECTING},
     ConnectionState.RECONNECTING: {ConnectionState.CONNECTING, ConnectionState.DISCONNECTED},

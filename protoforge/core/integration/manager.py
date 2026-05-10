@@ -241,9 +241,13 @@ class IntegrationManager:
             logger.debug("Connection check failed: %s", e)
             return False
 
-    async def push_device(self, device: Any, protoforge_host: str = "127.0.0.1") -> dict[str, Any]:
+    async def push_device(self, device: Any, protoforge_host: str | None = None) -> dict[str, Any]:
         if not self._enabled:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
+
+        if protoforge_host is None:
+            from protoforge.config import get_settings
+            protoforge_host = get_settings().protoforge_public_host or "127.0.0.1"
 
         from protoforge.core.edgelite import convert_device_to_edgelite, get_edgelite_config_from_device
         el_config = get_edgelite_config_from_device(device)
@@ -300,9 +304,12 @@ class IntegrationManager:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    async def batch_push(self, devices: list[Any], protoforge_host: str = "127.0.0.1", concurrency: int = 10) -> dict[str, Any]:
+    async def batch_push(self, devices: list[Any], protoforge_host: str | None = None, concurrency: int = 10) -> dict[str, Any]:
         if not self._enabled:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
+        if protoforge_host is None:
+            from protoforge.config import get_settings
+            protoforge_host = get_settings().protoforge_public_host or "127.0.0.1"
 
         semaphore = asyncio.Semaphore(concurrency)
         results = {"total": len(devices), "success": 0, "failure": 0, "details": []}

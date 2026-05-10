@@ -380,6 +380,7 @@ async function saveScenarioLayout() {
       enabled: true,
     })).filter(r => r.source_device_id && r.target_device_id)
 
+    const failedDevices = []
     for (const dc of deviceConfigs) {
       if (!dc.id) continue
       try {
@@ -387,22 +388,23 @@ async function saveScenarioLayout() {
           id: dc.id, name: dc.name, protocol: dc.protocol,
           points: dc.points, protocol_config: dc.protocol_config,
         })
-        try { await api.startDevice(dc.id) } catch (e) { message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
+        try { await api.startDevice(dc.id) } catch (e) { failedDevices.push(dc.name || dc.id); message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e.response?.data?.detail || e.message}`) }
       } catch (e) {
         const status = e.response?.status
         const detail = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')
         if (status === 400 && (detail.includes('already exists') || detail.includes('已存在'))) {
-          // Device already exists, try to update it
           try {
             await api.updateDevice(dc.id, {
               id: dc.id, name: dc.name, protocol: dc.protocol,
               points: dc.points, protocol_config: dc.protocol_config,
             })
-            try { await api.startDevice(dc.id) } catch (e2) { message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e2.response?.data?.detail || e2.message}`) }
+            try { await api.startDevice(dc.id) } catch (e2) { failedDevices.push(dc.name || dc.id); message.warning(`设备 ${dc.name || dc.id} 启动失败: ${e2.response?.data?.detail || e2.message}`) }
           } catch (e2) {
+            failedDevices.push(dc.name || dc.id)
             message.warning(`设备 ${dc.name || dc.id} 更新失败: ${e2.response?.data?.detail || e2.message}`)
           }
         } else {
+          failedDevices.push(dc.name || dc.id)
           throw e
         }
       }
@@ -415,7 +417,11 @@ async function saveScenarioLayout() {
       description: currentScenario?.description || '',
       devices: deviceConfigs, rules,
     })
-    message.success('场景布局已保存，设备已创建并启动')
+    if (failedDevices.length > 0) {
+      message.warning(`场景布局已保存，但 ${failedDevices.length} 个设备创建/启动失败，请检查设备配置`)
+    } else {
+      message.success('场景布局已保存，设备已创建并启动')
+    }
     hasUnsavedChanges.value = false
   } catch (e) {
     message.error('保存失败: ' + (e.response?.data?.detail || e.message))

@@ -269,7 +269,6 @@ class ForwardEngine:
                 await target.close()
             except Exception as e:
                 logger.warning("Error closing target: %s", e)
-        self._targets.clear()
         logger.info("Forward engine stopped")
 
     async def _forward_loop(self) -> None:
