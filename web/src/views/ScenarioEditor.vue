@@ -268,6 +268,8 @@ function addDeviceNode() {
 }
 
 async function confirmAddNode() {
+  if (!newNode.value.deviceId?.trim()) { message.warning('请输入设备 ID'); return }
+  if (!newNode.value.deviceName?.trim()) { message.warning('请输入设备名称'); return }
   const id = `node-${Date.now()}`
   const x = 100 + Math.random() * 400
   const y = 100 + Math.random() * 300
@@ -417,16 +419,24 @@ async function saveScenarioLayout() {
 
 async function startScenario() {
   if (!selectedScenario.value) return
-  scenarioLoading.value = true
-  try {
-    await api.startScenario(selectedScenario.value)
-    message.success('场景已启动')
-    await loadScenario(selectedScenario.value)
-  } catch (e) {
-    message.error('启动失败: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    scenarioLoading.value = false
-  }
+  dialog.warning({
+    title: '确认启动场景',
+    content: '启动场景将启动其中所有设备，可能占用较多系统资源，确定继续？',
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      scenarioLoading.value = true
+      try {
+        await api.startScenario(selectedScenario.value)
+        message.success('场景已启动')
+        await loadScenario(selectedScenario.value)
+      } catch (e) {
+        message.error('启动失败: ' + (e.response?.data?.detail || e.message))
+      } finally {
+        scenarioLoading.value = false
+      }
+    }
+  })
 }
 
 async function stopScenario() {

@@ -2,67 +2,67 @@
   <n-space vertical>
     <n-space justify="space-between" align="center">
       <div>
-        <div class="pf-section-title">模板市场</div>
-        <div class="pf-section-desc">{{ templates.length }} 个设备模板，选择后一键创建仿真设备</div>
+        <div class="pf-section-title">{{ t('marketplace.title') }}</div>
+        <div class="pf-section-desc">{{ t('marketplace.subtitle', { n: templates.length }) }}</div>
       </div>
     </n-space>
 
     <n-space>
-      <n-input v-model:value="searchQuery" placeholder="搜索模板名称、厂商、标签..." style="width: 280px" clearable />
+      <n-input v-model:value="searchQuery" :placeholder="t('marketplace.searchPlaceholder')" style="width: 280px" clearable />
       <n-radio-group v-model:value="filterCategory" size="small">
-        <n-radio-button value="all">全部</n-radio-button>
-        <n-radio-button value="plc">PLC</n-radio-button>
-        <n-radio-button value="sensor">传感器</n-radio-button>
-        <n-radio-button value="cnc">数控机床</n-radio-button>
-        <n-radio-button value="iot">IoT设备</n-radio-button>
-        <n-radio-button value="camera">摄像头</n-radio-button>
-        <n-radio-button value="hvac">楼宇</n-radio-button>
+        <n-radio-button value="all">{{ t('marketplace.categoryAll') }}</n-radio-button>
+        <n-radio-button value="plc">{{ t('marketplace.categoryPLC') }}</n-radio-button>
+        <n-radio-button value="sensor">{{ t('marketplace.categorySensor') }}</n-radio-button>
+        <n-radio-button value="cnc">{{ t('marketplace.categoryCNC') }}</n-radio-button>
+        <n-radio-button value="iot">{{ t('marketplace.categoryIoT') }}</n-radio-button>
+        <n-radio-button value="camera">{{ t('marketplace.categoryCamera') }}</n-radio-button>
+        <n-radio-button value="hvac">{{ t('marketplace.categoryBuilding') }}</n-radio-button>
       </n-radio-group>
-      <n-select v-model:value="filterProtocol" :options="protocolOptions" placeholder="按协议" clearable style="width: 130px" />
+      <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('common.protocol')" clearable style="width: 130px" />
     </n-space>
 
     <n-grid :cols="3" :x-gap="16" :y-gap="16">
-      <n-gi v-for="t in filteredTemplates" :key="t.id">
+      <n-gi v-for="tmpl in filteredTemplates" :key="tmpl.id">
         <n-card size="small" hoverable style="height: 100%">
           <template #header>
             <n-space align="center" justify="space-between" style="width: 100%">
-              <span style="font-weight: bold">{{ t.name }}</span>
-              <n-tag :type="protocolTagTypes[t.protocol] || 'default'" size="small">{{ protocolLabels[t.protocol] || t.protocol }}</n-tag>
+              <span style="font-weight: bold">{{ tmpl.name }}</span>
+              <n-tag :type="protocolTagTypes[tmpl.protocol] || 'default'" size="small">{{ protocolLabels[tmpl.protocol] || tmpl.protocol }}</n-tag>
             </n-space>
           </template>
-          <n-text depth="3" style="font-size: 13px">{{ t.description || '工业设备仿真模板' }}</n-text>
+          <n-text depth="3" style="font-size: 13px">{{ tmpl.description || tmpl.name }}</n-text>
           <div style="margin-top: 8px; font-size: 12px; color: #999">
-            {{ t.manufacturer || '' }} {{ t.model ? '| ' + t.model : '' }} | {{ t.point_count || (t.points?.length || 0) }} 测点
+            {{ tmpl.manufacturer || '' }} {{ tmpl.model ? '| ' + tmpl.model : '' }} | {{ tmpl.point_count || (tmpl.points?.length || 0) }} {{ t('common.points') }}
           </div>
           <div style="margin-top: 6px">
-            <n-tag v-for="tag in (t.tags || []).slice(0, 3)" :key="tag" size="tiny" style="margin-right: 4px">{{ tag }}</n-tag>
+            <n-tag v-for="tag in (tmpl.tags || []).slice(0, 3)" :key="tag" size="tiny" style="margin-right: 4px">{{ tag }}</n-tag>
           </div>
           <template #action>
-            <n-button type="primary" size="small" block @click="quickUse(t)">
-              一键创建设备
+            <n-button type="primary" size="small" block @click="quickUse(tmpl)">
+              {{ t('marketplace.createDevice') }}
             </n-button>
           </template>
         </n-card>
       </n-gi>
     </n-grid>
 
-    <n-empty v-if="filteredTemplates.length === 0" description="没有找到匹配的模板，试试其他关键词" />
+    <n-empty v-if="filteredTemplates.length === 0" :description="t('marketplace.noMatch')" />
 
-    <n-modal v-model:show="showUseModal" preset="card" title="一键创建设备" style="width: 420px">
+    <n-modal v-model:show="showUseModal" preset="card" :title="t('marketplace.createDevice')" style="width: 420px">
       <n-space vertical>
-        <n-text>只需输入设备名称，其他自动配置：</n-text>
+        <n-text>{{ t('marketplace.quickCreateDesc') }}</n-text>
         <n-descriptions :column="1" label-placement="left" bordered size="small">
-          <n-descriptions-item label="模板">{{ selectedTemplate?.name }}</n-descriptions-item>
-          <n-descriptions-item label="协议">{{ protocolLabels[selectedTemplate?.protocol] || selectedTemplate?.protocol }}</n-descriptions-item>
-          <n-descriptions-item label="测点数">{{ selectedTemplate?.point_count || (selectedTemplate?.points?.length || 0) }}</n-descriptions-item>
+          <n-descriptions-item :label="t('templates.title')">{{ selectedTemplate?.name }}</n-descriptions-item>
+          <n-descriptions-item :label="t('common.protocol')">{{ protocolLabels[selectedTemplate?.protocol] || selectedTemplate?.protocol }}</n-descriptions-item>
+          <n-descriptions-item :label="t('common.pointCount')">{{ selectedTemplate?.point_count || (selectedTemplate?.points?.length || 0) }}</n-descriptions-item>
         </n-descriptions>
-        <n-input v-model:value="useName" placeholder="给设备起个名字，如：车间温湿度传感器" size="large" />
+        <n-input v-model:value="useName" :placeholder="t('marketplace.deviceNamePlaceholder')" size="large" />
       </n-space>
       <template #action>
         <n-space>
-          <n-button @click="showUseModal = false">取消</n-button>
+          <n-button @click="showUseModal = false">{{ t('common.cancel') }}</n-button>
           <n-button type="primary" @click="doCreate" :loading="creating" :disabled="!useName">
-            创建并启动
+            {{ t('marketplace.createAndStart') }}
           </n-button>
         </n-space>
       </template>
@@ -100,7 +100,7 @@ const categoryMap = {
 }
 
 const protocolOptions = computed(() => [
-  { label: '全部协议', value: null },
+  { label: t('marketplace.categoryAll') + t('common.protocol'), value: null },
   ...protocols.value.map(p => ({ label: p.display_name, value: p.name })),
 ])
 
@@ -108,22 +108,22 @@ const filteredTemplates = computed(() => {
   let result = templates.value
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    result = result.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      (t.description || '').toLowerCase().includes(q) ||
-      (t.manufacturer || '').toLowerCase().includes(q) ||
-      (t.tags || []).some(tag => tag.toLowerCase().includes(q))
+    result = result.filter(item =>
+      item.name.toLowerCase().includes(q) ||
+      (item.description || '').toLowerCase().includes(q) ||
+      (item.manufacturer || '').toLowerCase().includes(q) ||
+      (item.tags || []).some(tag => tag.toLowerCase().includes(q))
     )
   }
   if (filterCategory.value !== 'all') {
     const keywords = categoryMap[filterCategory.value] || []
-    result = result.filter(t => {
-      const text = `${t.id} ${t.name} ${(t.tags || []).join(' ')} ${(t.description || '')} ${(t.manufacturer || '')}`.toLowerCase()
+    result = result.filter(item => {
+      const text = `${item.id} ${item.name} ${(item.tags || []).join(' ')} ${(item.description || '')} ${(item.manufacturer || '')}`.toLowerCase()
       return keywords.some(k => text.includes(k))
     })
   }
   if (filterProtocol.value) {
-    result = result.filter(t => t.protocol === filterProtocol.value)
+    result = result.filter(item => item.protocol === filterProtocol.value)
   }
   return result
 })
@@ -139,10 +139,10 @@ async function doCreate() {
   creating.value = true
   try {
     await api.quickCreateDevice(selectedTemplate.value.id, useName.value)
-    message.success(`设备 "${useName.value}" 创建成功并已启动！`)
+    message.success(t('welcome.createSuccess', { name: useName.value }))
     showUseModal.value = false
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     creating.value = false
   }
@@ -153,10 +153,10 @@ async function loadData() {
     const results = await Promise.allSettled([api.getTemplates(), api.getProtocols()])
     templates.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
     protocols.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
-    if (results[0].status === 'rejected') message.warning('加载模板失败')
-    if (results[1].status === 'rejected') message.warning('加载协议列表失败')
+    if (results[0].status === 'rejected') message.warning(t('common.loadFailed'))
+    if (results[1].status === 'rejected') message.warning(t('common.loadFailed'))
   } catch (e) {
-    message.error('加载模板失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 

@@ -72,7 +72,7 @@
       </n-space>
       <template #action>
         <n-space>
-          <n-button @click="showImportModal = false">取消</n-button>
+          <n-button @click="cancelImportScenario">取消</n-button>
           <n-button type="primary" @click="importScenario" :loading="importing">导入</n-button>
         </n-space>
       </template>

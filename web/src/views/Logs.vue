@@ -221,6 +221,7 @@ async function connectWebSocket() {
   }
   try {
     ws = api.createLogWs()
+    if (!ws) { message.warning('未登录，无法建立实时连接'); return }
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
     message.warning('日志实时连接失败，5秒后重试')

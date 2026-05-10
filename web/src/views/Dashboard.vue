@@ -272,6 +272,7 @@ function connectDeviceWs() {
   if (manualClose) return
   try {
     deviceWs = api.createDeviceWs()
+    if (!deviceWs) return
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
     devWsReconnectAttempts++
@@ -306,6 +307,7 @@ function connectLogWs() {
   if (manualClose) return
   try {
     logWs = api.createLogWs()
+    if (!logWs) return
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
     logWsReconnectAttempts++

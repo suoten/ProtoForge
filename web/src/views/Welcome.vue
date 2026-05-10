@@ -14,36 +14,36 @@
             <circle r="14" fill="#fbbf24"/>
           </g>
         </svg>
-        <h2 style="color:white;font-size:22px;font-weight:700;margin:0">欢迎使用 ProtoForge</h2>
-        <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0">3 步快速上手物联网协议仿真</p>
+        <h2 style="color:white;font-size:22px;font-weight:700;margin:0">{{ t('welcome.title') }}</h2>
+        <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0">{{ t('welcome.subtitle') }}</p>
       </div>
       <div class="welcome-body">
         <n-steps :current="currentStep" vertical>
-          <n-step title="选择设备模板">
+          <n-step :title="t('welcome.step1Title')">
             <div style="margin-top:8px">
-              <n-text depth="3" style="font-size:13px">从 35+ 工业设备模板中选择，一键创建仿真设备</n-text>
+              <n-text depth="3" style="font-size:13px">{{ t('welcome.step1Desc') }}</n-text>
               <n-select v-model:value="selectedTemplate" :options="quickTemplateOptions"
-                placeholder="选择一个模板..." filterable style="width:100%;margin-top:8px" />
+                :placeholder="t('welcome.selectTemplate')" filterable style="width:100%;margin-top:8px" />
             </div>
           </n-step>
-          <n-step title="给设备起个名字">
+          <n-step :title="t('welcome.step2Title')">
             <div style="margin-top:8px">
-              <n-input v-model:value="deviceName" placeholder="如：车间温湿度传感器" style="width:100%" />
+              <n-input v-model:value="deviceName" :placeholder="t('welcome.deviceNamePlaceholder')" style="width:100%" />
             </div>
           </n-step>
-          <n-step title="一键创建并启动">
+          <n-step :title="t('welcome.step3Title')">
             <div style="margin-top:8px">
               <n-button type="primary" size="large" @click="quickCreate" :loading="creating"
                 :disabled="!selectedTemplate || !deviceName" block>
                 <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-                一键创建设备
+                {{ t('welcome.quickCreate') }}
               </n-button>
             </div>
           </n-step>
         </n-steps>
         <n-divider />
         <n-space justify="center">
-          <n-button text @click="skipWelcome" style="color:#94a3b8">跳过引导，直接使用 →</n-button>
+          <n-button text @click="skipWelcome" style="color:#94a3b8">{{ t('welcome.skip') }}</n-button>
         </n-space>
       </div>
     </div>
@@ -83,13 +83,13 @@ async function quickCreate() {
   try {
     let deviceId = deviceName.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
     if (!deviceId) deviceId = 'dev-' + Date.now().toString(36)
-    message.info(`设备ID: ${deviceId}`)
+    message.info(`${t('common.deviceId')}: ${deviceId}`)
     await api.quickCreateDevice(selectedTemplate.value, deviceName.value, deviceId)
-    message.success(`设备 "${deviceName.value}" 创建成功并已启动！`)
+    message.success(t('welcome.createSuccess', { name: deviceName.value }))
     showWelcome.value = false
     localStorage.setItem('protoforge_onboarded', '1')
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     creating.value = false
   }
@@ -107,7 +107,7 @@ onMounted(async () => {
     templates.value = res
     showWelcome.value = true
   } catch (e) {
-    message.error('加载模板列表失败，请刷新重试')
+    message.error(t('welcome.loadTemplatesFailed'))
   }
 })
 </script>

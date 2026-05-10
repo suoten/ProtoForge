@@ -341,6 +341,7 @@ function connectWebSocket() {
   if (!loggedIn.value) return
   try {
     ws = api.createLogWs()
+    if (!ws) return
   } catch (e) {
     console.error('Failed to create log WebSocket:', e.message)
     wsReconnectAttempts++

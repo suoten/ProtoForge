@@ -262,21 +262,19 @@ export default {
 
   createDeviceWs: () => {
     const token = localStorage.getItem('token')
+    if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = token
-      ? `${wsProto}://${host}/api/v1/ws/devices?token=${encodeURIComponent(token)}`
-      : `${wsProto}://${host}/api/v1/ws/devices`
+    const url = `${wsProto}://${host}/api/v1/ws/devices?token=${encodeURIComponent(token)}`
     return new WebSocket(url)
   },
 
   createLogWs: () => {
     const token = localStorage.getItem('token')
+    if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
     const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const host = window.location.host
-    const url = token
-      ? `${wsProto}://${host}/api/v1/ws/logs?token=${encodeURIComponent(token)}`
-      : `${wsProto}://${host}/api/v1/ws/logs`
+    const url = `${wsProto}://${host}/api/v1/ws/logs?token=${encodeURIComponent(token)}`
     return new WebSocket(url)
   },
 

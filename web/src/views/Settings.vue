@@ -434,6 +434,7 @@ async function changeRole(row, newRole) {
         await loadUsers()
       } catch (e) {
         message.error('更新角色失败: ' + (e.response?.data?.detail || e.message))
+        await loadUsers()
       }
     },
     onNegativeClick: () => { loadUsers() },

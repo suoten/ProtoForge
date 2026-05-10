@@ -1431,6 +1431,39 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.5 — 2026-05-10
+
+**后端关键 Bug 修复：**
+
+- 修复 `webhook.py` 统计逻辑 Bug：`success_count` 错误地用 `total_triggers - total_errors` 计算（`trigger_count` 仅在成功时递增），导致成功数被低估。改为正确统计 `total_success` 和 `total_errors`
+- 修复 `edgelite.py` 的 `_extract_token()` 和 `verify_edgelite_pipeline()` 中 `.json()` 调用无 try/except 保护，EdgeLite 返回非 JSON 时直接崩溃
+- 修复 `channel.py` 的 `HttpChannel.send()` 中 6 处 `.json()` 调用无保护，新增 `_safe_json()` 方法统一处理
+- 修复 `edgelite.py` MQTT `tls_insecure` 默认值为 `True` 的安全隐患，改为 `False`
+- 修复 `edgelite.py` MQTT `client_id` 硬编码为 `"edgelite-mqtt-client"`，多实例部署时互踢，改为动态生成
+- 修复 `state.py` 的 `ConnectionStateMachine.reset()` 无回调通知，状态变化无法被监听
+- 修复 `main.py` 的 `cors_origins` 为 None 时 `.split(",")` 崩溃，增加 None 保护
+
+**后端可扩展性修复：**
+
+- 修复 `edgelite.py` 的 `_build_driver_config()` 中 17 种协议的 `"timeout": 5.0` 全部硬编码，改为从 `protocol_config.get("timeout", 5.0)` 读取
+
+**前端用户体验修复：**
+
+- 修复 `Devices.vue` 停止单个设备无确认对话框，会断开所有客户端连接，现增加确认对话框
+- 修复 `Recorder.vue` 停止录制无确认对话框，不可逆操作，现增加确认对话框
+- 修复 `ScenarioEditor.vue` 启动场景无确认对话框，可能占用大量资源，现增加确认对话框
+- 修复 `Devices.vue` 高级创建设备未校验 ID 和名称，现增加非空校验
+- 修复 `ScenarioEditor.vue` 添加设备节点未校验必填字段，现增加校验
+- 修复 `Testing.vue` 创建测试套件未校验名称，现增加非空校验
+- 修复 `Forward.vue` 添加转发目标未校验类型特定必填字段（InfluxDB/HTTP/File），现增加校验
+- 修复 `Webhook.vue` 添加 Webhook 未校验事件列表，现增加校验
+- 修复 `Settings.vue` 角色更改失败后 UI 状态不一致，现增加失败后刷新
+- 修复 `Scenarios.vue` 取消导入按钮未调用 `cancelImportScenario()`，旧 JSON 残留
+- 修复 `api.js` WebSocket 创建函数在无 token 时仍创建连接（10秒后必被服务端关闭），改为返回 null
+- 修复所有 WebSocket 调用点（Dashboard/Logs/Protocols/App）未处理 null 返回值
+
+***
+
 #### v0.1.4 — 2026-05-10
 
 **后端健壮性修复：**

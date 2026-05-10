@@ -183,40 +183,40 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1)}
     elif protocol == "mc":
-        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": 5.0}
+        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": timeout}
     elif protocol == "fins":
-        base = {"ip": host, "port": port or 9600, "timeout": 5.0}
+        base = {"ip": host, "port": port or 9600, "timeout": timeout}
     elif protocol == "ab":
         base = {"ip": host, "slot": protocol_config.get("slot", 0),
-                "micrologix": protocol_config.get("micrologix", False), "timeout": 5.0}
+                "micrologix": protocol_config.get("micrologix", False), "timeout": timeout}
     elif protocol == "fanuc":
-        base = {"ip": host, "port": port or 8193, "timeout": 5.0}
+        base = {"ip": host, "port": port or 8193, "timeout": timeout}
     elif protocol == "mtconnect":
-        base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": 5.0}
+        base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": timeout}
     elif protocol == "toledo":
-        base = {"ip": host, "port": port or 1701, "timeout": 5.0}
+        base = {"ip": host, "port": port or 1701, "timeout": timeout}
     elif protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
-                "host": protocol_config.get("host", host), "timeout": 5.0}
+                "host": protocol_config.get("host", host), "timeout": timeout}
     elif protocol == "onvif":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "admin"),
-                "password": protocol_config.get("password", ""), "timeout": 5.0}
+                "password": protocol_config.get("password", ""), "timeout": timeout}
     elif protocol == "dlt645":
         base = {"port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
                 "baud_rate": protocol_config.get("baud_rate", 2400),
-                "parity": protocol_config.get("parity", "E"), "timeout": 5.0}
+                "parity": protocol_config.get("parity", "E"), "timeout": timeout}
     elif protocol == "iec104":
         base = {"host": host, "port": port or 2404,
                 "asdu_addr": protocol_config.get("asdu_addr", 1),
-                "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": 5.0}
+                "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": timeout}
     elif protocol == "kuka":
         base = {"ip": host, "port": port or 54600,
-                "reconnect": protocol_config.get("reconnect", True), "timeout": 5.0}
+                "reconnect": protocol_config.get("reconnect", True), "timeout": timeout}
     elif protocol == "abb_robot":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "Default"),
-                "password": protocol_config.get("password", ""), "timeout": 5.0}
+                "password": protocol_config.get("password", ""), "timeout": timeout}
     elif protocol == "sparkplug_b":
         sparkplug_port = port or 1883
         base = {

@@ -306,6 +306,7 @@ function connectWs() {
   if (wsManualClose) return
   try {
     ws = api.createDeviceWs()
+    if (!ws) return
   } catch (e) {
     console.error('Failed to create device WebSocket:', e.message)
     message.warning('设备实时连接失败，5秒后重试')

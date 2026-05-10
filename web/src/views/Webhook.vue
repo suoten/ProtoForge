@@ -229,7 +229,8 @@ async function loadStats() {
 }
 
 async function addWebhook() {
-  if (!addForm.value.url) { message.warning('请输入回调URL'); return }
+  if (!addForm.value.url?.trim()) { message.warning('请输入回调URL'); return }
+  if (!addForm.value.events?.length) { message.warning('请至少选择一个触发事件'); return }
   adding.value = true
   try {
     const cfg = {

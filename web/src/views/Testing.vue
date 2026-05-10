@@ -745,6 +745,7 @@ function viewHtmlReport(id) {
 }
 
 async function createSuite() {
+  if (!suiteForm.value.name?.trim()) { message.warning('请输入套件名称'); return }
   creatingSuite.value = true
   try {
     await api.createTestSuite(suiteForm.value)

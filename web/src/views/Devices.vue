@@ -510,8 +510,8 @@ const columns = [
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openPipelineVerify(row.id) }, () => '链路'),
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => '编辑'),
       row.status === 'online' || row.status === 'running'
-        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => toggleDevice(row.id, 'stop') }, () => '停止')
-        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => toggleDevice(row.id, 'start') }, () => '启动'),
+        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => toggleDevice(row.id, 'stop', row.name) }, () => '停止')
+        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => toggleDevice(row.id, 'start', row.name) }, () => '启动'),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => confirmDeleteDevice(row) }, () => '删除'),
     ])
   },
@@ -753,6 +753,8 @@ async function batchPushToEdgelite() {
 }
 
 async function createDevice() {
+  if (!newDevice.value.id?.trim()) { message.warning('请输入设备 ID'); return }
+  if (!newDevice.value.name?.trim()) { message.warning('请输入设备名称'); return }
   creating.value = true
   try {
     let config = { ...newDevice.value, points: [], protocol_config: advancedProtocolConfig.value }
@@ -803,12 +805,27 @@ async function saveEditDevice() {
   finally { saving.value = false }
 }
 
-async function toggleDevice(id, action) {
+async function toggleDevice(id, action, name) {
+  if (action === 'stop') {
+    dialog.warning({
+      title: '确认停止设备',
+      content: `停止设备 "${name || id}" 将断开所有客户端连接，确定继续？`,
+      positiveText: '停止',
+      negativeText: '取消',
+      onPositiveClick: async () => {
+        try {
+          await api.stopDevice(id)
+          message.success('设备已停止')
+          await loadData()
+        } catch (e) { message.error('停止失败: ' + (e.response?.data?.detail || e.message)) }
+      }
+    })
+    return
+  }
   try {
-    if (action === 'start') { await api.startDevice(id); message.success('设备已启动') }
-    else { await api.stopDevice(id); message.success('设备已停止') }
+    await api.startDevice(id); message.success('设备已启动')
     await loadData()
-  } catch (e) { message.error((action === 'start' ? '启动' : '停止') + '失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error('启动失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 function confirmDeleteDevice(row) {

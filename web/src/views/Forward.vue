@@ -193,7 +193,16 @@ async function loadStats() {
 }
 
 async function addTarget() {
-  if (!addForm.value.name) { message.warning('请输入目标名称'); return }
+  if (!addForm.value.name?.trim()) { message.warning('请输入目标名称'); return }
+  if (addForm.value.type === 'influxdb') {
+    if (!addForm.value.host?.trim()) { message.warning('请输入 InfluxDB 主机地址'); return }
+    if (!addForm.value.port) { message.warning('请输入 InfluxDB 端口'); return }
+    if (!addForm.value.database?.trim()) { message.warning('请输入数据库名称'); return }
+  } else if (addForm.value.type === 'http') {
+    if (!addForm.value.url?.trim()) { message.warning('请输入 HTTP URL'); return }
+  } else if (addForm.value.type === 'file') {
+    if (!addForm.value.path?.trim()) { message.warning('请输入文件路径'); return }
+  }
   adding.value = true
   try {
     const cfg = { name: addForm.value.name, type: addForm.value.type }

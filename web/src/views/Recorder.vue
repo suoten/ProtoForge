@@ -238,17 +238,25 @@ async function doStartRecording() {
   } finally { starting.value = false }
 }
 
-async function stopRecording() {
-  stopping.value = true
-  try {
-    const res = await api.stopRecording()
-    activeRecording.value = null
-    if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
-    message.success('录制已停止，共 ' + (res.event_count || 0) + ' 个事件')
-    await loadRecordings()
-  } catch (e) {
-    message.error('停止录制失败: ' + (e.response?.data?.detail || e.message))
-  } finally { stopping.value = false }
+function stopRecording() {
+  dialog.warning({
+    title: '确认停止录制',
+    content: '停止录制后将无法继续记录事件，确定继续？',
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      stopping.value = true
+      try {
+        const res = await api.stopRecording()
+        activeRecording.value = null
+        if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
+        message.success('录制已停止，共 ' + (res.event_count || 0) + ' 个事件')
+        await loadRecordings()
+      } catch (e) {
+        message.error('停止录制失败: ' + (e.response?.data?.detail || e.message))
+      } finally { stopping.value = false }
+    }
+  })
 }
 
 async function viewDetail(id) {
