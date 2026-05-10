@@ -10,7 +10,7 @@
           <n-space size="small">
             <n-button size="small" @click="loadData" :loading="loading">刷新</n-button>
             <n-popconfirm @positive-click="handleClearAll">
-              <template #trigger><n-button size="small" type="warning">清空日志</n-button></template>
+              <template #trigger><n-button size="small" type="warning" :loading="clearing">清空日志</n-button></template>
               确定要清空所有审计日志吗？此操作不可恢复。
             </n-popconfirm>
           </n-space>
@@ -59,7 +59,11 @@ const filterResource = ref('')
 const auditStats = ref(null)
 
 const columns = [
-  { title: '时间', key: 'timestamp', width: 170, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
+  { title: '时间', key: 'timestamp', width: 170, render: (row) => {
+    if (!row.timestamp) return '-'
+    const ts = row.timestamp > 1e12 ? row.timestamp : row.timestamp * 1000
+    return new Date(ts).toLocaleString()
+  }},
   { title: '用户', key: 'username', width: 120 },
   { title: '操作', key: 'action', width: 120, render: (row) => h(NTag, { size: 'tiny', type: (row.action || '').includes('delete') ? 'error' : (row.action || '').includes('create') ? 'success' : 'info', bordered: false }, () => row.action || '-') },
   { title: '资源类型', key: 'resource_type', width: 100 },

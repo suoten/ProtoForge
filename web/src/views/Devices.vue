@@ -794,7 +794,7 @@ async function saveEditDevice() {
     message.success('设备更新成功')
     const protoConfig = editProtocolConfig.value || {}
     if (protoConfig.edgelite_url) {
-      message.info('EdgeLite: 设备配置已自动推送')
+      message.info('EdgeLite: 已检测到 EdgeLite 配置，可通过集成页面手动推送')
     }
     await loadData()
   } catch (e) { message.error('更新失败: ' + (e.response?.data?.detail || e.message)) }

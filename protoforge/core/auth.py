@@ -51,9 +51,9 @@ def set_secret_key(key: str) -> None:
     global _SECRET_KEY
     if not key or key == "protoforge-secret-change-me":
         _load_persistent_secret_key()
-        if not key:
+        if not _SECRET_KEY:
             logger.warning(
-                "JWT secret not configured. Using persistent auto-generated key. "
+                "JWT secret not configured. Using auto-generated key. "
                 "Set PROTOFORGE_JWT_SECRET in your .env for explicit control."
             )
     else:

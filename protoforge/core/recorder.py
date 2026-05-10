@@ -146,6 +146,11 @@ class Recorder:
 
     def set_encryption_key(self, key: str) -> None:
         if key:
+            if not _AES_AVAILABLE:
+                raise RuntimeError(
+                    "Recording encryption requires the 'cryptography' library. "
+                    "Install with: pip install cryptography"
+                )
             self._encryption_key = key.encode("utf-8")
             logger.info("Recording encryption enabled")
         else:

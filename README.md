@@ -1429,6 +1429,32 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ***
 
+### 📋 更新日志
+
+#### v0.1.1 — 2026-05-10
+
+**后端修复：**
+
+- 修复 `set_secret_key()` 逻辑缺陷：当 JWT 密钥为默认值时，警告日志永远不会输出（`if not key` 应为 `if not _SECRET_KEY`）
+- 修复 `_safe_json_loads()` 中 `logger` 引用在定义之前的问题，调整代码顺序
+- 修复 `_row_to_device()` 中 `pop("_position")` 修改原始字典的副作用 bug，改用 `get()` + 字典推导
+- 修复数据库导出/导入缺失 `integration_config` 和 `alarm_reaction_rules` 表，备份恢复不再丢失集成配置和告警规则
+- 修复 `WebhookManager` 持久化使用相对路径的问题，改用项目根目录下的绝对路径，避免 CWD 变化导致配置丢失
+- 修复 `Recorder.set_encryption_key()` 启用加密但未安装 `cryptography` 库时静默降级为明文存储的问题，现在会主动抛出 `RuntimeError`
+- 为全部 13 个路由模块添加异常处理（`try/except`），覆盖 80+ 个 API 端点，确保任何内部错误都返回友好的中文错误提示而非 500 堆栈
+- 增强输入验证：登录/注册参数类型检查、角色值白名单校验、告警规则必填字段检查、批量操作参数验证
+
+**前端修复：**
+
+- 修复 `Dashboard.vue` 使用原生 `fetch('/health')` 绕过统一 axios 拦截器的问题，改用 `axios.get`
+- 修复 `Audit.vue` 时间戳转换假设秒级导致毫秒级时间戳显示错误的 bug，自动检测时间戳精度
+- 修复 `Audit.vue` 清空按钮未绑定 `clearing` loading 状态的问题
+- 修复 `Login.vue` 登录响应异常时未清理 localStorage 中残留 token 的问题
+- 修复 `Devices.vue` "EdgeLite: 设备配置已自动推送" 的误导性提示，改为引导用户到集成页面手动推送
+- 增强 `Backup.vue` 导入验证：检查 JSON 格式、data 字段存在性、版本兼容性警告
+
+***
+
 ### 🔗 相关项目
 
 | 项目                                                           | 说明                        | 仓库地址                                                                                                    |

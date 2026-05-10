@@ -65,6 +65,10 @@ async function handleLogin() {
     const res = await api.login(form.value.username, form.value.password)
     if (!res?.access_token) {
       message.error('登录响应异常，未获取到令牌')
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
       return
     }
     localStorage.setItem('token', res.access_token)

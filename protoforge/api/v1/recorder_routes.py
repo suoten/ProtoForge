@@ -22,40 +22,60 @@ def _get_recorder():
 
 @router.post("/recorder/start")
 async def start_recording(config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
-    cfg = config or {}
-    recorder = _get_recorder()
-    rec = await recorder.start_recording(
-        name=cfg.get("name", "Untitled"),
-        protocol=cfg.get("protocol"),
-        device_id=cfg.get("device_id"),
-        metadata=cfg.get("metadata"),
-    )
-    return rec.to_dict()
+    try:
+        cfg = config or {}
+        recorder = _get_recorder()
+        rec = await recorder.start_recording(
+            name=cfg.get("name", "Untitled"),
+            protocol=cfg.get("protocol"),
+            device_id=cfg.get("device_id"),
+            metadata=cfg.get("metadata"),
+        )
+        return rec.to_dict()
+    except Exception as e:
+        logger.error("Failed to start recording: %s", e)
+        raise HTTPException(status_code=500, detail=f"开始录制失败: {e}") from e
 
 
 @router.post("/recorder/stop")
 async def stop_recording(_user: dict = Depends(require_operator)):
-    recorder = _get_recorder()
-    rec = await recorder.stop_recording()
-    if not rec:
-        raise HTTPException(status_code=400, detail="No active recording")
-    return rec.to_dict()
+    try:
+        recorder = _get_recorder()
+        rec = await recorder.stop_recording()
+        if not rec:
+            raise HTTPException(status_code=400, detail="No active recording")
+        return rec.to_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to stop recording: %s", e)
+        raise HTTPException(status_code=500, detail=f"停止录制失败: {e}") from e
 
 
 @router.get("/recorder/recordings")
 async def list_recordings(_user: dict = Depends(require_viewer)):
-    recorder = _get_recorder()
-    return {"recordings": recorder.list_recordings()}
+    try:
+        recorder = _get_recorder()
+        return {"recordings": recorder.list_recordings()}
+    except Exception as e:
+        logger.error("Failed to list recordings: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取录制列表失败: {e}") from e
 
 
 @router.get("/recorder/recordings/{rec_id}")
 async def get_recording(rec_id: str, _user: dict = Depends(require_viewer)):
-    recorder = _get_recorder()
-    rec = recorder.get_recording(rec_id)
+    try:
+        recorder = _get_recorder()
+        rec = recorder.get_recording(rec_id)
 
-    if not rec:
-        raise HTTPException(status_code=404, detail="Recording not found")
-    return rec.to_full_dict()
+        if not rec:
+            raise HTTPException(status_code=404, detail="Recording not found")
+        return rec.to_full_dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get recording %s: %s", rec_id, e)
+        raise HTTPException(status_code=500, detail=f"获取录制详情失败: {e}") from e
 
 
 @router.delete("/recorder/recordings/{rec_id}")
@@ -67,7 +87,7 @@ async def delete_recording(rec_id: str, _user: dict = Depends(require_operator))
         await recorder.delete_recording_persisted(rec_id)
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除录制失败: {str(e)}")
 
 
 @router.post("/recorder/recordings/{rec_id}/replay")
@@ -84,20 +104,33 @@ async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None,
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Failed to replay recording %s: %s", rec_id, e)
+        raise HTTPException(status_code=500, detail=f"回放录制失败: {e}") from e
 
 
 @router.get("/recorder/recordings/{rec_id}/export")
 async def export_recording(rec_id: str, _user: dict = Depends(require_viewer)):
-    recorder = _get_recorder()
-    rec = recorder.get_recording(rec_id)
+    try:
+        recorder = _get_recorder()
+        rec = recorder.get_recording(rec_id)
 
-    if not rec:
-        raise HTTPException(status_code=404, detail="Recording not found")
-    from fastapi.responses import JSONResponse
-    return JSONResponse(content=rec.to_full_dict())
+        if not rec:
+            raise HTTPException(status_code=404, detail="Recording not found")
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content=rec.to_full_dict())
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to export recording %s: %s", rec_id, e)
+        raise HTTPException(status_code=500, detail=f"导出录制失败: {e}") from e
 
 
 @router.get("/recorder/stats")
 async def recorder_stats(_user: dict = Depends(require_viewer)):
-    recorder = _get_recorder()
-    return recorder.get_stats()
+    try:
+        recorder = _get_recorder()
+        return recorder.get_stats()
+    except Exception as e:
+        logger.error("Failed to get recorder stats: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取录制统计失败: {e}") from e

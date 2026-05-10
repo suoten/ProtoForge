@@ -17,165 +17,221 @@ def _get_integration_manager():
 
 @router.get("/status")
 async def get_integration_status(_user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    return manager.get_status()
+    try:
+        manager = _get_integration_manager()
+        return manager.get_status()
+    except Exception as e:
+        logger.error("Failed to get integration status: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取集成状态失败: {e}") from e
 
 
 @router.get("/metrics")
 async def get_integration_metrics(_user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    return manager.metrics.to_dict()
+    try:
+        manager = _get_integration_manager()
+        return manager.metrics.to_dict()
+    except Exception as e:
+        logger.error("Failed to get integration metrics: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取集成指标失败: {e}") from e
 
 
 @router.post("/batch-push")
 async def batch_push(request: dict[str, Any], _user: dict = Depends(require_operator)):
-    from protoforge.main import get_engine
-    engine = get_engine()
-    manager = _get_integration_manager()
+    try:
+        from protoforge.main import get_engine
+        engine = get_engine()
+        manager = _get_integration_manager()
 
-    device_ids = request.get("device_ids", [])
-    if not isinstance(device_ids, list):
-        raise HTTPException(status_code=400, detail="device_ids 必须是数组")
-    if not device_ids:
-        raise HTTPException(status_code=400, detail="device_ids 不能为空")
-    protocol_filter = request.get("protocol", "")
-    concurrency = request.get("concurrency", 10)
-    if not isinstance(concurrency, int) or concurrency < 1:
-        concurrency = 10
-    elif concurrency > 50:
-        concurrency = 50
+        device_ids = request.get("device_ids", [])
+        if not isinstance(device_ids, list):
+            raise HTTPException(status_code=400, detail="device_ids 必须是数组")
+        if not device_ids:
+            raise HTTPException(status_code=400, detail="device_ids 不能为空")
+        protocol_filter = request.get("protocol", "")
+        concurrency = request.get("concurrency", 10)
+        if not isinstance(concurrency, int) or concurrency < 1:
+            concurrency = 10
+        elif concurrency > 50:
+            concurrency = 50
 
-    devices = []
-    for did in device_ids:
-        instance = engine.get_device_instance(did)
-        if instance:
-            if protocol_filter and instance.protocol != protocol_filter:
-                continue
-            devices.append(instance)
+        devices = []
+        for did in device_ids:
+            instance = engine.get_device_instance(did)
+            if instance:
+                if protocol_filter and instance.protocol != protocol_filter:
+                    continue
+                devices.append(instance)
 
-    if not devices:
-        raise HTTPException(status_code=400, detail="未找到匹配的设备，请检查 device_ids 和 protocol 参数")
+        if not devices:
+            raise HTTPException(status_code=400, detail="未找到匹配的设备，请检查 device_ids 和 protocol 参数")
 
-    result = await manager.batch_push(devices, concurrency=concurrency)
-    return result
+        result = await manager.batch_push(devices, concurrency=concurrency)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Batch push failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"批量推送失败: {e}") from e
 
 
 @router.post("/device/{device_id}/start")
 async def start_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     if not device_id or not device_id.strip():
         raise HTTPException(status_code=400, detail="device_id 不能为空")
-    manager = _get_integration_manager()
-    if not manager.is_connected():
-        raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
-    result = await manager.send_device_control(device_id, "start_collect")
-    return result
+    try:
+        manager = _get_integration_manager()
+        if not manager.is_connected():
+            raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
+        result = await manager.send_device_control(device_id, "start_collect")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Start device collect failed for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"启动设备采集失败: {e}") from e
 
 
 @router.post("/device/{device_id}/stop")
 async def stop_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     if not device_id or not device_id.strip():
         raise HTTPException(status_code=400, detail="device_id 不能为空")
-    manager = _get_integration_manager()
-    if not manager.is_connected():
-        raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
-    result = await manager.send_device_control(device_id, "stop_collect")
-    return result
+    try:
+        manager = _get_integration_manager()
+        if not manager.is_connected():
+            raise HTTPException(status_code=503, detail="Not connected to EdgeLite")
+        result = await manager.send_device_control(device_id, "stop_collect")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Stop device collect failed for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"停止设备采集失败: {e}") from e
 
 
 @router.get("/protocols")
 async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    raw_map = manager.protocol_mapper.get_map()
-    protocol_map = {}
-    for source, target in raw_map.items():
-        result = manager.protocol_mapper.map(source)
-        protocol_map[source] = {
-            "protocol": target or "",
-            "driver": target or "",
-            "status": result.status,
+    try:
+        manager = _get_integration_manager()
+        raw_map = manager.protocol_mapper.get_map()
+        protocol_map = {}
+        for source, target in raw_map.items():
+            result = manager.protocol_mapper.map(source)
+            protocol_map[source] = {
+                "protocol": target or "",
+                "driver": target or "",
+                "status": result.status,
+            }
+        return {
+            "protocol_map": protocol_map,
+            "supported_source_protocols": manager.protocol_mapper.get_supported_source_protocols(),
         }
-    return {
-        "protocol_map": protocol_map,
-        "supported_source_protocols": manager.protocol_mapper.get_supported_source_protocols(),
-    }
+    except Exception as e:
+        logger.error("Failed to get protocol mappings: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取协议映射失败: {e}") from e
 
 
 @router.post("/validate")
 async def validate_device_compatibility(request: dict[str, Any], _user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    driver_config = request.get("driver_config") or request.get("config") or {}
-    report = manager.validator.validate(
-        device_id=request.get("device_id", ""),
-        protocol=request.get("protocol", ""),
-        points=request.get("points", []),
-        driver_config=driver_config,
-    )
-    return {
-        "compatible": report.compatible,
-        "protocol_result": report.protocol_result,
-        "data_type_results": report.data_type_results,
-        "warnings": report.warnings,
-        "errors": report.errors,
-    }
+    try:
+        manager = _get_integration_manager()
+        driver_config = request.get("driver_config") or request.get("config") or {}
+        report = manager.validator.validate(
+            device_id=request.get("device_id", ""),
+            protocol=request.get("protocol", ""),
+            points=request.get("points", []),
+            driver_config=driver_config,
+        )
+        return {
+            "compatible": report.compatible,
+            "protocol_result": report.protocol_result,
+            "data_type_results": report.data_type_results,
+            "warnings": report.warnings,
+            "errors": report.errors,
+        }
+    except Exception as e:
+        logger.error("Device compatibility validation failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"设备兼容性验证失败: {e}") from e
 
 
 @router.get("/backhaul-data")
 async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
+    try:
+        manager = _get_integration_manager()
+        return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
+    except Exception as e:
+        logger.error("Failed to get backhaul data: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取回传数据失败: {e}") from e
 
 
 @router.get("/device-status")
 async def get_device_status_cache(_user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    status = manager.get_device_status_cache()
-    if isinstance(status, dict):
-        return {"devices": list(status.values())}
-    return {"devices": status if isinstance(status, list) else []}
+    try:
+        manager = _get_integration_manager()
+        status = manager.get_device_status_cache()
+        if isinstance(status, dict):
+            return {"devices": list(status.values())}
+        return {"devices": status if isinstance(status, list) else []}
+    except Exception as e:
+        logger.error("Failed to get device status cache: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取设备状态失败: {e}") from e
 
 
 @router.get("/alarm-rules")
 async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
-    manager = _get_integration_manager()
-    return {"rules": [
-        {"rule_id": r.rule_id, "source_device_id": r.source_device_id,
-         "alarm_severity": r.alarm_severity, "action": r.action,
-         "target_device_id": r.target_device_id, "enabled": r.enabled}
-        for r in manager.get_alarm_reaction_rules()
-    ]}
+    try:
+        manager = _get_integration_manager()
+        return {"rules": [
+            {"rule_id": r.rule_id, "source_device_id": r.source_device_id,
+             "alarm_severity": r.alarm_severity, "action": r.action,
+             "target_device_id": r.target_device_id, "enabled": r.enabled}
+            for r in manager.get_alarm_reaction_rules()
+        ]}
+    except Exception as e:
+        logger.error("Failed to get alarm rules: %s", e)
+        raise HTTPException(status_code=500, detail=f"获取告警规则失败: {e}") from e
 
 
 @router.post("/alarm-rules")
 async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends(require_operator)):
-    from protoforge.core.integration.manager import AlarmReactionRule
-    manager = _get_integration_manager()
-    rule_id = request.get("rule_id", "")
-    source_device_id = request.get("source_device_id", "")
-    target_device_id = request.get("target_device_id", "")
-    if not rule_id or not source_device_id or not target_device_id:
-        raise HTTPException(status_code=400, detail="rule_id、source_device_id 和 target_device_id 为必填项")
-    valid_actions = {"stop_device", "start_device", "inject_fault", "adjust_generator", "log_only", "send_alarm", "custom"}
-    action = request.get("action", "stop_device")
-    if action not in valid_actions:
-        raise HTTPException(status_code=400, detail=f"无效的 action，可选值: {', '.join(valid_actions)}")
-    rule = AlarmReactionRule(
-        rule_id=rule_id,
-        source_device_id=source_device_id,
-        alarm_severity=request.get("alarm_severity", "warning"),
-        action=action,
-        target_device_id=target_device_id,
-        action_params=request.get("action_params", {}),
-        enabled=request.get("enabled", True),
-    )
-    manager.add_alarm_reaction_rule(rule)
-    return {"status": "ok", "rule_id": rule.rule_id}
+    try:
+        from protoforge.core.integration.manager import AlarmReactionRule
+        manager = _get_integration_manager()
+        rule_id = request.get("rule_id", "")
+        source_device_id = request.get("source_device_id", "")
+        target_device_id = request.get("target_device_id", "")
+        if not rule_id or not source_device_id or not target_device_id:
+            raise HTTPException(status_code=400, detail="rule_id、source_device_id 和 target_device_id 为必填项")
+        valid_actions = {"stop_device", "start_device", "inject_fault", "adjust_generator", "log_only", "send_alarm", "custom"}
+        action = request.get("action", "stop_device")
+        if action not in valid_actions:
+            raise HTTPException(status_code=400, detail=f"无效的 action，可选值: {', '.join(valid_actions)}")
+        rule = AlarmReactionRule(
+            rule_id=rule_id,
+            source_device_id=source_device_id,
+            alarm_severity=request.get("alarm_severity", "warning"),
+            action=action,
+            target_device_id=target_device_id,
+            action_params=request.get("action_params", {}),
+            enabled=request.get("enabled", True),
+        )
+        manager.add_alarm_reaction_rule(rule)
+        return {"status": "ok", "rule_id": rule.rule_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Add alarm rule failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"添加告警规则失败: {e}") from e
 
 
 @router.delete("/alarm-rules/{rule_id}")
 async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require_operator)):
-    manager = _get_integration_manager()
-    manager.remove_alarm_reaction_rule(rule_id)
-    return {"status": "ok"}
+    try:
+        manager = _get_integration_manager()
+        manager.remove_alarm_reaction_rule(rule_id)
+        return {"status": "ok"}
+    except Exception as e:
+        logger.error("Delete alarm rule failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"删除告警规则失败: {e}") from e
 
 
 @router.post("/message")
@@ -185,8 +241,14 @@ async def handle_integration_message(request: dict[str, Any], _user: dict = Depe
     if not isinstance(payload, dict):
         payload = {}
     logger.info("Integration message received: type=%s", msg_type)
-    manager = _get_integration_manager()
-    if manager.is_connected():
-        result = await manager.send_message(request)
-        return {"status": "ok", "data": result}
-    raise HTTPException(status_code=503, detail="未连接到集成目标，请先配置并测试 EdgeLite 连接")
+    try:
+        manager = _get_integration_manager()
+        if manager.is_connected():
+            result = await manager.send_message(request)
+            return {"status": "ok", "data": result}
+        raise HTTPException(status_code=503, detail="未连接到集成目标，请先配置并测试 EdgeLite 连接")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Integration message failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"发送集成消息失败: {e}") from e

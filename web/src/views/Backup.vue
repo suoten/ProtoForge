@@ -66,9 +66,16 @@ async function handleImport({ file }) {
   try {
     const text = await file.file.text()
     const payload = JSON.parse(text)
-    if (!payload.data) {
-      message.error('无效的备份文件格式')
+    if (!payload || typeof payload !== 'object') {
+      message.error('无效的备份文件格式：文件内容不是有效的 JSON 对象')
       return
+    }
+    if (!payload.data) {
+      message.error('无效的备份文件格式：缺少 data 字段')
+      return
+    }
+    if (!payload.version) {
+      message.warning('备份文件缺少版本信息，恢复可能不完全兼容')
     }
     dialog.warning({
       title: '确认恢复备份',
