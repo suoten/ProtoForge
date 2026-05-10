@@ -1431,6 +1431,26 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.8 — 2026-05-10
+
+**前端安全与流程完整性修复：**
+
+- 修复 `Testing.vue` HTML测试报告通过URL参数暴露JWT Token的安全问题，改用Blob下载方式
+- 修复 `App.vue` WebSocket连接空转问题（LogWs只做console.debug无实际效果），简化为仅保持连接状态
+- 修复 `Settings.vue` 密码复杂度校验逻辑3处重复代码，提取到 `utils.js` 的 `validatePassword()` 公共函数
+- 修复 `App.vue` 密码验证逻辑重复，改用 `utils.js` 的 `validatePassword()`
+- 修复 `Devices.vue` 批量推送EdgeLite后未刷新设备列表，新增 `loadData()` 调用
+- 修复 `Forward.vue` 启动转发后统计数据不自动刷新，新增10秒定时轮询
+- 修复 `Recorder.vue` durationTimer可能在异常情况下泄漏，新增清理保护和状态回滚
+- 修复 `api.js` `startProtocol()` 传null作为body导致后端解析异常，改为传空对象 `{}`
+- 修复 `api.js` `getTestReportHtml()` 返回值被JSON解析破坏HTML内容，改用 `transformResponse` 保留原始内容
+
+**新增前端公共工具模块：**
+
+- 新增 `utils.js` 工具模块，包含 `validatePassword()`、`formatTime()`、`formatBytes()`、`formatDuration()`、`safeGet()`、`defensiveResult()` 公共函数
+
+***
+
 #### v0.1.7 — 2026-05-10
 
 **后端安全与健壮性修复：**

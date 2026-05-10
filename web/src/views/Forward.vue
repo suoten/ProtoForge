@@ -271,8 +271,15 @@ async function stopForward() {
   })
 }
 
+let statsTimer = null
+
 onMounted(() => {
   loadTargets()
   loadStats()
+  statsTimer = setInterval(loadStats, 10000)
+})
+
+onUnmounted(() => {
+  if (statsTimer) { clearInterval(statsTimer); statsTimer = null }
 })
 </script>

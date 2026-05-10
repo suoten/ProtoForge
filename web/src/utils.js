@@ -1,0 +1,62 @@
+export function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, reason: 'tooShort' }
+  }
+  const types = [
+    /[a-z]/.test(password),
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[^a-zA-Z0-9]/.test(password),
+  ].filter(Boolean).length
+  if (types < 3) {
+    return { valid: false, reason: 'tooWeak' }
+  }
+  return { valid: true, reason: null }
+}
+
+export function formatTime(ts) {
+  if (!ts) return '-'
+  let ms = ts
+  if (typeof ms === 'string') ms = Number(ms)
+  if (ms > 1e15) ms = ms / 1e6
+  else if (ms > 1e12 && ms < 1e15) ms = ms
+  else if (ms < 1e12) ms = ms * 1000
+  const d = new Date(ms)
+  if (isNaN(d.getTime())) return String(ts)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+export function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i]
+}
+
+export function formatDuration(seconds) {
+  if (!seconds && seconds !== 0) return '-'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}h ${m}m ${s}s`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
+}
+
+export function safeGet(obj, path, defaultValue = undefined) {
+  if (!obj || typeof obj !== 'object') return defaultValue
+  const keys = path.split('.')
+  let current = obj
+  for (const key of keys) {
+    if (current == null || typeof current !== 'object') return defaultValue
+    current = current[key]
+  }
+  return current ?? defaultValue
+}
+
+export function defensiveResult(res, field, fallback = null) {
+  if (!res) return fallback
+  if (field && res[field] !== undefined) return res[field]
+  return res
+}

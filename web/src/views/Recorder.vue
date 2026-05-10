@@ -230,9 +230,11 @@ async function doStartRecording() {
     showStartModal.value = false
     startForm.value = { name: '', protocol: '', device_id: '', note: '' }
     recordingDuration.value = 0
+    if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
     durationTimer = setInterval(() => { recordingDuration.value++ }, 1000)
     message.success(t('recorder.started'))
   } catch (e) {
+    activeRecording.value = null
     message.error(t('recorder.startFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { starting.value = false }
 }

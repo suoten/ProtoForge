@@ -6,17 +6,17 @@
         <template #header>
           <n-space align="center" size="small">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#6366f1" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            <span class="pf-section-title" style="font-size:16px">快速测试</span>
+            <span class="pf-section-title" style="font-size:16px">{{ t('testing.quickTest') }}</span>
           </n-space>
         </template>
         <template #header-extra>
           <n-button type="success" size="large" :loading="quickTesting" @click="runQuickTest('all')">
             <template #icon><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></template>
-            一键测试全部
+            {{ t('testing.testAll') }}
           </n-button>
         </template>
         <n-space vertical>
-          <n-text depth="3">系统根据当前设备、场景自动生成测试，一键执行</n-text>
+          <n-text depth="3">{{ t('testing.testAllDesc') }}</n-text>
           <n-spin :show="loadingSuggestions">
             <n-space v-if="suggestions.length" vertical>
               <n-card v-for="s in suggestions" :key="s.title" size="small" hoverable
@@ -24,18 +24,18 @@
                 <n-space justify="space-between" align="center">
                   <n-space align="center" size="small">
                     <n-tag :type="s.priority === 'high' ? 'error' : s.priority === 'medium' ? 'warning' : 'default'" size="small">
-                      {{ s.priority === 'high' ? '重要' : s.priority === 'medium' ? '建议' : '可选' }}
+                      {{ s.priority === 'high' ? t('testing.important') : s.priority === 'medium' ? t('testing.suggested') : t('testing.optional') }}
                     </n-tag>
                     <n-text strong>{{ s.title }}</n-text>
                     <n-text depth="3" style="font-size:12px">{{ s.description }}</n-text>
                   </n-space>
                   <n-button type="primary" size="small" :loading="quickTesting" @click="runQuickTest(s.scope, s.target_id)">
-                    立即测试
+                    {{ t('testing.testNow') }}
                   </n-button>
                 </n-space>
               </n-card>
             </n-space>
-            <n-empty v-else description="暂无测试建议，请先创建设备或场景" />
+            <n-empty v-else :description="t('testing.noSuggestions')" />
           </n-spin>
         </n-space>
       </n-card>
@@ -44,28 +44,28 @@
         <template #header>
           <n-space align="center" size="small">
             <span :style="{ fontSize: '24px', color: (lastReport.failed || 0) > 0 || (lastReport.errors || 0) > 0 ? '#ef4444' : '#10b981' }">●</span>
-            <span>测试结果</span>
+            <span>{{ t('testing.testResults') }}</span>
             <n-tag :type="(lastReport.success_rate || 0) >= 100 ? 'success' : (lastReport.success_rate || 0) >= 50 ? 'warning' : 'error'" size="small">
-              通过率 {{ lastReport.success_rate ?? 0 }}%
+              {{ t('testing.passRate') }} {{ lastReport.success_rate ?? 0 }}%
             </n-tag>
           </n-space>
         </template>
         <template #header-extra>
           <n-space size="small">
             <n-text depth="3" style="font-size:12px">{{ (lastReport.duration || 0).toFixed(2) }}s</n-text>
-            <n-button size="small" @click="viewHtmlReport(lastReport.id)">HTML报告</n-button>
+            <n-button size="small" @click="viewHtmlReport(lastReport.id)">{{ t('testing.htmlReport') }}</n-button>
           </n-space>
         </template>
         <n-space vertical size="small">
           <n-space size="large">
-            <n-statistic label="总数" :value="lastReport.total || 0" />
-            <n-statistic label="通过" :value="lastReport.passed || 0">
+            <n-statistic :label="t('testing.total')" :value="lastReport.total || 0" />
+            <n-statistic :label="t('testing.passed')" :value="lastReport.passed || 0">
               <template #default><span style="color:#18a058">{{ lastReport.passed || 0 }}</span></template>
             </n-statistic>
-            <n-statistic label="失败" :value="lastReport.failed || 0">
+            <n-statistic :label="t('testing.failed')" :value="lastReport.failed || 0">
               <template #default><span style="color:#d03050">{{ lastReport.failed || 0 }}</span></template>
             </n-statistic>
-            <n-statistic label="错误" :value="lastReport.errors || 0">
+            <n-statistic :label="t('testing.errors')" :value="lastReport.errors || 0">
               <template #default><span style="color:#f0a020">{{ lastReport.errors || 0 }}</span></template>
             </n-statistic>
           </n-space>
@@ -114,12 +114,12 @@
       </n-card>
 
       <n-tabs type="line" animated>
-        <n-tab-pane name="builder" tab="可视化编辑">
+        <n-tab-pane name="builder" :tab="t('testing.visualEdit')">
           <n-card size="small">
             <n-space vertical>
               <n-space align="center" size="small">
-                <n-text strong>测试名称:</n-text>
-                <n-input v-model:value="builderCase.name" placeholder="输入测试名称" style="width:250px" />
+                <n-text strong>{{ t('testing.testName') }}:</n-text>
+                <n-input v-model:value="builderCase.name" :placeholder="t('testing.inputTestName')" style="width:250px" />
                 <n-text depth="3" style="font-size:12px">ID: {{ builderCase.id }}</n-text>
               </n-space>
 
@@ -127,39 +127,39 @@
 
               <n-space vertical size="small">
                 <n-space justify="space-between" align="center">
-                  <n-text strong>测试步骤</n-text>
-                  <n-button size="small" type="primary" @click="addStep">+ 添加步骤</n-button>
+                  <n-text strong>{{ t('testing.testSteps') }}</n-text>
+                  <n-button size="small" type="primary" @click="addStep">{{ t('testing.addStep') }}</n-button>
                 </n-space>
 
                 <n-card v-for="(step, idx) in builderCase.steps" :key="idx" size="small"
                   :style="{ borderLeft: step.status === 'passed' ? '3px solid #18a058' : step.status === 'failed' ? '3px solid #d03050' : '3px solid #d9d9d9' }">
                   <n-space vertical size="small">
                     <n-space justify="space-between" align="center">
-                      <n-text strong>步骤 {{ idx + 1 }}</n-text>
+                      <n-text strong>{{ t('testing.stepIndex', { n: idx + 1 }) }}</n-text>
                       <n-space size="small">
                         <n-button size="tiny" quaternary :disabled="idx === 0" @click="moveStep(idx, -1)">↑</n-button>
                         <n-button size="tiny" quaternary :disabled="idx === builderCase.steps.length - 1" @click="moveStep(idx, 1)">↓</n-button>
-                        <n-button size="tiny" quaternary type="error" @click="removeStep(idx)">删除</n-button>
+                        <n-button size="tiny" quaternary type="error" @click="removeStep(idx)">{{ t('common.delete') }}</n-button>
                       </n-space>
                     </n-space>
                     <n-space align="center" size="small">
-                      <n-text>操作:</n-text>
-                      <n-select v-model:value="step.action" :options="actionTypeOptions" placeholder="选择操作"
+                      <n-text>{{ t('testing.operation') }}</n-text>
+                      <n-select v-model:value="step.action" :options="actionTypeOptions" :placeholder="t('testing.selectOperation')"
                         style="width:180px" @update:value="onActionChange(step)" />
-                      <n-input v-model:value="step.name" placeholder="步骤名称" style="width:200px" />
+                      <n-input v-model:value="step.name" :placeholder="t('testing.stepName')" style="width:200px" />
                     </n-space>
                     <n-grid :cols="2" :x-gap="8" v-if="step.action">
                       <n-gi v-for="paramKey in getActionParams(step.action)" :key="paramKey">
                         <n-space align="center" size="small" style="margin-bottom:4px">
                           <n-text style="font-size:12px;min-width:70px">{{ paramLabel(paramKey) }}:</n-text>
                           <n-select v-if="paramKey === 'device_id'" v-model:value="step.params[paramKey]"
-                            :options="deviceOptions" placeholder="选择设备" style="flex:1" />
+                            :options="deviceOptions" :placeholder="t('common.selectPlaceholder')" style="flex:1" />
                           <n-select v-else-if="paramKey === 'scenario_id'" v-model:value="step.params[paramKey]"
-                            :options="scenarioOptions" placeholder="选择场景" style="flex:1" />
+                            :options="scenarioOptions" :placeholder="t('common.selectPlaceholder')" style="flex:1" />
                           <n-select v-else-if="paramKey === 'protocol'" v-model:value="step.params[paramKey]"
-                            :options="protocolOptions" placeholder="选择协议" style="flex:1" />
+                            :options="protocolOptions" :placeholder="t('common.selectPlaceholder')" style="flex:1" />
                           <n-select v-else-if="paramKey === 'point_name'" v-model:value="step.params[paramKey]"
-                            :options="getPointOptions(step.params.device_id)" placeholder="选择测点" style="flex:1" />
+                            :options="getPointOptions(step.params.device_id)" :placeholder="t('common.selectPlaceholder')" style="flex:1" />
                           <n-input-number v-else-if="paramKey === 'seconds' || paramKey === 'value'"
                             v-model:value="step.params[paramKey]" :placeholder="paramKey" style="flex:1" />
                           <n-input v-else v-model:value="step.params[paramKey]" :placeholder="paramKey" style="flex:1" />
@@ -168,89 +168,89 @@
                     </n-grid>
 
                     <n-space align="center" size="small">
-                      <n-text style="font-size:12px">断言:</n-text>
-                      <n-button size="tiny" @click="addAssertion(step)">+ 添加检查</n-button>
+                      <n-text style="font-size:12px">{{ t('testing.assertions') }}:</n-text>
+                      <n-button size="tiny" @click="addAssertion(step)">{{ t('testing.addCheck') }}</n-button>
                     </n-space>
                     <n-space v-for="(asrt, ai) in step.assertions" :key="ai" align="center" size="small"
                       style="padding-left:12px">
-                      <n-select v-model:value="asrt.type" :options="simpleAssertionOptions" placeholder="检查类型"
+                      <n-select v-model:value="asrt.type" :options="simpleAssertionOptions" :placeholder="t('testing.checkType')"
                         style="width:150px" />
                       <n-input-number v-if="needsExpected(asrt.type)" v-model:value="asrt.expected"
-                        placeholder="期望值" style="width:120px" />
-                      <n-input v-model:value="asrt.message" placeholder="说明（可选）" style="width:200px" />
+                        :placeholder="t('testing.expectedValue')" style="width:120px" />
+                      <n-input v-model:value="asrt.message" :placeholder="t('testing.optionalNote')" style="width:200px" />
                       <n-button size="tiny" quaternary type="error" @click="step.assertions.splice(ai, 1)">×</n-button>
                     </n-space>
                   </n-space>
                 </n-card>
 
-                <n-empty v-if="!builderCase.steps.length" description="点击上方 添加步骤 开始构建测试" size="small" />
+                <n-empty v-if="!builderCase.steps.length" :description="t('testing.noSteps')" size="small" />
               </n-space>
 
               <n-divider style="margin:8px 0" />
               <n-space>
-                <n-button type="primary" :loading="runningBuilder" @click="runBuilderTest">执行测试</n-button>
-                <n-button @click="saveBuilderCase">保存为用例</n-button>
-                <n-button @click="exportBuilderJson">导出JSON</n-button>
+                <n-button type="primary" :loading="runningBuilder" @click="runBuilderTest">{{ t('testing.executeTest') }}</n-button>
+                <n-button @click="saveBuilderCase">{{ t('testing.saveAsCase') }}</n-button>
+                <n-button @click="exportBuilderJson">{{ t('testing.exportJson') }}</n-button>
               </n-space>
             </n-space>
           </n-card>
         </n-tab-pane>
 
-        <n-tab-pane name="json" tab="JSON编辑">
+        <n-tab-pane name="json" :tab="t('testing.jsonEdit')">
           <n-space vertical>
             <n-space>
-              <n-text depth="3">预设模板：</n-text>
+              <n-text depth="3">{{ t('testing.presetTemplates') }}</n-text>
               <n-button size="small" v-for="tpl in presetTemplates" :key="tpl.name"
                 @click="testJson = tpl.json">{{ tpl.name }}</n-button>
             </n-space>
-            <n-input v-model:value="testJson" type="textarea" :rows="12" placeholder='输入测试用例 JSON...' />
+            <n-input v-model:value="testJson" type="textarea" :rows="12" :placeholder="t('testing.inputJson')" />
             <n-space>
-              <n-button type="primary" @click="runJsonTest" :loading="runningJson">执行测试</n-button>
-              <n-button @click="formatJson">格式化</n-button>
-              <n-button @click="saveJsonAsCase">保存为用例</n-button>
+              <n-button type="primary" @click="runJsonTest" :loading="runningJson">{{ t('testing.executeTest') }}</n-button>
+              <n-button @click="formatJson">{{ t('testing.formatJson') }}</n-button>
+              <n-button @click="saveJsonAsCase">{{ t('testing.saveJsonAsCase') }}</n-button>
             </n-space>
           </n-space>
         </n-tab-pane>
 
-        <n-tab-pane name="cases" tab="用例管理">
+        <n-tab-pane name="cases" :tab="t('testing.caseManagement')">
           <n-space justify="space-between" style="margin-bottom:12px">
-            <n-h4 style="margin:0">用例列表</n-h4>
-            <n-input v-model:value="caseTagFilter" placeholder="按标签筛选" size="small" style="width:150px" clearable />
+            <n-h4 style="margin:0">{{ t('testing.caseList') }}</n-h4>
+            <n-input v-model:value="caseTagFilter" :placeholder="t('testing.filterByTag')" size="small" style="width:150px" clearable />
           </n-space>
           <n-data-table :columns="caseColumns" :data="filteredCases" :bordered="false" size="small"
             :pagination="{ pageSize: 10 }" />
         </n-tab-pane>
 
-        <n-tab-pane name="suites" tab="测试套件">
+        <n-tab-pane name="suites" :tab="t('testing.testSuite')">
           <n-space justify="space-between" style="margin-bottom:12px">
-            <n-h4 style="margin:0">套件列表</n-h4>
-            <n-button type="primary" size="small" @click="showSuiteModal = true">创建套件</n-button>
+            <n-h4 style="margin:0">{{ t('testing.suiteList') }}</n-h4>
+            <n-button type="primary" size="small" @click="showSuiteModal = true">{{ t('testing.createSuite') }}</n-button>
           </n-space>
           <n-data-table :columns="suiteColumns" :data="suites" :bordered="false" size="small"
             :pagination="{ pageSize: 10 }" />
         </n-tab-pane>
 
-        <n-tab-pane name="history" tab="历史报告">
+        <n-tab-pane name="history" :tab="t('testing.historyReports')">
           <n-space vertical>
             <n-space justify="space-between" align="center">
-              <n-text depth="3">历史测试报告列表</n-text>
-              <n-button size="small" @click="loadReportTrend" :loading="loadingTrend">查看趋势</n-button>
+              <n-text depth="3">{{ t('testing.historyReportsTitle') }}</n-text>
+              <n-button size="small" @click="loadReportTrend" :loading="loadingTrend">{{ t('testing.viewTrend') }}</n-button>
             </n-space>
             <n-data-table :columns="reportColumns" :data="reports" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
-            <n-card v-if="trendData.length > 0" size="small" title="测试趋势">
+            <n-card v-if="trendData.length > 0" size="small" :title="t('testing.testTrend')">
               <n-space vertical>
                 <n-grid :cols="3" :x-gap="12">
                   <n-gi v-for="(item, idx) in trendData" :key="idx">
                     <n-card size="small" embedded>
-                      <n-statistic :label="item.name || `报告 ${idx + 1}`">
+                      <n-statistic :label="item.name || t('testing.reportIndex', { n: idx + 1 })">
                         <template #default>
                           <span :style="{ color: (item.success_rate || 0) >= 100 ? '#18a058' : (item.success_rate || 0) >= 50 ? '#f0a020' : '#d03050' }">
                             {{ item.success_rate ?? 0 }}%
                           </span>
                         </template>
                       </n-statistic>
-                      <n-text depth="3" style="font-size:12px">{{ item.passed || 0 }}/{{ item.total || 0 }} 通过</n-text>
+                      <n-text depth="3" style="font-size:12px">{{ item.passed || 0 }}/{{ item.total || 0 }} {{ t('testing.passed') }}</n-text>
                     </n-card>
                   </n-gi>
                 </n-grid>
@@ -260,58 +260,58 @@
         </n-tab-pane>
       </n-tabs>
 
-      <n-modal v-model:show="showSuiteModal" preset="card" title="创建测试套件" style="width: 500px">
+      <n-modal v-model:show="showSuiteModal" preset="card" :title="t('testing.createSuiteTitle')" style="width: 500px">
         <n-space vertical>
-          <n-input v-model:value="suiteForm.name" placeholder="套件名称" />
-          <n-input v-model:value="suiteForm.description" placeholder="描述" type="textarea" :rows="2" />
-          <n-select v-model:value="suiteForm.test_case_ids" :options="caseOptions" multiple placeholder="选择测试用例" />
+          <n-input v-model:value="suiteForm.name" :placeholder="t('testing.suiteName')" />
+          <n-input v-model:value="suiteForm.description" :placeholder="t('common.description')" type="textarea" :rows="2" />
+          <n-select v-model:value="suiteForm.test_case_ids" :options="caseOptions" multiple :placeholder="t('testing.selectCases')" />
           <n-dynamic-tags v-model:value="suiteForm.tags" />
-          <n-button type="primary" @click="createSuite" :loading="creatingSuite">创建</n-button>
+          <n-button type="primary" @click="createSuite" :loading="creatingSuite">{{ t('common.create') }}</n-button>
         </n-space>
       </n-modal>
 
-      <n-modal v-model:show="showEditCaseModal" preset="card" title="编辑测试用例" style="width: 600px">
+      <n-modal v-model:show="showEditCaseModal" preset="card" :title="t('testing.editCaseTitle')" style="width: 600px">
         <n-space vertical>
           <n-form :model="editCaseForm" label-placement="left" label-width="80">
-            <n-form-item label="名称">
-              <n-input v-model:value="editCaseForm.name" placeholder="用例名称" />
+            <n-form-item :label="t('testing.caseName')">
+              <n-input v-model:value="editCaseForm.name" :placeholder="t('testing.caseName')" />
             </n-form-item>
-            <n-form-item label="标签">
+            <n-form-item :label="t('testing.caseTags')">
               <n-dynamic-tags v-model:value="editCaseForm.tags" />
             </n-form-item>
           </n-form>
-          <n-text depth="3" style="font-size:12px">步骤编辑：请使用可视化编辑器加载用例后修改步骤</n-text>
+          <n-text depth="3" style="font-size:12px">{{ t('testing.stepEditHint') }}</n-text>
         </n-space>
         <template #action>
           <n-space>
-            <n-button @click="showEditCaseModal = false">取消</n-button>
-            <n-button type="primary" @click="doUpdateTestCase" :loading="updatingCase">保存</n-button>
+            <n-button @click="showEditCaseModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="doUpdateTestCase" :loading="updatingCase">{{ t('common.save') }}</n-button>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showSuiteDetailModal" preset="card" title="测试套件详情" style="width: 600px">
+      <n-modal v-model:show="showSuiteDetailModal" preset="card" :title="t('testing.suiteDetailTitle')" style="width: 600px">
         <n-space vertical v-if="suiteDetail">
           <n-descriptions label-placement="left" :column="1" bordered size="small">
-            <n-descriptions-item label="名称">{{ suiteDetail.name }}</n-descriptions-item>
-            <n-descriptions-item label="描述">{{ suiteDetail.description || '-' }}</n-descriptions-item>
-            <n-descriptions-item label="用例数">{{ (suiteDetail.test_case_ids || []).length }}</n-descriptions-item>
+            <n-descriptions-item :label="t('common.name')">{{ suiteDetail.name }}</n-descriptions-item>
+            <n-descriptions-item :label="t('common.description')">{{ suiteDetail.description || '-' }}</n-descriptions-item>
+            <n-descriptions-item :label="t('testing.caseCount')">{{ (suiteDetail.test_case_ids || []).length }}</n-descriptions-item>
           </n-descriptions>
-          <n-text strong style="font-size:13px">包含用例:</n-text>
+          <n-text strong style="font-size:13px">{{ t('testing.includedCases') }}</n-text>
           <n-data-table :columns="suiteDetailCaseColumns" :data="suiteDetailCases" :bordered="false" size="small" />
         </n-space>
         <template #action>
-          <n-button @click="showSuiteDetailModal = false">关闭</n-button>
+          <n-button @click="showSuiteDetailModal = false">{{ t('common.close') }}</n-button>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showReportDetailModal" preset="card" title="报告详情" style="width: 700px">
+      <n-modal v-model:show="showReportDetailModal" preset="card" :title="t('testing.reportDetailTitle')" style="width: 700px">
         <n-space vertical v-if="reportDetail">
           <n-grid :cols="4" :x-gap="12">
-            <n-gi><n-statistic label="总数" :value="reportDetail.total || 0" /></n-gi>
-            <n-gi><n-statistic label="通过" :value="reportDetail.passed || 0" /></n-gi>
-            <n-gi><n-statistic label="失败" :value="reportDetail.failed || 0" /></n-gi>
-            <n-gi><n-statistic label="通过率" :value="(reportDetail.success_rate ?? 0) + '%'" /></n-gi>
+            <n-gi><n-statistic :label="t('testing.total')" :value="reportDetail.total || 0" /></n-gi>
+            <n-gi><n-statistic :label="t('testing.passed')" :value="reportDetail.passed || 0" /></n-gi>
+            <n-gi><n-statistic :label="t('testing.failed')" :value="reportDetail.failed || 0" /></n-gi>
+            <n-gi><n-statistic :label="t('testing.passRateLabel')" :value="(reportDetail.success_rate ?? 0) + '%'" /></n-gi>
           </n-grid>
           <n-collapse v-if="reportDetail.test_cases">
             <n-collapse-item v-for="tc in reportDetail.test_cases" :key="tc.id" :name="tc.id">
@@ -332,8 +332,8 @@
         </n-space>
         <template #action>
           <n-space>
-            <n-button @click="showReportDetailModal = false">关闭</n-button>
-            <n-button type="primary" @click="viewHtmlReport(reportDetail.id)">HTML报告</n-button>
+            <n-button @click="showReportDetailModal = false">{{ t('common.close') }}</n-button>
+            <n-button type="primary" @click="viewHtmlReport(reportDetail.id)">{{ t('testing.htmlReport') }}</n-button>
           </n-space>
         </template>
       </n-modal>
@@ -393,41 +393,41 @@ const builderCase = ref({
 
 const presetTemplates = [
   {
-    name: '设备连通性测试',
+    name: t('testing.connectivityTest'),
     json: JSON.stringify([{
-      id: "tc-connectivity", name: "设备连通性测试", tags: ["smoke"],
+      id: "tc-connectivity", name: t('testing.connectivityTest'), tags: ["smoke"],
       steps: [
-        { name: "创建设备", action: "create_device", params: { id: "test-conn", name: "连通性测试设备", protocol: "http", points: [{ name: "value", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] }, assertions: [{ type: "status_code", expected: 200, message: "创建设备应返回200" }] },
-        { name: "读取测点", action: "read_points", params: { device_id: "test-conn" }, assertions: [{ type: "length_greater", expected: 0, message: "测点列表不应为空" }] },
-        { name: "写入测点", action: "write_point", params: { device_id: "test-conn", point_name: "value", value: 42.5 }, assertions: [{ type: "status_code", expected: 200, message: "写入应返回200" }] },
-        { name: "清理", action: "delete_device", params: { device_id: "test-conn" } }
+        { name: t('testing.createDevice'), action: "create_device", params: { id: "test-conn", name: t('testing.connectivityTestDevice'), protocol: "http", points: [{ name: "value", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] }, assertions: [{ type: "status_code", expected: 200, message: t('testing.createDeviceShould200') }] },
+        { name: t('testing.readPoints'), action: "read_points", params: { device_id: "test-conn" }, assertions: [{ type: "length_greater", expected: 0, message: t('testing.pointsNotEmptyAssert') }] },
+        { name: t('testing.writePoint'), action: "write_point", params: { device_id: "test-conn", point_name: "value", value: 42.5 }, assertions: [{ type: "status_code", expected: 200, message: t('testing.writeShould200') }] },
+        { name: t('testing.cleanup'), action: "delete_device", params: { device_id: "test-conn" } }
       ]
     }], null, 2),
   },
   {
-    name: '批量设备测试',
+    name: t('testing.batchDeviceTest'),
     json: JSON.stringify([{
-      id: "tc-batch", name: "批量设备创建删除", tags: ["batch"],
+      id: "tc-batch", name: t('testing.batchDeviceTest'), tags: ["batch"],
       steps: [
-        { name: "批量创建", action: "batch_create_devices", params: { devices: [
-          { id: "batch-1", name: "批量1", protocol: "http", points: [{ name: "v", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] },
-          { id: "batch-2", name: "批量2", protocol: "http", points: [{ name: "v", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] },
-        ]}, assertions: [{ type: "status_code", expected: 200, message: "批量创建应返回200" }] },
-        { name: "查询设备列表", action: "list_devices", assertions: [{ type: "length_greater", expected: 1, message: "设备列表应不为空" }] },
-        { name: "批量删除", action: "batch_delete_devices", params: { device_ids: ["batch-1", "batch-2"] } }
+        { name: t('testing.batchCreate'), action: "batch_create_devices", params: { devices: [
+          { id: "batch-1", name: t('testing.batch1'), protocol: "http", points: [{ name: "v", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] },
+          { id: "batch-2", name: t('testing.batch2'), protocol: "http", points: [{ name: "v", address: "0", data_type: "float32", generator_type: "random", min_value: 0, max_value: 100 }] },
+        ]}, assertions: [{ type: "status_code", expected: 200, message: t('testing.batchCreateShould200') }] },
+        { name: t('testing.queryDeviceList'), action: "list_devices", assertions: [{ type: "length_greater", expected: 1, message: t('testing.deviceListNotEmpty') }] },
+        { name: t('testing.batchDelete'), action: "batch_delete_devices", params: { device_ids: ["batch-1", "batch-2"] } }
       ]
     }], null, 2),
   },
   {
-    name: '场景仿真测试',
+    name: t('testing.scenarioSimTest'),
     json: JSON.stringify([{
-      id: "tc-scenario", name: "场景仿真测试", tags: ["scenario"],
+      id: "tc-scenario", name: t('testing.scenarioSimTest'), tags: ["scenario"],
       steps: [
-        { name: "创建场景", action: "create_scenario", params: { id: "test-scene", name: "测试场景", devices: [], rules: [] }, assertions: [{ type: "status_code", expected: 200, message: "创建场景应返回200" }] },
-        { name: "启动场景", action: "start_scenario", params: { scenario_id: "test-scene" } },
-        { name: "等待2秒", action: "wait", params: { seconds: 2 } },
-        { name: "停止场景", action: "stop_scenario", params: { scenario_id: "test-scene" } },
-        { name: "删除场景", action: "delete_scenario", params: { scenario_id: "test-scene" } }
+        { name: t('testing.createScenario'), action: "create_scenario", params: { id: "test-scene", name: t('testing.testScenarioName'), devices: [], rules: [] }, assertions: [{ type: "status_code", expected: 200, message: t('testing.createScenarioShould200') }] },
+        { name: t('testing.startScenario'), action: "start_scenario", params: { scenario_id: "test-scene" } },
+        { name: t('testing.waitSeconds'), action: "wait", params: { seconds: 2 } },
+        { name: t('testing.stopScenario'), action: "stop_scenario", params: { scenario_id: "test-scene" } },
+        { name: t('testing.deleteScenario'), action: "delete_scenario", params: { scenario_id: "test-scene" } }
       ]
     }], null, 2),
   },
@@ -482,9 +482,9 @@ function getPointOptions(deviceId) {
 
 function paramLabel(key) {
   const labels = {
-    device_id: '设备', scenario_id: '场景', protocol: '协议', template_id: '模板',
-    point_name: '测点', seconds: '秒数', value: '值', method: '方法', url: 'URL',
-    id: 'ID', name: '名称', device_ids: '设备IDs',
+    device_id: t('testing.paramDevice'), scenario_id: t('testing.paramScenario'), protocol: t('common.protocol'), template_id: t('common.type'),
+    point_name: t('testing.paramPoint'), seconds: t('common.port'), value: t('common.value'), method: t('testing.paramMethod'), url: t('testing.paramUrl'),
+    id: t('testing.paramId'), name: t('common.name'), device_ids: t('testing.paramDeviceIds'),
   }
   return labels[key] || key
 }
@@ -501,10 +501,10 @@ function onActionChange(step) {
     step.params[p] = undefined
   }
   if (['create_device', 'start_protocol', 'start_scenario', 'write_point'].includes(step.action)) {
-    step.assertions.push({ type: 'status_code', expected: 200, message: '操作应成功' })
+    step.assertions.push({ type: 'status_code', expected: 200, message: t('testing.actionShouldSucceed') })
   }
   if (step.action === 'read_points') {
-    step.assertions.push({ type: 'length_greater', expected: 0, message: '测点列表不应为空' })
+    step.assertions.push({ type: 'length_greater', expected: 0, message: t('testing.pointsNotEmpty') })
   }
   if (!step.name) {
     const at = actionTypes.value.find(a => a.value === step.action)
@@ -539,7 +539,7 @@ function addAssertion(step) {
 function builderCaseToJson() {
   return [{
     id: builderCase.value.id,
-    name: builderCase.value.name || '未命名测试',
+    name: builderCase.value.name || t('testing.unnamedTest'),
     tags: ['custom'],
     steps: builderCase.value.steps.map(s => ({
       name: s.name,
@@ -552,7 +552,7 @@ function builderCaseToJson() {
 
 async function runBuilderTest() {
   if (!builderCase.value.steps.length) {
-    message.warning('请先添加测试步骤')
+    message.warning(t('testing.addStepsFirst'))
     return
   }
   runningBuilder.value = true
@@ -561,9 +561,9 @@ async function runBuilderTest() {
     const res = await api.runTests(cases)
     lastReport.value = res
     await loadReports()
-    message.success('测试执行完成')
+    message.success(t('testing.testComplete'))
   } catch (e) {
-    message.error('测试执行失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.testExecFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     runningBuilder.value = false
   }
@@ -574,12 +574,12 @@ async function saveBuilderCase() {
     const cases = builderCaseToJson()
     await api.createTestCase(cases[0])
     await loadCases()
-    message.success('用例已保存')
+    message.success(t('testing.caseSaved'))
   } catch (e) {
     if (e instanceof SyntaxError) {
-      message.error('JSON 格式错误: ' + e.message)
+      message.error(t('testing.jsonParseError') + ': ' + e.message)
     } else {
-      message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+      message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
     }
   }
 }
@@ -602,12 +602,12 @@ async function runQuickTest(scope, targetId) {
     lastReport.value = res
     await loadReports()
     if ((res.success_rate || 0) >= 100) {
-      message.success(`一键测试完成：全部 ${res.total || 0} 项通过！`)
+      message.success(t('testing.quickTestComplete', { total: res.total || 0 }))
     } else {
-      message.warning(`一键测试完成：${res.passed || 0}/${res.total || 0} 通过，${res.failed || 0} 项失败`)
+      message.warning(t('testing.quickTestPartial', { passed: res.passed || 0, total: res.total || 0, failed: res.failed || 0 }))
     }
   } catch (e) {
-    message.error('一键测试失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.quickTestFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     quickTesting.value = false
   }
@@ -620,12 +620,12 @@ async function runJsonTest() {
     const res = await api.runTests(cases)
     lastReport.value = res
     await loadReports()
-    message.success('测试执行完成')
+    message.success(t('testing.testComplete'))
   } catch (e) {
     if (e instanceof SyntaxError) {
-      message.error('JSON 格式错误: ' + e.message)
+      message.error(t('testing.jsonParseError') + ': ' + e.message)
     } else {
-      message.error('测试执行失败: ' + (e.response?.data?.detail || e.message))
+      message.error(t('testing.testExecFailed') + ': ' + (e.response?.data?.detail || e.message))
     }
   } finally {
     runningJson.value = false
@@ -636,9 +636,9 @@ function formatJson() {
   try {
     const parsed = JSON.parse(testJson.value)
     testJson.value = JSON.stringify(parsed, null, 2)
-    message.success('格式化完成')
+    message.success(t('testing.formatComplete'))
   } catch (e) {
-    message.error('JSON 格式错误，无法格式化')
+    message.error(t('testing.jsonFormatError'))
   }
 }
 
@@ -649,9 +649,9 @@ async function saveJsonAsCase() {
       await api.createTestCase(c)
     }
     await loadCases()
-    message.success('用例已保存')
+    message.success(t('testing.caseSaved'))
   } catch (e) {
-    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -660,9 +660,9 @@ async function runCaseById(caseId) {
     const res = await api.runTestCase(caseId)
     lastReport.value = res
     await loadReports()
-    message.success('测试执行完成')
+    message.success(t('testing.testComplete'))
   } catch (e) {
-    message.error('执行失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -671,9 +671,9 @@ async function runSuiteById(suiteId) {
     const res = await api.runTestSuite(suiteId)
     lastReport.value = res
     await loadReports()
-    message.success('测试执行完成')
+    message.success(t('testing.testComplete'))
   } catch (e) {
-    message.error('执行失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -694,25 +694,25 @@ async function loadCaseToEditor(caseId) {
         })),
       })),
     }
-    message.success('用例已加载到编辑器')
+    message.success(t('testing.caseLoaded'))
   } catch (e) {
-    message.error('加载失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.caseLoadFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function deleteCase(caseId) {
   dialog.warning({
-    title: '确认删除',
-    content: '确定删除此测试用例？此操作不可撤销。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('testing.confirmDeleteCase'),
+    content: t('testing.confirmDeleteCaseDesc'),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.deleteTestCase(caseId)
         await loadCases()
-        message.success('用例已删除')
+        message.success(t('testing.caseDeleted'))
       } catch (e) {
-        message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -720,41 +720,46 @@ async function deleteCase(caseId) {
 
 async function deleteSuite(suiteId) {
   dialog.warning({
-    title: '确认删除',
-    content: '确定删除此测试套件？此操作不可撤销。',
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('testing.confirmDeleteSuite'),
+    content: t('testing.confirmDeleteSuiteDesc'),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.deleteTestSuite(suiteId)
         await loadSuites()
-        message.success('套件已删除')
+        message.success(t('testing.suiteDeleted'))
       } catch (e) {
-        message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
 }
 
-function viewHtmlReport(id) {
-  const token = localStorage.getItem('token')
-  const url = token
-    ? `/api/v1/tests/reports/${id}/html?token=${encodeURIComponent(token)}`
-    : `/api/v1/tests/reports/${id}/html`
-  window.open(url, '_blank')
+async function viewHtmlReport(id) {
+  try {
+    const res = await api.getTestReportHtml(id)
+    const html = typeof res === 'string' ? res : JSON.stringify(res)
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60000)
+  } catch (e) {
+    message.error(t('testing.reportLoadFailed') + ': ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 async function createSuite() {
-  if (!suiteForm.value.name?.trim()) { message.warning('请输入套件名称'); return }
+  if (!suiteForm.value.name?.trim()) { message.warning(t('testing.suiteNameRequired')); return }
   creatingSuite.value = true
   try {
     await api.createTestSuite(suiteForm.value)
     showSuiteModal.value = false
     suiteForm.value = { name: '', description: '', test_case_ids: [], tags: [] }
     await loadSuites()
-    message.success('套件已创建')
+    message.success(t('testing.suiteCreated'))
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     creatingSuite.value = false
   }
@@ -764,7 +769,7 @@ async function loadSuggestions() {
   loadingSuggestions.value = true
   try {
     suggestions.value = await api.getTestSuggestions()
-  } catch (e) { message.error('加载测试建议失败: ' + (e.response?.data?.detail || e.message)) } finally {
+  } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) } finally {
     loadingSuggestions.value = false
   }
 }
@@ -785,74 +790,74 @@ async function loadMetadata() {
     protocols.value = results[4].status === 'fulfilled' ? (results[4].value || []) : []
     const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
     if (failedIdx.length > 0) {
-      const names = ['操作类型', '断言类型', '设备', '场景', '协议']
-      message.warning(`部分元数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+      const names = t('testing.metadataNames').split(',')
+      message.warning(t('testing.partialMetadataFailed', { items: failedIdx.map(i => names[i]).join(t('common.listSeparator') || '、') }))
     }
-  } catch (e) { message.error('加载测试元数据失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadReports() {
-  try { reports.value = await api.listTestReports() } catch (e) { message.error('加载测试报告失败: ' + (e.response?.data?.detail || e.message)) }
+  try { reports.value = await api.listTestReports() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadCases() {
-  try { testCases.value = await api.listTestCases() } catch (e) { message.error('加载测试用例失败: ' + (e.response?.data?.detail || e.message)) }
+  try { testCases.value = await api.listTestCases() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadSuites() {
-  try { suites.value = await api.listTestSuites() } catch (e) { message.error('加载测试套件失败: ' + (e.response?.data?.detail || e.message)) }
+  try { suites.value = await api.listTestSuites() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
-const caseColumns = [
-  { title: '名称', key: 'name', width: 150 },
-  { title: '标签', key: 'tags', width: 150, render: (row) => (row.tags || []).map(t => h('span', { style: 'background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:2px;font-size:11px' }, t)) },
-  { title: '步骤数', key: 'steps', width: 70, render: (row) => (row.steps || []).length },
+const caseColumns = computed(() => [
+  { title: t('common.name'), key: 'name', width: 150 },
+  { title: t('common.filter'), key: 'tags', width: 150, render: (row) => (row.tags || []).map(tag => h('span', { style: 'background:#f0f0f0;padding:1px 6px;border-radius:3px;margin-right:2px;font-size:11px' }, tag)) },
+  { title: t('testing.stepCount'), key: 'steps', width: 70, render: (row) => (row.steps || []).length },
   {
-    title: '操作', key: 'actions', width: 260,
+    title: t('common.action'), key: 'actions', width: 260,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'success', onClick: () => runCaseById(row.id) }, () => '执行'),
-      h(NButton, { size: 'tiny', type: 'info', onClick: () => openEditCase(row) }, () => '编辑'),
-      h(NButton, { size: 'tiny', type: 'primary', onClick: () => loadCaseToEditor(row.id) }, () => '加载'),
-      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteCase(row.id) }, () => '删除'),
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => runCaseById(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => openEditCase(row) }, () => t('common.edit')),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => loadCaseToEditor(row.id) }, () => t('testing.loadToEditor')),
+      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteCase(row.id) }, () => t('common.delete')),
     ])
   },
-]
+])
 
-const suiteColumns = [
-  { title: '名称', key: 'name', width: 150 },
-  { title: '用例数', key: 'test_case_ids', width: 80, render: (row) => (row.test_case_ids || []).length },
+const suiteColumns = computed(() => [
+  { title: t('common.name'), key: 'name', width: 150 },
+  { title: t('testing.caseCount'), key: 'test_case_ids', width: 80, render: (row) => (row.test_case_ids || []).length },
   {
-    title: '操作', key: 'actions', width: 200,
+    title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'success', onClick: () => runSuiteById(row.id) }, () => '执行'),
-      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewSuiteDetail(row.id) }, () => '详情'),
-      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteSuite(row.id) }, () => '删除'),
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => runSuiteById(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewSuiteDetail(row.id) }, () => t('common.detail')),
+      h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteSuite(row.id) }, () => t('common.delete')),
     ])
   },
-]
+])
 
-const reportColumns = [
-  { title: '名称', key: 'name', width: 150 },
-  { title: '总数', key: 'total', width: 60 },
-  { title: '通过', key: 'passed', width: 60 },
-  { title: '失败', key: 'failed', width: 60 },
-  { title: '通过率', key: 'success_rate', width: 80, render: (row) => `${row.success_rate ?? 0}%` },
-  { title: '耗时', key: 'duration', width: 80, render: (row) => `${(row.duration || 0).toFixed(2)}s` },
+const reportColumns = computed(() => [
+  { title: t('common.name'), key: 'name', width: 150 },
+  { title: t('testing.total'), key: 'total', width: 60 },
+  { title: t('testing.passed'), key: 'passed', width: 60 },
+  { title: t('testing.failed'), key: 'failed', width: 60 },
+  { title: t('testing.passRate'), key: 'success_rate', width: 80, render: (row) => `${row.success_rate ?? 0}%` },
+  { title: t('testing.duration'), key: 'duration', width: 80, render: (row) => `${(row.duration || 0).toFixed(2)}s` },
   {
-    title: '操作', key: 'actions', width: 200,
+    title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewReportDetail(row.id) }, () => '详情'),
-      h(NButton, { size: 'tiny', type: 'success', onClick: () => { lastReport.value = row } }, () => '查看'),
+      h(NButton, { size: 'tiny', type: 'info', onClick: () => viewReportDetail(row.id) }, () => t('common.detail')),
+      h(NButton, { size: 'tiny', type: 'success', onClick: () => { lastReport.value = row } }, () => t('testing.viewReport')),
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => viewHtmlReport(row.id) }, () => 'HTML'),
     ])
   },
-]
+])
 
-const suiteDetailCaseColumns = [
-  { title: '用例ID', key: 'id', width: 180 },
-  { title: '名称', key: 'name', width: 150 },
-  { title: '步骤数', key: 'steps', width: 80, render: (row) => (row.steps || []).length },
-]
+const suiteDetailCaseColumns = computed(() => [
+  { title: t('testing.caseId'), key: 'id', width: 180 },
+  { title: t('common.name'), key: 'name', width: 150 },
+  { title: t('testing.stepCount'), key: 'steps', width: 80, render: (row) => (row.steps || []).length },
+])
 
 async function openEditCase(row) {
   editCaseForm.value = { id: row.id, name: row.name || '', tags: [...(row.tags || [])] }
@@ -860,7 +865,7 @@ async function openEditCase(row) {
 }
 
 async function doUpdateTestCase() {
-  if (!editCaseForm.value.name) { message.warning('请输入用例名称'); return }
+  if (!editCaseForm.value.name) { message.warning(t('testing.caseNameRequired')); return }
   updatingCase.value = true
   try {
     await api.updateTestCase(editCaseForm.value.id, {
@@ -868,10 +873,10 @@ async function doUpdateTestCase() {
       tags: editCaseForm.value.tags,
     })
     showEditCaseModal.value = false
-    message.success('用例已更新')
+    message.success(t('testing.caseUpdated'))
     await loadCases()
   } catch (e) {
-    message.error('更新失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.updateFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { updatingCase.value = false }
 }
 
@@ -881,11 +886,11 @@ async function viewSuiteDetail(suiteId) {
     suiteDetail.value = res
     suiteDetailCases.value = (res.test_case_ids || []).map(id => {
       const c = testCases.value.find(tc => tc.id === id)
-      return c || { id, name: '未知用例', steps: [] }
+      return c || { id, name: t('testing.unknownCase'), steps: [] }
     })
     showSuiteDetailModal.value = true
   } catch (e) {
-    message.error('获取套件详情失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.suiteDetailFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -895,7 +900,7 @@ async function viewReportDetail(reportId) {
     reportDetail.value = res
     showReportDetailModal.value = true
   } catch (e) {
-    message.error('获取报告详情失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.reportDetailFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -905,7 +910,7 @@ async function loadReportTrend() {
     const res = await api.getReportTrend({ count: 10 })
     trendData.value = Array.isArray(res) ? res : (res.trends || [])
   } catch (e) {
-    message.error('加载趋势数据失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('testing.trendLoadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingTrend.value = false }
 }
 

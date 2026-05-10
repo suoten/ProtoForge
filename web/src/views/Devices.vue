@@ -749,6 +749,7 @@ async function batchPushToEdgelite() {
   if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
     message.success(parts.join('，'))
   }
+  loadData()
   } finally { pushLoading.value = false }
 }
 

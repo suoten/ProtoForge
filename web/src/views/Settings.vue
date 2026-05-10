@@ -1,85 +1,85 @@
 <template>
   <div>
-    <n-h2 style="margin-bottom: 4px">系统设置</n-h2>
-    <n-text depth="3" style="font-size: 13px">管理系统配置、用户账户和演示数据</n-text>
+    <n-h2 style="margin-bottom: 4px">{{ t('settings.title') }}</n-h2>
+    <n-text depth="3" style="font-size: 13px">{{ t('settings.subtitle') }}</n-text>
 
     <n-tabs type="line" animated style="margin-top: 20px">
-      <n-tab-pane name="general" tab="通用设置">
+      <n-tab-pane name="general" :tab="t('settings.general')">
         <n-spin :show="settingsLoading">
           <n-form label-placement="left" label-width="140" style="max-width: 600px; margin-top: 16px">
-            <n-form-item label="服务端口">
+            <n-form-item :label="t('settings.servicePort')">
               <n-input-number v-model:value="form.port" :min="1" :max="65535" style="width: 200px" />
             </n-form-item>
-            <n-form-item label="日志级别">
+            <n-form-item :label="t('settings.logLevel')">
               <n-select v-model:value="form.log_level" :options="logLevelOptions" style="width: 200px" />
             </n-form-item>
-            <n-form-item label="CORS 来源">
-              <n-input v-model:value="form.cors_origins" placeholder="* 或 https://example.com" />
+            <n-form-item :label="t('settings.corsOrigin')">
+              <n-input v-model:value="form.cors_origins" :placeholder="t('settings.corsPlaceholder')" />
             </n-form-item>
-            <n-form-item label="演示模式">
+            <n-form-item :label="t('settings.demoMode')">
               <n-switch v-model:value="form.demo_mode" />
             </n-form-item>
             <n-form-item>
               <n-space>
-                <n-button type="primary" :loading="saveLoading" @click="saveSettings">保存设置</n-button>
+                <n-button type="primary" :loading="saveLoading" @click="saveSettings">{{ t('settings.saveSettings') }}</n-button>
               </n-space>
             </n-form-item>
           </n-form>
         </n-spin>
       </n-tab-pane>
 
-      <n-tab-pane name="integration" tab="集成配置">
+      <n-tab-pane name="integration" :tab="t('settings.integrationConfig')">
         <n-spin :show="settingsLoading">
           <n-form label-placement="left" label-width="140" style="max-width: 600px; margin-top: 16px">
-            <n-form-item label="EdgeLite URL">
+            <n-form-item :label="t('settings.edgeliteUrl')">
               <n-input v-model:value="form.edgelite_url" placeholder="http://edgelite:8080" />
             </n-form-item>
-            <n-form-item label="EdgeLite 用户名">
+            <n-form-item :label="t('settings.edgeliteUsername')">
               <n-input v-model:value="form.edgelite_username" />
             </n-form-item>
-            <n-form-item label="EdgeLite 密码">
+            <n-form-item :label="t('settings.edgelitePassword')">
               <n-input v-model:value="form.edgelite_password" type="password" show-password-on="click" :placeholder="form.edgelite_password ? PASSWORD_MASK : ''" />
             </n-form-item>
             <n-form-item>
               <n-space>
-                <n-button type="primary" :loading="saveLoading" @click="saveSettings">保存设置</n-button>
-                <n-button :loading="testEdgeLiteLoading" @click="testEdgeLiteConnection">测试连接</n-button>
+                <n-button type="primary" :loading="saveLoading" @click="saveSettings">{{ t('settings.saveSettings') }}</n-button>
+                <n-button :loading="testEdgeLiteLoading" @click="testEdgeLiteConnection">{{ t('settings.testConnection') }}</n-button>
               </n-space>
             </n-form-item>
             <n-alert v-if="testEdgeLiteResult" :type="testEdgeLiteResult.ok ? 'success' : 'error'" :bordered="false" style="margin-bottom:12px">
               <template v-if="testEdgeLiteResult.ok">
-                连接成功！EdgeLite 版本: {{ testEdgeLiteResult.version || '未知' }}，设备总数: {{ testEdgeLiteResult.devices || 0 }}
+                {{ t('settings.testConnectionSuccess', { version: testEdgeLiteResult.version || t('common.unknown'), devices: testEdgeLiteResult.devices || 0 }) }}
               </template>
               <template v-else>
-                连接失败: {{ testEdgeLiteResult.error }}
+                {{ t('settings.testConnectionFailed', { error: testEdgeLiteResult.error }) }}
               </template>
             </n-alert>
           </n-form>
           <n-divider style="max-width: 600px" />
           <n-form label-placement="left" label-width="140" style="max-width: 600px">
-            <n-form-item label="InfluxDB URL">
+            <n-form-item :label="t('settings.influxdbUrl')">
               <n-input v-model:value="form.influxdb_url" placeholder="http://influxdb:8086" />
             </n-form-item>
-            <n-form-item label="InfluxDB Token">
+            <n-form-item :label="t('settings.influxdbToken')">
               <n-input v-model:value="form.influxdb_token" type="password" show-password-on="click" :placeholder="form.influxdb_token ? PASSWORD_MASK : ''" />
             </n-form-item>
-            <n-form-item label="InfluxDB 组织">
+            <n-form-item :label="t('settings.influxdbOrg')">
               <n-input v-model:value="form.influxdb_org" />
             </n-form-item>
-            <n-form-item label="InfluxDB Bucket">
+            <n-form-item :label="t('settings.influxdbBucket')">
               <n-input v-model:value="form.influxdb_bucket" />
             </n-form-item>
-            <n-form-item label="公网地址">
-              <n-input v-model:value="form.protoforge_public_host" placeholder="用于EdgeLite回调，如 http://1.2.3.4:8000" />
+            <n-form-item :label="t('settings.publicHost')">
+              <n-input v-model:value="form.protoforge_public_host" :placeholder="t('settings.publicHostPlaceholder')" />
             </n-form-item>
             <n-form-item>
-              <n-button type="primary" :loading="saveLoading" @click="saveSettings">保存设置</n-button>
+              <n-button type="primary" :loading="saveLoading" @click="saveSettings">{{ t('settings.saveSettings') }}</n-button>
             </n-form-item>
           </n-form>
         </n-spin>
       </n-tab-pane>
 
-      <n-tab-pane name="ports" tab="协议端口">
+      <n-tab-pane name="ports" :tab="t('settings.protocolPort')">
         <n-spin :show="settingsLoading">
           <n-form label-placement="left" label-width="140" style="max-width: 600px; margin-top: 16px">
             <n-form-item v-for="(port, key) in form.protocol_ports" :key="key" :label="getProtocolLabel(key)">
@@ -87,39 +87,39 @@
               <n-input-number v-else v-model:value="form.protocol_ports[key]" :min="1" :max="65535" style="width: 200px" />
             </n-form-item>
             <n-form-item>
-              <n-button type="primary" :loading="saveLoading" @click="saveSettings">保存设置</n-button>
+              <n-button type="primary" :loading="saveLoading" @click="saveSettings">{{ t('settings.saveSettings') }}</n-button>
             </n-form-item>
           </n-form>
         </n-spin>
       </n-tab-pane>
 
-      <n-tab-pane name="users" tab="用户管理">
+      <n-tab-pane name="users" :tab="t('settings.userManagement')">
         <n-space style="margin: 16px 0">
-          <n-button type="primary" @click="openAddUser">添加用户</n-button>
-          <n-button @click="openChangePassword">修改密码</n-button>
+          <n-button type="primary" @click="openAddUser">{{ t('settings.addUser') }}</n-button>
+          <n-button @click="openChangePassword">{{ t('common.changePassword') }}</n-button>
         </n-space>
         <n-data-table :columns="userColumns" :data="users" :bordered="false" size="small" />
       </n-tab-pane>
 
-      <n-tab-pane name="demo" tab="演示数据">
+      <n-tab-pane name="demo" :tab="t('settings.demoData')">
         <n-spin :show="setupLoading">
           <n-space vertical style="margin-top: 16px">
             <n-card size="small">
               <n-space align="center" justify="space-between">
                 <div>
-                  <n-text strong>系统状态</n-text>
-                  <n-text depth="3" style="margin-left: 8px">设备: {{ setupStatus.device_count || 0 }} | 场景: {{ setupStatus.scenario_count || 0 }} | 运行协议: {{ setupStatus.protocols_running || 0 }} | 模板: {{ setupStatus.templates_available || 0 }}</n-text>
+                  <n-text strong>{{ t('settings.systemStatus') }}</n-text>
+                  <n-text depth="3" style="margin-left: 8px">{{ t('settings.deviceCount') }}: {{ setupStatus.device_count || 0 }} | {{ t('settings.scenarioCount') }}: {{ setupStatus.scenario_count || 0 }} | {{ t('settings.runningProtocols') }}: {{ setupStatus.protocols_running || 0 }} | {{ t('settings.templatesAvailable') }}: {{ setupStatus.templates_available || 0 }}</n-text>
                 </div>
                 <n-tag :type="setupStatus.initialized ? 'success' : 'warning'" size="small">
-                  {{ setupStatus.initialized ? '已初始化' : '未初始化' }}
+                  {{ setupStatus.initialized ? t('settings.initialized') : t('settings.notInitialized') }}
                 </n-tag>
               </n-space>
             </n-card>
-            <n-card size="small" title="演示数据">
-              <n-text depth="3">创建一组演示设备和场景，用于快速体验 ProtoForge 功能。</n-text>
+            <n-card size="small" :title="t('settings.demoData')">
+              <n-text depth="3">{{ t('settings.demoDataDesc') }}</n-text>
               <template #action>
                 <n-button type="primary" :loading="demoLoading" @click="setupDemo" :disabled="setupStatus.demo_initialized">
-                  {{ setupStatus.demo_initialized ? '已创建' : '创建演示数据' }}
+                  {{ setupStatus.demo_initialized ? t('settings.demoCreated') : t('settings.createDemoData') }}
                 </n-button>
               </template>
             </n-card>
@@ -128,43 +128,43 @@
       </n-tab-pane>
     </n-tabs>
 
-    <n-modal v-model:show="showAddUser" title="添加用户" preset="card" style="width: 420px" :mask-closable="false">
+    <n-modal v-model:show="showAddUser" :title="t('settings.addUserTitle')" preset="card" style="width: 420px" :mask-closable="false">
       <n-space vertical>
-        <n-input v-model:value="newUser.username" placeholder="用户名" />
-        <n-input v-model:value="newUser.password" type="password" placeholder="密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
-        <n-select v-model:value="newUser.role" :options="roleOptions" placeholder="角色" />
+        <n-input v-model:value="newUser.username" :placeholder="t('common.username')" />
+        <n-input v-model:value="newUser.password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
+        <n-select v-model:value="newUser.role" :options="roleOptions" :placeholder="t('common.role')" />
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showAddUser = false">取消</n-button>
-          <n-button type="primary" :loading="addUserLoading" @click="handleAddUser">创建</n-button>
+          <n-button @click="showAddUser = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" :loading="addUserLoading" @click="handleAddUser">{{ t('common.create') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showResetPassword" title="重置密码" preset="card" style="width: 420px" :mask-closable="false">
+    <n-modal v-model:show="showResetPassword" :title="t('settings.resetPasswordTitle')" preset="card" style="width: 420px" :mask-closable="false">
       <n-space vertical>
-        <n-text>为用户 <n-text strong>{{ resetTarget.username }}</n-text> 设置新密码</n-text>
-        <n-input v-model:value="resetTarget.new_password" type="password" placeholder="新密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
+        <n-text>{{ t('settings.setPasswordFor', { username: resetTarget.username }) }}</n-text>
+        <n-input v-model:value="resetTarget.new_password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showResetPassword = false">取消</n-button>
-          <n-button type="primary" :loading="resetLoading" @click="handleResetPassword">确认重置</n-button>
+          <n-button @click="showResetPassword = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" :loading="resetLoading" @click="handleResetPassword">{{ t('common.confirm') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showChangePassword" title="修改密码" preset="card" style="width: 420px" :mask-closable="false">
+    <n-modal v-model:show="showChangePassword" :title="t('settings.changePasswordTitle')" preset="card" style="width: 420px" :mask-closable="false">
       <n-space vertical>
-        <n-input v-model:value="changePwdForm.username" placeholder="用户名" disabled />
-        <n-input v-model:value="changePwdForm.old_password" type="password" placeholder="当前密码" show-password-on="click" />
-        <n-input v-model:value="changePwdForm.new_password" type="password" placeholder="新密码（至少8位，含大小写/数字/特殊字符中3种）" show-password-on="click" />
+        <n-input v-model:value="changePwdForm.username" :placeholder="t('common.username')" disabled />
+        <n-input v-model:value="changePwdForm.old_password" type="password" :placeholder="t('common.currentPassword')" show-password-on="click" />
+        <n-input v-model:value="changePwdForm.new_password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
       </n-space>
       <template #footer>
         <n-space justify="end">
-          <n-button @click="showChangePassword = false">取消</n-button>
-          <n-button type="primary" :loading="changePwdLoading" @click="handleChangePassword">确认修改</n-button>
+          <n-button @click="showChangePassword = false">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" :loading="changePwdLoading" @click="handleChangePassword">{{ t('common.confirm') }}</n-button>
         </n-space>
       </template>
     </n-modal>
@@ -172,11 +172,12 @@
 </template>
 
 <script setup>
-import { ref, h, onMounted } from 'vue'
+import { ref, computed, h, onMounted } from 'vue'
 import { NButton, NSpace, NTag, NPopconfirm, NSelect, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { getProtocolLabel, PASSWORD_MASK } from '../constants.js'
+import { validatePassword } from '../utils.js'
 
 const message = useMessage()
 const { t } = useI18n()
@@ -215,12 +216,12 @@ const logLevelOptions = [
   { label: 'CRITICAL', value: 'critical' },
 ]
 
-const roleOptions = [
-  { label: '管理员', value: 'admin' },
-  { label: '操作员', value: 'operator' },
-  { label: '用户', value: 'user' },
-  { label: '只读', value: 'viewer' },
-]
+const roleOptions = computed(() => [
+  { label: t('settings.admin'), value: 'admin' },
+  { label: t('settings.operator'), value: 'operator' },
+  { label: t('settings.user'), value: 'user' },
+  { label: t('settings.viewer'), value: 'viewer' },
+])
 
 const users = ref([])
 const setupStatus = ref({})
@@ -232,35 +233,35 @@ const resetTarget = ref({ username: '', new_password: '' })
 const changePwdForm = ref({ username: '', old_password: '', new_password: '' })
 const changePwdLoading = ref(false)
 
-const userColumns = [
-  { title: '用户名', key: 'username', width: 150 },
+const userColumns = computed(() => [
+  { title: t('common.username'), key: 'username', width: 150 },
   {
-    title: '角色', key: 'role', width: 120,
+    title: t('common.role'), key: 'role', width: 120,
     render: (row) => h(NTag, { size: 'small', type: row.role === 'admin' ? 'error' : row.role === 'operator' ? 'warning' : 'info', bordered: false }, () => row.role),
   },
   {
-    title: '状态', key: 'locked', width: 100,
-    render: (row) => row.locked ? h(NTag, { size: 'small', type: 'error', bordered: false }, () => '已锁定') : h(NTag, { size: 'small', type: 'success', bordered: false }, () => '正常'),
+    title: t('common.status'), key: 'locked', width: 100,
+    render: (row) => row.locked ? h(NTag, { size: 'small', type: 'error', bordered: false }, () => t('common.locked')) : h(NTag, { size: 'small', type: 'success', bordered: false }, () => t('common.normal')),
   },
   {
-    title: '操作', key: 'actions', width: 320,
+    title: t('common.action'), key: 'actions', width: 320,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openResetPassword(row) }, () => '重置密码'),
-      row.locked ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => unlockUser(row) }, () => '解锁') : null,
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openResetPassword(row) }, () => t('common.resetPassword')),
+      row.locked ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => unlockUser(row) }, () => t('common.unlock')) : null,
       h(NSelect, {
         size: 'tiny',
         value: row.role,
-        options: roleOptions,
+        options: roleOptions.value,
         style: 'width: 100px',
         onUpdateValue: (val) => changeRole(row, val),
       }),
       row.username !== 'admin' ? h(NPopconfirm, { onPositiveClick: () => deleteUser(row) }, {
-        trigger: () => h(NButton, { size: 'tiny', type: 'error', secondary: true }, () => '删除'),
-        default: () => `确定删除用户 ${row.username}？`,
+        trigger: () => h(NButton, { size: 'tiny', type: 'error', secondary: true }, () => t('common.delete')),
+        default: () => t('settings.confirmDeleteUser', { username: row.username }),
       }) : null,
     ]),
   },
-]
+])
 
 async function loadSettings() {
   settingsLoading.value = true
@@ -282,7 +283,7 @@ async function loadSettings() {
       protocol_ports: data.protocol_ports || {},
     }
   } catch (e) {
-    message.error('加载设置失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.loadSettingsFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     settingsLoading.value = false
   }
@@ -295,9 +296,9 @@ async function saveSettings() {
     if (updates.edgelite_password === PASSWORD_MASK) delete updates.edgelite_password
     if (updates.influxdb_token === PASSWORD_MASK) delete updates.influxdb_token
     await api.updateSettings(updates)
-    message.success('设置已保存，部分配置需重启生效')
+    message.success(t('settings.settingsSaved'))
   } catch (e) {
-    message.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     saveLoading.value = false
   }
@@ -305,7 +306,7 @@ async function saveSettings() {
 
 async function testEdgeLiteConnection() {
   if (!form.value.edgelite_url) {
-    message.warning('请先填写 EdgeLite URL')
+    message.warning(t('settings.edgeliteUrlRequired'))
     return
   }
   testEdgeLiteLoading.value = true
@@ -332,7 +333,7 @@ async function loadUsers() {
     const data = await api.listUsers()
     users.value = Array.isArray(data) ? data : []
   } catch (e) {
-    message.error('加载用户列表失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.loadUsersFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -341,7 +342,7 @@ async function loadSetupStatus() {
   try {
     setupStatus.value = await api.getSetupStatus()
   } catch (e) {
-    message.warning('加载系统状态失败')
+    message.warning(t('settings.loadStatusFailed'))
   } finally {
     setupLoading.value = false
   }
@@ -354,17 +355,13 @@ function openAddUser() {
 
 async function handleAddUser() {
   if (!newUser.value.username || !newUser.value.password) {
-    message.warning('请填写用户名和密码')
+    message.warning(t('settings.usernameRequired'))
     return
   }
   const pwd = newUser.value.password
-  if (pwd.length < 8) {
-    message.warning('密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
-    return
-  }
-  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
-  if (types < 3) {
-    message.warning('密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+  const pwCheck = validatePassword(pwd)
+  if (!pwCheck.valid) {
+    message.warning(t('settings.passwordPolicy'))
     return
   }
   addUserLoading.value = true
@@ -373,11 +370,11 @@ async function handleAddUser() {
     if (newUser.value.role !== 'user') {
       await api.adminUpdateRole(newUser.value.username, newUser.value.role)
     }
-    message.success('用户创建成功')
+    message.success(t('settings.userCreated'))
     showAddUser.value = false
     await loadUsers()
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     addUserLoading.value = false
   }
@@ -390,22 +387,18 @@ function openResetPassword(row) {
 
 async function handleResetPassword() {
   const pwd = resetTarget.value.new_password
-  if (!pwd || pwd.length < 8) {
-    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
-    return
-  }
-  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
-  if (types < 3) {
-    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+  const pwCheck = validatePassword(pwd)
+  if (!pwCheck.valid) {
+    message.warning(t('settings.passwordPolicy'))
     return
   }
   resetLoading.value = true
   try {
     await api.adminResetPassword(resetTarget.value.username, resetTarget.value.new_password)
-    message.success('密码已重置')
+    message.success(t('settings.passwordReset'))
     showResetPassword.value = false
   } catch (e) {
-    message.error('重置失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     resetLoading.value = false
   }
@@ -414,26 +407,26 @@ async function handleResetPassword() {
 async function unlockUser(row) {
   try {
     await api.adminUnlockUser(row.username)
-    message.success('用户已解锁')
+    message.success(t('settings.userUnlocked'))
     await loadUsers()
   } catch (e) {
-    message.error('解锁失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function changeRole(row, newRole) {
   dialog.warning({
-    title: '确认更改角色',
-    content: `将用户 ${row.username} 的角色从 ${row.role} 更改为 ${newRole}，确定继续？`,
-    positiveText: '确定',
-    negativeText: '取消',
+    title: t('settings.confirmChangeRole'),
+    content: t('settings.confirmChangeRoleDesc', { username: row.username, oldRole: row.role, newRole }),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.adminUpdateRole(row.username, newRole)
-        message.success('角色已更新')
+        message.success(t('settings.roleUpdated'))
         await loadUsers()
       } catch (e) {
-        message.error('更新角色失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('settings.updateRoleFailed') + ': ' + (e.response?.data?.detail || e.message))
         await loadUsers()
       }
     },
@@ -444,10 +437,10 @@ async function changeRole(row, newRole) {
 async function deleteUser(row) {
   try {
     await api.deleteUser(row.username)
-    message.success('用户已删除')
+    message.success(t('settings.userDeleted'))
     await loadUsers()
   } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -459,26 +452,22 @@ function openChangePassword() {
 
 async function handleChangePassword() {
   if (!changePwdForm.value.old_password || !changePwdForm.value.new_password) {
-    message.warning('请填写当前密码和新密码')
+    message.warning(t('settings.fillOldAndNewPassword'))
     return
   }
   const pwd = changePwdForm.value.new_password
-  if (pwd.length < 8) {
-    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
-    return
-  }
-  const types = [/[a-z]/.test(pwd), /[A-Z]/.test(pwd), /[0-9]/.test(pwd), /[^a-zA-Z0-9]/.test(pwd)].filter(Boolean).length
-  if (types < 3) {
-    message.warning('新密码至少8位，需包含大小写字母、数字、特殊字符中的至少3种')
+  const pwCheck = validatePassword(pwd)
+  if (!pwCheck.valid) {
+    message.warning(t('settings.passwordPolicy'))
     return
   }
   changePwdLoading.value = true
   try {
     await api.changePassword(changePwdForm.value.username, changePwdForm.value.old_password, changePwdForm.value.new_password)
-    message.success('密码修改成功')
+    message.success(t('settings.passwordChanged'))
     showChangePassword.value = false
   } catch (e) {
-    message.error('修改失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.changePasswordFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     changePwdLoading.value = false
   }
@@ -488,10 +477,10 @@ async function setupDemo() {
   demoLoading.value = true
   try {
     const res = await api.setupDemo()
-    message.success(`演示数据已创建：${res.device_count || 0} 个设备，${res.scenario_count || 0} 个场景`)
+    message.success(t('settings.demoCreateSuccess', { devices: res.device_count || 0, scenarios: res.scenario_count || 0 }))
     await loadSetupStatus()
   } catch (e) {
-    message.error('创建演示数据失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.demoCreateFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     demoLoading.value = false
   }

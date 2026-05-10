@@ -159,7 +159,7 @@ export default {
   }),
   getProtocolConfig: (name) => d(api.get(`/protocols/${name}/config`)),
   getProtocolDeviceConfig: (name) => d(api.get(`/protocols/${name}/device-config`)),
-  startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config)),
+  startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config ?? {})),
   stopProtocol: (name) => d(api.post(`/protocols/${name}/stop`)),
 
   getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })).then(r => normalizeList(r, 'devices')),
@@ -229,7 +229,7 @@ export default {
   getTestAssertionTypes: () => d(api.get('/tests/assertion-types')).then(r => normalizeList(r, 'assertion_types')),
   listTestReports: () => d(api.get('/tests/reports')).then(r => normalizeList(r, 'reports')),
   getTestReport: (id) => d(api.get(`/tests/reports/${id}`)),
-  getTestReportHtml: (id) => d(api.get(`/tests/reports/${id}/html`)),
+  getTestReportHtml: (id) => api.get(`/tests/reports/${id}/html`, { transformResponse: [(data) => data] }).then(r => r.data),
   getReportTrend: (params) => d(api.get('/tests/reports/trend', { params })).then(r => normalizeList(r, 'trends')),
 
   importEdgelite: (config) => d(api.post('/integration/edgelite', config)),

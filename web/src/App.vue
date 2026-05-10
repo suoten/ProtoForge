@@ -141,6 +141,7 @@ import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NA
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api, { setNotifyFunction } from './api.js'
+import { validatePassword } from './utils.js'
 import Login from './views/Login.vue'
 
 const router = useRouter()
@@ -278,9 +279,9 @@ async function handleChangePassword() {
     message.error(t('password.tooShort'))
     return
   }
-  const types = [/[a-z]/.test(newPassword.value), /[A-Z]/.test(newPassword.value), /[0-9]/.test(newPassword.value), /[^a-zA-Z0-9]/.test(newPassword.value)].filter(Boolean).length
-  if (types < 3) {
-    message.error(t('password.tooWeak'))
+  const pwCheck = validatePassword(newPassword.value)
+  if (!pwCheck.valid) {
+    message.error(t(`password.${pwCheck.reason}`))
     return
   }
   changePasswordLoading.value = true
@@ -350,7 +351,7 @@ function connectWebSocket() {
     ws = api.createLogWs()
     if (!ws) return
   } catch (e) {
-    console.error('Failed to create log WebSocket:', e.message)
+    console.error('Failed to create WebSocket:', e.message)
     wsReconnectAttempts++
     if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
       wsReconnectTimer = setTimeout(connectWebSocket, 5000)
@@ -372,20 +373,7 @@ function connectWebSocket() {
     wsConnected.value = false
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
   }
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'ping') return
-      if (msg.type === 'log' && msg.data) {
-        console.debug('[WS] log event received:', msg.data.summary || msg.data.message_type)
-      }
-      if (msg.type === 'devices' && Array.isArray(msg.data)) {
-        console.debug('[WS] devices update received, count:', msg.data.length)
-      }
-    } catch (e) {
-      console.debug('[WS] Message parse error, skipping:', e.message)
-    }
-  }
+  ws.onmessage = () => {}
 }
 
 async function loadSearchData() {
