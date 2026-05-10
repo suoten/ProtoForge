@@ -119,9 +119,11 @@ import {
 } from 'naive-ui'
 import { useRoute, onBeforeRouteLeave } from 'vue-router'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { protocolColors, dataTypeOptions, generatorTypeOptions } from '../constants.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const route = useRoute()
 

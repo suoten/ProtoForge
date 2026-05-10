@@ -430,9 +430,11 @@ import { NSpace, NTabs, NTabPane, NCard, NInput, NButton, NButtonGroup, NAlert, 
   NForm, NFormItem, NTag, NModal, NSpin, NDescriptions, NDescriptionsItem, NText, NGrid, NGi,
   NSelect, NSwitch, NPopconfirm, NEmpty, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import config from '../config.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const edgeLiteJson = ref('')
 const pygbsentryJson = ref('')

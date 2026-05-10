@@ -123,8 +123,10 @@ import { NSpace, NButton, NCard, NDataTable, NModal, NForm, NFormItem,
   NInput, NSelect, NSwitch, NGrid, NGi, NTag, NEmpty, NPopconfirm,
   NText, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 
 const webhooks = ref([])

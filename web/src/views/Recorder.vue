@@ -130,8 +130,10 @@ import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
   NInput, NGrid, NGi, NText, NTag, NEmpty, NDescriptions, NDescriptionsItem,
   NSpin, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 
 const recordings = ref([])

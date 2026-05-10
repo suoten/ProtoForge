@@ -37,8 +37,10 @@
 import { ref } from 'vue'
 import { NCard, NGrid, NGi, NButton, NP, NUpload, NSpace, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const exporting = ref(false)
 const importing = ref(false)

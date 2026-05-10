@@ -160,11 +160,13 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions } from '../constants.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const templates = ref([])
 const protocols = ref([])

@@ -54,9 +54,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NDivider, NSteps, NStep, NSelect, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { popularTemplateIds } from '../constants.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const showWelcome = ref(false)
 const currentStep = ref(1)
 const selectedTemplate = ref(null)

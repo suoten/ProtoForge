@@ -359,10 +359,12 @@ import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFor
   NSteps, NStep, NText, NAlert, NSpin, NCard, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol } from '../constants.js'
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const devices = ref([])
 const selectedIds = ref([])

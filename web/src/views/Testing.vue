@@ -345,8 +345,10 @@
 import { ref, computed, onMounted, h } from 'vue'
 import { useMessage, useDialog, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags, NButton, NSpace } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 
 const suggestions = ref([])

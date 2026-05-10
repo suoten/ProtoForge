@@ -75,9 +75,11 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { directionTagTypeMap, directionLabelMap } from '../constants.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 
 const logs = ref([])

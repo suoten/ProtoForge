@@ -15,29 +15,29 @@
           </g>
         </svg>
         <h1 style="color:white;font-size:24px;font-weight:700;margin:0;letter-spacing:-0.5px">ProtoForge</h1>
-        <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0">物联网协议仿真与测试平台</p>
+        <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0">{{ t('login.subtitle') }}</p>
       </div>
       <div class="login-body">
         <n-form :model="form" @keyup.enter="handleLogin">
-          <n-form-item label="用户名">
-            <n-input v-model:value="form.username" placeholder="请输入用户名" size="large">
+          <n-form-item :label="t('login.username')">
+            <n-input v-model:value="form.username" :placeholder="t('login.usernameRequired')" size="large">
               <template #prefix>
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </template>
             </n-input>
           </n-form-item>
-          <n-form-item label="密码">
-            <n-input v-model:value="form.password" type="password" show-password-on="click" placeholder="请输入密码" size="large">
+          <n-form-item :label="t('login.password')">
+            <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('login.passwordRequired')" size="large">
               <template #prefix>
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               </template>
             </n-input>
           </n-form-item>
-          <n-button type="primary" block size="large" @click="handleLogin" :loading="loading" style="margin-top:8px;font-weight:600">登 录</n-button>
+          <n-button type="primary" block size="large" @click="handleLogin" :loading="loading" style="margin-top:8px;font-weight:600">{{ t('login.loginButton') }}</n-button>
         </n-form>
         <div class="login-hint">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4 M12 8h.01"/></svg>
-          <span v-if="isDev">默认账号: admin / admin</span>
+          <span v-if="isDev">{{ t('login.defaultAccount') }}</span>
         </div>
       </div>
     </div>
@@ -48,7 +48,9 @@
 import { ref } from 'vue'
 import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
+const { t } = useI18n()
 const message = useMessage()
 const loading = ref(false)
 const form = ref({ username: '', password: '' })
@@ -57,14 +59,14 @@ const emit = defineEmits(['login-success'])
 
 async function handleLogin() {
   if (!form.value.username || !form.value.password) {
-    message.warning('请输入用户名和密码')
+    message.warning(t('login.usernameRequired'))
     return
   }
   loading.value = true
   try {
     const res = await api.login(form.value.username, form.value.password)
     if (!res?.access_token) {
-      message.error('登录响应异常，未获取到令牌')
+      message.error(t('login.loginFailed'))
       localStorage.removeItem('token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
@@ -77,10 +79,10 @@ async function handleLogin() {
     }
     if (res.username) localStorage.setItem('username', res.username)
     if (res.role) localStorage.setItem('role', res.role)
-    message.success('登录成功')
+    message.success(t('login.loginSuccess'))
     emit('login-success', res)
   } catch (e) {
-    message.error('登录失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('login.loginFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
   }

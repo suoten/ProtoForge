@@ -75,9 +75,11 @@ import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
   NCard, NTag, NButton, NModal, NDescriptions, NDescriptionsItem, NEmpty, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { protocolTagTypes, protocolLabels } from '../constants.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const templates = ref([])
 const protocols = ref([])
 const searchQuery = ref('')

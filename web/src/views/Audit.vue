@@ -48,8 +48,10 @@
 import { ref, h, onMounted } from 'vue'
 import { NCard, NSpace, NButton, NDataTable, NInput, NTag, NPopconfirm, NGrid, NGi, NStatistic, useMessage } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const entries = ref([])
 const loading = ref(false)
 const clearing = ref(false)

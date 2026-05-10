@@ -89,11 +89,13 @@
 import { ref, h, onMounted } from 'vue'
 import { NSpace, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag, NAlert, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 const scenarios = ref([])
 const dataLoading = ref(false)

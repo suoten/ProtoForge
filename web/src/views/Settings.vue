@@ -175,9 +175,11 @@
 import { ref, h, onMounted } from 'vue'
 import { NButton, NSpace, NTag, NPopconfirm, NSelect, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
+import { useI18n } from '../i18n.js'
 import { getProtocolLabel, PASSWORD_MASK } from '../constants.js'
 
 const message = useMessage()
+const { t } = useI18n()
 const dialog = useDialog()
 
 const settingsLoading = ref(false)
