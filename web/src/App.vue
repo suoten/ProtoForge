@@ -140,13 +140,15 @@ import { useRouter, useRoute } from 'vue-router'
 import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput } from 'naive-ui'
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
-import api from './api.js'
+import api, { setNotifyFunction } from './api.js'
 import Login from './views/Login.vue'
 
 const router = useRouter()
 const route = useRoute()
 const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
 const message = discreteMessage
+
+setNotifyFunction(discreteMessage)
 const { t, locale, setLocale } = useI18n()
 const loggedIn = ref(false)
 const collapsed = ref(false)

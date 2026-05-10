@@ -43,8 +43,8 @@
                 </n-tag>
               </n-space>
               <n-space size="small">
-                <n-button v-if="p.status !== 'running'" type="primary" size="small" @click="quickStart(p.name)">一键启动</n-button>
-                <n-button v-else type="warning" size="small" @click="stopProtocol(p.name)">停止</n-button>
+                <n-button v-if="p.status !== 'running'" type="primary" size="small" :loading="startingProtocol === p.name" @click="quickStart(p.name)">一键启动</n-button>
+                <n-button v-else type="warning" size="small" :loading="stoppingProtocol === p.name" @click="stopProtocol(p.name)">停止</n-button>
                 <n-button size="small" tertiary @click="openAdvanced(p)">高级配置</n-button>
                 <n-button size="small" tertiary @click="showProtocolInfo(p.name)">详情</n-button>
               </n-space>

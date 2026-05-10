@@ -100,71 +100,76 @@ class HttpChannel(ChannelBase):
                         inner = resp_data.get("data", resp_data)
                         return {"ok": True, "updated": True, "data": inner}
                 if resp.status_code == 401 and self._auth:
-                    await self._auth.refresh_token()
-                    headers["Authorization"] = f"Bearer {self._auth.token}"
-                    resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
-                    if resp.status_code in (200, 201):
-                        return {"ok": True, "data": resp.json()}
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
+                        if resp.status_code in (200, 201):
+                            return {"ok": True, "data": resp.json()}
                 return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
 
             elif msg_type == "delete_device":
                 device_id = payload.get("device_id", "")
                 resp = await self._client.delete(f"/api/v1/devices/{device_id}", headers=headers)
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        resp = await self._client.delete(f"/api/v1/devices/{device_id}", headers=headers)
                 return {"ok": resp.status_code in (200, 204)}
 
             elif msg_type == "device_control":
                 device_id = payload.get("device_id", "")
                 action = payload.get("action", "")
-                if action == "start_collect":
-                    resp = await self._client.post(
-                        f"/api/v1/integration/message",
-                        json={"type": "device_control", "payload": {"device_id": device_id, "action": "start_collect"}},
-                        headers=headers,
-                    )
-                    if resp.status_code == 404:
-                        resp = await self._client.post(f"/api/v1/devices/{device_id}/start", headers=headers)
-                elif action == "stop_collect":
-                    resp = await self._client.post(
-                        f"/api/v1/integration/message",
-                        json={"type": "device_control", "payload": {"device_id": device_id, "action": "stop_collect"}},
-                        headers=headers,
-                    )
-                    if resp.status_code == 404:
-                        resp = await self._client.post(f"/api/v1/devices/{device_id}/stop", headers=headers)
-                else:
+                if action not in ("start_collect", "stop_collect"):
                     return {"ok": False, "error": f"Unknown action: {action}"}
+                resp = await self._client.post(
+                    f"/api/v1/integration/message",
+                    json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
+                    headers=headers,
+                )
+                if resp.status_code == 404:
+                    endpoint = "start" if action == "start_collect" else "stop"
+                    resp = await self._client.post(f"/api/v1/devices/{device_id}/{endpoint}", headers=headers)
                 if resp.status_code == 200:
                     resp_data = resp.json()
                     inner = resp_data.get("data", resp_data)
                     return {"ok": True, "data": inner}
                 if resp.status_code == 401 and self._auth:
-                    await self._auth.refresh_token()
-                    headers["Authorization"] = f"Bearer {self._auth.token}"
-                    if action == "start_collect":
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
                         resp = await self._client.post(
                             f"/api/v1/integration/message",
-                            json={"type": "device_control", "payload": {"device_id": device_id, "action": "start_collect"}},
+                            json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
                             headers=headers,
                         )
-                    else:
-                        resp = await self._client.post(
-                            f"/api/v1/integration/message",
-                            json={"type": "device_control", "payload": {"device_id": device_id, "action": "stop_collect"}},
-                            headers=headers,
-                        )
-                    if resp.status_code == 200:
-                        resp_data = resp.json()
-                        inner = resp_data.get("data", resp_data)
-                        return {"ok": True, "data": inner}
-                return {"ok": resp.status_code == 200}
+                        if resp.status_code == 200:
+                            resp_data = resp.json()
+                            inner = resp_data.get("data", resp_data)
+                            return {"ok": True, "data": inner}
+                return {"ok": resp.status_code == 200, "error": None if resp.status_code == 200 else f"HTTP {resp.status_code}"}
 
             else:
                 resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
                 return {"ok": resp.status_code == 200, "data": resp.json() if resp.status_code == 200 else None}
 
         except Exception as e:
             self._connected = False
             raise
+
+    async def _safe_refresh_token(self) -> bool:
+        try:
+            await self._auth.refresh_token()
+            return True
+        except Exception as e:
+            logger.warning("Token refresh failed: %s", e)
+            return False
 
     async def close(self) -> None:
         if self._client:

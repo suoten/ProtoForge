@@ -36,6 +36,16 @@ function extractErrorDetail(data) {
   try { return JSON.stringify(data) } catch { return String(data) }
 }
 
+let _notifyFn = null
+function _notifyUser(msg, type = 'warning') {
+  if (_notifyFn) {
+    _notifyFn({ type, message: msg, duration: 4000 })
+  }
+}
+export function setNotifyFunction(fn) {
+  _notifyFn = fn
+}
+
 api.interceptors.response.use(
   response => {
     if (response?.data === undefined || response?.data === null) {
@@ -96,16 +106,20 @@ api.interceptors.response.use(
       }
     } else if (status === 403) {
       console.error('Permission denied:', detail)
+      _notifyUser('权限不足：' + (detail || '您没有执行此操作的权限'), 'warning')
     } else if (status === 429) {
       const retryAfter = error?.response?.data?.retry_after
       const msg = retryAfter ? `请求过于频繁，请${retryAfter}秒后重试` : '请求过于频繁，请稍后再试'
       console.warn('Rate limited:', msg)
+      _notifyUser(msg, 'warning')
     } else if (status === 404) {
       console.error('Resource not found:', detail)
     } else if (status >= 500) {
       console.error('Server error:', detail)
+      _notifyUser('服务器内部错误，请稍后重试', 'error')
     } else if (!error.response) {
       console.error('Network error: Unable to connect to server')
+      _notifyUser('网络连接失败，请检查网络后重试', 'error')
     }
     return Promise.reject(error)
   }

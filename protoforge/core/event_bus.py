@@ -80,7 +80,8 @@ class EventBus:
         event_type = type(event).__name__
         self._history.append(event)
 
-        for queue in self._subscribers.get(event_type, []):
+        queues = list(self._subscribers.get(event_type, []))
+        for queue in queues:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
@@ -98,7 +99,8 @@ class EventBus:
                     self._last_drop_warning = now
                     logger.warning("EventBus dropped %d events (subscribers too slow)", self._dropped_count)
 
-        for callback in self._callbacks.get(event_type, []):
+        callbacks = list(self._callbacks.get(event_type, []))
+        for callback in callbacks:
             try:
                 result = callback(event)
                 if asyncio.iscoroutine(result):
