@@ -308,10 +308,19 @@ async function confirmAddNode() {
 
 async function loadScenario(scenarioId) {
   try {
-    const [scenario, allDevices] = await Promise.all([
+    const results = await Promise.allSettled([
       api.getScenario(scenarioId),
-      api.getDevices().catch((e) => { message.warning('加载设备列表失败，在线状态可能不准确'); return [] }),
+      api.getDevices(),
     ])
+    const scenario = results[0].status === 'fulfilled' ? results[0].value : null
+    const allDevices = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+    if (results[0].status === 'rejected') {
+      message.error('加载场景详情失败')
+      return
+    }
+    if (results[1].status === 'rejected') {
+      message.warning('加载设备列表失败，在线状态可能不准确')
+    }
     const deviceMap = {}
     for (const d of allDevices) {
       deviceMap[d.id] = d.status === 'online' || d.status === 'running'
@@ -453,12 +462,17 @@ async function stopScenario() {
 
 async function loadData() {
   try {
-    const [sRes, tRes, pRes] = await Promise.all([
+    const results = await Promise.allSettled([
       api.getScenarios(), api.getTemplates(), api.getProtocols()
     ])
-    scenarios.value = sRes || []
-    templates.value = tRes || []
-    protocols.value = pRes || []
+    scenarios.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
+    templates.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+    protocols.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
+    const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
+    if (failedIdx.length > 0) {
+      const names = ['场景', '模板', '协议']
+      message.warning(`部分数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+    }
     const scenarioId = route.params.id
     if (scenarioId) {
       selectedScenario.value = scenarioId

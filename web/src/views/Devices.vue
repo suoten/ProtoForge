@@ -200,7 +200,7 @@
             <div v-if="guideData.mode === 'server'">
               <div style="font-weight:600;margin-bottom:8px">📋 {{ guideData.connect_hint }}</div>
               <n-card size="small" embedded>
-                <div v-for="(val, key) in guideData.connection_info" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div v-for="(val, key) in (guideData.connection_info || {})" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
                   <n-text depth="3">{{ key }}</n-text>
                   <n-text code>{{ val }}</n-text>
                 </div>
@@ -210,7 +210,7 @@
             <div v-if="guideData.mode === 'client'">
               <div style="font-weight:600;margin-bottom:8px">📋 {{ guideData.connect_hint }}</div>
               <n-card size="small" embedded>
-                <div v-for="(val, key) in guideData.connection_info" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <div v-for="(val, key) in (guideData.connection_info || {})" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
                   <n-text depth="3">{{ key }}</n-text>
                   <n-text code>{{ val }}</n-text>
                 </div>
@@ -569,8 +569,19 @@ async function onAdvancedProtocolChange(protocol) {
 async function loadData() {
   dataLoading.value = true
   try {
-    const [devRes, protoRes, tmplRes] = await Promise.all([api.getDevices(), api.getProtocols(), api.getTemplates()])
-    devices.value = devRes || []; protocols.value = protoRes || []; templates.value = tmplRes || []
+    const results = await Promise.allSettled([
+      api.getDevices(),
+      api.getProtocols(),
+      api.getTemplates()
+    ])
+    devices.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
+    protocols.value = results[1].status === 'fulfilled' ? (results[1].value || []) : []
+    templates.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
+    const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
+    if (failedIdx.length > 0) {
+      const names = ['设备', '协议', '模板']
+      message.warning(`部分数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+    }
   } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
   finally { dataLoading.value = false }
 }

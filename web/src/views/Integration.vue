@@ -678,12 +678,14 @@ async function loadDeviceStatusCache() {
     if (Array.isArray(raw)) {
       deviceStatusCache.value = raw
     } else if (raw && typeof raw === 'object') {
-      deviceStatusCache.value = Object.entries(raw).map(([device_id, status]) => ({
-        device_id,
-        status,
-        protocol: '',
-        last_updated: '',
-      }))
+      deviceStatusCache.value = Object.entries(raw)
+        .filter(([_, status]) => status !== null && status !== undefined)
+        .map(([device_id, status]) => ({
+          device_id,
+          status: typeof status === 'object' ? (status.status || 'unknown') : status,
+          protocol: typeof status === 'object' ? (status.protocol || '') : '',
+          last_updated: typeof status === 'object' ? (status.last_updated || '') : '',
+        }))
     } else {
       deviceStatusCache.value = []
     }
@@ -710,12 +712,14 @@ async function loadProtocolMappings() {
     const res = await api.getIntegrationProtocols()
     const pmap = res.protocol_map || {}
     if (pmap && typeof pmap === 'object') {
-      protocolMappings.value = Object.entries(pmap).map(([source, target]) => ({
-        source_protocol: source,
-        target_protocol: typeof target === 'string' ? target : target.protocol || '',
-        driver_type: typeof target === 'object' ? target.driver || '' : '',
-        status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
-      }))
+      protocolMappings.value = Object.entries(pmap)
+        .filter(([_, target]) => target !== null && target !== undefined)
+        .map(([source, target]) => ({
+          source_protocol: source,
+          target_protocol: typeof target === 'string' ? target : target.protocol || '',
+          driver_type: typeof target === 'object' ? target.driver || '' : '',
+          status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
+        }))
     } else {
       protocolMappings.value = []
     }

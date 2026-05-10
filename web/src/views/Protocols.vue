@@ -130,12 +130,14 @@ const configInfoColumns = [
 
 const configInfoRows = computed(() => {
   if (!protocolConfigData.value) return []
-  return Object.entries(protocolConfigData.value).map(([key, info]) => ({
-    key,
-    type: info.type || '-',
-    default: info.default ?? '-',
-    description: info.description || '-',
-  }))
+  return Object.entries(protocolConfigData.value)
+    .filter(([_, info]) => info !== null && info !== undefined)
+    .map(([key, info]) => ({
+      key,
+      type: (info && info.type) || '-',
+      default: (info && info.default) ?? '-',
+      description: (info && info.description) || '-',
+    }))
 })
 
 async function loadData() {
@@ -226,10 +228,14 @@ async function showProtocolInfo(name) {
   protocolInfoData.value = null
   protocolConfigData.value = null
   try {
-    const [infoRes, configRes] = await Promise.all([
-      api.getProtocolInfo().catch((e) => { message.warning('获取协议信息失败'); return {} }),
-      api.getProtocolConfig(name).catch((e) => { message.warning('获取协议配置失败'); return {} }),
+    const results = await Promise.allSettled([
+      api.getProtocolInfo(),
+      api.getProtocolConfig(name),
     ])
+    const infoRes = results[0].status === 'fulfilled' ? results[0].value : {}
+    const configRes = results[1].status === 'fulfilled' ? results[1].value : {}
+    if (results[0].status === 'rejected') message.warning('获取协议信息失败')
+    if (results[1].status === 'rejected') message.warning('获取协议配置失败')
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
     protocolInfoData.value = found
@@ -246,7 +252,9 @@ function openAdvanced(p) {
     const schema = p.config_schema || {}
     advancedConfig.value = {}
     for (const [key, info] of Object.entries(schema)) {
-      advancedConfig.value[key] = info.default ?? ''
+      if (info !== null && info !== undefined) {
+        advancedConfig.value[key] = info.default ?? ''
+      }
     }
   } catch (e) {
     advancedConfig.value = { host: '0.0.0.0', port: '' }
