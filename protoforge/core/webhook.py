@@ -65,7 +65,14 @@ class WebhookConfig:
 
 
 class WebhookManager:
-    _PERSIST_FILE = "data/webhooks.json"
+    _PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+    _PERSIST_FILE = None
+
+    @classmethod
+    def _get_persist_file(cls) -> str:
+        if cls._PERSIST_FILE is None:
+            cls._PERSIST_FILE = os.path.join(cls._PERSIST_DIR, "webhooks.json")
+        return cls._PERSIST_FILE
 
     def __init__(self, queue_maxsize: int = 5000,
                  rate_limit_seconds: float = 5.0,
@@ -81,7 +88,7 @@ class WebhookManager:
     def _persist(self) -> None:
         try:
             from pathlib import Path
-            path = Path(self._PERSIST_FILE)
+            path = Path(self._get_persist_file())
             path.parent.mkdir(parents=True, exist_ok=True)
             data = []
             for wh in self._webhooks.values():
@@ -97,7 +104,7 @@ class WebhookManager:
     def _restore(self) -> None:
         try:
             from pathlib import Path
-            path = Path(self._PERSIST_FILE)
+            path = Path(self._get_persist_file())
             if not path.exists():
                 return
             data = json.loads(path.read_text(encoding="utf-8"))

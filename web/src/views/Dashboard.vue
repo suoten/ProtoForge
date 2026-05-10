@@ -161,6 +161,7 @@
 <script setup>
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
 import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, useMessage, useDialog } from 'naive-ui'
+import axios from 'axios'
 import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
 
@@ -258,10 +259,10 @@ async function loadData() {
     loading.value = false
   }
   try {
-    const res = await fetch('/health')
-    if (res.ok) healthInfo.value = await res.json()
-  } catch {
-    console.debug('Health endpoint unavailable')
+    const res = await axios.get('/health')
+    if (res.data) healthInfo.value = res.data
+  } catch (e) {
+    console.debug('Health endpoint unavailable:', e.message)
   }
 }
 

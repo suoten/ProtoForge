@@ -11,14 +11,15 @@ from protoforge.models.scenario import Rule, ScenarioConfig
 from protoforge.models.template import TemplateDetail
 
 
+logger = logging.getLogger(__name__)
+
+
 def _safe_json_loads(value: str, default=None):
     try:
         return json.loads(value)
     except (json.JSONDecodeError, TypeError, ValueError) as e:
         logger.warning("Failed to parse JSON value: %s, using default", e)
         return default if default is not None else []
-
-logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
@@ -485,7 +486,10 @@ class Database:
     def _row_to_device(self, row: dict) -> DeviceConfig:
         points = [PointConfig(**p) for p in _safe_json_loads(row["points"], [])]
         protocol_config = _safe_json_loads(row["protocol_config"], {})
-        position = protocol_config.pop("_position", None) if isinstance(protocol_config, dict) else None
+        position = None
+        if isinstance(protocol_config, dict):
+            position = protocol_config.get("_position")
+            protocol_config = {k: v for k, v in protocol_config.items() if k != "_position"}
         return DeviceConfig(
             id=row["id"],
             name=row["name"],
@@ -855,12 +859,14 @@ class Database:
         )
 
     _VALID_TABLES = {"devices", "scenarios", "templates", "test_cases",
-                      "test_suites", "test_reports", "users", "recordings", "audit_log"}
+                      "test_suites", "test_reports", "users", "recordings", "audit_log",
+                      "integration_config", "alarm_reaction_rules"}
 
     async def export_all(self) -> dict[str, Any]:
         result = {}
         for table in ("devices", "scenarios", "templates", "test_cases",
-                       "test_suites", "test_reports", "users", "recordings"):
+                       "test_suites", "test_reports", "users", "recordings",
+                       "integration_config", "alarm_reaction_rules"):
             if table not in self._VALID_TABLES:
                 continue
             try:
