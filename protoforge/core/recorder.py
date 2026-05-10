@@ -44,9 +44,42 @@ def _decrypt_data(encrypted: str, key: bytes) -> bytes:
     return aesgcm.decrypt(nonce, ct, None)
 
 
+_SALT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".recording_salt")
+_DERIVED_SALT: Optional[bytes] = None
+
+
+def _get_or_create_salt() -> bytes:
+    global _DERIVED_SALT
+    if _DERIVED_SALT is not None:
+        return _DERIVED_SALT
+    try:
+        salt_dir = os.path.dirname(_SALT_FILE)
+        os.makedirs(salt_dir, exist_ok=True)
+        if os.path.exists(_SALT_FILE):
+            with open(_SALT_FILE, "rb") as f:
+                saved = f.read().strip()
+            if saved and len(saved) >= 16:
+                _DERIVED_SALT = saved
+                return saved
+    except Exception as e:
+        logger.debug("Could not load recording salt: %s", e)
+    new_salt = os.urandom(32)
+    _DERIVED_SALT = new_salt
+    try:
+        salt_dir = os.path.dirname(_SALT_FILE)
+        os.makedirs(salt_dir, exist_ok=True)
+        with open(_SALT_FILE, "wb") as f:
+            f.write(new_salt)
+        logger.info("Generated and saved new recording salt")
+    except Exception as e:
+        logger.warning("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart.", e)
+    return new_salt
+
+
 def _derive_key(key: bytes) -> bytes:
     from hashlib import sha256
-    return sha256(b"protoforge-recording-key-derivation-" + key).digest()
+    salt = _get_or_create_salt()
+    return sha256(salt + key).digest()
 
 
 @dataclass

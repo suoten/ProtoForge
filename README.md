@@ -1431,6 +1431,40 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/backup -o ba
 
 ### 📋 更新日志
 
+#### v0.1.7 — 2026-05-10
+
+**后端安全与健壮性修复：**
+
+- 修复 `engine.py` 设备/场景 ID 无格式验证，允许特殊字符和路径遍历，新增 `_validate_entity_id()` 正则校验
+- 修复 `engine.py` `start_protocol()`/`stop_protocol()` 协议操作异常直接传播，新增 try/except 包装和友好错误信息
+- 修复 `engine.py` `_is_port_in_use()` 仅检查 TCP 端口，对 BACnet/EtherCAT 等 UDP 协议检测不准确，新增 SOCK_DGRAM 检查
+- 修复 `auth.py` 用户名无格式验证，允许特殊字符和超长字符串，新增 `_VALID_USERNAME_PATTERN` 正则校验和保留名检查
+- 修复 `forward.py` InfluxDB/HTTP 转发目标缺少 SSRF 防护（与 webhook 不一致），新增 `_is_url_allowed()` 检查，阻止访问内网 IP
+- 修复 `forward.py` `create_target()` 缺少必填参数验证，新增 InfluxDB token、HTTP url、File path 校验
+- 修复 `session.py` 审计日志查询 `limit`/`offset` 无上限验证，可传入极大值导致性能问题，新增上限约束（limit≤10000, offset≤1000000）
+- 修复 `session.py` 测试报告 `count` 参数无上限验证，新增上限约束（count≤10000）
+- 修复 `recorder.py` 加密密钥派生使用固定盐值 `protoforge-recording-key-derivation-`，改为随机生成并持久化到 `data/.recording_salt`
+
+**前端流程完整性修复：**
+
+- 修复 `Welcome.vue` 引导组件未集成到路由，完全孤立不可访问，新增 `/welcome` 路由
+- 修复 `ScenarioEditor.vue` 保存场景时设备创建失败直接 throw，导致后续设备不被创建且数据不一致，改为继续创建并收集失败列表
+- 修复 `App.vue` 修改密码后 setTimeout 1.5秒登出，期间用户操作可能中断，改为确认对话框引导登出
+- 修复 `App.vue` 全局搜索结果跳转仅到列表页不到具体条目，改为带 `highlight` 参数精确跳转
+- 修复 `App.vue` 搜索数据不自动刷新，新增 60 秒定时刷新
+- 修复 `App.vue` 日志 WebSocket 忽略 `devices` 类型消息，新增处理逻辑
+- 修复 `Backup.vue` 恢复成功后不刷新页面，界面数据与实际不一致，新增 1.5 秒后自动 reload
+- 修复 `Dashboard.vue` 健康检查使用裸 `axios.get('/health')` 不走统一拦截器，改用 `api.getHealth()`
+- 修复 `Dashboard.vue` 多余的 `import axios` 导入，已移除
+
+**i18n 国际化补全：**
+
+- 补充 `password.tooWeak`、`password.noUser`、`password.reloginRequired` 翻译键（中英文）
+- 补充 `scenarioEditor.deviceCreateFailed`、`deviceUpdateFailed`、`deviceStartFailed` 翻译键（中英文）
+- 新增 `api.js` 中 `getHealth()` 方法
+
+***
+
 #### v0.1.6 — 2026-05-10
 
 **部署关键修复（Docker 构建失败）：**

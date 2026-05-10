@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import secrets
 import time
 import uuid
@@ -12,6 +13,8 @@ from passlib.context import CryptContext
 logger = logging.getLogger(__name__)
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+_VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$')
 
 _SECRET_KEY: str = ""
 _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
@@ -305,6 +308,15 @@ class UserManager:
             raise RuntimeError(f"Failed to persist user: {e}") from e
 
     async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
+        if not username or not isinstance(username, str):
+            raise ValueError("Username must be a non-empty string")
+        if not _VALID_USERNAME_PATTERN.match(username):
+            raise ValueError(
+                f"Username '{username}' is invalid. "
+                "Must start with alphanumeric, contain only letters, digits, '_', '.', '-', max 64 chars"
+            )
+        if username.lower() in ("root", "system", "administrator", "null", "undefined"):
+            raise ValueError(f"Username '{username}' is reserved and cannot be used")
         if username in self._users:
             return None
         ok, msg = _is_password_strong(password)

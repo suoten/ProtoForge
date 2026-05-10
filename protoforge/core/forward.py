@@ -1,16 +1,56 @@
 import asyncio
+import ipaddress
 import json
 import logging
 from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import httpx
 
 from protoforge.core.log_bus import LogBus, LogEntry
 
 logger = logging.getLogger(__name__)
+
+_BLOCKED_NETWORKS = None
+
+
+def _get_blocked_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    global _BLOCKED_NETWORKS
+    if _BLOCKED_NETWORKS is None:
+        _BLOCKED_NETWORKS = [
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("169.254.0.0/16"),
+            ipaddress.ip_network("::1/128"),
+            ipaddress.ip_network("fc00::/7"),
+            ipaddress.ip_network("fe80::/10"),
+        ]
+    return _BLOCKED_NETWORKS
+
+
+def _is_url_allowed(url: str) -> tuple[bool, str]:
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "URL has no hostname"
+        try:
+            resolved_ips = __import__('socket').getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False, f"Cannot resolve hostname: {hostname}"
+        for family, _, _, _, sockaddr in resolved_ips:
+            ip = ipaddress.ip_address(sockaddr[0])
+            for network in _get_blocked_networks():
+                if ip in network:
+                    return False, f"URL resolves to internal IP {ip} (network {network})"
+        return True, ""
+    except Exception as e:
+        return False, f"URL validation error: {e}"
 
 
 class ForwardTarget(ABC):
@@ -332,15 +372,23 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
             raise ValueError("InfluxDB target requires 'url' parameter")
         if not config.get("token"):
             raise ValueError("InfluxDB target requires 'token' parameter")
+        url = config["url"]
+        allowed, reason = _is_url_allowed(url)
+        if not allowed:
+            raise ValueError(f"InfluxDB target URL not allowed: {reason}")
         return InfluxDBTarget(
-            url=config["url"], token=config["token"],
+            url=url, token=config["token"],
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
         )
     elif target_type == "http":
         if not config.get("url"):
             raise ValueError("HTTP target requires 'url' parameter")
+        url = config["url"]
+        allowed, reason = _is_url_allowed(url)
+        if not allowed:
+            raise ValueError(f"HTTP target URL not allowed: {reason}")
         return HTTPTarget(
-            url=config["url"], headers=config.get("headers"),
+            url=url, headers=config.get("headers"),
             method=config.get("method", "POST"),
         )
     elif target_type == "file":

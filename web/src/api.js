@@ -355,4 +355,6 @@ export default {
 
   exportBackup: () => d(api.get('/backup')),
   importBackup: (data) => d(api.post('/backup/restore', data)),
+
+  getHealth: () => axios.get('/health').then(r => r.data).catch(() => null),
 }

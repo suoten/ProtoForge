@@ -385,7 +385,7 @@ async function saveScenarioLayout() {
           }
         } else {
           failedDevices.push(dc.name || dc.id)
-          throw e
+          message.warning(t('scenarioEditor.deviceCreateFailed', { name: dc.name || dc.id }) + ': ' + (e.response?.data?.detail || e.message))
         }
       }
     }
