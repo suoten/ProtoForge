@@ -274,15 +274,23 @@ async function viewDetail(id) {
 }
 
 async function replayRecording(id) {
-  replaying.value = true
-  try {
-    const res = await api.replayRecording(id, { speed: 1.0 })
-    replayResult.value = res
-    showReplayModal.value = true
-    message.success(t('recorder.replayStarted'))
-  } catch (e) {
-    message.error(t('recorder.replayFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { replaying.value = false }
+  dialog.info({
+    title: t('recorder.confirmReplay') || '确认重放录制',
+    content: t('recorder.confirmReplayDesc') || '重放将向设备发送录制的数据，可能影响设备状态。确定继续？',
+    positiveText: t('common.start') || '重放',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      replaying.value = true
+      try {
+        const res = await api.replayRecording(id, { speed: 1.0 })
+        replayResult.value = res
+        showReplayModal.value = true
+        message.success(t('recorder.replayStarted'))
+      } catch (e) {
+        message.error(t('recorder.replayFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally { replaying.value = false }
+    }
+  })
 }
 
 async function exportRecordingFile(id) {

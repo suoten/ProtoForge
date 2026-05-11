@@ -136,6 +136,8 @@ const showAddModal = ref(false)
 const showEditModal = ref(false)
 const adding = ref(false)
 const saving = ref(false)
+const testingIds = ref(new Set())
+const deletingIds = ref(new Set())
 const editingId = ref('')
 
 const addForm = ref({
@@ -195,7 +197,7 @@ const columns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => testWebhookAction(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, loading: testingIds.value.has(row.id), onClick: () => testWebhookAction(row.id) }, () => t('common.test')),
       h(NButton, { size: 'tiny', secondary: true, onClick: () => openEdit(row) }, () => t('common.edit')),
       h(NPopconfirm, { onPositiveClick: () => deleteWebhookAction(row.id) }, {
         trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => t('common.delete')),
@@ -297,22 +299,24 @@ async function updateWebhook() {
 }
 
 async function testWebhookAction(id) {
+  testingIds.value.add(id)
   try {
     await api.testWebhook(id)
     message.success(t('webhook.testTriggered'))
   } catch (e) {
     message.error(t('webhook.testFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { testingIds.value.delete(id) }
 }
 
 async function deleteWebhookAction(id) {
+  deletingIds.value.add(id)
   try {
     await api.deleteWebhook(id)
     message.success(t('common.deleted'))
     await loadWebhooks()
   } catch (e) {
     message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { deletingIds.value.delete(id) }
 }
 
 onMounted(() => {

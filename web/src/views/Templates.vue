@@ -1,5 +1,6 @@
 <template>
   <n-space vertical>
+    <n-spin :show="dataLoading">
     <n-space justify="space-between">
       <n-space>
         <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('templates.filterByProtocol')" clearable style="width: 160px" />
@@ -153,12 +154,13 @@
         </n-space>
       </template>
     </n-modal>
+    </n-spin>
   </n-space>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
-import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions } from '../constants.js'
@@ -170,6 +172,7 @@ const { t } = useI18n()
 const dialog = useDialog()
 const templates = ref([])
 const protocols = ref([])
+const dataLoading = ref(false)
 const filterProtocol = ref(null)
 const searchQuery = ref('')
 const filterTag = ref(null)
@@ -265,6 +268,7 @@ function makeSelectRenderer(key, sourceRef, options) {
 function goMarketplace() { router.push('/marketplace') }
 
 async function loadData() {
+  dataLoading.value = true
   try {
     const results = await Promise.allSettled([api.getTemplates(), api.getProtocols()])
     templates.value = results[0].status === 'fulfilled' ? (results[0].value || []) : []
@@ -274,7 +278,7 @@ async function loadData() {
     await loadTags()
   } catch (e) {
     message.error(t('common.loadDataFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { dataLoading.value = false }
 }
 
 async function loadTags() {
@@ -372,7 +376,8 @@ async function instantiateDevice() {
     const deviceConfig = await api.instantiateTemplate(selectedTemplate.value.id, { device_id: instantiateForm.value.device_id, device_name: instantiateForm.value.device_name })
     await api.createDevice(deviceConfig)
     showInstantiateModal.value = false
-    message.success(t('templates.instantiateSuccess'))
+    message.success(t('templates.instantiateSuccess'), { duration: 5000 })
+    router.push('/devices')
   } catch (e) {
     message.error(t('templates.instantiateFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { instantiating.value = false }

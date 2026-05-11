@@ -414,6 +414,8 @@ const writePointValue = ref('')
 const writeLoading = ref(false)
 const currentViewDeviceId = ref('')
 const currentViewDeviceInfo = ref(null)
+const togglingIds = ref(new Set())
+const deletingIds = ref(new Set())
 
 const pipelineSteps = [
   { label: '认证', key: 'auth' },
@@ -510,9 +512,9 @@ const columns = [
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openPipelineVerify(row.id) }, () => '链路'),
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => '编辑'),
       row.status === 'online' || row.status === 'running'
-        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => toggleDevice(row.id, 'stop', row.name) }, () => '停止')
-        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => toggleDevice(row.id, 'start', row.name) }, () => '启动'),
-      h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => confirmDeleteDevice(row) }, () => '删除'),
+        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'stop', row.name) }, () => '停止')
+        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'start', row.name) }, () => '启动'),
+      h(NButton, { size: 'tiny', type: 'error', secondary: true, loading: deletingIds.value.has(row.id), onClick: () => confirmDeleteDevice(row) }, () => '删除'),
     ])
   },
 ]
@@ -813,19 +815,23 @@ async function toggleDevice(id, action, name) {
       positiveText: '停止',
       negativeText: '取消',
       onPositiveClick: async () => {
+        togglingIds.value.add(id)
         try {
           await api.stopDevice(id)
           message.success('设备已停止')
           await loadData()
         } catch (e) { message.error('停止失败: ' + (e.response?.data?.detail || e.message)) }
+        finally { togglingIds.value.delete(id) }
       }
     })
     return
   }
+  togglingIds.value.add(id)
   try {
     await api.startDevice(id); message.success('设备已启动')
     await loadData()
   } catch (e) { message.error('启动失败: ' + (e.response?.data?.detail || e.message)) }
+  finally { togglingIds.value.delete(id) }
 }
 
 function confirmDeleteDevice(row) {
@@ -833,8 +839,18 @@ function confirmDeleteDevice(row) {
 }
 
 async function deleteDevice(id) {
-  try { await api.deleteDevice(id); message.success('设备已删除'); await loadData() }
-  catch (e) { message.error('删除失败: ' + (e.response?.data?.detail || e.message)) }
+  dialog.warning({
+    title: '确认删除设备',
+    content: `确定删除设备 "${id}"？此操作不可撤销。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      deletingIds.value.add(id)
+      try { await api.deleteDevice(id); message.success('设备已删除'); await loadData() }
+      catch (e) { message.error('删除失败: ' + (e.response?.data?.detail || e.message)) }
+      finally { deletingIds.value.delete(id) }
+    }
+  })
 }
 
 async function viewPoints(id) {
