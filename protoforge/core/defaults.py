@@ -19,8 +19,12 @@ PROTOCOL_DEFAULTS = {
     },
     "opcua_client": {
         "endpoint": "opc.tcp://localhost:4840",
+        "request_timeout": 10.0,
+        "session_timeout": 3600000,
+        "reconnect_interval": 5.0,
+        "max_reconnect_attempts": 0,
         "display_name": "OPC-UA 客户端",
-        "description": "OPC-UA 客户端模式 — 连接到外部 OPC-UA 服务器，读取/写入节点数据",
+        "description": "OPC-UA 客户端模式 — 连接到外部 OPC-UA 服务器，读取/写入节点数据，支持断线自动重连",
         "icon": "🔗",
     },
     "mqtt": {
