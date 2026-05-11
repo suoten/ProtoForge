@@ -370,6 +370,7 @@ const messages = {
       noCollectData: '暂无采集数据',
       edgeliteCollectData: 'EdgeLite 采集数据',
       unknownError: '未知错误',
+      separator: '、',
     },
     nav: {
       dashboard: '仪表盘',
@@ -2042,6 +2043,7 @@ const messages = {
       noCollectData: 'No collected data',
       edgeliteCollectData: 'EdgeLite Collected Data',
       unknownError: 'Unknown error',
+      separator: ', ',
     },
     nav: {
       dashboard: 'Dashboard',
