@@ -313,6 +313,7 @@ def create_app() -> FastAPI:
     app.include_router(router)
 
     @app.get("/health")
+    @app.get("/api/v1/health")
     async def health():
         db_ok = _database is not None
         engine_ok = _engine is not None

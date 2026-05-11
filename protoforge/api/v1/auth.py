@@ -49,6 +49,7 @@ _PUBLIC_PATHS = {
     "/openapi.json",
     "/redoc",
     "/health",
+    "/api/v1/health",
 }
 
 _PUBLIC_PREFIXES = (

@@ -1,7 +1,11 @@
 <template>
   <n-space vertical>
     <n-spin :show="dataLoading">
-    <n-space justify="space-between">
+    <div style="margin-bottom: 8px">
+      <n-text strong style="font-size: 18px">{{ t('templates.title') }}</n-text>
+      <n-text depth="3" style="font-size: 13px; margin-left: 8px">{{ t('templates.subtitle', { n: filteredTemplates.length }) }}</n-text>
+    </div>
+    <n-space justify="space-between" style="margin-bottom: 12px">
       <n-space>
         <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('templates.filterByProtocol')" clearable style="width: 160px" />
         <n-input v-model:value="searchQuery" :placeholder="t('templates.searchPlaceholder')" clearable style="width: 200px" @keyup.enter="doSearch" />
