@@ -25,7 +25,10 @@
     </n-space>
 
     <div ref="logContainer" style="height: calc(100vh - 240px); overflow-y: auto; border: 1px solid #333; border-radius: 8px; background: #1a1a2e; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
-      <div v-if="filteredLogs.length === 0" style="padding: 40px; text-align: center; color: #666">
+      <div v-if="historyLoading" style="padding: 40px; text-align: center; color: #666">
+        {{ t('common.loading') || '加载中...' }}
+      </div>
+      <div v-else-if="filteredLogs.length === 0" style="padding: 40px; text-align: center; color: #666">
         {{ t('logs.noLogs') }}
       </div>
       <div v-for="(log, idx) in filteredLogs" :key="idx"
@@ -84,6 +87,7 @@ const dialog = useDialog()
 
 const logs = ref([])
 const protocols = ref([])
+const historyLoading = ref(false)
 const filterProtocol = ref(null)
 const filterDirection = ref(null)
 const searchText = ref('')
@@ -289,12 +293,13 @@ async function loadProtocols() {
 }
 
 async function loadHistory() {
+  historyLoading.value = true
   try {
     const res = await api.getLogs({ count: 200 })
     logs.value = res || []
   } catch (e) {
     message.error(t('logs.loadHistoryFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { historyLoading.value = false }
 }
 
 onMounted(() => {

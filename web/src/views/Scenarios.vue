@@ -108,6 +108,8 @@ const creating = ref(false)
 const importing = ref(false)
 const importJson = ref('')
 const snapshotDevices = ref([])
+const togglingIds = ref(new Set())
+const deletingIds = ref(new Set())
 const newScenario = ref({ id: '', name: '', description: '', devices: [], rules: [] })
 
 const columns = computed(() => [
@@ -128,8 +130,8 @@ const columns = computed(() => [
     title: t('common.action'), key: 'actions', width: 380,
     render: (row) => h(NSpace, { size: 'small' }, () => [
       row.status !== 'running'
-        ? h(NButton, { size: 'small', type: 'primary', onClick: () => startScene(row.id) }, () => t('common.start'))
-        : h(NButton, { size: 'small', type: 'warning', onClick: () => stopScene(row.id) }, () => t('common.stop')),
+        ? h(NButton, { size: 'small', type: 'primary', loading: togglingIds.value.has(row.id), onClick: () => startScene(row.id) }, () => t('common.start'))
+        : h(NButton, { size: 'small', type: 'warning', loading: togglingIds.value.has(row.id), onClick: () => stopScene(row.id) }, () => t('common.stop')),
       h(NButton, { size: 'small', onClick: () => editScene(row.id) }, () => t('common.edit')),
       h(NButton, { size: 'small', onClick: () => exportScene(row.id) }, () => t('common.export')),
       h(NButton, { size: 'small', onClick: () => viewSnapshot(row.id) }, () => t('scenarios.snapshot')),
@@ -336,13 +338,14 @@ async function startScene(id) {
     positiveText: t('common.start'),
     negativeText: t('common.cancel'),
     onPositiveClick: async () => {
+      togglingIds.value.add(id)
       try {
         await api.startScenario(id)
         message.success(t('scenarios.sceneStarted'))
         await loadData()
       } catch (e) {
         message.error(t('scenarios.startFailed') + ': ' + (e.response?.data?.detail || e.message))
-      }
+      } finally { togglingIds.value.delete(id) }
     },
   })
 }
@@ -354,13 +357,14 @@ async function stopScene(id) {
     positiveText: t('common.stop'),
     negativeText: t('common.cancel'),
     onPositiveClick: async () => {
+      togglingIds.value.add(id)
       try {
         await api.stopScenario(id)
         message.success(t('scenarios.sceneStopped'))
         await loadData()
       } catch (e) {
         message.error(t('scenarios.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
-      }
+      } finally { togglingIds.value.delete(id) }
     },
   })
 }
@@ -402,13 +406,22 @@ function confirmDelete(row) {
 }
 
 async function deleteScenario(id) {
-  try {
-    await api.deleteScenario(id)
-    message.success(t('scenarios.sceneDeleted'))
-    await loadData()
-  } catch (e) {
-    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: t('common.confirmDelete') || '确认删除',
+    content: t('scenarios.confirmDeleteDesc') || '确定删除此场景？此操作不可撤销。',
+    positiveText: t('common.delete') || '删除',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      deletingIds.value.add(id)
+      try {
+        await api.deleteScenario(id)
+        message.success(t('scenarios.sceneDeleted'))
+        await loadData()
+      } catch (e) {
+        message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally { deletingIds.value.delete(id) }
+    }
+  })
 }
 
 onMounted(loadData)

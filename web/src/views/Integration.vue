@@ -847,26 +847,34 @@ async function loadDevices() {
 }
 
 async function pushDevice(deviceId) {
-  try {
-    const res = await api.pushToEdgelite(deviceId)
-    if (res.skipped) {
-      const reason = res.reason || ''
-      if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
-      message.warning('该设备未配置 EdgeLite 地址'); return
+  dialog.info({
+    title: '确认推送设备',
+    content: '将设备配置推送到 EdgeLite，确定继续？',
+    positiveText: '推送',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        const res = await api.pushToEdgelite(deviceId)
+        if (res.skipped) {
+          const reason = res.reason || ''
+          if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
+          message.warning('该设备未配置 EdgeLite 地址'); return
+        }
+        if (!res.ok) {
+          const errMsg = res.error || '未知错误'
+          const hint = res.suggestion ? ` (${res.suggestion})` : ''
+          message.error('推送失败: ' + errMsg + hint)
+          return
+        }
+        const dc = res.driver_config
+        const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
+        message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
+        await checkStatus(deviceId)
+      } catch (e) {
+        message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+      }
     }
-    if (!res.ok) {
-      const errMsg = res.error || '未知错误'
-      const hint = res.suggestion ? ` (${res.suggestion})` : ''
-      message.error('推送失败: ' + errMsg + hint)
-      return
-    }
-    const dc = res.driver_config
-    const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
-    message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
-    await checkStatus(deviceId)
-  } catch (e) {
-    message.error('推送失败: ' + (e.response?.data?.detail || e.message))
-  }
+  })
 }
 
 async function removeFromEdgelite(deviceId) {
@@ -890,21 +898,37 @@ async function removeFromEdgelite(deviceId) {
 }
 
 async function startCollect(deviceId) {
-  try {
-    await api.startIntegrationDevice(deviceId)
-    message.success('采集已启动')
-  } catch (e) {
-    message.error('启动采集失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.info({
+    title: '确认启动采集',
+    content: '启动 EdgeLite 数据采集，确定继续？',
+    positiveText: '启动',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.startIntegrationDevice(deviceId)
+        message.success('采集已启动')
+      } catch (e) {
+        message.error('启动采集失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function stopCollect(deviceId) {
-  try {
-    await api.stopIntegrationDevice(deviceId)
-    message.success('采集已停止')
-  } catch (e) {
-    message.error('停止采集失败: ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.warning({
+    title: '确认停止采集',
+    content: '停止 EdgeLite 数据采集，确定继续？',
+    positiveText: '停止',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.stopIntegrationDevice(deviceId)
+        message.success('采集已停止')
+      } catch (e) {
+        message.error('停止采集失败: ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function checkStatus(deviceId) {
@@ -1006,7 +1030,13 @@ function getStepDesc(idx) {
 
 async function batchPushAndVerify() {
   if (elDevices.value.length === 0) { message.warning('没有配置了 EdgeLite 的设备'); return }
-  batchPipelineLoading.value = true
+  dialog.info({
+    title: '确认批量推送',
+    content: `将 ${elDevices.value.length} 个设备推送到 EdgeLite，确定继续？`,
+    positiveText: '推送',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      batchPipelineLoading.value = true
   try {
     const deviceIds = elDevices.value.map(d => d.id)
     const res = await api.batchPushDevices({ device_ids: deviceIds })
@@ -1040,6 +1070,8 @@ async function batchPushAndVerify() {
   } catch (e) {
     message.error('批量推送失败: ' + (e.response?.data?.detail || e.message))
   } finally { batchPipelineLoading.value = false }
+    }
+  })
 }
 
 async function readEdgelitePoints(deviceId) {

@@ -134,6 +134,7 @@ const forwardRunning = ref(false)
 const loadingTargets = ref(false)
 const starting = ref(false)
 const stopping = ref(false)
+const removingNames = ref(new Set())
 const showAddModal = ref(false)
 const adding = ref(false)
 const removingTarget = ref(null)
@@ -161,7 +162,7 @@ const targetColumns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 100,
     render: (row) => h(NPopconfirm, { onPositiveClick: () => removeTarget(row.name) }, {
-      trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => t('common.delete')),
+      trigger: () => h(NButton, { size: 'tiny', type: 'error', loading: removingNames.value.has(row.name) }, () => t('common.delete')),
       default: () => t('forward.confirmDelete', { name: row.name }),
     })
   },
@@ -232,13 +233,14 @@ async function addTarget() {
 }
 
 async function removeTarget(name) {
+  removingNames.value.add(name)
   try {
     await api.removeForwardTarget(name)
     message.success(t('common.deleted'))
     await loadTargets()
   } catch (e) {
     message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  } finally { removingNames.value.delete(name) }
 }
 
 async function startForward() {
