@@ -382,7 +382,7 @@
           <n-input v-model:value="alarmForm.rule_id" :placeholder="t('integration.ruleIdPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('integration.sourceDeviceId')">
-          <n-input v-model:value="alarmForm.source_device_id" :placeholder="t('integration.sourceDeviceIdPlaceholder')" />
+          <n-select v-model:value="alarmForm.source_device_id" :options="alarmDeviceOptions" :placeholder="t('integration.sourceDeviceIdPlaceholder')" clearable filterable />
         </n-form-item>
         <n-form-item :label="t('integration.alarmSeverity')">
           <n-select v-model:value="alarmForm.alarm_severity" :options="severityOptions" />
@@ -391,7 +391,7 @@
           <n-select v-model:value="alarmForm.action" :options="actionOptions" />
         </n-form-item>
         <n-form-item :label="t('integration.targetDeviceId')">
-          <n-input v-model:value="alarmForm.target_device_id" :placeholder="t('integration.targetDeviceIdPlaceholder')" />
+          <n-select v-model:value="alarmForm.target_device_id" :options="alarmDeviceOptions" :placeholder="t('integration.targetDeviceIdPlaceholder')" clearable filterable />
         </n-form-item>
         <n-form-item :label="t('integration.enabled')">
           <n-switch v-model:value="alarmForm.enabled" />
@@ -417,7 +417,7 @@
     </n-modal>
 
     <template v-if="importResults.length > 0">
-      <div class="pf-section-title" style="font-size:16px;margin-top:16px">导入结果</div>
+      <div class="pf-section-title" style="font-size:16px;margin-top:16px">{{ t('integration.importResults') }}</div>
       <n-data-table :columns="resultColumns" :data="importResults" :bordered="false" size="small"
         :pagination="{ pageSize: 10 }" />
     </template>
@@ -478,43 +478,43 @@ const msgForm = ref({ type: 'sync', payloadJson: '' })
 const sendingMsg = ref(false)
 const msgResult = ref(null)
 const msgTypeOptions = [
-  { label: '同步 (sync)', value: 'sync' },
-  { label: '心跳 (heartbeat)', value: 'heartbeat' },
-  { label: '状态查询 (status_query)', value: 'status_query' },
-  { label: '重新连接 (reconnect)', value: 'reconnect' },
-  { label: '刷新配置 (reload_config)', value: 'reload_config' },
+  { label: t('integration.sync'), value: 'sync' },
+  { label: t('integration.heartbeat'), value: 'heartbeat' },
+  { label: t('integration.statusQuery'), value: 'status_query' },
+  { label: t('integration.reconnect'), value: 'reconnect' },
+  { label: t('integration.reloadConfig'), value: 'reload_config' },
 ]
 
 const showEdgelitePointsModal = ref(false)
 const loadingElPoints = ref(false)
 const edgelitePoints = ref([])
 const edgelitePointColumns = [
-  { title: '测点', key: 'name', width: 120 },
-  { title: '值', key: 'value', width: 120 },
-  { title: '质量', key: 'quality', width: 80 },
-  { title: '时间戳', key: 'timestamp', width: 180 },
+  { title: t('integration.pointName'), key: 'name', width: 120 },
+  { title: t('integration.pointValue'), key: 'value', width: 120 },
+  { title: t('integration.pointQuality'), key: 'quality', width: 80 },
+  { title: t('integration.pointTimestamp'), key: 'timestamp', width: 180 },
 ]
 
 const severityOptions = [
-  { label: '严重 (critical)', value: 'critical' },
-  { label: '重要 (major)', value: 'major' },
-  { label: '一般 (minor)', value: 'minor' },
-  { label: '提示 (info)', value: 'info' },
+  { label: t('integration.severityCritical'), value: 'critical' },
+  { label: t('integration.severityMajor'), value: 'major' },
+  { label: t('integration.severityMinor'), value: 'minor' },
+  { label: t('integration.severityInfo'), value: 'info' },
 ]
 const actionOptions = [
-  { label: '停止设备', value: 'stop_device' },
-  { label: '启动设备', value: 'start_device' },
-  { label: '注入故障', value: 'inject_fault' },
-  { label: '调整生成器', value: 'adjust_generator' },
-  { label: '仅记录日志', value: 'log_only' },
+  { label: t('integration.actionStopDevice'), value: 'stop_device' },
+  { label: t('integration.actionStartDevice'), value: 'start_device' },
+  { label: t('integration.actionInjectFault'), value: 'inject_fault' },
+  { label: t('integration.actionAdjustGenerator'), value: 'adjust_generator' },
+  { label: t('integration.actionLogOnly'), value: 'log_only' },
 ]
 
 const pipelineSteps = [
-  { label: '认证', color: '#6366f1', key: 'auth' },
-  { label: '注册', color: '#3b82f6', key: 'register' },
-  { label: '连接', color: '#f59e0b', key: 'connect' },
-  { label: '采集', color: '#10b981', key: 'collect' },
-  { label: '验证', color: '#8b5cf6', key: 'verify' },
+  { label: t('integration.pipelineAuth'), color: '#6366f1', key: 'auth' },
+  { label: t('integration.pipelineRegister'), color: '#3b82f6', key: 'register' },
+  { label: t('integration.pipelineConnect'), color: '#f59e0b', key: 'connect' },
+  { label: t('integration.pipelineCollect'), color: '#10b981', key: 'collect' },
+  { label: t('integration.pipelineVerify'), color: '#8b5cf6', key: 'verify' },
 ]
 
 const EL_UNSUPPORTED_PROTOCOLS = new Set(config.edgeLite.unsupportedProtocols)
@@ -540,115 +540,119 @@ const elDeviceOptions = computed(() => {
   return allDevices.value.map(d => ({ label: `${d.name || d.id} (${d.protocol})`, value: d.id }))
 })
 
+const alarmDeviceOptions = computed(() => {
+  return allDevices.value.map(d => ({ label: `${d.name || d.id} (${d.protocol})`, value: d.id }))
+})
+
 const resultColumns = [
-  { title: '设备ID', key: 'id', width: 180 },
-  { title: '名称', key: 'name', width: 180 },
-  { title: '协议', key: 'protocol', width: 100 },
-  { title: '状态', key: 'status', width: 80 },
+  { title: t('integration.deviceId'), key: 'id', width: 180 },
+  { title: t('integration.nameCol'), key: 'name', width: 180 },
+  { title: t('integration.protocol'), key: 'protocol', width: 100 },
+  { title: t('integration.status'), key: 'status', width: 80 },
 ]
 
 const comparisonColumns = [
-  { title: '测点', key: 'point', width: 120 },
-  { title: 'ProtoForge值', key: 'protoforge_value', width: 140 },
-  { title: 'EdgeLite值', key: 'edgelite_value', width: 140 },
+  { title: t('integration.pointName'), key: 'point', width: 120 },
+  { title: t('integration.protoforgeValue'), key: 'protoforge_value', width: 140 },
+  { title: t('integration.edgeliteValue'), key: 'edgelite_value', width: 140 },
   {
-    title: '匹配', key: 'match', width: 80,
+    title: t('integration.matchCol'), key: 'match', width: 80,
     render: (row) => {
-      if (row.match === null || row.match === undefined) return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '无数据')
+      if (row.match === null || row.match === undefined) return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => t('integration.noData'))
       return row.match
-        ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '匹配')
-        : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '不一致')
+        ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => t('integration.matched'))
+        : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('integration.inconsistent'))
     }
   },
 ]
 
 const deviceColumns = [
-  { title: '设备', key: 'name', width: 150, render: (row) => h('div', {}, [
+  { title: t('integration.deviceCol'), key: 'name', width: 150, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
     h('div', { style: 'font-size:11px;color:#94a3b8' }, row.id),
   ]) },
-  { title: '协议', key: 'protocol', width: 110, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => row.protocol) },
+  { title: t('integration.protocol'), key: 'protocol', width: 110, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => row.protocol) },
   {
-    title: '本地状态', key: 'status', width: 90,
+    title: t('integration.localStatus'), key: 'status', width: 90,
     render: (row) => h(NTag, {
       type: row.status === 'online' ? 'success' : 'default', size: 'tiny', bordered: false
-    }, () => row.status === 'online' ? '在线' : '离线')
+    }, () => row.status === 'online' ? t('integration.online') : t('integration.offline'))
   },
   {
     title: 'EdgeLite', key: 'edgelite_status', width: 100,
     render: (row) => {
       const s = row._el_status
-      if (!s) return h(NText, { depth: 3, style: 'font-size:12px' }, () => '未查询')
-      if (s === 'error') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '错误')
-      if (s === 'not_registered') return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '未注册')
-      if (s === 'online') return h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '在线')
-      if (s === 'offline') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '离线')
+      if (!s) return h(NText, { depth: 3, style: 'font-size:12px' }, () => t('integration.notQueried'))
+      if (s === 'error') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('integration.error'))
+      if (s === 'not_registered') return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => t('integration.notRegistered'))
+      if (s === 'online') return h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => t('integration.online'))
+      if (s === 'offline') return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('integration.offline'))
       return h(NTag, { size: 'tiny', bordered: false }, () => s)
     }
   },
-  { title: '采集间隔', key: 'collect_interval', width: 80, render: (row) => `${row.collect_interval || 5}s` },
+  { title: t('integration.collectInterval'), key: 'collect_interval', width: 80, render: (row) => `${row.collect_interval || 5}s` },
   {
-    title: '操作', key: 'actions', width: 400,
+    title: t('integration.actions'), key: 'actions', width: 400,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => '推送注册'),
-      h(NButton, { size: 'tiny', type: 'primary', onClick: () => startCollect(row.id) }, () => '启动采集'),
-      h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => '停止采集'),
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => readEdgelitePoints(row.id) }, () => '读测点'),
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => '验证链路'),
-      h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => '移除'),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => t('integration.pushRegister')),
+      h(NButton, { size: 'tiny', type: 'primary', onClick: () => startCollect(row.id) }, () => t('integration.startCollect')),
+      h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => t('integration.stopCollect')),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => readEdgelitePoints(row.id) }, () => t('integration.readPoints')),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => t('integration.verifyLink')),
+      h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => t('integration.remove')),
     ])
   },
 ]
 
 const statusCacheColumns = [
-  { title: '设备ID', key: 'device_id', width: 180 },
-  { title: '状态', key: 'status', width: 100, render: (row) => {
+  { title: t('integration.deviceId'), key: 'device_id', width: 180 },
+  { title: t('integration.status'), key: 'status', width: 100, render: (row) => {
     const map = { online: 'success', offline: 'error' }
-    return h(NTag, { size: 'tiny', type: map[row.status] || 'default', bordered: false }, () => row.status || '未知')
+    return h(NTag, { size: 'tiny', type: map[row.status] || 'default', bordered: false }, () => row.status || t('common.unknown'))
   }},
-  { title: '协议', key: 'protocol', width: 120 },
-  { title: '最后更新', key: 'last_updated', width: 180 },
+  { title: t('integration.protocol'), key: 'protocol', width: 120 },
+  { title: t('integration.lastUpdated'), key: 'last_updated', width: 180 },
 ]
 
 const backhaulColumns = [
-  { title: '设备ID', key: 'device_id', width: 160 },
-  { title: '测点', key: 'point_name', width: 120 },
-  { title: '值', key: 'value', width: 120 },
-  { title: '时间戳', key: 'timestamp', width: 180 },
+  { title: t('integration.deviceId'), key: 'device_id', width: 160 },
+  { title: t('integration.pointName'), key: 'point_name', width: 120 },
+  { title: t('integration.pointValue'), key: 'value', width: 120 },
+  { title: t('integration.pointTimestamp'), key: 'timestamp', width: 180 },
 ]
 
 const protocolMapColumns = [
-  { title: '源协议', key: 'source_protocol', width: 160 },
-  { title: '目标协议', key: 'target_protocol', width: 160 },
-  { title: '驱动类型', key: 'driver_type', width: 140 },
-  { title: '状态', key: 'status', width: 100, render: (row) => {
-    const m = { ok: ['success', '可用'], available: ['success', '可用'], unsupported: ['warning', '不支持'], target_unavailable: ['warning', '目标不可用'], unknown: ['default', '未知'], disabled: ['default', '已禁用'] }
-    const [t, l] = m[row.status] || ['info', row.status || '未知']
-    return h(NTag, { size: 'tiny', type: t, bordered: false }, () => l)
+  { title: t('integration.sourceProtocol'), key: 'source_protocol', width: 160 },
+  { title: t('integration.targetProtocol'), key: 'target_protocol', width: 160 },
+  { title: t('integration.driverType'), key: 'driver_type', width: 140 },
+  { title: t('integration.status'), key: 'status', width: 100, render: (row) => {
+    const m = { ok: ['success', t('integration.available')], available: ['success', t('integration.available')], unsupported: ['warning', t('integration.unsupported')], target_unavailable: ['warning', t('integration.targetUnavailable')], unknown: ['default', t('common.unknown')], disabled: ['default', t('integration.disabled')] }
+    const [tp, lb] = m[row.status] || ['info', row.status || t('common.unknown')]
+    return h(NTag, { size: 'tiny', type: tp, bordered: false }, () => lb)
   }},
 ]
 
 const alarmRuleColumns = [
-  { title: '规则ID', key: 'rule_id', width: 150 },
-  { title: '源设备', key: 'source_device_id', width: 150 },
+  { title: t('integration.ruleId'), key: 'rule_id', width: 150 },
+  { title: t('integration.sourceDevice'), key: 'source_device_id', width: 150 },
   {
-    title: '告警级别', key: 'alarm_severity', width: 100,
+    title: t('integration.alarmSeverity'), key: 'alarm_severity', width: 100,
     render: (row) => {
       const map = { critical: 'error', major: 'warning', minor: 'info', info: 'default' }
       return h(NTag, { size: 'tiny', type: map[row.alarm_severity] || 'default', bordered: false }, () => row.alarm_severity)
     }
   },
-  { title: '动作', key: 'action', width: 120 },
-  { title: '目标设备', key: 'target_device_id', width: 150 },
+  { title: t('integration.actionCol'), key: 'action', width: 120 },
+  { title: t('integration.targetDevice'), key: 'target_device_id', width: 150 },
   {
-    title: '状态', key: 'enabled', width: 80,
-    render: (row) => h(NTag, { size: 'tiny', type: row.enabled ? 'success' : 'default', bordered: false }, () => row.enabled ? '启用' : '禁用')
+    title: t('integration.status'), key: 'enabled', width: 80,
+    render: (row) => h(NTag, { size: 'tiny', type: row.enabled ? 'success' : 'default', bordered: false }, () => row.enabled ? t('integration.enabled') : t('integration.disabled'))
   },
   {
-    title: '操作', key: 'actions', width: 100,
+    title: t('integration.actions'), key: 'actions', width: 100,
     render: (row) => h(NPopconfirm, { onPositiveClick: () => deleteAlarmRule(row.rule_id) }, {
-      trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => '删除'),
-      default: () => `确定删除规则 "${row.rule_id}" 吗？`,
+      trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => t('common.delete')),
+      default: () => t('integration.confirmDeleteRule', { id: row.rule_id }),
     })
   },
 ]
@@ -661,7 +665,7 @@ async function loadIntStatus() {
   try {
     intStatus.value = await api.getIntegrationStatus()
   } catch (e) {
-    message.error('加载集成状态失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadIntStatusFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -669,7 +673,7 @@ async function loadIntMetrics() {
   try {
     intMetrics.value = await api.getIntegrationMetrics()
   } catch (e) {
-    message.error('加载集成指标失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadIntMetricsFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -693,7 +697,7 @@ async function loadDeviceStatusCache() {
       deviceStatusCache.value = []
     }
   } catch (e) {
-    message.error('加载设备状态失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadStatusCacheFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingStatusCache.value = false }
 }
 
@@ -711,7 +715,7 @@ async function loadBackhaulData() {
       backhaulData.value = []
     }
   } catch (e) {
-    message.error('加载回传数据失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadBackhaulFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingBackhaul.value = false }
 }
 
@@ -733,7 +737,7 @@ async function loadProtocolMappings() {
       protocolMappings.value = []
     }
   } catch (e) {
-    message.error('加载协议映射失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadProtocolMappingsFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingProtocols.value = false }
 }
 
@@ -743,7 +747,7 @@ async function loadAlarmRules() {
     const res = await api.getAlarmRules()
     alarmRules.value = res || []
   } catch (e) {
-    message.error('加载告警规则失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.loadAlarmRulesFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingAlarmRules.value = false }
 }
 
@@ -754,7 +758,7 @@ function cancelAddAlarm() {
 
 async function addAlarmRule() {
   if (!alarmForm.value.rule_id || !alarmForm.value.source_device_id || !alarmForm.value.target_device_id) {
-    message.warning('请填写规则ID、源设备ID和目标设备ID')
+    message.warning(t('integration.fillRequired'))
     return
   }
   addingAlarm.value = true
@@ -762,26 +766,26 @@ async function addAlarmRule() {
     await api.addAlarmRule(alarmForm.value)
     showAddAlarmModal.value = false
     alarmForm.value = { rule_id: '', source_device_id: '', alarm_severity: 'critical', action: 'stop_device', target_device_id: '', enabled: true }
-    message.success('告警规则已添加')
+    message.success(t('integration.ruleAdded'))
     await loadAlarmRules()
   } catch (e) {
-    message.error('添加失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.addFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { addingAlarm.value = false }
 }
 
 async function deleteAlarmRule(ruleId) {
   try {
     await api.deleteAlarmRule(ruleId)
-    message.success('规则已删除')
+    message.success(t('integration.ruleDeleted'))
     await loadAlarmRules()
   } catch (e) {
-    message.error('删除失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function validateDevice() {
   if (!validateForm.value.device_id) {
-    message.warning('请输入设备ID')
+    message.warning(t('integration.fillDeviceId'))
     return
   }
   validating.value = true
@@ -809,12 +813,12 @@ async function loadElConfig() {
       password: (settings.edgelite_password && settings.edgelite_password !== '***') ? settings.edgelite_password : '',
     }
   } catch (e) {
-    message.warning('加载 EdgeLite 配置失败，使用默认值')
+    message.warning(t('integration.loadEdgeliteConfigFailed'))
   }
 }
 
 async function testConnection() {
-  if (!elConfig.value.url) { message.warning('请填写 EdgeLite 地址'); return }
+  if (!elConfig.value.url) { message.warning(t('integration.fillEdgeliteAddress')); return }
   testingConn.value = true
   try {
     connResult.value = await api.testEdgeliteConnection(elConfig.value)
@@ -829,7 +833,7 @@ async function testConnection() {
         }
         await api.updateSettings(syncPayload)
       } catch (e) {
-        message.warning('EdgeLite 配置同步到系统设置失败，请手动保存')
+        message.warning(t('integration.configSyncFailed'))
       }
     }
   } catch (e) {
@@ -842,36 +846,36 @@ async function loadDevices() {
   try {
     const devs = await api.getDevices()
     allDevices.value = (devs || []).map(d => ({ ...d, _el_status: null }))
-  } catch (e) { message.error('加载设备失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('integration.loadDeviceFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { loadingDevices.value = false }
 }
 
 async function pushDevice(deviceId) {
   dialog.info({
-    title: '确认推送设备',
-    content: '将设备配置推送到 EdgeLite，确定继续？',
-    positiveText: '推送',
-    negativeText: '取消',
+    title: t('integration.confirmPushDevice'),
+    content: t('integration.confirmPushDeviceDesc'),
+    positiveText: t('integration.push'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         const res = await api.pushToEdgelite(deviceId)
         if (res.skipped) {
           const reason = res.reason || ''
-          if (reason.includes('not supported') || reason.includes('不支持')) { message.warning('EdgeLite 不支持该协议，无法推送'); return }
-          message.warning('该设备未配置 EdgeLite 地址'); return
+          if (reason.includes('not supported') || reason.includes('不支持')) { message.warning(t('integration.protocolNotSupported')); return }
+          message.warning(t('integration.deviceNotConfiguredEdgeLite')); return
         }
         if (!res.ok) {
-          const errMsg = res.error || '未知错误'
+          const errMsg = res.error || t('common.unknownError')
           const hint = res.suggestion ? ` (${res.suggestion})` : ''
-          message.error('推送失败: ' + errMsg + hint)
+          message.error(t('integration.pushFailed') + ': ' + errMsg + hint)
           return
         }
         const dc = res.driver_config
-        const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
-        message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
+        const dcHint = dc ? ` (${t('integration.connectAddress')}: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
+        message.success((res.action === 'created' ? t('integration.deviceRegistered') : t('integration.deviceConfigUpdated')) + dcHint)
         await checkStatus(deviceId)
       } catch (e) {
-        message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.pushFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -879,19 +883,19 @@ async function pushDevice(deviceId) {
 
 async function removeFromEdgelite(deviceId) {
   dialog.warning({
-    title: '确认移除设备',
-    content: `将从 EdgeLite 移除设备 ${deviceId}，移除后 EdgeLite 将停止采集该设备数据。确定继续？`,
-    positiveText: '移除',
-    negativeText: '取消',
+    title: t('integration.confirmRemoveDevice'),
+    content: t('integration.confirmRemoveDeviceDesc', { id: deviceId }),
+    positiveText: t('integration.remove'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         const res = await api.removeDeviceFromEdgelite(deviceId)
-        if (res.skipped) { message.warning('该设备未配置 EdgeLite 地址'); return }
-        if (!res.ok) { message.error('移除失败: ' + (res.error || '未知错误')); return }
-        message.success('设备已从 EdgeLite 移除')
+        if (res.skipped) { message.warning(t('integration.deviceNotConfiguredEdgeLite')); return }
+        if (!res.ok) { message.error(t('integration.removeFailed') + ': ' + (res.error || t('common.unknownError'))); return }
+        message.success(t('integration.deviceRemoved'))
         await checkStatus(deviceId)
       } catch (e) {
-        message.error('移除失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.removeFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -899,16 +903,16 @@ async function removeFromEdgelite(deviceId) {
 
 async function startCollect(deviceId) {
   dialog.info({
-    title: '确认启动采集',
-    content: '启动 EdgeLite 数据采集，确定继续？',
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('integration.confirmStartCollect'),
+    content: t('integration.confirmStartCollectDesc'),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.startIntegrationDevice(deviceId)
-        message.success('采集已启动')
+        message.success(t('integration.collectStarted'))
       } catch (e) {
-        message.error('启动采集失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.startCollectFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -916,16 +920,16 @@ async function startCollect(deviceId) {
 
 async function stopCollect(deviceId) {
   dialog.warning({
-    title: '确认停止采集',
-    content: '停止 EdgeLite 数据采集，确定继续？',
-    positiveText: '停止',
-    negativeText: '取消',
+    title: t('integration.confirmStopCollect'),
+    content: t('integration.confirmStopCollectDesc'),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.stopIntegrationDevice(deviceId)
-        message.success('采集已停止')
+        message.success(t('integration.collectStopped'))
       } catch (e) {
-        message.error('停止采集失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.stopCollectFailed') + ': ' + (e.response?.data?.detail || e.message))
       }
     }
   })
@@ -937,13 +941,13 @@ async function checkStatus(deviceId) {
     const dev = allDevices.value.find(d => d.id === deviceId)
     if (dev) dev._el_status = res.ok ? res.status : 'error'
     if (!res.ok) {
-      message.error('查询失败: ' + (res.error || '未知错误'))
-    } else if (res.status === 'not_registered') message.info('设备未在 EdgeLite 注册')
-    else if (res.status === 'online') message.success('EdgeLite 设备在线')
-    else if (res.status === 'offline') message.warning('EdgeLite 设备离线（驱动未连接到 ProtoForge）')
-    else message.info(`EdgeLite 状态: ${res.status}`)
+      message.error(t('integration.queryFailed') + ': ' + (res.error || t('common.unknownError')))
+    } else if (res.status === 'not_registered') message.info(t('integration.deviceNotRegistered'))
+    else if (res.status === 'online') message.success(t('integration.edgeliteOnline'))
+    else if (res.status === 'offline') message.warning(t('integration.edgeliteOffline'))
+    else message.info(t('integration.edgeliteStatus', { status: res.status }))
   } catch (e) {
-    message.error('查询失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.queryFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -974,19 +978,19 @@ async function pushFromPipeline() {
   try {
     const res = await api.pushToEdgelite(pipelineDeviceId.value)
     if (res.skipped) {
-      message.warning('该设备未配置 EdgeLite 地址')
+      message.warning(t('integration.deviceNotConfiguredEdgeLite'))
     } else if (res.ok) {
       const dc = res.driver_config
-      const dcHint = dc ? ` (连接地址: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
-      message.success((res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新') + dcHint)
+      const dcHint = dc ? ` (${t('integration.connectAddress')}: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
+      message.success((res.action === 'created' ? t('integration.deviceRegistered') : t('integration.deviceConfigUpdated')) + dcHint)
       await runPipeline()
     } else {
-      const errMsg = res.error || '未知错误'
+      const errMsg = res.error || t('common.unknownError')
       const hint = res.suggestion ? ` (${res.suggestion})` : ''
-      message.error('推送失败: ' + errMsg + hint)
+      message.error(t('integration.pushFailed') + ': ' + errMsg + hint)
     }
   } catch (e) {
-    message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.pushFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { pipelinePushLoading.value = false }
 }
 
@@ -1012,29 +1016,29 @@ function getStepDesc(idx) {
     const comp = pipelineResult.value.data_comparison
     if (comp && comp.length > 0) {
       const matched = comp.filter(c => c.match).length
-      return `${matched}/${comp.length} 测点匹配`
+      return t('integration.pointMatchCount', { matched, total: comp.length })
     }
-    return '等待采集数据'
+    return t('integration.waitingForData')
   }
   const step = pipelineResult.value.steps[key]
-  if (!step) return '未执行'
+  if (!step) return t('integration.notExecuted')
   if (step.ok) {
-    if (key === 'auth') return '认证成功'
-    if (key === 'register') return `已注册 (状态: ${step.status || 'ok'})`
-    if (key === 'connect') return `已连接 (状态: ${step.status || 'ok'})`
-    if (key === 'collect') return step.has_real_data || (step.data && Object.keys(step.data).length > 0) ? '已采集到数据' : '暂无实际数据'
-    return '成功'
+    if (key === 'auth') return t('integration.authSuccess')
+    if (key === 'register') return t('integration.registeredStatus', { status: step.status || 'ok' })
+    if (key === 'connect') return t('integration.connectedStatus', { status: step.status || 'ok' })
+    if (key === 'collect') return step.has_real_data || (step.data && Object.keys(step.data).length > 0) ? t('integration.dataCollected') : t('integration.noRealData')
+    return t('common.success')
   }
-  return step.error || '失败'
+  return step.error || t('common.failed')
 }
 
 async function batchPushAndVerify() {
-  if (elDevices.value.length === 0) { message.warning('没有配置了 EdgeLite 的设备'); return }
+  if (elDevices.value.length === 0) { message.warning(t('integration.noEdgeliteDevices')); return }
   dialog.info({
-    title: '确认批量推送',
-    content: `将 ${elDevices.value.length} 个设备推送到 EdgeLite，确定继续？`,
-    positiveText: '推送',
-    negativeText: '取消',
+    title: t('integration.confirmBatchPush'),
+    content: t('integration.confirmBatchPushDesc', { count: elDevices.value.length }),
+    positiveText: t('integration.push'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchPipelineLoading.value = true
   try {
@@ -1042,7 +1046,7 @@ async function batchPushAndVerify() {
     const res = await api.batchPushDevices({ device_ids: deviceIds })
     const pushed = res.success ?? 0
     const failed = res.failure ?? 0
-    message.info(`已推送 ${pushed} 个设备${failed ? `，${failed} 个失败` : ''}，等待 EdgeLite 采集数据...`)
+    message.info(t('integration.pushedAndWait', { pushed, failed }))
 
     const pollInterval = (elConfig.value.collect_interval || 5) * 1000
     const maxPolls = 6
@@ -1062,13 +1066,13 @@ async function batchPushAndVerify() {
         if (verified > 0 || pollCount >= maxPolls) {
           clearInterval(_batchPollTimer)
           _batchPollTimer = null
-          message.success(`推送: ${pushed} 个, EdgeLite在线: ${verified} 个` + (failed ? `, 失败: ${failed} 个` : ''))
+          message.success(t('integration.batchPushResult', { pushed, verified, failed }))
           resolve()
         }
       }, pollInterval)
     })
   } catch (e) {
-    message.error('批量推送失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.batchPushFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { batchPipelineLoading.value = false }
     }
   })
@@ -1085,37 +1089,37 @@ async function readEdgelitePoints(deviceId) {
     } else if (res && Array.isArray(res.points)) {
       edgelitePoints.value = res.points
     } else if (res && !res.ok) {
-      message.error('读取EdgeLite测点失败: ' + (res.error || '未知错误'))
+      message.error(t('integration.readPointsFailed') + ': ' + (res.error || t('common.unknownError')))
     } else {
       edgelitePoints.value = []
     }
   } catch (e) {
-    message.error('读取EdgeLite测点失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('integration.readPointsFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { loadingElPoints.value = false }
 }
 
 async function importEdgeLite() {
   if (!edgeLiteJson.value.trim()) {
-    message.warning('请输入 EdgeLite 设备配置 JSON')
+    message.warning(t('integration.fillEdgeliteJson'))
     return
   }
   let config
   try { config = JSON.parse(edgeLiteJson.value) }
-  catch (e) { message.error('JSON 格式错误: ' + e.message); return }
+  catch (e) { message.error(t('integration.jsonFormatError') + ': ' + e.message); return }
   const deviceCount = Array.isArray(config.devices) ? config.devices.length : (Array.isArray(config) ? config.length : 1)
   dialog.info({
-    title: '确认导入 EdgeLite 设备',
-    content: `将导入 ${deviceCount} 个设备配置，确定继续？`,
-    positiveText: '导入',
-    negativeText: '取消',
+    title: t('integration.confirmImportEdgelite'),
+    content: t('integration.confirmImportEdgeliteDesc', { count: deviceCount }),
+    positiveText: t('common.import'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       importing.value = true
       try {
         const res = await api.importEdgelite(config)
         importResults.value = res.devices || []
-        message.success(`成功导入 ${res.imported || 0} 个设备`)
+        message.success(t('integration.importSuccess', { count: res.imported || 0 }))
       } catch (e) {
-        message.error('导入失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.importFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { importing.value = false }
     }
   })
@@ -1123,26 +1127,26 @@ async function importEdgeLite() {
 
 async function importPyGBSentry() {
   if (!pygbsentryJson.value.trim()) {
-    message.warning('请输入 PyGBSentry 摄像头配置 JSON')
+    message.warning(t('integration.fillPygbsentryJson'))
     return
   }
   let config
   try { config = JSON.parse(pygbsentryJson.value) }
-  catch (e) { message.error('JSON 格式错误: ' + e.message); return }
+  catch (e) { message.error(t('integration.jsonFormatError') + ': ' + e.message); return }
   const deviceCount = Array.isArray(config.cameras) ? config.cameras.length : (Array.isArray(config) ? config.length : 1)
   dialog.info({
-    title: '确认导入 PyGBSentry 设备',
-    content: `将导入 ${deviceCount} 个摄像头配置，确定继续？`,
-    positiveText: '导入',
-    negativeText: '取消',
+    title: t('integration.confirmImportPygbsentry'),
+    content: t('integration.confirmImportPygbsentryDesc', { count: deviceCount }),
+    positiveText: t('common.import'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       importing.value = true
       try {
         const res = await api.importPygbsentry(config)
         importResults.value = res.devices || []
-        message.success(`成功导入 ${res.imported || 0} 个设备`)
+        message.success(t('integration.importSuccess', { count: res.imported || 0 }))
       } catch (e) {
-        message.error('导入失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('integration.importFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { importing.value = false }
     }
   })
@@ -1150,7 +1154,7 @@ async function importPyGBSentry() {
 
 async function sendIntMessage() {
   if (!msgForm.value.type) {
-    message.warning('请选择或输入消息类型')
+    message.warning(t('integration.selectMsgType'))
     return
   }
   sendingMsg.value = true
@@ -1161,13 +1165,13 @@ async function sendIntMessage() {
       try {
         payload = JSON.parse(msgForm.value.payloadJson)
       } catch {
-        message.error('载荷 JSON 格式错误')
+        message.error(t('integration.payloadJsonError'))
         sendingMsg.value = false
         return
       }
     }
     msgResult.value = await api.sendIntegrationMessage(msgForm.value.type, payload)
-    message.success('消息已发送')
+    message.success(t('integration.messageSent'))
   } catch (e) {
     msgResult.value = { status: 'error', error: e.response?.data?.detail || e.message }
   } finally { sendingMsg.value = false }

@@ -11,7 +11,7 @@
               <n-input-number v-model:value="form.port" :min="1" :max="65535" style="width: 200px" />
             </n-form-item>
             <n-form-item :label="t('settings.logLevel')">
-              <n-select v-model:value="form.log_level" :options="logLevelOptions" style="width: 200px" />
+              <n-select v-model:value="form.log_level" :options="logLevelOptions" :placeholder="t('common.selectPlaceholder')" style="width: 200px" />
             </n-form-item>
             <n-form-item :label="t('settings.corsOrigin')">
               <n-input v-model:value="form.cors_origins" :placeholder="t('settings.corsPlaceholder')" />
@@ -237,7 +237,10 @@ const userColumns = computed(() => [
   { title: t('common.username'), key: 'username', width: 150 },
   {
     title: t('common.role'), key: 'role', width: 120,
-    render: (row) => h(NTag, { size: 'small', type: row.role === 'admin' ? 'error' : row.role === 'operator' ? 'warning' : 'info', bordered: false }, () => row.role),
+    render: (row) => {
+      const roleMap = { admin: t('settings.admin'), operator: t('settings.operator'), user: t('settings.user'), viewer: t('settings.viewer') }
+      return h(NTag, { size: 'small', type: row.role === 'admin' ? 'error' : row.role === 'operator' ? 'warning' : 'info', bordered: false }, () => roleMap[row.role] || row.role)
+    },
   },
   {
     title: t('common.status'), key: 'locked', width: 100,

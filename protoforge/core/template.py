@@ -20,7 +20,9 @@ class TemplateManager:
         if self._loaded:
             return
         self._load_from_dir(_TEMPLATES_DIR / "modbus")
+        self._load_from_dir(_TEMPLATES_DIR / "modbus_rtu")
         self._load_from_dir(_TEMPLATES_DIR / "opcua")
+        self._load_from_dir(_TEMPLATES_DIR / "opcua_client")
         self._load_from_dir(_TEMPLATES_DIR / "mqtt")
         self._load_from_dir(_TEMPLATES_DIR / "gb28181")
         self._load_from_dir(_TEMPLATES_DIR / "bacnet")

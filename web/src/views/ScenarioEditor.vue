@@ -41,7 +41,7 @@
           <n-input v-model:value="newNode.deviceName" :placeholder="t('scenarioEditor.deviceNamePlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('common.protocol')">
-          <n-select v-model:value="newNode.protocol" :options="protocolTypeOptions" />
+          <n-select v-model:value="newNode.protocol" :options="protocolTypeOptions" @update:value="() => { newNode.templateId = null }" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.fromTemplate')">
           <n-select v-model:value="newNode.templateId" :options="templateOptions" clearable :placeholder="t('scenarioEditor.optional')" />
@@ -61,13 +61,13 @@
           <n-input v-model:value="newRule.name" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.ruleType')">
-          <n-select v-model:value="newRule.ruleType" :options="ruleTypeOptions" />
+          <n-select v-model:value="newRule.ruleType" :options="ruleTypeOptions" :placeholder="t('common.selectPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.sourcePoint')">
           <n-input v-model:value="newRule.sourcePoint" :placeholder="t('scenarioEditor.sourcePointPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.condition')">
-          <n-select v-model:value="newRule.operator" :options="operatorOptions" style="width: 140px" />
+          <n-select v-model:value="newRule.operator" :options="operatorOptions" :placeholder="t('common.selectPlaceholder')" style="width: 140px" />
           <n-input-number v-model:value="newRule.threshold" style="width: 150px" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.targetPoint')">
@@ -183,7 +183,12 @@ const pendingConnection = ref(null)
 
 const scenarioOptions = computed(() => scenarios.value.map(s => ({ label: s.name, value: s.id })))
 const protocolTypeOptions = computed(() => protocols.value.map(p => ({ label: p.display_name, value: p.name })))
-const templateOptions = computed(() => templates.value.map(tmpl => ({ label: `${tmpl.name} (${tmpl.protocol})`, value: tmpl.id })))
+const templateOptions = computed(() => {
+  const list = newNode.value.protocol
+    ? templates.value.filter(tmpl => tmpl.protocol === newNode.value.protocol)
+    : templates.value
+  return list.map(tmpl => ({ label: `${tmpl.name} (${tmpl.protocol})`, value: tmpl.id }))
+})
 const operatorOptions = computed(() => [
   { label: t('scenarioEditor.greaterThan'), value: '>' },
   { label: t('scenarioEditor.greaterEqual'), value: '>=' },
