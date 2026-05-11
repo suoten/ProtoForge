@@ -95,7 +95,9 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         points = await _read(instance)
         if isinstance(points, list):
             return {"points": points}
-        return points
+        if isinstance(points, dict) and "points" in points:
+            return points
+        return {"points": points if points else []}
     except Exception as e:
         logger.error("EdgeLite read points exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite 测点读取失败: {e}")
