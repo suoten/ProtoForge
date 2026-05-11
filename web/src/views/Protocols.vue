@@ -6,10 +6,16 @@
           <div class="pf-section-title">{{ t('protocols.title') }}</div>
           <div class="pf-section-desc">{{ t('protocols.subtitle') }}</div>
         </div>
-        <n-button type="primary" @click="startAll" :loading="startingAll">
-          <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-          {{ t('protocols.startAll') }}
-        </n-button>
+        <n-space>
+          <n-button type="primary" @click="startAll" :loading="startingAll">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
+            {{ t('protocols.startAll') }}
+          </n-button>
+          <n-button type="warning" @click="stopAll" :loading="stoppingAll">
+            <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
+            {{ t('protocols.stopAll') }}
+          </n-button>
+        </n-space>
       </n-space>
 
       <n-spin :show="dataLoading">
@@ -114,6 +120,7 @@ const starting = ref(false)
 const startingProtocol = ref(null)
 const stoppingProtocol = ref(null)
 const startingAll = ref(false)
+const stoppingAll = ref(false)
 const advancedProtocol = ref({})
 const advancedConfig = ref({})
 
@@ -181,6 +188,34 @@ async function startAll() {
         }
         await loadData()
       } finally { startingAll.value = false }
+    }
+  })
+}
+
+async function stopAll() {
+  const running = protocols.value.filter(p => p.status === 'running')
+  if (!running.length) { message.info(t('protocols.allStopped')); return }
+  dialog.warning({
+    title: t('protocols.confirmStopAll'),
+    content: t('protocols.confirmStopAllDesc', { count: running.length }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: async () => {
+      stoppingAll.value = true
+      let failCount = 0
+      try {
+        for (const p of running) {
+          try {
+            await api.stopProtocol(p.name)
+          } catch (e) { failCount++; message.warning(t('protocols.protocolStopFailed', { name: p.name }) + ': ' + (e.response?.data?.detail || e.message)) }
+        }
+        if (failCount > 0) {
+          message.warning(t('protocols.stopAllPartial', { success: running.length - failCount, fail: failCount }))
+        } else {
+          message.success(t('protocols.stopAllSuccess', { count: running.length }))
+        }
+        await loadData()
+      } finally { stoppingAll.value = false }
     }
   })
 }

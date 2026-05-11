@@ -148,9 +148,9 @@ const router = useRouter()
 const route = useRoute()
 const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
 const message = discreteMessage
-
-setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }))
 const { t, locale, setLocale } = useI18n()
+
+setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }), t)
 const loggedIn = ref(false)
 const collapsed = ref(false)
 const username = ref(localStorage.getItem('username') || '')

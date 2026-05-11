@@ -37,13 +37,16 @@ function extractErrorDetail(data) {
 }
 
 let _notifyFn = null
-function _notifyUser(msg, type = 'warning') {
+let _tFn = null
+function _notifyUser(type, key, params) {
   if (_notifyFn) {
+    const msg = _tFn ? _tFn(key, params) : key
     _notifyFn(type, msg)
   }
 }
-export function setNotifyFunction(fn) {
+export function setNotifyFunction(fn, tFn) {
   _notifyFn = fn
+  _tFn = tFn || null
 }
 
 api.interceptors.response.use(
@@ -113,27 +116,28 @@ api.interceptors.response.use(
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('username')
       localStorage.removeItem('role')
-      _notifyUser('登录已过期，请重新登录', 'warning')
+      _notifyUser('warning', 'common.apiSessionExpired')
       if (window.location.pathname !== '/') {
         window.location.href = '/'
       }
     } else if (status === 403) {
       console.error('Permission denied:', detail)
-      _notifyUser('权限不足：' + (detail || '您没有执行此操作的权限'), 'warning')
+      _notifyUser('warning', 'common.apiPermissionDenied', { detail: detail || '' })
     } else if (status === 429) {
       const retryAfter = error?.response?.data?.retry_after
-      const msg = retryAfter ? `请求过于频繁，请${retryAfter}秒后重试` : '请求过于频繁，请稍后再试'
+      const msg = retryAfter ? 'common.apiRateLimitedWithRetry' : 'common.apiRateLimited'
+      const params = retryAfter ? { seconds: retryAfter } : {}
       console.warn('Rate limited:', msg)
-      _notifyUser(msg, 'warning')
+      _notifyUser('warning', msg, params)
     } else if (status === 404) {
       console.error('Resource not found:', detail)
-      _notifyUser('请求的资源不存在：' + (detail || '未找到'), 'warning')
+      _notifyUser('warning', 'common.apiResourceNotFound', { detail: detail || '' })
     } else if (status >= 500) {
       console.error('Server error:', detail)
-      _notifyUser('服务器内部错误，请稍后重试', 'error')
+      _notifyUser('error', 'common.apiServerError')
     } else if (!error.response) {
       console.error('Network error: Unable to connect to server')
-      _notifyUser('网络连接失败，请检查网络后重试', 'error')
+      _notifyUser('error', 'common.apiNetworkError')
     }
     return Promise.reject(error)
   }

@@ -118,10 +118,10 @@
               {{ healthInfo.status === 'ok' ? t('common.running') : t('common.warning') }}
             </n-tag>
             <n-text depth="3" style="font-size:12px">
-              {{ t('settings.database') }}: <n-tag :type="healthInfo.database ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.database ? t('common.running') : t('common.error') }}</n-tag>
+              {{ t('settings.database') }}: <n-tag :type="healthInfo.database ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.database ? t('common.running') : t('common.abnormal') }}</n-tag>
             </n-text>
             <n-text depth="3" style="font-size:12px">
-              Engine: <n-tag :type="healthInfo.engine ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.engine ? t('common.running') : t('common.error') }}</n-tag>
+              Engine: <n-tag :type="healthInfo.engine ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.engine ? t('common.running') : t('common.abnormal') }}</n-tag>
             </n-text>
             <n-text depth="3" style="font-size:12px" v-if="healthInfo.protocols">
               {{ t('common.protocol') }}: {{ healthInfo.protocols.running || 0 }}/{{ healthInfo.protocols.total || 0 }} {{ t('common.running') }}

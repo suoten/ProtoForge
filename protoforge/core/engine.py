@@ -112,6 +112,7 @@ class SimulationEngine:
         server = self._protocol_servers.get(protocol_name)
         if not server:
             raise ValueError(f"Unknown protocol: {protocol_name}")
+        logger.info("Starting protocol %s with config: %s", protocol_name, {k: v for k, v in config.items() if k not in ("auth_password", "secret")})
         if "port" in config and isinstance(config["port"], int):
             if config["port"] < 1 or config["port"] > 65535:
                 raise ValueError(f"Invalid port {config['port']}, must be between 1 and 65535")
@@ -126,6 +127,15 @@ class SimulationEngine:
                 config["port"] = new_port
         try:
             await server.start(config)
+            await asyncio.sleep(0.3)
+            if server.status == ProtocolStatus.ERROR:
+                error_msg = "Protocol server entered ERROR state immediately after start (likely port conflict)"
+                logger.error("Protocol %s: %s", protocol_name, error_msg)
+                try:
+                    await server.stop()
+                except Exception:
+                    pass
+                raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
             logger.info("Protocol %s started", protocol_name)
         except Exception as e:
             logger.error("Failed to start protocol %s: %s", protocol_name, e)
@@ -142,9 +152,11 @@ class SimulationEngine:
             logger.error("Failed to stop protocol %s: %s", protocol_name, e)
             raise RuntimeError(f"Failed to stop protocol {protocol_name}: {e}") from e
 
-    async def create_device(self, config: DeviceConfig) -> DeviceInfo:
-        _validate_entity_id(config.id, "Device")
+    async def create_device(self, config: DeviceConfig, allow_update: bool = False) -> DeviceInfo:
         if config.id in self._devices:
+            if allow_update:
+                logger.warning("Device %s already exists, updating instead", config.id)
+                return await self.update_device(config.id, config)
             raise ValueError(f"Device '{config.id}' already exists. Use update_device() to modify it, or delete it first.")
         instance = DeviceInstance(config, self._generator)
         self._devices[config.id] = instance
