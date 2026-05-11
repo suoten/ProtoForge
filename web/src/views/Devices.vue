@@ -502,7 +502,18 @@ const columns = [
   {
     title: t('devices.status'), key: 'status', width: 100,
     render: (row) => {
-      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || 'offline']
+      const statusI18nMap = {
+        online: t('devices.online'), running: t('devices.running'),
+        error: t('devices.error'), stopped: t('devices.stopped'),
+        offline: t('devices.offline'), disabled: t('devices.disabled'),
+      }
+      const statusTypeMap = {
+        online: 'success', running: 'success',
+        error: 'error', stopped: 'default',
+        offline: 'default', disabled: 'default',
+      }
+      const type = statusTypeMap[row.status] || 'default'
+      const label = statusI18nMap[row.status] || row.status || t('devices.offline')
       return h(NTag, { type, size: 'small', bordered: false }, () => label)
     }
   },

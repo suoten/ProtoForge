@@ -126,7 +126,7 @@
             <n-text depth="3" style="font-size:12px" v-if="healthInfo.protocols">
               {{ t('common.protocol') }}: {{ healthInfo.protocols.running || 0 }}/{{ healthInfo.protocols.total || 0 }} {{ t('common.running') }}
             </n-text>
-            <n-button size="tiny" quaternary @click="window.open('/metrics','_blank')">
+            <n-button size="tiny" quaternary @click="openMetrics">
               <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/></svg></template>
               Prometheus
             </n-button>
@@ -338,6 +338,10 @@ function connectLogWs() {
       if (event.data !== 'ping') console.debug('Log WS: non-JSON message ignored')
     }
   }
+}
+
+function openMetrics() {
+  window.open('/metrics', '_blank')
 }
 
 onMounted(() => {

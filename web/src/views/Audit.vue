@@ -9,7 +9,7 @@
           </n-space>
           <n-space size="small">
             <n-button size="small" @click="loadData" :loading="loading">{{ t('audit.refresh') }}</n-button>
-            <n-popconfirm @positive-click="handleClearAll">
+            <n-popconfirm @positive-click="handleClearAll" :positive-text="t('common.confirm')" :negative-text="t('common.cancel')">
               <template #trigger><n-button size="small" type="warning" :loading="clearing">{{ t('audit.clearLog') }}</n-button></template>
               {{ t('audit.confirmClear') }}
             </n-popconfirm>
