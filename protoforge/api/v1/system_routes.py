@@ -65,9 +65,11 @@ async def get_settings(_user: dict = Depends(require_admin)):
 @router.put("/settings")
 async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
     try:
-        from protoforge.config import update_settings as _update_settings, get_all_settings_dict
+        from protoforge.config import update_settings as _update_settings, get_all_settings_dict, ConfigValidationError
         changed = _update_settings(updates)
         return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
+    except ConfigValidationError as e:
+        raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e
     except Exception as e:
         logger.error("Failed to update settings: %s", e)
         raise HTTPException(status_code=500, detail=f"更新系统设置失败: {e}") from e

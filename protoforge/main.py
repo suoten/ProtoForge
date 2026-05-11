@@ -354,36 +354,24 @@ def create_app() -> FastAPI:
     if not fallback_dir.is_dir():
         fallback_dir = Path("/app/static")
 
-    if static_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+    spa_dir = static_dir if static_dir.is_dir() else (fallback_dir if fallback_dir.is_dir() else None)
+
+    if spa_dir:
+        app.mount("/assets", StaticFiles(directory=spa_dir / "assets"), name="assets")
+        _spa_dir_resolved = spa_dir.resolve()
 
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
             if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
-            file_path = (static_dir / full_path).resolve()
-            if not str(file_path).startswith(str(static_dir.resolve())):
+            file_path = (spa_dir / full_path).resolve()
+            if not str(file_path).startswith(str(_spa_dir_resolved)):
                 from fastapi.responses import JSONResponse
                 return JSONResponse({"detail": "Not Found"}, status_code=404)
             if file_path.is_file():
                 return FileResponse(file_path)
-            return FileResponse(static_dir / "index.html")
-    elif fallback_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=fallback_dir / "assets"), name="assets")
-
-        @app.get("/{full_path:path}")
-        async def serve_spa(full_path: str):
-            if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("openapi") or full_path.startswith("redoc"):
-                from fastapi.responses import JSONResponse
-                return JSONResponse({"detail": "Not Found"}, status_code=404)
-            file_path = (fallback_dir / full_path).resolve()
-            if not str(file_path).startswith(str(fallback_dir.resolve())):
-                from fastapi.responses import JSONResponse
-                return JSONResponse({"detail": "Not Found"}, status_code=404)
-            if file_path.is_file():
-                return FileResponse(file_path)
-            return FileResponse(fallback_dir / "index.html")
+            return FileResponse(spa_dir / "index.html")
     else:
         logger.warning(
             "前端静态文件目录不存在: %s 和 %s 均未找到。"

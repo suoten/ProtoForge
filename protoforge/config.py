@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "/dev/ttyUSB0"
+    modbus_rtu_host: str = "/dev/ttyUSB0"
     opcua_port: int = 4840
     mqtt_port: int = 1883
     http_port: int = 8080
@@ -87,6 +88,28 @@ class Settings(BaseSettings):
     toledo_port: int = 1701
     profinet_port: int = 34964
     ethercat_port: int = 34980
+
+    @property
+    def protocol_ports(self) -> dict[str, Any]:
+        return {
+            "modbus_tcp": {"port": self.modbus_tcp_port, "host": self.host or "0.0.0.0"},
+            "modbus_rtu": {"port": self.modbus_rtu_port, "host": self.modbus_rtu_host},
+            "opcua": {"port": self.opcua_port, "host": self.host or "0.0.0.0"},
+            "mqtt": {"port": self.mqtt_port, "host": self.host or "0.0.0.0"},
+            "http": {"port": self.http_port, "host": self.host or "0.0.0.0"},
+            "gb28181": {"port": self.gb28181_port, "host": self.host or "0.0.0.0"},
+            "bacnet": {"port": self.bacnet_port, "host": self.host or "0.0.0.0"},
+            "s7": {"port": self.s7_port, "host": self.host or "0.0.0.0"},
+            "mc": {"port": self.mc_port, "host": self.host or "0.0.0.0"},
+            "fins": {"port": self.fins_port, "host": self.host or "0.0.0.0"},
+            "ab": {"port": self.ab_port, "host": self.host or "0.0.0.0"},
+            "opcda": {"port": self.opcda_port, "host": self.host or "0.0.0.0"},
+            "fanuc": {"port": self.fanuc_port, "host": self.host or "0.0.0.0"},
+            "mtconnect": {"port": self.mtconnect_port, "host": self.host or "0.0.0.0"},
+            "toledo": {"port": self.toledo_port, "host": self.host or "0.0.0.0"},
+            "profinet": {"port": self.profinet_port, "host": self.host or "0.0.0.0"},
+            "ethercat": {"port": self.ethercat_port, "host": self.host or "0.0.0.0"},
+        }
 
     model_config = {
         "env_prefix": "PROTOFORGE_",
@@ -141,6 +164,12 @@ def _validate_setting(key: str, value: Any) -> str | None:
     return None
 
 
+class ConfigValidationError(Exception):
+    def __init__(self, errors: list[str]):
+        self.errors = errors
+        super().__init__("; ".join(errors))
+
+
 def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     global _settings, _settings_overrides
     s = get_settings()
@@ -168,8 +197,7 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
                     setattr(s, key, value)
                     changed[key] = {"old": old_val, "new": value}
     if errors:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=422, detail="; ".join(errors))
+        raise ConfigValidationError(errors)
     _save_env()
     return changed
 
@@ -209,27 +237,7 @@ def _save_env() -> None:
 
 
 def get_protocol_port_map() -> dict[str, Any]:
-    s = get_settings()
-    bind_host = s.host if s.host else "0.0.0.0"
-    return {
-        "modbus_tcp": {"port": s.modbus_tcp_port, "host": bind_host},
-        "modbus_rtu": {"port": s.modbus_rtu_port, "host": "/dev/ttyUSB0"},
-        "opcua": {"port": s.opcua_port, "host": bind_host},
-        "mqtt": {"port": s.mqtt_port, "host": bind_host},
-        "http": {"port": s.http_port, "host": bind_host},
-        "gb28181": {"port": s.gb28181_port, "host": bind_host},
-        "bacnet": {"port": s.bacnet_port, "host": bind_host},
-        "s7": {"port": s.s7_port, "host": bind_host},
-        "mc": {"port": s.mc_port, "host": bind_host},
-        "fins": {"port": s.fins_port, "host": bind_host},
-        "ab": {"port": s.ab_port, "host": bind_host},
-        "opcda": {"port": s.opcda_port, "host": bind_host},
-        "fanuc": {"port": s.fanuc_port, "host": bind_host},
-        "mtconnect": {"port": s.mtconnect_port, "host": bind_host},
-        "toledo": {"port": s.toledo_port, "host": bind_host},
-        "profinet": {"port": s.profinet_port, "host": bind_host},
-        "ethercat": {"port": s.ethercat_port, "host": bind_host},
-    }
+    return get_settings().protocol_ports
 
 
 def get_all_settings_dict() -> dict[str, Any]:
@@ -249,23 +257,5 @@ def get_all_settings_dict() -> dict[str, Any]:
         "edgelite_username": s.edgelite_username,
         "edgelite_password": "***" if s.edgelite_password else "",
         "protoforge_public_host": s.protoforge_public_host or "",
-        "protocol_ports": {
-            "modbus_tcp": s.modbus_tcp_port,
-            "modbus_rtu": s.modbus_rtu_port,
-            "opcua": s.opcua_port,
-            "mqtt": s.mqtt_port,
-            "http": s.http_port,
-            "gb28181": s.gb28181_port,
-            "bacnet": s.bacnet_port,
-            "s7": s.s7_port,
-            "mc": s.mc_port,
-            "fins": s.fins_port,
-            "ab": s.ab_port,
-            "opcda": s.opcda_port,
-            "fanuc": s.fanuc_port,
-            "mtconnect": s.mtconnect_port,
-            "toledo": s.toledo_port,
-            "profinet": s.profinet_port,
-            "ethercat": s.ethercat_port,
-        },
+        "protocol_ports": {k: v["port"] for k, v in s.protocol_ports.items()},
     }

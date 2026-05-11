@@ -705,7 +705,13 @@ async function stopAllDevices() {
 }
 
 async function batchPushToEdgelite() {
-  pushLoading.value = true
+  dialog.info({
+    title: '确认批量推送',
+    content: `将 ${selectedIds.value.length} 个选中设备推送到 EdgeLite，确定继续？`,
+    positiveText: '推送',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      pushLoading.value = true
   try {
   let ok = 0, fail = 0, skip = 0, unsupported = 0, notConfigured = 0
   const errorDetails = []
@@ -752,6 +758,8 @@ async function batchPushToEdgelite() {
   await loadData()
   selectedIds.value = []
   } finally { pushLoading.value = false }
+    }
+  })
 }
 
 async function createDevice() {

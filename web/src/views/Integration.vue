@@ -1099,16 +1099,26 @@ async function importEdgeLite() {
     message.warning('请输入 EdgeLite 设备配置 JSON')
     return
   }
-  importing.value = true
-  try {
-    const config = JSON.parse(edgeLiteJson.value)
-    const res = await api.importEdgelite(config)
-    importResults.value = res.devices || []
-    message.success(`成功导入 ${res.imported || 0} 个设备`)
-  } catch (e) {
-    if (e instanceof SyntaxError) message.error('JSON 格式错误: ' + e.message)
-    else message.error('导入失败: ' + (e.response?.data?.detail || e.message))
-  } finally { importing.value = false }
+  let config
+  try { config = JSON.parse(edgeLiteJson.value) }
+  catch (e) { message.error('JSON 格式错误: ' + e.message); return }
+  const deviceCount = Array.isArray(config.devices) ? config.devices.length : (Array.isArray(config) ? config.length : 1)
+  dialog.info({
+    title: '确认导入 EdgeLite 设备',
+    content: `将导入 ${deviceCount} 个设备配置，确定继续？`,
+    positiveText: '导入',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      importing.value = true
+      try {
+        const res = await api.importEdgelite(config)
+        importResults.value = res.devices || []
+        message.success(`成功导入 ${res.imported || 0} 个设备`)
+      } catch (e) {
+        message.error('导入失败: ' + (e.response?.data?.detail || e.message))
+      } finally { importing.value = false }
+    }
+  })
 }
 
 async function importPyGBSentry() {
@@ -1116,16 +1126,26 @@ async function importPyGBSentry() {
     message.warning('请输入 PyGBSentry 摄像头配置 JSON')
     return
   }
-  importing.value = true
-  try {
-    const config = JSON.parse(pygbsentryJson.value)
-    const res = await api.importPygbsentry(config)
-    importResults.value = res.devices || []
-    message.success(`成功导入 ${res.imported || 0} 个设备`)
-  } catch (e) {
-    if (e instanceof SyntaxError) message.error('JSON 格式错误: ' + e.message)
-    else message.error('导入失败: ' + (e.response?.data?.detail || e.message))
-  } finally { importing.value = false }
+  let config
+  try { config = JSON.parse(pygbsentryJson.value) }
+  catch (e) { message.error('JSON 格式错误: ' + e.message); return }
+  const deviceCount = Array.isArray(config.cameras) ? config.cameras.length : (Array.isArray(config) ? config.length : 1)
+  dialog.info({
+    title: '确认导入 PyGBSentry 设备',
+    content: `将导入 ${deviceCount} 个摄像头配置，确定继续？`,
+    positiveText: '导入',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      importing.value = true
+      try {
+        const res = await api.importPygbsentry(config)
+        importResults.value = res.devices || []
+        message.success(`成功导入 ${res.imported || 0} 个设备`)
+      } catch (e) {
+        message.error('导入失败: ' + (e.response?.data?.detail || e.message))
+      } finally { importing.value = false }
+    }
+  })
 }
 
 async function sendIntMessage() {

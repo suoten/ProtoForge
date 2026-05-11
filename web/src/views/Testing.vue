@@ -602,21 +602,31 @@ function exportBuilderJson() {
 }
 
 async function runQuickTest(scope, targetId) {
-  quickTesting.value = true
-  try {
-    const res = await api.quickTest(scope, targetId)
-    lastReport.value = res
-    await loadReports()
-    if ((res.success_rate || 0) >= 100) {
-      message.success(t('testing.quickTestComplete', { total: res.total || 0 }))
-    } else {
-      message.warning(t('testing.quickTestPartial', { passed: res.passed || 0, total: res.total || 0, failed: res.failed || 0 }))
+  const scopeLabels = { all: t('testing.testAll') || '所有设备', protocol: t('testing.protocolDevices') || '协议下所有设备', device: t('testing.specifiedDevice') || '指定设备' }
+  const scopeLabel = scopeLabels[scope] || scope
+  dialog.info({
+    title: t('testing.confirmQuickTest') || '确认执行快速测试',
+    content: (t('testing.confirmQuickTestDesc') || '将对 {scope} 执行测试，可能会写入测试数据。确定继续？').replace('{scope}', scopeLabel),
+    positiveText: t('testing.executeTest') || '执行测试',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      quickTesting.value = true
+      try {
+        const res = await api.quickTest(scope, targetId)
+        lastReport.value = res
+        await loadReports()
+        if ((res.success_rate || 0) >= 100) {
+          message.success(t('testing.quickTestComplete', { total: res.total || 0 }))
+        } else {
+          message.warning(t('testing.quickTestPartial', { passed: res.passed || 0, total: res.total || 0, failed: res.failed || 0 }))
+        }
+      } catch (e) {
+        message.error(t('testing.quickTestFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally {
+        quickTesting.value = false
+      }
     }
-  } catch (e) {
-    message.error(t('testing.quickTestFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally {
-    quickTesting.value = false
-  }
+  })
 }
 
 async function runJsonTest() {

@@ -412,13 +412,21 @@ async function handleResetPassword() {
 }
 
 async function unlockUser(row) {
-  try {
-    await api.adminUnlockUser(row.username)
-    message.success(t('settings.userUnlocked'))
-    await loadUsers()
-  } catch (e) {
-    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
-  }
+  dialog.info({
+    title: t('settings.confirmUnlock') || '确认解锁用户',
+    content: t('settings.confirmUnlockDesc', { name: row.username }) || `确定解锁用户 "${row.username}"？`,
+    positiveText: t('common.confirm') || '确认',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.adminUnlockUser(row.username)
+        message.success(t('settings.userUnlocked'))
+        await loadUsers()
+      } catch (e) {
+        message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
+      }
+    }
+  })
 }
 
 async function changeRole(row, newRole) {
