@@ -445,9 +445,12 @@ const protocolOptions = computed(() => [
   ...protocols.value.map(p => ({ label: p.display_name, value: p.name })),
 ])
 
-const templateOptions = computed(() =>
-  templates.value.map(t => ({ label: `${t.name} (${t.protocol})`, value: t.id }))
-)
+const templateOptions = computed(() => {
+  const list = newDevice.value.protocol
+    ? templates.value.filter(t => t.protocol === newDevice.value.protocol)
+    : templates.value
+  return list.map(t => ({ label: `${t.name} (${t.protocol})`, value: t.id }))
+})
 
 const quickTemplateOptions = computed(() => {
   const popularSet = new Set(popularTemplateIds)
@@ -565,6 +568,7 @@ function openAdvancedCreate() {
 }
 
 async function onAdvancedProtocolChange(protocol) {
+  selectedTemplate.value = null
   const { fields, defaults } = await loadDeviceConfig(protocol)
   advancedConfigFields.value = fields
   advancedProtocolConfig.value = defaults

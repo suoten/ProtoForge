@@ -63,7 +63,7 @@
           <n-select v-model:value="addForm.events" :options="eventOptions" multiple filterable :placeholder="t('webhook.selectEvents')" />
         </n-form-item>
         <n-form-item :label="t('webhook.httpMethod')">
-          <n-select v-model:value="addForm.method" :options="methodOptions" />
+          <n-select v-model:value="addForm.method" :options="methodOptions" :placeholder="t('common.selectPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('webhook.headers')">
           <n-input v-model:value="addForm.headers_json" type="textarea" :rows="3" :placeholder="t('webhook.headersPlaceholder')" />
@@ -95,7 +95,7 @@
           <n-select v-model:value="editForm.events" :options="eventOptions" multiple filterable :placeholder="t('webhook.selectEvents')" />
         </n-form-item>
         <n-form-item :label="t('webhook.httpMethod')">
-          <n-select v-model:value="editForm.method" :options="methodOptions" />
+          <n-select v-model:value="editForm.method" :options="methodOptions" :placeholder="t('common.selectPlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('webhook.headers')">
           <n-input v-model:value="editForm.headers_json" type="textarea" :rows="3" />

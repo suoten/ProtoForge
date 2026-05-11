@@ -65,10 +65,10 @@
           <n-input v-model:value="startForm.name" :placeholder="t('recorder.namePlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('common.protocol')">
-          <n-input v-model:value="startForm.protocol" :placeholder="t('recorder.protocolPlaceholder')" />
+          <n-select v-model:value="startForm.protocol" :options="protocolOptions" :placeholder="t('recorder.protocolPlaceholder')" clearable />
         </n-form-item>
         <n-form-item :label="t('common.deviceId')">
-          <n-input v-model:value="startForm.device_id" :placeholder="t('recorder.devicePlaceholder')" />
+          <n-select v-model:value="startForm.device_id" :options="deviceOptions" :placeholder="t('recorder.devicePlaceholder')" clearable filterable />
         </n-form-item>
         <n-form-item :label="t('common.description')">
           <n-input v-model:value="startForm.note" type="textarea" :rows="2" :placeholder="t('recorder.notePlaceholder')" />
@@ -125,12 +125,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
 import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
-  NInput, NGrid, NGi, NText, NTag, NEmpty, NDescriptions, NDescriptionsItem,
+  NInput, NSelect, NGrid, NGi, NText, NTag, NEmpty, NDescriptions, NDescriptionsItem,
   NSpin, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
+import { protocolLabels } from '../constants.js'
 
 const message = useMessage()
 const { t } = useI18n()
@@ -151,6 +152,30 @@ const replaying = ref(false)
 const replayResult = ref(null)
 
 const startForm = ref({ name: '', protocol: '', device_id: '', note: '' })
+const recorderProtocols = ref([])
+const recorderDevices = ref([])
+
+watch(() => startForm.value.protocol, async (val) => {
+  startForm.value.device_id = ''
+  if (!val) { recorderDevices.value = []; return }
+  try {
+    const res = await api.getDevices(val)
+    recorderDevices.value = (res || []).map(d => ({ label: `${d.name} (${d.id})`, value: d.id }))
+  } catch { recorderDevices.value = [] }
+})
+
+const protocolOptions = computed(() => {
+  const all = [{ label: t('common.all'), value: '' }]
+  recorderProtocols.value.forEach(p => {
+    all.push({ label: p.display_name || protocolLabels[p.name] || p.name, value: p.name })
+  })
+  return all
+})
+
+const deviceOptions = computed(() => {
+  const all = [{ label: t('common.all'), value: '' }]
+  return all.concat(recorderDevices.value)
+})
 const recordingDuration = ref(0)
 let durationTimer = null
 
@@ -344,6 +369,7 @@ function formatBytes(bytes) {
 onMounted(() => {
   loadRecordings()
   loadStats()
+  api.getProtocols().then(res => { recorderProtocols.value = res || [] }).catch(() => {})
 })
 
 onUnmounted(() => {

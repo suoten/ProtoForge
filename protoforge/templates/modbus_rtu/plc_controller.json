@@ -1,0 +1,65 @@
+{
+    "id": "modbus_rtu_plc",
+    "name": "RTU PLC控制器",
+    "protocol": "modbus_rtu",
+    "description": "基于RS-485串口的Modbus RTU小型PLC控制器，适用于简单自动化场景",
+    "manufacturer": "Generic",
+    "model": "PLC-RTU-200",
+    "points": [
+        {
+            "name": "coil_start",
+            "address": "0",
+            "data_type": "bool",
+            "description": "启动线圈",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "coil_stop",
+            "address": "1",
+            "data_type": "bool",
+            "description": "停止线圈",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "running_status",
+            "address": "100",
+            "data_type": "uint16",
+            "description": "运行状态寄存器",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "setpoint",
+            "address": "101",
+            "data_type": "float32",
+            "unit": "",
+            "description": "设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 100.0
+        },
+        {
+            "name": "process_value",
+            "address": "102",
+            "data_type": "float32",
+            "unit": "",
+            "description": "过程值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 90.0,
+            "max_value": 110.0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 3,
+        "baudrate": 19200,
+        "parity": "none",
+        "stopbits": 1
+    },
+    "tags": ["PLC", "控制器", "RS-485"]
+}

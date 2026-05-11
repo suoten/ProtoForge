@@ -1,0 +1,83 @@
+{
+    "id": "modbus_rtu_power_meter",
+    "name": "RTU电力仪表",
+    "protocol": "modbus_rtu",
+    "description": "基于RS-485串口的Modbus RTU三相电力仪表，适用于配电柜远程抄表",
+    "manufacturer": "Generic",
+    "model": "PM-RTU-300",
+    "points": [
+        {
+            "name": "voltage_a",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "A相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218.0,
+            "max_value": 222.0
+        },
+        {
+            "name": "voltage_b",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "B相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218.0,
+            "max_value": 222.0
+        },
+        {
+            "name": "voltage_c",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "C相电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218.0,
+            "max_value": 222.0
+        },
+        {
+            "name": "current_a",
+            "address": "3",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "A相电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "power_total",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "总有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 30.0
+        },
+        {
+            "name": "power_factor",
+            "address": "5",
+            "data_type": "float32",
+            "unit": "",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.98
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 2,
+        "baudrate": 9600,
+        "parity": "even",
+        "stopbits": 1
+    },
+    "tags": ["电力", "仪表", "RS-485"]
+}

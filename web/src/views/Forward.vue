@@ -74,7 +74,7 @@
           <n-input v-model:value="addForm.name" :placeholder="t('forward.namePlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('forward.targetType')">
-          <n-select v-model:value="addForm.type" :options="typeOptions" />
+          <n-select v-model:value="addForm.type" :options="typeOptions" :placeholder="t('common.selectPlaceholder')" />
         </n-form-item>
         <template v-if="addForm.type === 'influxdb'">
           <n-form-item :label="t('forward.hostAddress')">
@@ -100,7 +100,7 @@
             <n-input v-model:value="addForm.path" :placeholder="t('forward.pathPlaceholder')" />
           </n-form-item>
           <n-form-item :label="t('forward.fileFormat')">
-            <n-select v-model:value="addForm.format" :options="[{label: t('forward.jsonl'), value: 'jsonl'}, {label: t('forward.csv'), value: 'csv'}]" />
+            <n-select v-model:value="addForm.format" :options="[{label: t('forward.jsonl'), value: 'jsonl'}, {label: t('forward.csv'), value: 'csv'}]" :placeholder="t('common.selectPlaceholder')" />
           </n-form-item>
         </template>
         <n-form-item :label="t('forward.protocolFilter')">
@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
   NInput, NInputNumber, NSelect, NGrid, NGi, NTag, NEmpty, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
