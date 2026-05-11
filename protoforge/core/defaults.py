@@ -128,6 +128,10 @@ PROTOCOL_DEVICE_CONFIG = {
         {"key": "namespace", "label": "命名空间URI", "type": "string", "default": "urn:protoforge:simulation", "description": "节点命名空间URI，客户端通过ns索引访问节点"},
         {"key": "security_mode", "label": "安全模式", "type": "select", "default": "None", "options": ["None", "Sign", "SignAndEncrypt"], "description": "OPC-UA安全模式(None=无加密 Sign=签名 SignAndEncrypt=签名加密)"},
     ],
+    "opcua_client": [
+        {"key": "namespace", "label": "命名空间URI", "type": "string", "default": "urn:protoforge:simulation", "description": "目标服务器节点命名空间URI"},
+        {"key": "security_mode", "label": "安全模式", "type": "select", "default": "None", "options": ["None", "Sign", "SignAndEncrypt"], "description": "OPC-UA客户端安全模式"},
+    ],
     "mqtt": [
         {"key": "topic_prefix", "label": "Topic前缀", "type": "string", "default": "protoforge", "description": "MQTT发布主题前缀，格式: {prefix}/{device_id}/{point_name}"},
         {"key": "qos", "label": "QoS等级", "type": "select", "default": 0, "options": [0, 1, 2], "description": "消息服务质量(0=至多一次 1=至少一次 2=恰好一次)"},
@@ -233,6 +237,18 @@ PROTOCOL_USAGE = {
             "csharp": "// OPC-UA SDK 示例 — OPC-UA 客户端\nusing Opc.Ua;\nusing Opc.Ua.Client;\n\nvar endpoint = new EndpointDescription(\"opc.tcp://{host}:{port}\");\nvar session = await Session.Create(\n    new ApplicationConfiguration(),\n    new ConfiguredEndpoint(null, endpoint),\n    true, \"\", 60000, null, null);\n\n// 读取节点\nvar node = session.ReadNode(new NodeId(\"protoforge.temperature\", 2));\nConsole.WriteLine($\"温度: {{node.Value}}\");\n\n// 写入节点\nsession.WriteNode(new NodeId(\"protoforge.temperature\", 2), 25.5);",
             "java": "// eclipse milo 示例 — OPC-UA 客户端\nimport org.eclipse.milo.opcua.sdk.client.OpcUaClient;\n\nOpcUaClient client = OpcUaClient.create(\"opc.tcp://{host}:{port}\");\nclient.connect().get();\n\n// 读取节点\nNodeId nodeId = new NodeId(2, \"protoforge.temperature\");\nDataValue value = client.readValue(0, TimestampsToReturn.Both, nodeId).get();\nSystem.out.println(\"温度: \" + value.getValue().getValue());",
             "go": "// opcua 示例 — OPC-UA 客户端\nimport \"github.com/gopcua/opcua\"\n\nclient, _ := opcua.NewClient(\"opc.tcp://{host}:{port}\")\nclient.Connect(context.Background())\n\n// 读取节点\nid := opcua.NewStringNodeID(2, \"protoforge.temperature\")\nresp, _ := client.Read(context.Background(), &ua.ReadRequest{\n    NodesToRead: []*ua.ReadValueID{{NodeID: id}},\n})\nfmt.Printf(\"温度: %v\\n\", resp.Results[0].Value)",
+        },
+    },
+    "opcua_client": {
+        "mode": "client",
+        "mode_label": "客户端连接",
+        "mode_desc": "ProtoForge 作为 OPC-UA 客户端连接到外部 OPC-UA 服务器，读取/写入节点数据，支持断线自动重连",
+        "connect_hint": "配置外部 OPC-UA 服务器的端点地址：",
+        "code_examples": {
+            "python": "# ProtoForge OPC-UA 客户端模式\n# 在协议服务页面启动 opcua_client 协议\n# 配置 endpoint 为目标 OPC-UA 服务器地址\n# 例如: opc.tcp://192.168.1.100:4840\n# \n# 启动后，创建设备并配置测点的 address 为节点ID\n# 例如: ns=2;s=Temperature\n# ProtoForge 将自动读取/写入该节点",
+            "csharp": "// ProtoForge OPC-UA 客户端模式\n// 在协议服务页面启动 opcua_client 协议\n// 配置 endpoint 为目标 OPC-UA 服务器地址\n// 例如: opc.tcp://192.168.1.100:4840\n// \n// 启动后，创建设备并配置测点的 address 为节点ID\n// 例如: ns=2;s=Temperature",
+            "java": "// ProtoForge OPC-UA 客户端模式\n// 在协议服务页面启动 opcua_client 协议\n// 配置 endpoint 为目标 OPC-UA 服务器地址\n// 例如: opc.tcp://192.168.1.100:4840\n// \n// 启动后，创建设备并配置测点的 address 为节点ID\n// 例如: ns=2;s=Temperature",
+            "go": "// ProtoForge OPC-UA 客户端模式\n// 在协议服务页面启动 opcua_client 协议\n// 配置 endpoint 为目标 OPC-UA 服务器地址\n// 例如: opc.tcp://192.168.1.100:4840\n// \n// 启动后，创建设备并配置测点的 address 为节点ID\n// 例如: ns=2;s=Temperature",
         },
     },
     "mqtt": {
