@@ -878,7 +878,7 @@ async function viewPoints(id) {
 
 async function writeDevicePointQuick() {
   if (!currentViewDeviceId.value || !writePointName.value) {
-    message.warning('请选择要写入的测点')
+    message.warning(t('devices.pleaseSelectPoint'))
     return
   }
   writeLoading.value = true
@@ -886,11 +886,11 @@ async function writeDevicePointQuick() {
     const numVal = Number(writePointValue.value)
     const value = isNaN(numVal) ? writePointValue.value : numVal
     await api.writeDevicePoint(currentViewDeviceId.value, writePointName.value, value)
-    message.success(`测点 ${writePointName.value} 写入成功`)
+    message.success(t('devices.pointWriteSuccess', { name: writePointName.value }))
     const res = await api.getDevicePoints(currentViewDeviceId.value)
     currentPoints.value = res
   } catch (e) {
-    message.error('写入失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('devices.writeFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { writeLoading.value = false }
 }
 
@@ -900,9 +900,9 @@ function openBatchCreateModal() {
 }
 
 async function doBatchCreate() {
-  if (!batchForm.value.templateId) { message.warning('请选择模板'); return }
-  if (!batchForm.value.namePrefix) { message.warning('请输入名称前缀'); return }
-  if (!batchForm.value.idPrefix) { message.warning('请输入ID前缀'); return }
+  if (!batchForm.value.templateId) { message.warning(t('devices.pleaseSelectTemplate')); return }
+  if (!batchForm.value.namePrefix) { message.warning(t('devices.pleaseEnterNamePrefix')); return }
+  if (!batchForm.value.idPrefix) { message.warning(t('devices.pleaseEnterIdPrefix')); return }
   batchCreating.value = true
   try {
     const tmpl = templates.value.find(t => t.id === batchForm.value.templateId)
@@ -917,10 +917,10 @@ async function doBatchCreate() {
     }
     const res = await api.batchCreateDevices(configs)
     showBatchCreateModal.value = false
-    message.success(`成功创建 ${res.created || configs.length} 个设备`)
+    message.success(t('devices.batchCreatedSuccess', { count: res.created || configs.length }))
     await loadData()
   } catch (e) {
-    message.error('批量创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('devices.batchCreateFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { batchCreating.value = false }
 }
 
@@ -929,7 +929,7 @@ async function showGuide(id) {
     guideData.value = await api.getDeviceConnectionGuide(id)
     guideLang.value = 'python'
     showGuideModal.value = true
-  } catch (e) { message.error('获取连接指南失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.getGuideFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function copyGuide() {
@@ -937,9 +937,9 @@ async function copyGuide() {
   if (!code) return
   try {
     await navigator.clipboard.writeText(code)
-    message.success('代码已复制到剪贴板')
+    message.success(t('devices.codeCopied'))
   } catch (e) {
-    message.error('复制失败，请手动复制')
+    message.error(t('devices.copyFailed'))
   }
 }
 
@@ -972,21 +972,21 @@ async function pushFromPipeline() {
     if (res.skipped) {
       const reason = res.reason || ''
       if (reason.includes('not supported') || reason.includes('不支持')) {
-        message.warning('EdgeLite 不支持该协议，无法推送')
+        message.warning(t('devices.protocolNotSupportedByEdgeLite'))
       } else if (res.error_type === 'not_configured') {
-        message.warning('未配置 EdgeLite 网关地址，请先在「系统设置」中配置')
+        message.warning(t('devices.edgeliteNotConfiguredInSettings'))
       } else {
-        message.warning('该设备未配置 EdgeLite 地址')
+        message.warning(t('devices.deviceNotConfiguredEdgeLite'))
       }
     } else if (res.ok) {
-      message.success(res.action === 'created' ? '设备已注册到 EdgeLite' : '设备配置已更新')
+      message.success(res.action === 'created' ? t('devices.deviceRegisteredToEdgeLite') : t('devices.deviceConfigUpdated'))
       await runPipelineVerify()
     } else {
-      const errMsg = res.suggestion || res.error || '未知错误'
-      message.error('推送失败: ' + errMsg)
+      const errMsg = res.suggestion || res.error || t('common.unknownError')
+      message.error(t('devices.pushFailed') + ': ' + errMsg)
     }
   } catch (e) {
-    message.error('推送失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('devices.pushFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { pipelinePushLoading.value = false }
 }
 
@@ -1011,20 +1011,20 @@ function getPipelineStepDesc(idx) {
     const comp = pipelineResult.value.data_comparison
     if (comp && comp.length > 0) {
       const matched = comp.filter(c => c.match).length
-      return `${matched}/${comp.length} 测点匹配`
+      return t('devices.pointMatchCount', { matched, total: comp.length })
     }
-    return '等待采集数据'
+    return t('devices.waitingForData')
   }
   const step = pipelineResult.value.steps[key]
-  if (!step) return '未执行'
+  if (!step) return t('devices.notExecuted')
   if (step.ok) {
-    if (key === 'auth') return '认证成功'
-    if (key === 'register') return `已注册 (状态: ${step.status || 'ok'})`
-    if (key === 'connect') return `已连接 (状态: ${step.status || 'ok'})`
-    if (key === 'collect') return step.has_real_data ? '已采集到数据' : '暂无实际数据'
-    return '成功'
+    if (key === 'auth') return t('devices.authSuccess')
+    if (key === 'register') return t('devices.registeredStatus', { status: step.status || 'ok' })
+    if (key === 'connect') return t('devices.connectedStatus', { status: step.status || 'ok' })
+    if (key === 'collect') return step.has_real_data ? t('devices.dataCollected') : t('devices.noRealData')
+    return t('common.success')
   }
-  return step.error || '失败'
+  return step.error || t('common.failed')
 }
 
 async function batchVerifyPipeline() {
@@ -1037,17 +1037,17 @@ async function batchVerifyPipeline() {
       if (res.skipped) { skip++ }
       else if (res.ok) { ok++ }
       else { fail++ }
-    } catch (e) { fail++; message.warning(`设备 ${id} 链路验证失败: ${e.response?.data?.detail || e.message}`) }
+    } catch (e) { fail++; message.warning(t('devices.devicePipelineFailed', { id, error: e.response?.data?.detail || e.message })) }
   }
   } finally {
     pipelineLoading.value = false
   }
   selectedIds.value = []
   const parts = []
-  if (ok) parts.push(`${ok} 个链路正常`)
-  if (skip) parts.push(`${skip} 个未配置EdgeLite`)
-  if (fail) parts.push(`${fail} 个链路异常`)
-  const msg = parts.join('，') || '无操作'
+  if (ok) parts.push(t('devices.pipelineOkCount', { count: ok }))
+  if (skip) parts.push(t('devices.edgeliteNotConfiguredCount', { count: skip }))
+  if (fail) parts.push(t('devices.pipelineFailCount', { count: fail }))
+  const msg = parts.join(t('common.separator')) || t('devices.noOperation')
   if (fail > 0 && ok === 0) message.error(msg)
   else if (fail > 0) message.warning(msg)
   else message.success(msg)
