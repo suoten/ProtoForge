@@ -1,53 +1,53 @@
 <template>
   <n-space vertical>
-    <div class="pf-section-title">联调集成</div>
-    <div class="pf-section-desc">对接 EdgeLite 网关，完成设备注册→连接→采集→验证→监控的完整联调链路</div>
+    <div class="pf-section-title">{{ t('integration.title') }}</div>
+    <div class="pf-section-desc">{{ t('integration.subtitle') }}</div>
 
     <n-tabs type="card">
-      <n-tab-pane name="edgelite-pipeline" tab="EdgeLite 联调">
+      <n-tab-pane name="edgelite-pipeline" :tab="t('integration.edgelitePipeline')">
         <n-space vertical size="large">
-          <n-card size="small" title="EdgeLite 连接配置">
+          <n-card size="small" :title="t('integration.edgeliteConnectionConfig')">
             <template #header-extra>
-              <n-button text type="info" size="tiny" @click="$router.push('/settings')">在系统设置中管理</n-button>
+              <n-button text type="info" size="tiny" @click="$router.push('/settings')">{{ t('integration.manageInSettings') }}</n-button>
             </template>
             <n-space vertical>
               <n-form :model="elConfig" label-placement="left" label-width="140" inline>
-                <n-form-item label="EdgeLite地址">
+                <n-form-item :label="t('integration.edgeliteAddress')">
                   <n-input v-model:value="elConfig.url" placeholder="http://edgelite-host:8100" style="width:260px" />
                 </n-form-item>
-                <n-form-item label="用户名">
+                <n-form-item :label="t('integration.username')">
                   <n-input v-model:value="elConfig.username" placeholder="admin" style="width:120px" />
                 </n-form-item>
-                <n-form-item label="密码">
-                  <n-input v-model:value="elConfig.password" type="password" show-password-on="click" placeholder="密码" style="width:120px" />
+                <n-form-item :label="t('integration.password')">
+                  <n-input v-model:value="elConfig.password" type="password" show-password-on="click" :placeholder="t('integration.password')" style="width:120px" />
                 </n-form-item>
                 <n-form-item>
                   <n-button type="primary" @click="testConnection" :loading="testingConn">
-                    测试连接
+                    {{ t('integration.testConnection') }}
                   </n-button>
                 </n-form-item>
               </n-form>
               <n-alert v-if="connResult" :type="connResult.ok ? 'success' : 'error'" :bordered="false" style="margin-top:4px">
                 <template v-if="connResult.ok">
-                  连接成功！EdgeLite 版本: {{ connResult.version || '未知' }}，设备总数: {{ connResult.devices || 0 }}
+                  {{ t('integration.connectionSuccess') }} {{ connResult.version || t('common.unknown') }}，{{ t('integration.deviceCount') }}: {{ connResult.devices || 0 }}
                 </template>
                 <template v-else>
-                  连接失败: {{ connResult.error }}
+                  {{ t('integration.connectionFailed') }}: {{ connResult.error }}
                 </template>
               </n-alert>
             </n-space>
           </n-card>
 
-          <n-card size="small" title="联调链路说明">
+          <n-card size="small" :title="t('integration.pipelineExplanation')">
             <n-space vertical size="small">
               <n-alert type="info" :bordered="false">
-                <div style="font-weight:600;margin-bottom:8px">完整联调链路 (5步)</div>
+                <div style="font-weight:600;margin-bottom:8px">{{ t('integration.fullPipeline5Steps') }}</div>
                 <div style="line-height:2">
-                  <n-text code>1. 注册</n-text> ProtoForge 将设备配置推送到 EdgeLite，包含 driver_config 指向 ProtoForge 的 IP:端口<br/>
-                  <n-text code>2. 连接</n-text> EdgeLite 的驱动根据 driver_config 反向连接 ProtoForge 的仿真设备<br/>
-                  <n-text code>3. 采集</n-text> EdgeLite 定期从 ProtoForge 仿真设备读取数据<br/>
-                  <n-text code>4. 验证</n-text> ProtoForge 从 EdgeLite 回读采集数据，与本地仿真数据对比<br/>
-                  <n-text code>5. 监控</n-text> 持续查看 EdgeLite 上设备的在线状态和采集数据
+                  <n-text code>1. {{ t('integration.stepRegister') }}</n-text> {{ t('integration.stepRegisterDesc') }}<br/>
+                  <n-text code>2. {{ t('integration.stepConnect') }}</n-text> {{ t('integration.stepConnectDesc') }}<br/>
+                  <n-text code>3. {{ t('integration.stepCollect') }}</n-text> {{ t('integration.stepCollectDesc') }}<br/>
+                  <n-text code>4. {{ t('integration.stepVerify') }}</n-text> {{ t('integration.stepVerifyDesc') }}<br/>
+                  <n-text code>5. {{ t('integration.stepMonitor') }}</n-text> {{ t('integration.stepMonitorDesc') }}
                 </div>
               </n-alert>
               <div style="padding:12px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -66,12 +66,12 @@
             </n-space>
           </n-card>
 
-          <n-card size="small" title="设备联调状态">
+          <n-card size="small" :title="t('integration.deviceIntegrationStatus')">
             <template #header-extra>
               <n-space>
-                <n-button size="small" @click="loadDevices" :loading="loadingDevices">刷新</n-button>
+                <n-button size="small" @click="loadDevices" :loading="loadingDevices">{{ t('common.refresh') }}</n-button>
                 <n-button size="small" type="primary" @click="batchPushAndVerify" :loading="batchPipelineLoading">
-                  批量推送并验证
+                  {{ t('integration.batchPushAndVerify') }}
                 </n-button>
               </n-space>
             </template>
@@ -81,32 +81,32 @@
         </n-space>
       </n-tab-pane>
 
-      <n-tab-pane name="integration-status" tab="集成状态">
+      <n-tab-pane name="integration-status" :tab="t('integration.integrationStatus')">
         <n-space vertical size="large">
           <n-grid :cols="4" :x-gap="12" :y-gap="12">
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">连接状态</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.connectionStatus') }}</div>
                 <n-tag :type="intStatus.connection_state === 'connected' ? 'success' : 'error'" size="small" :bordered="false">
-                  {{ intStatus.connection_state === 'connected' ? '已连接' : '未连接' }}
+                  {{ intStatus.connection_state === 'connected' ? t('integration.connected') : t('integration.disconnected') }}
                 </n-tag>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">推送成功</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.pushSuccess') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#6366f1">{{ intMetrics.push_success_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">推送失败</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.pushFailed') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.push_failure_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">平均推送延迟</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.avgPushLatency') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#f59e0b">{{ intMetrics.avg_push_latency_ms || 0 }}<span style="font-size:12px;font-weight:400">ms</span></div>
               </n-card>
             </n-gi>
@@ -115,68 +115,68 @@
           <n-grid :cols="4" :x-gap="12" :y-gap="12">
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">回传数据</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.backhaulData') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#3b82f6">{{ intMetrics.data_backhaul_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">同步事件</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.syncEvents') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#8b5cf6">{{ intMetrics.sync_event_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">告警转发</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.alarmForward') }}</div>
                 <div style="font-size:24px;font-weight:600;color:#ef4444">{{ intMetrics.alarm_forward_count || 0 }}</div>
               </n-card>
             </n-gi>
             <n-gi>
               <n-card size="small" style="text-align:center">
-                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">最后心跳</div>
-                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_heartbeat_at ? new Date(intMetrics.last_heartbeat_at * 1000).toLocaleString() : '无' }}</div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.lastHeartbeat') }}</div>
+                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_heartbeat_at ? new Date(intMetrics.last_heartbeat_at * 1000).toLocaleString() : t('common.none') }}</div>
               </n-card>
             </n-gi>
           </n-grid>
 
-          <n-card size="small" title="设备状态缓存">
+          <n-card size="small" :title="t('integration.deviceStatusCache')">
             <template #header-extra>
-              <n-button size="small" @click="loadDeviceStatusCache" :loading="loadingStatusCache">刷新</n-button>
+              <n-button size="small" @click="loadDeviceStatusCache" :loading="loadingStatusCache">{{ t('common.refresh') }}</n-button>
             </template>
             <n-data-table :columns="statusCacheColumns" :data="deviceStatusCache" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
           </n-card>
 
-          <n-card size="small" title="回传数据">
+          <n-card size="small" :title="t('integration.backhaulData')">
             <template #header-extra>
               <n-space size="small">
-                <n-input v-model:value="backhaulDeviceId" size="small" placeholder="设备ID过滤" clearable style="width:180px" />
-                <n-button size="small" @click="loadBackhaulData" :loading="loadingBackhaul">查询</n-button>
+                <n-input v-model:value="backhaulDeviceId" size="small" :placeholder="t('integration.deviceIdFilter')" clearable style="width:180px" />
+                <n-button size="small" @click="loadBackhaulData" :loading="loadingBackhaul">{{ t('common.query') }}</n-button>
               </n-space>
             </template>
             <n-data-table :columns="backhaulColumns" :data="backhaulData" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
           </n-card>
 
-          <n-card size="small" title="协议映射">
+          <n-card size="small" :title="t('integration.protocolMapping')">
             <template #header-extra>
-              <n-button size="small" @click="loadProtocolMappings" :loading="loadingProtocols">刷新</n-button>
+              <n-button size="small" @click="loadProtocolMappings" :loading="loadingProtocols">{{ t('common.refresh') }}</n-button>
             </template>
             <n-data-table :columns="protocolMapColumns" :data="protocolMappings" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
           </n-card>
 
-          <n-card size="small" title="发送集成消息">
+          <n-card size="small" :title="t('integration.sendMessage')">
             <n-space vertical>
               <n-alert type="info" :bordered="false">
-                向集成管理器发送自定义消息，触发特定动作或查询状态。支持自定义消息类型和载荷。
+                {{ t('integration.sendMessageDesc') }}
               </n-alert>
               <n-form :model="msgForm" label-placement="left" label-width="100" inline>
-                <n-form-item label="消息类型">
-                  <n-select v-model:value="msgForm.type" :options="msgTypeOptions" filterable tag placeholder="选择或输入消息类型" style="width:220px" />
+                <n-form-item :label="t('integration.messageType')">
+                  <n-select v-model:value="msgForm.type" :options="msgTypeOptions" filterable tag :placeholder="t('integration.selectOrInputMsgType')" style="width:220px" />
                 </n-form-item>
                 <n-form-item>
-                  <n-button type="primary" @click="sendIntMessage" :loading="sendingMsg">发送</n-button>
+                  <n-button type="primary" @click="sendIntMessage" :loading="sendingMsg">{{ t('common.send') }}</n-button>
                 </n-form-item>
               </n-form>
               <n-input v-model:value="msgForm.payloadJson" type="textarea" :rows="3"
