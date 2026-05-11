@@ -62,9 +62,11 @@
 
       <n-modal v-model:show="showAdvanced" preset="card" :title="t('protocols.advancedConfigTitle', { name: advancedProtocol.display_name || advancedProtocol.name })" style="width: 500px">
         <n-alert type="info" :bordered="false" style="margin-bottom: 12px">{{ t('protocols.advancedConfigHint') }}</n-alert>
-        <n-form :model="advancedConfig" label-placement="left" label-width="80">
-          <n-form-item v-for="(value, key) in advancedConfig" :key="key" :label="key">
-            <n-input v-model:value="advancedConfig[key]" :placeholder="String(value)" />
+        <n-form :model="advancedConfig" label-placement="left" label-width="120">
+          <n-form-item v-for="(info, key) in advancedConfigSchema" :key="key" :label="key">
+            <n-input-number v-if="info.type === 'number' || info.type === 'integer'" v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" style="width:100%" />
+            <n-input v-else v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" />
+            <template #feedback v-if="info.description"><n-text depth="3" style="font-size:12px">{{ info.description }}</n-text></template>
           </n-form-item>
         </n-form>
         <template #action>
@@ -105,7 +107,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NInputNumber, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { protocolColors, protocolModes } from '../constants.js'
@@ -123,6 +125,11 @@ const startingAll = ref(false)
 const stoppingAll = ref(false)
 const advancedProtocol = ref({})
 const advancedConfig = ref({})
+const advancedConfigSchema = computed(() => {
+  const schema = advancedProtocol.value.config_schema || {}
+  const properties = schema.properties || {}
+  return properties
+})
 
 const showInfoModal = ref(false)
 const protocolInfoName = ref('')
@@ -284,7 +291,7 @@ async function showProtocolInfo(name) {
     const infoList = Array.isArray(infoRes) ? infoRes : (infoRes.protocols || [])
     const found = infoList.find(p => p.name === name) || protocols.value.find(p => p.name === name) || { name }
     protocolInfoData.value = found
-    protocolConfigData.value = configRes.config_schema || (Object.keys(configRes).length > 0 ? configRes : {})
+    protocolConfigData.value = configRes.properties || configRes.config_schema?.properties || (Object.keys(configRes).length > 0 ? configRes : {})
   } catch (e) {
     protocolInfoData.value = protocols.value.find(p => p.name === name) || { name }
     protocolConfigData.value = {}
@@ -295,9 +302,10 @@ function openAdvanced(p) {
   advancedProtocol.value = p
   try {
     const schema = p.config_schema || {}
+    const properties = schema.properties || schema
     advancedConfig.value = {}
-    for (const [key, info] of Object.entries(schema)) {
-      if (info !== null && info !== undefined) {
+    for (const [key, info] of Object.entries(properties)) {
+      if (info !== null && info !== undefined && typeof info === 'object' && info.type) {
         advancedConfig.value[key] = info.default ?? ''
       }
     }

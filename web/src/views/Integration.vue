@@ -180,9 +180,9 @@
                 </n-form-item>
               </n-form>
               <n-input v-model:value="msgForm.payloadJson" type="textarea" :rows="3"
-                placeholder='消息载荷 JSON（可选），如 {"device_id":"dev-001","action":"sync"}' />
+                :placeholder="t('integration.msgPayloadPlaceholder')" />
               <n-alert v-if="msgResult" :type="msgResult.status === 'ok' ? 'success' : 'error'" :bordered="false">
-                <div style="font-weight:600;margin-bottom:4px">{{ msgResult.status === 'ok' ? '发送成功' : '发送失败' }}</div>
+                <div style="font-weight:600;margin-bottom:4px">{{ msgResult.status === 'ok' ? t('common.sendSuccess') : t('common.sendFailed') }}</div>
                 <div v-if="msgResult.data" style="font-size:12px;color:#94a3b8">{{ JSON.stringify(msgResult.data) }}</div>
                 <div v-if="msgResult.error" style="font-size:12px;color:#ef4444">{{ msgResult.error }}</div>
               </n-alert>
@@ -191,56 +191,56 @@
         </n-space>
       </n-tab-pane>
 
-      <n-tab-pane name="alarm-rules" tab="告警联动">
+      <n-tab-pane name="alarm-rules" :tab="t('integration.alarmLinkage')">
         <n-space vertical size="large">
-          <n-card size="small" title="告警联动规则">
+          <n-card size="small" :title="t('integration.alarmRules')">
             <template #header-extra>
               <n-space size="small">
-                <n-button size="small" @click="loadAlarmRules" :loading="loadingAlarmRules">刷新</n-button>
-                <n-button size="small" type="primary" @click="showAddAlarmModal = true">添加规则</n-button>
+                <n-button size="small" @click="loadAlarmRules" :loading="loadingAlarmRules">{{ t('common.refresh') }}</n-button>
+                <n-button size="small" type="primary" @click="showAddAlarmModal = true">{{ t('integration.addRule') }}</n-button>
               </n-space>
             </template>
             <n-alert v-if="alarmRules.length === 0 && !loadingAlarmRules" type="info" :bordered="false" style="margin-bottom:12px">
-              暂无告警联动规则。添加规则后，当源设备产生告警时，系统将自动执行指定动作（如停止目标设备）。
+              {{ t('integration.noAlarmRules') }}
             </n-alert>
             <n-data-table :columns="alarmRuleColumns" :data="alarmRules" :bordered="false" size="small"
               :pagination="{ pageSize: 10 }" />
           </n-card>
 
-          <n-card size="small" title="设备兼容性验证">
+          <n-card size="small" :title="t('integration.deviceCompatibility')">
             <n-space vertical>
               <n-form :model="validateForm" label-placement="left" label-width="100" inline>
-                <n-form-item label="设备ID">
-                  <n-select v-model:value="validateForm.device_id" :options="elDeviceOptions" filterable placeholder="选择或输入设备ID" style="width:220px" />
+                <n-form-item :label="t('integration.deviceId')">
+                  <n-select v-model:value="validateForm.device_id" :options="elDeviceOptions" filterable :placeholder="t('integration.selectOrInputDeviceId')" style="width:220px" />
                 </n-form-item>
-                <n-form-item label="协议">
-                  <n-input v-model:value="validateForm.protocol" placeholder="如 modbus_tcp" style="width:140px" />
+                <n-form-item :label="t('integration.protocol')">
+                  <n-input v-model:value="validateForm.protocol" :placeholder="t('integration.protocolPlaceholder')" style="width:140px" />
                 </n-form-item>
                 <n-form-item>
-                  <n-button type="primary" @click="validateDevice" :loading="validating">验证兼容性</n-button>
+                  <n-button type="primary" @click="validateDevice" :loading="validating">{{ t('integration.verifyCompatibility') }}</n-button>
                 </n-form-item>
               </n-form>
               <n-alert v-if="validateResult" :type="validateResult.compatible ? 'success' : 'error'" :bordered="false">
                 <div style="font-weight:600;margin-bottom:4px">
-                  {{ validateResult.compatible ? '设备兼容' : '设备不兼容' }}
+                  {{ validateResult.compatible ? t('integration.deviceCompatible') : t('integration.deviceIncompatible') }}
                 </div>
                 <div v-if="validateResult.warnings && validateResult.warnings.length > 0" style="margin-top:4px">
-                  <div style="font-weight:500;color:#f59e0b">警告:</div>
+                  <div style="font-weight:500;color:#f59e0b">{{ t('integration.warnings') }}</div>
                   <ul style="margin:4px 0;padding-left:20px">
                     <li v-for="w in validateResult.warnings" :key="w">{{ w }}</li>
                   </ul>
                 </div>
                 <div v-if="validateResult.errors && validateResult.errors.length > 0" style="margin-top:4px">
-                  <div style="font-weight:500;color:#ef4444">错误:</div>
+                  <div style="font-weight:500;color:#ef4444">{{ t('integration.errors') }}</div>
                   <ul style="margin:4px 0;padding-left:20px">
                     <li v-for="e in validateResult.errors" :key="e">{{ e }}</li>
                   </ul>
                 </div>
                 <div v-if="validateResult.protocol_result" style="margin-top:4px;font-size:12px;color:#94a3b8">
-                  协议验证: {{ validateResult.protocol_result }}
+                  {{ t('integration.protocolVerify') }}: {{ validateResult.protocol_result }}
                 </div>
                 <div v-if="validateResult.data_type_results" style="margin-top:4px;font-size:12px;color:#94a3b8">
-                  数据类型: {{ JSON.stringify(validateResult.data_type_results) }}
+                  {{ t('integration.dataType') }}: {{ JSON.stringify(validateResult.data_type_results) }}
                 </div>
               </n-alert>
             </n-space>
@@ -248,36 +248,36 @@
         </n-space>
       </n-tab-pane>
 
-      <n-tab-pane name="edgelite-import" tab="EdgeLite 导入">
+      <n-tab-pane name="edgelite-import" :tab="t('integration.edgeliteImport')">
         <n-card size="small">
           <n-space vertical>
             <n-alert type="info" :bordered="false">
-              导入 EdgeLite 设备配置，自动生成仿真设备。支持批量导入设备列表。
+              {{ t('integration.edgeliteImportDesc') }}
             </n-alert>
             <n-input v-model:value="edgeLiteJson" type="textarea" :rows="10"
-              placeholder='粘贴 EdgeLite 设备配置 JSON...' />
-            <n-button type="primary" @click="importEdgeLite" :loading="importing">导入</n-button>
+              :placeholder="t('integration.pasteEdgeliteJson')" />
+            <n-button type="primary" @click="importEdgeLite" :loading="importing">{{ t('common.import') }}</n-button>
           </n-space>
         </n-card>
       </n-tab-pane>
 
-      <n-tab-pane name="pygbsentry" tab="PyGBSentry 对接">
+      <n-tab-pane name="pygbsentry" :tab="t('integration.pygbsentryIntegration')">
         <n-card size="small">
           <n-space vertical>
             <n-alert type="info" :bordered="false">
-              导入 PyGBSentry 摄像头配置，自动生成 GB28181 仿真设备并注册到视频平台。
+              {{ t('integration.pygbsentryImportDesc') }}
             </n-alert>
             <n-input v-model:value="pygbsentryJson" type="textarea" :rows="10"
-              placeholder='粘贴 PyGBSentry 摄像头配置 JSON...' />
-            <n-button type="primary" @click="importPyGBSentry" :loading="importing">导入</n-button>
+              :placeholder="t('integration.pastePygbsentryJson')" />
+            <n-button type="primary" @click="importPyGBSentry" :loading="importing">{{ t('common.import') }}</n-button>
           </n-space>
         </n-card>
       </n-tab-pane>
 
-      <n-tab-pane name="sdk" tab="SDK 示例">
+      <n-tab-pane name="sdk" :tab="t('integration.sdkExamples')">
         <n-card size="small">
           <template #header>
-            <span>ProtoForge SDK 代码示例</span>
+            <span>{{ t('integration.sdkCodeExamples') }}</span>
           </template>
           <template #header-extra>
             <n-button-group size="tiny">
@@ -293,7 +293,7 @@
       </n-tab-pane>
     </n-tabs>
 
-    <n-modal v-model:show="showPipelineModal" preset="card" title="联调链路验证" style="width:780px">
+    <n-modal v-model:show="showPipelineModal" preset="card" :title="t('integration.pipelineVerify')" style="width:780px">
       <n-space vertical size="large" v-if="pipelineResult">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0">
           <div v-for="(step, idx) in pipelineSteps" :key="idx" style="display:flex;align-items:center;gap:4px">
@@ -317,13 +317,13 @@
         </div>
 
         <n-card v-if="pipelineResult.data_comparison && pipelineResult.data_comparison.length > 0"
-          size="small" title="数据对比 (ProtoForge vs EdgeLite)">
+          size="small" :title="t('integration.dataComparison')">
           <n-data-table :columns="comparisonColumns" :data="pipelineResult.data_comparison"
             :bordered="false" size="small" />
         </n-card>
 
         <n-card v-if="pipelineResult?.steps?.collect?.data"
-          size="small" title="EdgeLite 采集数据">
+          size="small" :title="t('integration.edgeliteCollectedData')">
           <n-descriptions label-placement="left" :column="2" bordered size="small">
             <n-descriptions-item v-for="(val, key) in pipelineResult.steps.collect.data" :key="key" :label="key">
               {{ val }}
@@ -332,87 +332,87 @@
         </n-card>
 
         <n-alert v-if="pipelineResult.skipped" type="warning" :bordered="false">
-          未配置 EdgeLite 网关地址。请编辑设备，在协议配置中填写 EdgeLite网关地址、用户名和密码。
+          {{ t('integration.edgeliteNotConfiguredDetail') }}
         </n-alert>
         <n-alert v-else-if="pipelineResult.ok" type="success" :bordered="false">
-          联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
+          {{ t('integration.pipelineVerifySuccess') }}
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
-          <div style="font-weight:600;margin-bottom:4px">认证失败</div>
-          <div>{{ pipelineResult?.steps?.auth?.error || '认证失败' }}</div>
-          <div style="margin-top:4px;font-size:12px;color:#94a3b8">请检查 EdgeLite 网关地址是否正确、用户名密码是否正确</div>
+          <div style="font-weight:600;margin-bottom:4px">{{ t('integration.authFailed') }}</div>
+          <div>{{ pipelineResult?.steps?.auth?.error || t('integration.authFailed') }}</div>
+          <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ t('integration.authFailedDesc') }}</div>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
-          <div style="font-weight:600;margin-bottom:4px">设备未在 EdgeLite 注册</div>
-          <div>需要先将设备配置推送到 EdgeLite，EdgeLite 才能连接 ProtoForge 采集数据</div>
+          <div style="font-weight:600;margin-bottom:4px">{{ t('integration.deviceNotRegistered') }}</div>
+          <div>{{ t('integration.deviceNotRegisteredDesc') }}</div>
           <n-button type="primary" size="small" style="margin-top:8px" @click="pushFromPipeline" :loading="pipelinePushLoading">
-            推送注册到 EdgeLite
+            {{ t('integration.pushRegisterToEdgeLite') }}
           </n-button>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
-          <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
-          <div style="white-space:pre-line">{{ pipelineResult?.steps?.connect?.error || '连接失败' }}</div>
+          <div style="font-weight:600;margin-bottom:4px">{{ t('integration.edgeliteCannotConnect') }}</div>
+          <div style="white-space:pre-line">{{ pipelineResult?.steps?.connect?.error || t('integration.connectionFailed') }}</div>
           <div v-if="pipelineResult?.steps?.connect?.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
-            <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
+            <div style="font-weight:500;margin-bottom:4px">{{ t('integration.driverConfigLabel') }}</div>
             <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
           </div>
           <div v-if="!pipelineResult.steps.connect.driver_host || pipelineResult.steps.connect.driver_host === ''" style="margin-top:8px">
-            <n-button size="small" type="primary" @click="$router.push('/settings')">前往设置 ProtoForge 地址</n-button>
+            <n-button size="small" type="primary" @click="$router.push('/settings')">{{ t('integration.goToSettingsProtoforge') }}</n-button>
           </div>
         </n-alert>
         <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
-          <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
+          <div style="font-weight:600;margin-bottom:4px">{{ t('integration.edgeliteNoData') }}</div>
           <div>{{ pipelineResult.steps.collect.error }}</div>
-          <div style="margin-top:4px;font-size:12px;color:#94a3b8">设备已注册且在线，但 EdgeLite 采集数据失败，请检查测点配置和采集间隔</div>
+          <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ t('integration.edgeliteNoDataDesc') }}</div>
         </n-alert>
       </n-space>
       <n-space v-else-if="pipelineLoading" vertical align="center" style="padding:40px 0">
         <n-spin size="large" />
-        <n-text depth="3">正在验证联调链路...</n-text>
+        <n-text depth="3">{{ t('integration.verifyingPipeline') }}</n-text>
       </n-space>
       <template #action>
-        <n-button @click="showPipelineModal = false">关闭</n-button>
-        <n-button type="primary" @click="rerunPipeline" :loading="pipelineLoading">重新验证</n-button>
+        <n-button @click="showPipelineModal = false">{{ t('common.close') }}</n-button>
+        <n-button type="primary" @click="rerunPipeline" :loading="pipelineLoading">{{ t('integration.reverify') }}</n-button>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showAddAlarmModal" preset="card" title="添加告警联动规则" style="width:560px">
+    <n-modal v-model:show="showAddAlarmModal" preset="card" :title="t('integration.addAlarmRule')" style="width:560px">
       <n-form :model="alarmForm" label-placement="left" label-width="120">
-        <n-form-item label="规则ID">
-          <n-input v-model:value="alarmForm.rule_id" placeholder="如 alarm-stop-001" />
+        <n-form-item :label="t('integration.ruleId')">
+          <n-input v-model:value="alarmForm.rule_id" :placeholder="t('integration.ruleIdPlaceholder')" />
         </n-form-item>
-        <n-form-item label="源设备ID">
-          <n-input v-model:value="alarmForm.source_device_id" placeholder="产生告警的设备ID" />
+        <n-form-item :label="t('integration.sourceDeviceId')">
+          <n-input v-model:value="alarmForm.source_device_id" :placeholder="t('integration.sourceDeviceIdPlaceholder')" />
         </n-form-item>
-        <n-form-item label="告警级别">
+        <n-form-item :label="t('integration.alarmSeverity')">
           <n-select v-model:value="alarmForm.alarm_severity" :options="severityOptions" />
         </n-form-item>
-        <n-form-item label="执行动作">
+        <n-form-item :label="t('integration.executeAction')">
           <n-select v-model:value="alarmForm.action" :options="actionOptions" />
         </n-form-item>
-        <n-form-item label="目标设备ID">
-          <n-input v-model:value="alarmForm.target_device_id" placeholder="被控制的设备ID" />
+        <n-form-item :label="t('integration.targetDeviceId')">
+          <n-input v-model:value="alarmForm.target_device_id" :placeholder="t('integration.targetDeviceIdPlaceholder')" />
         </n-form-item>
-        <n-form-item label="启用">
+        <n-form-item :label="t('integration.enabled')">
           <n-switch v-model:value="alarmForm.enabled" />
         </n-form-item>
       </n-form>
       <template #action>
         <n-space>
-          <n-button @click="cancelAddAlarm">取消</n-button>
-          <n-button type="primary" @click="addAlarmRule" :loading="addingAlarm">添加</n-button>
+          <n-button @click="cancelAddAlarm">{{ t('common.cancel') }}</n-button>
+          <n-button type="primary" @click="addAlarmRule" :loading="addingAlarm">{{ t('common.add') }}</n-button>
         </n-space>
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showEdgelitePointsModal" preset="card" title="EdgeLite 采集测点" style="width:600px">
+    <n-modal v-model:show="showEdgelitePointsModal" preset="card" :title="t('integration.edgeliteCollectedPoints')" style="width:600px">
       <n-spin :show="loadingElPoints">
         <n-data-table v-if="edgelitePoints.length > 0"
           :columns="edgelitePointColumns" :data="edgelitePoints" :bordered="false" size="small" />
-        <n-empty v-else description="暂无采集数据" />
+        <n-empty v-else :description="t('integration.noCollectedData')" />
       </n-spin>
       <template #action>
-        <n-button @click="showEdgelitePointsModal = false">关闭</n-button>
+        <n-button @click="showEdgelitePointsModal = false">{{ t('common.close') }}</n-button>
       </template>
     </n-modal>
 
