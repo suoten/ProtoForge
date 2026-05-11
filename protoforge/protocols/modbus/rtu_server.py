@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import struct
+import sys
 import time
 from typing import Any
 
@@ -41,7 +43,7 @@ class ModbusRtuServer(ProtocolServer):
         self._context: Any = None
         self._behaviors: dict[str, ModbusDeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
-        self._port = "COM1"
+        self._port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
         self._baudrate = 9600
         self._parity = "N"
         self._stopbits = 1
@@ -50,6 +52,15 @@ class ModbusRtuServer(ProtocolServer):
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
+
+    def _on_server_task_done(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error("Modbus RTU server task failed: %s", e)
+            self._status = ProtocolStatus.ERROR
 
     def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
         if self._context is None:
@@ -88,7 +99,8 @@ class ModbusRtuServer(ProtocolServer):
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
-        self._port = config.get("port", "COM1")
+        default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
+        self._port = config.get("port", default_port)
         self._baudrate = config.get("baudrate", 9600)
         self._parity = config.get("parity", "N")
         self._stopbits = config.get("stopbits", 1)
@@ -96,6 +108,16 @@ class ModbusRtuServer(ProtocolServer):
 
         if not StartAsyncSerialServer:
             raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
+
+        if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
+            pass
+        elif not os.path.exists(self._port):
+            logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port 5021", self._port)
+            self._status = ProtocolStatus.RUNNING
+            self._server_task = asyncio.create_task(self._serve_datastore_only())
+            self._log_debug("system", "server_start",
+                            f"Modbus RTU串口 {self._port} 不存在，回退到TCP桥接模式端口5021")
+            return
 
         try:
             if self._use_simdata:
@@ -146,6 +168,9 @@ class ModbusRtuServer(ProtocolServer):
                 self._server_task = asyncio.create_task(
                     self._serve_datastore_only()
                 )
+
+            if self._server_task:
+                self._server_task.add_done_callback(self._on_server_task_done)
 
             self._status = ProtocolStatus.RUNNING
             logger.info("Modbus RTU server starting on %s @ %d (simdata=%s)", self._port, self._baudrate, self._use_simdata)
@@ -395,7 +420,7 @@ class ModbusRtuServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "port": {"type": "string", "default": "COM1", "description": "串口设备路径 (如 COM1 或 /dev/ttyUSB0)"},
+                "port": {"type": "string", "default": "/dev/ttyUSB0", "description": "串口设备路径 (Linux: /dev/ttyUSB0, Windows: COM1)"},
                 "baudrate": {"type": "integer", "default": 9600, "description": "波特率"},
                 "parity": {"type": "string", "default": "N", "description": "校验位 (N/E/O)"},
                 "stopbits": {"type": "integer", "default": 1, "description": "停止位"},

@@ -229,10 +229,10 @@ async function stopAll() {
 
 async function quickStart(name) {
   dialog.info({
-    title: t('protocols.confirmStart') || '确认启动协议',
-    content: t('protocols.confirmStartDesc', { name }) || `启动协议 "${name}" 将开放网络端口并消耗系统资源，确定继续？`,
-    positiveText: t('common.start') || '启动',
-    negativeText: t('common.cancel') || '取消',
+    title: t('protocols.confirmStart'),
+    content: t('protocols.confirmStartDesc', { name }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       startingProtocol.value = name
       try {

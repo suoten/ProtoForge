@@ -376,6 +376,7 @@ const messages = {
       send: '发送',
       sendSuccess: '发送成功',
       sendFailed: '发送失败',
+      chinese: '中文',
     },
     nav: {
       dashboard: '仪表盘',
@@ -757,6 +758,8 @@ const messages = {
       stopAllSuccess: '已停止 {count} 个协议',
       stopAllPartial: '已停止 {success} 个协议，{fail} 个失败',
       protocolStopFailed: '协议 {name} 停止失败',
+      confirmStart: '确认启动协议',
+      confirmStartDesc: '启动协议 "{name}" 将开放网络端口并消耗系统资源，确定继续？',
     },
     scenarios: {
       title: '仿真场景',
@@ -857,6 +860,7 @@ const messages = {
       sceneStopFailed: '场景停止失败',
       startFailed: '启动失败',
       stopFailed: '停止失败',
+      confirmDeleteDesc: '确定删除此场景？此操作不可撤销。',
     },
     scenarioEditor: {
       title: '场景编排器',
@@ -1082,6 +1086,10 @@ const messages = {
       batch1: '批量1',
       batch2: '批量2',
       testScenarioName: '测试场景',
+      caseMissingId: '第 {index} 个用例缺少有效的 id 字段',
+      caseMissingSteps: '用例 "{id}" 缺少 steps 字段或 steps 为空',
+      stepMissingAction: '用例 "{id}" 的第 {index} 步缺少 action 字段',
+      jsonMustBeArray: '测试数据必须是数组格式',
     },
     integration: {
       title: '联调集成',
@@ -1578,6 +1586,10 @@ const messages = {
       operator: '操作员',
       user: '用户',
       viewer: '只读',
+      confirmUnlock: '确认解锁用户',
+      confirmUnlockDesc: '确定解锁用户 "{name}"？',
+      confirmDemo: '确认创建演示数据',
+      confirmDemoDesc: '将批量创建演示设备和场景，此操作不可撤销。确定继续？',
     },
     logs: {
       title: '协议调试日志',
@@ -1687,6 +1699,8 @@ const messages = {
       startFailed: '启动失败',
       stopped: '转发已停止',
       stopFailed: '停止失败',
+      confirmStart: '确认启动转发',
+      confirmStartDesc: '启动转发服务将向配置的目标发送数据，确定继续？',
     },
     recorder: {
       title: '录制回放',
@@ -1723,6 +1737,8 @@ const messages = {
       replayEvents: '回放事件',
       startTime: '开始时间',
       endTime: '结束时间',
+      confirmReplay: '确认重放录制',
+      confirmReplayDesc: '重放将向设备发送录制的数据，可能影响设备状态。确定继续？',
     },
     webhook: {
       title: 'Webhook 管理',
@@ -2241,6 +2257,7 @@ const messages = {
       send: 'Send',
       sendSuccess: 'Sent successfully',
       sendFailed: 'Send failed',
+      chinese: 'Chinese',
     },
     nav: {
       dashboard: 'Dashboard',
@@ -2947,8 +2964,11 @@ const messages = {
       batch1: 'Batch 1',
       batch2: 'Batch 2',
       testScenarioName: 'Test Scenario',
-    },
-    integration: {
+      caseMissingId: 'Case {index} is missing a valid id field',
+      caseMissingSteps: 'Case "{id}" is missing steps or steps is empty',
+      stepMissingAction: 'Step {index} of case "{id}" is missing action field',
+      jsonMustBeArray: 'Test data must be an array',
+    }, {
       title: 'Integration',
       subtitle: 'Connect EdgeLite gateway for full integration pipeline',
       edgeliteIntegration: 'EdgeLite Integration',

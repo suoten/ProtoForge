@@ -416,10 +416,10 @@ async function handleResetPassword() {
 
 async function unlockUser(row) {
   dialog.info({
-    title: t('settings.confirmUnlock') || '确认解锁用户',
-    content: t('settings.confirmUnlockDesc', { name: row.username }) || `确定解锁用户 "${row.username}"？`,
-    positiveText: t('common.confirm') || '确认',
-    negativeText: t('common.cancel') || '取消',
+    title: t('settings.confirmUnlock'),
+    content: t('settings.confirmUnlockDesc', { name: row.username }),
+    positiveText: t('common.confirm'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       try {
         await api.adminUnlockUser(row.username)
@@ -493,10 +493,10 @@ async function handleChangePassword() {
 
 async function setupDemo() {
   dialog.warning({
-    title: t('settings.confirmDemo') || '确认创建演示数据',
-    content: t('settings.confirmDemoDesc') || '将批量创建演示设备和场景，此操作不可撤销。确定继续？',
-    positiveText: t('common.create') || '创建',
-    negativeText: t('common.cancel') || '取消',
+    title: t('settings.confirmDemo'),
+    content: t('settings.confirmDemoDesc'),
+    positiveText: t('common.create'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       demoLoading.value = true
       try {

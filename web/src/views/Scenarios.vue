@@ -407,10 +407,10 @@ function confirmDelete(row) {
 
 async function deleteScenario(id) {
   dialog.warning({
-    title: t('common.confirmDelete') || '确认删除',
-    content: t('scenarios.confirmDeleteDesc') || '确定删除此场景？此操作不可撤销。',
-    positiveText: t('common.delete') || '删除',
-    negativeText: t('common.cancel') || '取消',
+    title: t('common.confirmDelete'),
+    content: t('scenarios.confirmDeleteDesc'),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       deletingIds.value.add(id)
       try {

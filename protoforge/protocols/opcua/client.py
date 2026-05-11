@@ -102,7 +102,8 @@ class OpcUaClientProtocol(ProtocolServer):
             if self._connected and self._client:
                 try:
                     if not ASYNCUA_SYNC and hasattr(self._client, 'uaclient'):
-                        pass
+                        if hasattr(self._client.uaclient, 'keepalive') and callable(self._client.uaclient.keepalive):
+                            await self._client.uaclient.keepalive()
                 except Exception:
                     pass
                 continue
