@@ -270,7 +270,7 @@ export default {
   batchPushDevices: (data) => d(api.post('/integration/batch-push', data)),
   startIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
   stopIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),
-  getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })).then(r => normalizeList(r, 'data')),
+  getBackhaulData: (params) => d(api.get('/integration/backhaul-data', { params })),
   getDeviceStatusCache: () => d(api.get('/integration/device-status')),
   getAlarmRules: () => d(api.get('/integration/alarm-rules')).then(r => normalizeList(r, 'rules')),
   addAlarmRule: (data) => d(api.post('/integration/alarm-rules', data)),
@@ -364,7 +364,7 @@ export default {
   getSettings: () => d(api.get('/settings')),
   updateSettings: (updates) => d(api.put('/settings', updates)),
 
-  queryAuditLog: (params) => d(api.get('/audit', { params })).then(r => normalizeList(r, 'entries')),
+  queryAuditLog: (params) => d(api.get('/audit', { params })),
   getAuditStats: () => d(api.get('/audit/stats')),
   deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
   clearAuditLog: (params) => d(api.delete('/audit', { params })),

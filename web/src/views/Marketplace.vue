@@ -138,7 +138,8 @@ async function doCreate() {
   if (!selectedTemplate.value || !useName.value) return
   creating.value = true
   try {
-    await api.quickCreateDevice(selectedTemplate.value.id, useName.value)
+    const deviceId = useName.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'dev-' + Date.now().toString(36)
+    await api.quickCreateDevice(selectedTemplate.value.id, useName.value, deviceId)
     message.success(t('welcome.createSuccess', { name: useName.value }))
     showUseModal.value = false
   } catch (e) {

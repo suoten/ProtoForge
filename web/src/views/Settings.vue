@@ -368,7 +368,14 @@ async function handleAddUser() {
   try {
     await api.register(newUser.value.username, newUser.value.password)
     if (newUser.value.role !== 'user') {
-      await api.adminUpdateRole(newUser.value.username, newUser.value.role)
+      try {
+        await api.adminUpdateRole(newUser.value.username, newUser.value.role)
+      } catch (roleErr) {
+        try { await api.deleteUser(newUser.value.username) } catch { /* best effort cleanup */ }
+        message.error(t('settings.updateRoleFailed') + ': ' + (roleErr.response?.data?.detail || roleErr.message))
+        await loadUsers()
+        return
+      }
     }
     message.success(t('settings.userCreated'))
     showAddUser.value = false

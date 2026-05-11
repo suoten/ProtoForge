@@ -99,8 +99,16 @@ async function loadData() {
     if (filterAction.value) params.action = filterAction.value
     if (filterResource.value) params.resource_type = filterResource.value
     const res = await api.queryAuditLog(params)
-    entries.value = Array.isArray(res) ? res : (res.entries || res.data || [])
-    totalEntries.value = res.total || res.total_entries || (auditStats.value?.total_entries || entries.value.length)
+    if (res && typeof res === 'object' && !Array.isArray(res)) {
+      entries.value = res.entries || []
+      totalEntries.value = res.total || 0
+    } else if (Array.isArray(res)) {
+      entries.value = res
+      totalEntries.value = res.length
+    } else {
+      entries.value = []
+      totalEntries.value = 0
+    }
   } catch (e) {
     message.error(t('audit.loadFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {

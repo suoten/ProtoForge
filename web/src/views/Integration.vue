@@ -703,7 +703,13 @@ async function loadBackhaulData() {
     const params = {}
     if (backhaulDeviceId.value) params.device_id = backhaulDeviceId.value
     const res = await api.getBackhaulData(params)
-    backhaulData.value = Array.isArray(res) ? res : (res.data || [])
+    if (res && typeof res === 'object' && Array.isArray(res.data)) {
+      backhaulData.value = res.data
+    } else if (Array.isArray(res)) {
+      backhaulData.value = res
+    } else {
+      backhaulData.value = []
+    }
   } catch (e) {
     message.error('加载回传数据失败: ' + (e.response?.data?.detail || e.message))
   } finally { loadingBackhaul.value = false }
