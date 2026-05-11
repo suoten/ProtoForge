@@ -224,7 +224,7 @@ export default {
   importScenario: (config) => d(api.post('/scenarios/import', config)),
   getScenarioSnapshot: (id) => d(api.get(`/scenarios/${id}/snapshot`)),
 
-  getLogs: (params) => d(api.get('/logs', { params })).then(r => normalizeList(r, 'logs', 'entries')),
+  getLogs: (params) => d(api.get('/logs', { params })).then(r => normalizeList(r, 'entries')),
   clearLogs: () => d(api.delete('/logs')),
 
   createTestCase: (data) => d(api.post('/tests/cases', data)),
@@ -253,7 +253,7 @@ export default {
   pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
   removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/integration/edgelite/push/${deviceId}`)),
   getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/integration/edgelite/status/${deviceId}`)),
-  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)).then(r => normalizeList(r, 'points')),
   verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
 
@@ -367,9 +367,21 @@ export default {
   queryAuditLog: (params) => d(api.get('/audit', { params })),
   getAuditStats: () => d(api.get('/audit/stats')),
   deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
-  clearAuditLog: (params) => d(api.delete('/audit', { params })),
+  clearAuditLog: (before) => d(api.delete('/audit', { params: before ? { before } : {} })),
 
-  exportBackup: () => d(api.get('/backup')),
+  exportBackup: () => api.get('/backup', { responseType: 'blob' }).then(r => {
+    const disposition = r.headers['content-disposition']
+    let filename = 'protoforge-backup.json'
+    if (disposition) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (match && match[1]) filename = match[1].replace(/['"]/g, '')
+    }
+    const url = URL.createObjectURL(r.data)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click()
+    document.body.removeChild(a); URL.revokeObjectURL(url)
+    return { downloaded: true, filename }
+  }),
   importBackup: (data) => d(api.post('/backup/restore', data)),
 
   getHealth: () => axios.get('/health').then(r => r.data).catch(() => null),

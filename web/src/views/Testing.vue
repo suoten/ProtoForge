@@ -585,14 +585,18 @@ async function saveBuilderCase() {
 }
 
 function exportBuilderJson() {
-  const json = JSON.stringify(builderCaseToJson(), null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `test_${builderCase.value.id}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  try {
+    const json = JSON.stringify(builderCaseToJson(), null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `test_${builderCase.value.id}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    message.error(t('common.exportFailed') || '导出失败: ' + (e.message || '未知错误'))
+  }
 }
 
 async function runQuickTest(scope, targetId) {

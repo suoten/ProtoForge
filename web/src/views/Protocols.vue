@@ -186,20 +186,28 @@ async function startAll() {
 }
 
 async function quickStart(name) {
-  startingProtocol.value = name
-  try {
-    const res = await api.startProtocol(name, null)
-    if (res.port_changed) {
-      message.warning(res.message, { duration: 6000 })
-    } else {
-      message.success(t('protocols.protocolStarted', { name }))
+  dialog.info({
+    title: t('protocols.confirmStart') || '确认启动协议',
+    content: t('protocols.confirmStartDesc', { name }) || `启动协议 "${name}" 将开放网络端口并消耗系统资源，确定继续？`,
+    positiveText: t('common.start') || '启动',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      startingProtocol.value = name
+      try {
+        const res = await api.startProtocol(name, null)
+        if (res.port_changed) {
+          message.warning(res.message, { duration: 6000 })
+        } else {
+          message.success(t('protocols.protocolStarted', { name }))
+        }
+        await loadData()
+      } catch (e) {
+        message.error(t('protocols.startFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally {
+        startingProtocol.value = null
+      }
     }
-    await loadData()
-  } catch (e) {
-    message.error(t('protocols.startFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally {
-    startingProtocol.value = null
-  }
+  })
 }
 
 async function stopProtocol(name) {

@@ -73,12 +73,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
-  NCard, NTag, NButton, NModal, NDescriptions, NDescriptionsItem, NEmpty, useMessage } from 'naive-ui'
+  NButton, NTag, NModal, NCard, NAlert, useMessage } from 'naive-ui'
+import { useRouter } from 'vue-router'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { protocolTagTypes, protocolLabels } from '../constants.js'
 
 const message = useMessage()
+const router = useRouter()
 const { t } = useI18n()
 const templates = ref([])
 const protocols = ref([])
@@ -140,8 +142,9 @@ async function doCreate() {
   try {
     const deviceId = useName.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'dev-' + Date.now().toString(36)
     await api.quickCreateDevice(selectedTemplate.value.id, useName.value, deviceId)
-    message.success(t('welcome.createSuccess', { name: useName.value }))
+    message.success(t('welcome.createSuccess', { name: useName.value }), { duration: 5000 })
     showUseModal.value = false
+    router.push('/devices')
   } catch (e) {
     message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {

@@ -481,16 +481,24 @@ async function handleChangePassword() {
 }
 
 async function setupDemo() {
-  demoLoading.value = true
-  try {
-    const res = await api.setupDemo()
-    message.success(t('settings.demoCreateSuccess', { devices: res.device_count || 0, scenarios: res.scenario_count || 0 }))
-    await loadSetupStatus()
-  } catch (e) {
-    message.error(t('settings.demoCreateFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally {
-    demoLoading.value = false
-  }
+  dialog.warning({
+    title: t('settings.confirmDemo') || '确认创建演示数据',
+    content: t('settings.confirmDemoDesc') || '将批量创建演示设备和场景，此操作不可撤销。确定继续？',
+    positiveText: t('common.create') || '创建',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      demoLoading.value = true
+      try {
+        const res = await api.setupDemo()
+        message.success(t('settings.demoCreateSuccess', { devices: res.device_count || 0, scenarios: res.scenario_count || 0 }))
+        await loadSetupStatus()
+      } catch (e) {
+        message.error(t('settings.demoCreateFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally {
+        demoLoading.value = false
+      }
+    }
+  })
 }
 
 onMounted(() => {

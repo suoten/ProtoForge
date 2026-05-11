@@ -242,15 +242,23 @@ async function removeTarget(name) {
 }
 
 async function startForward() {
-  starting.value = true
-  try {
-    await api.startForward()
-    forwardRunning.value = true
-    message.success(t('forward.started'))
-    loadStats()
-  } catch (e) {
-    message.error(t('forward.startFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { starting.value = false }
+  dialog.info({
+    title: t('forward.confirmStart') || '确认启动转发',
+    content: t('forward.confirmStartDesc') || '启动转发服务将向配置的目标发送数据，确定继续？',
+    positiveText: t('common.start') || '启动',
+    negativeText: t('common.cancel') || '取消',
+    onPositiveClick: async () => {
+      starting.value = true
+      try {
+        await api.startForward()
+        forwardRunning.value = true
+        message.success(t('forward.started'))
+        loadStats()
+      } catch (e) {
+        message.error(t('forward.startFailed') + ': ' + (e.response?.data?.detail || e.message))
+      } finally { starting.value = false }
+    }
+  })
 }
 
 async function stopForward() {

@@ -48,15 +48,19 @@ const importing = ref(false)
 async function handleExport() {
   exporting.value = true
   try {
-    const data = await api.exportBackup()
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `protoforge_backup_${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    message.success(t('backup.exportSuccess'))
+    const result = await api.exportBackup()
+    if (result && result.downloaded) {
+      message.success(t('backup.exportSuccess'))
+    } else {
+      const blob = new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `protoforge_backup_${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      message.success(t('backup.exportSuccess'))
+    }
   } catch (e) {
     message.error(t('backup.exportFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally {

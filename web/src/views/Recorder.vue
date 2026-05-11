@@ -233,6 +233,7 @@ async function doStartRecording() {
     if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
     durationTimer = setInterval(() => { recordingDuration.value++ }, 1000)
     message.success(t('recorder.started'))
+    await loadRecordings()
   } catch (e) {
     activeRecording.value = null
     message.error(t('recorder.startFailed') + ': ' + (e.response?.data?.detail || e.message))

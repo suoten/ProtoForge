@@ -185,23 +185,27 @@ async function clearAllLogs() {
 }
 
 function exportLogs() {
-  const data = filteredLogs.value.map(l => ({
-    time: new Date(l.timestamp * 1000).toISOString(),
-    protocol: l.protocol,
-    direction: l.direction,
-    device_id: l.device_id,
-    type: l.message_type,
-    summary: l.summary,
-    detail: l.detail,
-  }))
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `protoforge-debug-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-  message.success(t('logs.exported', { count: data.length }))
+  try {
+    const data = filteredLogs.value.map(l => ({
+      time: new Date(l.timestamp * 1000).toISOString(),
+      protocol: l.protocol,
+      direction: l.direction,
+      device_id: l.device_id,
+      type: l.message_type,
+      summary: l.summary,
+      detail: l.detail,
+    }))
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `protoforge-debug-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success(t('logs.exported', { count: data.length }))
+  } catch (e) {
+    message.error(t('common.exportFailed') || '导出失败: ' + (e.message || '未知错误'))
+  }
 }
 
 function scrollToBottom() {
