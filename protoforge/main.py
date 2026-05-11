@@ -111,7 +111,7 @@ async def lifespan(app: FastAPI):
                 if not dev.protocol_config:
                     dev.protocol_config = {}
                 dev.protocol_config["_skip_auto_push"] = True
-                await _engine.create_device(dev)
+                await _engine.create_device(dev, allow_update=True)
                 dev.protocol_config.pop("_skip_auto_push", None)
                 restored += 1
             except Exception as e:

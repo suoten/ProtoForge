@@ -10,70 +10,70 @@
           <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('devices.filterByProtocol')" clearable style="width:160px" />
           <n-button v-if="selectedIds.length > 0" type="error" @click="batchDelete" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></template>
-            批量删除({{ selectedIds.length }})
+            {{ t('devices.batchDelete') }}({{ selectedIds.length }})
           </n-button>
           <n-button v-if="selectedIds.length > 0" type="primary" @click="batchStart" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-            启动选中({{ selectedIds.length }})
+            {{ t('devices.batchStart') }}({{ selectedIds.length }})
           </n-button>
           <n-button v-if="selectedIds.length > 0" type="warning" @click="batchStop" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
-            停止选中({{ selectedIds.length }})
+            {{ t('devices.batchStop') }}({{ selectedIds.length }})
           </n-button>
           <n-button @click="startAllDevices" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></template>
-            全部启动
+            {{ t('devices.startAll') }}
           </n-button>
           <n-button @click="stopAllDevices" :loading="batchLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></template>
-            全部停止
+            {{ t('devices.stopAll') }}
           </n-button>
           <n-button v-if="selectedIds.length > 0" type="info" @click="batchPushToEdgelite" :loading="pushLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z"/></svg></template>
-            推送到EdgeLite({{ selectedIds.length }})
+            {{ t('devices.pushToEdgeLite') }}({{ selectedIds.length }})
           </n-button>
           <n-button v-if="selectedIds.length > 0" @click="batchVerifyPipeline" :loading="pipelineLoading">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></template>
-            验证链路({{ selectedIds.length }})
+            {{ t('devices.verifyPipeline') }}({{ selectedIds.length }})
           </n-button>
           <n-button type="primary" @click="openQuickCreate">
             <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></template>
-            快速创建
+            {{ t('devices.quickCreate') }}
           </n-button>
-          <n-button tertiary @click="openAdvancedCreate">高级创建</n-button>
-          <n-button tertiary @click="openBatchCreateModal">批量创建</n-button>
+          <n-button tertiary @click="openAdvancedCreate">{{ t('devices.advancedCreate') }}</n-button>
+          <n-button tertiary @click="openBatchCreateModal">{{ t('devices.batchCreate') }}</n-button>
         </n-space>
       </n-space>
 
       <n-alert v-if="noProtocolRunning" type="warning" :bordered="false">
         <template #icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01"/></svg></template>
-        没有协议服务在运行，设备将无法正常工作。
-        <n-button size="tiny" type="primary" @click="goProtocols" style="margin-left:8px">前往启动协议</n-button>
+        {{ t('devices.noProtocolRunning') }}
+        <n-button size="tiny" type="primary" @click="goProtocols" style="margin-left:8px">{{ t('devices.goStartProtocol') }}</n-button>
       </n-alert>
 
       <n-data-table :columns="columns" :data="filteredDevices" :bordered="false"
         :pagination="{ pageSize: 15 }" :row-key="row => row.id" :loading="dataLoading"
         v-model:checked-row-keys="selectedIds" :single-line="false" />
 
-      <n-modal v-model:show="showQuickCreateModal" preset="card" title="快速创建设备" style="width:560px">
+      <n-modal v-model:show="showQuickCreateModal" preset="card" :title="t('devices.quickCreateDevice')" style="width:560px">
         <n-steps :current="quickStep" size="small" style="margin-bottom:16px">
-          <n-step title="选模板" />
-          <n-step title="起名字" />
-          <n-step title="协议配置" />
-          <n-step title="完成" />
+          <n-step :title="t('devices.stepSelectTemplate')" />
+          <n-step :title="t('devices.stepNameDevice')" />
+          <n-step :title="t('devices.stepProtocolConfig')" />
+          <n-step :title="t('devices.stepComplete')" />
         </n-steps>
         <n-space v-if="quickStep === 1" vertical>
-          <n-text>选择设备模板：</n-text>
-          <n-select v-model:value="qcTemplateId" :options="quickTemplateOptions" placeholder="搜索模板..." filterable />
+          <n-text>{{ t('devices.selectDeviceTemplate') }}</n-text>
+          <n-select v-model:value="qcTemplateId" :options="quickTemplateOptions" :placeholder="t('devices.searchTemplate')" filterable />
         </n-space>
         <n-space v-if="quickStep === 2" vertical>
-          <n-text>给设备起个名字：</n-text>
-          <n-input v-model:value="qcDeviceName" placeholder="如：车间温湿度传感器" size="large" />
-          <n-text v-if="qcTemplateId" depth="3" style="font-size:12px">协议: {{ qcTemplateName }} | 测点: {{ qcTemplatePoints }}个</n-text>
+          <n-text>{{ t('devices.nameYourDevice') }}</n-text>
+          <n-input v-model:value="qcDeviceName" :placeholder="t('devices.deviceNamePlaceholder')" size="large" />
+          <n-text v-if="qcTemplateId" depth="3" style="font-size:12px">{{ t('devices.protocol') }}: {{ qcTemplateName }} | {{ t('devices.points') }}: {{ qcTemplatePoints }}</n-text>
         </n-space>
         <div v-if="quickStep === 3">
           <div v-if="qcDeviceConfigFields.length === 0" style="text-align:center;padding:20px 0;color:#94a3b8">
-            该协议无需额外配置，直接下一步即可
+            {{ t('devices.noExtraConfigNeeded') }}
           </div>
           <n-form v-else :model="qcProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in qcDeviceConfigFields" :key="f.key" :label="f.label">
@@ -92,32 +92,32 @@
         </div>
         <n-space v-if="quickStep === 4" vertical align="center" style="padding:20px 0">
           <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-          <n-text>准备创建设备：</n-text>
+          <n-text>{{ t('devices.readyToCreate') }}</n-text>
           <n-text strong>{{ qcDeviceName }}</n-text>
-          <n-text depth="3">模板: {{ qcTemplateName }}</n-text>
+          <n-text depth="3">{{ t('devices.template') }}: {{ qcTemplateName }}</n-text>
         </n-space>
         <template #action>
           <n-space justify="space-between" style="width:100%">
-            <n-button v-if="quickStep > 1" @click="quickStep--">上一步</n-button>
+            <n-button v-if="quickStep > 1" @click="quickStep--">{{ t('common.previous') }}</n-button>
             <div v-else></div>
             <n-space>
-              <n-button @click="showQuickCreateModal = false">取消</n-button>
-              <n-button v-if="quickStep < 4" type="primary" @click="quickStepNext" :disabled="quickStep === 1 && !qcTemplateId || quickStep === 2 && !qcDeviceName">下一步</n-button>
-              <n-button v-if="quickStep === 4" type="primary" @click="doQuickCreate" :loading="qcLoading">创建并启动</n-button>
+              <n-button @click="showQuickCreateModal = false">{{ t('common.cancel') }}</n-button>
+              <n-button v-if="quickStep < 4" type="primary" @click="quickStepNext" :disabled="quickStep === 1 && !qcTemplateId || quickStep === 2 && !qcDeviceName">{{ t('common.next') }}</n-button>
+              <n-button v-if="quickStep === 4" type="primary" @click="doQuickCreate" :loading="qcLoading">{{ t('devices.createAndStart') }}</n-button>
             </n-space>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showCreateModal" preset="card" title="高级创建设备" style="width:640px">
+      <n-modal v-model:show="showCreateModal" preset="card" :title="t('devices.advancedCreateDevice')" style="width:640px">
         <n-form :model="newDevice" label-placement="left" label-width="80">
-          <n-form-item label="设备ID"><n-input v-model:value="newDevice.id" placeholder="如: sensor-001" /></n-form-item>
-          <n-form-item label="设备名称"><n-input v-model:value="newDevice.name" placeholder="如: 温湿度传感器-1" /></n-form-item>
-          <n-form-item label="协议"><n-select v-model:value="newDevice.protocol" :options="protocolOptions.filter(o => o.value)" @update:value="onAdvancedProtocolChange" /></n-form-item>
-          <n-form-item label="从模板创建"><n-select v-model:value="selectedTemplate" :options="templateOptions" placeholder="选择模板" clearable /></n-form-item>
+          <n-form-item :label="t('devices.deviceId')"><n-input v-model:value="newDevice.id" :placeholder="t('devices.deviceIdPlaceholder')" /></n-form-item>
+          <n-form-item :label="t('devices.deviceName')"><n-input v-model:value="newDevice.name" :placeholder="t('devices.deviceNamePlaceholder2')" /></n-form-item>
+          <n-form-item :label="t('devices.protocol')"><n-select v-model:value="newDevice.protocol" :options="protocolOptions.filter(o => o.value)" @update:value="onAdvancedProtocolChange" /></n-form-item>
+          <n-form-item :label="t('devices.createFromTemplate')"><n-select v-model:value="selectedTemplate" :options="templateOptions" :placeholder="t('devices.selectTemplate')" clearable /></n-form-item>
         </n-form>
         <div v-if="advancedConfigFields.length > 0" style="margin-top:8px">
-          <div style="font-weight:600;margin-bottom:8px;font-size:14px">协议配置</div>
+          <div style="font-weight:600;margin-bottom:8px;font-size:14px">{{ t('devices.protocolConfig') }}</div>
           <n-form :model="advancedProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in advancedConfigFields" :key="f.key" :label="f.label">
               <template v-if="f.type === 'select'">
@@ -134,19 +134,19 @@
         </div>
         <template #action>
           <n-space>
-            <n-button @click="showCreateModal = false">取消</n-button>
-            <n-button type="primary" @click="createDevice" :loading="creating">创建</n-button>
+            <n-button @click="showCreateModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="createDevice" :loading="creating">{{ t('common.create') }}</n-button>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showEditModal" preset="card" title="编辑设备" style="width:640px">
+      <n-modal v-model:show="showEditModal" preset="card" :title="t('devices.editDevice')" style="width:640px">
         <n-form :model="editDevice" label-placement="left" label-width="80">
-          <n-form-item label="设备名称"><n-input v-model:value="editDevice.name" /></n-form-item>
-          <n-form-item label="协议"><n-input :value="editDevice.protocol" disabled /></n-form-item>
+          <n-form-item :label="t('devices.deviceName')"><n-input v-model:value="editDevice.name" /></n-form-item>
+          <n-form-item :label="t('devices.protocol')"><n-input :value="editDevice.protocol" disabled /></n-form-item>
         </n-form>
         <div v-if="editConfigFields.length > 0" style="margin-top:8px">
-          <div style="font-weight:600;margin-bottom:8px;font-size:14px">协议配置</div>
+          <div style="font-weight:600;margin-bottom:8px;font-size:14px">{{ t('devices.protocolConfig') }}</div>
           <n-form :model="editProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in editConfigFields" :key="f.key" :label="f.label">
               <template v-if="f.type === 'select'">
@@ -163,29 +163,29 @@
         </div>
         <template #action>
           <n-space>
-            <n-button @click="showEditModal = false">取消</n-button>
-            <n-button type="primary" @click="saveEditDevice" :loading="saving">保存</n-button>
+            <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="saveEditDevice" :loading="saving">{{ t('common.save') }}</n-button>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showPointsModal" preset="card" title="设备测点" style="width:700px">
+      <n-modal v-model:show="showPointsModal" preset="card" :title="t('devices.devicePoints')" style="width:700px">
         <n-space v-if="currentViewDeviceInfo" align="center" size="small" style="margin-bottom:8px">
           <n-tag :type="currentViewDeviceInfo.status === 'online' ? 'success' : currentViewDeviceInfo.status === 'error' ? 'error' : 'default'" size="small" :bordered="false">{{ currentViewDeviceInfo.status || 'offline' }}</n-tag>
           <n-text depth="3" style="font-size:12px">{{ currentViewDeviceInfo.name }} ({{ currentViewDeviceInfo.protocol }})</n-text>
         </n-space>
         <n-data-table :columns="pointColumns" :data="currentPoints" :bordered="false" size="small" />
         <n-space vertical style="margin-top:12px">
-          <n-text strong style="font-size:13px">快速写入测点值</n-text>
+          <n-text strong style="font-size:13px">{{ t('devices.quickWritePoint') }}</n-text>
           <n-space align="center" size="small">
-            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: p.name, value: p.name }))" placeholder="选择测点" style="width:160px" size="small" />
-            <n-input v-model:value="writePointValue" placeholder="输入值" style="width:120px" size="small" />
-            <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">写入</n-button>
+            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:160px" size="small" />
+            <n-input v-model:value="writePointValue" :placeholder="t('devices.inputValue')" style="width:120px" size="small" />
+            <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">{{ t('devices.write') }}</n-button>
           </n-space>
         </n-space>
       </n-modal>
 
-      <n-modal v-model:show="showGuideModal" preset="card" title="连接指南" style="width:680px">
+      <n-modal v-model:show="showGuideModal" preset="card" :title="t('devices.connectionGuide')" style="width:680px">
         <div v-if="guideData">
           <n-space vertical size="large">
             <n-alert :type="guideData.mode === 'client' ? 'warning' : 'info'" :bordered="false">
@@ -219,7 +219,7 @@
 
             <div v-if="guideData.code_examples && Object.keys(guideData.code_examples).length > 0">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                <div style="font-weight:600">💻 代码示例</div>
+                <div style="font-weight:600">💻 {{ t('devices.codeExamples') }}</div>
                 <n-button-group size="tiny">
                   <n-button v-for="(_, lang) in (guideData.code_examples || {})" :key="lang"
                     :type="guideLang === lang ? 'primary' : 'default'"
@@ -233,7 +233,7 @@
               </n-card>
             </div>
             <div v-else-if="guideData.code_example">
-              <div style="font-weight:600;margin-bottom:8px">💻 代码示例</div>
+              <div style="font-weight:600;margin-bottom:8px">💻 {{ t('devices.codeExamples') }}</div>
               <n-card size="small" embedded>
                 <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ guideData.code_example }}</pre>
               </n-card>
@@ -241,38 +241,38 @@
           </n-space>
         </div>
         <template #action>
-          <n-button @click="showGuideModal = false">关闭</n-button>
-          <n-button type="primary" @click="copyGuide">复制代码</n-button>
+          <n-button @click="showGuideModal = false">{{ t('common.close') }}</n-button>
+          <n-button type="primary" @click="copyGuide">{{ t('devices.copyCode') }}</n-button>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showBatchCreateModal" preset="card" title="批量创建设备" style="width:640px">
+      <n-modal v-model:show="showBatchCreateModal" preset="card" :title="t('devices.batchCreateDevice')" style="width:640px">
         <n-space vertical>
-          <n-alert type="info" :bordered="false">选择模板和数量，一键批量创建多个同类型设备</n-alert>
+          <n-alert type="info" :bordered="false">{{ t('devices.batchCreateDesc') }}</n-alert>
           <n-form :model="batchForm" label-placement="left" label-width="100">
-            <n-form-item label="模板">
-              <n-select v-model:value="batchForm.templateId" :options="quickTemplateOptions" placeholder="选择设备模板" filterable />
+            <n-form-item :label="t('devices.template')">
+              <n-select v-model:value="batchForm.templateId" :options="quickTemplateOptions" :placeholder="t('devices.selectDeviceTemplate')" filterable />
             </n-form-item>
-            <n-form-item label="数量">
+            <n-form-item :label="t('devices.count')">
               <n-input-number v-model:value="batchForm.count" :min="1" :max="50" style="width:100%" />
             </n-form-item>
-            <n-form-item label="名称前缀">
-              <n-input v-model:value="batchForm.namePrefix" placeholder="如: 车间传感器" />
+            <n-form-item :label="t('devices.namePrefix')">
+              <n-input v-model:value="batchForm.namePrefix" :placeholder="t('devices.namePrefixPlaceholder')" />
             </n-form-item>
-            <n-form-item label="ID前缀">
-              <n-input v-model:value="batchForm.idPrefix" placeholder="如: sensor-group" />
+            <n-form-item :label="t('devices.idPrefix')">
+              <n-input v-model:value="batchForm.idPrefix" :placeholder="t('devices.idPrefixPlaceholder')" />
             </n-form-item>
           </n-form>
         </n-space>
         <template #action>
           <n-space>
-            <n-button @click="showBatchCreateModal = false">取消</n-button>
-            <n-button type="primary" @click="doBatchCreate" :loading="batchCreating">批量创建</n-button>
+            <n-button @click="showBatchCreateModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="doBatchCreate" :loading="batchCreating">{{ t('devices.batchCreate') }}</n-button>
           </n-space>
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showPipelineModal" preset="card" title="EdgeLite 联调链路验证" style="width:780px">
+      <n-modal v-model:show="showPipelineModal" preset="card" :title="t('devices.pipelineVerify')" style="width:780px">
         <n-space vertical size="large" v-if="pipelineResult">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0">
             <div v-for="(step, idx) in pipelineSteps" :key="idx" style="display:flex;align-items:center;gap:4px">
@@ -296,57 +296,57 @@
           </div>
 
           <n-card v-if="pipelineResult.data_comparison && pipelineResult.data_comparison.length > 0"
-            size="small" title="数据对比 (ProtoForge vs EdgeLite)">
+            size="small" :title="t('devices.dataComparison')">
             <n-data-table :columns="pipelineComparisonColumns" :data="pipelineResult.data_comparison"
               :bordered="false" size="small" />
           </n-card>
 
           <n-alert v-if="pipelineResult.skipped" type="warning" :bordered="false">
-            <div style="font-weight:600;margin-bottom:4px">未配置 EdgeLite 网关</div>
-            <div>{{ pipelineResult.suggestion || '请先在「系统设置」中配置 EdgeLite 网关地址，或在设备协议配置中启用 EdgeLite 联调' }}</div>
+            <div style="font-weight:600;margin-bottom:4px">{{ t('devices.edgeliteNotConfigured') }}</div>
+            <div>{{ pipelineResult.suggestion || t('devices.edgeliteNotConfiguredDesc') }}</div>
             <n-button type="primary" size="small" style="margin-top:8px" @click="$router.push('/settings')">
-              前往系统设置
+              {{ t('devices.goToSettings') }}
             </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.ok" type="success" :bordered="false">
-            联调链路验证通过！EdgeLite 已成功连接 ProtoForge 并采集到数据。
+            {{ t('devices.pipelineVerifySuccess') }}
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.auth?.ok === false" type="error" :bordered="false">
-            <div style="font-weight:600;margin-bottom:4px">认证失败</div>
+            <div style="font-weight:600;margin-bottom:4px">{{ t('devices.authFailed') }}</div>
             <div>{{ pipelineResult.steps.auth.error }}</div>
-            <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ pipelineResult.steps.auth.suggestion || '请检查 EdgeLite 网关地址是否正确、用户名密码是否正确' }}</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ pipelineResult.steps.auth.suggestion || t('devices.authFailedDesc') }}</div>
             <n-button type="primary" size="small" style="margin-top:8px" @click="$router.push('/settings')">
-              前往系统设置
+              {{ t('devices.goToSettings') }}
             </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.register?.ok === false" type="warning" :bordered="false">
-            <div style="font-weight:600;margin-bottom:4px">设备未在 EdgeLite 注册</div>
-            <div>需要先将设备配置推送到 EdgeLite，EdgeLite 才能连接 ProtoForge 采集数据</div>
+            <div style="font-weight:600;margin-bottom:4px">{{ t('devices.deviceNotRegistered') }}</div>
+            <div>{{ t('devices.deviceNotRegisteredDesc') }}</div>
             <n-button type="primary" size="small" style="margin-top:8px" @click="pushFromPipeline" :loading="pipelinePushLoading">
-              推送注册到 EdgeLite
+              {{ t('devices.pushRegisterToEdgeLite') }}
             </n-button>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.connect?.ok === false" type="error" :bordered="false">
-            <div style="font-weight:600;margin-bottom:4px">EdgeLite 无法连接 ProtoForge</div>
+            <div style="font-weight:600;margin-bottom:4px">{{ t('devices.edgeliteCannotConnect') }}</div>
             <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
             <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
-              <div style="font-weight:500;margin-bottom:4px">driver_config (EdgeLite 用此配置连接 ProtoForge):</div>
+              <div style="font-weight:500;margin-bottom:4px">{{ t('devices.driverConfigLabel') }}</div>
               <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
             </div>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
-            <div style="font-weight:600;margin-bottom:4px">EdgeLite 未能采集到数据</div>
+            <div style="font-weight:600;margin-bottom:4px">{{ t('devices.edgeliteNoData') }}</div>
             <div>{{ pipelineResult.steps.collect.error }}</div>
-            <div style="margin-top:4px;font-size:12px;color:#94a3b8">设备已注册且在线，但 EdgeLite 采集数据失败，请检查测点配置和采集间隔</div>
+            <div style="margin-top:4px;font-size:12px;color:#94a3b8">{{ t('devices.edgeliteNoDataDesc') }}</div>
           </n-alert>
         </n-space>
         <n-space v-else-if="pipelineLoading" vertical align="center" style="padding:40px 0">
           <n-spin size="large" />
-          <n-text depth="3">正在验证联调链路...</n-text>
+          <n-text depth="3">{{ t('devices.verifyingPipeline') }}</n-text>
         </n-space>
         <template #action>
-          <n-button @click="showPipelineModal = false">关闭</n-button>
-          <n-button type="primary" @click="rerunPipelineVerify" :loading="pipelineLoading">重新验证</n-button>
+          <n-button @click="showPipelineModal = false">{{ t('common.close') }}</n-button>
+          <n-button type="primary" @click="rerunPipelineVerify" :loading="pipelineLoading">{{ t('devices.reverify') }}</n-button>
         </template>
       </n-modal>
     </n-space>
@@ -418,30 +418,30 @@ const togglingIds = ref(new Set())
 const deletingIds = ref(new Set())
 
 const pipelineSteps = [
-  { label: '认证', key: 'auth' },
-  { label: '注册', key: 'register' },
-  { label: '连接', key: 'connect' },
-  { label: '采集', key: 'collect' },
-  { label: '验证', key: 'verify' },
+  { label: t('devices.pipelineAuth'), key: 'auth' },
+  { label: t('devices.pipelineRegister'), key: 'register' },
+  { label: t('devices.pipelineConnect'), key: 'connect' },
+  { label: t('devices.pipelineCollect'), key: 'collect' },
+  { label: t('devices.pipelineVerify'), key: 'verify' },
 ]
 
 const pipelineComparisonColumns = [
-  { title: '测点', key: 'point', width: 120 },
-  { title: 'ProtoForge值', key: 'protoforge_value', width: 140 },
-  { title: 'EdgeLite值', key: 'edgelite_value', width: 140 },
+  { title: t('devices.point'), key: 'point', width: 120 },
+  { title: t('devices.protoforgeValue'), key: 'protoforge_value', width: 140 },
+  { title: t('devices.edgeliteValue'), key: 'edgelite_value', width: 140 },
   {
-    title: '匹配', key: 'match', width: 80,
+    title: t('devices.match'), key: 'match', width: 80,
     render: (row) => {
-      if (row.match === null || row.match === undefined) return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => '无数据')
+      if (row.match === null || row.match === undefined) return h(NTag, { size: 'tiny', type: 'warning', bordered: false }, () => t('devices.noData'))
       return row.match
-        ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => '匹配')
-        : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => '不一致')
+        ? h(NTag, { size: 'tiny', type: 'success', bordered: false }, () => t('devices.matched'))
+        : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('devices.inconsistent'))
     }
   },
 ]
 
 const protocolOptions = computed(() => [
-  { label: '全部', value: null },
+  { label: t('common.all'), value: null },
   ...protocols.value.map(p => ({ label: p.display_name, value: p.name })),
 ])
 
@@ -486,44 +486,44 @@ async function loadDeviceConfig(protocol) {
     const defaults = {}
     ;(res.fields || []).forEach(f => { defaults[f.key] = f.default })
     return { fields: res.fields || [], defaults }
-  } catch (e) { message.warning('加载协议配置失败，使用默认值'); return { fields: [], defaults: {} } }
+  } catch (e) { message.warning(t('devices.loadConfigFailed')); return { fields: [], defaults: {} } }
 }
 
 const columns = [
   { type: 'selection' },
-  { title: '设备', key: 'name', width: 160, render: (row) => h('div', {}, [
+  { title: t('devices.device'), key: 'name', width: 160, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
     h('div', { style: 'font-size:11px;color:#94a3b8' }, row.id),
   ]) },
-  { title: '协议', key: 'protocol', width: 120, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => protocolLabels[row.protocol] || row.protocol) },
+  { title: t('devices.protocol'), key: 'protocol', width: 120, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => protocolLabels[row.protocol] || row.protocol) },
   {
-    title: '状态', key: 'status', width: 100,
+    title: t('devices.status'), key: 'status', width: 100,
     render: (row) => {
       const [type, label] = deviceStatusMap[row.status] || ['default', row.status || 'offline']
       return h(NTag, { type, size: 'small', bordered: false }, () => label)
     }
   },
-  { title: '测点', key: 'points', width: 70, render: (row) => (row.points || []).length },
+  { title: t('devices.points'), key: 'points', width: 70, render: (row) => (row.points || []).length },
   {
-    title: '操作', key: 'actions', width: 280,
+    title: t('devices.actions'), key: 'actions', width: 280,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id) }, () => '测点'),
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => showGuide(row.id) }, () => '指南'),
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openPipelineVerify(row.id) }, () => '链路'),
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => '编辑'),
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id) }, () => t('devices.points')),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => showGuide(row.id) }, () => t('devices.guide')),
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openPipelineVerify(row.id) }, () => t('devices.pipeline')),
+      h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => t('common.edit')),
       row.status === 'online' || row.status === 'running'
-        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'stop', row.name) }, () => '停止')
-        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'start', row.name) }, () => '启动'),
-      h(NButton, { size: 'tiny', type: 'error', secondary: true, loading: deletingIds.value.has(row.id), onClick: () => confirmDeleteDevice(row) }, () => '删除'),
+        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'stop', row.name) }, () => t('common.stop'))
+        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'start', row.name) }, () => t('common.start')),
+      h(NButton, { size: 'tiny', type: 'error', secondary: true, loading: deletingIds.value.has(row.id), onClick: () => confirmDeleteDevice(row) }, () => t('common.delete')),
     ])
   },
 ]
 
 const pointColumns = [
-  { title: '名称', key: 'name', width: 120 },
-  { title: '值', key: 'value', width: 120 },
-  { title: '时间', key: 'timestamp', width: 180, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
-  { title: '质量', key: 'quality', width: 80 },
+  { title: t('devices.name'), key: 'name', width: 120 },
+  { title: t('devices.value'), key: 'value', width: 120 },
+  { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
+  { title: t('devices.quality'), key: 'quality', width: 80 },
 ]
 
 function openQuickCreate() {
@@ -549,11 +549,11 @@ async function doQuickCreate() {
   qcLoading.value = true
   try {
     await api.quickCreateDevice(qcTemplateId.value, qcDeviceName.value, null, qcProtocolConfig.value)
-    message.success(`设备 "${qcDeviceName.value}" 创建成功并已启动！`)
+    message.success(t('devices.deviceCreatedAndStarted', { name: qcDeviceName.value }))
     showQuickCreateModal.value = false
     await loadData()
   } catch (e) {
-    message.error('创建失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('devices.createFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { qcLoading.value = false }
 }
 
@@ -583,19 +583,19 @@ async function loadData() {
     templates.value = results[2].status === 'fulfilled' ? (results[2].value || []) : []
     const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
     if (failedIdx.length > 0) {
-      const names = ['设备', '协议', '模板']
-      message.warning(`部分数据加载失败: ${failedIdx.map(i => names[i]).join('、')}`)
+      const names = [t('devices.device'), t('devices.protocol'), t('devices.template')]
+    message.warning(t('devices.partialLoadFailed', { items: failedIdx.map(i => names[i]).join(t('common.separator')) }))
     }
-  } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.loadDataFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { dataLoading.value = false }
 }
 
 async function batchStart() {
   dialog.info({
-    title: '确认批量启动',
-    content: `将启动选中的 ${selectedIds.value.length} 个设备。确定继续？`,
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('devices.confirmBatchStart'),
+    content: t('devices.confirmBatchStartDesc', { count: selectedIds.value.length }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       try {
@@ -603,10 +603,10 @@ async function batchStart() {
         const ok = res.started || 0
         const fail = res.errors?.length || 0
         selectedIds.value = []
-        message.success(`已启动 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        message.success(t('devices.batchStarted', { ok, fail }))
         loadData()
       } catch (e) {
-        message.error('批量启动失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('devices.batchStartFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
     }
   })
@@ -614,10 +614,10 @@ async function batchStart() {
 
 async function batchStop() {
   dialog.warning({
-    title: '确认批量停止',
-    content: `将停止选中的 ${selectedIds.value.length} 个运行中的设备。确定继续？`,
-    positiveText: '停止',
-    negativeText: '取消',
+    title: t('devices.confirmBatchStop'),
+    content: t('devices.confirmBatchStopDesc', { count: selectedIds.value.length }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       try {
@@ -625,10 +625,10 @@ async function batchStop() {
         const ok = res.stopped || 0
         const fail = res.errors?.length || 0
         selectedIds.value = []
-        message.success(`已停止 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        message.success(t('devices.batchStopped', { ok, fail }))
         loadData()
       } catch (e) {
-        message.error('批量停止失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('devices.batchStopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
     }
   })
@@ -636,10 +636,10 @@ async function batchStop() {
 
 async function batchDelete() {
   dialog.warning({
-    title: '确认批量删除',
-    content: `确定要删除选中的 ${selectedIds.value.length} 个设备吗？此操作不可恢复。`,
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('devices.confirmBatchDelete'),
+    content: t('devices.confirmBatchDeleteDesc', { count: selectedIds.value.length }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       try {
@@ -647,10 +647,10 @@ async function batchDelete() {
         const ok = res.deleted || 0
         const fail = res.errors?.length || 0
         selectedIds.value = []
-        message.success(`已删除 ${ok} 个设备` + (fail ? `，${fail} 个失败` : ''))
+        message.success(t('devices.batchDeleted', { ok, fail }))
         loadData()
       } catch (e) {
-        message.error('批量删除失败: ' + (e.response?.data?.detail || e.message))
+        message.error(t('devices.batchDeleteFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
     }
   })
@@ -658,12 +658,12 @@ async function batchDelete() {
 
 async function startAllDevices() {
   const toStart = filteredDevices.value.filter(d => d.status !== 'online' && d.status !== 'running')
-  if (!toStart.length) { message.info('所有设备已在运行中'); return }
+  if (!toStart.length) { message.info(t('devices.allDevicesRunning')); return }
   dialog.warning({
-    title: '确认全部启动',
-    content: `将启动 ${toStart.length} 个设备，可能占用大量端口和资源。确定继续？`,
-    positiveText: '启动',
-    negativeText: '取消',
+    title: t('devices.confirmStartAll'),
+    content: t('devices.confirmStartAllDesc', { count: toStart.length }),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       try {
@@ -671,9 +671,9 @@ async function startAllDevices() {
         let ok = 0, fail = 0
         results.forEach((r, i) => {
           if (r.status === 'fulfilled') ok++
-          else { fail++; message.warning(`设备 ${toStart[i].id} 启动失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+          else { fail++; message.warning(t('devices.deviceStartFailed', { id: toStart[i].id, error: r.reason?.response?.data?.detail || r.reason?.message || t('common.unknownError') })) }
         })
-        if (fail > 0) { message.warning(`已启动 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已启动 ${ok} 个设备`) }
+        if (fail > 0) { message.warning(t('devices.startedWithFailures', { ok, fail })) } else { message.success(t('devices.startedCount', { ok })) }
         loadData()
       } finally { batchLoading.value = false }
     }
@@ -682,12 +682,12 @@ async function startAllDevices() {
 
 async function stopAllDevices() {
   const toStop = filteredDevices.value.filter(d => d.status === 'online' || d.status === 'running')
-  if (!toStop.length) { message.info('没有运行中的设备'); return }
+  if (!toStop.length) { message.info(t('devices.noRunningDevices')); return }
   dialog.warning({
-    title: '确认全部停止',
-    content: `将停止 ${toStop.length} 个运行中的设备，所有客户端连接将断开。确定继续？`,
-    positiveText: '停止',
-    negativeText: '取消',
+    title: t('devices.confirmStopAll'),
+    content: t('devices.confirmStopAllDesc', { count: toStop.length }),
+    positiveText: t('common.stop'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       batchLoading.value = true
       try {
@@ -695,9 +695,9 @@ async function stopAllDevices() {
         let ok = 0, fail = 0
         results.forEach((r, i) => {
           if (r.status === 'fulfilled') ok++
-          else { fail++; message.warning(`设备 ${toStop[i].id} 停止失败: ${r.reason?.response?.data?.detail || r.reason?.message || '未知错误'}`) }
+          else { fail++; message.warning(t('devices.deviceStopFailed', { id: toStop[i].id, error: r.reason?.response?.data?.detail || r.reason?.message || t('common.unknownError') })) }
         })
-        if (fail > 0) { message.warning(`已停止 ${ok} 个设备，${fail} 个失败`) } else { message.success(`已停止 ${ok} 个设备`) }
+        if (fail > 0) { message.warning(t('devices.stoppedWithFailures', { ok, fail })) } else { message.success(t('devices.stoppedCount', { ok })) }
         loadData()
       } finally { batchLoading.value = false }
     }
@@ -706,10 +706,10 @@ async function stopAllDevices() {
 
 async function batchPushToEdgelite() {
   dialog.info({
-    title: '确认批量推送',
-    content: `将 ${selectedIds.value.length} 个选中设备推送到 EdgeLite，确定继续？`,
-    positiveText: '推送',
-    negativeText: '取消',
+    title: t('devices.confirmBatchPush'),
+    content: t('devices.confirmBatchPushDesc', { count: selectedIds.value.length }),
+    positiveText: t('devices.push'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       pushLoading.value = true
   try {
@@ -720,7 +720,7 @@ async function batchPushToEdgelite() {
     if (r.status === 'rejected') {
       fail++
       const e = r.reason
-      message.warning(`推送设备 ${selectedIds.value[i]} 失败: ${e?.response?.data?.detail || e?.message || '未知错误'}`)
+      message.warning(t('devices.pushDeviceFailed', { id: selectedIds.value[i], error: e?.response?.data?.detail || e?.message || t('common.unknownError') }))
       return
     }
     const res = r.value
@@ -740,18 +740,18 @@ async function batchPushToEdgelite() {
   })
 
   if (notConfigured > 0) {
-    message.warning(`${notConfigured} 个设备未配置 EdgeLite 网关，请先在「系统设置」中配置网关地址`)
+    message.warning(t('devices.edgeliteNotConfiguredCount', { count: notConfigured }))
   }
   if (fail > 0 && errorDetails.length > 0) {
     const uniqueSuggestions = [...new Set(errorDetails)].slice(0, 3)
-    message.error(`推送失败: ${uniqueSuggestions.join('；')}`)
+    message.error(t('devices.pushFailed') + ': ' + uniqueSuggestions.join(t('common.separator')))
   }
 
   const parts = []
-  if (ok) parts.push(`${ok} 个推送成功`)
-  if (skip) parts.push(`${skip} 个未配置EdgeLite`)
-  if (unsupported) parts.push(`${unsupported} 个协议不支持`)
-  if (fail) parts.push(`${fail} 个失败`)
+  if (ok) parts.push(t('devices.pushSuccessCount', { count: ok }))
+  if (skip) parts.push(t('devices.edgeliteNotConfiguredCount', { count: skip }))
+  if (unsupported) parts.push(t('devices.protocolUnsupportedCount', { count: unsupported }))
+  if (fail) parts.push(t('devices.failedCount', { count: fail }))
   if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
     message.success(parts.join('，'))
   }
@@ -763,8 +763,8 @@ async function batchPushToEdgelite() {
 }
 
 async function createDevice() {
-  if (!newDevice.value.id?.trim()) { message.warning('请输入设备 ID'); return }
-  if (!newDevice.value.name?.trim()) { message.warning('请输入设备名称'); return }
+  if (!newDevice.value.id?.trim()) { message.warning(t('devices.pleaseEnterDeviceId')); return }
+  if (!newDevice.value.name?.trim()) { message.warning(t('devices.pleaseEnterDeviceName')); return }
   creating.value = true
   try {
     let config = { ...newDevice.value, points: [], protocol_config: advancedProtocolConfig.value }
@@ -777,9 +777,9 @@ async function createDevice() {
     showCreateModal.value = false
     newDevice.value = { id: '', name: '', protocol: defaultProtocol, points: [] }
     selectedTemplate.value = null
-    message.success('设备创建成功')
+    message.success(t('devices.deviceCreated'))
     await loadData()
-  } catch (e) { message.error('创建失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.createFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { creating.value = false }
 }
 
@@ -792,7 +792,7 @@ async function openEditDevice(row) {
     editProtocolConfig.value = { ...defaults, ...(config.protocol_config || {}) }
     showEditModal.value = true
   } catch (e) {
-    message.error('获取设备配置失败: ' + (e.response?.data?.detail || e.message))
+    message.error(t('devices.getConfigFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
 }
 
@@ -805,30 +805,30 @@ async function saveEditDevice() {
       protocol_config: editProtocolConfig.value,
     })
     showEditModal.value = false
-    message.success('设备更新成功')
+    message.success(t('devices.deviceUpdated'))
     const protoConfig = editProtocolConfig.value || {}
     if (protoConfig.edgelite_url) {
-      message.info('EdgeLite: 已检测到 EdgeLite 配置，可通过集成页面手动推送')
+      message.info(t('devices.edgeliteConfigDetected'))
     }
     await loadData()
-  } catch (e) { message.error('更新失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.updateFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { saving.value = false }
 }
 
 async function toggleDevice(id, action, name) {
   if (action === 'stop') {
     dialog.warning({
-      title: '确认停止设备',
-      content: `停止设备 "${name || id}" 将断开所有客户端连接，确定继续？`,
-      positiveText: '停止',
-      negativeText: '取消',
+      title: t('devices.confirmStopDevice'),
+      content: t('devices.confirmStopDeviceDesc', { name: name || id }),
+      positiveText: t('common.stop'),
+      negativeText: t('common.cancel'),
       onPositiveClick: async () => {
         togglingIds.value.add(id)
         try {
           await api.stopDevice(id)
-          message.success('设备已停止')
+          message.success(t('devices.deviceStopped'))
           await loadData()
-        } catch (e) { message.error('停止失败: ' + (e.response?.data?.detail || e.message)) }
+        } catch (e) { message.error(t('devices.stopFailed') + ': ' + (e.response?.data?.detail || e.message)) }
         finally { togglingIds.value.delete(id) }
       }
     })
@@ -836,26 +836,26 @@ async function toggleDevice(id, action, name) {
   }
   togglingIds.value.add(id)
   try {
-    await api.startDevice(id); message.success('设备已启动')
+    await api.startDevice(id); message.success(t('devices.deviceStarted'))
     await loadData()
-  } catch (e) { message.error('启动失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.startFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { togglingIds.value.delete(id) }
 }
 
 function confirmDeleteDevice(row) {
-  dialog.warning({ title: '确认删除', content: `确定要删除设备 "${row.name}" (${row.id}) 吗？`, positiveText: '删除', negativeText: '取消', onPositiveClick: () => deleteDevice(row.id) })
+  dialog.warning({ title: t('devices.confirmDelete'), content: t('devices.confirmDeleteDesc', { name: row.name, id: row.id }), positiveText: t('common.delete'), negativeText: t('common.cancel'), onPositiveClick: () => deleteDevice(row.id) })
 }
 
 async function deleteDevice(id) {
   dialog.warning({
-    title: '确认删除设备',
-    content: `确定删除设备 "${id}"？此操作不可撤销。`,
-    positiveText: '删除',
-    negativeText: '取消',
+    title: t('devices.confirmDeleteDevice'),
+    content: t('devices.confirmDeleteDeviceDesc', { id }),
+    positiveText: t('common.delete'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       deletingIds.value.add(id)
-      try { await api.deleteDevice(id); message.success('设备已删除'); await loadData() }
-      catch (e) { message.error('删除失败: ' + (e.response?.data?.detail || e.message)) }
+      try { await api.deleteDevice(id); message.success(t('devices.deviceDeleted')); await loadData() }
+      catch (e) { message.error(t('devices.deleteFailed') + ': ' + (e.response?.data?.detail || e.message)) }
       finally { deletingIds.value.delete(id) }
     }
   })
@@ -873,7 +873,7 @@ async function viewPoints(id) {
     writePointName.value = ''
     writePointValue.value = ''
     showPointsModal.value = true
-  } catch (e) { message.error('读取测点失败: ' + (e.response?.data?.detail || e.message)) }
+  } catch (e) { message.error(t('devices.readPointsFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function writeDevicePointQuick() {
