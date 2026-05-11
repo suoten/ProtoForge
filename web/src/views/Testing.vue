@@ -597,18 +597,18 @@ function exportBuilderJson() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    message.error(t('common.exportFailed') || '导出失败: ' + (e.message || '未知错误'))
+    message.error(t('common.exportFailed') + ': ' + (e.message || t('common.unknownError')))
   }
 }
 
 async function runQuickTest(scope, targetId) {
-  const scopeLabels = { all: t('testing.testAll') || '所有设备', protocol: t('testing.protocolDevices') || '协议下所有设备', device: t('testing.specifiedDevice') || '指定设备' }
+  const scopeLabels = { all: t('testing.testAll'), protocol: t('testing.protocolDevices'), device: t('testing.specifiedDevice') }
   const scopeLabel = scopeLabels[scope] || scope
   dialog.info({
-    title: t('testing.confirmQuickTest') || '确认执行快速测试',
-    content: (t('testing.confirmQuickTestDesc') || '将对 {scope} 执行测试，可能会写入测试数据。确定继续？').replace('{scope}', scopeLabel),
-    positiveText: t('testing.executeTest') || '执行测试',
-    negativeText: t('common.cancel') || '取消',
+    title: t('testing.confirmQuickTest'),
+    content: t('testing.confirmQuickTestDesc', { scope: scopeLabel }),
+    positiveText: t('testing.executeTest'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       quickTesting.value = true
       try {
@@ -662,23 +662,23 @@ async function saveJsonAsCase() {
   try {
     const cases = JSON.parse(testJson.value)
     if (!Array.isArray(cases)) {
-      message.error(t('testing.jsonMustBeArray') || '测试数据必须是数组格式')
+      message.error(t('testing.jsonMustBeArray'))
       return
     }
     for (let i = 0; i < cases.length; i++) {
       const c = cases[i]
       if (!c.id || typeof c.id !== 'string') {
-        message.error(`第 ${i + 1} 个用例缺少有效的 id 字段`)
+        message.error(t('testing.caseMissingId', { index: i + 1 }))
         return
       }
       if (!c.steps || !Array.isArray(c.steps) || c.steps.length === 0) {
-        message.error(`用例 "${c.id}" 缺少 steps 字段或 steps 为空`)
+        message.error(t('testing.caseMissingSteps', { id: c.id }))
         return
       }
       for (let j = 0; j < c.steps.length; j++) {
         const s = c.steps[j]
         if (!s.action || typeof s.action !== 'string') {
-          message.error(`用例 "${c.id}" 的第 ${j + 1} 步缺少 action 字段`)
+          message.error(t('testing.stepMissingAction', { id: c.id, index: j + 1 }))
           return
         }
       }

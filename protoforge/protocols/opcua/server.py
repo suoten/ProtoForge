@@ -139,6 +139,15 @@ class OpcUaServer(ProtocolServer):
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
         self._server_task: asyncio.Task | None = None
 
+    def _on_server_task_done(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error("OPC-UA server task failed: %s", e)
+            self._status = ProtocolStatus.ERROR
+
     async def start(self, config: dict[str, Any]) -> None:
         if not ASYNCUA_AVAILABLE:
             raise RuntimeError("asyncua is not installed. Install with: pip install protoforge[opcua]")
@@ -211,6 +220,7 @@ class OpcUaServer(ProtocolServer):
 
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._server.start())
+            self._server_task.add_done_callback(self._on_server_task_done)
             logger.info("OPC-UA server starting at %s", self._endpoint)
             self._log_debug("system", "server_start",
                             f"OPC-UA服务启动 {self._endpoint}")

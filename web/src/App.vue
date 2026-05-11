@@ -77,7 +77,7 @@
                   <template #icon>
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                   </template>
-                  {{ locale === 'zh' ? '中文' : 'EN' }}
+                  {{ locale === 'zh' ? t('common.chinese') : 'EN' }}
                 </n-button>
               </n-dropdown>
               <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
@@ -192,10 +192,10 @@ const userMenuOptions = computed(() => [
   { label: t('header.logout'), key: 'logout' },
 ])
 
-const langMenuOptions = [
-  { label: '中文', key: 'zh' },
+const langMenuOptions = computed(() => [
+  { label: t('common.chinese'), key: 'zh' },
   { label: 'English', key: 'en' },
-]
+])
 
 function onLangMenuSelect(key) {
   setLocale(key)
@@ -380,7 +380,10 @@ function connectWebSocket() {
     wsConnected.value = false
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
   }
-  ws.onmessage = () => {}
+  ws.onmessage = () => {
+    // Log WebSocket: messages are handled by the Logs view's own WebSocket connection.
+    // This connection is used only for online status indication (wsConnected).
+  }
 }
 
 async function loadSearchData() {

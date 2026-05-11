@@ -377,7 +377,7 @@ async function saveScenarioLayout() {
       } catch (e) {
         const status = e.response?.status
         const detail = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')
-        if (status === 400 && (detail.includes('already exists') || detail.includes('已存在'))) {
+        if (status === 400 && (detail.includes('already exists') || detail.includes('已存在') || detail.includes('ALREADY_EXISTS'))) {
           try {
             await api.updateDevice(dc.id, {
               id: dc.id, name: dc.name, protocol: dc.protocol,

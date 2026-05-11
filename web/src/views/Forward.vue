@@ -245,10 +245,10 @@ async function removeTarget(name) {
 
 async function startForward() {
   dialog.info({
-    title: t('forward.confirmStart') || '确认启动转发',
-    content: t('forward.confirmStartDesc') || '启动转发服务将向配置的目标发送数据，确定继续？',
-    positiveText: t('common.start') || '启动',
-    negativeText: t('common.cancel') || '取消',
+    title: t('forward.confirmStart'),
+    content: t('forward.confirmStartDesc'),
+    positiveText: t('common.start'),
+    negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       starting.value = true
       try {

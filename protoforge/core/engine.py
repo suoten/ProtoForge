@@ -127,9 +127,12 @@ class SimulationEngine:
                 config["port"] = new_port
         try:
             await server.start(config)
-            await asyncio.sleep(0.3)
+            for i in range(5):
+                await asyncio.sleep(0.2)
+                if server.status == ProtocolStatus.ERROR:
+                    break
             if server.status == ProtocolStatus.ERROR:
-                error_msg = "Protocol server entered ERROR state immediately after start (likely port conflict)"
+                error_msg = "Protocol server entered ERROR state after start (likely port conflict or config error)"
                 logger.error("Protocol %s: %s", protocol_name, error_msg)
                 try:
                     await server.stop()

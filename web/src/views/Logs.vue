@@ -26,7 +26,7 @@
 
     <div ref="logContainer" style="height: calc(100vh - 240px); overflow-y: auto; border: 1px solid #333; border-radius: 8px; background: #1a1a2e; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
       <div v-if="historyLoading" style="padding: 40px; text-align: center; color: #666">
-        {{ t('common.loading') || '加载中...' }}
+        {{ t('common.loading') }}
       </div>
       <div v-else-if="filteredLogs.length === 0" style="padding: 40px; text-align: center; color: #666">
         {{ t('logs.noLogs') }}
@@ -208,7 +208,7 @@ function exportLogs() {
     URL.revokeObjectURL(url)
     message.success(t('logs.exported', { count: data.length }))
   } catch (e) {
-    message.error(t('common.exportFailed') || '导出失败: ' + (e.message || '未知错误'))
+    message.error(t('common.exportFailed') + ': ' + (e.message || t('common.unknownError')))
   }
 }
 

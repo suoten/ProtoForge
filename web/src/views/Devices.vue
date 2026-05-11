@@ -730,7 +730,7 @@ async function batchPushToEdgelite() {
     const res = r.value
     if (res.skipped) {
       const reason = res.reason || ''
-      if (reason.includes('not supported') || reason.includes('不支持')) { unsupported++ }
+      if (reason.includes('not supported') || reason.includes('不支持') || reason.includes('NOT_SUPPORTED')) { unsupported++ }
       else if (res.error_type === 'not_configured') { notConfigured++ }
       else { skip++ }
     } else if (res.ok) {
@@ -975,7 +975,7 @@ async function pushFromPipeline() {
     const res = await api.pushToEdgelite(pipelineDeviceId.value)
     if (res.skipped) {
       const reason = res.reason || ''
-      if (reason.includes('not supported') || reason.includes('不支持')) {
+      if (reason.includes('not supported') || reason.includes('不支持') || reason.includes('NOT_SUPPORTED')) {
         message.warning(t('devices.protocolNotSupportedByEdgeLite'))
       } else if (res.error_type === 'not_configured') {
         message.warning(t('devices.edgeliteNotConfiguredInSettings'))

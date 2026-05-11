@@ -48,6 +48,15 @@ class ModbusTcpServer(ProtocolServer):
         self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
 
+    def _on_server_task_done(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error("Modbus TCP server task failed: %s", e)
+            self._status = ProtocolStatus.ERROR
+
     def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
         if self._context is None:
             return
@@ -306,6 +315,9 @@ class ModbusTcpServer(ProtocolServer):
                 self._server_task = asyncio.create_task(
                     self._serve_datastore_only()
                 )
+
+            if self._server_task:
+                self._server_task.add_done_callback(self._on_server_task_done)
 
             self._status = ProtocolStatus.RUNNING
             logger.info("Modbus TCP server starting on %s:%d (simdata=%s)", self._host, self._port, self._use_simdata)
