@@ -2639,6 +2639,8 @@ const messages = {
       stopAllSuccess: 'Stopped {count} protocols',
       stopAllPartial: 'Stopped {success} protocols, {fail} failed',
       protocolStopFailed: 'Protocol {name} stop failed',
+      confirmStart: 'Confirm Start Protocol',
+      confirmStartDesc: 'Starting protocol "{name}" will open network ports and consume system resources. Continue?',
     },
     scenarios: {
       title: 'Simulation Scenarios',
@@ -2739,6 +2741,7 @@ const messages = {
       sceneStopFailed: 'Scenario stop failed',
       startFailed: 'Start failed',
       stopFailed: 'Stop failed',
+      confirmDeleteDesc: 'Are you sure you want to delete this scenario? This action cannot be undone.',
     },
     scenarioEditor: {
       title: 'Scenario Editor',
@@ -2968,7 +2971,8 @@ const messages = {
       caseMissingSteps: 'Case "{id}" is missing steps or steps is empty',
       stepMissingAction: 'Step {index} of case "{id}" is missing action field',
       jsonMustBeArray: 'Test data must be an array',
-    }, {
+    },
+    integration: {
       title: 'Integration',
       subtitle: 'Connect EdgeLite gateway for full integration pipeline',
       edgeliteIntegration: 'EdgeLite Integration',
@@ -3463,6 +3467,10 @@ const messages = {
       operator: 'Operator',
       user: 'User',
       viewer: 'Viewer',
+      confirmUnlock: 'Confirm Unlock User',
+      confirmUnlockDesc: 'Are you sure you want to unlock user "{name}"?',
+      confirmDemo: 'Confirm Create Demo Data',
+      confirmDemoDesc: 'This will batch create demo devices and scenarios. This action cannot be undone. Continue?',
     },
     logs: {
       title: 'Protocol Debug Logs',
@@ -3572,6 +3580,8 @@ const messages = {
       startFailed: 'Start failed',
       stopped: 'Forward stopped',
       stopFailed: 'Stop failed',
+      confirmStart: 'Confirm Start Forward',
+      confirmStartDesc: 'Starting forward service will send data to configured targets. Continue?',
     },
     recorder: {
       title: 'Record & Replay',
@@ -3608,6 +3618,8 @@ const messages = {
       replayEvents: 'Replay Events',
       startTime: 'Start Time',
       endTime: 'End Time',
+      confirmReplay: 'Confirm Replay Recording',
+      confirmReplayDesc: 'Replay will send recorded data to devices, which may affect device state. Continue?',
     },
     webhook: {
       title: 'Webhook Management',
