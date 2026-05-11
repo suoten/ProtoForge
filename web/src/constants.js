@@ -65,6 +65,7 @@ export const protocolModes = {
   modbus_tcp: 'TCP',
   modbus_rtu: 'RTU',
   opcua: 'Server',
+  opcua_client: 'Client',
   mqtt: 'Broker',
   http: 'Server',
   gb28181: 'SIP',
