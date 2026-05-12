@@ -1,14 +1,14 @@
-<div align="center">
-
 # ProtoForge
 
 **物联网协议仿真与测试平台**
 
-<a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python"></a> <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.115+-green.svg" alt="FastAPI"></a> <a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3.x-brightgreen.svg" alt="Vue3"></a> <a href="https://naiveui.com"><img src="https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg" alt="Naive UI"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
+[![Vue3](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
+[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg)](https://naiveui.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [English](#english) | [中文](#中文)
-
-</div>
 
 > ✅ **Windows** &nbsp; ✅ **Linux** &nbsp; ✅ **macOS**
 >
@@ -325,7 +325,7 @@ pip install -e ".[s7]"        # 西门子 S7 协议
 
 ### 🚀 5 分钟上手
 
-按上述「方式一：本地快速体验」完成前后端部署后，按以下步骤操作：
+按上述安装步骤完成部署后，按以下步骤操作：
 
 1. **登录** — 浏览器打开前端地址（开发模式 `http://localhost:5173`，生产模式 `http://your-domain.com`），输入 admin / admin
 2. **启动协议** — 左侧菜单「协议服务」→ 点击「一键启动」
@@ -1416,10 +1416,41 @@ npm config set registry https://registry.npmmirror.com
 
 **Q: 前端页面空白？**
 
-A: 通常是 `web/dist/` 目录缺失（生产模式）或后端未启动（开发模式）：
+A: 按你的部署方式排查：
 
-- 生产模式：执行 `cd web && npm install && npm run build`
-- 开发模式：确认后端已启动（另一个终端里 `protoforge run` 在运行）
+**源码 / Nginx 部署：**
+
+- 最常见原因：`web/dist/` 目录不存在。执行 `cd web && npm install && npm run build` 构建前端。
+- Nginx 部署：检查 `nginx -t` 配置是否正确，`root` 路径是否指向了正确的 `web/dist/`。
+- 开发模式：确认后端已启动（另一个终端里 `protoforge run` 在运行），且访问的是 `http://localhost:5173`（不是 8000）。
+
+**Docker 部署：**
+
+- 检查容器日志：`docker logs protoforge`，看是否有 "前端静态文件目录不存在" 的警告。如果有，说明 Docker 镜像构建时前端编译失败了。
+- 确认访问的是 `http://localhost:8000`（Docker 模式后端直接托管前端）。
+
+**通用排查：**
+
+- 打开浏览器开发者工具（F12）→ Console / Network，看是否有红色报错或 404 请求。
+- 检查后端是否正常：访问 `/api/v1/health` 看是否返回 JSON。
+
+**Q: Linux 上部署失败？**
+
+A: 按以下步骤逐项排查：
+
+1. **检查 Python 版本** — `python3 --version`，需要 ≥ 3.10。如果版本太低，用 `apt install python3.12` 或 `dnf install python3.12`。
+2. **检查 Node.js 版本** — `node --version`，需要 ≥ 18。如果 apt 装的版本太旧，用 NodeSource 安装：
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+   sudo apt install -y nodejs
+   ```
+3. **检查虚拟环境** — 是否激活了 venv？（终端前面应该有 `(venv)` 前缀）
+4. **检查端口** — `lsof -i :8000`（或你设置的端口），确认没有被其他进程占用。
+5. **检查 .env 配置** — `cat .env`，确认 `PROTOFORGE_PORT` 等配置正确。
+6. **查看后端日志** — 如果用的 `nohup`，查看 `protoforge.log`；如果用的 `systemd`，查看 `journalctl -u protoforge`。
+7. **从源码安装时** — 确保用了 `pip install -e "."`（带引号和点号），不是 `pip install -e .`（Unix shell 下点号会被解释成当前目录，两者效果相同但格式要正确）。
+
+**如果是串口相关错误（Modbus RTU）：** Linux 上没有 `COM1`，默认使用 `/dev/ttyUSB0`。如果你没有物理串口，在设备的协议配置中设置 `port=0` 即可自动切换到 TCP 桥接模式。
 
 #### Docker 相关
 
@@ -1432,9 +1463,9 @@ docker build -t protoforge .
 docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data protoforge
 ```
 
-**Q: Docker 构建时** **`npm run build`** **失败？**
+**Q: Docker 构建时 `npm run build` 失败？**
 
-A: Dockerfile 构建阶段的 `apt-get install nodejs npm` 装的是 Debian 仓库的 Node.js，可能版本过旧。可以在 Dockerfile 中改用 NodeSource 源安装新版。
+A: 最新 Dockerfile 已使用 NodeSource 安装 Node.js 20.x（LTS），确保版本可靠。如果你用的是旧版 Dockerfile，请拉取最新代码重新构建。
 
 #### 其他
 
