@@ -4,15 +4,15 @@
 
 **物联网协议仿真与测试平台**
 
-<a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python"></a>
-<a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.115+-green.svg" alt="FastAPI"></a>
-<a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3.x-brightgreen.svg" alt="Vue3"></a>
-<a href="https://naiveui.com"><img src="https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg" alt="Naive UI"></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
+<a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python"></a> <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.115+-green.svg" alt="FastAPI"></a> <a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3.x-brightgreen.svg" alt="Vue3"></a> <a href="https://naiveui.com"><img src="https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg" alt="Naive UI"></a> <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
 
 [English](#english) | [中文](#中文)
 
 </div>
+
+> ✅ **Windows** &nbsp; ✅ **Linux** &nbsp; ✅ **macOS**
+>
+> ProtoForge 后端基于 Python，前端基于 Vue.js，均为跨平台技术，三个平台均可部署使用。
 
 ***
 
@@ -78,156 +78,18 @@ node --version      # 应显示 v18.x 或更高
 > source venv/bin/activate
 > ```
 
-#### 方式一：本地快速体验（推荐）
+#### 选择部署方式
 
-适合本地开发、测试或单机使用，直接通过 `localhost` 访问。
+| 你的场景 | 推荐方式 | 说明 |
+| -------- | -------- | ---- |
+| 任何平台，想最快上手 | [方式一：Docker](#方式一docker-一键部署推荐) | Docker 自动处理所有环境，跨平台通用 |
+| Linux 服务器，生产环境（有域名） | [方式二：Linux 服务器部署](#方式二linux-服务器部署nginx--域名) | Nginx 托管前端，性能最优 |
+| Linux 服务器，没有域名 | [方式三：本地源码部署](#方式三本地源码部署开发体验) | 后端直接托管前端，单端口运行 |
+| Windows / macOS 本地开发 | [方式三：本地源码部署](#方式三本地源码部署开发体验) | 两终端模式，支持热更新 |
 
-**Step 1 — 部署后端**
+#### 方式一：Docker 一键部署（推荐）
 
-```bash
-# 1. 克隆仓库
-git clone https://github.com/suoten/ProtoForge.git
-cd ProtoForge
-
-# 2. 安装后端依赖（FastAPI、Pydantic 等）
-pip install -e .
-
-# 3. 构建前端（需要 Node.js ≥18）
-cd web
-npm install
-npm run build
-cd ..
-
-# 4. 初始化配置（创建 data/ 目录和 .env 文件）
-protoforge init
-
-# 5. 启动后端（默认端口 8000）
-protoforge demo
-```
-
-> ✅ 看到 `ProtoForge started successfully` 说明后端启动成功。
->
-> `protoforge demo` 会自动创建 4 个演示设备和 1 个仿真场景。
-> 如果不想带演示数据，用 `protoforge run` 启动空白环境。
-> 端口冲突？修改 `.env` 中的 `PROTOFORGE_PORT` 即可。
-
-**Step 2 — 部署前端**
-
-另开一个终端窗口（保持后端运行）：
-
-```bash
-cd ProtoForge/web
-
-# 1. 安装前端依赖
-npm install
-
-# 2. 启动前端开发服务器（热更新，默认端口 5173）
-npm run dev
-```
-
-> ✅ 看到 `VITE v6.x  ready in xxx ms` 说明前端启动成功。
-
-**Step 3 — 访问系统**
-
-打开浏览器访问 **<http://localhost:5173>**，用 `admin` / `admin` 登录。
-
-> ⚠️ 不要访问 `http://localhost:8000`——那是后端 API 端口，打开会看到 Swagger 接口文档，不是网页。
->
-> 前端开发服务器（`npm run dev`）会自动代理 API 请求到后端的 8000 端口，无需额外配置。
-
-#### 方式二：服务器部署（Nginx + 域名）
-
-适合生产环境，通过域名访问，Nginx 托管前端静态文件，API 代理到后端。
-
-**部署架构：**
-
-```
-用户 → 域名 (http://your-domain.com)
-    → Nginx
-        → 前端静态文件 (web/dist/) 直接返回
-        → /api/* 代理到后端 (127.0.0.1:8200)
-        → /api/v1/ws/* WebSocket 代理到后端
-```
-
-**Step 1 — 克隆仓库**
-
-```bash
-git clone https://github.com/suoten/ProtoForge.git
-cd ProtoForge
-```
-
-**Step 2 — 构建前端（⚠️ 必须执行）**
-
-> 仓库已包含前端构建产物 `web/dist/`，但建议你重新构建以确保与最新代码一致：
-
-```bash
-cd web
-
-# 1. 安装前端依赖（需要 Node.js 18+）
-npm install
-
-# 2. 构建生产包（输出到 web/dist/）
-npm run build
-
-cd ..
-```
-
-> 如果 `web/dist/` 目录不存在，后端将无法提供前端页面，浏览器会显示空白页。
-
-**Step 3 — 部署后端**
-
-```bash
-# 1. 安装后端依赖
-pip install -e ".[all]"
-
-# 2. 配置后端端口（避免与 Nginx 冲突）
-# 编辑 .env，设置：
-# PROTOFORGE_PORT=8200
-
-# 3. 启动后端
-protoforge run
-```
-
-**Step 4 — 配置 Nginx**
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    # API 请求 → 代理到 Python 后端
-    location /api/ {
-        proxy_pass http://127.0.0.1:8200;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # WebSocket → 代理到 Python 后端（需升级协议）
-    location /api/v1/ws/ {
-        proxy_pass http://127.0.0.1:8200;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    # 前端静态文件 → Nginx 直接返回（高效）
-    location / {
-        root /path/to/ProtoForge/web/dist;
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-> 把 `8200` 换成你 `.env` 中配置的端口，把 `/path/to/ProtoForge` 换成你的实际路径。
-
-**Step 5 — 访问系统**
-
-打开浏览器访问 \*\*<http://your-domain.com**，用> `admin` / `admin` 登录。
-
-> 如果页面空白，请检查 `web/dist/` 目录是否存在。若不存在，重新执行 Step 2 构建前端。
-
-#### 方式三：Docker 一键部署
+✅ Windows &nbsp; ✅ Linux &nbsp; ✅ macOS
 
 Docker 方式已包含前后端完整构建，无需手动安装 Node.js 或构建前端。
 
@@ -247,13 +109,182 @@ docker-compose down
 
 > ⚠️ **注意**：`docker-compose up -d` 默认使用 PostgreSQL 数据库 + 自动运行测试，需要约 **2GB+ 内存**。
 >
-> 低配机器可以用纯 SQLite 模式（仅启动 ProtoForge，不启动 PostgreSQL）：
+> 低配 Linux VPS（1GB 内存）可以用纯 SQLite 模式：
 >
 > ```bash
-> docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data suoten/protoforge:latest
+> docker build -t protoforge .
+> docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data protoforge
 > ```
 >
-> 构建时如果前端编译失败（Node.js 版本过低等），Dockerfile 会直接报错——不会像旧版那样静默跳过。
+> 如果在低配机器上 `docker build` 内存不足，可以在本地构建后导出镜像，再上传到服务器：
+> ```bash
+> # 本地构建
+> docker build -t protoforge .
+> docker save protoforge | gzip > protoforge.tar.gz
+> # 上传到服务器后加载
+> docker load < protoforge.tar.gz
+> docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data protoforge
+> ```
+
+#### 方式二：Linux 服务器部署（Nginx + 域名）
+
+✅ Linux（生产环境推荐）
+
+适合生产环境，通过域名访问，Nginx 托管前端静态文件，API 代理到后端。
+
+**部署架构：**
+
+```
+用户 → 域名 (http://your-domain.com)
+    → Nginx
+        → 前端静态文件 (web/dist/) 直接返回
+        → /api/* 代理到后端 (127.0.0.1:8200)
+        → /api/v1/ws/* WebSocket 代理到后端
+```
+
+**Step 1 — 安装系统依赖**
+
+```bash
+# Ubuntu / Debian
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv nodejs npm nginx git
+
+# 如果 apt 装的 Node.js 版本太低（< 18），用 NodeSource 安装：
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+sudo apt install -y nodejs
+
+# CentOS / Rocky Linux
+sudo dnf install -y python3 python3-pip nodejs nginx git
+```
+
+**Step 2 — 克隆仓库并构建前端**
+
+```bash
+git clone https://github.com/suoten/ProtoForge.git
+cd ProtoForge
+
+# 构建前端（⚠️ 必须执行，否则页面空白）
+cd web
+npm install
+npm run build    # 输出到 web/dist/
+cd ..
+```
+
+> 如果 `web/dist/` 目录不存在，浏览器将显示空白页。务必确认 `npm run build` 成功完成。
+
+**Step 3 — 部署后端**
+
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装后端依赖
+pip install -e ".[all]"
+
+# 初始化配置（创建 data/ 目录和 .env）
+protoforge init
+
+# 配置后端端口（避免与 Nginx 的 80 端口冲突）
+# 编辑 .env，修改：
+# PROTOFORGE_PORT=8200
+
+# 以后台方式启动
+nohup protoforge run > protoforge.log 2>&1 &
+# 或用 systemd 管理（推荐，见下方说明）
+```
+
+**Step 4 — 配置 Nginx**
+
+```bash
+sudo tee /etc/nginx/sites-available/protoforge << 'EOF'
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /api/v1/ws/ {
+        proxy_pass http://127.0.0.1:8200;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location / {
+        root /path/to/ProtoForge/web/dist;
+        try_files $uri $uri/ /index.html;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/protoforge /etc/nginx/sites-enabled/
+sudo nginx -t          # 检查配置语法
+sudo systemctl reload nginx
+```
+
+> 把 `/path/to/ProtoForge` 换成你的实际路径（如 `/home/user/ProtoForge`）。
+
+**Step 5 — 访问系统**
+
+打开浏览器访问 **http://your-domain.com**，用 `admin` / `admin` 登录。
+
+> 如果页面空白或 API 报错，请参考 [常见问题排查](#-常见问题排查) 中的"页面显示不了"和"Linux 部署故障诊断"。
+
+#### 方式三：本地源码部署（开发/体验）
+
+✅ Windows &nbsp; ✅ Linux &nbsp; ✅ macOS
+
+适合本地开发、测试或单机使用。需要两个终端窗口（或后台运行后端）。
+
+**Windows 用户：**
+
+```bash
+# 终端 1 — 后端
+git clone https://github.com/suoten/ProtoForge.git
+cd ProtoForge
+python -m venv venv
+.\venv\Scripts\activate
+pip install -e ".[all]"
+cd web && npm install && npm run build && cd ..
+protoforge init
+protoforge demo
+
+# 终端 2 — 前端（保持后端运行，另开终端）
+cd ProtoForge\web
+npm install
+npm run dev
+```
+
+**Linux / macOS 用户：**
+
+```bash
+# 终端 1 — 后端
+git clone https://github.com/suoten/ProtoForge.git
+cd ProtoForge
+python3 -m venv venv
+source venv/bin/activate
+pip install -e ".[all]"
+cd web && npm install && npm run build && cd ..
+protoforge init
+protoforge demo
+
+# 终端 2 — 前端（保持后端运行，另开终端）
+cd ProtoForge/web
+npm install
+npm run dev
+```
+
+> ✅ 看到 `ProtoForge started successfully` 说明后端启动成功。`VITE v6.x ready in xxx ms` 说明前端启动成功。
+
+**访问系统：** 浏览器打开 **http://localhost:5173**（不是 8000！），用 `admin` / `admin` 登录。
+
+> 如果不想开两个终端，可在 Linux 上 `nohup protoforge run &` 后台运行后端，然后直接访问 `http://localhost:8000`（后端已托管了 `web/dist/` 下的前端）。
 
 #### 可选：安装更多协议
 
