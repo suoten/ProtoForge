@@ -4,11 +4,11 @@
 
 **物联网协议仿真与测试平台**
 
-[!\[Python\](https://img.shields.io/badge/Python-3.10+-blue.svg null)](https://python.org)
-[!\[FastAPI\](https://img.shields.io/badge/FastAPI-0.115+-green.svg null)](https://fastapi.tiangolo.com)
-[!\[Vue3\](https://img.shields.io/badge/Vue-3.x-brightgreen.svg null)](https://vuejs.org)
-[!\[Naive UI\](https://img.shields.io/badge/Naive\_UI-2.x-%235f25d4.svg null)](https://naiveui.com)
-[!\[License\](https://img.shields.io/badge/License-MIT-yellow.svg null)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
+[![Vue3](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
+[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg)](https://naiveui.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [English](#english) | [中文](#中文)
 
