@@ -21,14 +21,22 @@ def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConf
         protocol = dev.get("protocol", "modbus_tcp")
         points = []
         for pt in dev.get("points", []):
+            try:
+                data_type = DataType(pt.get("data_type", "float32"))
+            except ValueError:
+                data_type = DataType.FLOAT32
+            try:
+                gen_type = GeneratorType(pt.get("generator_type", "random"))
+            except ValueError:
+                gen_type = GeneratorType.RANDOM
             point = PointConfig(
                 name=pt.get("name", ""),
                 address=str(pt.get("address", "0")),
-                data_type=DataType(pt.get("data_type", "float32")),
+                data_type=data_type,
                 unit=pt.get("unit", ""),
                 description=pt.get("description", ""),
                 access=pt.get("access", "rw"),
-                generator_type=GeneratorType(pt.get("generator_type", "random")),
+                generator_type=gen_type,
                 min_value=pt.get("min_value"),
                 max_value=pt.get("max_value"),
                 fixed_value=pt.get("fixed_value"),

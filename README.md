@@ -10,7 +10,7 @@
 
 [English](#english) | [中文](#中文)
 
-> ✅ **Windows** &nbsp; ✅ **Linux** &nbsp; ✅ **macOS**
+> ✅ **Windows**   ✅ **Linux**   ✅ **macOS**
 >
 > ProtoForge 后端基于 Python，前端基于 Vue.js，均为跨平台技术，三个平台均可部署使用。
 
@@ -80,16 +80,16 @@ node --version      # 应显示 v18.x 或更高
 
 #### 选择部署方式
 
-| 你的场景 | 推荐方式 | 说明 |
-| -------- | -------- | ---- |
-| 任何平台，想最快上手 | [方式一：Docker](#方式一docker-一键部署推荐) | Docker 自动处理所有环境，跨平台通用 |
-| Linux 服务器，生产环境（有域名） | [方式二：Linux 服务器部署](#方式二linux-服务器部署nginx--域名) | Nginx 托管前端，性能最优 |
-| Linux 服务器，没有域名 | [方式三：本地源码部署](#方式三本地源码部署开发体验) | 后端直接托管前端，单端口运行 |
-| Windows / macOS 本地开发 | [方式三：本地源码部署](#方式三本地源码部署开发体验) | 两终端模式，支持热更新 |
+| 你的场景                 | 推荐方式                                        | 说明                    |
+| -------------------- | ------------------------------------------- | --------------------- |
+| 任何平台，想最快上手           | [方式一：Docker](#方式一docker-一键部署推荐)             | Docker 自动处理所有环境，跨平台通用 |
+| Linux 服务器，生产环境（有域名）  | [方式二：Linux 服务器部署](#方式二linux-服务器部署nginx--域名) | Nginx 托管前端，性能最优       |
+| Linux 服务器，没有域名       | [方式三：本地源码部署](#方式三本地源码部署开发体验)                | 后端直接托管前端，单端口运行        |
+| Windows / macOS 本地开发 | [方式三：本地源码部署](#方式三本地源码部署开发体验)                | 两终端模式，支持热更新           |
 
 #### 方式一：Docker 一键部署（推荐）
 
-✅ Windows &nbsp; ✅ Linux &nbsp; ✅ macOS
+✅ Windows   ✅ Linux   ✅ macOS
 
 Docker 方式已包含前后端完整构建，无需手动安装 Node.js 或构建前端。
 
@@ -101,7 +101,7 @@ cd ProtoForge
 docker-compose up -d
 
 # 打开浏览器访问 http://localhost:8000
-# 默认账号: admin / admin
+# 首次使用需设置环境变量：PROTOFORGE_ADMIN_PASSWORD
 
 # 停止
 docker-compose down
@@ -117,6 +117,7 @@ docker-compose down
 > ```
 >
 > 如果在低配机器上 `docker build` 内存不足，可以在本地构建后导出镜像，再上传到服务器：
+>
 > ```bash
 > # 本地构建
 > docker build -t protoforge .
@@ -232,13 +233,13 @@ sudo systemctl reload nginx
 
 **Step 5 — 访问系统**
 
-打开浏览器访问 **http://your-domain.com**，用 `admin` / `admin` 登录。
+打开浏览器访问 \*\*<http://your-domain.com**，用> `admin` / `admin` 登录。
 
 > 如果页面空白或 API 报错，请参考 [常见问题排查](#-常见问题排查) 中的"页面显示不了"和"Linux 部署故障诊断"。
 
 #### 方式三：本地源码部署（开发/体验）
 
-✅ Windows &nbsp; ✅ Linux &nbsp; ✅ macOS
+✅ Windows   ✅ Linux   ✅ macOS
 
 适合本地开发、测试或单机使用。需要两个终端窗口（或后台运行后端）。
 
@@ -282,7 +283,7 @@ npm run dev
 
 > ✅ 看到 `ProtoForge started successfully` 说明后端启动成功。`VITE v6.x ready in xxx ms` 说明前端启动成功。
 
-**访问系统：** 浏览器打开 **http://localhost:5173**（不是 8000！），用 `admin` / `admin` 登录。
+**访问系统：** 浏览器打开 \*\*<http://localhost:5173**（不是> 8000！），用 `admin` / `admin` 登录。
 
 > 如果不想开两个终端，可在 Linux 上 `nohup protoforge run &` 后台运行后端，然后直接访问 `http://localhost:8000`（后端已托管了 `web/dist/` 下的前端）。
 
@@ -1463,7 +1464,7 @@ docker build -t protoforge .
 docker run -d --name protoforge -p 8000:8000 -v $(pwd)/data:/app/data protoforge
 ```
 
-**Q: Docker 构建时 `npm run build` 失败？**
+**Q: Docker 构建时** **`npm run build`** **失败？**
 
 A: 最新 Dockerfile 已使用 NodeSource 安装 Node.js 20.x（LTS），确保版本可靠。如果你用的是旧版 Dockerfile，请拉取最新代码重新构建。
 

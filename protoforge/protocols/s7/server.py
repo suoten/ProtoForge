@@ -251,7 +251,10 @@ class S7Server(ProtocolServer):
         connection_device_id: str | None = None
         try:
             while self._server_running:
-                tpkt_header = await reader.readexactly(4)
+                try:  # FIXED: TCP connection had no read timeout (Slowloris vulnerability)
+                    tpkt_header = await asyncio.wait_for(reader.readexactly(4), timeout=30.0)
+                except asyncio.TimeoutError:
+                    break
                 if len(tpkt_header) < 4:
                     break
                 if tpkt_header[0] != 0x03:

@@ -369,9 +369,15 @@ function connectWebSocket() {
       if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
         const delay = wsReconnectDelay
         wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
-        wsReconnectTimer = setTimeout(async () => {
-          await api.ensureValidToken().catch(() => {})
-          connectWebSocket()
+        wsReconnectTimer = setTimeout(async () => {  // FIXED: WS reconnect was infinite loop when token expired
+          const valid = await api.ensureValidToken().catch(() => false)
+          if (valid) {
+            connectWebSocket()
+          } else {
+            loggedIn.value = false
+            localStorage.removeItem('token')
+            localStorage.removeItem('refresh_token')
+          }
         }, delay)
       }
     }

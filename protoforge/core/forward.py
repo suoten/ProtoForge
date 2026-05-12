@@ -2,7 +2,7 @@ import asyncio
 import ipaddress
 import json
 import logging
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
+import socket  # FIXED: socket.gaierror was referenced without importing socket
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional
@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 from protoforge.core.log_bus import LogBus, LogEntry
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,7 @@ def _is_url_allowed(url: str) -> tuple[bool, str]:
         if not hostname:
             return False, "URL has no hostname"
         try:
-            resolved_ips = __import__('socket').getaddrinfo(hostname, None)
+            resolved_ips = socket.getaddrinfo(hostname, None)
         except socket.gaierror:
             return False, f"Cannot resolve hostname: {hostname}"
         for family, _, _, _, sockaddr in resolved_ips:

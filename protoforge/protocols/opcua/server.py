@@ -378,9 +378,13 @@ class OpcUaServer(ProtocolServer):
         if not self._server:
             return
         behavior = self._behaviors.get(config.id)
-        device_folder = await self._server.nodes.objects.add_object(
-            self._idx, config.name
-        )
+        try:
+            device_folder = await self._server.nodes.objects.add_object(
+                self._idx, config.name
+            )
+        except Exception as e:
+            logger.error("Failed to create OPC-UA device folder for %s: %s", config.id, e)
+            return
         point_nodes = {}
         if not ASYNCUA_AVAILABLE:
             logger.warning("asyncua not available, cannot create OPC-UA device nodes")
@@ -397,18 +401,21 @@ class OpcUaServer(ProtocolServer):
             "string": ua.VariantType.String,
         }
         for point in config.points:
-            value = behavior.get_value(point.name) if behavior else 0
-            variant_type = type_map.get(point.data_type.value, None)
-            if variant_type:
-                node = await device_folder.add_variable(
-                    self._idx, point.name, ua.Variant(value, variant_type)
-                )
-            else:
-                node = await device_folder.add_variable(
-                    self._idx, point.name, value
-                )
-            if point.access and "w" in point.access:
-                await node.set_writable()
-            point_nodes[point.name] = node
-            self._point_nodes[f"{config.id}.{point.name}"] = node
+            try:
+                value = behavior.get_value(point.name) if behavior else 0
+                variant_type = type_map.get(point.data_type.value, None)
+                if variant_type:
+                    node = await device_folder.add_variable(
+                        self._idx, point.name, ua.Variant(value, variant_type)
+                    )
+                else:
+                    node = await device_folder.add_variable(
+                        self._idx, point.name, value
+                    )
+                if point.access and "w" in point.access:
+                    await node.set_writable()
+                point_nodes[point.name] = node
+                self._point_nodes[f"{config.id}.{point.name}"] = node
+            except Exception as e:
+                logger.warning("Failed to create OPC-UA point %s.%s: %s", config.id, point.name, e)
         self._device_nodes[config.id] = {"folder": device_folder, "points": point_nodes}

@@ -396,7 +396,7 @@ class GB28181Server(ProtocolServer):
         while self._status == ProtocolStatus.RUNNING:
             for gb_device in self._gb_devices.values():
                 await self._send_keepalive(gb_device)
-            refresh_interval = max(60, min(gb_device.expires for gb_device in self._gb_devices.values()) // 2) if self._gb_devices else 1800
+            refresh_interval = max(60, min((gb_device.expires for gb_device in self._gb_devices.values()), default=3600) // 2)
             await asyncio.sleep(refresh_interval)
 
     async def _send_keepalive(self, gb_device) -> None:

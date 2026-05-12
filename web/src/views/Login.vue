@@ -83,7 +83,7 @@ async function handleLogin() {
     message.success(t('login.loginSuccess'))
     emit('login-success', res)
   } catch (e) {
-    message.error(t('login.loginFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('login.loginFailed') + ': ' + (e.response?.data?.detail || e.message || 'Unknown error'))  // FIXED: error message was undefined on network/CORS errors
   } finally {
     loading.value = false
   }

@@ -84,7 +84,7 @@ def _check_role(request: Request, allowed_roles: list[str]) -> Optional[JSONResp
     if user_role not in allowed_roles:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            content={"code": 403, "data": None, "message": f"角色 '{user_role}' 无权执行此操作", "detail": f"Role '{user_role}' not allowed for this operation", "timestamp": int(time.time() * 1000)},
+            content={"code": 403, "data": None, "message": f"Role '{user_role}' not allowed for this operation", "detail": f"Role '{user_role}' not allowed for this operation", "timestamp": int(time.time() * 1000)},  # FIXED: hardcoded Chinese
         )
     return None
 
@@ -123,7 +123,7 @@ async def auth_middleware(request: Request, call_next):
     token = auth_header[7:]
     payload, reason = verify_token_with_reason(token)
     if payload is None:
-        detail = "Token已过期，请重新登录" if reason == "token_expired" else "无效的认证令牌"
+        detail = "Token expired, please log in again" if reason == "token_expired" else "Invalid authentication token"  # FIXED: hardcoded Chinese
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"code": 401, "data": None, "message": detail, "detail": detail, "reason": reason, "timestamp": int(time.time() * 1000)},

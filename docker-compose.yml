@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: protoforge
       POSTGRES_USER: protoforge
-      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:-protoforge}
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
@@ -47,9 +47,9 @@ services:
       - "34980:34980"
       - "50051:50051"
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge
-      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-protoforge-jwt-secret-change-me-in-production}
-      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}@postgres:5432/protoforge
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?PROTOFORGE_JWT_SECRET must be set}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?PROTOFORGE_ADMIN_PASSWORD must be set}
       PROTOFORGE_LOG_LEVEL: info
       PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}
     depends_on:
@@ -63,7 +63,7 @@ services:
     build: .
     command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge}@postgres:5432/protoforge_test
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"
     depends_on:
       init-test-db:

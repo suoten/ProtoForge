@@ -144,23 +144,23 @@ def _validate_setting(key: str, value: Any) -> str | None:
         try:
             p = int(value)
             if not (1 <= p <= 65535):
-                return f"端口号必须在 1-65535 之间，当前值: {p}"
+                return f"Port must be between 1 and 65535, got: {p}"  # FIXED: hardcoded Chinese
         except (ValueError, TypeError):
-            return f"端口号必须为整数，当前值: {value}"
+            return f"Port must be an integer, got: {value}"  # FIXED: hardcoded Chinese
     if key.endswith("_port") and key != "modbus_rtu_port":
         try:
             p = int(value)
             if not (1 <= p <= 65535):
-                return f"端口号必须在 1-65535 之间，当前值: {p}"
+                return f"Port must be between 1 and 65535, got: {p}"  # FIXED: hardcoded Chinese
         except (ValueError, TypeError):
-            return f"端口号必须为整数，当前值: {value}"
+            return f"Port must be an integer, got: {value}"  # FIXED: hardcoded Chinese
     if key == "log_level":
         valid_levels = {"debug", "info", "warning", "error", "critical"}
         if str(value).lower() not in valid_levels:
-            return f"日志级别必须为 {', '.join(valid_levels)} 之一，当前值: {value}"
+            return f"Log level must be one of {', '.join(valid_levels)}, got: {value}"  # FIXED: hardcoded Chinese
     if key == "host" and value:
         if not isinstance(value, str) or not value.strip():
-            return "主机地址不能为空"
+            return "Host address cannot be empty"  # FIXED: hardcoded Chinese
     return None
 
 

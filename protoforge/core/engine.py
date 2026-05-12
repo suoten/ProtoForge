@@ -185,8 +185,11 @@ class SimulationEngine:
 
         server = self._protocol_servers.get(config.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
-            await server.create_device(config)
-            instance.start()
+            try:  # FIXED: create_device on running server had no exception handling
+                await server.create_device(config)
+                instance.start()
+            except Exception as e:
+                logger.warning("Failed to sync device %s to protocol server: %s", config.id, e)
 
         if self._event_bus:
             await self._event_bus.publish_safe(DeviceCreatedEvent(
@@ -234,7 +237,10 @@ class SimulationEngine:
 
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
-            await server.remove_device(device_id)
+            try:  # FIXED: remove_device on running server had no exception handling
+                await server.remove_device(device_id)
+            except Exception as e:
+                logger.warning("Failed to remove device %s from protocol server: %s", device_id, e)
 
         instance.stop()
 

@@ -185,7 +185,7 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
     from protoforge.config import get_settings
     min_length = get_settings().min_password_length
     if len(password) < min_length:
-        return False, f"密码长度至少{min_length}位"
+        return False, f"Password must be at least {min_length} characters"  # FIXED: hardcoded Chinese
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_digit = any(c.isdigit() for c in password)
@@ -194,14 +194,14 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
     if categories < 3:
         missing = []
         if not has_upper:
-            missing.append("大写字母")
+            missing.append("uppercase letter")
         if not has_lower:
-            missing.append("小写字母")
+            missing.append("lowercase letter")
         if not has_digit:
-            missing.append("数字")
+            missing.append("digit")
         if not has_special:
-            missing.append("特殊字符")
-        return False, f"密码需包含大写字母、小写字母、数字、特殊字符中的至少3种，当前缺少：{'、'.join(missing)}"
+            missing.append("special character")
+        return False, f"Password must contain at least 3 of: uppercase, lowercase, digit, special character. Missing: {', '.join(missing)}"  # FIXED: hardcoded Chinese
     return True, ""
 
 
@@ -373,7 +373,7 @@ class UserManager:
     async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False, "原密码错误"
+            return False, "Incorrect current password"  # FIXED: hardcoded Chinese
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -385,7 +385,7 @@ class UserManager:
             except Exception as e:
                 logger.error("Failed to update user password for %s: %s", username, e)
                 user.password_hash = old_hash
-                return False, "密码更新失败，请稍后重试"
+                return False, "Password update failed, please try again later"  # FIXED: hardcoded Chinese
         return True, ""
 
     async def reset_login_attempts(self, username: str) -> bool:
@@ -404,7 +404,7 @@ class UserManager:
     async def admin_reset_password(self, username: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user:
-            return False, "用户不存在"
+            return False, "User not found"  # FIXED: hardcoded Chinese
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -422,7 +422,7 @@ class UserManager:
                 user.password_hash = old_hash
                 user.login_attempts = old_attempts
                 user.locked_until = old_locked
-                return False, "密码重置失败，请稍后重试"
+                return False, "Password reset failed, please try again later"  # FIXED: hardcoded Chinese
         return True, ""
 
     async def update_user_role(self, username: str, new_role: str) -> bool:

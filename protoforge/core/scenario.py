@@ -101,6 +101,8 @@ class Scenario:
         return False
 
     def _check_value_change(self, rule: Rule) -> bool:
+        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+            return False
         source = self._devices.get(rule.source_device_id)
         if not source or source.status != DeviceStatus.ONLINE:
             return False
@@ -125,6 +127,8 @@ class Scenario:
         return False
 
     def _check_timer(self, rule: Rule) -> bool:
+        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+            return False
         if not self._start_time:
             return False
         interval = rule.condition.get("interval", 60)
@@ -139,6 +143,8 @@ class Scenario:
         return False
 
     def _check_script(self, rule: Rule) -> bool:
+        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+            return False
         source = self._devices.get(rule.source_device_id)
         if not source or source.status != DeviceStatus.ONLINE:
             return False
@@ -159,6 +165,8 @@ class Scenario:
         return False
 
     def _check_cooldown(self, rule: Rule) -> bool:
+        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+            return True
         cooldown = rule.condition.get("cooldown", 0)
         if cooldown <= 0:
             return True
@@ -177,7 +185,7 @@ class Scenario:
         if not target or target.status != DeviceStatus.ONLINE:
             return
         value = rule.target_value
-        action_type = rule.condition.get("action", "set")
+        action_type = (rule.condition or {}).get("action", "set")
         if action_type == "toggle":
             current = target.read_point(rule.target_point)
             if current and isinstance(current.value, bool):
@@ -189,7 +197,7 @@ class Scenario:
                 value = True
         elif action_type == "increment":
             current = target.read_point(rule.target_point)
-            step = rule.condition.get("step", 1)
+            step = (rule.condition or {}).get("step", 1)
             try:
                 value = (float(current.value) if current else 0) + step
             except (ValueError, TypeError):
@@ -197,7 +205,7 @@ class Scenario:
                 return
         elif action_type == "decrement":
             current = target.read_point(rule.target_point)
-            step = rule.condition.get("step", 1)
+            step = (rule.condition or {}).get("step", 1)
             try:
                 value = (float(current.value) if current else 0) - step
             except (ValueError, TypeError):

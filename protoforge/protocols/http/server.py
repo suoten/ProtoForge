@@ -83,7 +83,10 @@ class HttpSimulatorServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         try:
             while self._server_running:
-                request_line = await reader.readline()
+                try:  # FIXED: TCP connection had no read timeout (Slowloris vulnerability)
+                    request_line = await asyncio.wait_for(reader.readline(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    break
                 if not request_line:
                     break
                 request_str = request_line.decode("utf-8", errors="replace").strip()
@@ -105,7 +108,10 @@ class HttpSimulatorServer(ProtocolServer):
                     if ":" in line_str:
                         key, val = line_str.split(":", 1)
                         headers[key.strip().lower()] = val.strip()
-                content_length = int(headers.get("content-length", "0"))
+                try:  # FIXED: content-length parsing had no exception handling
+                    content_length = int(headers.get("content-length", "0"))
+                except (ValueError, TypeError):
+                    content_length = 0
                 body = b""
                 if content_length > 0:
                     body = await reader.readexactly(content_length)

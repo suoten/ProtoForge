@@ -721,6 +721,7 @@ const messages = {
       title: '协议服务',
       subtitle: '点击「一键启动」即可使用默认配置启动协议',
       startAll: '全部启动',
+      stopAll: '全部停止',
       running: '运行中',
       stopped: '已停止',
       port: '端口',

@@ -213,8 +213,8 @@ export default {
   instantiateTemplate: (id, params) => {
     const genId = () => 'dev-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
     if (!params) return d(api.post(`/templates/${id}/instantiate`, null, { params: { device_id: genId(), device_name: 'Device' } }))
-    const { device_id, device_name, protocol_config, ...rest } = params
-    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || genId(), device_name: device_name || 'Device', ...rest } }))
+    const { device_id, device_name, protocol_config } = params
+    return d(api.post(`/templates/${id}/instantiate`, protocol_config ? { protocol_config } : null, { params: { device_id: device_id || genId(), device_name: device_name || 'Device' } }))
   },
 
   getScenarios: () => d(api.get('/scenarios')).then(r => normalizeList(r, 'scenarios')),
@@ -268,6 +268,7 @@ export default {
     const payload = { ...data }
     if (payload.config && !payload.driver_config) {
       payload.driver_config = payload.config
+      delete payload.config
     }
     return d(api.post('/integration/validate', payload))
   },
@@ -370,7 +371,7 @@ export default {
 
   queryAuditLog: (params) => d(api.get('/audit', { params })),
   getAuditStats: () => d(api.get('/audit/stats')),
-  deleteAuditEntry: (id) => d(api.delete(`/audit/${id}`)),
+  deleteAuditEntry: (id) => d(api.delete(`/audit/${Number(id)}`)),
   clearAuditLog: (before) => d(api.delete('/audit', { params: before ? { before } : {} })),
 
   exportBackup: () => api.get('/backup', { responseType: 'blob' }).then(r => {
