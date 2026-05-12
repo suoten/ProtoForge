@@ -861,7 +861,7 @@ async function pushDevice(deviceId) {
         const res = await api.pushToEdgelite(deviceId)
         if (res.skipped) {
           const reason = res.reason || ''
-          if (reason.includes('not supported') || reason.includes('不支持') || reason.includes('NOT_SUPPORTED')) { message.warning(t('integration.protocolNotSupported')); return }
+          if (res.error_type === 'unsupported' || reason.includes('not supported') || reason.includes('NOT_SUPPORTED')) { message.warning(t('integration.protocolNotSupported')); return }
           message.warning(t('integration.deviceNotConfiguredEdgeLite')); return
         }
         if (!res.ok) {

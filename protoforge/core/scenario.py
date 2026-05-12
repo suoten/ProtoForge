@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from protoforge.core.device import DeviceInstance
 from protoforge.core.generator import DataGenerator
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class Scenario:
-    def __init__(self, config: ScenarioConfig):
+    def __init__(self, config: ScenarioConfig, on_write_point: Callable[[str, str, Any], Any] | None = None):
         self.config = config
         self._status: ScenarioStatus = ScenarioStatus.STOPPED
         self._devices: dict[str, DeviceInstance] = {}
@@ -20,6 +20,7 @@ class Scenario:
         self._start_time: Optional[float] = None
         self._last_trigger: dict[str, float] = {}
         self._prev_values: dict[str, Any] = {}
+        self._on_write_point = on_write_point
 
     @property
     def id(self) -> str:
@@ -205,6 +206,14 @@ class Scenario:
         success = await target.write_point(rule.target_point, value)
         if success:
             logger.info("Rule %s triggered: %s.%s = %s", rule.id, rule.target_device_id, rule.target_point, value)
+            if self._on_write_point:
+                try:
+                    await self._on_write_point(rule.target_device_id, rule.target_point, value)
+                except Exception as e:
+                    logger.warning(
+                        "Rule %s: failed to propagate write to protocol server for %s.%s: %s",
+                        rule.id, rule.target_device_id, rule.target_point, e,
+                    )
             self._notify_webhook(rule, value)
 
     def _notify_webhook(self, rule: Rule, value: Any) -> None:

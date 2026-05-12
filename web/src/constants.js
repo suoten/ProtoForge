@@ -86,6 +86,7 @@ export const defaultPorts = {
   modbus_tcp: 5020,
   modbus_rtu: '/dev/ttyUSB0',
   opcua: 4840,
+  opcua_client: 4840,
   mqtt: 1883,
   http: 8080,
   gb28181: 5060,
@@ -100,6 +101,25 @@ export const defaultPorts = {
   toledo: 1701,
   profinet: 34964,
   ethercat: 34980,
+}
+
+export async function fetchDefaultPorts() {
+  try {
+    const api = (await import('./api.js')).default
+    const info = await api.getProtocolInfo()
+    if (info && Array.isArray(info)) {
+      const ports = {}
+      for (const p of info) {
+        if (p.name && p.default_port !== undefined) {
+          ports[p.name] = p.default_port
+        }
+      }
+      return ports
+    }
+  } catch (e) {
+    // fallback to static defaults
+  }
+  return { ...defaultPorts }
 }
 
 export const deviceStatusMap = {

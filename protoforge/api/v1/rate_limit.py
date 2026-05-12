@@ -69,7 +69,9 @@ def _get_rate_limits():
             RateLimiter(max_requests=getattr(s, 'rate_limit_max_requests', 100), window_seconds=getattr(s, 'rate_limit_window_seconds', 60)),
             RateLimiter(max_requests=getattr(s, 'rate_limit_auth_max_requests', 10), window_seconds=getattr(s, 'rate_limit_auth_window_seconds', 60)),
         )
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to load rate limit settings, using defaults: %s", e)
         return RateLimiter(max_requests=100, window_seconds=60), RateLimiter(max_requests=10, window_seconds=60)
 
 _default_limiter, _auth_limiter = _get_rate_limits()
@@ -99,8 +101,9 @@ async def rate_limit_middleware(request: Request, call_next):
             status_code=429,
             content={
                 "code": 429,
-                "message": "请求过于频繁，请稍后再试",
-                "detail": "请求过于频繁，请稍后再试",
+                "error_code": "RATE_LIMITED",
+                "message": "Too many requests, please try again later",
+                "detail": "Too many requests, please try again later",
                 "data": None,
                 "retry_after": retry_after,
                 "timestamp": int(time.time() * 1000),

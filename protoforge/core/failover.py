@@ -16,7 +16,8 @@ class FailoverManager:
         try:
             from protoforge.config import get_settings
             self._health_check_interval = get_settings().failover_interval
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to load failover interval from config, using default 10s: %s", e)
             self._health_check_interval = 10
         self._health_check_task: Optional[asyncio.Task] = None
         self._on_failover_callbacks = []
@@ -65,7 +66,8 @@ class FailoverManager:
         try:
             from protoforge.config import get_settings
             max_failures = get_settings().failover_max_failures
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to load failover max_failures from config, using default 3: %s", e)
             max_failures = 3
         while True:
             try:

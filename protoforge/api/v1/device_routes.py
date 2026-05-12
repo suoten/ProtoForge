@@ -45,6 +45,10 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
             db_ok = False
             db_err_msg = str(db_err)
             logger.error("Failed to save device %s to DB: %s", config.id, db_err)
+        try:
+            await engine.start_device(config.id)
+        except Exception as start_err:
+            logger.warning("Device %s created but auto-start failed: %s", config.id, start_err)
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {config.name} created", {"device_id": config.id})
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
@@ -135,6 +139,10 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
                 except Exception as db_err:
                     db_ok = False
                     logger.error("Failed to persist device %s: %s", config.id, db_err)
+            try:
+                await engine.start_device(config.id)
+            except Exception as start_err:
+                logger.warning("Device %s batch-created but auto-start failed: %s", config.id, start_err)
             item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
             if not db_ok:
                 item["_persistence_warning"] = "数据持久化失败，重启后数据将丢失"

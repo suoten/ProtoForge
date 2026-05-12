@@ -235,13 +235,16 @@ class UserManager:
             default_password = get_settings().admin_password
             if not default_password:
                 default_password = None
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to load admin password from config: %s", e)
             default_password = None
         if not default_password:
-            default_password = "admin"
+            default_password = secrets.token_urlsafe(16)
             logger.warning(
-                "Admin account is using the default password 'admin'. "
-                "Set the PROTOFORGE_ADMIN_PASSWORD environment variable to a strong password before deployment."
+                "SECURITY: No admin password configured. A random password has been generated. "
+                "Set the PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control. "
+                "Generated admin password (save this now, it will not be shown again): %s",
+                default_password,
             )
         admin_hash = hash_password(default_password)
         admin_user = User(
