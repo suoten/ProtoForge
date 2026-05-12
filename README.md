@@ -4,11 +4,11 @@
 
 **物联网协议仿真与测试平台**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
-[![Vue3](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
-[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg)](https://naiveui.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python"></a>
+<a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.115+-green.svg" alt="FastAPI"></a>
+<a href="https://vuejs.org"><img src="https://img.shields.io/badge/Vue-3.x-brightgreen.svg" alt="Vue3"></a>
+<a href="https://naiveui.com"><img src="https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg" alt="Naive UI"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License"></a>
 
 [English](#english) | [中文](#中文)
 
