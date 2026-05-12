@@ -626,6 +626,17 @@ _PROTOCOL_DEFAULT_PORTS = {
 }
 
 
+def _get_default_port(protocol: str) -> int:
+    try:
+        from protoforge.config import get_protocol_port_map
+        port_map = get_protocol_port_map()
+        if protocol in port_map:
+            return port_map[protocol].get("port", _PROTOCOL_DEFAULT_PORTS.get(protocol, 0))
+    except Exception:
+        pass
+    return _PROTOCOL_DEFAULT_PORTS.get(protocol, 0)
+
+
 def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[str, str]:
     if not isinstance(driver_config, dict):
         return ("", "")
@@ -689,7 +700,7 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
 def _build_connect_error(driver_config: dict, protocol: str, protoforge_running: bool, same_server: bool = False) -> dict[str, Any]:
     driver_host, driver_port = _extract_driver_host_port(driver_config, protocol)
     proto_name = _PROTOCOL_DISPLAY.get(protocol, protocol.upper())
-    default_port = _PROTOCOL_DEFAULT_PORTS.get(protocol, "")
+    default_port = _get_default_port(protocol)
 
     parts = []
     if not protoforge_running:

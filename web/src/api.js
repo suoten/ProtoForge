@@ -55,13 +55,13 @@ api.interceptors.response.use(
       response.data = {}
     }
     if (response.data && response.data._persistence_warning) {
-      _notifyUser(response.data._persistence_warning, 'warning')
+      _notifyUser('warning', 'common.persistenceWarning', { detail: response.data._persistence_warning })
       delete response.data._persistence_warning
     }
     if (Array.isArray(response.data)) {
       for (let i = response.data.length - 1; i >= 0; i--) {
         if (response.data[i] && response.data[i]._persistence_warning) {
-          _notifyUser(response.data[i]._persistence_warning, 'warning')
+          _notifyUser('warning', 'common.persistenceWarning', { detail: response.data[i]._persistence_warning })
           delete response.data[i]._persistence_warning
         }
       }

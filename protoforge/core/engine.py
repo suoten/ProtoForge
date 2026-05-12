@@ -5,7 +5,7 @@ import socket
 from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
-from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent
+from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent, ProtocolStatusEvent
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
@@ -140,6 +140,19 @@ class SimulationEngine:
                     pass
                 raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
             logger.info("Protocol %s started", protocol_name)
+            for dev_id, instance in list(self._devices.items()):
+                if instance.protocol == protocol_name:
+                    try:
+                        await server.create_device(instance.config)
+                        logger.info("Re-registered device %s to newly started protocol %s", dev_id, protocol_name)
+                    except Exception as reg_err:
+                        logger.debug("Device %s already registered or registration failed: %s", dev_id, reg_err)
+            if self._event_bus:
+                await self._event_bus.publish_safe(ProtocolStatusEvent(
+                    protocol_name=protocol_name,
+                    old_status="stopped",
+                    new_status="running",
+                ))
         except Exception as e:
             logger.error("Failed to start protocol %s: %s", protocol_name, e)
             raise RuntimeError(f"Failed to start protocol {protocol_name}: {e}") from e
@@ -151,6 +164,12 @@ class SimulationEngine:
         try:
             await server.stop()
             logger.info("Protocol %s stopped", protocol_name)
+            if self._event_bus:
+                await self._event_bus.publish_safe(ProtocolStatusEvent(
+                    protocol_name=protocol_name,
+                    old_status="running",
+                    new_status="stopped",
+                ))
         except Exception as e:
             logger.error("Failed to stop protocol %s: %s", protocol_name, e)
             raise RuntimeError(f"Failed to stop protocol {protocol_name}: {e}") from e
@@ -366,6 +385,25 @@ class SimulationEngine:
         instance = self._devices.get(device_id)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
+        server = self._protocol_servers.get(instance.protocol)
+        if server and server.status == ProtocolStatus.RUNNING:
+            try:
+                proto_points = await server.read_points(device_id)
+                if proto_points:
+                    proto_map = {p.name: p for p in proto_points}
+                    memory_points = instance.read_all_points()
+                    merged = []
+                    for mp in memory_points:
+                        if mp.name in proto_map:
+                            merged.append(proto_map[mp.name])
+                        else:
+                            merged.append(mp)
+                    return merged
+            except Exception as e:
+                logger.warning(
+                    "Failed to read points from protocol server for %s, falling back to memory: %s",
+                    device_id, e,
+                )
         return instance.read_all_points()
 
     async def write_device_point(self, device_id: str, point_name: str, value: Any) -> bool:
@@ -453,7 +491,7 @@ class SimulationEngine:
         if not config:
             raise ValueError(f"Scenario not found: {scenario_id}")
 
-        scenario = Scenario(config)
+        scenario = Scenario(config, on_write_point=self.write_device_point)
         self._scenario_status[scenario_id] = ScenarioStatus.STARTING
 
         try:

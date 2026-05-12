@@ -17,7 +17,8 @@
     <div style="height: 600px; border: 1px solid #e0e0e0; border-radius: 4px;">
       <VueFlow v-model:nodes="nodes" v-model:edges="edges" :default-viewport="{ zoom: 0.8 }"
         :min-zoom="0.3" :max-zoom="2" fit-view-on-init @connect="onConnect"
-        @node-double-click="onNodeDoubleClick">
+        @node-double-click="onNodeDoubleClick"
+        @edge-double-click="onEdgeDoubleClick">
         <Background :gap="20" />
         <Controls />
         <MiniMap />
@@ -171,6 +172,7 @@ const showPointsModal = ref(false)
 const saving = ref(false)
 const scenarioLoading = ref(false)
 const hasUnsavedChanges = ref(false)
+const editingEdgeId = ref(null)
 const devices = ref([])
 const templates = ref([])
 const protocols = ref([])
@@ -218,6 +220,8 @@ const generatorOptions = generatorTypeOptions
 
 function onConnect(params) {
   pendingConnection.value = params
+  editingEdgeId.value = null
+  newRule.value = { name: '', ruleType: 'threshold', sourcePoint: 'value', operator: '>', threshold: 0, targetPoint: 'alarm', targetValue: 'true', cooldown: 0 }
   showRuleModal.value = true
 }
 
@@ -226,6 +230,23 @@ function onNodeDoubleClick({ node }) {
   editingDevice.value = { nodeId: node.id, label: deviceData.label, deviceId: deviceData.deviceId }
   editingPoints.value = (deviceData.points || [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }]).map(p => ({ ...p }))
   showPointsModal.value = true
+}
+
+function onEdgeDoubleClick({ edge }) {
+  const rule = edge.data?.rule || {}
+  editingEdgeId.value = edge.id
+  const condition = rule.condition || {}
+  newRule.value = {
+    name: rule.name || edge.data?.label || '',
+    ruleType: rule.rule_type || rule.ruleType || 'threshold',
+    sourcePoint: rule.source_point || rule.sourcePoint || 'value',
+    operator: condition.operator || rule.operator || '>',
+    threshold: condition.value ?? rule.threshold ?? 0,
+    targetPoint: rule.target_point || rule.targetPoint || 'alarm',
+    targetValue: rule.target_value ?? rule.targetValue ?? 'true',
+    cooldown: condition.cooldown ?? rule.cooldown ?? 0,
+  }
+  showRuleModal.value = true
 }
 
 function addPoint() {
@@ -244,12 +265,23 @@ function savePoints() {
 }
 
 function confirmRule() {
-  if (pendingConnection.value) {
+  const ruleLabel = `${newRule.value.name}: ${newRule.value.sourcePoint} ${newRule.value.operator} ${newRule.value.threshold}`
+  if (editingEdgeId.value) {
+    const edge = edges.value.find(e => e.id === editingEdgeId.value)
+    if (edge) {
+      edge.data = {
+        ...edge.data,
+        label: ruleLabel,
+        rule: { ...newRule.value },
+      }
+    }
+    editingEdgeId.value = null
+  } else if (pendingConnection.value) {
     addEdges([{
       ...pendingConnection.value,
       type: 'rule',
       data: {
-        label: `${newRule.value.name}: ${newRule.value.sourcePoint} ${newRule.value.operator} ${newRule.value.threshold}`,
+        label: ruleLabel,
         rule: { ...newRule.value },
       },
       animated: true,
@@ -377,7 +409,7 @@ async function saveScenarioLayout() {
       } catch (e) {
         const status = e.response?.status
         const detail = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : JSON.stringify(e.response?.data?.detail || '')
-        if (status === 400 && (detail.includes('already exists') || detail.includes('已存在') || detail.includes('ALREADY_EXISTS'))) {
+        if (status === 400 && (detail.includes('already exists') || detail.includes('ALREADY_EXISTS') || e.response?.data?.error_code === 'ALREADY_EXISTS')) {
           try {
             await api.updateDevice(dc.id, {
               id: dc.id, name: dc.name, protocol: dc.protocol,

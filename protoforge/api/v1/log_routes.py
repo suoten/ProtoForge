@@ -95,6 +95,11 @@ async def ws_devices(websocket: WebSocket):
     from protoforge.api.v1._helpers import _get_engine
     engine = _get_engine()
 
+    event_bus = getattr(engine, '_event_bus', None)
+    proto_queue = None
+    if event_bus:
+        proto_queue = event_bus.subscribe("ProtocolStatusEvent")
+
     try:
         while True:
             devices = engine.list_devices()
@@ -106,6 +111,22 @@ async def ws_devices(websocket: WebSocket):
                     logger.debug("Device serialization fallback: %s", exc)
                     data.append({"id": d.id, "name": d.name, "protocol": d.protocol, "status": d.status.value})
             await websocket.send_json({"type": "devices", "data": data})
+
+            if proto_queue:
+                try:
+                    event = await asyncio.wait_for(proto_queue.get(), timeout=0.1)
+                    await websocket.send_json({
+                        "type": "protocol_status",
+                        "data": {
+                            "protocol_name": event.protocol_name,
+                            "old_status": event.old_status,
+                            "new_status": event.new_status,
+                        },
+                    })
+                except asyncio.TimeoutError:
+                    pass
+                except Exception as exc:
+                    logger.debug("Protocol event send failed: %s", exc)
 
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
@@ -119,6 +140,9 @@ async def ws_devices(websocket: WebSocket):
         logger.debug("WebSocket /ws/devices disconnected")
     except Exception as e:
         logger.warning("WebSocket /ws/devices error: %s", e)
+    finally:
+        if event_bus and proto_queue:
+            event_bus.unsubscribe("ProtocolStatusEvent", proto_queue)
 
 
 @router.websocket("/ws/logs")

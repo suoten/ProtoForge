@@ -560,12 +560,36 @@ class TestRunner:
         try:
             reports = await self._db.load_test_reports(count=100)
             for r in reports:
+                test_cases = []
+                for tc_data in r.get("test_cases", []):
+                    tc = TestCase(
+                        id=tc_data.get("id", uuid.uuid4().hex[:12]),
+                        name=tc_data.get("name", ""),
+                        description=tc_data.get("description", ""),
+                        status=TestStatus(tc_data.get("status", "pending")),
+                        start_time=tc_data.get("start_time", 0),
+                        end_time=tc_data.get("end_time", 0),
+                        error=tc_data.get("error", ""),
+                    )
+                    for step_data in tc_data.get("steps", []):
+                        step = TestStep(
+                            name=step_data.get("name", ""),
+                            action=step_data.get("action", ""),
+                            status=TestStatus(step_data.get("status", "pending")),
+                            duration=step_data.get("duration", 0),
+                            error=step_data.get("error", ""),
+                            assertion_results=step_data.get("assertion_results", []),
+                            extracted_vars=step_data.get("extracted_vars", {}),
+                        )
+                        tc.steps.append(step)
+                    test_cases.append(tc)
                 report = TestReport(
                     id=r["id"], name=r["name"],
                     start_time=r.get("start_time", 0), end_time=r.get("end_time", 0),
                     total=r.get("total", 0), passed=r.get("passed", 0),
                     failed=r.get("failed", 0), errors=r.get("errors", 0),
                     skipped=r.get("skipped", 0), environment=r.get("environment", {}),
+                    test_cases=test_cases,
                 )
                 self._reports.append(report)
             logger.info("Restored %d test reports from database", len(reports))

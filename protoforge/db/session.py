@@ -42,13 +42,17 @@ class Database:
             await self._connect_sqlite()
 
     async def _connect_sqlite(self) -> None:
-        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._db = await aiosqlite.connect(self._db_path)
-        self._db.row_factory = aiosqlite.Row
-        await self._db.execute("PRAGMA journal_mode=WAL")
-        await self._db.execute("PRAGMA busy_timeout=5000")
-        await self._create_tables_sqlite()
-        logger.info("SQLite database connected: %s", self._db_path)
+        try:
+            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+            self._db = await aiosqlite.connect(self._db_path)
+            self._db.row_factory = aiosqlite.Row
+            await self._db.execute("PRAGMA journal_mode=WAL")
+            await self._db.execute("PRAGMA busy_timeout=5000")
+            await self._create_tables_sqlite()
+            logger.info("SQLite database connected: %s", self._db_path)
+        except Exception as e:
+            logger.error("Failed to connect to SQLite database at %s: %s", self._db_path, e)
+            raise RuntimeError(f"SQLite connection failed: {e}") from e
 
     async def _connect_postgres(self) -> None:
         try:
@@ -57,11 +61,15 @@ class Database:
             raise RuntimeError(
                 "PostgreSQL support requires asyncpg. Install it with: pip install asyncpg"
             )
-        self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10, autocommit=True)
-        self._is_postgres = True
-        async with self._pg_pool.acquire() as conn:
-            await self._create_tables_postgres(conn)
-        logger.info("PostgreSQL database connected")
+        try:
+            self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10, autocommit=True)
+            self._is_postgres = True
+            async with self._pg_pool.acquire() as conn:
+                await self._create_tables_postgres(conn)
+            logger.info("PostgreSQL database connected")
+        except Exception as e:
+            logger.error("Failed to connect to PostgreSQL database: %s", e)
+            raise RuntimeError(f"PostgreSQL connection failed: {e}") from e
 
     async def close(self) -> None:
         if self._is_postgres and self._pg_pool:

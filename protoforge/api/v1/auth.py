@@ -21,7 +21,7 @@ class RoleChecker:
 
     async def __call__(self, request: Request) -> dict:
         if is_no_auth():
-            return {"sub": "no-auth", "username": "admin", "role": "admin"}
+            return {"sub": "no-auth", "username": "anonymous", "role": "viewer"}
         payload = getattr(request.state, "user", None)
         if payload is None:
             raise HTTPException(

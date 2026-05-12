@@ -48,6 +48,13 @@ class IntegrationHealthAlertEvent(Event):
     detail: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ProtocolStatusEvent(Event):
+    protocol_name: str = ""
+    old_status: str = ""
+    new_status: str = ""
+
+
 class EventBus:
     def __init__(self, max_history: int = 5000):
         self._subscribers: dict[str, list[asyncio.Queue]] = {}
