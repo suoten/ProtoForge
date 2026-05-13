@@ -30,6 +30,8 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
             raise HTTPException(status_code=400, detail="url is required")
 
         url = config.get("url", "")
+        if not isinstance(url, str):  # FIXED: 校验url类型
+            raise HTTPException(status_code=400, detail="url must be a string")
         if not re.match(r'^https?://', url):
             raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
 
@@ -50,6 +52,8 @@ async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depen
         from protoforge.core.webhook import webhook_manager
 
         url = config.get("url", "")
+        if url is not None and not isinstance(url, str):  # FIXED: 校验url类型
+            raise HTTPException(status_code=400, detail="url must be a string")
         if url and not re.match(r'^https?://', url):
             raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
 

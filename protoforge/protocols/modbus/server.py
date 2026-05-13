@@ -106,17 +106,19 @@ class ModbusTcpServer(ProtocolServer):
             logger.error("Modbus native frame server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
+    _CONN_TIMEOUT = 30  # FIXED: 连接读取超时秒数，防止Slowloris攻击
+
     async def _handle_native_modbus(self, reader: asyncio.StreamReader,
                                      writer: asyncio.StreamWriter) -> None:
         try:
             while self._server_running:
-                header = await reader.readexactly(7)
+                header = await asyncio.wait_for(reader.readexactly(7), timeout=self._CONN_TIMEOUT)  # FIXED: 添加读取超时
                 tx_id = struct.unpack(">H", header[0:2])[0]
                 proto_id = struct.unpack(">H", header[2:4])[0]
                 length = struct.unpack(">H", header[4:6])[0]
                 unit_id = header[6]
                 if length > 0:
-                    payload = await reader.readexactly(length - 1)
+                    payload = await asyncio.wait_for(reader.readexactly(length - 1), timeout=self._CONN_TIMEOUT)  # FIXED: 添加读取超时
                 else:
                     payload = b""
                 fc = payload[0] if payload else 0
@@ -124,7 +126,7 @@ class ModbusTcpServer(ProtocolServer):
                 mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
                 writer.write(mbap + resp)
                 await writer.drain()
-        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError):
+        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 添加TimeoutError捕获
             pass
         finally:
             writer.close()

@@ -17,7 +17,7 @@ async def list_scenarios(_user: dict = Depends(require_viewer)):
     return {"scenarios": engine.list_scenarios()}
 
 
-@router.post("/scenarios", response_model=ScenarioInfo)
+@router.post("/scenarios")  # FIXED: 移除response_model=ScenarioInfo，避免过滤_persistence_warning
 async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
     if not config.name or not config.name.strip():
         raise HTTPException(status_code=400, detail="场景名称不能为空")
@@ -88,7 +88,7 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/scenarios/{scenario_id}", response_model=ScenarioInfo)
+@router.put("/scenarios/{scenario_id}")  # FIXED: 移除response_model=ScenarioInfo，避免过滤_persistence_warning
 async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()

@@ -68,8 +68,11 @@ def _init_command():
     env_example = Path(".env.example")
     env_file = Path(".env")
     if env_example.exists() and not env_file.exists():
-        shutil.copy(env_example, env_file)
-        print("✓ 已从 .env.example 创建 .env 配置文件")
+        try:  # FIXED: 文件复制添加异常处理
+            shutil.copy(env_example, env_file)
+            print("✓ 已从 .env.example 创建 .env 配置文件")
+        except (OSError, PermissionError) as e:
+            print(f"⚠ 无法创建 .env 文件: {e}")
     print("✓ 数据目录已创建: data/")
     print("✓ 初始化完成！运行 'protoforge run' 启动服务")
     print("  或运行 'protoforge demo' 一键体验演示")

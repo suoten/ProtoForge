@@ -116,11 +116,11 @@ async def lifespan(app: FastAPI):
                 restored += 1
             except Exception as e:
                 dev.protocol_config.pop("_skip_auto_push", None)
-                logger.error("Failed to restore device %s: %s", dev.id, e)
+                logger.error("Failed to restore device %s: [%s] %s", dev.id, type(e).__name__, e)  # FIXED: 记录异常类型便于区分编程错误
         logger.info("Restored %d/%d devices from database", restored, len(saved_devices))
     except Exception as e:
         restore_errors.append(f"devices: {e}")
-        logger.error("Failed to load devices from database: %s", e)
+        logger.error("Failed to load devices from database: [%s] %s", type(e).__name__, e)  # FIXED: 记录异常类型
 
     try:
         saved_scenarios = await _database.load_all_scenarios()
@@ -128,7 +128,7 @@ async def lifespan(app: FastAPI):
             try:
                 _engine.create_scenario(sc)
             except Exception as e:
-                logger.error("Failed to restore scenario %s: %s", sc.id, e)
+                logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)  # FIXED: 记录异常类型
         logger.info("Restored %d scenarios from database", len(saved_scenarios))
     except Exception as e:
         restore_errors.append(f"scenarios: {e}")
@@ -140,7 +140,7 @@ async def lifespan(app: FastAPI):
             try:
                 _template_manager.add_template(tmpl)
             except Exception as e:
-                logger.error("Failed to restore template %s: %s", tmpl.id, e)
+                logger.error("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)  # FIXED: 记录异常类型
         logger.info("Restored %d templates from database", len(saved_templates))
     except Exception as e:
         restore_errors.append(f"templates: {e}")

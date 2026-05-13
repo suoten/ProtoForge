@@ -57,11 +57,14 @@ async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/templates", response_model=TemplateDetail)
+@router.post("/templates")  # FIXED: 移除response_model=TemplateDetail，避免过滤_persistence_warning
 async def create_template(template: TemplateDetail, _user: dict = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
-    tm.add_template(template)
+    try:  # FIXED: 添加异常处理
+        tm.add_template(template)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     db_ok = True
     db_err_msg = ""
@@ -86,7 +89,10 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
         tm.get_template(template_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    tm.remove_template(template_id)
+    try:  # FIXED: 添加异常处理
+        tm.remove_template(template_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     db_ok = True
     db_err_msg = ""
     if db:
