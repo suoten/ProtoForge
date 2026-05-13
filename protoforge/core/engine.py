@@ -28,11 +28,9 @@ def _validate_entity_id(entity_id: str, entity_type: str = "Entity") -> None:
 
 
 def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
-    for sock_type in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            with socket.socket(socket.AF_INET, sock_type) as s:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind((host, port))
+            s.bind((host, port))
         except OSError:
             return True
     return False
@@ -112,6 +110,9 @@ class SimulationEngine:
         server = self._protocol_servers.get(protocol_name)
         if not server:
             raise ValueError(f"Unknown protocol: {protocol_name}")
+        if server.status == ProtocolStatus.RUNNING:
+            logger.info("Protocol %s is already running, skipping", protocol_name)
+            return
         logger.info("Starting protocol %s with config: %s", protocol_name, {k: v for k, v in config.items() if k not in ("auth_password", "secret")})
         if "port" in config and isinstance(config["port"], int):
             if config["port"] < 1 or config["port"] > 65535:
@@ -125,6 +126,8 @@ class SimulationEngine:
                     original_port, protocol_name, new_port,
                 )
                 config["port"] = new_port
+                config["_port_changed"] = True
+                config["_original_port"] = original_port
         try:
             await server.start(config)
             for i in range(5):
@@ -132,7 +135,10 @@ class SimulationEngine:
                 if server.status == ProtocolStatus.ERROR:
                     break
             if server.status == ProtocolStatus.ERROR:
-                error_msg = "Protocol server entered ERROR state after start (likely port conflict or config error)"
+                port_info = ""
+                if "port" in config:
+                    port_info = f" (port {config['port']})"
+                error_msg = f"Protocol server entered ERROR state after start{port_info}. Possible causes: port conflict, permission denied, or config error. Check server logs for details."
                 logger.error("Protocol %s: %s", protocol_name, error_msg)
                 try:
                     await server.stop()

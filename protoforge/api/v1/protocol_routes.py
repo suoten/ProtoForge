@@ -51,6 +51,63 @@ async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(r
     return {"protocol": protocol_name, "fields": config}
 
 
+@router.post("/protocols/start-all")
+async def start_all_protocols(_user: dict = Depends(require_operator)):
+    engine = _get_engine()
+    log_bus = _get_log_bus()
+    from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
+    results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
+    for p in engine.get_protocols():
+        name = p.get("name", "")
+        if p.get("status") == "running":
+            results["skipped"].append(name)
+            continue
+        config = get_protocol_defaults(name)
+        original_port = config.get("port")
+        try:
+            await engine.start_protocol(name, config)
+            actual_port = config.get("port", original_port)
+            port_changed = config.pop("_port_changed", False)
+            config_original_port = config.pop("_original_port", None)
+            if not port_changed and original_port and actual_port != original_port:
+                port_changed = True
+                config_original_port = original_port
+            log_bus.emit(name, "system", "", "protocol_start", f"Protocol {name} started on port {actual_port}", config)
+            results["started"].append(name)
+            if port_changed:
+                results["port_warnings"].append({
+                    "protocol": name,
+                    "original_port": config_original_port or original_port,
+                    "actual_port": actual_port,
+                    "message": f"端口 {config_original_port or original_port} 被占用，已自动切换到 {actual_port}",
+                })
+        except Exception as e:
+            friendly = get_friendly_error(str(e))
+            results["failed"].append({"protocol": name, "error": friendly})
+            logger.warning("Failed to start protocol %s in start-all: %s", name, e)
+    return results
+
+
+@router.post("/protocols/stop-all")
+async def stop_all_protocols(_user: dict = Depends(require_operator)):
+    engine = _get_engine()
+    log_bus = _get_log_bus()
+    results = {"stopped": [], "failed": [], "skipped": []}
+    for p in engine.get_protocols():
+        name = p.get("name", "")
+        if p.get("status") != "running":
+            results["skipped"].append(name)
+            continue
+        try:
+            await engine.stop_protocol(name)
+            log_bus.emit(name, "system", "", "protocol_stop", f"Protocol {name} stopped")
+            results["stopped"].append(name)
+        except Exception as e:
+            results["failed"].append({"protocol": name, "error": str(e)})
+            logger.warning("Failed to stop protocol %s in stop-all: %s", name, e)
+    return results
+
+
 @router.post("/protocols/{protocol_name}/start")
 async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
@@ -63,25 +120,31 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
     try:
         await engine.start_protocol(protocol_name, config)
         actual_port = config.get("port", original_port)
-        port_changed = original_port and actual_port != original_port
+        port_changed = config.pop("_port_changed", False)
+        config_original_port = config.pop("_original_port", None)
+        if not port_changed and original_port and actual_port != original_port:
+            port_changed = True
+            config_original_port = original_port
         log_bus.emit(protocol_name, "system", "", "protocol_start", f"Protocol {protocol_name} started on port {actual_port}", config)
         result = {"status": "ok"}
 
         if port_changed:
             result["port_changed"] = True
-            result["original_port"] = original_port
+            result["original_port"] = config_original_port or original_port
             result["actual_port"] = actual_port
-            result["message"] = f"端口 {original_port} 被占用，已自动切换到 {actual_port}"
+            result["message"] = f"端口 {config_original_port or original_port} 被占用，已自动切换到 {actual_port}"
 
         return result
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        error_detail = str(e)
+        friendly = get_friendly_error(error_detail)
+        raise HTTPException(status_code=503, detail=friendly)
     except Exception as e:
         logger.error("Failed to start protocol %s: %s", protocol_name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
 
 
 @router.post("/protocols/{protocol_name}/stop")

@@ -176,24 +176,27 @@ async function startAll() {
     negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       startingAll.value = true
-      let portWarnings = []
-      let failCount = 0
       try {
-        for (const p of stopped) {
-          try {
-            const res = await api.startProtocol(p.name, null)
-            if (res.port_changed) portWarnings.push(`${p.display_name || p.name}: ${res.message}`)
-          } catch (e) { failCount++; message.warning(t('protocols.protocolStartFailed', { name: p.name }) + ': ' + (e.response?.data?.detail || e.message)) }
-        }
-        if (failCount > 0) {
-          message.warning(t('protocols.startAllPartial', { success: stopped.length - failCount, fail: failCount }))
-        } else {
-          message.success(t('protocols.startAllSuccess', { count: stopped.length }))
+        const res = await api.startAllProtocols()
+        const started = res.started || []
+        const failed = res.failed || []
+        const portWarnings = res.port_warnings || []
+        if (failed.length > 0) {
+          message.warning(t('protocols.startAllPartial', { success: started.length, fail: failed.length }))
+          for (const f of failed) {
+            message.error(`${f.protocol}: ${f.error}`, { duration: 8000 })
+          }
+        } else if (started.length > 0) {
+          message.success(t('protocols.startAllSuccess', { count: started.length }))
         }
         if (portWarnings.length > 0) {
-          message.warning(portWarnings.join('\n'), { duration: 8000 })
+          for (const w of portWarnings) {
+            message.warning(w.message, { duration: 8000 })
+          }
         }
         await loadData()
+      } catch (e) {
+        message.error(t('protocols.startFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { startingAll.value = false }
     }
   })
@@ -209,19 +212,21 @@ async function stopAll() {
     negativeText: t('common.cancel'),
     onPositiveClick: async () => {
       stoppingAll.value = true
-      let failCount = 0
       try {
-        for (const p of running) {
-          try {
-            await api.stopProtocol(p.name)
-          } catch (e) { failCount++; message.warning(t('protocols.protocolStopFailed', { name: p.name }) + ': ' + (e.response?.data?.detail || e.message)) }
-        }
-        if (failCount > 0) {
-          message.warning(t('protocols.stopAllPartial', { success: running.length - failCount, fail: failCount }))
-        } else {
-          message.success(t('protocols.stopAllSuccess', { count: running.length }))
+        const res = await api.stopAllProtocols()
+        const stopped = res.stopped || []
+        const failed = res.failed || []
+        if (failed.length > 0) {
+          message.warning(t('protocols.stopAllPartial', { success: stopped.length, fail: failed.length }))
+          for (const f of failed) {
+            message.error(`${f.protocol}: ${f.error}`, { duration: 6000 })
+          }
+        } else if (stopped.length > 0) {
+          message.success(t('protocols.stopAllSuccess', { count: stopped.length }))
         }
         await loadData()
+      } catch (e) {
+        message.error(t('protocols.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { stoppingAll.value = false }
     }
   })
