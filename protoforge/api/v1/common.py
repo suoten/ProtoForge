@@ -35,27 +35,27 @@ class ProtoForgeException(Exception):
 
 
 class NotFoundException(ProtoForgeException):
-    def __init__(self, message: str = "资源不存在"):
+    def __init__(self, message: str = "Resource not found"):  # FIXED: 中文→英文
         super().__init__(message=message, code=404, status_code=404)
 
 
 class ValidationException(ProtoForgeException):
-    def __init__(self, message: str = "参数校验失败"):
+    def __init__(self, message: str = "Validation failed"):  # FIXED: 中文→英文
         super().__init__(message=message, code=400, status_code=400)
 
 
 class UnauthorizedException(ProtoForgeException):
-    def __init__(self, message: str = "未授权"):
+    def __init__(self, message: str = "Unauthorized"):  # FIXED: 中文→英文
         super().__init__(message=message, code=401, status_code=401)
 
 
 class ForbiddenException(ProtoForgeException):
-    def __init__(self, message: str = "禁止访问"):
+    def __init__(self, message: str = "Forbidden"):  # FIXED: 中文→英文
         super().__init__(message=message, code=403, status_code=403)
 
 
 class ConflictException(ProtoForgeException):
-    def __init__(self, message: str = "资源冲突"):
+    def __init__(self, message: str = "Resource conflict"):  # FIXED: 中文→英文
         super().__init__(message=message, code=409, status_code=409)
 
 
@@ -92,7 +92,7 @@ def setup_exception_handlers(app) -> None:
         if "not initialized" in msg.lower():
             return JSONResponse(
                 status_code=503,
-                content=APIResponse.error(message="服务正在启动中，请稍后重试", code=503),
+                content=APIResponse.error(message="Service is starting up, please try again later", code=503),  # FIXED: 中文→英文
             )
         return JSONResponse(
             status_code=500,
@@ -106,5 +106,5 @@ def setup_exception_handlers(app) -> None:
         logger.exception("Unhandled exception in API: %s", exc)
         return JSONResponse(
             status_code=500,
-            content=APIResponse.error(message="服务器内部错误", code=500),
+            content=APIResponse.error(message="Internal server error", code=500),  # FIXED: 中文→英文
         )

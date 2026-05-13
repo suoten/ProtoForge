@@ -20,9 +20,9 @@ async def list_scenarios(_user: dict = Depends(require_viewer)):
 @router.post("/scenarios")  # FIXED: 移除response_model=ScenarioInfo，避免过滤_persistence_warning
 async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
     if not config.name or not config.name.strip():
-        raise HTTPException(status_code=400, detail="场景名称不能为空")
+        raise HTTPException(status_code=400, detail="Scenario name is required")  # FIXED: 中文→英文
     if not config.id or not config.id.strip():
-        raise HTTPException(status_code=400, detail="场景ID不能为空")
+        raise HTTPException(status_code=400, detail="Scenario ID is required")  # FIXED: 中文→英文
     engine = _get_engine()
     db = _get_database()
 
@@ -38,13 +38,13 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
             logger.error("Failed to persist scenario %s: %s", config.id, db_err)
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
-            resp["_persistence_warning"] = f"场景已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+            resp["_persistence_warning"] = f"Scenario created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/scenarios/{scenario_id}", response_model=ScenarioDetail)
+@router.get("/scenarios/{scenario_id}")  # FIXED: 移除response_model=ScenarioDetail，与create/update保持一致
 async def get_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
@@ -116,7 +116,7 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
                 logger.error("Failed to persist scenario %s: %s", scenario_id, db_err)
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
-            resp["_persistence_warning"] = f"场景已在内存中更新，但数据持久化失败: {db_err_msg}。重启后更改将丢失。"
+            resp["_persistence_warning"] = f"Scenario updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."  # FIXED: 中文→英文
         return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -140,7 +140,7 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
                 logger.error("Failed to delete scenario %s from DB: %s", scenario_id, db_err)
         resp = {"status": "ok"}
         if not db_ok:
-            resp["_persistence_warning"] = f"场景已从内存中删除，但数据库删除失败: {db_err_msg}。重启后场景可能重新出现。"
+            resp["_persistence_warning"] = f"Scenario deleted from memory, but DB deletion failed: {db_err_msg}. Scenario may reappear after restart."  # FIXED: 中文→英文
         return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -164,7 +164,7 @@ async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Failed to export scenario %s: %s", scenario_id, e)
-        raise HTTPException(status_code=500, detail="导出场景失败")
+        raise HTTPException(status_code=500, detail="Failed to export scenario")  # FIXED: 中文→英文
 
 
 @router.post("/scenarios/import")
@@ -185,13 +185,13 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
                 logger.error("Failed to persist imported scenario %s: %s", config.id, db_err)
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
-            resp["_persistence_warning"] = f"场景已导入到内存，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+            resp["_persistence_warning"] = f"Scenario imported to memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Failed to import scenario: %s", e)
-        raise HTTPException(status_code=500, detail="导入场景失败")
+        raise HTTPException(status_code=500, detail="Failed to import scenario")  # FIXED: 中文→英文
 
 
 @router.get("/scenarios/{scenario_id}/snapshot")

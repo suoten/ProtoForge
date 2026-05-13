@@ -1,4 +1,5 @@
 import logging
+import math
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,7 +35,7 @@ async def start_recording(config: Optional[dict[str, Any]] = None, _user: dict =
         return rec.to_dict()
     except Exception as e:
         logger.error("Failed to start recording: %s", e)
-        raise HTTPException(status_code=500, detail=f"开始录制失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to start recording: {e}") from e
 
 
 @router.post("/recorder/stop")
@@ -49,7 +50,7 @@ async def stop_recording(_user: dict = Depends(require_operator)):
         raise
     except Exception as e:
         logger.error("Failed to stop recording: %s", e)
-        raise HTTPException(status_code=500, detail=f"停止录制失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to stop recording: {e}") from e
 
 
 @router.get("/recorder/recordings")
@@ -59,7 +60,7 @@ async def list_recordings(_user: dict = Depends(require_viewer)):
         return {"recordings": recorder.list_recordings()}
     except Exception as e:
         logger.error("Failed to list recordings: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取录制列表失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to list recordings: {e}") from e
 
 
 @router.get("/recorder/recordings/{rec_id}")
@@ -75,7 +76,7 @@ async def get_recording(rec_id: str, _user: dict = Depends(require_viewer)):
         raise
     except Exception as e:
         logger.error("Failed to get recording %s: %s", rec_id, e)
-        raise HTTPException(status_code=500, detail=f"获取录制详情失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get recording: {e}") from e
 
 
 @router.delete("/recorder/recordings/{rec_id}")
@@ -87,7 +88,7 @@ async def delete_recording(rec_id: str, _user: dict = Depends(require_operator))
         await recorder.delete_recording_persisted(rec_id)
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"删除录制失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {str(e)}")
 
 
 @router.post("/recorder/recordings/{rec_id}/replay")
@@ -96,8 +97,8 @@ async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None,
     cfg = config or {}
     speed = cfg.get("speed", 1.0)
 
-    if not isinstance(speed, (int, float)) or speed <= 0 or speed > 100:
-        raise HTTPException(status_code=400, detail="speed 必须是 0-100 之间的正数")
+    if not isinstance(speed, (int, float)) or speed <= 0 or speed > 100 or math.isinf(speed) or math.isnan(speed):  # FIXED: 排除NaN/Infinity
+        raise HTTPException(status_code=400, detail="speed must be a positive finite number between 0 and 100")
 
     try:
         result = await recorder.replay_recording(rec_id, speed=speed, target_engine=_get_engine())
@@ -106,7 +107,7 @@ async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None,
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error("Failed to replay recording %s: %s", rec_id, e)
-        raise HTTPException(status_code=500, detail=f"回放录制失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to replay recording: {e}") from e
 
 
 @router.get("/recorder/recordings/{rec_id}/export")
@@ -123,7 +124,7 @@ async def export_recording(rec_id: str, _user: dict = Depends(require_viewer)):
         raise
     except Exception as e:
         logger.error("Failed to export recording %s: %s", rec_id, e)
-        raise HTTPException(status_code=500, detail=f"导出录制失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to export recording: {e}") from e
 
 
 @router.get("/recorder/stats")
@@ -133,4 +134,4 @@ async def recorder_stats(_user: dict = Depends(require_viewer)):
         return recorder.get_stats()
     except Exception as e:
         logger.error("Failed to get recorder stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取录制统计失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get recorder stats: {e}") from e

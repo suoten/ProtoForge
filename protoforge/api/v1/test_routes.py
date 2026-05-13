@@ -51,8 +51,12 @@ async def _get_internal_client():
     from protoforge.main import app
     from protoforge.api.v1.auth import is_no_auth
 
-    transport = ASGITransport(app=app)
-    _internal_client = AsyncClient(transport=transport, base_url="http://testserver")
+    try:  # FIXED: 添加异常保护
+        transport = ASGITransport(app=app)
+        _internal_client = AsyncClient(transport=transport, base_url="http://testserver")
+    except Exception as exc:
+        logger.error("Failed to create internal test client: %s", exc)
+        raise HTTPException(status_code=500, detail="Test infrastructure unavailable") from exc
 
     if not is_no_auth():
         try:
@@ -76,11 +80,16 @@ async def _close_internal_client():
 
 @router.post("/tests/cases")
 async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(require_user)):
+    if not isinstance(case_def, dict) or not case_def:  # FIXED: 类型校验
+        raise HTTPException(status_code=400, detail="Request body must be a non-empty object")
     from protoforge.core.testing import TestCase
     runner = _get_test_runner()
-    tc = TestCase.from_dict(case_def)
-    await runner.save_test_case(tc)
-    return tc.to_dict()
+    try:  # FIXED: 添加异常处理，格式错误返回400而非500
+        tc = TestCase.from_dict(case_def)
+        await runner.save_test_case(tc)
+        return tc.to_dict()
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid test case definition: {e}") from e
 
 
 @router.get("/tests/cases")
@@ -112,7 +121,10 @@ async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict =
 
     merged = existing.to_dict()
     merged.update(case_def)
-    tc = TestCase.from_dict(merged)
+    try:  # FIXED: 添加异常处理
+        tc = TestCase.from_dict(merged)
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid test case definition: {e}") from e
     tc.id = case_id
     await runner.save_test_case(tc)
     return tc.to_dict()
@@ -173,13 +185,17 @@ async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
 
 @router.post("/tests/run")
 async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(require_user)):
+    if not isinstance(test_cases, list) or not test_cases:  # FIXED: 类型校验
+        raise HTTPException(status_code=400, detail="Request body must be a non-empty array of test cases")
     from protoforge.core.testing import TestCase
     runner = _get_test_runner()
     cases = []
-
-    for tc_def in test_cases:
-        tc = TestCase.from_dict(tc_def)
-        cases.append(tc)
+    try:  # FIXED: 添加异常处理
+        for tc_def in test_cases:
+            tc = TestCase.from_dict(tc_def)
+            cases.append(tc)
+    except (ValueError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid test case in request: {e}") from e
 
     api_client = await _get_internal_client()
     report = await runner.run_test_suite("API Test", cases, api_client=api_client)
@@ -240,6 +256,8 @@ async def get_test_report(report_id: str, _user: dict = Depends(require_viewer))
 async def get_test_report_html(report_id: str, request: Request, _user: dict = Depends(require_viewer)):
     from protoforge.core.auth import verify_token
     token = request.query_params.get("token")
+    if not _user and not token:  # FIXED: 无认证且无token时拒绝访问
+        raise HTTPException(status_code=401, detail="Authentication required")
     if token and not _user:
         payload = verify_token(token)
         if not payload:

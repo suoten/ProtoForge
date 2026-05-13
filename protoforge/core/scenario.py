@@ -82,7 +82,7 @@ class Scenario:
         if not source or source.status != DeviceStatus.ONLINE:
             return False
         point_value = source.read_point(rule.source_point)
-        if not point_value:
+        if not point_value or point_value.value is None:  # FIXED: 检查point_value.value为None
             return False
         if not rule.condition or not isinstance(rule.condition, dict):
             return False

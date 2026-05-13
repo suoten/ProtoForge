@@ -22,13 +22,13 @@ async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(req
 @router.post("/devices")  # FIXED: 移除response_model=DeviceInfo，避免过滤_persistence_warning
 async def create_device(config: DeviceConfig, _user: dict = Depends(require_operator)):
     if not config.name or not config.name.strip():
-        raise HTTPException(status_code=400, detail="设备名称不能为空")
+        raise HTTPException(status_code=400, detail="Device name is required")  # FIXED: 中文→英文
     if not config.id or not config.id.strip():
-        raise HTTPException(status_code=400, detail="设备ID不能为空")
+        raise HTTPException(status_code=400, detail="Device ID is required")  # FIXED: 中文→英文
     if len(config.id) > 64:
-        raise HTTPException(status_code=400, detail="设备ID长度不能超过64个字符")
+        raise HTTPException(status_code=400, detail="Device ID must not exceed 64 characters")  # FIXED: 中文→英文
     if len(config.name) > 128:
-        raise HTTPException(status_code=400, detail="设备名称长度不能超过128个字符")
+        raise HTTPException(status_code=400, detail="Device name must not exceed 128 characters")  # FIXED: 中文→英文
     config.name = config.name.strip()
     config.id = config.id.strip()
     engine = _get_engine()
@@ -52,7 +52,7 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {config.name} created", {"device_id": config.id})
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
-            resp["_persistence_warning"] = f"设备已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+            resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
 
     except ValueError as e:
@@ -66,7 +66,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
     if not isinstance(template_id, str) or not isinstance(device_name, str):
-        raise HTTPException(status_code=400, detail="template_id 和 name 必须为字符串")
+        raise HTTPException(status_code=400, detail="template_id and name must be strings")  # FIXED: 中文→英文
     template_id = template_id.strip()
     device_name = device_name.strip()
     device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("(", "").replace(")", "") or str(uuid.uuid4())[:8]
@@ -75,18 +75,18 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
     device_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', device_id).strip('-') or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
     if not isinstance(protocol_config, dict):
-        raise HTTPException(status_code=400, detail="protocol_config 必须为对象")
+        raise HTTPException(status_code=400, detail="protocol_config must be an object")  # FIXED: 中文→英文
 
     if not template_id or not template_id.strip():
-        raise HTTPException(status_code=400, detail="template_id 为必填项")
+        raise HTTPException(status_code=400, detail="template_id is required")  # FIXED: 中文→英文
     if not device_name or not device_name.strip():
-        raise HTTPException(status_code=400, detail="name 为必填项")
+        raise HTTPException(status_code=400, detail="name is required")  # FIXED: 中文→英文
     from protoforge.api.v1._helpers import _get_template_manager
     tm = _get_template_manager()
     template = tm.get_template(template_id)
 
     if not template:
-        raise HTTPException(status_code=404, detail=f"模板不存在: {template_id}")
+        raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")  # FIXED: 中文→英文
 
     merged_config = {**(template.protocol_config or {}), **protocol_config}
     config = DeviceConfig(
@@ -117,7 +117,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
-            resp["_persistence_warning"] = f"设备已在内存中创建，但数据持久化失败: {db_err_msg}。重启后数据将丢失。"
+            resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -126,7 +126,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 @router.post("/devices/batch")
 async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depends(require_operator)):
     if not configs:
-        raise HTTPException(status_code=400, detail="configs 不能为空")
+        raise HTTPException(status_code=400, detail="configs must not be empty")  # FIXED: 中文→英文
     engine = _get_engine()
     db = _get_database()
     results = []
@@ -147,7 +147,7 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
                 logger.warning("Device %s batch-created but auto-start failed: %s", config.id, start_err)
             item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
             if not db_ok:
-                item["_persistence_warning"] = "数据持久化失败，重启后数据将丢失"
+                item["_persistence_warning"] = "Persistence failed, data will be lost after restart"  # FIXED: 中文→英文
             results.append(item)
         except Exception as e:
             logger.warning("Batch create device %s failed: [%s] %s", config.id, type(e).__name__, e)  # FIXED: 记录异常类型
@@ -172,7 +172,7 @@ async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _u
                     await db.delete_device(device_id)
                 except Exception as db_err:
                     logger.error("Failed to delete device %s from DB: %s", device_id, db_err)
-                    errors.append({"id": device_id, "error": f"内存已删除但数据库删除失败: {db_err}"})
+                    errors.append({"id": device_id, "error": f"Deleted from memory but DB deletion failed: {db_err}"})  # FIXED: 中文→英文
                     continue
             deleted += 1
         except ValueError as e:
@@ -211,7 +211,7 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
     return {"status": "ok", "stopped": stopped, "errors": errors}
 
 
-@router.get("/devices/{device_id}", response_model=DeviceInfo)
+@router.get("/devices/{device_id}")  # FIXED: 移除response_model=DeviceInfo，与create_device保持一致
 async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     try:
@@ -220,7 +220,7 @@ async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/devices/{device_id}/config", response_model=DeviceConfig)
+@router.get("/devices/{device_id}/config")  # FIXED: 移除response_model=DeviceConfig，避免过滤额外字段
 async def get_device_config(device_id: str, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -294,7 +294,7 @@ async def delete_device(device_id: str, _user: dict = Depends(require_operator))
         log_bus.emit(info.protocol, "system", device_id, "device_removed", f"Device {info.name} removed")
         resp = {"status": "ok"}
         if not db_ok:
-            resp["_persistence_warning"] = f"设备已从内存中删除，但数据库删除失败: {db_err_msg}。重启后设备可能重新出现。"
+            resp["_persistence_warning"] = f"Device deleted from memory, but DB deletion failed: {db_err_msg}. Device may reappear after restart."  # FIXED: 中文→英文
         return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -321,7 +321,7 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
         response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else {"id": device_id, "name": config.name, "protocol": config.protocol}
         if not db_ok:
-            response["_persistence_warning"] = f"设备已在内存中更新，但数据持久化失败: {db_err_msg}。重启后更改将丢失。"
+            response["_persistence_warning"] = f"Device updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."  # FIXED: 中文→英文
         return response
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

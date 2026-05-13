@@ -72,7 +72,7 @@ def _get_or_create_salt() -> bytes:
             f.write(new_salt)
         logger.info("Generated and saved new recording salt")
     except Exception as e:
-        logger.warning("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart.", e)
+        logger.error("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart!", e)  # FIXED: 提升日志级别为error
     return new_salt
 
 
@@ -300,8 +300,9 @@ class Recorder:
             logger.warning("Failed to restore recordings: %s", e)
 
     async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict:
-        if not isinstance(speed, (int, float)) or speed <= 0:
-            raise ValueError(f"Speed must be a positive number, got: {speed}")
+        import math
+        if not isinstance(speed, (int, float)) or speed <= 0 or math.isinf(speed) or math.isnan(speed):  # FIXED: 排除NaN/Infinity
+            raise ValueError(f"Speed must be a positive finite number, got: {speed}")
         recording = self._recordings.get(rec_id)
         if not recording:
             raise ValueError(f"Recording not found: {rec_id}")
@@ -376,28 +377,29 @@ class Recorder:
         self._active.messages.append(recorded)
 
     def get_stats(self) -> dict[str, Any]:
-        is_rec = self._active is not None
+        active = self._active  # FIXED: 缓存引用，防止并发stop_recording导致None
+        is_rec = active is not None
         total_events = sum(len(r.messages) for r in self._recordings.values())
-        if is_rec and self._active:
-            total_events += len(self._active.messages)
+        if is_rec:
+            total_events += len(active.messages)
         total_bytes = 0
         for r in self._recordings.values():
             for msg in r.messages:
                 total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
-        if is_rec and self._active:
-            for msg in self._active.messages:
+        if is_rec:
+            for msg in active.messages:
                 total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
         avg_events = round(total_events / max(len(self._recordings), 1), 1)
         return {
             "is_recording": is_rec,
-            "active_name": self._active.name if self._active else None,
-            "frames_captured": len(self._active.messages) if self._active else 0,
+            "active_name": active.name if is_rec else None,
+            "frames_captured": len(active.messages) if is_rec else 0,
             "total_recordings": len(self._recordings),
             "total_events": total_events,
             "total_bytes": total_bytes,
             "avg_events_per_recording": avg_events,
             "encryption_enabled": self._encryption_key is not None,
-            "duration_seconds": (time.time() - self._active.start_time) if is_rec and hasattr(self._active, 'start_time') else 0,
+            "duration_seconds": (time.time() - active.start_time) if is_rec else 0,
         }
 
     def _encrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:

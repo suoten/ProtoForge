@@ -23,7 +23,7 @@ async def setup_demo(_user: dict = Depends(require_admin)):
         scenarios = engine.get_all_scenario_configs()
         return {
             "status": "ok",
-            "message": "演示数据已创建",
+            "message": "Demo data created",  # FIXED: 中文→英文
             "device_count": len(devices),
             "scenario_count": len(scenarios),
         }
@@ -49,7 +49,7 @@ async def setup_status(_user: dict = Depends(require_viewer)):
         }
     except Exception as e:
         logger.error("Failed to get setup status: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取系统状态失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get system status: {e}") from e
 
 
 @router.get("/settings")
@@ -59,7 +59,7 @@ async def get_settings(_user: dict = Depends(require_admin)):
         return get_all_settings_dict()
     except Exception as e:
         logger.error("Failed to get settings: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取系统设置失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get settings: {e}") from e
 
 
 _ALLOWED_SETTINGS_KEYS = {  # FIXED: update_settings字段白名单，防止修改敏感配置
@@ -85,7 +85,7 @@ async def update_settings(updates: dict[str, Any], _user: dict = Depends(require
         raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e
     except Exception as e:
         logger.error("Failed to update settings: %s", e)
-        raise HTTPException(status_code=500, detail=f"更新系统设置失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {e}") from e
 
 
 @router.get("/audit")
@@ -113,7 +113,7 @@ async def query_audit_log(
         return {"entries": entries, "total": total}
     except Exception as e:
         logger.error("Failed to query audit log: %s", e)
-        raise HTTPException(status_code=500, detail=f"查询审计日志失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to query audit log: {e}") from e
 
 
 @router.get("/audit/stats")
@@ -123,7 +123,7 @@ async def get_audit_stats(_user: dict = Depends(require_admin)):
         return await audit_logger.get_stats()
     except Exception as e:
         logger.error("Failed to get audit stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取审计统计失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get audit stats: {e}") from e
 
 
 @router.delete("/audit/{entry_id}")
@@ -138,7 +138,7 @@ async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)
         raise
     except Exception as e:
         logger.error("Failed to delete audit entry: %s", e)
-        raise HTTPException(status_code=500, detail=f"删除审计条目失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to delete audit entry: {e}") from e
 
 
 @router.delete("/audit")
@@ -152,7 +152,7 @@ async def clear_audit_log(
         return {"status": "ok", "deleted": count}
     except Exception as e:
         logger.error("Failed to clear audit log: %s", e)
-        raise HTTPException(status_code=500, detail=f"清空审计日志失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to clear audit log: {e}") from e
 
 
 @router.get("/backup")
@@ -174,7 +174,7 @@ async def export_backup(_user: dict = Depends(require_admin)):
         )
     except Exception as e:
         logger.error("Failed to export backup: %s", e)
-        raise HTTPException(status_code=500, detail=f"导出备份失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to export backup: {e}") from e
 
 
 @router.post("/backup/restore")
@@ -192,4 +192,4 @@ async def import_backup(payload: dict[str, Any], _user: dict = Depends(require_a
         raise
     except Exception as e:
         logger.error("Failed to import backup: %s", e)
-        raise HTTPException(status_code=500, detail=f"恢复备份失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to restore backup: {e}") from e

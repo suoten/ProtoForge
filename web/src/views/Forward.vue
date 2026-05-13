@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, h } from 'vue'
 import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
   NInput, NInputNumber, NSelect, NGrid, NGi, NTag, NEmpty, NPopconfirm, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
@@ -134,10 +134,9 @@ const forwardRunning = ref(false)
 const loadingTargets = ref(false)
 const starting = ref(false)
 const stopping = ref(false)
-const removingNames = ref(new Set())
+const removingNames = reactive(new Set())  // FIXED: ref→reactive，Set响应性更可靠
 const showAddModal = ref(false)
 const adding = ref(false)
-const removingTarget = ref(null)
 
 const addForm = ref({
   name: '', type: 'influxdb', host: 'localhost', port: 8086,
@@ -162,7 +161,7 @@ const targetColumns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 100,
     render: (row) => h(NPopconfirm, { onPositiveClick: () => removeTarget(row.name) }, {
-      trigger: () => h(NButton, { size: 'tiny', type: 'error', loading: removingNames.value.has(row.name) }, () => t('common.delete')),
+      trigger: () => h(NButton, { size: 'tiny', type: 'error', loading: removingNames.has(row.name) }, () => t('common.delete')),
       default: () => t('forward.confirmDelete', { name: row.name }),
     })
   },
@@ -216,7 +215,7 @@ async function addTarget() {
       cfg.url = addForm.value.url
       if (addForm.value.headers_json) {
         try { cfg.headers = JSON.parse(addForm.value.headers_json) }
-        catch { message.warning(t('forward.headersJsonError')); adding.value = false; return }
+        catch { message.warning(t('forward.headersJsonError')); return }
       }
     } else if (addForm.value.type === 'file') {
       cfg.path = addForm.value.path
@@ -233,14 +232,14 @@ async function addTarget() {
 }
 
 async function removeTarget(name) {
-  removingNames.value.add(name)
+  removingNames.add(name)
   try {
     await api.removeForwardTarget(name)
     message.success(t('common.deleted'))
     await loadTargets()
   } catch (e) {
     message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { removingNames.value.delete(name) }
+  } finally { removingNames.delete(name) }
 }
 
 async function startForward() {
@@ -255,7 +254,7 @@ async function startForward() {
         await api.startForward()
         forwardRunning.value = true
         message.success(t('forward.started'))
-        loadStats()
+        await loadStats()  // FIXED: await loadStats防止未捕获的Promise rejection
       } catch (e) {
         message.error(t('forward.startFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { starting.value = false }

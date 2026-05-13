@@ -22,7 +22,7 @@ async def get_integration_status(_user: dict = Depends(require_viewer)):
         return manager.get_status()
     except Exception as e:
         logger.error("Failed to get integration status: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取集成状态失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get integration status: {e}") from e  # FIXED: 中文→英文
 
 
 @router.get("/metrics")
@@ -32,7 +32,7 @@ async def get_integration_metrics(_user: dict = Depends(require_viewer)):
         return manager.metrics.to_dict()
     except Exception as e:
         logger.error("Failed to get integration metrics: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取集成指标失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get integration metrics: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/batch-push")
@@ -44,9 +44,9 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
 
         device_ids = request.get("device_ids", [])
         if not isinstance(device_ids, list):
-            raise HTTPException(status_code=400, detail="device_ids 必须是数组")
+            raise HTTPException(status_code=400, detail="device_ids must be an array")  # FIXED: 中文→英文
         if not device_ids:
-            raise HTTPException(status_code=400, detail="device_ids 不能为空")
+            raise HTTPException(status_code=400, detail="device_ids must not be empty")  # FIXED: 中文→英文
         protocol_filter = request.get("protocol", "")
         concurrency = request.get("concurrency", 10)
         if not isinstance(concurrency, int) or concurrency < 1:
@@ -63,7 +63,7 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
                 devices.append(instance)
 
         if not devices:
-            raise HTTPException(status_code=400, detail="未找到匹配的设备，请检查 device_ids 和 protocol 参数")
+            raise HTTPException(status_code=400, detail="No matching devices found, check device_ids and protocol parameters")  # FIXED: 中文→英文
 
         result = await manager.batch_push(devices, concurrency=concurrency)
         return result
@@ -71,13 +71,13 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
         raise
     except Exception as e:
         logger.error("Batch push failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"批量推送失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Batch push failed: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/device/{device_id}/start")
 async def start_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     if not device_id or not device_id.strip():
-        raise HTTPException(status_code=400, detail="device_id 不能为空")
+        raise HTTPException(status_code=400, detail="device_id is required")  # FIXED: 中文→英文
     try:
         manager = _get_integration_manager()
         if not manager.is_connected():
@@ -88,13 +88,13 @@ async def start_device_collect(device_id: str, _user: dict = Depends(require_ope
         raise
     except Exception as e:
         logger.error("Start device collect failed for %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=f"启动设备采集失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to start device collection: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/device/{device_id}/stop")
 async def stop_device_collect(device_id: str, _user: dict = Depends(require_operator)):
     if not device_id or not device_id.strip():
-        raise HTTPException(status_code=400, detail="device_id 不能为空")
+        raise HTTPException(status_code=400, detail="device_id is required")  # FIXED: 中文→英文
     try:
         manager = _get_integration_manager()
         if not manager.is_connected():
@@ -105,7 +105,7 @@ async def stop_device_collect(device_id: str, _user: dict = Depends(require_oper
         raise
     except Exception as e:
         logger.error("Stop device collect failed for %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=f"停止设备采集失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to stop device collection: {e}") from e  # FIXED: 中文→英文
 
 
 @router.get("/protocols")
@@ -127,7 +127,7 @@ async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
         }
     except Exception as e:
         logger.error("Failed to get protocol mappings: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取协议映射失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get protocol mappings: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/validate")
@@ -150,7 +150,7 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict = D
         }
     except Exception as e:
         logger.error("Device compatibility validation failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"设备兼容性验证失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Device compatibility validation failed: {e}") from e  # FIXED: 中文→英文
 
 
 @router.get("/backhaul-data")
@@ -160,7 +160,7 @@ async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict =
         return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
     except Exception as e:
         logger.error("Failed to get backhaul data: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取回传数据失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get backhaul data: {e}") from e  # FIXED: 中文→英文
 
 
 @router.get("/device-status")
@@ -173,7 +173,7 @@ async def get_device_status_cache(_user: dict = Depends(require_viewer)):
         return {"devices": status if isinstance(status, list) else []}
     except Exception as e:
         logger.error("Failed to get device status cache: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取设备状态失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get device status: {e}") from e  # FIXED: 中文→英文
 
 
 @router.get("/alarm-rules")
@@ -188,7 +188,7 @@ async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
         ]}
     except Exception as e:
         logger.error("Failed to get alarm rules: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取告警规则失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get alarm rules: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/alarm-rules")
@@ -200,11 +200,11 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends
         source_device_id = request.get("source_device_id", "")
         target_device_id = request.get("target_device_id", "")
         if not rule_id or not source_device_id or not target_device_id:
-            raise HTTPException(status_code=400, detail="rule_id、source_device_id 和 target_device_id 为必填项")
+            raise HTTPException(status_code=400, detail="rule_id, source_device_id and target_device_id are required")  # FIXED: 中文→英文
         valid_actions = {"stop_device", "start_device", "inject_fault", "adjust_generator", "log_only", "send_alarm", "custom"}
         action = request.get("action", "stop_device")
         if action not in valid_actions:
-            raise HTTPException(status_code=400, detail=f"无效的 action，可选值: {', '.join(valid_actions)}")
+            raise HTTPException(status_code=400, detail=f"Invalid action, valid values: {', '.join(valid_actions)}")  # FIXED: 中文→英文
         rule = AlarmReactionRule(
             rule_id=rule_id,
             source_device_id=source_device_id,
@@ -220,7 +220,7 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends
         raise
     except Exception as e:
         logger.error("Add alarm rule failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"添加告警规则失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to add alarm rule: {e}") from e  # FIXED: 中文→英文
 
 
 @router.delete("/alarm-rules/{rule_id}")
@@ -231,7 +231,7 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
         return {"status": "ok"}
     except Exception as e:
         logger.error("Delete alarm rule failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"删除告警规则失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to delete alarm rule: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/message")
@@ -246,9 +246,9 @@ async def handle_integration_message(request: dict[str, Any], _user: dict = Depe
         if manager.is_connected():
             result = await manager.send_message(request)
             return {"status": "ok", "data": result}
-        raise HTTPException(status_code=503, detail="未连接到集成目标，请先配置并测试 EdgeLite 连接")
+        raise HTTPException(status_code=503, detail="Not connected to integration target, please configure and test EdgeLite connection first")  # FIXED: 中文→英文
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Integration message failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"发送集成消息失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to send integration message: {e}") from e  # FIXED: 中文→英文
