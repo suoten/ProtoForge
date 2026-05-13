@@ -332,6 +332,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/metrics", response_class=PlainTextResponse)
+    @app.get("/api/v1/metrics", response_class=PlainTextResponse)
     async def prometheus_metrics():
         from protoforge.core.metrics import metrics
         try:

@@ -81,18 +81,18 @@
         <n-spin :show="loadingInfo">
           <n-space vertical v-if="protocolInfoData">
             <n-descriptions label-placement="left" :column="1" bordered size="small">
-              <n-descriptions-item :label="t('protocols.protocolName')">{{ protocolInfoData.name || protocolInfoName }}</n-descriptions-item>
-              <n-descriptions-item :label="t('protocols.displayName')">{{ protocolInfoData.display_name || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.protocolName')">{{ protocolInfoData.name || protocolInfoName }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.displayName')">{{ protocolInfoData.display_name || '-' }}</n-descriptions-item>
               <n-descriptions-item :label="t('common.description')">{{ protocolInfoData.description || '-' }}</n-descriptions-item>
-              <n-descriptions-item :label="t('protocols.defaultPort')">{{ protocolInfoData.default_port || '-' }}</n-descriptions-item>
-              <n-descriptions-item :label="t('protocols.mode')">{{ protocolInfoData.mode || 'Server' }}</n-descriptions-item>
-              <n-descriptions-item :label="t('protocols.version')">{{ protocolInfoData.version || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.defaultPort')">{{ protocolInfoData.default_port || '-' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.mode')">{{ protocolInfoData.mode || 'Server' }}</n-descriptions-item>
+              <n-descriptions-item :label="t('common.version')">{{ protocolInfoData.version || '-' }}</n-descriptions-item>
             </n-descriptions>
-            <n-text strong v-if="protocolInfoData.features && protocolInfoData.features.length > 0" style="font-size:13px">{{ t('protocols.supportedFeatures') }}:</n-text>
+            <n-text strong v-if="protocolInfoData.features && protocolInfoData.features.length > 0" style="font-size:13px">{{ t('common.features') }}:</n-text>
             <n-space v-if="protocolInfoData.features && protocolInfoData.features.length > 0" size="small">
               <n-tag v-for="f in protocolInfoData.features" :key="f" size="tiny" type="info" :bordered="false">{{ f }}</n-tag>
             </n-space>
-            <n-text strong v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0" style="font-size:13px">{{ t('protocols.configParams') }}:</n-text>
+            <n-text strong v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0" style="font-size:13px">{{ t('common.configParams') }}:</n-text>
             <n-data-table v-if="protocolConfigData && Object.keys(protocolConfigData).length > 0"
               :columns="configInfoColumns" :data="configInfoRows" :bordered="false" size="small" />
           </n-space>

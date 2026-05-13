@@ -341,7 +341,7 @@ function connectLogWs() {
 }
 
 function openMetrics() {
-  window.open('/metrics', '_blank')
+  window.open('/api/v1/metrics', '_blank')
 }
 
 onMounted(() => {
