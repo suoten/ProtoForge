@@ -224,13 +224,23 @@ async function startAllProtocols() {
     onPositiveClick: async () => {
       startingAll.value = true
       try {
-        const results = await Promise.allSettled(stopped.map(p => api.startProtocol(p.name, null)))
-        let ok = 0, fail = 0
-        results.forEach((r, i) => {
-          if (r.status === 'fulfilled') ok++
-          else { fail++; message.warning(`${stopped[i].name}: ${r.reason?.response?.data?.detail || r.reason?.message || 'Error'}`) }
-        })
-        if (fail > 0) { message.warning(t('dashboard.startedWithFail', { ok, fail })) } else { message.success(t('dashboard.startedCount', { n: ok })) }
+        const res = await api.startAllProtocols()
+        const started = res.started || []
+        const failed = res.failed || []
+        const portWarnings = res.port_warnings || []
+        if (failed.length > 0) {
+          message.warning(t('dashboard.startedWithFail', { ok: started.length, fail: failed.length }))
+          for (const f of failed) {
+            message.error(`${f.protocol}: ${f.error}`, { duration: 8000 })
+          }
+        } else if (started.length > 0) {
+          message.success(t('dashboard.startedCount', { n: started.length }))
+        }
+        if (portWarnings.length > 0) {
+          for (const w of portWarnings) {
+            message.warning(w.message, { duration: 8000 })
+          }
+        }
         await loadData()
       } catch (e) {
         message.error(t('dashboard.startFailed') + ': ' + (e.response?.data?.detail || e.message))

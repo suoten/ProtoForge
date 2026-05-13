@@ -468,6 +468,11 @@ ERROR_MESSAGES = {
     "url is required": "请填写Webhook的URL地址。",
     "No active recording": "当前没有正在进行的录制。请先开始录制。",
     "devices= cannot be None": "Modbus从站上下文初始化失败，请确保至少有一个设备。",
+    "address already in use": "端口被占用，该端口上已有其他服务在运行。请在「系统设置」中修改协议端口号，或停止占用该端口的其他进程。",
+    "could not bind": "端口绑定失败，该端口可能被其他服务占用。请在「系统设置」中修改协议端口号。",
+    "could not start listen": "监听启动失败，端口可能被占用或权限不足。Linux 上 1024 以下端口需要 root 权限。",
+    "permission denied": "权限不足。Linux 上绑定 1024 以下端口需要 root 权限，请在「系统设置」中改为 1024 以上的端口。",
+    "ERROR state after start": "协议启动失败，可能是端口冲突、权限不足或配置错误。请检查服务器日志或尝试修改端口号。",
 }
 
 

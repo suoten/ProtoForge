@@ -93,9 +93,9 @@ api.interceptors.response.use(
         originalRequest._retry = true
         try {
           const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
-          const newToken = res.data.access_token
-          const newRefresh = res.data.refresh_token
-          if (newToken) {
+          const newToken = res.data?.access_token  // FIXED: 使用可选链防止undefined
+          const newRefresh = res.data?.refresh_token
+          if (newToken && typeof newToken === 'string') {  // FIXED: 校验token类型
             localStorage.setItem('token', newToken)
             if (newRefresh) localStorage.setItem('refresh_token', newRefresh)
             if (res.data.username) localStorage.setItem('username', res.data.username)
@@ -179,8 +179,10 @@ export default {
   }),
   getProtocolConfig: (name) => d(api.get(`/protocols/${name}/config`)),
   getProtocolDeviceConfig: (name) => d(api.get(`/protocols/${name}/device-config`)),
-  startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config ?? {})),
+  startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config || undefined)), // FIXED: config为空时不发请求体，让后端应用默认配置
   stopProtocol: (name) => d(api.post(`/protocols/${name}/stop`)),
+  startAllProtocols: () => d(api.post('/protocols/start-all')),
+  stopAllProtocols: () => d(api.post('/protocols/stop-all')),
 
   getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })).then(r => normalizeList(r, 'devices')),
   getDevice: (id) => d(api.get(`/devices/${id}`)),
@@ -283,21 +285,31 @@ export default {
   sendIntegrationMessage: (type, payload) => d(api.post('/integration/message', { type, payload })),
 
   createDeviceWs: () => {
-    const token = localStorage.getItem('token')
-    if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
-    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/devices?token=${encodeURIComponent(token)}`
-    return new WebSocket(url)
+    try {  // FIXED: 添加try-catch防止WebSocket创建失败崩溃
+      const token = localStorage.getItem('token')
+      if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
+      const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const host = window.location.host
+      const url = `${wsProto}://${host}/api/v1/ws/devices?token=${encodeURIComponent(token)}`
+      return new WebSocket(url)
+    } catch (e) {
+      console.error('Failed to create device WebSocket:', e)
+      return null
+    }
   },
 
   createLogWs: () => {
-    const token = localStorage.getItem('token')
-    if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
-    const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const host = window.location.host
-    const url = `${wsProto}://${host}/api/v1/ws/logs?token=${encodeURIComponent(token)}`
-    return new WebSocket(url)
+    try {  // FIXED: 添加try-catch防止WebSocket创建失败崩溃
+      const token = localStorage.getItem('token')
+      if (!token) { console.warn('No auth token available, WebSocket connection will be rejected by server'); return null }
+      const wsProto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      const host = window.location.host
+      const url = `${wsProto}://${host}/api/v1/ws/logs?token=${encodeURIComponent(token)}`
+      return new WebSocket(url)
+    } catch (e) {
+      console.error('Failed to create log WebSocket:', e)
+      return null
+    }
   },
 
   ensureValidToken: async () => {
