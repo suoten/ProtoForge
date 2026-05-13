@@ -378,6 +378,9 @@ const messages = {
       sendSuccess: '发送成功',
       sendFailed: '发送失败',
       chinese: '中文',
+      finish: '完成',
+      exportFailed: '导出失败',
+      listSeparator: '、',
     },
     nav: {
       dashboard: '仪表盘',
@@ -776,6 +779,9 @@ const messages = {
     scenarios: {
       title: '仿真场景',
       subtitle: '组合多个设备并定义联动规则',
+      deviceId: '设备ID',
+      importPlaceholder: '粘贴场景配置 JSON...',
+      createSuccess: '场景创建成功',
       createScenario: '创建场景',
       editScenario: '编辑场景',
       startScenario: '启动场景',
@@ -958,6 +964,7 @@ const messages = {
     },
     testing: {
       title: '仿真测试',
+      reportLoadFailed: '加载测试报告失败',
       quickTest: '快速测试',
       testAll: '一键测试全部',
       testAllDesc: '系统根据当前设备、场景自动生成测试，一键执行',
@@ -1106,6 +1113,8 @@ const messages = {
     integration: {
       title: '联调集成',
       subtitle: '对接 EdgeLite 网关，完成设备注册→连接→采集→验证→监控的完整联调链路',
+      status: '状态',
+      actions: '操作',
       edgeliteIntegration: 'EdgeLite 联调',
       edgeliteConfig: 'EdgeLite 连接配置',
       edgeliteUrl: 'EdgeLite地址',
@@ -2271,6 +2280,9 @@ const messages = {
       sendSuccess: 'Sent successfully',
       sendFailed: 'Send failed',
       chinese: 'Chinese',
+      finish: 'Finish',
+      exportFailed: 'Export failed',
+      listSeparator: ', ',
     },
     nav: {
       dashboard: 'Dashboard',
@@ -2668,6 +2680,9 @@ const messages = {
     scenarios: {
       title: 'Simulation Scenarios',
       subtitle: 'Combine multiple devices and define linkage rules',
+      deviceId: 'Device ID',
+      importPlaceholder: 'Paste scenario config JSON...',
+      createSuccess: 'Scenario created',
       createScenario: 'Create Scenario',
       editScenario: 'Edit Scenario',
       startScenario: 'Start Scenario',
@@ -2850,6 +2865,7 @@ const messages = {
     },
     testing: {
       title: 'Simulation Testing',
+      reportLoadFailed: 'Failed to load test report',
       quickTest: 'Quick Test',
       testAll: 'Test All',
       testAllDesc: 'Auto-generate tests from current devices and scenarios',
@@ -2998,6 +3014,8 @@ const messages = {
     integration: {
       title: 'Integration',
       subtitle: 'Connect EdgeLite gateway for full integration pipeline',
+      status: 'Status',
+      actions: 'Actions',
       edgeliteIntegration: 'EdgeLite Integration',
       edgeliteConfig: 'EdgeLite Connection Config',
       edgeliteUrl: 'EdgeLite URL',
