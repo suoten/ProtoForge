@@ -62,11 +62,24 @@ async def get_settings(_user: dict = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=f"获取系统设置失败: {e}") from e
 
 
+_ALLOWED_SETTINGS_KEYS = {  # FIXED: update_settings字段白名单，防止修改敏感配置
+    "demo_mode", "log_level", "cors_origins", "min_password_length",
+    "rate_limit_max_requests", "rate_limit_window_seconds",
+    "rate_limit_auth_max_requests", "rate_limit_auth_window_seconds",
+    "edgelite_url", "edgelite_username", "edgelite_password",
+    "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
+    "forward_enabled", "forward_interval",
+}
+
+
 @router.put("/settings")
 async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
+    filtered = {k: v for k, v in updates.items() if k in _ALLOWED_SETTINGS_KEYS}  # FIXED: 过滤非法字段
+    if not filtered:
+        raise HTTPException(status_code=400, detail="No valid settings keys provided")
     try:
         from protoforge.config import update_settings as _update_settings, get_all_settings_dict, ConfigValidationError
-        changed = _update_settings(updates)
+        changed = _update_settings(filtered)
         return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
     except ConfigValidationError as e:
         raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e
@@ -169,6 +182,8 @@ async def import_backup(payload: dict[str, Any], _user: dict = Depends(require_a
     try:
         db = _get_database()
         data = payload.get("data", {})
+        if not isinstance(data, dict):  # FIXED: 校验data类型必须为dict
+            raise HTTPException(status_code=400, detail="Backup 'data' must be a dictionary")
         if not data:
             raise HTTPException(status_code=400, detail="No data found in backup")
         restored = await db.import_all(data)

@@ -367,8 +367,8 @@ async function saveScenarioLayout() {
   }
   saving.value = true
   try {
-    const deviceConfigs = nodes.value.map(n => ({
-      id: n.data.deviceId, name: n.data.label, protocol: n.data.protocol,
+    const deviceConfigs = nodes.value.filter(n => n.data && n.data.deviceId).map(n => ({  // FIXED: 过滤无data或deviceId的节点
+      id: n.data.deviceId, name: n.data.label || n.data.deviceId, protocol: n.data.protocol || 'modbus',
       points: (n.data.points || []).map(p => ({
         name: p.name, address: p.address ?? '0',
         data_type: p.data_type || 'float32', unit: p.unit || '',
@@ -381,10 +381,10 @@ async function saveScenarioLayout() {
       protocol_config: n.data.protocol_config || {},
       position: n.position,
     }))
-    const rules = edges.value.map(e => ({
+    const rules = edges.value.filter(e => e.source && e.target).map(e => ({  // FIXED: 过滤无source/target的边
       id: e.id, name: e.data?.rule?.name || e.data?.label || 'Rule',
       rule_type: e.data?.rule?.ruleType || 'threshold',
-      source_device_id: e.source?.replace('node-', '') || '',
+      source_device_id: e.source.replace('node-', '') || '',
       source_point: e.data?.rule?.sourcePoint || 'value',
       target_device_id: e.target?.replace('node-', '') || '',
       target_point: e.data?.rule?.targetPoint || 'alarm',

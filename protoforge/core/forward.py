@@ -127,16 +127,26 @@ class InfluxDBTarget(ForwardTarget):
         if not lines:
             return
         client = await self._ensure_client()
-        try:
-            resp = await client.post(
-                "/api/v2/write",
-                params={"org": self._org, "bucket": self._bucket, "precision": "ns"},
-                content="\n".join(lines),
-            )
-            if resp.status_code >= 400:
-                logger.warning("InfluxDB write failed: %d %s", resp.status_code, resp.text[:200])
-        except Exception as e:
-            logger.warning("InfluxDB send error: %s", e)
+        max_retries = 3  # FIXED: InfluxDB写入添加简单重试
+        for attempt in range(max_retries):
+            try:
+                resp = await client.post(
+                    "/api/v2/write",
+                    params={"org": self._org, "bucket": self._bucket, "precision": "ns"},
+                    content="\n".join(lines),
+                )
+                if resp.status_code >= 400:
+                    logger.warning("InfluxDB write failed: %d %s", resp.status_code, resp.text[:200])
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+                break
+            except Exception as e:
+                logger.warning("InfluxDB send error (attempt %d/%d): %s", attempt + 1, max_retries, e)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1 * (attempt + 1))
+                else:
+                    logger.error("InfluxDB write failed after %d retries, data lost", max_retries)
 
     async def close(self) -> None:
         if self._client:

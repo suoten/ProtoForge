@@ -487,20 +487,20 @@ class EtherCATServer(ProtocolServer):
         try:
             while self._server_running:
                 try:
-                    header = await reader.readexactly(2)
+                    header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: 添加读取超时
                 except asyncio.IncompleteReadError:
                     break
                 length = struct.unpack("<H", header)[0]
                 if length > 0:
                     try:
-                        payload = await reader.readexactly(length)
+                        payload = await asyncio.wait_for(reader.readexactly(length), timeout=30)  # FIXED: 添加读取超时
                     except asyncio.IncompleteReadError:
                         break
                     response = self._process_frame(header + payload)
                     if response:
                         writer.write(response)
                         await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 添加TimeoutError捕获
             pass
         finally:
             writer.close()

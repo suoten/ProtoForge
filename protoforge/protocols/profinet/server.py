@@ -300,15 +300,15 @@ class ProfinetServer(ProtocolServer):
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                header = await reader.readexactly(2)
+                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: 添加读取超时
                 body_len = struct.unpack(">H", header)[0]
-                data = await reader.readexactly(body_len) if body_len > 0 else b""
+                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""  # FIXED: 添加读取超时
                 response = self._process_tunnel_message(data, addr, writer)
                 if response:
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):  # FIXED: 添加TimeoutError捕获
             pass
         finally:
             self._connections.discard(writer)

@@ -19,7 +19,7 @@ async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(req
     return {"devices": engine.list_devices(protocol=protocol)}
 
 
-@router.post("/devices", response_model=DeviceInfo)
+@router.post("/devices")  # FIXED: 移除response_model=DeviceInfo，避免过滤_persistence_warning
 async def create_device(config: DeviceConfig, _user: dict = Depends(require_operator)):
     if not config.name or not config.name.strip():
         raise HTTPException(status_code=400, detail="设备名称不能为空")
@@ -70,6 +70,8 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
     template_id = template_id.strip()
     device_name = device_name.strip()
     device_id = params.get("id") or device_name.lower().replace(" ", "-").replace("(", "").replace(")", "") or str(uuid.uuid4())[:8]
+    if not isinstance(device_id, str):  # FIXED: 校验id类型
+        raise HTTPException(status_code=400, detail="id must be a string")
     device_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', device_id).strip('-') or str(uuid.uuid4())[:8]
     protocol_config = params.get("protocol_config", {})
     if not isinstance(protocol_config, dict):
@@ -148,6 +150,7 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
                 item["_persistence_warning"] = "数据持久化失败，重启后数据将丢失"
             results.append(item)
         except Exception as e:
+            logger.warning("Batch create device %s failed: [%s] %s", config.id, type(e).__name__, e)  # FIXED: 记录异常类型
             results.append({"id": config.id, "error": str(e)})
 
     created_count = sum(1 for r in results if "error" not in r)

@@ -18,10 +18,18 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
     try:
         devices = import_edgelite_config(config)
         results = []
+        errors = []
         for dev in devices:
-            info = await engine.create_device(dev)
-            results.append(info.model_dump())
-        return {"status": "ok", "imported": len(results), "devices": results}
+            try:  # FIXED: 单设备创建失败不中断整个导入
+                info = await engine.create_device(dev)
+                results.append(info.model_dump())
+            except Exception as dev_err:
+                logger.warning("Failed to import device %s: %s", getattr(dev, 'id', '?'), dev_err)
+                errors.append({"device_id": getattr(dev, 'id', '?'), "error": str(dev_err)})
+        resp = {"status": "ok" if not errors else "partial", "imported": len(results), "devices": results}
+        if errors:
+            resp["errors"] = errors
+        return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -176,11 +184,17 @@ async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(requir
     try:
         devices = import_pygbsentry_config(config)
         results = []
-
+        errors = []
         for dev in devices:
-            info = await engine.create_device(dev)
-            results.append(info.model_dump())
-
-        return {"status": "ok", "imported": len(results), "devices": results}
+            try:  # FIXED: 单设备创建失败不中断整个导入
+                info = await engine.create_device(dev)
+                results.append(info.model_dump())
+            except Exception as dev_err:
+                logger.warning("Failed to import pygbsentry device %s: %s", getattr(dev, 'id', '?'), dev_err)
+                errors.append({"device_id": getattr(dev, 'id', '?'), "error": str(dev_err)})
+        resp = {"status": "ok" if not errors else "partial", "imported": len(results), "devices": results}
+        if errors:
+            resp["errors"] = errors
+        return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
