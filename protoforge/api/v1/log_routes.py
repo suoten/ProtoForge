@@ -40,7 +40,7 @@ async def get_logs(
 async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
-    return {"status": "ok", "message": "日志已清空"}
+    return {"status": "ok", "message": "Logs cleared"}  # FIXED: 中文→英文
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:

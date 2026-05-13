@@ -28,7 +28,7 @@ async def list_forward_targets(_user: dict = Depends(require_viewer)):
         return {"targets": engine.list_targets()}
     except Exception as e:
         logger.error("Failed to list forward targets: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取转发目标列表失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to list forward targets: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/forward/targets")
@@ -42,7 +42,7 @@ async def add_forward_target(config: dict[str, Any], _user: dict = Depends(requi
             host = config.get("host", "localhost")
             port = config.get("port", 8086)
             if not isinstance(port, int) or port < 1 or port > 65535:
-                raise HTTPException(status_code=400, detail="port 必须是 1-65535 之间的整数")
+                raise HTTPException(status_code=400, detail="port must be an integer between 1 and 65535")  # FIXED: 中文→英文
             protocol = config.get("protocol", "http")
             if protocol in ("influxdb",):
                 config["url"] = f"http://{host}:{port}"
@@ -59,7 +59,7 @@ async def add_forward_target(config: dict[str, Any], _user: dict = Depends(requi
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to add forward target: %s", e)
-        raise HTTPException(status_code=500, detail=f"添加转发目标失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to add forward target: {e}") from e  # FIXED: 中文→英文
 
 
 @router.delete("/forward/targets/{name}")
@@ -70,7 +70,7 @@ async def remove_forward_target(name: str, _user: dict = Depends(require_operato
         return {"status": "ok"}
     except Exception as e:
         logger.error("Failed to remove forward target: %s", e)
-        raise HTTPException(status_code=500, detail=f"删除转发目标失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to remove forward target: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/forward/start")
@@ -80,7 +80,7 @@ async def start_forward(_user: dict = Depends(require_operator)):
         await engine.start()
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"启动数据转发失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start data forwarding: {str(e)}")  # FIXED: 中文→英文
 
 
 @router.post("/forward/stop")
@@ -90,7 +90,7 @@ async def stop_forward(_user: dict = Depends(require_operator)):
         await engine.stop()
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"停止数据转发失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop data forwarding: {str(e)}")  # FIXED: 中文→英文
 
 
 @router.get("/forward/stats")
@@ -100,4 +100,4 @@ async def forward_stats(_user: dict = Depends(require_viewer)):
         return engine.get_stats()
     except Exception as e:
         logger.error("Failed to get forward stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取转发统计失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get forward stats: {e}") from e  # FIXED: 中文→英文

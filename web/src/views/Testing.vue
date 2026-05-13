@@ -342,7 +342,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, h } from 'vue'
 import { useMessage, useDialog, NStatistic, NGrid, NGi, NDescriptions, NDescriptionsItem, NCollapse, NCollapseItem, NDynamicTags, NButton, NSpace } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -354,8 +354,8 @@ const dialog = useDialog()
 const suggestions = ref([])
 const loadingSuggestions = ref(false)
 const quickTesting = ref(false)
-const runningCaseIds = ref(new Set())
-const runningSuiteIds = ref(new Set())
+const runningCaseIds = reactive(new Set())  // FIXED: ref→reactive，Set响应性更可靠
+const runningSuiteIds = reactive(new Set())
 const lastReport = ref(null)
 const testJson = ref('')
 const runningJson = ref(false)
@@ -698,7 +698,7 @@ async function saveJsonAsCase() {
 }
 
 async function runCaseById(caseId) {
-  runningCaseIds.value.add(caseId)
+  runningCaseIds.add(caseId)
   try {
     const res = await api.runTestCase(caseId)
     lastReport.value = res
@@ -706,11 +706,11 @@ async function runCaseById(caseId) {
     message.success(t('testing.testComplete'))
   } catch (e) {
     message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { runningCaseIds.value.delete(caseId) }
+  } finally { runningCaseIds.delete(caseId) }
 }
 
 async function runSuiteById(suiteId) {
-  runningSuiteIds.value.add(suiteId)
+  runningSuiteIds.add(suiteId)
   try {
     const res = await api.runTestSuite(suiteId)
     lastReport.value = res
@@ -718,7 +718,7 @@ async function runSuiteById(suiteId) {
     message.success(t('testing.testComplete'))
   } catch (e) {
     message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { runningSuiteIds.value.delete(suiteId) }
+  } finally { runningSuiteIds.delete(suiteId) }
 }
 
 async function loadCaseToEditor(caseId) {
@@ -859,7 +859,7 @@ const caseColumns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 260,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'success', loading: runningCaseIds.value.has(row.id), onClick: () => runCaseById(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'success', loading: runningCaseIds.has(row.id), onClick: () => runCaseById(row.id) }, () => t('common.test')),
       h(NButton, { size: 'tiny', type: 'info', onClick: () => openEditCase(row) }, () => t('common.edit')),
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => loadCaseToEditor(row.id) }, () => t('testing.loadToEditor')),
       h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteCase(row.id) }, () => t('common.delete')),
@@ -873,7 +873,7 @@ const suiteColumns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'success', loading: runningSuiteIds.value.has(row.id), onClick: () => runSuiteById(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'success', loading: runningSuiteIds.has(row.id), onClick: () => runSuiteById(row.id) }, () => t('common.test')),
       h(NButton, { size: 'tiny', type: 'info', onClick: () => viewSuiteDetail(row.id) }, () => t('common.detail')),
       h(NButton, { size: 'tiny', type: 'error', onClick: () => deleteSuite(row.id) }, () => t('common.delete')),
     ])

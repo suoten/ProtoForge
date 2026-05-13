@@ -50,7 +50,7 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         return result
     except Exception as e:
         logger.error("EdgeLite push exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 推送失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")  # FIXED: 中文→英文
 
 
 @router.post("/integration/edgelite/test")
@@ -64,12 +64,12 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
     password = config.get("password", "")
 
     if not url:
-        raise HTTPException(status_code=400, detail="请填写 EdgeLite 地址")
+        raise HTTPException(status_code=400, detail="EdgeLite address is required")  # FIXED: 中文→英文
     try:
         return await _test(url, username, password)
     except Exception as e:
         logger.error("EdgeLite connection test failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 连接测试失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}")  # FIXED: 中文→英文
 
 
 @router.get("/integration/edgelite/status/{device_id}")
@@ -86,7 +86,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
         return await _status(instance)
     except Exception as e:
         logger.error("EdgeLite status check exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 状态查询失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}")  # FIXED: 中文→英文
 
 
 @router.get("/integration/edgelite/points/{device_id}")
@@ -108,7 +108,7 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         return {"points": points if points else []}
     except Exception as e:
         logger.error("EdgeLite read points exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 测点读取失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}")  # FIXED: 中文→英文
 
 
 @router.get("/integration/edgelite/pipeline/{device_id}")
@@ -156,7 +156,7 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         return result
     except Exception as e:
         logger.error("EdgeLite pipeline verification exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 管道验证失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")  # FIXED: 中文→英文
 
 
 @router.delete("/integration/edgelite/push/{device_id}")
@@ -173,7 +173,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
         return await _remove(instance)
     except Exception as e:
         logger.error("EdgeLite remove device exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite 移除设备失败: {e}")
+        raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}")  # FIXED: 中文→英文
 
 
 @router.post("/integration/pygbsentry")

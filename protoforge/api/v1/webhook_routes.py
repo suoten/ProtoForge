@@ -18,7 +18,7 @@ async def list_webhooks(_user: dict = Depends(require_viewer)):
         return {"webhooks": webhook_manager.list_webhooks()}
     except Exception as e:
         logger.error("Failed to list webhooks: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取 Webhook 列表失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to list webhooks: {e}") from e
 
 
 @router.post("/webhooks")
@@ -30,10 +30,10 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
             raise HTTPException(status_code=400, detail="url is required")
 
         url = config.get("url", "")
-        if not isinstance(url, str):  # FIXED: 校验url类型
+        if not isinstance(url, str):
             raise HTTPException(status_code=400, detail="url must be a string")
         if not re.match(r'^https?://', url):
-            raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
+            raise HTTPException(status_code=400, detail="url must start with http:// or https://")  # FIXED: 中文→英文
 
         webhook = webhook_manager.add_webhook(config)
         return webhook.to_dict()
@@ -43,7 +43,7 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to add webhook: %s", e)
-        raise HTTPException(status_code=500, detail=f"添加 Webhook 失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to add webhook: {e}") from e  # FIXED: 中文→英文
 
 
 @router.put("/webhooks/{wh_id}")
@@ -52,10 +52,10 @@ async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depen
         from protoforge.core.webhook import webhook_manager
 
         url = config.get("url", "")
-        if url is not None and not isinstance(url, str):  # FIXED: 校验url类型
+        if url is not None and not isinstance(url, str):
             raise HTTPException(status_code=400, detail="url must be a string")
         if url and not re.match(r'^https?://', url):
-            raise HTTPException(status_code=400, detail="url 必须以 http:// 或 https:// 开头")
+            raise HTTPException(status_code=400, detail="url must start with http:// or https://")  # FIXED: 中文→英文
 
         webhook = webhook_manager.update_webhook(wh_id, config)
         if not webhook:
@@ -67,7 +67,7 @@ async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depen
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to update webhook %s: %s", wh_id, e)
-        raise HTTPException(status_code=500, detail=f"更新 Webhook 失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to update webhook: {e}") from e  # FIXED: 中文→英文
 
 
 @router.delete("/webhooks/{wh_id}")
@@ -81,7 +81,7 @@ async def delete_webhook(wh_id: str, _user: dict = Depends(require_operator)):
         raise
     except Exception as e:
         logger.error("Failed to delete webhook %s: %s", wh_id, e)
-        raise HTTPException(status_code=500, detail=f"删除 Webhook 失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to delete webhook: {e}") from e  # FIXED: 中文→英文
 
 
 @router.post("/webhooks/{wh_id}/test")
@@ -96,7 +96,7 @@ async def test_webhook(wh_id: str, _user: dict = Depends(require_operator)):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Webhook 测试失败: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Webhook test failed: {str(e)}")  # FIXED: 中文→英文
 
 
 @router.get("/webhooks/stats")
@@ -106,4 +106,4 @@ async def webhook_stats(_user: dict = Depends(require_viewer)):
         return webhook_manager.get_stats()
     except Exception as e:
         logger.error("Failed to get webhook stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"获取 Webhook 统计失败: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to get webhook stats: {e}") from e  # FIXED: 中文→英文

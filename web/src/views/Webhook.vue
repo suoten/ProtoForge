@@ -118,16 +118,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, reactive, computed, onMounted, h } from 'vue'
 import { NSpace, NButton, NCard, NDataTable, NModal, NForm, NFormItem,
   NInput, NSelect, NSwitch, NGrid, NGi, NTag, NEmpty, NPopconfirm,
-  NText, useMessage, useDialog } from 'naive-ui'
+  NText, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 
 const message = useMessage()
 const { t } = useI18n()
-const dialog = useDialog()
 
 const webhooks = ref([])
 const webhookStats = ref({})
@@ -136,8 +135,8 @@ const showAddModal = ref(false)
 const showEditModal = ref(false)
 const adding = ref(false)
 const saving = ref(false)
-const testingIds = ref(new Set())
-const deletingIds = ref(new Set())
+const testingIds = reactive(new Set())  // FIXED: ref→reactive，Set响应性更可靠
+const deletingIds = reactive(new Set())
 const editingId = ref('')
 
 const addForm = ref({
@@ -197,7 +196,7 @@ const columns = computed(() => [
   {
     title: t('common.action'), key: 'actions', width: 200,
     render: (row) => h(NSpace, { size: 4 }, () => [
-      h(NButton, { size: 'tiny', type: 'info', secondary: true, loading: testingIds.value.has(row.id), onClick: () => testWebhookAction(row.id) }, () => t('common.test')),
+      h(NButton, { size: 'tiny', type: 'info', secondary: true, loading: testingIds.has(row.id), onClick: () => testWebhookAction(row.id) }, () => t('common.test')),
       h(NButton, { size: 'tiny', secondary: true, onClick: () => openEdit(row) }, () => t('common.edit')),
       h(NPopconfirm, { onPositiveClick: () => deleteWebhookAction(row.id) }, {
         trigger: () => h(NButton, { size: 'tiny', type: 'error' }, () => t('common.delete')),
@@ -235,8 +234,8 @@ async function addWebhook() {
   if (!addForm.value.events?.length) { message.warning(t('webhook.selectOneEvent')); return }
   adding.value = true
   try {
-    if (!addForm.value.url?.trim()) { message.warning(t('webhook.urlRequired')); adding.value = false; return }
-    try { const u = new URL(addForm.value.url); if (!['http:','https:'].includes(u.protocol)) throw new Error() } catch { message.warning(t('webhook.urlInvalid')); adding.value = false; return }
+    if (!addForm.value.url?.trim()) { message.warning(t('webhook.urlRequired')); return }
+    try { const u = new URL(addForm.value.url); if (!['http:','https:'].includes(u.protocol)) throw new Error() } catch { message.warning(t('webhook.urlInvalid')); return }
     const cfg = {
       name: addForm.value.name || `webhook-${Date.now()}`,
       url: addForm.value.url,
@@ -247,7 +246,7 @@ async function addWebhook() {
     }
     if (addForm.value.headers_json) {
       try { cfg.headers = JSON.parse(addForm.value.headers_json) }
-      catch { message.warning(t('webhook.headersJsonError')); adding.value = false; return }
+      catch { message.warning(t('webhook.headersJsonError')); return }
     }
     await api.addWebhook(cfg)
     showAddModal.value = false
@@ -287,7 +286,7 @@ async function updateWebhook() {
     }
     if (editForm.value.headers_json) {
       try { cfg.headers = JSON.parse(editForm.value.headers_json) }
-      catch { message.warning(t('webhook.headersJsonError')); saving.value = false; return }
+      catch { message.warning(t('webhook.headersJsonError')); return }
     }
     await api.updateWebhook(editingId.value, cfg)
     showEditModal.value = false
@@ -299,24 +298,24 @@ async function updateWebhook() {
 }
 
 async function testWebhookAction(id) {
-  testingIds.value.add(id)
+  testingIds.add(id)
   try {
     await api.testWebhook(id)
     message.success(t('webhook.testTriggered'))
   } catch (e) {
     message.error(t('webhook.testFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { testingIds.value.delete(id) }
+  } finally { testingIds.delete(id) }
 }
 
 async function deleteWebhookAction(id) {
-  deletingIds.value.add(id)
+  deletingIds.add(id)
   try {
     await api.deleteWebhook(id)
     message.success(t('common.deleted'))
     await loadWebhooks()
   } catch (e) {
     message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally { deletingIds.value.delete(id) }
+  } finally { deletingIds.delete(id) }
 }
 
 onMounted(() => {
