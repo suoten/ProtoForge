@@ -26,22 +26,28 @@ except ImportError:
 def _encrypt_data(data: bytes, key: bytes) -> str:
     if not _AES_AVAILABLE:
         raise RuntimeError("Recording encryption requires the 'cryptography' library. Install with: pip install cryptography")
-    derived_key = _derive_key(key)
-    nonce = os.urandom(12)
-    aesgcm = AESGCM(derived_key)
-    ct = aesgcm.encrypt(nonce, data, None)
-    return base64.b64encode(nonce + ct).decode("ascii")
+    try:  # FIXED: 加密操作无异常保护
+        derived_key = _derive_key(key)
+        nonce = os.urandom(12)
+        aesgcm = AESGCM(derived_key)
+        ct = aesgcm.encrypt(nonce, data, None)
+        return base64.b64encode(nonce + ct).decode("ascii")
+    except Exception as e:
+        raise RuntimeError(f"Recording encryption failed: {e}") from e
 
 
 def _decrypt_data(encrypted: str, key: bytes) -> bytes:
     if not _AES_AVAILABLE:
         raise RuntimeError("Recording decryption requires the 'cryptography' library. Install with: pip install cryptography")
-    derived_key = _derive_key(key)
-    raw = base64.b64decode(encrypted)
-    nonce = raw[:12]
-    ct = raw[12:]
-    aesgcm = AESGCM(derived_key)
-    return aesgcm.decrypt(nonce, ct, None)
+    try:  # FIXED: 解密操作无异常保护(base64解码/密文校验均可抛异常)
+        derived_key = _derive_key(key)
+        raw = base64.b64decode(encrypted)
+        nonce = raw[:12]
+        ct = raw[12:]
+        aesgcm = AESGCM(derived_key)
+        return aesgcm.decrypt(nonce, ct, None)
+    except Exception as e:
+        raise RuntimeError(f"Recording decryption failed: {e}") from e
 
 
 _SALT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".recording_salt")
@@ -106,11 +112,14 @@ class RecordedMessage:
     def from_dict(cls, data: dict) -> "RecordedMessage":
         raw = None
         if "raw_hex" in data:
-            raw = bytes.fromhex(data["raw_hex"])
+            try:  # FIXED: bytes.fromhex可能抛ValueError
+                raw = bytes.fromhex(data["raw_hex"])
+            except ValueError as e:
+                logger.debug("Invalid raw_hex in recorded message: %s", e)
         return cls(
-            timestamp=data["timestamp"], protocol=data["protocol"],
-            direction=data["direction"], device_id=data["device_id"],
-            message_type=data["message_type"], data=data["data"], raw=raw,
+            timestamp=data.get("timestamp", 0), protocol=data.get("protocol", ""),
+            direction=data.get("direction", ""), device_id=data.get("device_id", ""),
+            message_type=data.get("message_type", ""), data=data.get("data"), raw=raw,
         )
 
 
@@ -405,15 +414,19 @@ class Recorder:
     def _encrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:
         if not self._encryption_key:
             return data
-        messages = data.get("messages", [])
-        encrypted_messages = []
-        for msg in messages:
-            msg_bytes = json.dumps(msg, ensure_ascii=False).encode("utf-8")
-            encrypted_messages.append(_encrypt_data(msg_bytes, self._encryption_key))
-        result = {k: v for k, v in data.items() if k != "messages"}
-        result["messages_encrypted"] = encrypted_messages
-        result["encrypted"] = True
-        return result
+        try:  # FIXED: 加密失败时fallback保存未加密数据
+            messages = data.get("messages", [])
+            encrypted_messages = []
+            for msg in messages:
+                msg_bytes = json.dumps(msg, ensure_ascii=False).encode("utf-8")
+                encrypted_messages.append(_encrypt_data(msg_bytes, self._encryption_key))
+            result = {k: v for k, v in data.items() if k != "messages"}
+            result["messages_encrypted"] = encrypted_messages
+            result["encrypted"] = True
+            return result
+        except Exception as e:
+            logger.error("Recording encryption failed, saving unencrypted: %s", e)
+            return data
 
     def _decrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:
         if not self._encryption_key:

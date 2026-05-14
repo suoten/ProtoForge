@@ -8,6 +8,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 
@@ -223,7 +224,7 @@ class OpcUaServer(ProtocolServer):
             self._server_task.add_done_callback(self._on_server_task_done)
             logger.info("OPC-UA server starting at %s", self._endpoint)
             self._log_debug("system", "server_start",
-                            f"OPC-UA服务启动 {self._endpoint}")
+                            msg("opcua", "service_started", host=self._host, port=self._port))  # FIXED: 中文硬编码→i18n常量
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to start OPC-UA server: %s", e)
@@ -246,7 +247,7 @@ class OpcUaServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-UA server stopped")
-            self._log_debug("system", "server_stop", "OPC-UA服务停止")
+            self._log_debug("system", "server_stop", msg("opcua", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcUaDeviceBehavior(device_config.points)
@@ -263,7 +264,7 @@ class OpcUaServer(ProtocolServer):
 
         logger.info("OPC-UA device created: %s (namespace=%s)", device_config.id, ns)
         self._log_debug("system", "device_create",
-                        f"创建OPC-UA设备 {device_config.name}",
+                        msg("opcua", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_config.id)
         return device_config.id
 
@@ -290,7 +291,7 @@ class OpcUaServer(ProtocolServer):
                     logger.warning("OPC-UA folder node delete error: %s", e)
         logger.info("OPC-UA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除OPC-UA设备 {device_id}",
+                        msg("opcua", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -337,40 +338,33 @@ class OpcUaServer(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": "监听地址",
-                },
+                    "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
                 "port": {
                     "type": "integer",
                     "default": 4840,
-                    "description": "监听端口",
-                },
+                    "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
                 "security_mode": {
                     "type": "string",
                     "default": "None",
                     "enum": ["None", "Sign", "SignAndEncrypt"],
-                    "description": "安全模式",
-                },
+                    "description": desc("security_mode")},  # FIXED: 中文硬编码→i18n常量
                 "security_policy": {
                     "type": "string",
                     "default": "None",
                     "enum": ["None", "Basic256Sha256"],
-                    "description": "安全策略",
-                },
+                    "description": desc("security_policy")},  # FIXED: 中文硬编码→i18n常量
                 "certificate_path": {
                     "type": "string",
                     "default": "",
-                    "description": "服务器证书路径（PEM格式，留空自动生成）",
-                },
+                    "description": desc("server_cert_path")},  # FIXED: 中文硬编码→i18n常量
                 "private_key_path": {
                     "type": "string",
                     "default": "",
-                    "description": "服务器私钥路径（PEM格式，留空自动生成）",
-                },
+                    "description": desc("server_key_path")},  # FIXED: 中文硬编码→i18n常量
                 "cert_dir": {
                     "type": "string",
                     "default": "",
-                    "description": "证书存储目录（默认 ~/.protoforge/opcua_certs）",
-                },
+                    "description": desc("cert_store_dir")},  # FIXED: 中文硬编码→i18n常量
             },
         }
 

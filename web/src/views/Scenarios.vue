@@ -187,7 +187,7 @@ async function batchStart() {
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
-      loadData()
+      await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
     }
   })
 }
@@ -213,7 +213,7 @@ async function batchStop() {
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
-      loadData()
+      await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
     }
   })
 }

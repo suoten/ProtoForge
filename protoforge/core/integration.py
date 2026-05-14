@@ -10,7 +10,13 @@ logger = logging.getLogger(__name__)
 
 def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        config_data = json.loads(config_data)
+        try:
+            config_data = json.loads(config_data)
+        except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+            raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
+
+    if not isinstance(config_data, dict):
+        raise ValueError(f"EdgeLite config must be a dict, got {type(config_data).__name__}")
 
     devices = []
     device_list = config_data.get("devices", [])
@@ -18,9 +24,15 @@ def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConf
         device_list = [config_data]
 
     for dev in device_list:
+        if not isinstance(dev, dict):  # FIXED: device_list元素无类型校验
+            logger.warning("Skipping non-dict device entry in EdgeLite config: %s", type(dev).__name__)
+            continue
         protocol = dev.get("protocol", "modbus_tcp")
         points = []
         for pt in dev.get("points", []):
+            if not isinstance(pt, dict):  # FIXED: points元素无类型校验
+                logger.warning("Skipping non-dict point entry: %s", type(pt).__name__)
+                continue
             try:
                 data_type = DataType(pt.get("data_type", "float32"))
             except ValueError:
@@ -61,20 +73,35 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {file_path}")
-    content = path.read_text(encoding="utf-8")
-    data = json.loads(content)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, PermissionError, OSError) as e:  # FIXED: 文件IO无异常保护
+        raise ValueError(f"Failed to read config file '{file_path}': {e}") from e
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+        raise ValueError(f"Invalid JSON in file '{file_path}': {e}") from e
     return import_edgelite_config(data)
 
 
 def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        config_data = json.loads(config_data)
+        try:
+            config_data = json.loads(config_data)
+        except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+            raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e
+
+    if not isinstance(config_data, dict):
+        raise ValueError(f"PyGBSentry config must be a dict, got {type(config_data).__name__}")
 
     devices = []
     sip_servers = config_data.get("sip_servers", [])
     cameras = config_data.get("cameras", config_data.get("devices", []))
 
     for cam in cameras:
+        if not isinstance(cam, dict):  # FIXED: cameras元素无类型校验
+            logger.warning("Skipping non-dict camera entry in PyGBSentry config: %s", type(cam).__name__)
+            continue
         device_id = cam.get("device_id", cam.get("id", ""))
         device_name = cam.get("name", cam.get("device_name", f"Camera-{device_id}"))
         sip_server = cam.get("sip_server", sip_servers[0] if sip_servers else "127.0.0.1")

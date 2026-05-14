@@ -7,6 +7,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +238,7 @@ class EtherCATServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("EtherCAT server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"EtherCAT服务启动 {self._host}:{self._port}",
+                            msg("ethercat", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -258,7 +259,7 @@ class EtherCATServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("EtherCAT server stopped")
-            self._log_debug("system", "server_stop", "EtherCAT服务停止")
+            self._log_debug("system", "server_stop", msg("ethercat", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     def _init_eeprom(self) -> None:
         self._eeprom = bytearray(EEPROM_SIZE * 2)

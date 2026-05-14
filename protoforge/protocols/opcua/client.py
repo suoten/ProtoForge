@@ -104,9 +104,8 @@ class OpcUaClientProtocol(ProtocolServer):
                     if not ASYNCUA_SYNC and hasattr(self._client, 'uaclient'):
                         if hasattr(self._client.uaclient, 'keepalive') and callable(self._client.uaclient.keepalive):
                             await self._client.uaclient.keepalive()
-                except Exception:
-                    pass
-                continue
+                except Exception as ka_err:  # FIXED: keepalive异常被吞掉，连接状态不可知
+                    logger.debug("OPC-UA keepalive error: %s", ka_err)
             if self._max_reconnect_attempts > 0 and attempts >= self._max_reconnect_attempts:
                 logger.error("OPC-UA Client max reconnect attempts (%d) reached, giving up",
                              self._max_reconnect_attempts)
@@ -121,8 +120,8 @@ class OpcUaClientProtocol(ProtocolServer):
                             self._client.disconnect()
                         else:
                             await self._client.disconnect()
-                    except Exception:
-                        pass
+                    except Exception as disc_err:  # FIXED: disconnect异常被吞掉
+                        logger.debug("OPC-UA disconnect error during reconnect: %s", disc_err)
                     self._client = None
                 await self._connect()
                 self._status = ProtocolStatus.RUNNING

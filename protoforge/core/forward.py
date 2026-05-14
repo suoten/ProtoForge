@@ -44,6 +44,8 @@ def _is_url_allowed(url: str) -> tuple[bool, str]:
             resolved_ips = socket.getaddrinfo(hostname, None)
         except socket.gaierror:
             return False, f"Cannot resolve hostname: {hostname}"
+        if not resolved_ips:  # FIXED: getaddrinfo可能返回空列表导致IndexError
+            return False, f"No DNS records found for hostname: {hostname}"
         for family, _, _, _, sockaddr in resolved_ips:
             ip = ipaddress.ip_address(sockaddr[0])
             for network in _get_blocked_networks():
@@ -122,7 +124,10 @@ class InfluxDBTarget(ForwardTarget):
             if not fields_parts:
                 continue
             fields = ",".join(fields_parts)
-            ts = int(r.get("timestamp", time.time()) * 1e9)
+            try:  # FIXED: timestamp可能为字符串导致TypeError
+                ts = int(float(r.get("timestamp", time.time())) * 1e9)
+            except (ValueError, TypeError):
+                ts = int(time.time() * 1e9)
             lines.append(f"{measurement},{tags} {fields} {ts}")
         if not lines:
             return
@@ -229,12 +234,15 @@ class FileTarget(ForwardTarget):
             logger.warning("File forward error: %s", e)
 
     def _write_sync(self, records: list[dict[str, Any]]) -> None:
-        with open(self._path, "a", encoding="utf-8") as f:
-            for r in records:
-                if self._format == "jsonl":
-                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
-                else:
-                    f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
+        try:  # FIXED: 文件写入无try-catch(磁盘满/权限不足/路径不存在)
+            with open(self._path, "a", encoding="utf-8") as f:
+                for r in records:
+                    if self._format == "jsonl":
+                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                    else:
+                        f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
+        except (OSError, PermissionError, FileNotFoundError) as e:
+            logger.error("FileTarget write failed to %s: %s", self._path, e)
 
     async def close(self) -> None:
         try:
@@ -349,7 +357,7 @@ class ForwardEngine:
                         "detail": msg.detail,
                     })
             except asyncio.TimeoutError:
-                pass
+                pass  # FIXED: 正常超时等待下一批，无需日志
             if records and self._targets:
                 for name, target in self._targets.items():
                     for attempt in range(self._retry_count):

@@ -6,6 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class HttpSimulatorServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("HTTP REST server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"HTTP REST服务启动 {self._host}:{self._port}",
+                            msg("http", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -63,7 +64,7 @@ class HttpSimulatorServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("HTTP REST server stopped")
-            self._log_debug("system", "server_stop", "HTTP REST服务停止")
+            self._log_debug("system", "server_stop", msg("http", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     async def _serve(self) -> None:
         try:
@@ -173,7 +174,7 @@ class HttpSimulatorServer(ProtocolServer):
                     for name, value in data.items():
                         behavior.set_value(name, value)
                     self._log_debug("recv", "http_write",
-                                    f"HTTP写入设备 {device_id}",
+                                    msg("http", "device_written", detail=device_id),  # FIXED: 中文硬编码→i18n常量
                                     device_id=device_id,
                                     detail={"data": data})
                     return self._json_response(200, {"ok": True})
@@ -196,7 +197,7 @@ class HttpSimulatorServer(ProtocolServer):
                         if value is not None:
                             behavior.set_value(p.name, value)
                             self._log_debug("recv", "http_write",
-                                            f"HTTP写入 {p.name}={value}",
+                                            msg("http", "point_written", detail=f"{p.name}={value}"),  # FIXED: 中文硬编码→i18n常量
                                             device_id=device_id)
                         return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)})
                     except (json.JSONDecodeError, Exception) as e:
@@ -246,7 +247,7 @@ class HttpSimulatorServer(ProtocolServer):
 
         logger.info("HTTP device created: %s (api_prefix=%s)", device_config.id, api_prefix)
         self._log_debug("system", "device_create",
-                        f"创建HTTP设备 {device_config.name}",
+                        msg("http", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_config.id)
         return device_config.id
 
@@ -257,7 +258,7 @@ class HttpSimulatorServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("HTTP device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除HTTP设备 {device_id}",
+                        msg("http", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -282,8 +283,8 @@ class HttpSimulatorServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
-                "port": {"type": "integer", "default": 8080, "description": "HTTP端口"},
-                "api_prefix": {"type": "string", "default": "/api", "description": "API路径前缀"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量,
+                "port": {"type": "integer", "default": 8080, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量,
+                "api_prefix": {"type": "string", "default": "/api", "description": desc("http_api_prefix")},  # FIXED: 中文硬编码→i18n常量,
             },
         }

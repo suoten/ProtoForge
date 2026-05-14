@@ -104,7 +104,7 @@ onMounted(async () => {
   if (localStorage.getItem('protoforge_onboarded')) return
   try {
     const res = await api.getTemplates()
-    templates.value = res
+    templates.value = res || []  // FIXED: API返回null时filter()崩溃
     showWelcome.value = true
   } catch (e) {
     message.error(t('welcome.loadTemplatesFailed'))

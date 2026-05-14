@@ -632,8 +632,8 @@ def _get_default_port(protocol: str) -> int:
         port_map = get_protocol_port_map()
         if protocol in port_map:
             return port_map[protocol].get("port", _PROTOCOL_DEFAULT_PORTS.get(protocol, 0))
-    except Exception:
-        pass
+    except Exception as e:  # FIXED: 吞掉异常导致配置错误不可见
+        logger.debug("Failed to get protocol port map for %s: %s", protocol, e)
     return _PROTOCOL_DEFAULT_PORTS.get(protocol, 0)
 
 

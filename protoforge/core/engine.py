@@ -142,8 +142,8 @@ class SimulationEngine:
                 logger.error("Protocol %s: %s", protocol_name, error_msg)
                 try:
                     await server.stop()
-                except Exception:
-                    pass
+                except Exception as stop_err:  # FIXED: 吞掉异常导致原始错误信息丢失
+                    logger.warning("Error stopping protocol %s after ERROR state: %s", protocol_name, stop_err)
                 raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
             logger.info("Protocol %s started", protocol_name)
             for dev_id, instance in list(self._devices.items()):
@@ -310,8 +310,13 @@ class SimulationEngine:
             logger.error("Failed to create new device %s during update: %s, restoring old", device_id, e)
             try:
                 await self.create_device(old_config)
+                if was_running:  # FIXED: 回滚后尝试恢复运行状态
+                    try:
+                        await self.start_device(device_id)
+                    except Exception as restart_err:
+                        logger.warning("Failed to restart restored device %s: %s", device_id, restart_err)
             except Exception as restore_err:
-                logger.error("Failed to restore old device %s: %s", device_id, restore_err)
+                logger.critical("Failed to restore old device %s: %s. Device may be lost!", device_id, restore_err)  # FIXED: 回滚失败提升日志级别
             raise
 
     def get_all_device_ids(self) -> list[str]:
@@ -505,6 +510,7 @@ class SimulationEngine:
 
         scenario = Scenario(config, on_write_point=self.write_device_point)
         self._scenario_status[scenario_id] = ScenarioStatus.STARTING
+        created_device_ids: list[str] = []  # FIXED: 场景启动失败时回滚已创建设备
 
         try:
             failed_devices = []
@@ -512,6 +518,7 @@ class SimulationEngine:
                 if device_config.id not in self._devices:
                     try:
                         await self.create_device(device_config)
+                        created_device_ids.append(device_config.id)
                     except Exception as e:
                         logger.warning("Failed to create device %s in scenario: %s", device_config.id, e)
                         failed_devices.append(device_config.id)
@@ -548,6 +555,12 @@ class SimulationEngine:
             logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
         except Exception as e:
             self._scenario_status[scenario_id] = ScenarioStatus.ERROR
+            for dev_id in created_device_ids:  # FIXED: 回滚场景启动时创建的设备
+                try:
+                    await self.remove_device(dev_id)
+                    logger.info("Rolled back device %s after scenario start failure", dev_id)
+                except Exception as rollback_err:
+                    logger.warning("Failed to rollback device %s: %s", dev_id, rollback_err)
             logger.error("Failed to start scenario %s: %s", scenario_id, e)
             raise
 
