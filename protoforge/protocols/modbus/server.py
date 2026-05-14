@@ -7,6 +7,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -324,7 +325,7 @@ class ModbusTcpServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("Modbus TCP server starting on %s:%d (simdata=%s)", self._host, self._port, self._use_simdata)
             self._log_debug("system", "server_start",
-                            f"Modbus TCP服务启动 {self._host}:{self._port}",
+                            msg("modbus_tcp", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"host": self._host, "port": self._port, "simdata": self._use_simdata})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -346,7 +347,7 @@ class ModbusTcpServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("Modbus TCP server stopped")
-            self._log_debug("system", "server_stop", "Modbus TCP服务停止")
+            self._log_debug("system", "server_stop", msg("modbus_tcp", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
@@ -376,7 +377,7 @@ class ModbusTcpServer(ProtocolServer):
 
         logger.info("Modbus device created: %s (slave_id=%d)", device_config.id, slave_id)
         self._log_debug("system", "device_created",
-                        f"Modbus设备创建: {device_config.name} (slave_id={slave_id})",
+                        msg("modbus_tcp", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_config.id,
                         detail={"slave_id": slave_id, "points": len(device_config.points)})
         return device_config.id
@@ -390,7 +391,7 @@ class ModbusTcpServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("Modbus device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除Modbus设备 {device_id}",
+                        msg("modbus_tcp", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -422,8 +423,8 @@ class ModbusTcpServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
-                "port": {"type": "integer", "default": 5020, "description": "监听端口"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
+                "port": {"type": "integer", "default": 5020, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
             },
         }
 

@@ -7,6 +7,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +209,7 @@ class S7Server(ProtocolServer):
             logger.info("S7 server started on %s:%d (rack=%d, slot=%d)",
                          self._host, self._port, self._rack, self._slot)
             self._log_debug("system", "server_start",
-                            f"S7服务启动 {self._host}:{self._port}",
+                            msg("s7", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -229,7 +230,7 @@ class S7Server(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("S7 server stopped")
-            self._log_debug("system", "server_stop", "S7服务停止")
+            self._log_debug("system", "server_stop", msg("s7", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     async def _serve(self) -> None:
         try:
@@ -570,7 +571,7 @@ class S7Server(ProtocolServer):
                             logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
-                                f"写入{area_name}{db_number}偏移{offset}",
+                                msg("s7", "point_written", area=area_name, db_number=db_number, offset=offset),  # FIXED: 中文硬编码→i18n常量
                                 detail={"area": area_name, "db": db_number, "offset": offset, "len": len(write_data)})
             result_codes.append(0xFF)
 
@@ -725,7 +726,7 @@ class S7Server(ProtocolServer):
         logger.info("S7 device created: %s (rack=%d, slot=%d)",
                      device_id, rack, slot)
         self._log_debug("system", "device_create",
-                        f"创建S7设备 {device_config.name}",
+                        msg("s7", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
         return device_id
 
@@ -740,7 +741,7 @@ class S7Server(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("S7 device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除S7设备 {device_id}",
+                        msg("s7", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -772,22 +773,22 @@ class S7Server(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": "S7 服务器监听地址",
+                    "description": desc("listen_address"),  # FIXED: 中文硬编码→i18n常量
                 },
                 "port": {
                     "type": "integer",
                     "default": 102,
-                    "description": "S7 端口 (默认102)",
+                    "description": desc("s7_port_desc"),  # FIXED: 中文硬编码→i18n常量
                 },
                 "rack": {
                     "type": "integer",
                     "default": 0,
-                    "description": "机架号",
+                    "description": desc("s7_rack"),  # FIXED: 中文硬编码→i18n常量
                 },
                 "slot": {
                     "type": "integer",
                     "default": 1,
-                    "description": "槽号",
+                    "description": desc("s7_slot"),  # FIXED: 中文硬编码→i18n常量
                 },
             },
         }

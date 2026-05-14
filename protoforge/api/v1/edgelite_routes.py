@@ -6,11 +6,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine
 
-router = APIRouter()
+router = APIRouter(prefix="/integration", tags=["integration"])  # FIXED: 统一路由前缀风格与integration.py一致
 logger = logging.getLogger(__name__)
 
 
-@router.post("/integration/edgelite")
+@router.post("/edgelite")
 async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.integration import import_edgelite_config
     engine = _get_engine()
@@ -34,7 +34,7 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/integration/edgelite/push/{device_id}")
+@router.post("/edgelite/push/{device_id}")
 async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import push_device_to_edgelite as _push
     engine = _get_engine()
@@ -53,7 +53,7 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")  # FIXED: 中文→英文
 
 
-@router.post("/integration/edgelite/test")
+@router.post("/edgelite/test")
 async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(default=None), _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import test_edgelite_connection as _test
     if config is None:
@@ -72,7 +72,7 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
         raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}")  # FIXED: 中文→英文
 
 
-@router.get("/integration/edgelite/status/{device_id}")
+@router.get("/edgelite/status/{device_id}")
 async def get_edgelite_device_status(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import get_edgelite_device_status as _status
 
@@ -89,7 +89,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
         raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}")  # FIXED: 中文→英文
 
 
-@router.get("/integration/edgelite/points/{device_id}")
+@router.get("/edgelite/points/{device_id}")
 async def read_edgelite_device_points(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import read_edgelite_device_points as _read
 
@@ -111,7 +111,7 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}")  # FIXED: 中文→英文
 
 
-@router.get("/integration/edgelite/pipeline/{device_id}")
+@router.get("/edgelite/pipeline/{device_id}")
 async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
 
@@ -159,7 +159,7 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")  # FIXED: 中文→英文
 
 
-@router.delete("/integration/edgelite/push/{device_id}")
+@router.delete("/edgelite/push/{device_id}")
 async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import remove_device_from_edgelite as _remove
 
@@ -176,7 +176,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
         raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}")  # FIXED: 中文→英文
 
 
-@router.post("/integration/pygbsentry")
+@router.post("/pygbsentry")
 async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(require_operator)):
     from protoforge.core.integration import import_pygbsentry_config
     engine = _get_engine()

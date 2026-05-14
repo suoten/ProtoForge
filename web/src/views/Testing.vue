@@ -812,7 +812,7 @@ async function createSuite() {
 async function loadSuggestions() {
   loadingSuggestions.value = true
   try {
-    suggestions.value = await api.getTestSuggestions()
+    suggestions.value = (await api.getTestSuggestions()) || []  // FIXED: API返回null时后续操作崩溃
   } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) } finally {
     loadingSuggestions.value = false
   }
@@ -841,15 +841,15 @@ async function loadMetadata() {
 }
 
 async function loadReports() {
-  try { reports.value = await api.listTestReports() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
+  try { reports.value = (await api.listTestReports()) || [] } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadCases() {
-  try { testCases.value = await api.listTestCases() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
+  try { testCases.value = (await api.listTestCases()) || [] } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function loadSuites() {
-  try { suites.value = await api.listTestSuites() } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
+  try { suites.value = (await api.listTestSuites()) || [] } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
 const caseColumns = computed(() => [

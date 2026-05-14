@@ -183,8 +183,8 @@ async function loadTargets() {
 async function loadStats() {
   try {
     const res = await api.getForwardStats()
-    stats.value = res
-    forwardRunning.value = res.running || false
+    stats.value = res || {}  // FIXED: API返回null时res.running崩溃
+    forwardRunning.value = (res && res.running) || false
   } catch (e) {
     stats.value = stats.value || {}
     message.warning(t('forward.loadStatsFailed') + ': ' + (e.response?.data?.detail || e.message))

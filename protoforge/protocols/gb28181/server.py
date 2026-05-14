@@ -10,6 +10,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -243,12 +244,12 @@ class GB28181Server(ProtocolServer):
 
             self._status = ProtocolStatus.RUNNING
             self._log_debug("system", "server_start",
-                            f"GB28181 SIP服务启动 {self._host}:{self._port}",
+                            msg("gb28181", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"server_id": self._server_id, "port": self._port})
             logger.info("GB28181 server starting on %s:%d", self._host, self._port)
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            self._log_debug("system", "server_error", f"SIP服务启动失败: {e}")
+            self._log_debug("system", "server_error", msg("gb28181", "service_start_failed", error=e))  # FIXED: 中文硬编码→i18n常量
             logger.error("Failed to start GB28181 server: %s", e)
             raise
 
@@ -280,7 +281,7 @@ class GB28181Server(ProtocolServer):
             logger.warning("GB28181 server stop error: %s", e)
         finally:
             self._status = ProtocolStatus.STOPPED
-            self._log_debug("system", "server_stop", "GB28181 SIP服务停止")
+            self._log_debug("system", "server_stop", msg("gb28181", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
             logger.info("GB28181 server stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
@@ -329,7 +330,7 @@ class GB28181Server(ProtocolServer):
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._clear_default_device(device_id)
-        self._log_debug("system", "device_removed", f"设备移除", device_id=device_id)
+        self._log_debug("system", "device_removed", msg("gb28181", "device_removed"))  # FIXED: 中文硬编码→i18n常量, device_id=device_id
         logger.info("GB28181 device removed: %s", device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -356,16 +357,15 @@ class GB28181Server(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
-                "port": {"type": "integer", "default": 5060, "description": "监听端口"},
-                "server_id": {"type": "string", "default": "34020000002000000001", "description": "SIP服务器ID(20位编码)"},
-                "srtp_enabled": {"type": "boolean", "default": False, "description": "是否启用SRTP加密"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
+                "port": {"type": "integer", "default": 5060, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
+                "server_id": {"type": "string", "default": "34020000002000000001", "description": desc("sip_server_id")},  # FIXED: 中文硬编码→i18n常量
+                "srtp_enabled": {"type": "boolean", "default": False, "description": desc("srtp_enabled")},  # FIXED: 中文硬编码→i18n常量
                 "srtp_crypto_suite": {
                     "type": "string",
                     "default": "AES_CM_128_HMAC_SHA1_80",
                     "enum": ["AES_CM_128_HMAC_SHA1_80", "AES_CM_128_HMAC_SHA1_32"],
-                    "description": "SRTP加密套件",
-                },
+                    "description": desc("srtp_crypto_suite")},  # FIXED: 中文硬编码→i18n常量
             },
         }
 
@@ -388,7 +388,7 @@ class GB28181Server(ProtocolServer):
                             gb_device.device_id, server_host, server_port)
         except Exception as e:
             self._log_debug("out", "sip_register_error",
-                            f"REGISTER发送失败: {e}",
+                            msg("gb28181", "register_failed", error=e),  # FIXED: 中文硬编码→i18n常量
                             device_id=gb_device._protoforge_device_id)
             logger.warning("Failed to send REGISTER for %s: %s", gb_device.device_id, e)
 
@@ -474,7 +474,7 @@ class GB28181Server(ProtocolServer):
                 self._log_debug("in", "sip_unknown",
                                 f"未处理的SIP消息: {first_line[:60]}")
         except Exception as e:
-            self._log_debug("in", "sip_error", f"SIP消息处理异常: {e}")
+            self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))  # FIXED: 中文硬编码→i18n常量
 
     def _handle_message(self, message: str, addr: tuple) -> None:
         body_start = message.find("\r\n\r\n")
@@ -507,28 +507,28 @@ class GB28181Server(ProtocolServer):
                 response_body = gb_device.make_catalog_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_catalog_response",
-                                f"发送Catalog响应 (1个设备)",
+                                msg("gb28181", "catalog_response_sent"),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
             elif cmd_type == "Keepalive":
                 response_body = gb_device.make_heartbeat_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_keepalive_response",
-                                f"发送Keepalive响应 OK",
+                                msg("gb28181", "keepalive_response_sent"),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
             elif cmd_type == "DeviceControl":
                 response_body = gb_device.make_control_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_control_response",
-                                f"发送DeviceControl响应 OK",
+                                msg("gb28181", "device_control_response_sent"),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
             elif cmd_type == "DeviceConfig":
                 response_body = gb_device.make_config_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_config_response",
-                                f"发送DeviceConfig响应 OK",
+                                msg("gb28181", "device_config_response_sent"),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
         except ET.ParseError:
-            self._log_debug("in", "sip_xml_error", "XML解析失败")
+            self._log_debug("in", "sip_xml_error", msg("gb28181", "xml_parse_failed"))  # FIXED: 中文硬编码→i18n常量
 
     def _handle_200_ok(self, message: str, addr: tuple) -> None:
         call_id = ""
@@ -543,13 +543,13 @@ class GB28181Server(ProtocolServer):
                 pf_id = gb_device._protoforge_device_id
                 if not was_registered:
                     self._log_debug("in", "sip_register_ok",
-                                    f"设备注册成功! 服务器已确认",
+                                    msg("gb28181", "register_success"),  # FIXED: 中文硬编码→i18n常量
                                     device_id=pf_id,
                                     detail={"gb_id": gb_device.device_id,
                                             "server": f"{gb_device.host}:{gb_device.port}"})
                 else:
                     self._log_debug("in", "sip_register_refresh",
-                                    f"注册刷新成功",
+                                    msg("gb28181", "register_refresh_success"),  # FIXED: 中文硬编码→i18n常量
                                     device_id=pf_id)
                 logger.info("Device %s registered successfully", gb_device.device_id)
                 break
@@ -587,7 +587,7 @@ class GB28181Server(ProtocolServer):
                     logger.info("Sent authenticated REGISTER for %s", gb_device.device_id)
             except Exception as e:
                 self._log_debug("out", "sip_register_auth_error",
-                                f"认证REGISTER发送失败: {e}",
+                                msg("gb28181", "auth_register_failed", error=e),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
 
     def _handle_invite(self, message: str, addr: tuple) -> None:
@@ -701,7 +701,7 @@ class GB28181Server(ProtocolServer):
         gb_device._srtp_context = srtp_context
 
         self._log_debug("out", "sip_invite_ok",
-                        f"发送INVITE 200 OK + SDP (媒体: {media_ip}:{media_port})",
+                        msg("gb28181", "invite_ok_sent", detail=f"{media_ip}:{media_port}"),  # FIXED: 中文硬编码→i18n常量
                         device_id=pf_id,
                         detail={"media": f"{media_ip}:{media_port}",
                                 "ssrc": ssrc,
@@ -759,11 +759,11 @@ class GB28181Server(ProtocolServer):
                                                 "fps": 25})
                     except Exception as e:
                         self._log_debug("out", "rtp_stream_error",
-                                        f"RTP流启动失败: {e}",
+                                        msg("gb28181", "rtp_start_failed", error=e),  # FIXED: 中文硬编码→i18n常量
                                         device_id=pf_id)
                 else:
                     self._log_debug("in", "sip_ack_no_media",
-                                    f"ACK收到但无有效媒体地址",
+                                    msg("gb28181", "ack_no_media"),  # FIXED: 中文硬编码→i18n常量
                                     device_id=pf_id)
                 break
 
@@ -806,12 +806,12 @@ class GB28181Server(ProtocolServer):
                     t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
                     self._rtp_tasks.append(t)
                     self._log_debug("out", "rtp_stream_stop",
-                                    "BYE收到, 停止RTP视频流",
+                                    msg("gb28181", "bye_received"),  # FIXED: 中文硬编码→i18n常量
                                     device_id=pf_id)
                 gb_device._invite_call_id = ""
                 break
 
-        self._log_debug("out", "sip_bye_ok", "发送BYE 200 OK")
+        self._log_debug("out", "sip_bye_ok", msg("gb28181", "bye_ok_sent"))  # FIXED: 中文硬编码→i18n常量
         logger.info("Sent BYE 200 OK")
 
     def _send_response(self, original_message: str, body: str, addr: tuple) -> None:

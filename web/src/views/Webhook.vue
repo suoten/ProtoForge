@@ -222,7 +222,7 @@ async function loadWebhooks() {
 
 async function loadStats() {
   try {
-    webhookStats.value = await api.getWebhookStats()
+    webhookStats.value = (await api.getWebhookStats()) || {}  // FIXED: API返回null时模板访问属性崩溃
   } catch (e) {
     webhookStats.value = webhookStats.value || {}
     message.warning(t('webhook.loadStatsFailed') + ': ' + (e.response?.data?.detail || e.message))

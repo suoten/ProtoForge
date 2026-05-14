@@ -619,7 +619,7 @@ async function batchStart() {
         const fail = res.errors?.length || 0
         selectedIds.value = []
         message.success(t('devices.batchStarted', { ok, fail }))
-        loadData()
+        await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
       } catch (e) {
         message.error(t('devices.batchStartFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
@@ -641,7 +641,7 @@ async function batchStop() {
         const fail = res.errors?.length || 0
         selectedIds.value = []
         message.success(t('devices.batchStopped', { ok, fail }))
-        loadData()
+        await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
       } catch (e) {
         message.error(t('devices.batchStopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }

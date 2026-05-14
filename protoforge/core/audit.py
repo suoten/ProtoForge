@@ -149,8 +149,17 @@ class AuditLogger:
             return
         try:
             entries = await self._database.load_audit_entries(limit=1000)
-            self._entries = [AuditEntry(**e) for e in entries]
-            logger.info("Restored %d audit entries from database", len(self._entries))
+            restored = []
+            for e in entries:  # FIXED: 逐条解析防止单个字段不匹配导致全部失败
+                try:
+                    restored.append(AuditEntry(**e))
+                except Exception as entry_err:
+                    logger.debug("Skipping invalid audit entry: %s", entry_err)
+            existing_ids = {e.id for e in self._entries}
+            for entry in restored:  # FIXED: 合并而非替换，防止丢失未持久化条目
+                if entry.id not in existing_ids:
+                    self._entries.append(entry)
+            logger.info("Restored %d audit entries from database (total: %d)", len(restored), len(self._entries))
         except Exception as e:
             logger.warning("Failed to restore audit entries: %s", e)
 

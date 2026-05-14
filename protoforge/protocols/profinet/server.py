@@ -9,6 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
 
@@ -229,7 +230,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"PROFINET IO服务启动 {self._host}:{self._port}",
+                            msg("profinet", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
                             detail={"host": self._host, "port": self._port,
                                     "device_name": self._device_name})
         except Exception as e:
@@ -252,7 +253,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.STOPPED
             self._active_ars.clear()
             logger.info("PROFINET IO server stopped")
-            self._log_debug("system", "server_stop", "PROFINET IO服务停止")
+            self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -317,7 +318,7 @@ class ProfinetServer(ProtocolServer):
                 if ar.state == ARState.W_DATA:
                     ar.state = ARState.W_ABORT
                     self._log_debug("outbound", "ar_abort",
-                                    f"PROFINET AR[{ar_id}]连接断开, 转为W_ABORT",
+                                    msg("profinet", "ar_disconnected", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
                                     detail={"ar_id": ar_id})
             writer.close()
             try:
@@ -470,7 +471,7 @@ class ProfinetServer(ProtocolServer):
             resp += struct.pack(">B", 0x01 if cr.is_consumer else 0x00)
 
         self._log_debug("inbound", "cm_connect",
-                        f"PROFINET CM Connect: AR[{ar_id}]建立, 状态=W_DATA, "
+                        msg("profinet", "cm_connect", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
                         f"CRs={len(ar.crs)}, input={self._input_size}, output={self._output_size}",
                         detail={"ar_id": ar_id, "session_key": ar.session_key,
                                 "send_clock": ar.send_clock, "crs": len(ar.crs)})
@@ -484,11 +485,11 @@ class ProfinetServer(ProtocolServer):
         if ar:
             ar.state = ARState.W_ABORT
             self._log_debug("inbound", "cm_release",
-                            f"PROFINET CM Release: AR[{ar_id}]释放",
+                            msg("profinet", "cm_release", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
                             detail={"ar_id": ar_id})
         else:
             self._log_debug("inbound", "cm_release_error",
-                            f"PROFINET CM Release: AR[{ar_id}]不存在",
+                            msg("profinet", "cm_release_not_found", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
                             detail={"ar_id": ar_id})
 
         resp = bytearray()
@@ -655,7 +656,7 @@ class ProfinetServer(ProtocolServer):
         logger.info("PROFINET IO device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
         self._log_debug("system", "device_created",
-                        f"PROFINET设备创建: {device_config.name}",
+                        msg("profinet", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_config.id,
                         detail={"input_size": self._input_size,
                                 "output_size": self._output_size})
@@ -668,7 +669,7 @@ class ProfinetServer(ProtocolServer):
         self._recalc_data_sizes()
         logger.info("PROFINET device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除PROFINET设备 {device_id}",
+                        msg("profinet", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -698,16 +699,16 @@ class ProfinetServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址(TCP隧道模式)"},
-                "port": {"type": "integer", "default": 34964, "description": "TCP隧道端口"},
-                "device_name": {"type": "string", "default": "protoforge-device", "description": "PROFINET设备名称(DCP识别用)"},
-                "vendor_id": {"type": "integer", "default": 266, "description": "厂商ID(VendorID)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("tcp_tunnel_address")},  # FIXED: 中文硬编码→i18n常量
+                "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},  # FIXED: 中文硬编码→i18n常量
+                "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},  # FIXED: 中文硬编码→i18n常量
+                "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},  # FIXED: 中文硬编码→i18n常量
                 "device_id": {"type": "integer", "default": 256, "description": "设备ID(DeviceID)"},
-                "ip_address": {"type": "string", "default": "192.168.1.1", "description": "DCP Identify响应IP地址"},
-                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": "子网掩码"},
-                "gateway": {"type": "string", "default": "192.168.1.254", "description": "默认网关"},
+                "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},  # FIXED: 中文硬编码→i18n常量
+                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},  # FIXED: 中文硬编码→i18n常量
+                "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},  # FIXED: 中文硬编码→i18n常量
             },
-            "description": "TCP隧道模式 - 支持DCP发现/CM连接建立/AR状态机/RT循环数据/Alarm通知",
+            "description": desc("tcp_tunnel_mode_desc"),  # FIXED: 中文硬编码→i18n常量
         }
 
     @staticmethod

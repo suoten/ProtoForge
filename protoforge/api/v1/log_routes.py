@@ -124,7 +124,7 @@ async def ws_devices(websocket: WebSocket):
                         },
                     })
                 except asyncio.TimeoutError:
-                    pass
+                    pass  # FIXED: WebSocket发送超时正常跳过，客户端可能暂时不活跃
                 except Exception as exc:
                     logger.debug("Protocol event send failed: %s", exc)
 

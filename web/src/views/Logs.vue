@@ -286,7 +286,7 @@ function scheduleReconnect() {
 async function loadProtocols() {
   try {
     const res = await api.getProtocols()
-    protocols.value = res
+    protocols.value = res || []  // FIXED: API返回null时map()崩溃
   } catch (e) {
     message.error(t('logs.loadProtocolsFailed') + ': ' + (e.response?.data?.detail || e.message))
   }

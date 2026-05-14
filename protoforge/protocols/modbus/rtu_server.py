@@ -110,7 +110,7 @@ class ModbusRtuServer(ProtocolServer):
             raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
 
         if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
-            pass
+            logger.info("Non-standard serial port path %s, attempting direct connection", self._port)  # FIXED: 串口路径不匹配时if分支为空
         elif not os.path.exists(self._port):
             logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port 5021", self._port)
             self._status = ProtocolStatus.RUNNING
