@@ -198,7 +198,7 @@ const form = ref({
   cors_origins: '*',
   demo_mode: false,
   edgelite_url: '',
-  edgelite_username: 'admin',
+  edgelite_username: '',  // FIXED: removed hardcoded 'admin' default
   edgelite_password: '',
   influxdb_url: '',
   influxdb_token: '',
@@ -276,7 +276,7 @@ async function loadSettings() {
       cors_origins: data.cors_origins || '*',
       demo_mode: data.demo_mode || false,
       edgelite_url: data.edgelite_url || '',
-      edgelite_username: data.edgelite_username || 'admin',
+      edgelite_username: data.edgelite_username || '',  // FIXED: removed hardcoded 'admin' fallback
       edgelite_password: data.edgelite_password || '',
       influxdb_url: data.influxdb_url || '',
       influxdb_token: data.influxdb_token || '',
@@ -317,7 +317,7 @@ async function testEdgeLiteConnection() {
   try {
     const testPayload = {
       url: form.value.edgelite_url,
-      username: form.value.edgelite_username || 'admin',
+      username: form.value.edgelite_username || '',  // FIXED: removed hardcoded 'admin' fallback
     }
     if (form.value.edgelite_password && form.value.edgelite_password !== PASSWORD_MASK) {
       testPayload.password = form.value.edgelite_password

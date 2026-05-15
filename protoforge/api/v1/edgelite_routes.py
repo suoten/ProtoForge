@@ -60,7 +60,7 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
         config = {}
 
     url = config.get("url", "")
-    username = config.get("username", "admin")
+    username = config.get("username", "")  # FIXED: removed hardcoded "admin" fallback
     password = config.get("password", "")
 
     if not url:

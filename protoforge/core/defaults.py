@@ -429,12 +429,16 @@ HTTP_TIMEOUT_DEFAULT = 10.0
 HTTP_TIMEOUT_SHORT = 5.0
 HTTP_TIMEOUT_LONG = 30.0
 
+import logging  # FIXED: added logging import for config fallback warnings
+_defaults_logger = logging.getLogger(__name__)
+
 
 def get_http_timeout_default() -> float:
     try:
         from protoforge.config import get_settings
         return get_settings().http_timeout
-    except Exception:
+    except Exception as e:
+        _defaults_logger.debug("Failed to read http_timeout from config, using default: %s", e)  # FIXED: log the exception
         return HTTP_TIMEOUT_DEFAULT
 
 
@@ -442,7 +446,8 @@ def get_http_timeout_short() -> float:
     try:
         from protoforge.config import get_settings
         return get_settings().http_timeout_short
-    except Exception:
+    except Exception as e:
+        _defaults_logger.debug("Failed to read http_timeout_short from config, using default: %s", e)  # FIXED: log the exception
         return HTTP_TIMEOUT_SHORT
 
 
@@ -450,7 +455,8 @@ def get_http_timeout_long() -> float:
     try:
         from protoforge.config import get_settings
         return get_settings().http_timeout_long
-    except Exception:
+    except Exception as e:
+        _defaults_logger.debug("Failed to read http_timeout_long from config, using default: %s", e)  # FIXED: log the exception
         return HTTP_TIMEOUT_LONG
 
 ERROR_MESSAGES = {

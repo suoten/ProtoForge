@@ -231,7 +231,8 @@ class FileTarget(ForwardTarget):
         except ValueError:
             raise
         except Exception as e:
-            logger.warning("File forward error: %s", e)
+            logger.error("File forward write failed: %s", e)  # FIXED: elevated from warning to error, caller can detect failure
+            raise  # FIXED: re-raise so caller knows write failed
 
     def _write_sync(self, records: list[dict[str, Any]]) -> None:
         try:  # FIXED: 文件写入无try-catch(磁盘满/权限不足/路径不存在)
@@ -276,11 +277,16 @@ class ForwardEngine:
     def remove_target(self, name: str) -> None:
         target = self._targets.pop(name, None)
         if target and hasattr(target, 'close'):
+            async def _safe_close():  # FIXED: wrap close in try-catch to prevent silent failure
+                try:
+                    await target.close()
+                except Exception as exc:
+                    logger.warning("Failed to close forward target %s: %s", name, exc)
             try:
-                asyncio.get_running_loop().create_task(target.close())
+                asyncio.get_running_loop().create_task(_safe_close())
             except RuntimeError:
                 try:
-                    asyncio.ensure_future(target.close())
+                    asyncio.ensure_future(_safe_close())
                 except Exception as exc:
                     logger.debug("Failed to schedule target close: %s", exc)
         logger.info("Forward target removed: %s", name)

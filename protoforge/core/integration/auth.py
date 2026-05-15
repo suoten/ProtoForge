@@ -12,7 +12,7 @@ class IntegrationAuth:
     def __init__(
         self,
         base_url: str,
-        username: str = "admin",
+        username: str = "",  # FIXED: removed hardcoded "admin" default, callers should pass from config
         password: str = "",
         refresh_margin: float = 30.0,
     ):

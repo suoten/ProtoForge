@@ -36,7 +36,7 @@ def parse_node_id(address: str):
 
 class OpcUaClientProtocol(ProtocolServer):
     protocol_name = "opcua_client"
-    protocol_display_name = "OPC-UA 客户端"
+    protocol_display_name = "OPC-UA Client"  # FIXED: CN→EN
 
     def __init__(self):
         super().__init__()
@@ -75,7 +75,7 @@ class OpcUaClientProtocol(ProtocolServer):
             logger.info("OPC-UA Client connected to %s (timeout=%.1fs, session_timeout=%dms)",
                         self._endpoint, self._request_timeout, self._session_timeout)
             self._log_debug("system", "client_connect",
-                            f"OPC-UA客户端连接 {self._endpoint}")
+                            f"OPC-UA client connected: {self._endpoint}")  # FIXED: CN→EN
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to connect to OPC-UA server: %s", e)
@@ -128,7 +128,7 @@ class OpcUaClientProtocol(ProtocolServer):
                 attempts = 0
                 logger.info("OPC-UA Client reconnected to %s", self._endpoint)
                 self._log_debug("system", "client_reconnect",
-                                f"OPC-UA客户端重连成功 {self._endpoint}")
+                                f"OPC-UA client reconnected: {self._endpoint}")  # FIXED: CN→EN
             except Exception as e:
                 self._connected = False
                 self._status = ProtocolStatus.ERROR
@@ -157,7 +157,7 @@ class OpcUaClientProtocol(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-UA Client disconnected")
-            self._log_debug("system", "client_disconnect", "OPC-UA客户端断开连接")
+            self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")  # FIXED: CN→EN
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         self._device_configs[device_config.id] = device_config
@@ -170,7 +170,7 @@ class OpcUaClientProtocol(ProtocolServer):
         logger.info("OPC-UA Client device created: %s (%d points)",
                     device_config.id, len(device_config.points))
         self._log_debug("system", "device_create",
-                        f"创建OPC-UA客户端设备 {device_config.name}",
+                        f"Creating OPC-UA client device: {device_config.name}"  ,  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -252,32 +252,32 @@ class OpcUaClientProtocol(ProtocolServer):
                 "endpoint": {
                     "type": "string",
                     "default": "opc.tcp://localhost:4840",
-                    "description": "OPC-UA 服务器端点地址",
+                    "description": "OPC-UA server endpoint address"  ,  # FIXED: CN→EN
                 },
                 "read_interval": {
                     "type": "number",
                     "default": 1.0,
-                    "description": "数据读取间隔(秒)",
+                    "description": "Data read interval (seconds)"  ,  # FIXED: CN→EN
                 },
                 "request_timeout": {
                     "type": "number",
                     "default": 10.0,
-                    "description": "请求超时时间(秒)，增大此值可减少通道续期超时错误",
+                    "description": "Request timeout (seconds), increase to reduce channel renewal timeout errors"  ,  # FIXED: CN→EN
                 },
                 "session_timeout": {
                     "type": "integer",
                     "default": 3600000,
-                    "description": "会话超时时间(毫秒)，默认1小时",
+                    "description": "Session timeout (ms), default 1 hour"  ,  # FIXED: CN→EN
                 },
                 "reconnect_interval": {
                     "type": "number",
                     "default": 5.0,
-                    "description": "断线重连间隔(秒)",
+                    "description": "Reconnect interval (seconds)"  ,  # FIXED: CN→EN
                 },
                 "max_reconnect_attempts": {
                     "type": "integer",
                     "default": 0,
-                    "description": "最大重连次数，0表示无限重试",
+                    "description": "Max reconnect attempts, 0 for unlimited"  ,  # FIXED: CN→EN
                 },
             },
         }

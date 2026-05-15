@@ -3,7 +3,7 @@ import time
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request  # FIXED: added Body import
 
 from protoforge.api.v1.auth import require_user, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_database, _trigger_webhook_safe
@@ -184,7 +184,8 @@ async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
 
 
 @router.post("/tests/run")
-async def run_test(test_cases: list[dict[str, Any]], _user: dict = Depends(require_user)):
+async def run_test(payload: dict[str, Any] = Body(...), _user: dict = Depends(require_user)):  # FIXED: accept wrapped object for explicit contract
+    test_cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
     if not isinstance(test_cases, list) or not test_cases:  # FIXED: 类型校验
         raise HTTPException(status_code=400, detail="Request body must be a non-empty array of test cases")
     from protoforge.core.testing import TestCase

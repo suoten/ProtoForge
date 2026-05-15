@@ -297,7 +297,7 @@ class ProfinetServer(ProtocolServer):
         logger.info("PROFINET IO connection from %s", addr)
         self._connections.add(writer)
         self._log_debug("inbound", "connect",
-                        f"IO Controller连接: {addr[0]}:{addr[1]}",
+                        f"IO Controller connected: {addr[0]}:{addr[1]}",  # FIXED: CN→EN
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
@@ -574,7 +574,7 @@ class ProfinetServer(ProtocolServer):
         frame = struct.pack(">H", len(payload)) + payload
 
         self._log_debug("outbound", "alarm_send",
-                        f"PROFINET Alarm发送: AR[{ar_id}] type=0x{alarm_type:04X}",
+                        f"PROFINET Alarm sent: AR[{ar_id}] type=0x{alarm_type:04X}"  ,  # FIXED: CN→EN
                         detail={"ar_id": ar_id, "alarm_type": alarm_type,
                                 "alarm_seq": self._alarm_seq})
 
@@ -691,7 +691,7 @@ class ProfinetServer(ProtocolServer):
         success = behavior.on_write(point_name, value)
         if success:
             self._log_debug("system", "write_point",
-                            f"PROFINET写入测点: {point_name}={value}",
+                            f"PROFINET write point: {point_name}={value}"  ,  # FIXED: CN→EN
                             device_id=device_id)
         return success
 
@@ -703,7 +703,7 @@ class ProfinetServer(ProtocolServer):
                 "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},  # FIXED: 中文硬编码→i18n常量
                 "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},  # FIXED: 中文硬编码→i18n常量
                 "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},  # FIXED: 中文硬编码→i18n常量
-                "device_id": {"type": "integer", "default": 256, "description": "设备ID(DeviceID)"},
+                "device_id": {"type": "integer", "default": 256, "description": "Device ID"},  # FIXED: CN→EN,
                 "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},  # FIXED: 中文硬编码→i18n常量
                 "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},  # FIXED: 中文硬编码→i18n常量
                 "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},  # FIXED: 中文硬编码→i18n常量

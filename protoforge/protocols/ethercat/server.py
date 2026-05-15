@@ -483,7 +483,7 @@ class EtherCATServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         logger.info("EtherCAT connection from %s", addr)
         self._log_debug("inbound", "connect",
-                        f"EtherCAT Master连接: {addr[0]}:{addr[1]}",
+                        f"EtherCAT Master connected: {addr[0]}:{addr[1]}"  ,  # FIXED: CN→EN
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
@@ -599,7 +599,7 @@ class EtherCATServer(ProtocolServer):
             if behavior and config:
                 behavior.set_pd_output(config, payload[:length])
                 self._log_debug("inbound", "pdo_write",
-                                f"EtherCAT PDO写入 {length}字节",
+                                f"EtherCAT PDO write {length} bytes"  ,  # FIXED: CN→EN
                                 device_id=self._default_device_id or "",
                                 detail={"size": length})
             return b"", 0x0001
@@ -674,7 +674,7 @@ class EtherCATServer(ProtocolServer):
             end = min(offset + len(data), FMMU_REG_SIZE)
             ch[offset:end] = data[:end - offset]
             self._log_debug("inbound", "fmmu_config",
-                            f"EtherCAT FMMU[{ch_idx}]配置写入",
+                            f"EtherCAT FMMU[{ch_idx}] config written"  ,  # FIXED: CN→EN
                             detail={"channel": ch_idx, "address": hex(address)})
             self._configure_fmmu_for_pd()
 
@@ -696,7 +696,7 @@ class EtherCATServer(ProtocolServer):
             ch[offset:end] = data[:end - offset]
             sm_type = "Output" if ch_idx == 2 else "Input" if ch_idx == 3 else f"SM{ch_idx}"
             self._log_debug("inbound", "sm_config",
-                            f"EtherCAT SM[{ch_idx}]({sm_type})配置写入",
+                            f"EtherCAT SM[{ch_idx}]({sm_type}) config written"  ,  # FIXED: CN→EN
                             detail={"channel": ch_idx, "address": hex(address),
                                     "physical_start": struct.unpack("<H", ch[0:2])[0],
                                     "length": struct.unpack("<H", ch[2:4])[0],
@@ -751,7 +751,7 @@ class EtherCATServer(ProtocolServer):
             self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
             self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
             self._log_debug("inbound", "state_change_error",
-                            "EtherCAT AL: PREOP->SAFEOP失败, SM未配置",
+                            "EtherCAT AL: PREOP->SAFEOP failed, SM not configured"  ,  # FIXED: CN→EN
                             detail={"error_code": 0x001A, "reason": "SM not configured"})
             return
 
@@ -760,14 +760,14 @@ class EtherCATServer(ProtocolServer):
                 self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
                 self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
                 self._log_debug("inbound", "state_change_error",
-                                "EtherCAT AL: ->OP失败, SM未配置",
+                                "EtherCAT AL: ->OP failed, SM not configured"  ,  # FIXED: CN→EN
                                 detail={"error_code": 0x001A})
                 return
             if not self._check_fmmu_configured():
                 self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001B)
                 self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
                 self._log_debug("inbound", "state_change_error",
-                                "EtherCAT AL: ->OP失败, FMMU未配置",
+                                "EtherCAT AL: ->OP failed, FMMU not configured"  ,  # FIXED: CN→EN
                                 detail={"error_code": 0x001B})
                 return
 
@@ -795,7 +795,7 @@ class EtherCATServer(ProtocolServer):
         logger.info("EtherCAT device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
         self._log_debug("system", "device_created",
-                        f"EtherCAT设备创建: {device_config.name}",
+                        f"EtherCAT device created: {device_config.name}"  ,  # FIXED: CN→EN
                         device_id=device_config.id,
                         detail={"input_size": self._input_size,
                                 "output_size": self._output_size})
@@ -808,7 +808,7 @@ class EtherCATServer(ProtocolServer):
         self._recalc_data_sizes()
         logger.info("EtherCAT device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除EtherCAT设备 {device_id}",
+                        f"Removed EtherCAT device: {device_id}"  ,  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -830,7 +830,7 @@ class EtherCATServer(ProtocolServer):
         success = behavior.on_write(point_name, value)
         if success:
             self._log_debug("system", "write_point",
-                            f"EtherCAT写入测点: {point_name}={value}",
+                            f"EtherCAT write point: {point_name}={value}"  ,  # FIXED: CN→EN
                             device_id=device_id)
         return success
 
@@ -838,9 +838,9 @@ class EtherCATServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "监听地址"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "Listen address"},  # FIXED: CN→EN,
                 "port": {"type": "integer", "default": 34980, "description": "EtherCAT帧服务端口"},
-                "slave_address": {"type": "integer", "default": 4097, "description": "从站地址(Station Address)"},
+                "slave_address": {"type": "integer", "default": 4097, "description": "Slave Station Address"},  # FIXED: CN→EN,
                 "vendor_id": {"type": "integer", "default": 0, "description": "厂商ID(EEPROM)"},
                 "product_code": {"type": "integer", "default": 0, "description": "产品代码(EEPROM)"},
                 "revision_number": {"type": "integer", "default": 1, "description": "修订号(EEPROM)"},

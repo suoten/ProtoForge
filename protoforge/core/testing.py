@@ -520,7 +520,8 @@ class TestRunner:
             try:
                 from protoforge.config import get_settings
                 cls._MAX_REPORTS = get_settings().test_max_reports
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to read test_max_reports from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
                 cls._MAX_REPORTS = 1000
         return cls._MAX_REPORTS
 

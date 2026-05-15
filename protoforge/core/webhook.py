@@ -110,9 +110,14 @@ class WebhookManager:
                 return
             data = json.loads(path.read_text(encoding="utf-8"))
             for item in data:
+                wh_id = item.get("id")
+                wh_url = item.get("url")
+                if not wh_id or not wh_url:  # FIXED: validate required fields to prevent KeyError on corrupt data
+                    logger.warning("Skipping webhook with missing id or url: %s", item)
+                    continue
                 wh = WebhookConfig(
-                    id=item["id"], name=item.get("name", item["id"]),
-                    url=item["url"], events=item.get("events", ["rule_triggered"]),
+                    id=wh_id, name=item.get("name", wh_id),
+                    url=wh_url, events=item.get("events", ["rule_triggered"]),
                     headers=item.get("headers", {}), enabled=item.get("enabled", True),
                     secret=item.get("secret"),
                 )
@@ -222,8 +227,12 @@ class WebhookManager:
             raise RuntimeError("WebhookManager is not running. Call start() first.")
         headers = {"Content-Type": "application/json", **webhook.headers}
         if webhook.secret:
-            body_bytes = json.dumps(body).encode()
-            sig = hmac.new(webhook.secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+            try:
+                body_bytes = json.dumps(body).encode("utf-8")
+                sig = hmac.new(webhook.secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()  # FIXED: explicit utf-8 encoding to prevent UnicodeEncodeError
+            except (UnicodeEncodeError, TypeError) as enc_err:
+                logger.error("Failed to compute HMAC for webhook %s: %s", webhook.id, enc_err)
+                return
             headers["X-ProtoForge-Signature"] = sig
         try:
             resp = await self._client.post(webhook.url, json=body, headers=headers)

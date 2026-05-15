@@ -157,7 +157,7 @@ async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depend
     return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
 
 
-@router.delete("/devices/batch")
+@router.post("/devices/batch/delete")  # FIXED: changed from DELETE to POST to avoid proxy body-stripping issues
 async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()

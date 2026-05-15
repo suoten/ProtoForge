@@ -166,7 +166,8 @@ class Recorder:
             try:
                 from protoforge.config import get_settings
                 cls._MAX_MESSAGES = get_settings().recorder_max_messages
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to read recorder_max_messages from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
                 cls._MAX_MESSAGES = 100000
         return cls._MAX_MESSAGES
 
@@ -179,7 +180,8 @@ class Recorder:
         try:
             from protoforge.config import get_settings
             queue_size = get_settings().recorder_queue_size
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read recorder_queue_size from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
             queue_size = 50000
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._task: Optional[asyncio.Task] = None
@@ -293,10 +295,17 @@ class Recorder:
                         if full.get("encrypted") and self._encryption_key:
                             full = self._decrypt_recording(full)
                         messages = [RecordedMessage.from_dict(m) for m in full.get("messages", [])]
+                        rec_id = full.get("id")
+                        rec_name = full.get("name")
+                        rec_protocol = full.get("protocol")
+                        rec_start = full.get("start_time")
+                        if not all([rec_id, rec_name, rec_protocol, rec_start]):  # FIXED: validate required fields before constructing Recording
+                            logger.warning("Skipping recording with missing required fields: id=%s", rec_id)
+                            continue
                         rec = Recording(
-                            id=full["id"], name=full["name"],
-                            protocol=full["protocol"],
-                            start_time=full["start_time"],
+                            id=rec_id, name=rec_name,
+                            protocol=rec_protocol,
+                            start_time=rec_start,
                             end_time=full.get("end_time", 0),
                             messages=messages,
                             metadata=full.get("metadata", {}),
@@ -336,7 +345,7 @@ class Recorder:
                         if point_value is not None:
                             await target_engine.write_device_point(msg.device_id, point_name, point_value)
                 except Exception as e:
-                    logger.debug("Replay write error: %s", e)
+                    logger.warning("Replay write error for device %s point %s: %s", msg.device_id, msg.data.get("point_name", ""), e)  # FIXED: elevated from debug to warning
                     errors += 1
             replayed += 1
         elapsed = round(time.time() - start_ts, 2)

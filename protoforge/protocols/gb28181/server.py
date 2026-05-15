@@ -314,7 +314,7 @@ class GB28181Server(ProtocolServer):
             await self._register_device(gb_device)
 
         self._log_debug("system", "device_created",
-                        f"设备创建: {device_config.name} (国标编码={gb_device_id})",
+                        f"Device created: {device_config.name} (GB ID={gb_device_id})"  ,  # FIXED: CN→EN
                         device_id=device_config.id,
                         detail={"gb_id": gb_device_id, "server": f"{sip_server_addr}:{sip_server_port}"})
         logger.info("GB28181 device created: %s (gb_id=%s, server=%s:%d)",
@@ -380,7 +380,7 @@ class GB28181Server(ProtocolServer):
                     (server_host, server_port),
                 )
                 self._log_debug("out", "sip_register",
-                                f"发送REGISTER → {server_host}:{server_port}",
+                                f"Sending REGISTER to {server_host}:{server_port}"  ,  # FIXED: CN→EN
                                 device_id=gb_device._protoforge_device_id,
                                 detail={"gb_id": gb_device.device_id,
                                         "server": f"{server_host}:{server_port}"})
@@ -455,7 +455,7 @@ class GB28181Server(ProtocolServer):
             message = data.decode("utf-8", errors="replace")
             first_line = message.split("\r\n")[0]
             self._log_debug("in", "sip_recv",
-                            f"收到SIP消息 ← {addr[0]}:{addr[1]}: {first_line[:80]}",
+                            f"SIP message received from {addr[0]}:{addr[1]}: {first_line[:80]}"  ,  # FIXED: CN→EN
                             detail={"from": f"{addr[0]}:{addr[1]}",
                                     "first_line": first_line[:120]})
             if "MESSAGE" in first_line:
@@ -472,7 +472,7 @@ class GB28181Server(ProtocolServer):
                 self._handle_401(message, addr)
             else:
                 self._log_debug("in", "sip_unknown",
-                                f"未处理的SIP消息: {first_line[:60]}")
+                                f"Unhandled SIP message: {first_line[:60]}")  # FIXED: CN→EN
         except Exception as e:
             self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))  # FIXED: 中文硬编码→i18n常量
 
@@ -494,12 +494,12 @@ class GB28181Server(ProtocolServer):
                     break
             if not gb_device:
                 self._log_debug("in", "sip_message_unknown",
-                                f"未知设备MESSAGE: {cmd_type}, DeviceID={device_id}")
+                                f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")  # FIXED: CN→EN
                 return
 
             pf_id = gb_device._protoforge_device_id
             self._log_debug("in", f"sip_{cmd_type.lower()}",
-                            f"收到{cmd_type}请求 (SN={sn})",
+                            f"Received {cmd_type} request (SN={sn})"  ,  # FIXED: CN→EN
                             device_id=pf_id,
                             detail={"cmd": cmd_type, "sn": sn, "gb_id": device_id})
 
@@ -581,7 +581,7 @@ class GB28181Server(ProtocolServer):
                 if self._transport:
                     self._transport.sendto(auth_request.encode("utf-8"), addr)
                     self._log_debug("out", "sip_register_auth",
-                                    f"发送带认证REGISTER (Digest认证, nonce={nonce[:8]}...)",
+                                    f"Sending authenticated REGISTER (Digest auth, nonce={nonce[:8]}...)"  ,  # FIXED: CN→EN
                                     device_id=pf_id,
                                     detail={"realm": realm, "nonce": nonce[:16]})
                     logger.info("Sent authenticated REGISTER for %s", gb_device.device_id)
@@ -626,7 +626,7 @@ class GB28181Server(ProtocolServer):
                 break
         if not gb_device:
             self._log_debug("in", "sip_invite_no_device",
-                            f"INVITE但无匹配设备: {device_id}")
+                            f"INVITE but no matching device: {device_id}")  # FIXED: CN→EN
             return
 
         pf_id = gb_device._protoforge_device_id
@@ -640,7 +640,7 @@ class GB28181Server(ProtocolServer):
                 sdp_info["media_ip"] = addr[0]
 
         self._log_debug("in", "sip_invite",
-                        f"收到INVITE(视频请求) ← {addr[0]}:{addr[1]}",
+                        f"INVITE (video request) received from {addr[0]}:{addr[1]}"  ,  # FIXED: CN→EN
                         device_id=pf_id,
                         detail={"gb_id": device_id,
                                 "media_addr": f"{sdp_info['media_ip']}:{sdp_info['media_port']}"})
@@ -751,7 +751,7 @@ class GB28181Server(ProtocolServer):
                         self._rtp_tasks.append(t)
 
                         self._log_debug("out", "rtp_stream_start",
-                                        f"ACK收到, 启动RTP视频流 → {dest_ip}:{dest_port}",
+                                        f"ACK received, starting RTP video stream to {dest_ip}:{dest_port}"  ,  # FIXED: CN→EN
                                         device_id=pf_id,
                                         detail={"dest": f"{dest_ip}:{dest_port}",
                                                 "ssrc": ssrc,

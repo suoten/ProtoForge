@@ -72,7 +72,7 @@ class ChannelConfig(BaseModel):
 class IntegrationConfig(BaseModel):
     enabled: bool = False
     edgelite_url: str = ""
-    username: str = "admin"
+    username: str = ""  # FIXED: removed hardcoded "admin" default
     password: str = ""
     channel: ChannelConfig = Field(default_factory=ChannelConfig)
     backhaul: BackhaulConfig = Field(default_factory=BackhaulConfig)

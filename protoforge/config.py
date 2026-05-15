@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     demo_mode: bool = False
     log_level: str = "info"
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "*"  # FIXED: default to allow all origins; set PROTOFORGE_CORS_ORIGINS for production
     no_auth: bool = False
     admin_password: str = ""
     grpc_port: int = 50051

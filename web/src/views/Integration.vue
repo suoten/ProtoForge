@@ -441,7 +441,7 @@ const pygbsentryJson = ref('')
 const importing = ref(false)
 const importResults = ref([])
 
-const elConfig = ref({ url: '', username: 'admin', password: '' })
+const elConfig = ref({ url: '', username: '', password: '' })  // FIXED: removed hardcoded 'admin' default
 const testingConn = ref(false)
 const connResult = ref(null)
 const loadingDevices = ref(false)
@@ -809,7 +809,7 @@ async function loadElConfig() {
     const settings = await api.getSettings()
     elConfig.value = {
       url: settings.edgelite_url || '',
-      username: settings.edgelite_username || 'admin',
+      username: settings.edgelite_username || '',  // FIXED: removed hardcoded 'admin' fallback
       password: (settings.edgelite_password && settings.edgelite_password !== '***') ? settings.edgelite_password : '',
     }
   } catch (e) {
@@ -870,7 +870,7 @@ async function pushDevice(deviceId) {
           message.error(t('integration.pushFailed') + ': ' + errMsg + hint)
           return
         }
-        const dc = res.driver_config
+        const dc = res.driver_config || {}  // FIXED: guard against null driver_config
         const dcHint = dc ? ` (${t('integration.connectAddress')}: ${dc.host || dc.url || ''}:${dc.port || ''})` : ''
         message.success((res.action === 'created' ? t('integration.deviceRegistered') : t('integration.deviceConfigUpdated')) + dcHint)
         await checkStatus(deviceId)
@@ -1061,7 +1061,7 @@ async function batchPushAndVerify() {
             const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
             dev._el_status = statusRes.ok ? statusRes.status : 'error'
             if (statusRes.ok && statusRes.status === 'online') verified++
-          } catch (e) { /* ignore individual status errors during polling */ }
+          } catch (e) { console.warn('Status check failed for device %s:', dev.id, e.message) }  // FIXED: log instead of silently ignoring
         }
         if (verified > 0 || pollCount >= maxPolls) {
           clearInterval(_batchPollTimer)

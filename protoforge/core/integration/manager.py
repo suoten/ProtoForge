@@ -58,7 +58,7 @@ class IntegrationManager:
         event_bus: EventBus,
         enabled: bool = False,
         edgelite_url: str = "",
-        username: str = "admin",
+        username: str = "",  # FIXED: removed hardcoded "admin" default, callers should pass from config
         password: str = "",
     ):
         self._event_bus = event_bus
@@ -152,14 +152,14 @@ class IntegrationManager:
         self._running = False
         self._cleanup_event_handlers()
 
-        if self._ws_channel:
-            await self._ws_channel.close()
-            self._ws_channel = None
-        if self._channel:
-            await self._channel.close()
-            self._channel = None
-        if self._auth:
-            await self._auth.close()
+        for ch_name, ch in [("ws_channel", self._ws_channel), ("channel", self._channel), ("auth", self._auth)]:  # FIXED: wrap each close in try-catch to prevent blocking cleanup
+            if ch:
+                try:
+                    await ch.close()
+                except Exception as e:
+                    logger.warning("Failed to close %s: %s", ch_name, e)
+        self._ws_channel = None
+        self._channel = None
         logger.info("IntegrationManager stopped")
 
     async def _connect(self) -> None:
@@ -425,9 +425,10 @@ class IntegrationManager:
                     generator_type = params.get("generator_type", "")
                     generator_config = params.get("generator_config", {})
                     instance = engine.get_device_instance(target_id)
-                    if instance and point_name:
+                    point_configs = getattr(instance, 'point_configs', None) or getattr(instance, '_point_configs', None)  # FIXED: try public attr first, then private fallback
+                    if instance and point_name and point_configs:
                         if generator_config:
-                            point_cfg = instance._point_configs.get(point_name)
+                            point_cfg = point_configs.get(point_name)
                             if point_cfg:
                                 for k, v in generator_config.items():
                                     if hasattr(point_cfg, k):
@@ -436,7 +437,7 @@ class IntegrationManager:
                                         except (AttributeError, TypeError) as attr_err:
                                             logger.debug("Cannot set %s on point config: %s", k, attr_err)
                         if generator_type:
-                            point_cfg = instance._point_configs.get(point_name) if instance else None
+                            point_cfg = point_configs.get(point_name) if instance else None
                             if point_cfg:
                                 try:
                                     from protoforge.models.device import GeneratorType

@@ -248,7 +248,10 @@ class SimulationEngine:
             except Exception as e:
                 logger.warning("Failed to remove device %s from protocol server: %s", device_id, e)
 
-        instance.stop()
+        try:
+            instance.stop()
+        except Exception as e:
+            logger.warning("Failed to stop device %s during removal: %s", device_id, e)  # FIXED: wrap stop() in try-catch to allow removal to continue
 
         proto_config = instance.config.protocol_config or {}
         edgelite_url = proto_config.get("edgelite_url", "")
@@ -328,7 +331,11 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         if instance.status == DeviceStatus.ONLINE:
             return
-        instance.start()
+        try:
+            instance.start()
+        except Exception as e:
+            logger.error("Failed to start device %s: %s", device_id, e)  # FIXED: wrap start() in try-catch to prevent state inconsistency
+            raise
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
             try:
@@ -347,7 +354,10 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         if instance.status != DeviceStatus.ONLINE:
             return
-        instance.stop()
+        try:
+            instance.stop()
+        except Exception as e:
+            logger.error("Failed to stop device %s: %s", device_id, e)  # FIXED: wrap stop() in try-catch to ensure event is still published
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
             try:
@@ -659,7 +669,7 @@ class SimulationEngine:
                 try:
                     await scenario.tick()
                 except Exception as e:
-                    logger.warning("Tick error for scenario %s: %s", scenario.config.id, e)
+                    logger.warning("Tick error for scenario %s: %s", getattr(scenario.config, 'id', 'unknown') if scenario.config else 'unknown', e)  # FIXED: guard against None config
             await asyncio.sleep(self._tick_interval)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:

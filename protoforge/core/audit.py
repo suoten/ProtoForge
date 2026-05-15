@@ -32,7 +32,8 @@ class AuditLogger:
             try:
                 from protoforge.config import get_settings
                 cls._MAX_ENTRIES = get_settings().audit_max_entries
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to read audit_max_entries from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
                 cls._MAX_ENTRIES = 50000
         return cls._MAX_ENTRIES
 

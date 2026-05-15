@@ -250,7 +250,7 @@ class WebSocketChannel(ChannelBase):
         else:
             connect_url = self._url
 
-        self._ws = await websockets.connect(connect_url, ping_interval=None, close_timeout=5.0)
+        self._ws = await websockets.connect(connect_url, ping_interval=None, close_timeout=5.0, open_timeout=10.0)  # FIXED: added open_timeout to prevent infinite blocking
         self._connected = True
         self._missed_heartbeats = 0
 
@@ -265,7 +265,13 @@ class WebSocketChannel(ChannelBase):
 
         msg_id = message.get("id")
         data = json.dumps(message)
-        await self._ws.send(data)
+        try:
+            await self._ws.send(data)
+        except Exception as e:  # FIXED: clean up pending_responses on send failure
+            self._connected = False
+            if msg_id and msg_id in self._pending_responses:
+                self._pending_responses.pop(msg_id, None)
+            raise
         if msg_id and hasattr(self, '_pending_responses'):
             future = asyncio.get_running_loop().create_future()
             self._pending_responses[msg_id] = future

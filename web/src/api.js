@@ -197,7 +197,7 @@ export default {
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
   writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
-  batchDeleteDevices: (ids) => d(api.request({ method: 'DELETE', url: '/devices/batch', data: { device_ids: ids } })),
+  batchDeleteDevices: (ids) => d(api.post('/devices/batch/delete', { device_ids: ids })),  // FIXED: changed from DELETE to POST
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
   batchStopDevices: (ids) => d(api.post('/devices/batch/stop', { device_ids: ids })),
 
@@ -242,7 +242,7 @@ export default {
   listTestSuites: () => d(api.get('/tests/suites')).then(r => normalizeList(r, 'suites')),
   getTestSuite: (id) => d(api.get(`/tests/suites/${id}`)),
   deleteTestSuite: (id) => d(api.delete(`/tests/suites/${id}`)),
-  runTests: (cases) => d(api.post('/tests/run', cases)),
+  runTests: (cases) => d(api.post('/tests/run', { test_cases: cases })),  // FIXED: wrap in object for explicit contract
   runTestCase: (id) => d(api.post(`/tests/run/case/${id}`)),
   runTestSuite: (id) => d(api.post(`/tests/run/suite/${id}`)),
   quickTest: (scope, targetId) => d(api.post('/tests/quick-test', null, { params: { scope, target_id: targetId || undefined } })),
@@ -266,14 +266,7 @@ export default {
   getIntegrationStatus: () => d(api.get('/integration/status')),
   getIntegrationMetrics: () => d(api.get('/integration/metrics')),
   getIntegrationProtocols: () => d(api.get('/integration/protocols')),
-  validateDeviceCompatibility: (data) => {
-    const payload = { ...data }
-    if (payload.config && !payload.driver_config) {
-      payload.driver_config = payload.config
-      delete payload.config
-    }
-    return d(api.post('/integration/validate', payload))
-  },
+  validateDeviceCompatibility: (data) => d(api.post('/integration/validate', data)),  // FIXED: removed redundant config->driver_config remap, backend handles both
   batchPushDevices: (data) => d(api.post('/integration/batch-push', data)),
   startIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/start`)),
   stopIntegrationDevice: (deviceId) => d(api.post(`/integration/device/${deviceId}/stop`)),
