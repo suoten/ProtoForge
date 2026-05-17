@@ -1,4 +1,7 @@
 <template>
+  <n-message-provider>
+  <n-dialog-provider>
+  <n-notification-provider>
   <div v-if="!loggedIn" class="login-wrapper">
     <Login @login-success="onLogin" />
   </div>
@@ -73,12 +76,15 @@
       </n-layout-content>
     </n-layout>
   </n-layout>
+  </n-notification-provider>
+  </n-dialog-provider>
+  </n-message-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NMessageProvider, NDialogProvider, NNotificationProvider } from 'naive-ui'
 import api from './api.js'
 import Login from './views/Login.vue'
 import Welcome from './views/Welcome.vue'

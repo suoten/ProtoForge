@@ -1,8 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from protoforge.api.v1.router import router
 from protoforge.core.engine import SimulationEngine
@@ -184,11 +187,18 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def root():
+        index = Path("/app/static/index.html")
+        if index.exists():
+            return FileResponse(index)
         return {
             "name": "ProtoForge",
             "version": "0.1.0",
             "description": "物联网协议仿真与测试平台",
         }
+
+    static_dir = Path("/app/static")
+    if static_dir.exists():
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
     @app.get("/health")
     async def health():
