@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        config_data = json.loads(config_data)
+        try:  # FIXED: json.loads without exception protection
+            config_data = json.loads(config_data)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
 
     devices = []
     device_list = config_data.get("devices", [])
@@ -54,13 +57,19 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {file_path}")
     content = path.read_text(encoding="utf-8")
-    data = json.loads(content)
+    try:  # FIXED: json.loads without exception protection
+        data = json.loads(content)
+    except (json.JSONDecodeError, TypeError) as e:
+        raise ValueError(f"Invalid JSON in file '{file_path}': {e}") from e
     return import_edgelite_config(data)
 
 
 def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        config_data = json.loads(config_data)
+        try:  # FIXED: json.loads without exception protection
+            config_data = json.loads(config_data)
+        except (json.JSONDecodeError, TypeError) as e:
+            raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e
 
     devices = []
     sip_servers = config_data.get("sip_servers", [])

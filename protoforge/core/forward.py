@@ -115,12 +115,14 @@ class InfluxDBTarget(ForwardTarget):
             tags = f"device_id={device_id},protocol={protocol}"
             fields_parts = []
             if "value" in r:
+                value = r.get("value", "")  # FIXED: direct dict access
                 try:
-                    fields_parts.append(f"value={float(r['value'])}")
+                    fields_parts.append(f"value={float(value)}")
                 except (ValueError, TypeError):
-                    fields_parts.append(f'value="{_esc_field(r["value"])}"')
-            if "point_name" in r:
-                fields_parts.append(f'point_name="{_esc_field(r["point_name"])}"')
+                    fields_parts.append(f'value="{_esc_field(value)}"')
+            point_name = r.get("point_name", "")  # FIXED: direct dict access
+            if point_name:
+                fields_parts.append(f'point_name="{_esc_field(point_name)}"')
             if not fields_parts:
                 continue
             fields = ",".join(fields_parts)
@@ -393,22 +395,23 @@ class ForwardEngine:
 def create_target(config: dict[str, Any]) -> ForwardTarget:
     target_type = config.get("type", "http")
     if target_type == "influxdb":
-        if not config.get("url"):
+        url = config.get("url")  # FIXED: direct dict access could raise KeyError
+        if not url:
             raise ValueError("InfluxDB target requires 'url' parameter")
-        if not config.get("token"):
+        token = config.get("token")  # FIXED: direct dict access could raise KeyError
+        if not token:
             raise ValueError("InfluxDB target requires 'token' parameter")
-        url = config["url"]
         allowed, reason = _is_url_allowed(url)
         if not allowed:
             raise ValueError(f"InfluxDB target URL not allowed: {reason}")
         return InfluxDBTarget(
-            url=url, token=config["token"],
+            url=url, token=token,
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
         )
     elif target_type == "http":
-        if not config.get("url"):
+        url = config.get("url")  # FIXED: direct dict access could raise KeyError
+        if not url:
             raise ValueError("HTTP target requires 'url' parameter")
-        url = config["url"]
         allowed, reason = _is_url_allowed(url)
         if not allowed:
             raise ValueError(f"HTTP target URL not allowed: {reason}")

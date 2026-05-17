@@ -279,6 +279,7 @@ function stopRecording() {
         if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
         message.success(t('recorder.stopped', { n: res.event_count || 0 }))
         await loadRecordings()
+        await loadStats()  // FIXED: refresh stats after stopRecording succeeds
       } catch (e) {
         message.error(t('recorder.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { stopping.value = false }

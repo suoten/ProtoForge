@@ -307,8 +307,12 @@ class WebSocketChannel(ChannelBase):
     async def _receive_loop(self) -> None:
         try:
             async for raw in self._ws:
-                try:
+                try:  # FIXED: json.loads without exception protection
                     message = json.loads(raw) if isinstance(raw, str) else raw
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning("Invalid JSON received on WebSocket")
+                    continue
+                try:
                     msg_type = message.get("type", "")
                     if msg_type == "heartbeat_ack":
                         self._missed_heartbeats = 0
@@ -319,8 +323,6 @@ class WebSocketChannel(ChannelBase):
                             future.set_result(message)
                         continue
                     await self._dispatch_message(message)
-                except json.JSONDecodeError:
-                    logger.warning("Invalid JSON received on WebSocket")
                 except Exception as e:
                     logger.error("WebSocket receive error: %s", e)
         except asyncio.CancelledError:

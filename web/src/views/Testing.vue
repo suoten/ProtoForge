@@ -722,25 +722,39 @@ async function runSuiteById(suiteId) {
 }
 
 async function loadCaseToEditor(caseId) {
-  try {
-    const c = await api.getTestCase(caseId)
-    builderCase.value = {
-      id: c.id,
-      name: c.name,
-      steps: (c.steps || []).map(s => ({
-        name: s.name || '',
-        action: s.action || '',
-        params: s.params || {},
-        assertions: (s.assertions || []).map(a => ({
-          type: a.type || 'status_code',
-          expected: a.expected,
-          message: a.message || '',
+  const hasContent = builderCase.value.name || builderCase.value.steps?.length > 0  // FIXED: check if editor has content
+  const doLoad = async () => {
+    try {
+      const c = await api.getTestCase(caseId)
+      builderCase.value = {
+        id: c.id,
+        name: c.name,
+        steps: (c.steps || []).map(s => ({
+          name: s.name || '',
+          action: s.action || '',
+          params: s.params || {},
+          assertions: (s.assertions || []).map(a => ({
+            type: a.type || 'status_code',
+            expected: a.expected,
+            message: a.message || '',
+          })),
         })),
-      })),
+      }
+      message.success(t('testing.caseLoaded'))
+    } catch (e) {
+      message.error(t('testing.caseLoadFailed') + ': ' + (e.response?.data?.detail || e.message))
     }
-    message.success(t('testing.caseLoaded'))
-  } catch (e) {
-    message.error(t('testing.caseLoadFailed') + ': ' + (e.response?.data?.detail || e.message))
+  }
+  if (hasContent) {  // FIXED: added confirmation dialog before overwriting current editor content
+    dialog.warning({
+      title: t('testing.confirmOverwrite') || 'Overwrite Editor',
+      content: t('testing.confirmOverwriteDesc') || 'The editor currently has content. Loading this case will overwrite it. Continue?',
+      positiveText: t('common.confirm') || 'Confirm',
+      negativeText: t('common.cancel') || 'Cancel',
+      onPositiveClick: doLoad,
+    })
+  } else {
+    await doLoad()
   }
 }
 

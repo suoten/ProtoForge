@@ -999,7 +999,7 @@ function getStepStatus(idx) {
   const key = pipelineSteps[idx].key
   if (key === 'verify') {
     const collectOk = pipelineResult.value.steps.collect?.ok
-    const hasComparison = pipelineResult.value.data_comparison?.length > 0
+    const hasComparison = pipelineResult.value?.data_comparison?.length > 0  // FIXED: added null check for pipelineResult.value
     if (collectOk && hasComparison) return 'success'
     if (collectOk && !hasComparison) return 'warning'
     return 'pending'

@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:
+        try:  # FIXED: json.loads without exception protection
             config_data = json.loads(config_data)
-        except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+        except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
 
     if not isinstance(config_data, dict):
@@ -77,18 +77,18 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
         content = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, PermissionError, OSError) as e:  # FIXED: 文件IO无异常保护
         raise ValueError(f"Failed to read config file '{file_path}': {e}") from e
-    try:
+    try:  # FIXED: json.loads without exception protection
         data = json.loads(content)
-    except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+    except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid JSON in file '{file_path}': {e}") from e
     return import_edgelite_config(data)
 
 
 def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:
+        try:  # FIXED: json.loads without exception protection
             config_data = json.loads(config_data)
-        except json.JSONDecodeError as e:  # FIXED: JSON解析无异常保护
+        except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e
 
     if not isinstance(config_data, dict):

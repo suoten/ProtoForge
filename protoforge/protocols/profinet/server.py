@@ -9,7 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc  # FIXED: i18n message constants
 
 logger = logging.getLogger(__name__)
 
@@ -230,7 +230,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            msg("profinet", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
+                            msg("profinet", "service_started", host=self._host, port=self._port),  # FIXED: hardcoded CN -> i18n constants
                             detail={"host": self._host, "port": self._port,
                                     "device_name": self._device_name})
         except Exception as e:
@@ -253,7 +253,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.STOPPED
             self._active_ars.clear()
             logger.info("PROFINET IO server stopped")
-            self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))  # FIXED: hardcoded CN -> i18n constants
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -301,15 +301,15 @@ class ProfinetServer(ProtocolServer):
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: 添加读取超时
+                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: added read timeout
                 body_len = struct.unpack(">H", header)[0]
-                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""  # FIXED: 添加读取超时
+                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""  # FIXED: added read timeout
                 response = self._process_tunnel_message(data, addr, writer)
                 if response:
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):  # FIXED: 添加TimeoutError捕获
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):  # FIXED: added TimeoutError catch
             pass
         finally:
             self._connections.discard(writer)
@@ -318,7 +318,7 @@ class ProfinetServer(ProtocolServer):
                 if ar.state == ARState.W_DATA:
                     ar.state = ARState.W_ABORT
                     self._log_debug("outbound", "ar_abort",
-                                    msg("profinet", "ar_disconnected", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
+                                    msg("profinet", "ar_disconnected", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
                                     detail={"ar_id": ar_id})
             writer.close()
             try:
@@ -471,7 +471,7 @@ class ProfinetServer(ProtocolServer):
             resp += struct.pack(">B", 0x01 if cr.is_consumer else 0x00)
 
         self._log_debug("inbound", "cm_connect",
-                        msg("profinet", "cm_connect", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
+                        msg("profinet", "cm_connect", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
                         f"CRs={len(ar.crs)}, input={self._input_size}, output={self._output_size}",
                         detail={"ar_id": ar_id, "session_key": ar.session_key,
                                 "send_clock": ar.send_clock, "crs": len(ar.crs)})
@@ -485,11 +485,11 @@ class ProfinetServer(ProtocolServer):
         if ar:
             ar.state = ARState.W_ABORT
             self._log_debug("inbound", "cm_release",
-                            msg("profinet", "cm_release", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
+                            msg("profinet", "cm_release", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
                             detail={"ar_id": ar_id})
         else:
             self._log_debug("inbound", "cm_release_error",
-                            msg("profinet", "cm_release_not_found", ar_id=ar_id),  # FIXED: 中文硬编码→i18n常量
+                            msg("profinet", "cm_release_not_found", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
                             detail={"ar_id": ar_id})
 
         resp = bytearray()
@@ -613,7 +613,7 @@ class ProfinetServer(ProtocolServer):
             output_data = rt_payload[:self._output_size]
             behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
-                            f"PROFINET IO循环写入 {len(output_data)}字节 cycle={cycle_counter}",
+                            f"PROFINET IO cyclic write {len(output_data)} bytes cycle={cycle_counter}",  # FIXED: CN→EN
                             device_id=self._default_device_id or "",
                             detail={"size": len(output_data), "cycle": cycle_counter})
 
@@ -627,7 +627,7 @@ class ProfinetServer(ProtocolServer):
         resp += input_data
 
         self._log_debug("outbound", "cyclic_read",
-                        f"PROFINET IO循环响应 {len(input_data)}字节 cycle={resp_cycle}",
+                        f"PROFINET IO cyclic response {len(input_data)} bytes cycle={resp_cycle}",  # FIXED: CN→EN
                         device_id=self._default_device_id or "",
                         detail={"size": len(input_data), "cycle": resp_cycle})
 
@@ -640,12 +640,9 @@ class ProfinetServer(ProtocolServer):
         self._update_default_device(device_config.id)
 
         proto_config = device_config.protocol_config or {}
-        if proto_config.get("device_name"):
-            self._device_name = proto_config["device_name"]
-        if proto_config.get("vendor_id"):
-            self._vendor_id = int(proto_config["vendor_id"])
-        if proto_config.get("device_id"):
-            self._device_id = int(proto_config["device_id"])
+        self._device_name = proto_config.get("device_name", "profinet-device")  # FIXED: direct dict access
+        self._vendor_id = int(proto_config.get("vendor_id", 0))  # FIXED: direct dict access + type conversion
+        self._device_id = int(proto_config.get("device_id", 0))  # FIXED: direct dict access + type conversion
 
         self._recalc_data_sizes()
 
@@ -656,7 +653,7 @@ class ProfinetServer(ProtocolServer):
         logger.info("PROFINET IO device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
         self._log_debug("system", "device_created",
-                        msg("profinet", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
+                        msg("profinet", "device_created", name=device_config.name),  # FIXED: hardcoded CN -> i18n constants
                         device_id=device_config.id,
                         detail={"input_size": self._input_size,
                                 "output_size": self._output_size})
@@ -669,7 +666,7 @@ class ProfinetServer(ProtocolServer):
         self._recalc_data_sizes()
         logger.info("PROFINET device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        msg("profinet", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
+                        msg("profinet", "device_removed", id=device_id),  # FIXED: hardcoded CN -> i18n constants
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -699,16 +696,16 @@ class ProfinetServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": desc("tcp_tunnel_address")},  # FIXED: 中文硬编码→i18n常量
-                "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},  # FIXED: 中文硬编码→i18n常量
-                "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},  # FIXED: 中文硬编码→i18n常量
-                "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},  # FIXED: 中文硬编码→i18n常量
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("tcp_tunnel_address")},  # FIXED: hardcoded CN -> i18n constants
+                "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},  # FIXED: hardcoded CN -> i18n constants
+                "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},  # FIXED: hardcoded CN -> i18n constants
+                "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},  # FIXED: hardcoded CN -> i18n constants
                 "device_id": {"type": "integer", "default": 256, "description": "Device ID"},  # FIXED: CN→EN,
-                "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},  # FIXED: 中文硬编码→i18n常量
-                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},  # FIXED: 中文硬编码→i18n常量
-                "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},  # FIXED: 中文硬编码→i18n常量
+                "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},  # FIXED: hardcoded CN -> i18n constants
+                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},  # FIXED: hardcoded CN -> i18n constants
+                "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},  # FIXED: hardcoded CN -> i18n constants
             },
-            "description": desc("tcp_tunnel_mode_desc"),  # FIXED: 中文硬编码→i18n常量
+            "description": desc("tcp_tunnel_mode_desc"),  # FIXED: hardcoded CN -> i18n constants
         }
 
     @staticmethod

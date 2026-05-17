@@ -1,4 +1,4 @@
-"""联调集成数据模型"""
+"""Integration data model"""  # FIXED: CN→EN
 
 from __future__ import annotations
 

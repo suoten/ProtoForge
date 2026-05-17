@@ -408,7 +408,7 @@ async function loadSearchData() {
 </script>
 
 <style>
-@import url('https://fonts.loli.net/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* FIXED: removed external CDN font import (fonts.loli.net), Inter falls back to system fonts */
 
 :root {
   --pf-primary: #6366f1;

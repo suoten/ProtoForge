@@ -445,7 +445,10 @@ class Recorder:
         for enc_msg in encrypted_messages:
             try:
                 msg_bytes = _decrypt_data(enc_msg, self._encryption_key)
-                decrypted_messages.append(json.loads(msg_bytes.decode("utf-8")))
+                try:  # FIXED: json.loads after decrypt without exception protection
+                    decrypted_messages.append(json.loads(msg_bytes.decode("utf-8")))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    logger.warning("Failed to parse decrypted recording message")
             except Exception as e:
                 logger.debug("Failed to decrypt recording message: %s", e)
         result = {k: v for k, v in data.items() if k not in ("messages_encrypted", "encrypted")}

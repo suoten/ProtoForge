@@ -48,7 +48,10 @@ class Scenario:
         self._status = ScenarioStatus.STOPPED
         self._start_time = None
         for device in self._devices.values():
-            device.stop()
+            try:  # FIXED: device.stop() without exception protection
+                device.stop()
+            except Exception as e:
+                logger.error("Failed to stop device %s: %s", device.id, e)
 
     async def tick(self) -> None:
         if self._status != ScenarioStatus.RUNNING:

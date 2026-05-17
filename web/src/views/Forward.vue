@@ -139,7 +139,7 @@ const showAddModal = ref(false)
 const adding = ref(false)
 
 const addForm = ref({
-  name: '', type: 'influxdb', host: 'localhost', port: 8086,
+  name: '', type: 'influxdb', host: '', port: '',  // FIXED: removed hardcoded InfluxDB defaults, user should configure
   database: 'protoforge', url: '', path: 'data/forward_output.log',
   format: 'jsonl', headers_json: '', protocol: '',
 })
@@ -223,7 +223,7 @@ async function addTarget() {
     }
     await api.addForwardTarget(cfg)
     showAddModal.value = false
-    addForm.value = { name: '', type: 'influxdb', host: 'localhost', port: 8086, database: 'protoforge', url: '', path: 'data/forward_output.log', format: 'jsonl', headers_json: '', protocol: '' }
+    addForm.value = { name: '', type: 'influxdb', host: '', port: '', database: 'protoforge', url: '', path: 'data/forward_output.log', format: 'jsonl', headers_json: '', protocol: '' }  // FIXED: removed hardcoded InfluxDB defaults
     message.success(t('forward.added'))
     await loadTargets()
   } catch (e) {
@@ -274,6 +274,7 @@ async function stopForward() {
         await api.stopForward()
         forwardRunning.value = false
         message.success(t('forward.stopped'))
+        await loadStats()  // FIXED: refresh stats after stopForward succeeds
       } catch (e) {
         message.error(t('forward.stopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { stopping.value = false }

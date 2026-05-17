@@ -179,6 +179,7 @@ const protocols = ref([])
 const editingDevice = ref({})
 const editingPoints = ref([])
 
+const addingNode = ref(false)  // FIXED: loading state to prevent double-click on confirmAddNode
 const newNode = ref({ deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null })
 const newRule = ref({ name: '', ruleType: 'threshold', sourcePoint: 'value', operator: '>', threshold: 0, targetPoint: 'alarm', targetValue: 'true', cooldown: 0 })
 const pendingConnection = ref(null)
@@ -265,6 +266,9 @@ function savePoints() {
 }
 
 function confirmRule() {
+  if (!newRule.value.name?.trim()) { message.warning(t('scenarioEditor.ruleNameRequired') || 'Rule name is required'); return }  // FIXED: validate empty rule name
+  if (!newRule.value.sourcePoint?.trim()) { message.warning(t('scenarioEditor.sourcePointRequired') || 'Source point is required'); return }  // FIXED: validate empty source point
+  if (!newRule.value.operator) { message.warning(t('scenarioEditor.operatorRequired') || 'Operator is required'); return }  // FIXED: validate empty operator
   const ruleLabel = `${newRule.value.name}: ${newRule.value.sourcePoint} ${newRule.value.operator} ${newRule.value.threshold}`
   if (editingEdgeId.value) {
     const edge = edges.value.find(e => e.id === editingEdgeId.value)
@@ -298,8 +302,11 @@ function addDeviceNode() {
 }
 
 async function confirmAddNode() {
+  if (addingNode.value) return  // FIXED: prevent double-click
   if (!newNode.value.deviceId?.trim()) { message.warning(t('scenarioEditor.deviceIdRequired')); return }
   if (!newNode.value.deviceName?.trim()) { message.warning(t('scenarioEditor.deviceNameRequired')); return }
+  addingNode.value = true  // FIXED: set loading state
+  try {
   const id = `node-${Date.now()}`
   const x = 100 + Math.random() * 400
   const y = 100 + Math.random() * 300
@@ -321,6 +328,7 @@ async function confirmAddNode() {
   newNode.value = { deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null }
   hasUnsavedChanges.value = true
   message.success(t('scenarioEditor.deviceNodeAdded'))
+  } finally { addingNode.value = false }  // FIXED: reset loading state
 }
 
 async function loadScenario(scenarioId) {

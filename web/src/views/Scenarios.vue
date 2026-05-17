@@ -265,7 +265,7 @@ async function stopAllScenes() {
         batchLoading.value = false
       }
       if (fail > 0) { message.warning(t('scenarios.stopAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.stoppedCount', { count: ok })) }
-      loadData()
+      await loadData()  // FIXED: was not awaited, could cause race condition
     }
   })
 }
@@ -396,13 +396,7 @@ async function viewSnapshot(id) {
 }
 
 function confirmDelete(row) {
-  dialog.warning({
-    title: t('common.delete'),
-    content: t('scenarios.confirmDelete', { name: row.name, id: row.id }),
-    positiveText: t('common.delete'),
-    negativeText: t('common.cancel'),
-    onPositiveClick: () => deleteScenario(row.id),
-  })
+  deleteScenario(row.id)  // FIXED: removed duplicate confirmation dialog - deleteScenario already shows confirmation
 }
 
 async function deleteScenario(id) {

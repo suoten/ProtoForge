@@ -169,17 +169,17 @@ class HttpSimulatorServer(ProtocolServer):
                     })
                 return self._json_response(200, {"device_id": device_id, "points": points})
             elif method == "POST" and body:
-                try:
+                try:  # FIXED: json.loads without exception protection
                     data = json.loads(body)
-                    for name, value in data.items():
-                        behavior.set_value(name, value)
-                    self._log_debug("recv", "http_write",
-                                    msg("http", "device_written", detail=device_id),  # FIXED: 中文硬编码→i18n常量
-                                    device_id=device_id,
-                                    detail={"data": data})
-                    return self._json_response(200, {"ok": True})
-                except (json.JSONDecodeError, Exception) as e:
-                    return self._json_response(400, {"error": str(e)})
+                except (json.JSONDecodeError, TypeError):
+                    return self._json_response(400, {"error": "Invalid JSON body"})
+                for name, value in data.items():
+                    behavior.set_value(name, value)
+                self._log_debug("recv", "http_write",
+                                msg("http", "device_written", detail=device_id),  # FIXED: 中文硬编码→i18n常量
+                                device_id=device_id,
+                                detail={"data": data})
+                return self._json_response(200, {"ok": True})
 
         point_name = path.lstrip("/")
         for p in config.points:
@@ -191,17 +191,17 @@ class HttpSimulatorServer(ProtocolServer):
                         "access": p.access, "timestamp": time.time(),
                     })
                 elif method in ("PUT", "POST") and body:
-                    try:
+                    try:  # FIXED: json.loads without exception protection
                         data = json.loads(body)
-                        value = data.get("value", data.get(p.name))
-                        if value is not None:
-                            behavior.set_value(p.name, value)
-                            self._log_debug("recv", "http_write",
-                                            msg("http", "point_written", detail=f"{p.name}={value}"),  # FIXED: 中文硬编码→i18n常量
-                                            device_id=device_id)
-                        return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)})
-                    except (json.JSONDecodeError, Exception) as e:
-                        return self._json_response(400, {"error": str(e)})
+                    except (json.JSONDecodeError, TypeError):
+                        return self._json_response(400, {"error": "Invalid JSON body"})
+                    value = data.get("value", data.get(p.name))
+                    if value is not None:
+                        behavior.set_value(p.name, value)
+                        self._log_debug("recv", "http_write",
+                                        msg("http", "point_written", detail=f"{p.name}={value}"),  # FIXED: 中文硬编码→i18n常量
+                                        device_id=device_id)
+                    return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)})
                 elif method == "DELETE":
                     behavior.set_value(p.name, 0)
                     return self._json_response(200, {"ok": True})

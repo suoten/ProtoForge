@@ -187,25 +187,20 @@ class WebhookManager:
         webhook = self._webhooks.get(wh_id)
         if not webhook:
             return None
-        if "name" in config:
-            webhook.name = config["name"]
+        webhook.name = config.get("name", webhook.name)  # FIXED: direct dict access
+        new_url = config.get("url", webhook.url)  # FIXED: direct dict access
         if "url" in config:
-            new_url = config["url"]
             parsed = urlparse(new_url)
             if parsed.scheme not in ("http", "https"):
                 raise ValueError(f"Webhook URL must use http/https scheme, got: {parsed.scheme}")
             hostname = parsed.hostname or ""
             if _is_private_hostname(hostname):
                 raise ValueError(f"Webhook URL points to private/internal address: {new_url}")
-            webhook.url = new_url
-        if "events" in config:
-            webhook.events = config["events"]
-        if "headers" in config:
-            webhook.headers = config["headers"]
-        if "enabled" in config:
-            webhook.enabled = config["enabled"]
-        if "secret" in config:
-            webhook.secret = config["secret"]
+        webhook.url = new_url
+        webhook.events = config.get("events", webhook.events)  # FIXED: direct dict access
+        webhook.headers = config.get("headers", webhook.headers)  # FIXED: direct dict access
+        webhook.enabled = config.get("enabled", webhook.enabled)  # FIXED: direct dict access
+        webhook.secret = config.get("secret", webhook.secret)  # FIXED: direct dict access
         self._persist()
         return webhook
 
@@ -247,9 +242,12 @@ class WebhookManager:
         self._persist()
 
     async def _dispatch(self, msg: dict) -> None:
-        event = msg["event"]
-        payload = msg["payload"]
-        timestamp = msg["timestamp"]
+        event = msg.get("event")  # FIXED: direct dict access could raise KeyError
+        payload = msg.get("payload")  # FIXED: direct dict access could raise KeyError
+        timestamp = msg.get("timestamp")  # FIXED: direct dict access could raise KeyError
+        if not event:
+            logger.warning("Webhook message missing 'event' field")
+            return
         for webhook in list(self._webhooks.values()):
             if not webhook.enabled:
                 continue

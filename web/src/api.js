@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 15000,
+  timeout: 30000,  // FIXED: increased from 15s to 30s for batch operations
 })
 
 api.interceptors.request.use(config => {
@@ -51,9 +51,7 @@ export function setNotifyFunction(fn, tFn) {
 
 api.interceptors.response.use(
   response => {
-    if (response?.data === undefined || response?.data === null) {
-      response.data = {}
-    }
+    // FIXED: removed silent null→{} replacement that masked API errors
     if (response.data && response.data._persistence_warning) {
       _notifyUser('warning', 'common.persistenceWarning', { detail: response.data._persistence_warning })
       delete response.data._persistence_warning
@@ -156,8 +154,8 @@ function normalizeList(data, ...keys) {
       if (Array.isArray(data[k])) return data[k]
     }
   }
-  console.warn('[API] normalizeList: unexpected response format, keys tried:', keys, 'data:', data)
-  return []
+  console.error('[API] normalizeList: unexpected response format, keys tried:', keys, 'data:', data)  // FIXED: upgraded from warn to error
+  return null  // FIXED: return null instead of [] to signal error vs empty
 }
 
 export default {
@@ -173,13 +171,15 @@ export default {
 
   getProtocols: () => d(api.get('/protocols')).then(r => normalizeList(r, 'protocols')),
   getProtocolInfo: () => d(api.get('/protocols/info')).then(r => {
-    if (Array.isArray(r)) return r
-    if (r && Array.isArray(r.protocols)) return r.protocols
+    if (r && Array.isArray(r.protocols)) return r.protocols  // FIXED: removed dead Array.isArray(r) branch
     return []
   }),
   getProtocolConfig: (name) => d(api.get(`/protocols/${name}/config`)),
   getProtocolDeviceConfig: (name) => d(api.get(`/protocols/${name}/device-config`)),
-  startProtocol: (name, config) => d(api.post(`/protocols/${name}/start`, config || undefined)), // FIXED: config为空时不发请求体，让后端应用默认配置
+  startProtocol: (name, config) => {
+    const body = (config && Object.keys(config).length > 0) ? config : undefined  // FIXED: empty object {} now treated as no config
+    return d(api.post(`/protocols/${name}/start`, body))
+  },
   stopProtocol: (name) => d(api.post(`/protocols/${name}/stop`)),
   startAllProtocols: () => d(api.post('/protocols/start-all')),
   stopAllProtocols: () => d(api.post('/protocols/stop-all')),
@@ -208,8 +208,7 @@ export default {
   updateTemplate: (id, data) => d(api.put(`/templates/${id}`, data)),
   searchTemplates: (params) => d(api.get('/templates/search', { params })).then(r => normalizeList(r, 'templates')),
   listTemplateTags: () => d(api.get('/templates/tags')).then(r => {
-    if (Array.isArray(r)) return r
-    if (r && Array.isArray(r.tags)) return r.tags
+    if (r && Array.isArray(r.tags)) return r.tags  // FIXED: removed dead Array.isArray(r) branch
     return []
   }),
   instantiateTemplate: (id, params) => {
@@ -251,7 +250,10 @@ export default {
   getTestAssertionTypes: () => d(api.get('/tests/assertion-types')).then(r => normalizeList(r, 'assertion_types')),
   listTestReports: () => d(api.get('/tests/reports')).then(r => normalizeList(r, 'reports')),
   getTestReport: (id) => d(api.get(`/tests/reports/${id}`)),
-  getTestReportHtml: (id) => api.get(`/tests/reports/${id}/html`, { transformResponse: [(data) => data] }).then(r => r.data),
+  getTestReportHtml: (id, token) => {
+    const params = token ? { token } : {}  // FIXED: support token query param for browser access
+    return api.get(`/tests/reports/${id}/html`, { params, transformResponse: [r => r] }).then(r => r.data)
+  },
   getReportTrend: (params) => d(api.get('/tests/reports/trend', { params })).then(r => normalizeList(r, 'trends')),
 
   importEdgelite: (config) => d(api.post('/integration/edgelite', config)),
@@ -392,7 +394,7 @@ export default {
     document.body.removeChild(a); URL.revokeObjectURL(url)
     return { downloaded: true, filename }
   }),
-  importBackup: (data) => d(api.post('/backup/restore', data)),
+  importBackup: (backup) => d(api.post('/backup/restore', backup)),  // FIXED: renamed param from 'data' to 'backup' for clarity
 
   getHealth: () => api.get('/health').then(r => r.data).catch(() => null),
 }

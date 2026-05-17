@@ -407,7 +407,7 @@ def _extract_token(login_resp: httpx.Response) -> str:
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config["url"]:
+    if not el_config.get("url"):  # FIXED: el_config["url"] direct dict access could raise KeyError
         return {
             "ok": False, "skipped": True,
             "reason": "edgelite_url not configured",
@@ -426,7 +426,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
         except EdgeLiteError as e:
             return {
                 "ok": False,
@@ -441,7 +441,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
         try:
             create_resp = await client.post(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",  # FIXED: direct dict access
                 json=payload, headers=headers,
             )
         except httpx.ConnectError:
@@ -459,7 +459,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
             try:
                 update_resp = await client.put(
-                    f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",  # FIXED: direct dict access
                     json=update_payload, headers=headers,
                 )
             except httpx.ConnectError:
@@ -484,7 +484,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             return {
                 "ok": False,
                 "error": f"EdgeLite server error: HTTP {create_resp.status_code}", "error_type": "edgelite_error",
-                "suggestion": f"EdgeLite ({el_config['url']}) 内部错误。请检查 EdgeLite 日志，确认已注册的协议驱动类型: {payload['protocol']}",
+                "suggestion": f"EdgeLite ({el_config.get('url', '')}) 内部错误。请检查 EdgeLite 日志，确认已注册的协议驱动类型: {payload['protocol']}",  # FIXED: direct dict access
             }
 
         return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
@@ -492,13 +492,13 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config["url"]:
+    if not el_config.get("url"):  # FIXED: direct dict access
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
@@ -507,7 +507,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.delete(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",  # FIXED: direct dict access
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -523,13 +523,13 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
 
 async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config["url"]:
+    if not el_config.get("url"):  # FIXED: direct dict access
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
-            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
@@ -538,7 +538,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.get(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -568,13 +568,13 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
 
 async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config["url"]:
+    if not el_config.get("url"):  # FIXED: direct dict access
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
-            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
@@ -583,7 +583,7 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.get(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",  # FIXED: direct dict access
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -766,12 +766,12 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
 
 async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config["url"]:
+    if not el_config.get("url"):  # FIXED: direct dict access
         return {
             "ok": False, "skipped": True,
             "reason": "edgelite_url not configured",
             "error_type": "not_configured",
-            "suggestion": "Please configure the EdgeLite gateway URL in System Settings, or set edgelite_url in the device protocol config"  ,  # FIXED: CN→EN
+            "suggestion": "Please configure the EdgeLite gateway URL in System Settings, or set edgelite_url in the device protocol config",
         }
 
     device_id = getattr(device, "id", "")
@@ -779,7 +779,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config["url"], el_config["username"], el_config["password"])
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
         except EdgeLiteError as e:
             result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
             result["ok"] = False
@@ -793,7 +793,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         try:
             dev_resp = await client.get(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",  # FIXED: direct dict access
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -853,7 +853,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         try:
             points_resp = await client.get(
-                f"{el_config['url'].rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",  # FIXED: direct dict access
                 headers=headers,
             )
         except httpx.ConnectError:

@@ -107,26 +107,26 @@ class FailoverManager:
         self._failover_count += 1
         self._last_failover_time = time.time()
         for callback in self._on_failover_callbacks:
-            try:
+            try:  # FIXED: callback without exception protection
                 if asyncio.iscoroutinefunction(callback):
                     await callback()
                 else:
                     callback()
             except Exception as e:
-                logger.error("Failover callback error: %s", e)
+                logger.error("Failover callback failed: %s", e)
 
     async def demote_to_standby(self) -> None:
         logger.info("Demoting to standby (primary recovered)")
         self._is_primary = False
         self._status = "standby"
         for callback in self._on_recovery_callbacks:
-            try:
+            try:  # FIXED: callback without exception protection
                 if asyncio.iscoroutinefunction(callback):
                     await callback()
                 else:
                     callback()
             except Exception as e:
-                logger.error("Recovery callback error: %s", e)
+                logger.error("Failover callback failed: %s", e)
 
     def get_status(self) -> dict[str, Any]:
         return {

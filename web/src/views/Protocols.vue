@@ -315,7 +315,7 @@ function openAdvanced(p) {
       }
     }
   } catch (e) {
-    advancedConfig.value = { host: '0.0.0.0', port: '' }
+    advancedConfig.value = {}  // FIXED: removed hardcoded fallback config
   }
   showAdvanced.value = true
 }
@@ -377,7 +377,9 @@ function connectWs() {
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'devices' && Array.isArray(msg.data)) {
-        loadData()
+        // FIXED: added 300ms debounce for WS-triggered loadData to prevent rapid re-fetches
+        if (wsLoadDataTimer) clearTimeout(wsLoadDataTimer)
+        wsLoadDataTimer = setTimeout(() => { loadData() }, 300)
       }
     } catch (e) {
       console.debug('[WS] Non-JSON message ignored:', typeof event.data === 'string' ? event.data.substring(0, 100) : event.data)

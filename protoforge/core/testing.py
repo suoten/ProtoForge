@@ -289,7 +289,7 @@ class TestReport:
                 </div>
                 {f'<div class="case-error">{html.escape(tc.error)}</div>' if tc.error else ''}
                 <table class="steps-table">
-                    <thead><tr><th>步骤</th><th>状态</th><th>耗时</th><th>错误</th></tr></thead>
+                    <thead><tr><th>Step</th><th>Status</th><th>Duration</th><th>Error</th></tr></thead>  <!-- FIXED: CN→EN -->
                     <tbody>{step_rows}</tbody>
                 </table>
             </div>"""
@@ -302,7 +302,7 @@ class TestReport:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>ProtoForge 测试报告 - {html.escape(self.name)}</title>
+<title>ProtoForge Test Report - {html.escape(self.name)}</title>  <!-- FIXED: CN→EN -->
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; color:#333; padding:20px; }}
@@ -334,15 +334,15 @@ h1 {{ font-size:24px; margin-bottom:20px; color:#1a1a1a; }}
 </head>
 <body>
 <div class="container">
-<h1>🧪 ProtoForge 测试报告</h1>
-<p class="timestamp">报告ID: {self.id} | 生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
+<h1>🧪 ProtoForge Test Report</h1>  <!-- FIXED: CN→EN -->
+<p class="timestamp">Report ID: {self.id} | Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>  <!-- FIXED: CN→EN -->
 <div class="summary">
-    <div class="summary-card"><div class="number">{self.total}</div><div class="label">总用例</div></div>
-    <div class="summary-card"><div class="number" style="color:#18a058">{self.passed}</div><div class="label">通过</div></div>
-    <div class="summary-card"><div class="number" style="color:#d03050">{self.failed}</div><div class="label">失败</div></div>
-    <div class="summary-card"><div class="number" style="color:#f0a020">{self.errors}</div><div class="label">错误</div></div>
-    <div class="summary-card"><div class="number" style="color:#909399">{self.skipped}</div><div class="label">跳过</div></div>
-    <div class="summary-card"><div class="number" style="color:#2080f0">{passed_pct}%</div><div class="label">通过率</div></div>
+    <div class="summary-card"><div class="number">{self.total}</div><div class="label">Total</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number" style="color:#18a058">{self.passed}</div><div class="label">Passed</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number" style="color:#d03050">{self.failed}</div><div class="label">Failed</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number" style="color:#f0a020">{self.errors}</div><div class="label">Errors</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number" style="color:#909399">{self.skipped}</div><div class="label">Skipped</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number" style="color:#2080f0">{passed_pct}%</div><div class="label">Pass Rate</div></div>  <!-- FIXED: CN→EN -->
 </div>
 <div class="progress-bar">
     <div class="passed" style="width:{passed_pct}%"></div>
@@ -350,7 +350,7 @@ h1 {{ font-size:24px; margin-bottom:20px; color:#1a1a1a; }}
     <div class="errors" style="width:{error_pct}%"></div>
 </div>
 {case_rows}
-{f'<h2 style="margin-top:24px;font-size:18px">环境信息</h2><table class="env-table"><thead><tr><th>键</th><th>值</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}
+{f'<h2 style="margin-top:24px;font-size:18px">Environment</h2><table class="env-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}  <!-- FIXED: CN→EN -->
 </div>
 </body>
 </html>"""
@@ -395,32 +395,32 @@ class AssertionEngine:
             if assertion.type == AssertionType.EQUALS:
                 passed = target_value == assertion.expected
                 result["passed"] = passed
-                result["message"] = f"期望 {assertion.expected}, 实际 {target_value}" if not passed else f"等于 {assertion.expected}"
+                result["message"] = f"Expected {assertion.expected}, got {target_value}" if not passed else f"equals {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.NOT_EQUALS:
                 passed = target_value != assertion.expected
                 result["passed"] = passed
-                result["message"] = f"不应等于 {assertion.expected}" if not passed else f"不等于 {assertion.expected}"
+                result["message"] = f"should not equal {assertion.expected}" if not passed else f"not equal to {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.CONTAINS:
                 passed = assertion.expected in str(target_value) if target_value is not None else False
                 result["passed"] = passed
-                result["message"] = f"包含 '{assertion.expected}'" if passed else f"不包含 '{assertion.expected}', 实际: {target_value}"
+                result["message"] = f"contains '{assertion.expected}'" if passed else f"does not contain '{assertion.expected}', Actual: {target_value}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.NOT_CONTAINS:
                 passed = assertion.expected not in str(target_value) if target_value is not None else True
                 result["passed"] = passed
-                result["message"] = f"不包含 '{assertion.expected}'" if passed else f"包含 '{assertion.expected}'"
+                result["message"] = f"does not contain '{assertion.expected}'" if passed else f"contains '{assertion.expected}'"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.GREATER_THAN:
                 passed = float(target_value) > float(assertion.expected) if target_value is not None else False
                 result["passed"] = passed
-                result["message"] = f"{target_value} > {assertion.expected}" if passed else f"{target_value} 不大于 {assertion.expected}"
+                result["message"] = f"{target_value} > {assertion.expected}" if passed else f"{target_value} not greater than {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.LESS_THAN:
                 passed = float(target_value) < float(assertion.expected) if target_value is not None else False
                 result["passed"] = passed
-                result["message"] = f"{target_value} < {assertion.expected}" if passed else f"{target_value} 不小于 {assertion.expected}"
+                result["message"] = f"{target_value} < {assertion.expected}" if passed else f"{target_value} not less than {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.REGEX_MATCH:
                 try:
@@ -429,56 +429,56 @@ class AssertionEngine:
                 except re.error:
                     passed = False
                 result["passed"] = passed
-                result["message"] = f"匹配正则 '{assertion.expected}'" if passed else f"不匹配正则 '{assertion.expected}'"
+                result["message"] = f"matches regex '{assertion.expected}'" if passed else f"does not match regex '{assertion.expected}'"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.JSON_PATH:
                 json_value = self._extract_json_path(actual, assertion.json_path)
                 passed = json_value == assertion.expected
                 result["passed"] = passed
-                result["message"] = f"JSON路径 '{assertion.json_path}' = {json_value}" if passed else f"JSON路径 '{assertion.json_path}' 期望 {assertion.expected}, 实际 {json_value}"
+                result["message"] = f"JSON path '{assertion.json_path}' = {json_value}" if passed else f"JSON path '{assertion.json_path}' Expected {assertion.expected}, got {json_value}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.NOT_NULL:
                 passed = target_value is not None and target_value != ""
                 result["passed"] = passed
-                result["message"] = "值不为空" if passed else "值为空"
+                result["message"] = "value is not null" if passed else "value is null"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.TYPE_CHECK:
                 type_map = {"str": str, "int": int, "float": float, "bool": bool, "list": list, "dict": dict}
                 expected_type = type_map.get(str(assertion.expected), str)
                 passed = isinstance(target_value, expected_type)
                 result["passed"] = passed
-                result["message"] = f"类型为 {assertion.expected}" if passed else f"类型不为 {assertion.expected}, 实际 {type(target_value).__name__}"
+                result["message"] = f"type is {assertion.expected}" if passed else f"type is not {assertion.expected}, Actual {type(target_value).__name__}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.STATUS_CODE:
                 status = self._extract_json_path(actual, "status_code") if isinstance(actual, dict) else None
                 passed = str(status) == str(assertion.expected)
                 result["passed"] = passed
-                result["message"] = f"状态码 {status}" if passed else f"状态码期望 {assertion.expected}, 实际 {status}"
+                result["message"] = f"Status code {status}" if passed else f"Expected status code {assertion.expected}, got {status}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.LENGTH_EQUALS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
                 passed = length == int(assertion.expected)
                 result["passed"] = passed
-                result["message"] = f"长度 {length} == {assertion.expected}" if passed else f"长度 {length} != {assertion.expected}"
+                result["message"] = f"Length {length} == {assertion.expected}" if passed else f"Length {length} != {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.LENGTH_GREATER:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
                 passed = length > int(assertion.expected)
                 result["passed"] = passed
-                result["message"] = f"长度 {length} > {assertion.expected}" if passed else f"长度 {length} 不大于 {assertion.expected}"
+                result["message"] = f"Length {length} > {assertion.expected}" if passed else f"Length {length} not greater than {assertion.expected}"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.LENGTH_LESS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
                 passed = length < int(assertion.expected)
                 result["passed"] = passed
-                result["message"] = f"长度 {length} < {assertion.expected}" if passed else f"长度 {length} 不小于 {assertion.expected}"
+                result["message"] = f"Length {length} < {assertion.expected}" if passed else f"Length {length} not less than {assertion.expected}"  # FIXED: CN→EN
 
             else:
-                result["message"] = f"未知断言类型: {assertion.type}"
+                result["message"] = f"Unknown assertion type: {assertion.type}"  # FIXED: CN→EN
 
         except Exception as e:
             result["passed"] = False
-            result["message"] = f"断言执行异常: {str(e)}"
+            result["message"] = f"Assertion execution error: {str(e)}"  # FIXED: CN→EN
 
         if assertion.message:
             result["message"] = f"{assertion.message}: {result['message']}"

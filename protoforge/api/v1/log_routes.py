@@ -60,10 +60,10 @@ async def _ws_authenticate(websocket: WebSocket) -> tuple[bool, str]:
     if not token:
         try:
             msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-            try:
+            try:  # FIXED: json.loads without exception protection
                 msg_data = json.loads(msg)
                 token = msg_data.get("token", "")
-            except (ValueError, TypeError):
+            except (json.JSONDecodeError, TypeError):
                 token = msg
         except asyncio.TimeoutError:
             await websocket.close(code=4001, reason="Authentication timeout")

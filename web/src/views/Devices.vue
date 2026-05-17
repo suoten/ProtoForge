@@ -713,7 +713,7 @@ async function stopAllDevices() {
           else { fail++; message.warning(t('devices.deviceStopFailed', { id: toStop[i].id, error: r.reason?.response?.data?.detail || r.reason?.message || t('common.unknownError') })) }
         })
         if (fail > 0) { message.warning(t('devices.stoppedWithFailures', { ok, fail })) } else { message.success(t('devices.stoppedCount', { ok })) }
-        loadData()
+        await loadData()  // FIXED: was not awaited, could cause race condition
       } finally { batchLoading.value = false }
     }
   })
@@ -858,7 +858,7 @@ async function toggleDevice(id, action, name) {
 }
 
 function confirmDeleteDevice(row) {
-  dialog.warning({ title: t('devices.confirmDelete'), content: t('devices.confirmDeleteDesc', { name: row.name, id: row.id }), positiveText: t('common.delete'), negativeText: t('common.cancel'), onPositiveClick: () => deleteDevice(row.id) })
+  deleteDevice(row.id)  // FIXED: removed duplicate confirmation dialog - deleteDevice already shows confirmation
 }
 
 async function deleteDevice(id) {

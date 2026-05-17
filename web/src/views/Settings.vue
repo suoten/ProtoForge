@@ -512,9 +512,9 @@ async function setupDemo() {
   })
 }
 
-onMounted(() => {
-  loadSettings()
-  loadUsers()
-  loadSetupStatus()
+onMounted(async () => {  // FIXED: made async and added try-catch for await calls
+  try { await loadSettings() } catch (e) { message.error(t('settings.loadSettingsFailed') + ': ' + e.message) }
+  try { await loadUsers() } catch (e) { message.error(t('settings.loadUsersFailed') + ': ' + e.message) }
+  try { await loadSetupStatus() } catch (e) { message.error(t('settings.loadStatusFailed') + ': ' + e.message) }
 })
 </script>
