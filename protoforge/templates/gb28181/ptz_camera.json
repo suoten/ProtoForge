@@ -70,7 +70,7 @@
     "protocol_config": {
         "server_id": "34020000001320000001",
         "username": "34020000001320000001",
-        "password": "12345678",
+        "password": "",
         "realm": "3402000000",
         "srtp_enabled": false,
         "srtp_crypto_suite": "AES_CM_128_HMAC_SHA1_80",

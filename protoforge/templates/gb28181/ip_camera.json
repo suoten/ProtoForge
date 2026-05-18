@@ -49,7 +49,7 @@
     "protocol_config": {
         "server_id": "34020000002000000001",
         "username": "34020000002000000001",
-        "password": "12345678",
+        "password": "",
         "realm": "3402000000"
     },
     "tags": [

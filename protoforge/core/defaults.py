@@ -144,7 +144,7 @@ PROTOCOL_DEVICE_CONFIG = {
     "gb28181": [
         {"key": "sip_server_id", "label": "Upstream SIP Server ID", "type": "string", "default": "34020000002000000001", "description": "National standard upstream platform 20-digit code (center code 8 digits + industry code 2 digits + type code 3 digits + network ID 7 digits)"},  # FIXED: CN→EN
         {"key": "sip_domain", "label": "SIP Domain Code", "type": "string", "default": "3402000000", "description": "SIP server domain code (10-digit administrative division code)"},  # FIXED: CN→EN
-        {"key": "sip_server_addr", "label": "Upstream SIP Server Address", "type": "string", "default": "192.168.1.100", "description": "Upstream video platform SIP server IP address"},  # FIXED: CN→EN
+        {"key": "sip_server_addr", "label": "Upstream SIP Server Address", "type": "string", "default": "", "description": "Upstream video platform SIP server IP address (must be set before starting)"},  # FIXED: removed hardcoded 192.168.1.100 default
         {"key": "sip_server_port", "label": "Upstream SIP Port", "type": "number", "default": 5060, "min": 1, "max": 65535, "description": "Upstream video platform SIP signaling port (default 5060)"},  # FIXED: CN→EN
         {"key": "device_id", "label": "Device National Standard Code", "type": "string", "default": "34020000001320000001", "description": "This device 20-digit national standard code (center code 8 digits + industry code 2 digits + type code 3 digits + serial 7 digits), type 132=IPC"},  # FIXED: CN→EN
         {"key": "register_interval", "label": "Registration Interval (seconds)", "type": "number", "default": 3600, "min": 60, "max": 86400, "description": "SIP REGISTER interval, national standard recommends 3600 seconds"},  # FIXED: CN→EN
@@ -489,18 +489,25 @@ def get_friendly_error(detail: str) -> str:
     return detail
 
 
-def get_protocol_defaults(protocol_name: str) -> dict:
-    from protoforge.config import get_protocol_port_map
-    base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})
-    port_map = get_protocol_port_map()
+def get_protocol_defaults(protocol_name: str) -> dict:  # FIXED: added try-except for config import safety
+    try:
+        from protoforge.config import get_protocol_port_map
+        base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})
+        port_map = get_protocol_port_map()
+    except Exception:
+        base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})
+        port_map = {}
     if protocol_name in port_map:
         base = {**base, **port_map[protocol_name]}
     return base
 
 
-def get_all_protocol_info() -> list[dict]:
-    from protoforge.config import get_protocol_port_map
-    port_map = get_protocol_port_map()
+def get_all_protocol_info() -> list[dict]:  # FIXED: added try-except for config import safety
+    try:
+        from protoforge.config import get_protocol_port_map
+        port_map = get_protocol_port_map()
+    except Exception:
+        port_map = {}
     result = []
     for name, info in PROTOCOL_DEFAULTS.items():
         port_info = port_map.get(name, {})

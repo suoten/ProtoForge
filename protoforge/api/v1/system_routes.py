@@ -12,6 +12,19 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _get_version() -> str:  # FIXED: replaced __import__ with importlib.metadata
+    try:
+        from importlib.metadata import version as pkg_version
+        return pkg_version("protoforge")
+    except Exception:
+        pass
+    try:
+        import protoforge
+        return getattr(protoforge, "__version__", "0.1.0")
+    except Exception:
+        return "0.1.0"
+
+
 @router.post("/setup/demo")
 async def setup_demo(_user: dict = Depends(require_admin)):
     engine = _get_engine()
@@ -162,7 +175,7 @@ async def export_backup(_user: dict = Depends(require_admin)):
         db = _get_database()
         data = await db.export_all()
         backup = {
-            "version": getattr(__import__('protoforge'), '__version__', '0.1.0'),
+            "version": _get_version(),  # FIXED: replaced __import__ with importlib
             "timestamp": time.time(),
             "data": data,
         }

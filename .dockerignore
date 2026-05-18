@@ -8,7 +8,7 @@ __pycache__
 node_modules
 web/node_modules
 *.egg-info
-dist
+/dist
 build
 .env
 .venv

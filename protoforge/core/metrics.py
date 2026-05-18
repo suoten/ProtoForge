@@ -1,5 +1,8 @@
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class MetricsCollector:
@@ -33,26 +36,37 @@ class MetricsCollector:
         key = self._make_key(name, labels)
         return self._gauges.get(key, 0)
 
-    def collect_from_engine(self, engine: Any) -> None:
-        devices = engine.get_all_device_instances()
-        self.set_gauge("protoforge_devices_total", len(devices))
-        online = sum(1 for d in devices.values()
-                     if d.status.value == "online")
-        self.set_gauge("protoforge_devices_online", online)
-        scenarios = engine.get_all_scenario_configs()
-        self.set_gauge("protoforge_scenarios_total", len(scenarios))
-        running = sum(1 for sid in scenarios
-                      if engine.get_scenario_status(sid).value == "running")
-        self.set_gauge("protoforge_scenarios_running", running)
-        protocols = engine.get_all_protocol_servers()
-        protocols_running = sum(1 for p in protocols.values()
-                                if p.status.value == "running")
-        self.set_gauge("protoforge_protocols_running", protocols_running)
+    def collect_from_engine(self, engine: Any) -> None:  # FIXED: added try-except to prevent metrics collection crash
+        try:
+            devices = engine.get_all_device_instances()
+            self.set_gauge("protoforge_devices_total", len(devices))
+            online = sum(1 for d in devices.values()
+                         if getattr(getattr(d, 'status', None), 'value', None) == "online")
+            self.set_gauge("protoforge_devices_online", online)
+            scenarios = engine.get_all_scenario_configs()
+            self.set_gauge("protoforge_scenarios_total", len(scenarios))
+            running = sum(1 for sid in scenarios
+                          if getattr(engine.get_scenario_status(sid), 'value', None) == "running")
+            self.set_gauge("protoforge_scenarios_running", running)
+            protocols = engine.get_all_protocol_servers()
+            protocols_running = sum(1 for p in protocols.values()
+                                    if getattr(getattr(p, 'status', None), 'value', None) == "running")
+            self.set_gauge("protoforge_protocols_running", protocols_running)
+        except Exception as e:
+            logger.debug("Failed to collect engine metrics: %s", e)
 
-    def collect_from_test_runner(self, runner: Any) -> None:
-        self.set_gauge("protoforge_test_cases_total", len(getattr(runner, "test_cases", getattr(runner, "_test_cases", []))))
-        self.set_gauge("protoforge_test_suites_total", len(getattr(runner, "test_suites", getattr(runner, "_test_suites", []))))
-        self.set_gauge("protoforge_test_reports_total", len(getattr(runner, "reports", getattr(runner, "_reports", []))))
+    def collect_from_test_runner(self, runner: Any) -> None:  # FIXED: added try-except and null-safe len()
+        try:
+            if runner is None:
+                return
+            cases = getattr(runner, "test_cases", getattr(runner, "_test_cases", []))
+            suites = getattr(runner, "test_suites", getattr(runner, "_test_suites", []))
+            reports = getattr(runner, "reports", getattr(runner, "_reports", []))
+            self.set_gauge("protoforge_test_cases_total", len(cases) if cases else 0)
+            self.set_gauge("protoforge_test_suites_total", len(suites) if suites else 0)
+            self.set_gauge("protoforge_test_reports_total", len(reports) if reports else 0)
+        except Exception as e:
+            logger.debug("Failed to collect test runner metrics: %s", e)
 
     def generate_prometheus_output(self) -> str:
         lines = []

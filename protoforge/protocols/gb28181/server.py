@@ -293,7 +293,7 @@ class GB28181Server(ProtocolServer):
         proto_config = device_config.protocol_config or {}
         gb_device_id = proto_config.get("device_id", device_config.id)
         sip_server_id = proto_config.get("sip_server_id", self._server_id)
-        sip_server_addr = proto_config.get("sip_server_addr", "127.0.0.1")
+        sip_server_addr = proto_config.get("sip_server_addr", "")  # FIXED: removed hardcoded 127.0.0.1 fallback
         sip_server_port = proto_config.get("sip_server_port", 5060)
         register_interval = proto_config.get("register_interval", 3600)
 

@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from typing import Any
 
@@ -11,13 +12,16 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _forward_engine = None
+_forward_engine_lock = threading.Lock()
 
 
 def _get_forward_engine():
     global _forward_engine
-    if _forward_engine is None:
-        from protoforge.core.forward import ForwardEngine
-        _forward_engine = ForwardEngine(_get_log_bus())
+    if _forward_engine is None:  # FIXED: thread-safe singleton with double-checked locking
+        with _forward_engine_lock:
+            if _forward_engine is None:
+                from protoforge.core.forward import ForwardEngine
+                _forward_engine = ForwardEngine(_get_log_bus())
     return _forward_engine
 
 

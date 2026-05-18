@@ -1,8 +1,11 @@
 import axios from 'axios'
 
+const API_TIMEOUT_MS = 30000  // FIXED: named constant for API request timeout
+const TOKEN_REFRESH_THRESHOLD_SEC = 300  // FIXED: named constant for token refresh window (5 min)
+
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 30000,  // FIXED: increased from 15s to 30s for batch operations
+  timeout: API_TIMEOUT_MS,
 })
 
 api.interceptors.request.use(config => {
@@ -149,13 +152,17 @@ function normalizeList(data, ...keys) {
     for (const k of keys) {
       if (Array.isArray(data[k])) return data[k]
     }
-    const commonKeys = ['data', 'items', 'results', 'records', 'list', 'rows']
+    if (data.code === 0 && data.data !== undefined) {  // FIXED: handle APIResponse wrapper {code, data, message}
+      if (Array.isArray(data.data)) return data.data
+      if (data.data && typeof data.data === 'object') return normalizeList(data.data, ...keys)
+    }
+    const commonKeys = ['items', 'results', 'records', 'list', 'rows']  // FIXED: removed 'data' to avoid false match on APIResponse
     for (const k of commonKeys) {
       if (Array.isArray(data[k])) return data[k]
     }
   }
-  console.error('[API] normalizeList: unexpected response format, keys tried:', keys, 'data:', data)  // FIXED: upgraded from warn to error
-  return null  // FIXED: return null instead of [] to signal error vs empty
+  console.error('[API] normalizeList: unexpected response format, keys tried:', keys, 'data:', data)
+  return []  // FIXED: return empty array instead of null to prevent .forEach/.map crashes in callers
 }
 
 export default {
@@ -325,7 +332,7 @@ export default {
         }
         const exp = payload.exp || 0
         const now = Math.floor(Date.now() / 1000)
-        if (exp - now < 300) {
+        if (exp - now < TOKEN_REFRESH_THRESHOLD_SEC) {  // FIXED: use named constant
           const refreshToken = localStorage.getItem('refresh_token')
           if (refreshToken) {
             const res = await axios.post('/api/v1/auth/refresh', { refresh_token: refreshToken })
@@ -389,9 +396,13 @@ export default {
       if (match && match[1]) filename = match[1].replace(/['"]/g, '')
     }
     const url = URL.createObjectURL(r.data)
-    const a = document.createElement('a')
-    a.href = url; a.download = filename; document.body.appendChild(a); a.click()
-    document.body.removeChild(a); URL.revokeObjectURL(url)
+    try {  // FIXED: DOM operations wrapped in try-finally to ensure URL.revokeObjectURL always runs
+      const a = document.createElement('a')
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click()
+      document.body.removeChild(a)
+    } finally {
+      URL.revokeObjectURL(url)
+    }
     return { downloaded: true, filename }
   }),
   importBackup: (backup) => d(api.post('/backup/restore', backup)),  // FIXED: renamed param from 'data' to 'backup' for clarity
