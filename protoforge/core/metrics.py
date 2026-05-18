@@ -61,7 +61,7 @@ class MetricsCollector:
                 )
                 if point_config and point_config.unit:
                     labels["unit"] = point_config.unit
-                self.set_gauge("protoforge_device_point", float(point.value), labels)
+                self.set_gauge(f"protoforge_{point.name}", float(point.value), labels)
 
     def collect_from_test_runner(self, runner: Any) -> None:
         self.set_gauge("protoforge_test_cases_total", len(runner._test_cases))
