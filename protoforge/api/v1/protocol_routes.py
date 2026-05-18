@@ -79,7 +79,7 @@ async def start_all_protocols(_user: dict = Depends(require_operator)):
                     "protocol": name,
                     "original_port": config_original_port or original_port,
                     "actual_port": actual_port,
-                    "message": f"端口 {config_original_port or original_port} 被占用，已自动切换到 {actual_port}",
+                    "message": f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}",  # FIXED: Chinese→English
                 })
         except Exception as e:
             friendly = get_friendly_error(str(e))
@@ -132,7 +132,7 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
             result["port_changed"] = True
             result["original_port"] = config_original_port or original_port
             result["actual_port"] = actual_port
-            result["message"] = f"端口 {config_original_port or original_port} 被占用，已自动切换到 {actual_port}"
+            result["message"] = f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}"  # FIXED: Chinese→English
 
         return result
 

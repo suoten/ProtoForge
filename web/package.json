@@ -30,5 +30,8 @@
     "@openapi-ts/json-schema": "^0.3.0",
     "glob": "^10.3.0",
     "@types/node": "^20.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

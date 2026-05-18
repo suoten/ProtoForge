@@ -663,7 +663,7 @@ async function batchDelete() {
         const fail = res.errors?.length || 0
         selectedIds.value = []
         message.success(t('devices.batchDeleted', { ok, fail }))
-        loadData()
+        await loadData()  // FIXED: await loadData to prevent stale data display
       } catch (e) {
         message.error(t('devices.batchDeleteFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
@@ -689,7 +689,7 @@ async function startAllDevices() {
           else { fail++; message.warning(t('devices.deviceStartFailed', { id: toStart[i].id, error: r.reason?.response?.data?.detail || r.reason?.message || t('common.unknownError') })) }
         })
         if (fail > 0) { message.warning(t('devices.startedWithFailures', { ok, fail })) } else { message.success(t('devices.startedCount', { ok })) }
-        loadData()
+        await loadData()  // FIXED: await loadData to prevent stale data display
       } finally { batchLoading.value = false }
     }
   })

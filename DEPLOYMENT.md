@@ -103,24 +103,41 @@ python -m protoforge.main
 
 ## Docker 部署
 
-### 使用 Docker Compose（推荐）
+### 🚀 快速上手（新手推荐）
+
+直接使用 Docker Hub 上的预构建镜像，无需克隆代码，无需编译：
 
 ```bash
-# 克隆仓库
+docker run -d --name protoforge -p 8000:8000 -v protoforge-data:/app/data suoten/protoforge:latest
+```
+
+打开浏览器访问 http://localhost:8000，用 `admin` / `admin` 登录。
+
+停止服务：`docker stop protoforge && docker rm protoforge`
+
+> 也可以用 docker compose 方式（方便管理更多参数）：下载仓库中的 [docker-compose.simple.yml](../docker-compose.simple.yml)，然后运行 `docker compose -f docker-compose.simple.yml up -d`
+
+### 生产环境 Docker Compose（PostgreSQL）
+
+使用 PostgreSQL 数据库 + 从源码构建，适合有经验的用户：
+
+```bash
 git clone https://github.com/suoten/ProtoForge.git
 cd ProtoForge
 
-# 启动服务
-docker-compose up -d
+# 启动服务（含 PostgreSQL + 自动运行测试）
+docker compose up -d
 
 # 查看日志
-docker-compose logs -f
+docker compose logs -f
 
 # 停止服务
-docker-compose down
+docker compose down
 ```
 
-### Docker 单机运行
+> ⚠️ 此方式需要约 **2GB+ 内存**。低配机器建议用上面的快速上手方式。
+
+### 自定义构建
 
 ```bash
 # 构建镜像

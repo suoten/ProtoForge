@@ -326,7 +326,7 @@ async function startWithConfig() {
     const config = {}
     for (const [key, value] of Object.entries(advancedConfig.value)) {
       if (value !== '' && value !== null && value !== undefined) {
-        config[key] = (value !== '' && !isNaN(Number(value))) ? Number(value) : value
+        config[key] = (String(value).trim() !== '' && !isNaN(Number(value))) ? Number(value) : value  // FIXED: trim whitespace to prevent Number("  ") → 0
       }
     }
     await api.startProtocol(advancedProtocol.value.name, config)

@@ -413,14 +413,28 @@ class AssertionEngine:
                 result["message"] = f"does not contain '{assertion.expected}'" if passed else f"contains '{assertion.expected}'"  # FIXED: CN→EN
 
             elif assertion.type == AssertionType.GREATER_THAN:
-                passed = float(target_value) > float(assertion.expected) if target_value is not None else False
-                result["passed"] = passed
-                result["message"] = f"{target_value} > {assertion.expected}" if passed else f"{target_value} not greater than {assertion.expected}"  # FIXED: CN→EN
+                try:  # FIXED: wrap float() conversion with type validation
+                    tv = float(target_value) if target_value is not None else None
+                    ev = float(assertion.expected)
+                except (ValueError, TypeError) as conv_err:
+                    passed = False
+                    result["message"] = f"cannot compare: {conv_err}"
+                else:
+                    passed = tv > ev if tv is not None else False
+                    result["passed"] = passed
+                    result["message"] = f"{target_value} > {assertion.expected}" if passed else f"{target_value} not greater than {assertion.expected}"
 
             elif assertion.type == AssertionType.LESS_THAN:
-                passed = float(target_value) < float(assertion.expected) if target_value is not None else False
-                result["passed"] = passed
-                result["message"] = f"{target_value} < {assertion.expected}" if passed else f"{target_value} not less than {assertion.expected}"  # FIXED: CN→EN
+                try:  # FIXED: wrap float() conversion with type validation
+                    tv = float(target_value) if target_value is not None else None
+                    ev = float(assertion.expected)
+                except (ValueError, TypeError) as conv_err:
+                    passed = False
+                    result["message"] = f"cannot compare: {conv_err}"
+                else:
+                    passed = tv < ev if tv is not None else False
+                    result["passed"] = passed
+                    result["message"] = f"{target_value} < {assertion.expected}" if passed else f"{target_value} not less than {assertion.expected}"
 
             elif assertion.type == AssertionType.REGEX_MATCH:
                 try:
@@ -457,21 +471,39 @@ class AssertionEngine:
 
             elif assertion.type == AssertionType.LENGTH_EQUALS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                passed = length == int(assertion.expected)
-                result["passed"] = passed
-                result["message"] = f"Length {length} == {assertion.expected}" if passed else f"Length {length} != {assertion.expected}"  # FIXED: CN→EN
+                try:  # FIXED: wrap int() conversion with type validation
+                    expected_len = int(assertion.expected)
+                except (ValueError, TypeError):
+                    passed = False
+                    result["message"] = f"expected length value is not a valid integer: {assertion.expected}"
+                else:
+                    passed = length == expected_len
+                    result["passed"] = passed
+                    result["message"] = f"Length {length} == {assertion.expected}" if passed else f"Length {length} != {assertion.expected}"
 
             elif assertion.type == AssertionType.LENGTH_GREATER:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                passed = length > int(assertion.expected)
-                result["passed"] = passed
-                result["message"] = f"Length {length} > {assertion.expected}" if passed else f"Length {length} not greater than {assertion.expected}"  # FIXED: CN→EN
+                try:  # FIXED: wrap int() conversion with type validation
+                    expected_len = int(assertion.expected)
+                except (ValueError, TypeError):
+                    passed = False
+                    result["message"] = f"expected length value is not a valid integer: {assertion.expected}"
+                else:
+                    passed = length > expected_len
+                    result["passed"] = passed
+                    result["message"] = f"Length {length} > {assertion.expected}" if passed else f"Length {length} not greater than {assertion.expected}"
 
             elif assertion.type == AssertionType.LENGTH_LESS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                passed = length < int(assertion.expected)
-                result["passed"] = passed
-                result["message"] = f"Length {length} < {assertion.expected}" if passed else f"Length {length} not less than {assertion.expected}"  # FIXED: CN→EN
+                try:  # FIXED: wrap int() conversion with type validation
+                    expected_len = int(assertion.expected)
+                except (ValueError, TypeError):
+                    passed = False
+                    result["message"] = f"expected length value is not a valid integer: {assertion.expected}"
+                else:
+                    passed = length < expected_len
+                    result["passed"] = passed
+                    result["message"] = f"Length {length} < {assertion.expected}" if passed else f"Length {length} not less than {assertion.expected}"
 
             else:
                 result["message"] = f"Unknown assertion type: {assertion.type}"  # FIXED: CN→EN
@@ -496,7 +528,7 @@ class AssertionEngine:
             return data
         parts = path.replace("[", ".").replace("]", "").split(".")
         current = data
-        for part in parts:
+        for i, part in enumerate(parts):
             if not part:
                 continue
             if isinstance(current, dict):
@@ -505,8 +537,10 @@ class AssertionEngine:
                 try:
                     current = current[int(part)]
                 except (ValueError, IndexError):
+                    logger.debug("JSON path traversal failed at segment %d ('%s'): index error on %s", i, part, type(current).__name__)  # FIXED: add debug log for silent None return
                     return None
             else:
+                logger.debug("JSON path traversal failed at segment %d ('%s'): unexpected type %s", i, part, type(current).__name__)  # FIXED: add debug log for silent None return
                 return None
         return current
 

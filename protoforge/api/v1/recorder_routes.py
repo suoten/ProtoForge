@@ -1,5 +1,6 @@
 import logging
 import math
+import threading
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,13 +12,16 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _recorder = None
+_recorder_lock = threading.Lock()
 
 
 def _get_recorder():
     global _recorder
-    if _recorder is None:
-        from protoforge.core.recorder import Recorder
-        _recorder = Recorder(_get_log_bus())
+    if _recorder is None:  # FIXED: thread-safe singleton with double-checked locking
+        with _recorder_lock:
+            if _recorder is None:
+                from protoforge.core.recorder import Recorder
+                _recorder = Recorder(_get_log_bus())
     return _recorder
 
 

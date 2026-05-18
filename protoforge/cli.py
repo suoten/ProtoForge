@@ -10,31 +10,31 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="protoforge",
-        description="ProtoForge - 物联网协议仿真与测试平台",
+        description="ProtoForge - IoT Protocol Simulation & Testing Platform",  # FIXED: 中文→英文
     )
-    subparsers = parser.add_subparsers(dest="command", help="子命令")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")  # FIXED: Chinese→English
 
-    run_parser = subparsers.add_parser("run", help="启动 ProtoForge 服务")
-    run_parser.add_argument("--host", default=default_host, help=f"监听地址 (默认: {default_host})")
-    run_parser.add_argument("--port", type=int, default=default_port, help=f"监听端口 (默认: {default_port})")
-    run_parser.add_argument("--reload", action="store_true", help="开发模式热重载")
-    run_parser.add_argument("--log-level", default="info", help="日志级别")
+    run_parser = subparsers.add_parser("run", help="Start ProtoForge server")  # FIXED: Chinese→English
+    run_parser.add_argument("--host", default=default_host, help=f"Listen address (default: {default_host})")  # FIXED: Chinese→English
+    run_parser.add_argument("--port", type=int, default=default_port, help=f"Listen port (default: {default_port})")  # FIXED: Chinese→English
+    run_parser.add_argument("--reload", action="store_true", help="Enable hot reload for development")  # FIXED: Chinese→English
+    run_parser.add_argument("--log-level", default="info", help="Log level (debug/info/warning/error)")  # FIXED: Chinese→English
 
-    demo_parser = subparsers.add_parser("demo", help="一键启动演示（自动创建示例设备和场景）")
-    demo_parser.add_argument("--host", default=default_host, help="监听地址")
-    demo_parser.add_argument("--port", type=int, default=default_port, help="监听端口")
+    demo_parser = subparsers.add_parser("demo", help="Start demo mode with sample devices")  # FIXED: Chinese→English
+    demo_parser.add_argument("--host", default=default_host, help="Listen address")  # FIXED: Chinese→English
+    demo_parser.add_argument("--port", type=int, default=default_port, help="Listen port")  # FIXED: Chinese→English
 
-    subparsers.add_parser("version", help="查看版本")
+    subparsers.add_parser("version", help="Show version")  # FIXED: Chinese→English
 
-    subparsers.add_parser("init", help="初始化数据目录和默认配置")
+    subparsers.add_parser("init", help="Initialize data directory and default config")  # FIXED: Chinese→English
 
-    migrate_parser = subparsers.add_parser("migrate", help="运行数据库迁移")
-    migrate_parser.add_argument("--revision", default="head", help="目标版本 (默认: head)")
+    migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")  # FIXED: Chinese→English
+    migrate_parser.add_argument("--revision", default="head", help="Target revision (default: head)")  # FIXED: Chinese→English
 
     args = parser.parse_args()
 
     if args.command == "version":
-        print("ProtoForge v0.1.0 - 物联网协议仿真与测试平台")
+        print("ProtoForge v0.1.0 - IoT Protocol Simulation & Testing Platform")  # FIXED: 中文→英文
         return
 
     if args.command == "init":
@@ -68,19 +68,19 @@ def _init_command():
     env_example = Path(".env.example")
     env_file = Path(".env")
     if env_example.exists() and not env_file.exists():
-        try:  # FIXED: 文件复制添加异常处理
+        try:
             shutil.copy(env_example, env_file)
-            print("✓ 已从 .env.example 创建 .env 配置文件")
+            print("+ Created .env from .env.example")  # FIXED: Chinese->English, avoid Unicode on Windows
         except (OSError, PermissionError) as e:
-            print(f"⚠ 无法创建 .env 文件: {e}")
-    print("✓ 数据目录已创建: data/")
-    print("✓ 初始化完成！运行 'protoforge run' 启动服务")
-    print("  或运行 'protoforge demo' 一键体验演示")
+            print(f"! Failed to create .env: {e}")  # FIXED: Chinese->English
+    print("+ Data directory created: data/")  # FIXED: Chinese->English
+    print("+ Done! Run 'protoforge run' to start the server")  # FIXED: Chinese->English
+    print("  or run 'protoforge demo' for a quick demo")  # FIXED: Chinese→English
 
 
 def _migrate_command(revision: str = "head"):
     import subprocess
-    print(f"运行数据库迁移到版本: {revision}")
+    print(f"Running database migration to revision: {revision}")  # FIXED: Chinese→English
     try:
         result = subprocess.run(
             ["alembic", "upgrade", revision],
@@ -88,32 +88,58 @@ def _migrate_command(revision: str = "head"):
             text=True,
         )
         if result.returncode == 0:
-            print("✓ 数据库迁移完成")
+            print("+ Database migration completed")  # FIXED: Chinese->English, avoid Unicode on Windows
         else:
-            print(f"✗ 迁移失败:\n{result.stderr}")
+            print(f"! Migration failed:\n{result.stderr}")  # FIXED: Chinese->English
             sys.exit(1)
     except FileNotFoundError:
-        print("✗ 未找到 alembic 命令，请确认已安装: pip install alembic")
+        print("! alembic not found. Install it: pip install alembic")  # FIXED: Chinese->English
         sys.exit(1)
 
 
 def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_mode=False):
     import os
+    import secrets
+
+    if not demo_mode:
+        port_str = str(port)
+        admin_pw = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "")
+        if not admin_pw:
+            admin_pw = secrets.token_urlsafe(12)
+            os.environ["PROTOFORGE_ADMIN_PASSWORD"] = admin_pw
+            logger_banner_msg = f"admin / {admin_pw} (auto-generated, save this now!)"
+        else:
+            logger_banner_msg = f"admin / ********"
+        w = 50
+        print()
+        print("╔" + "═" * w + "╗")
+        print("║  ProtoForge is starting" + " " * (w - 25) + "║")
+        print("║  Access:  http://localhost:" + port_str + " " * max(0, w - 28 - len(port_str)) + "║")
+        print("║  API Docs: http://localhost:" + port_str + "/docs" + " " * max(0, w - 34 - len(port_str)) + "║")
+        print("║  Admin:   " + logger_banner_msg + " " * max(0, w - 12 - len(logger_banner_msg)) + "║")
+        print("╚" + "═" * w + "╝")
+        print()
 
     if demo_mode:
         os.environ["PROTOFORGE_DEMO_MODE"] = "1"
+        demo_pw = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "")
+        if not demo_pw:
+            demo_pw = secrets.token_urlsafe(12)
+            os.environ["PROTOFORGE_ADMIN_PASSWORD"] = demo_pw
+        os.environ.setdefault("PROTOFORGE_NO_AUTH", "0")
+        w = 50
         print()
-        print("╔══════════════════════════════════════════════════╗")
-        print("║        ProtoForge 演示模式                      ║")
-        print("║                                                  ║")
-        print("║  ✓ 自动创建示例设备和场景                        ║")
-        print("║  ✓ 自动启动所有协议服务                          ║")
-        print("║  ✓ 默认账号: admin / admin                       ║")
-        print("║                                                  ║")
+        print("╔" + "═" * w + "╗")
+        print("║  ProtoForge Demo Mode" + " " * (w - 22) + "║")
+        print("║" + " " * w + "║")
+        print("║  + Auto-create sample devices and scenarios" + " " * max(0, w - 46) + "║")
+        print("║  + Auto-start all protocol services" + " " * max(0, w - 39) + "║")
+        print("║  + Login: admin / " + demo_pw + " " * max(0, w - 21 - len(demo_pw)) + "║")
+        print("║" + " " * w + "║")
         port_str = str(port)
-        padding = " " * (37 - len(port_str))
-        print(f"║  访问地址: http://localhost:{port_str}{padding}║")
-        print("╚══════════════════════════════════════════════════╝")
+        access_content = f"Access URL: http://localhost:{port_str}"
+        print("║  " + access_content + " " * max(0, w - 2 - len(access_content)) + "║")
+        print("╚" + "═" * w + "╝")
         print()
 
     import uvicorn

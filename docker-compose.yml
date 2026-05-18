@@ -1,14 +1,20 @@
+# ProtoForge Docker Compose Configuration（生产环境 / 开发者）
+# 新手请用 docker-compose.simple.yml，无需编译直接用预构建镜像
+#
+# Quick start: docker compose up -d
+# Simple mode: docker compose -f docker-compose.simple.yml up -d
+# With custom settings: Set PROTOFORGE_DB_PASSWORD, PROTOFORGE_JWT_SECRET, PROTOFORGE_ADMIN_PASSWORD in .env
+# Run tests: docker compose --profile test up -d
+
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: protoforge
       POSTGRES_USER: protoforge
-      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:-protoforge2024}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U protoforge"]
       interval: 5s
@@ -17,6 +23,7 @@ services:
     restart: unless-stopped
 
   init-test-db:
+    profiles: [test]
     image: postgres:16-alpine
     depends_on:
       postgres:
@@ -26,6 +33,7 @@ services:
 
   protoforge:
     build: .
+    command: ["sh", "-c", "alembic upgrade head || :; python -m protoforge.cli run"]
     ports:
       - "8000:8000"
       - "5020:5020"
@@ -45,13 +53,13 @@ services:
       - "1701:1701"
       - "34964:34964"
       - "34980:34980"
-      - "50051:50051"
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}@postgres:5432/protoforge
-      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?PROTOFORGE_JWT_SECRET must be set}
-      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?PROTOFORGE_ADMIN_PASSWORD must be set}
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}
       PROTOFORGE_LOG_LEVEL: info
       PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}
+      PROTOFORGE_GRPC_PORT: "0"
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,10 +68,11 @@ services:
     restart: unless-stopped
 
   protoforge-test:
+    profiles: [test]
     build: .
     command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:?PROTOFORGE_DB_PASSWORD must be set}@postgres:5432/protoforge_test
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"
     depends_on:
       init-test-db:

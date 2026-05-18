@@ -203,9 +203,9 @@ class ProfinetServer(ProtocolServer):
         self._input_size = 0
         self._output_size = 0
         self._connections: set[asyncio.StreamWriter] = set()
-        self._ip_address = "192.168.1.1"
+        self._ip_address = ""  # FIXED: removed hardcoded 192.168.1.1; set via config in start()
         self._subnet_mask = "255.255.255.0"
-        self._gateway = "192.168.1.254"
+        self._gateway = ""  # FIXED: removed hardcoded 192.168.1.254; set via config in start()
         self._ar_counter = 0
         self._active_ars: dict[int, ApplicationRelation] = {}
         self._alarm_seq = 0

@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 
@@ -271,7 +272,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="ProtoForge",
-        description="物联网协议仿真与测试平台 API",
+        description="IoT Protocol Simulation & Testing Platform API",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -282,8 +283,14 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)
 
-    cors_origins_raw = settings.cors_origins or "*"
+    cors_origins_raw = settings.cors_origins or ""
     cors_origins_list = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+    if not cors_origins_list:
+        cors_origins_list = [f"http://localhost:{settings.port}", f"http://127.0.0.1:{settings.port}"]
+        logger.info(
+            "CORS origins not configured. Defaulting to localhost only. "
+            "Set PROTOFORGE_CORS_ORIGINS for production (e.g. 'https://your-domain.com')."
+        )
     has_wildcard = "*" in cors_origins_list
     if has_wildcard and len(cors_origins_list) > 1:
         logger.warning(
@@ -352,9 +359,11 @@ def create_app() -> FastAPI:
     fallback_dir = Path(__file__).parent.parent / "static"
 
     if not static_dir.is_dir():
-        static_dir = Path("/app/web/dist")
+        env_static = os.environ.get("PROTOFORGE_STATIC_DIR", "")  # FIXED: configurable static dir via env var
+        static_dir = Path(env_static) if env_static else Path("/app/web/dist")
     if not fallback_dir.is_dir():
-        fallback_dir = Path("/app/static")
+        env_fallback = os.environ.get("PROTOFORGE_FALLBACK_DIR", "")  # FIXED: configurable fallback dir via env var
+        fallback_dir = Path(env_fallback) if env_fallback else Path("/app/static")
 
     spa_dir = static_dir if static_dir.is_dir() else (fallback_dir if fallback_dir.is_dir() else None)
 
@@ -376,11 +385,34 @@ def create_app() -> FastAPI:
             return FileResponse(spa_dir / "index.html")
     else:
         logger.warning(
-            "前端静态文件目录不存在: %s 和 %s 均未找到。"
-            "浏览器访问时将显示空白页。请执行 'cd web && npm install && npm run build' 构建前端。",
+            "Frontend static files not found: %s and %s. "
+            "Run 'cd web && npm install && npm run build' to build the frontend.",
             static_dir,
             fallback_dir,
         )
+
+        @app.get("/")
+        async def frontend_not_built():
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse(content="""
+<!DOCTYPE html>
+<html>
+<head><title>ProtoForge - Frontend Not Built</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:700px;margin:80px auto;padding:0 20px">
+<h1>ProtoForge API is running</h1>
+<p>The web frontend has not been built yet. You can still use the API:</p>
+<ul>
+<li><a href="/docs">API Documentation (Swagger UI)</a></li>
+<li><a href="/api/v1/health">Health Check</a></li>
+</ul>
+<h2>To enable the web interface:</h2>
+<pre style="background:#f5f5f5;padding:16px;border-radius:8px">cd web
+npm install
+npm run build</pre>
+<p>Then restart ProtoForge.</p>
+</body>
+</html>
+            """)
 
     return app
 

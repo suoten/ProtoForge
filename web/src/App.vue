@@ -374,6 +374,7 @@ function connectWebSocket() {
           if (valid) {
             connectWebSocket()
           } else {
+            if (ws) { try { ws.close() } catch (_) {} }  // FIXED: close stale WS before logout on token expiry
             loggedIn.value = false
             localStorage.removeItem('token')
             localStorage.removeItem('refresh_token')

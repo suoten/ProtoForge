@@ -47,7 +47,12 @@ router.beforeEach((to, from, next) => {
   }
 
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const parts = token.split('.')
+    if (parts.length !== 3) throw new Error('invalid JWT format')
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(decodeURIComponent(atob(base64).split('').map(c =>
+      '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+    ).join('')))  // FIXED: proper Base64url decoding with Unicode support
     if (payload.exp && payload.exp * 1000 < Date.now()) {
       localStorage.removeItem('token')
       localStorage.removeItem('refresh_token')
@@ -63,7 +68,7 @@ router.beforeEach((to, from, next) => {
   }
 
   if (to.meta?.roles && !to.meta.roles.includes(userRole)) {
-    console.warn(`访问 ${to.path} 需要角色: ${to.meta.roles.join(', ')}，当前角色: ${userRole}`)
+    console.warn(`Access to ${to.path} requires role: ${to.meta.roles.join(', ')}, current role: ${userRole}`)  // FIXED: Chinese log→English
     next('/')
     return
   }

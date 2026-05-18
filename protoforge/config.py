@@ -1,6 +1,7 @@
 import json
 import logging
 import secrets
+import sys
 import threading
 from pathlib import Path
 from typing import Any
@@ -19,10 +20,10 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     demo_mode: bool = False
     log_level: str = "info"
-    cors_origins: str = "*"  # FIXED: default to allow all origins; set PROTOFORGE_CORS_ORIGINS for production
+    cors_origins: str = ""  # FIXED: default empty for security; set PROTOFORGE_CORS_ORIGINS for production
     no_auth: bool = False
-    admin_password: str = ""
-    grpc_port: int = 50051
+    admin_password: str = ""  # FIXED: default empty; auto-generates random password if unset
+    grpc_port: int = 0  # FIXED: default to 0 (disabled); set PROTOFORGE_GRPC_PORT to enable (e.g. 50051)
     failover_role: str = ""
     failover_primary: str = ""
     failover_standby: str = ""
@@ -43,7 +44,7 @@ class Settings(BaseSettings):
     refresh_token_expires: int = 604800
     max_login_attempts: int = 5
     lockout_duration: int = 300
-    min_password_length: int = 8
+    min_password_length: int = 8  # FIXED: raised from 4 to 8 for security
 
     http_timeout: float = 10.0
     http_timeout_short: float = 5.0
@@ -71,8 +72,8 @@ class Settings(BaseSettings):
     rate_limit_auth_window_seconds: int = 60
 
     modbus_tcp_port: int = 5020
-    modbus_rtu_port: str = "/dev/ttyUSB0"
-    modbus_rtu_host: str = "/dev/ttyUSB0"
+    modbus_rtu_port: str = "COM1" if sys.platform == "win32" else "/dev/ttyUSB0"
+    modbus_rtu_host: str = "COM1" if sys.platform == "win32" else "/dev/ttyUSB0"
     opcua_port: int = 4840
     mqtt_port: int = 1883
     http_port: int = 8080

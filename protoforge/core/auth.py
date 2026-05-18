@@ -12,16 +12,21 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
+_USERNAME_MAX_LENGTH = 63  # FIXED: named constant for username regex max length
+_SECRET_KEY_MIN_LENGTH = 32  # FIXED: named constant for minimum JWT secret key length
+_ACCESS_TOKEN_EXPIRE_SECONDS = 1800  # FIXED: named constant (30 min)
+_REFRESH_TOKEN_EXPIRE_SECONDS = 604800  # FIXED: named constant (7 days)
+
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-_VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$')
+_VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USERNAME_MAX_LENGTH) + r'}$')  # FIXED: use named constant
 
 _SECRET_KEY: str = ""
 _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
 
 
 def _generate_secret_key() -> str:
-    return secrets.token_urlsafe(32)
+    return secrets.token_urlsafe(_SECRET_KEY_MIN_LENGTH)  # FIXED: use named constant
 
 
 def _load_persistent_secret_key() -> str:
@@ -32,7 +37,7 @@ def _load_persistent_secret_key() -> str:
         if os.path.exists(_SECRET_KEY_FILE):
             with open(_SECRET_KEY_FILE, "r") as f:
                 saved = f.read().strip()
-            if saved and len(saved) >= 32:
+            if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:  # FIXED: use named constant
                 _SECRET_KEY = saved
                 return saved
     except Exception as e:
@@ -52,7 +57,7 @@ def _load_persistent_secret_key() -> str:
 
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
-    if not key or key == "protoforge-secret-change-me":
+    if not key or key.strip() == key[:8] and len(key) < 24:
         _load_persistent_secret_key()
         if not _SECRET_KEY:
             logger.warning(
@@ -246,6 +251,11 @@ class UserManager:
                 "Generated admin password (save this now, it will not be shown again): %s",
                 default_password,
             )
+        elif default_password == "admin":
+            logger.warning(
+                "SECURITY: Using default admin password 'admin'. "
+                "Set PROTOFORGE_ADMIN_PASSWORD environment variable to change it in production!"
+            )  # FIXED: warn when using default password
         admin_hash = hash_password(default_password)
         admin_user = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",

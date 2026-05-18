@@ -1,0 +1,34 @@
+# ProtoForge 简易部署（新手推荐）
+# 使用预构建的 Docker 镜像 + SQLite，无需克隆代码，无需编译
+#
+# 启动：docker compose -f docker-compose.simple.yml up -d
+# 停止：docker compose -f docker-compose.simple.yml down
+# 地址：http://localhost:8000
+# 登录：admin / admin
+
+services:
+  protoforge:
+    image: suoten/protoforge:latest
+    container_name: protoforge
+    command:
+      - sh
+      - -c
+      - alembic upgrade head || :; python -m protoforge.cli demo
+    ports:
+      - "8000:8000"
+    environment:
+      PROTOFORGE_DB_PATH: data/protoforge.db
+      PROTOFORGE_LOG_LEVEL: info
+      PROTOFORGE_ADMIN_PASSWORD: admin
+      PROTOFORGE_DEMO_MODE: "1"
+    volumes:
+      - protoforge-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  protoforge-data:

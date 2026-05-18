@@ -239,7 +239,7 @@ async function startAllScenes() {
         batchLoading.value = false
       }
       if (fail > 0) { message.warning(t('scenarios.startAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.startedCount', { count: ok })) }
-      loadData()
+      await loadData()  // FIXED: await loadData to prevent stale data display
     }
   })
 }

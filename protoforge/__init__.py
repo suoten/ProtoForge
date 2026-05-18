@@ -1,3 +1,3 @@
-"""ProtoForge - 物联网协议仿真与测试平台"""
+"""ProtoForge - IoT Protocol Simulation & Testing Platform"""
 
 __version__ = "0.1.0"
