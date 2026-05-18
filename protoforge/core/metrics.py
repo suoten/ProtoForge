@@ -47,8 +47,6 @@ class MetricsCollector:
         self.set_gauge("protoforge_protocols_running", protocols_running)
 
         for device in engine._devices.values():
-            if device.status.value != "online":
-                continue
             labels_base = {
                 "device_id": device.config.id,
                 "device_name": device.config.name,
