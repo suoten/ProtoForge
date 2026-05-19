@@ -49,9 +49,12 @@
             "unit": "m/s²",
             "description": "X轴振动加速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "script",
             "min_value": 0.1,
-            "max_value": 2.5
+            "max_value": 2.5,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 85 + 0.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+            }
         },
         {
             "name": "vibration_y",
@@ -60,9 +63,12 @@
             "unit": "m/s²",
             "description": "Y轴振动加速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "script",
             "min_value": 0.1,
-            "max_value": 2.5
+            "max_value": 2.5,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 70 + 1.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+            }
         },
         {
             "name": "vibration_z",
@@ -71,9 +77,12 @@
             "unit": "m/s²",
             "description": "Z轴振动加速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "script",
             "min_value": 0.1,
-            "max_value": 3.0
+            "max_value": 3.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.7 + 0.4 * math.sin(2 * math.pi * elapsed / 58 + 2.8); noise = random.uniform(-0.2, 0.2); result = round(max(0.1, base + noise), 3)"
+            }
         },
         {
             "name": "spindle_override",
