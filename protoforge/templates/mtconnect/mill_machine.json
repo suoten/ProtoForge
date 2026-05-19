@@ -128,7 +128,7 @@
             "min_value": 0,
             "max_value": 999,
             "generator_config": {
-                "script": "key = 'part_count_mtconnect'; interval = 60; result = min(int(elapsed / interval), 999); cache[key] = result"
+                "script": "elapsed = context['elapsed']; result = min(int(elapsed / 60), 999)"
             }
         }
     ],
