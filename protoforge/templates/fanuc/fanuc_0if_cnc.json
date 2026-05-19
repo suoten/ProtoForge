@@ -81,6 +81,51 @@
             "generator_config": {"period": 60, "phase": 0.0}
         },
         {
+            "name": "spindle_current",
+            "address": "spindle_current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "主轴电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 8.0,
+            "max_value": 32.0,
+            "generator_config": {"period": 120, "phase": 0.5}
+        },
+        {
+            "name": "vibration_x",
+            "address": "vibration_x",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "X轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 2.5
+        },
+        {
+            "name": "vibration_y",
+            "address": "vibration_y",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Y轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 2.5
+        },
+        {
+            "name": "vibration_z",
+            "address": "vibration_z",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Z轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 3.0
+        },
+        {
             "name": "alarm_status",
             "address": "alarm",
             "data_type": "uint16",

@@ -30,6 +30,51 @@
             "generator_config": {"period": 90, "phase": 1.0}
         },
         {
+            "name": "spindle_current",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "主轴电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 8.0,
+            "max_value": 35.0,
+            "generator_config": {"period": 120, "phase": 2.0}
+        },
+        {
+            "name": "vibration_x",
+            "address": "23",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "X轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 2.5
+        },
+        {
+            "name": "vibration_y",
+            "address": "25",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Y轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 2.5
+        },
+        {
+            "name": "vibration_z",
+            "address": "27",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Z轴振动加速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 3.0
+        },
+        {
             "name": "spindle_override",
             "address": "3",
             "data_type": "uint16",
