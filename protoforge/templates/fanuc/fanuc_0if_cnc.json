@@ -75,9 +75,10 @@
             "unit": "mm/min",
             "description": "进给速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "sine",
             "min_value": 100,
-            "max_value": 5000
+            "max_value": 5000,
+            "generator_config": {"period": 60, "phase": 0.0}
         },
         {
             "name": "alarm_status",

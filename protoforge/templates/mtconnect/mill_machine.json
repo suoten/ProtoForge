@@ -66,9 +66,10 @@
             "unit": "mm/min",
             "description": "进给速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "sine",
             "min_value": 200,
-            "max_value": 3000
+            "max_value": 3000,
+            "generator_config": {"period": 75, "phase": 2.1}
         },
         {
             "name": "part_count",
