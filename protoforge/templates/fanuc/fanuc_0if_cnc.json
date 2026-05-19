@@ -64,9 +64,10 @@
             "unit": "RPM",
             "description": "主轴转速",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "sawtooth",
             "min_value": 1000,
-            "max_value": 8000
+            "max_value": 8000,
+            "generator_config": {"period": 120}
         },
         {
             "name": "feed_rate",
