@@ -418,6 +418,9 @@ const messages = {
       usernameRequired: '请输入用户名',
       passwordRequired: '请输入密码',
       defaultAccount: '默认账号: admin / admin',
+      invalidCredentials: '用户名或密码错误',
+      accountLocked: '账户已锁定，请{seconds}秒后重试',
+      serverError: '服务器错误，请稍后重试',
     },
     password: {
       title: '修改密码',
@@ -433,6 +436,7 @@ const messages = {
       tooWeak: '新密码需包含大写字母、小写字母、数字、特殊字符中的至少3种',
       noUser: '未找到当前登录用户',
       reloginRequired: '密码已修改，请点击确认后重新登录',
+      wrongOldPassword: '当前密码不正确',
     },
     dashboard: {
       title: '仪表盘',
@@ -2320,6 +2324,9 @@ const messages = {
       usernameRequired: 'Username is required',
       passwordRequired: 'Password is required',
       defaultAccount: 'Default: admin / admin',
+      invalidCredentials: 'Invalid username or password',
+      accountLocked: 'Account locked, retry after {seconds}s',
+      serverError: 'Server error, please try again later',
     },
     password: {
       title: 'Change Password',
@@ -2335,6 +2342,7 @@ const messages = {
       tooWeak: 'Password must contain at least 3 of: uppercase, lowercase, digits, special characters',
       noUser: 'No current user found',
       reloginRequired: 'Password changed. Click OK to login again.',
+      wrongOldPassword: 'Current password is incorrect',
     },
     dashboard: {
       title: 'Dashboard',
@@ -2626,6 +2634,7 @@ const messages = {
       title: 'Protocol Services',
       subtitle: 'Click "One-Click Start" to start protocol with default config',
       startAll: 'Start All',
+      stopAll: 'Stop All',
       running: 'Running',
       stopped: 'Stopped',
       port: 'Port',
