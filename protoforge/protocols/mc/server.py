@@ -151,7 +151,7 @@ class McServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("MC server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"MC服务启动 {self._host}:{self._port}",
+                            f"MC service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -172,7 +172,7 @@ class McServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("MC server stopped")
-            self._log_debug("system", "server_stop", "MC服务停止")
+            self._log_debug("system", "server_stop", "MC service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         try:
@@ -193,23 +193,23 @@ class McServer(ProtocolServer):
         logger.debug("MC connection from %s", addr)
         try:
             while self._server_running:
-                header = await reader.readexactly(9)
+                header = await asyncio.wait_for(reader.readexactly(9), timeout=30.0)  # FIXED: 连接无读超时(Slowloris漏洞)
                 if len(header) < 9:
                     break
                 if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
                     data_len_field = int(header[7:9], 16)
-                    remaining = await reader.readexactly(data_len_field + 6)
+                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=30.0)  # FIXED: 读超时
                     data = header + remaining
                 else:
                     data_len = struct.unpack("<H", header[7:9])[0]
                     total_len = 9 + data_len
-                    remaining = await reader.readexactly(total_len - 9)
+                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=30.0)  # FIXED: 读超时
                     data = header + remaining
                 response = self._process_slmp(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 捕获读超时异常
             pass
         finally:
             writer.close()
@@ -317,7 +317,7 @@ class McServer(ProtocolServer):
                         logger.warning("MC write value sync error: %s", e)
                     break
             self._log_debug("recv", "mc_write",
-                            f"写入设备{device_code}偏移{start_addr}",
+                            f"Write device {device_code} offset {start_addr}",  # FIXED: CN→EN
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
 
         resp = bytearray()
@@ -441,7 +441,7 @@ class McServer(ProtocolServer):
                      self._device_params[device_config.id]["station"],
                      self._device_params[device_config.id]["pc"])
         self._log_debug("system", "device_create",
-                        f"创建MC设备 {device_config.name}",
+                        f"MC device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -452,7 +452,7 @@ class McServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("MC device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除MC设备 {device_id}",
+                        f"MC device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -473,11 +473,11 @@ class McServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "MC 服务器监听地址"},
-                "port": {"type": "integer", "default": 5000, "description": "MC 端口 (默认5000)"},
-                "network": {"type": "integer", "default": 0, "description": "网络号"},
-                "station": {"type": "integer", "default": 0, "description": "站号"},
-                "pc": {"type": "integer", "default": 255, "description": "PC号 (0xFF=自身)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "MC server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 5000, "description": "MC port (default 5000)"},  # FIXED: CN→EN
+                "network": {"type": "integer", "default": 0, "description": "Network number"},  # FIXED: CN→EN
+                "station": {"type": "integer", "default": 0, "description": "Station number"},  # FIXED: CN→EN
+                "pc": {"type": "integer", "default": 255, "description": "PC number (0xFF=self)"},  # FIXED: CN→EN
             },
         }
 

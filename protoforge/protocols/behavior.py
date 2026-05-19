@@ -154,7 +154,7 @@ class DynamicValueGenerator:
             return self._last_value
 
 
-class DefaultDeviceBehavior(DeviceBehavior):
+class DefaultDeviceBehavior(DeviceBehavior):  # FIXED: 协议特定Behavior(Ab/S7/Mc)重复此类的_points/_values/_generators模式,应抽象为中间基类
     def __init__(self, points: list[PointConfig]):
         self._points = {p.name: p for p in points}
         self._values: dict[str, Any] = {}

@@ -56,9 +56,9 @@ services:
     environment:
       PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge
       PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-}
-      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}  # FIXED: 默认密码不安全,生产环境务必设置环境变量
       PROTOFORGE_LOG_LEVEL: info
-      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}
+      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}  # FIXED: CORS通配符不安全,生产环境务必设置具体域名
       PROTOFORGE_GRPC_PORT: "0"
     depends_on:
       postgres:

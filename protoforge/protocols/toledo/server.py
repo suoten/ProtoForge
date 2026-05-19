@@ -112,7 +112,7 @@ class ToledoServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("Toledo server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"Toledo服务启动 {self._host}:{self._port}",
+                            f"Toledo service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -147,7 +147,7 @@ class ToledoServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("Toledo server stopped")
-            self._log_debug("system", "server_stop", "Toledo服务停止")
+            self._log_debug("system", "server_stop", "Toledo service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         try:
@@ -314,7 +314,7 @@ class ToledoServer(ProtocolServer):
         logger.info("Toledo device created: %s (addr=%s, unit=%s)",
                      device_config.id, scale_addr, unit)
         self._log_debug("system", "device_create",
-                        f"创建Toledo设备 {device_config.name}",
+                        f"Toledo device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -324,7 +324,7 @@ class ToledoServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("Toledo device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除Toledo设备 {device_id}",
+                        f"Toledo device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -345,7 +345,7 @@ class ToledoServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "Toledo 服务器监听地址"},
-                "port": {"type": "integer", "default": 1701, "description": "Toledo 端口 (默认1701)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "Toledo server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 1701, "description": "Toledo port (default 1701)"},  # FIXED: CN→EN
             },
         }

@@ -334,7 +334,16 @@ async def get_device_points(device_id: str, _user: dict = Depends(require_viewer
     engine = _get_engine()
 
     try:
-        return {"points": await engine.read_device_points(device_id)}
+        points = await engine.read_device_points(device_id)
+        # FIXED: include protocol_active flag so frontend knows if data is from real protocol
+        instance = engine.get_device_instance(device_id)
+        protocol_active = False
+        if instance:
+            protocol_active = engine.is_protocol_running(instance.protocol)
+        return {
+            "points": points,
+            "protocol_active": protocol_active,
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
@@ -382,6 +391,12 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
             raise HTTPException(status_code=400, detail="Write failed")
         log_bus.emit(instance.protocol if (instance := engine.get_device_instance(device_id)) else "", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
         await _trigger_webhook_safe("data_change", {"device_id": device_id, "point": point_name, "value": value})
-        return {"status": "ok"}
+        # FIXED: include protocol_active flag in write response
+        resp = {"status": "ok"}
+        if instance:
+            resp["protocol_active"] = engine.is_protocol_running(instance.protocol)
+            if not resp["protocol_active"]:
+                resp["warning"] = f"Protocol {instance.protocol} is not running - write only affects memory, not visible to external clients"
+        return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

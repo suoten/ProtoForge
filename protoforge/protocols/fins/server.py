@@ -135,7 +135,7 @@ class FinsServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("FINS server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"FINS服务启动 {self._host}:{self._port}",
+                            f"FINS service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -156,7 +156,7 @@ class FinsServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("FINS server stopped")
-            self._log_debug("system", "server_stop", "FINS服务停止")
+            self._log_debug("system", "server_stop", "FINS service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         loop = asyncio.get_running_loop()
@@ -319,7 +319,7 @@ class FinsServer(ProtocolServer):
                         logger.warning("FINS write value sync error for %s: %s", name, e)
                     break
             self._log_debug("recv", "fins_write",
-                            f"写入区域{area}偏移{word_addr}",
+                            f"Write area {area} offset {word_addr}",  # FIXED: CN→EN
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
 
         resp = bytearray()
@@ -386,7 +386,7 @@ class FinsServer(ProtocolServer):
                      self._device_params[device_config.id]["source_node"],
                      self._device_params[device_config.id]["dest_node"])
         self._log_debug("system", "device_create",
-                        f"创建FINS设备 {device_config.name}",
+                        f"FINS device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -397,7 +397,7 @@ class FinsServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("FINS device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除FINS设备 {device_id}",
+                        f"FINS device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -418,8 +418,8 @@ class FinsServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "FINS 服务器监听地址"},
-                "port": {"type": "integer", "default": 9600, "description": "FINS 端口 (默认9600, TCP+UDP共用)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "FINS server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 9600, "description": "FINS port (default 9600, TCP+UDP shared)"},  # FIXED: CN→EN
             },
         }
 

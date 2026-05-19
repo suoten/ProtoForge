@@ -265,7 +265,7 @@ function openEdit(row) {
     url: row.url || '',
     events: [...(row.events || [])],
     method: row.method || 'POST',
-    headers_json: row.headers ? JSON.stringify(row.headers) : '',
+    headers_json: row.headers ? (() => { try { return JSON.stringify(row.headers) } catch { return '' } })() : '',  // FIXED: guard JSON.stringify against non-serializable values
     enabled: row.enabled !== false,
     description: row.description || '',
   }

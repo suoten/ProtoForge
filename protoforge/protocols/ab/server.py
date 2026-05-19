@@ -110,7 +110,7 @@ class AbServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("AB EtherNet/IP server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"AB服务启动 {self._host}:{self._port}",
+                            f"AB service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -131,7 +131,7 @@ class AbServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("AB server stopped")
-            self._log_debug("system", "server_stop", "AB服务停止")
+            self._log_debug("system", "server_stop", "AB service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         try:
@@ -152,14 +152,14 @@ class AbServer(ProtocolServer):
         logger.debug("AB connection from %s", addr)
         try:
             while self._server_running:
-                data = await reader.read(4096)
+                data = await asyncio.wait_for(reader.read(4096), timeout=30.0)  # FIXED: 连接无读超时(Slowloris漏洞)
                 if not data:
                     break
                 response = self._process_eip(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 捕获读超时异常
             pass
         finally:
             writer.close()
@@ -447,7 +447,7 @@ class AbServer(ProtocolServer):
                 write_value = self._unpack_cip_value(data_type, value_data)
                 behavior.set_tag(tag_name, write_value)
                 self._log_debug("recv", "cip_write",
-                                f"写入标签 {tag_name}={write_value}",
+                                f"Write tag {tag_name}={write_value}",  # FIXED: CN→EN
                                 detail={"tag": tag_name, "value": write_value})
 
         cip_resp = bytearray()
@@ -529,7 +529,7 @@ class AbServer(ProtocolServer):
         logger.info("AB device created: %s (slot=%d)",
                      device_config.id, self._device_slots[device_config.id])
         self._log_debug("system", "device_create",
-                        f"创建AB设备 {device_config.name}",
+                        f"AB device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -540,7 +540,7 @@ class AbServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("AB device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除AB设备 {device_id}",
+                        f"AB device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -561,7 +561,7 @@ class AbServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "EtherNet/IP 服务器监听地址"},
-                "port": {"type": "integer", "default": 44818, "description": "EtherNet/IP 端口 (默认44818)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "EtherNet/IP server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 44818, "description": "EtherNet/IP port (default 44818)"},  # FIXED: CN→EN
             },
         }

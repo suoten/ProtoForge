@@ -374,7 +374,7 @@ class ModbusRtuServer(ProtocolServer):
 
         logger.info("Modbus RTU device created: %s (slave_id=%d)", device_config.id, slave_id)
         self._log_debug("system", "device_created",
-                        f"Modbus RTU设备创建: {device_config.name} (slave_id={slave_id})",
+                        f"Modbus RTU device created: {device_config.name} (slave_id={slave_id})",  # FIXED: CN→EN
                         device_id=device_config.id,
                         detail={"slave_id": slave_id, "points": len(device_config.points)})
         return device_config.id

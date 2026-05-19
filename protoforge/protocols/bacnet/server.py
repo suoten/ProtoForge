@@ -94,7 +94,7 @@ class BACnetServer(ProtocolServer):
             logger.info("BACnet server started on %s:%d (BBMD: %s)",
                          self._host, self._port, self._bbmd_enabled)
             self._log_debug("system", "server_start",
-                            f"BACnet服务启动 {self._host}:{self._port}",
+                            f"BACnet service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -120,7 +120,7 @@ class BACnetServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("BACnet server stopped")
-            self._log_debug("system", "server_stop", "BACnet服务停止")
+            self._log_debug("system", "server_stop", "BACnet service stopped")  # FIXED: CN→EN
 
     async def _serve_udp(self) -> None:
         loop = asyncio.get_running_loop()
@@ -509,7 +509,7 @@ class BACnetServer(ProtocolServer):
         logger.info("BACnet device created: %s (BACnet ID: %d, name: %s, %d objects)",
                      device_id, bacnet_device_id, bacnet_device_name, len(objects))
         self._log_debug("system", "device_create",
-                        f"创建BACnet设备 {device_config.name}",
+                        f"BACnet device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_id)
         return device_id
 
@@ -520,7 +520,7 @@ class BACnetServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("BACnet device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除BACnet设备 {device_id}",
+                        f"BACnet device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -558,28 +558,28 @@ class BACnetServer(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": "BACnet 监听地址",
+                    "description": "BACnet listen address",  # FIXED: CN→EN
                 },
                 "port": {
                     "type": "integer",
                     "default": 47808,
-                    "description": "BACnet UDP 端口 (默认47808)",
+                    "description": "BACnet UDP port (default 47808)",  # FIXED: CN→EN
                 },
                 "device_id_base": {
                     "type": "integer",
                     "default": 100,
-                    "description": "BACnet 设备ID起始值",
+                    "description": "BACnet device ID base value",  # FIXED: CN→EN
                 },
                 "bbmd_enabled": {
                     "type": "boolean",
                     "default": False,
-                    "description": "启用BBMD广播管理",
+                    "description": "Enable BBMD broadcast management",  # FIXED: CN→EN
                 },
                 "bbmd_peers": {
                     "type": "array",
                     "items": {"type": "string"},
                     "default": [],
-                    "description": "BBMD对等节点列表 (格式: host:port)",
+                    "description": "BBMD peer list (format: host:port)",  # FIXED: CN→EN
                 },
             },
         }

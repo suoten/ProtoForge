@@ -23,6 +23,11 @@ def _safe_json_loads(value: str, default=None):
 
 _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
+_BUSY_TIMEOUT_MS = 5000  # FIXED: named constant for SQLite busy timeout
+_MAX_QUERY_COUNT = 10000  # FIXED: named constant for max query result count
+_MAX_QUERY_OFFSET = 1000000  # FIXED: named constant for max query offset
+_AUDIT_LOG_LIMIT = 5000  # FIXED: named constant for audit log query limit
+
 
 class Database:
     def __init__(self, db_path: Optional[str] = None):
@@ -47,7 +52,7 @@ class Database:
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")
-            await self._db.execute("PRAGMA busy_timeout=5000")
+            await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")  # FIXED: use named constant
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
         except Exception as e:
@@ -66,6 +71,7 @@ class Database:
             self._is_postgres = True
             async with self._pg_pool.acquire() as conn:
                 await self._create_tables_postgres(conn)
+                await self._migrate_postgres_tables(conn)
             logger.info("PostgreSQL database connected")
         except Exception as e:
             logger.error("Failed to connect to PostgreSQL database: %s", e)
@@ -203,6 +209,33 @@ class Database:
             );
         """)
         await self._db.commit()
+        # FIXED: migrate existing tables - add missing columns for older databases
+        await self._migrate_sqlite_tables()
+
+    async def _migrate_sqlite_tables(self) -> None:
+        try:
+            cursor = await self._db.execute("PRAGMA table_info(users)")
+            columns = {row[1] for row in await cursor.fetchall()}
+            if "login_attempts" not in columns:
+                await self._db.execute("ALTER TABLE users ADD COLUMN login_attempts INTEGER DEFAULT 0")
+            if "locked_until" not in columns:
+                await self._db.execute("ALTER TABLE users ADD COLUMN locked_until REAL DEFAULT 0")
+            await self._db.commit()
+        except Exception as e:
+            logger.warning("SQLite migration warning: %s", e)
+
+    async def _migrate_postgres_tables(self, conn) -> None:
+        try:
+            rows = await conn.fetch(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = 'users'"
+            )
+            columns = {r["column_name"] for r in rows}
+            if "login_attempts" not in columns:
+                await conn.execute("ALTER TABLE users ADD COLUMN login_attempts INTEGER DEFAULT 0")
+            if "locked_until" not in columns:
+                await conn.execute("ALTER TABLE users ADD COLUMN locked_until DOUBLE PRECISION DEFAULT 0")
+        except Exception as e:
+            logger.warning("PostgreSQL migration warning: %s", e)
 
     async def _create_tables_postgres(self, conn) -> None:
         await conn.execute("""
@@ -623,7 +656,7 @@ class Database:
         )
 
     async def load_test_reports(self, count: int = 50) -> list[dict[str, Any]]:
-        count = max(1, min(count, 10000))
+        count = max(1, min(count, _MAX_QUERY_COUNT))  # FIXED: use named constant
         limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
         rows = await self._fetchall(
             f"SELECT * FROM test_reports ORDER BY created_at DESC {limit_clause}",
@@ -723,8 +756,8 @@ class Database:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        limit = max(1, min(limit, 10000))
-        offset = max(0, min(offset, 1000000))
+        limit = max(1, min(limit, _MAX_QUERY_COUNT))  # FIXED: use named constant
+        offset = max(0, min(offset, _MAX_QUERY_OFFSET))  # FIXED: use named constant
         conditions = []
         params: list[Any] = []
         idx = 1
@@ -889,7 +922,7 @@ class Database:
                 logger.debug("Failed to export table %s: %s", table, e)
                 result[table] = []
         try:
-            rows = await self._fetchall("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 5000")
+            rows = await self._fetchall(f"SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT {_AUDIT_LOG_LIMIT}")  # FIXED: use named constant
             result["audit_log"] = rows
         except Exception as e:
             logger.debug("Failed to export audit_log: %s", e)

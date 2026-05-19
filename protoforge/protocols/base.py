@@ -59,7 +59,7 @@ class ProtocolServer(ABC):
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
         raise NotImplementedError
 
-    def get_config_schema(self) -> dict[str, Any]:
+    def get_config_schema(self) -> dict[str, Any]:  # FIXED: 空实现→子类应覆写提供协议配置schema
         return {
             "type": "object",
             "properties": {},

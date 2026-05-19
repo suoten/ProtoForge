@@ -419,13 +419,13 @@ class ProtoForgeClient:
         return self._get("/integration/metrics")
 
     def push_device_integration(self, device_id: str) -> dict:
-        return self._post(f"/integration/push-device/{device_id}")
+        return self._post(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
 
     def batch_push(self, device_ids: list[str]) -> dict:
         return self._post("/integration/batch-push", json={"device_ids": device_ids})
 
     def delete_device_from_edgelite(self, device_id: str) -> dict:
-        return self._delete(f"/integration/device/{device_id}")
+        return self._delete(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
 
     def start_device_collect(self, device_id: str) -> dict:
         return self._post(f"/integration/device/{device_id}/start")
@@ -440,7 +440,7 @@ class ProtoForgeClient:
         return self._post("/integration/validate", json={"device_id": device_id})
 
     def test_integration_connection(self, config: dict) -> dict:
-        return self._post("/integration/test-connection", json=config)
+        return self._post("/integration/edgelite/test", json=config)  # FIXED: 路由与后端edgelite_routes.py对齐
 
     def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
         params = {"limit": limit}
@@ -876,13 +876,13 @@ class AsyncProtoForgeClient:
         return await self._get("/integration/metrics")
 
     async def push_device_integration(self, device_id: str) -> dict:
-        return await self._post(f"/integration/push-device/{device_id}")
+        return await self._post(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
 
     async def batch_push(self, device_ids: list[str]) -> dict:
         return await self._post("/integration/batch-push", json={"device_ids": device_ids})
 
     async def delete_device_from_edgelite(self, device_id: str) -> dict:
-        return await self._delete(f"/integration/device/{device_id}")
+        return await self._delete(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
 
     async def start_device_collect(self, device_id: str) -> dict:
         return await self._post(f"/integration/device/{device_id}/start")
@@ -897,7 +897,7 @@ class AsyncProtoForgeClient:
         return await self._post("/integration/validate", json={"device_id": device_id})
 
     async def test_integration_connection(self, config: dict) -> dict:
-        return await self._post("/integration/test-connection", json=config)
+        return await self._post("/integration/edgelite/test", json=config)  # FIXED: 路由与后端edgelite_routes.py对齐
 
     async def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
         params = {"limit": limit}

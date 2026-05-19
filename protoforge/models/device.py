@@ -64,6 +64,7 @@ class PointValue(BaseModel):
     value: Any
     timestamp: float = 0.0
     quality: str = "good"
+    simulated: bool = False  # FIXED: indicate whether value is from memory (not real protocol)
 
 
 class DeviceStatus(str, Enum):
@@ -82,3 +83,4 @@ class DeviceInfo(BaseModel):
     created_at: Optional[str] = None
     protocol_config: Optional[dict[str, Any]] = None
     edgelite_status: Optional[dict[str, Any]] = None
+    protocol_active: bool = True  # FIXED: indicate whether the device's protocol is running

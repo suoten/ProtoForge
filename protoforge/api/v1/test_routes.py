@@ -283,28 +283,43 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
             if target_id and dev_id != target_id:
                 continue
 
+            # FIXED: check if device's protocol is actually running
+            protocol_running = engine.is_protocol_running(dev.protocol)
+
             steps = [
                 TestStep(
-                    name=f"读取 {dev.name} 测点",
+                    name=f"Read {dev.name} points",
                     action="read_points",
                     params={"device_id": dev_id},
-                    assertions=[Assertion(type=AssertionType.LENGTH_GREATER, expected=0, message=f"{dev.name} 应有测点数据")],
+                    assertions=[Assertion(type=AssertionType.LENGTH_GREATER, expected=0,
+                                           message=f"{dev.name} should have point data")],
                 ),
             ]
+
+            # FIXED: add protocol status check step for device
+            if not protocol_running:
+                steps.append(TestStep(
+                    name=f"WARNING: Protocol {dev.protocol} is not running for device {dev.name}",
+                    action="http_request",
+                    params={"method": "GET", "url": "/health"},
+                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200,
+                                           message=f"Protocol {dev.protocol} is not running - point data is simulated only, not from real protocol")],
+                ))
 
             writable_points = [p for p in dev.config.points if getattr(p, 'access', 'rw') != "r"]
 
             if writable_points:
                 wp = writable_points[0]
                 steps.append(TestStep(
-                    name=f"写入 {dev.name}/{wp.name}",
+                    name=f"Write {dev.name}/{wp.name}",
                     action="write_point",
                     params={"device_id": dev_id, "point_name": wp.name, "value": 42.5},
-                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message=f"写入 {wp.name} 应成功")],
+                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200,
+                                           message=f"Write {wp.name} should succeed")],
                 ))
 
             cases.append(TestCase(
-                id=f"qt-{dev_id}", name=f"设备测试: {dev.name}",
+                id=f"qt-{dev_id}", name=f"Device test: {dev.name}",
                 tags=["quick-test", "device"], steps=steps,
             ))
 
@@ -313,41 +328,76 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, _user:
             if target_id and sc_id != target_id:
                 continue
             sc_steps = [
-                TestStep(name=f"验证场景 {sc_config.name} 状态", action="http_request",
+                TestStep(name=f"Verify scenario {sc_config.name} status", action="http_request",
                          params={"method": "GET", "url": f"/api/v1/scenarios/{sc_id}"},
-                         assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="场景应可访问")]),
+                         assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="Scenario should be accessible")]),
             ]
 
             cases.append(TestCase(
-                id=f"qt-scene-{sc_id}", name=f"场景测试: {sc_config.name}",
+                id=f"qt-scene-{sc_id}", name=f"Scenario test: {sc_config.name}",
                 tags=["quick-test", "scenario"],
                 steps=sc_steps,
             ))
 
     if scope == "all" or scope == "protocol":
         for proto_name, proto_server in engine.get_all_protocol_servers().items():
+            # FIXED: test actual protocol status instead of just API list endpoint
+            is_running = proto_server.status.value == "running"
+            running_port = engine.get_protocol_running_port(proto_name)
+            proto_steps = []
+
+            if is_running and running_port:
+                import socket as _socket
+                port_reachable = False
+                try:
+                    with _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM) as s:
+                        s.settimeout(2)
+                        s.connect(("127.0.0.1", running_port))
+                        port_reachable = True
+                except (OSError, _socket.timeout):
+                    port_reachable = False
+
+                proto_steps.append(TestStep(
+                    name=f"Verify protocol {proto_name} port {running_port} is listening",
+                    action="http_request",
+                    params={"method": "GET", "url": f"/api/v1/protocols"},
+                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200)],
+                ))
+                if not port_reachable:
+                    proto_steps.append(TestStep(
+                        name=f"WARNING: Protocol {proto_name} reports running but port {running_port} is not reachable",
+                        action="http_request",
+                        params={"method": "GET", "url": "/health"},
+                        assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200,
+                                               message=f"Protocol {proto_name} port {running_port} not reachable - data is simulated only")],
+                    ))
+            else:
+                proto_steps.append(TestStep(
+                    name=f"Protocol {proto_name} is not running (status: {proto_server.status.value})",
+                    action="http_request",
+                    params={"method": "GET", "url": "/health"},
+                    assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200,
+                                           message=f"Protocol {proto_name} is not running - devices using this protocol will only return simulated data")],
+                ))
+
             cases.append(TestCase(
-                id=f"qt-proto-{proto_name}", name=f"协议测试: {proto_name}",
+                id=f"qt-proto-{proto_name}", name=f"Protocol test: {proto_name}",
                 tags=["quick-test", "protocol"],
-                steps=[
-                    TestStep(name=f"验证协议 {proto_name} 运行状态", action="http_request",
-                             params={"method": "GET", "url": "/api/v1/protocols"},
-                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="协议列表应可访问")]),
-                ],
+                steps=proto_steps,
             ))
 
     if not cases:
         cases.append(TestCase(
-                id="qt-empty", name="基础连通性测试", tags=["quick-test"],
+                id="qt-empty", name="Basic connectivity test", tags=["quick-test"],
                 steps=[
-                    TestStep(name="API健康检查", action="http_request",
+                    TestStep(name="API health check", action="http_request",
                              params={"method": "GET", "url": "/health"},
-                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="API应可访问")]),
+                             assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200, message="API should be accessible")]),
                 ],
             ))
 
     api_client = await _get_internal_client()
-    report = await _get_test_runner().run_test_suite("一键测试", cases, api_client=api_client)
+    report = await _get_test_runner().run_test_suite("Quick test", cases, api_client=api_client)
     return report.to_dict()
 
 
@@ -359,8 +409,8 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     for dev_id, dev in engine.get_all_device_instances().items():
         suggestions.append({
             "type": "device",
-            "title": f"测试设备 {dev.name}",
-            "description": f"验证 {dev.name} ({dev.protocol}) 的测点读写功能",
+            "title": f"Test device {dev.name}",  # FIXED: CN→EN
+            "description": f"Verify read/write points for {dev.name} ({dev.protocol})",  # FIXED: CN→EN
             "scope": "device",
             "target_id": dev_id,
             "priority": "high" if dev.status.value == "online" else "medium",
@@ -369,8 +419,8 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     for sc_id, sc_config in engine.get_all_scenario_configs().items():
         suggestions.append({
             "type": "scenario",
-            "title": f"测试场景 {sc_config.name}",
-            "description": f"验证场景 {sc_config.name} 的启停和规则触发",
+            "title": f"Test scenario {sc_config.name}",  # FIXED: CN→EN
+            "description": f"Verify start/stop and rule triggering for scenario {sc_config.name}",  # FIXED: CN→EN
             "scope": "scenario",
             "target_id": sc_id,
             "priority": "medium",
@@ -381,8 +431,8 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     if running_protocols:
         suggestions.append({
             "type": "protocol",
-            "title": f"测试 {len(running_protocols)} 个运行中协议",
-            "description": "验证所有运行中协议的连通性",
+            "title": f"Test {len(running_protocols)} running protocol(s)",  # FIXED: CN→EN
+            "description": "Verify connectivity of all running protocols",  # FIXED: CN→EN
             "scope": "protocol",
             "target_id": None,
             "priority": "low",
@@ -391,8 +441,8 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
     if not suggestions:
         suggestions.append({
             "type": "basic",
-            "title": "基础连通性测试",
-            "description": "系统暂无设备，先测试API连通性",
+            "title": "Basic connectivity test",  # FIXED: CN→EN
+            "description": "No devices yet, test API connectivity first",  # FIXED: CN→EN
             "scope": "all",
             "target_id": None,
             "priority": "high",
@@ -404,43 +454,43 @@ async def get_test_suggestions(_user: dict = Depends(require_viewer)):
 @router.get("/tests/action-types")
 async def get_test_action_types(_user: dict = Depends(require_viewer)):
     return {"action_types": [
-        {"value": "create_device", "label": "创建设备", "category": "设备", "params": ["id", "name", "protocol", "points"]},
-        {"value": "get_device", "label": "获取设备", "category": "设备", "params": ["device_id"]},
-        {"value": "delete_device", "label": "删除设备", "category": "设备", "params": ["device_id"]},
-        {"value": "read_points", "label": "读取测点", "category": "设备", "params": ["device_id"]},
-        {"value": "write_point", "label": "写入测点", "category": "设备", "params": ["device_id", "point_name", "value"]},
-        {"value": "list_devices", "label": "设备列表", "category": "设备", "params": []},
-        {"value": "batch_create_devices", "label": "批量创建", "category": "设备", "params": ["devices"]},
-        {"value": "batch_delete_devices", "label": "批量删除", "category": "设备", "params": ["device_ids"]},
-        {"value": "start_protocol", "label": "启动协议", "category": "协议", "params": ["protocol", "config"]},
-        {"value": "stop_protocol", "label": "停止协议", "category": "协议", "params": ["protocol"]},
-        {"value": "create_scenario", "label": "创建场景", "category": "场景", "params": ["id", "name", "devices", "rules"]},
-        {"value": "start_scenario", "label": "启动场景", "category": "场景", "params": ["scenario_id"]},
-        {"value": "stop_scenario", "label": "停止场景", "category": "场景", "params": ["scenario_id"]},
-        {"value": "delete_scenario", "label": "删除场景", "category": "场景", "params": ["scenario_id"]},
-        {"value": "list_templates", "label": "模板列表", "category": "模板", "params": []},
-        {"value": "instantiate_template", "label": "实例化模板", "category": "模板", "params": ["template_id"]},
-        {"value": "http_request", "label": "HTTP请求", "category": "通用", "params": ["method", "url", "headers", "body"]},
-        {"value": "wait", "label": "等待", "category": "通用", "params": ["seconds"]},
-        {"value": "assert_value", "label": "断言值", "category": "通用", "params": []},
+        {"value": "create_device", "label": "Create device", "category": "Device", "params": ["id", "name", "protocol", "points"]},  # FIXED: CN→EN
+        {"value": "get_device", "label": "Get device", "category": "Device", "params": ["device_id"]},  # FIXED: CN→EN
+        {"value": "delete_device", "label": "Delete device", "category": "Device", "params": ["device_id"]},  # FIXED: CN→EN
+        {"value": "read_points", "label": "Read points", "category": "Device", "params": ["device_id"]},  # FIXED: CN→EN
+        {"value": "write_point", "label": "Write point", "category": "Device", "params": ["device_id", "point_name", "value"]},  # FIXED: CN→EN
+        {"value": "list_devices", "label": "Device list", "category": "Device", "params": []},  # FIXED: CN→EN
+        {"value": "batch_create_devices", "label": "Batch create", "category": "Device", "params": ["devices"]},  # FIXED: CN→EN
+        {"value": "batch_delete_devices", "label": "Batch delete", "category": "Device", "params": ["device_ids"]},  # FIXED: CN→EN
+        {"value": "start_protocol", "label": "Start protocol", "category": "Protocol", "params": ["protocol", "config"]},  # FIXED: CN→EN
+        {"value": "stop_protocol", "label": "Stop protocol", "category": "Protocol", "params": ["protocol"]},  # FIXED: CN→EN
+        {"value": "create_scenario", "label": "Create scenario", "category": "Scenario", "params": ["id", "name", "devices", "rules"]},  # FIXED: CN→EN
+        {"value": "start_scenario", "label": "Start scenario", "category": "Scenario", "params": ["scenario_id"]},  # FIXED: CN→EN
+        {"value": "stop_scenario", "label": "Stop scenario", "category": "Scenario", "params": ["scenario_id"]},  # FIXED: CN→EN
+        {"value": "delete_scenario", "label": "Delete scenario", "category": "Scenario", "params": ["scenario_id"]},  # FIXED: CN→EN
+        {"value": "list_templates", "label": "Template list", "category": "Template", "params": []},  # FIXED: CN→EN
+        {"value": "instantiate_template", "label": "Instantiate template", "category": "Template", "params": ["template_id"]},  # FIXED: CN→EN
+        {"value": "http_request", "label": "HTTP request", "category": "General", "params": ["method", "url", "headers", "body"]},  # FIXED: CN→EN
+        {"value": "wait", "label": "Wait", "category": "General", "params": ["seconds"]},  # FIXED: CN→EN
+        {"value": "assert_value", "label": "Assert value", "category": "General", "params": []},  # FIXED: CN→EN
     ]}
 
 
 @router.get("/tests/assertion-types")
 async def get_test_assertion_types(_user: dict = Depends(require_viewer)):
     return {"assertion_types": [
-        {"value": "status_code", "label": "请求应成功", "description": "验证HTTP状态码", "simple": True},
-        {"value": "not_null", "label": "值不应为空", "description": "验证返回值非空", "simple": True},
-        {"value": "length_greater", "label": "列表不应为空", "description": "验证列表长度>0", "simple": True},
-        {"value": "equals", "label": "值应等于", "description": "验证值等于期望值", "simple": True},
-        {"value": "contains", "label": "应包含", "description": "验证包含指定内容", "simple": True},
-        {"value": "greater_than", "label": "值应大于", "description": "验证数值大于阈值", "simple": False},
-        {"value": "less_than", "label": "值应小于", "description": "验证数值小于阈值", "simple": False},
-        {"value": "not_equals", "label": "值不应等于", "description": "验证值不等于指定值", "simple": False},
-        {"value": "not_contains", "label": "不应包含", "description": "验证不包含指定内容", "simple": False},
-        {"value": "regex_match", "label": "正则匹配", "description": "验证匹配正则表达式", "simple": False},
-        {"value": "json_path", "label": "JSON路径取值", "description": "从JSON中提取值验证", "simple": False},
-        {"value": "type_check", "label": "类型检查", "description": "验证值的类型", "simple": False},
-        {"value": "length_equals", "label": "长度等于", "description": "验证列表长度等于指定值", "simple": False},
-        {"value": "length_less", "label": "长度小于", "description": "验证列表长度小于指定值", "simple": False},
+        {"value": "status_code", "label": "Request should succeed", "description": "Verify HTTP status code", "simple": True},  # FIXED: CN→EN
+        {"value": "not_null", "label": "Value should not be empty", "description": "Verify return value is not empty", "simple": True},  # FIXED: CN→EN
+        {"value": "length_greater", "label": "List should not be empty", "description": "Verify list length > 0", "simple": True},  # FIXED: CN→EN
+        {"value": "equals", "label": "Value should equal", "description": "Verify value equals expected", "simple": True},  # FIXED: CN→EN
+        {"value": "contains", "label": "Should contain", "description": "Verify contains specified content", "simple": True},  # FIXED: CN→EN
+        {"value": "greater_than", "label": "Value should be greater than", "description": "Verify value greater than threshold", "simple": False},  # FIXED: CN→EN
+        {"value": "less_than", "label": "Value should be less than", "description": "Verify value less than threshold", "simple": False},  # FIXED: CN→EN
+        {"value": "not_equals", "label": "Value should not equal", "description": "Verify value does not equal specified value", "simple": False},  # FIXED: CN→EN
+        {"value": "not_contains", "label": "Should not contain", "description": "Verify does not contain specified content", "simple": False},  # FIXED: CN→EN
+        {"value": "regex_match", "label": "Regex match", "description": "Verify matches regex pattern", "simple": False},  # FIXED: CN→EN
+        {"value": "json_path", "label": "JSON path value", "description": "Extract value from JSON for verification", "simple": False},  # FIXED: CN→EN
+        {"value": "type_check", "label": "Type check", "description": "Verify value type", "simple": False},  # FIXED: CN→EN
+        {"value": "length_equals", "label": "Length equals", "description": "Verify list length equals specified value", "simple": False},  # FIXED: CN→EN
+        {"value": "length_less", "label": "Length less than", "description": "Verify list length less than specified value", "simple": False},  # FIXED: CN→EN
     ]}

@@ -139,10 +139,19 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
     try:
         from protoforge.core.auth import user_manager
 
-        if _user.get("role") != "admin" and data.username != _user.get("username", ""):
-            raise HTTPException(status_code=403, detail="You can only change your own password")
+        is_admin = _user.get("role") == "admin"
+        is_self = data.username == _user.get("username", "")
 
-        ok, msg = await user_manager.change_password(data.username, data.old_password, data.new_password)
+        # FIXED: admin can change anyone's password; non-admin can only change own
+        if not is_admin and not is_self:
+            raise HTTPException(status_code=403, detail="只能修改自己的密码")
+
+        # FIXED: admin changing other user's password doesn't need old_password
+        if is_admin and not is_self:
+            ok, msg = await user_manager.admin_reset_password(data.username, data.new_password)
+        else:
+            ok, msg = await user_manager.change_password(data.username, data.old_password, data.new_password)
+
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
 
@@ -151,7 +160,7 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
         raise
     except Exception as e:
         logger.error("Change password failed: %s", e)
-        raise HTTPException(status_code=500, detail="Password change failed, please try again later") from e
+        raise HTTPException(status_code=500, detail="密码修改失败，请稍后重试") from e
 
 
 @router.post("/auth/admin/reset-password")

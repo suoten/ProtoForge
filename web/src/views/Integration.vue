@@ -808,9 +808,9 @@ async function loadElConfig() {
   try {
     const settings = await api.getSettings()
     elConfig.value = {
-      url: settings.edgelite_url || '',
-      username: settings.edgelite_username || '',  // FIXED: removed hardcoded 'admin' fallback
-      password: (settings.edgelite_password && settings.edgelite_password !== '***') ? settings.edgelite_password : '',
+      url: (settings && settings.edgelite_url) || '',  // FIXED: null guard for settings response
+      username: (settings && settings.edgelite_username) || '',  // FIXED: removed hardcoded 'admin' fallback
+      password: (settings && settings.edgelite_password && settings.edgelite_password !== '***') ? settings.edgelite_password : '',
     }
   } catch (e) {
     message.warning(t('integration.loadEdgeliteConfigFailed'))

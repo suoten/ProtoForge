@@ -535,12 +535,12 @@ namespace ProtoForge
 
         public async Task<JsonElement?> TestIntegrationConnectionAsync(object config)
         {
-            return await PostAsync("/api/v1/integration/test-connection", config);
+            return await PostAsync("/api/v1/integration/edgelite/test", config);  // FIXED: 路由与后端edgelite_routes.py对齐
         }
 
         public async Task<JsonElement?> PushDeviceIntegrationAsync(string deviceId)
         {
-            return await PostAsync($"/api/v1/integration/push-device/{deviceId}", new { });
+            return await PostAsync($"/api/v1/integration/edgelite/push/{deviceId}", new { });  // FIXED: 路由与后端edgelite_routes.py对齐
         }
 
         public async Task<JsonElement?> BatchPushAsync(object deviceIds)
