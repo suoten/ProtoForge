@@ -194,9 +194,12 @@
             "data_type": "uint16",
             "description": "加工计数",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "script",
             "min_value": 0,
-            "max_value": 99999
+            "max_value": 99999,
+            "generator_config": {
+                "script": "key = 'part_count_modbus'; last = cache.get(key, 0); interval = 45; result = min(int(elapsed / interval), 99999); cache[key] = result"
+            }
         },
         {
             "name": "cycle_time",
