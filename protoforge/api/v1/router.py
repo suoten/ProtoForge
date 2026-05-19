@@ -202,6 +202,38 @@ async def batch_stop_devices(device_ids: list[str]):
     return {"status": "ok", "stopped": stopped, "errors": errors}
 
 
+@router.post("/devices/{device_id}/sync-from-template")
+async def sync_device_from_template(device_id: str):
+    engine = _get_engine()
+    db = _get_database()
+    tm = _get_template_manager()
+    try:
+        instance = engine._devices.get(device_id)
+        if not instance:
+            raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+        template_id = instance.config.template_id
+        if not template_id:
+            raise HTTPException(status_code=400, detail="Device has no associated template")
+        template = tm.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")
+        new_config = DeviceConfig(
+            id=device_id,
+            name=instance.config.name,
+            protocol=instance.config.protocol,
+            template_id=template_id,
+            points=template.points,
+            protocol_config=instance.config.protocol_config,
+        )
+        result = await engine.update_device(device_id, new_config)
+        await db.save_device(new_config)
+        return {"status": "ok", "point_count": len(template.points), "device": result}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.get("/devices/{device_id}", response_model=DeviceInfo)
 async def get_device(device_id: str):
     engine = _get_engine()
