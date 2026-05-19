@@ -521,11 +521,11 @@ func (c *Client) ValidateDeviceCompatibility(deviceID string) (map[string]interf
 }
 
 func (c *Client) TestIntegrationConnection(config map[string]interface{}) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/test-connection", config)
+	return c.post("/api/v1/integration/edgelite/test", config)  // FIXED: 路由与后端edgelite_routes.py对齐
 }
 
 func (c *Client) PushDeviceIntegration(deviceID string) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/push-device/"+deviceID, nil)
+	return c.post("/api/v1/integration/edgelite/push/"+deviceID, nil)  // FIXED: 路由与后端edgelite_routes.py对齐
 }
 
 func (c *Client) BatchPush(deviceIDs []string) (map[string]interface{}, error) {

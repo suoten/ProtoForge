@@ -100,7 +100,7 @@ class OpcDaServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("OPC-DA server started on %s:%d (TCP bridge mode)", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"OPC-DA服务启动 {self._host}:{self._port}",
+                            f"OPC-DA service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -134,7 +134,7 @@ class OpcDaServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-DA server stopped")
-            self._log_debug("system", "server_stop", "OPC-DA服务停止")
+            self._log_debug("system", "server_stop", "OPC-DA service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         try:
@@ -286,7 +286,7 @@ class OpcDaServer(ProtocolServer):
         value = self._unpack_typed_value(data_type, value_data)
         behavior.set_value(tag_name, value)
         self._log_debug("recv", "opcda_write",
-                        f"写入标签 {tag_name}={value}",
+                        f"Write tag {tag_name}={value}",  # FIXED: CN→EN
                         detail={"tag": tag_name, "value": value})
 
         resp = bytearray()
@@ -447,7 +447,7 @@ class OpcDaServer(ProtocolServer):
         logger.info("OPC-DA device created: %s (ProgID=%s)",
                      device_config.id, self._device_params[device_config.id]["prog_id"])
         self._log_debug("system", "device_create",
-                        f"创建OPC-DA设备 {device_config.name}",
+                        f"OPC-DA device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -458,7 +458,7 @@ class OpcDaServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("OPC-DA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除OPC-DA设备 {device_id}",
+                        f"OPC-DA device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -479,7 +479,7 @@ class OpcDaServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "OPC-DA 桥接服务器监听地址"},
-                "port": {"type": "integer", "default": 51340, "description": "OPC-DA 桥接端口 (默认51340)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "OPC-DA bridge server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 51340, "description": "OPC-DA bridge port (default 51340)"},  # FIXED: CN→EN
             },
         }

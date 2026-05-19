@@ -743,7 +743,7 @@ class EtherCATServer(ProtocolServer):
             self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0016)
             self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
             self._log_debug("inbound", "state_change_error",
-                            f"EtherCAT AL非法状态转换: 0x{current:02X} -> 0x{requested_state:02X}",
+                            f"EtherCAT AL illegal state transition: 0x{current:02X} -> 0x{requested_state:02X}",  # FIXED: CN→EN
                             detail={"from": current, "to": requested_state, "error_code": 0x0016})
             return
 
@@ -776,7 +776,7 @@ class EtherCATServer(ProtocolServer):
         self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
         state_names = {0x01: "INIT", 0x02: "PREOP", 0x03: "BOOT", 0x04: "SAFEOP", 0x08: "OP"}
         self._log_debug("inbound", "state_change",
-                        f"EtherCAT AL状态: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",
+                        f"EtherCAT AL state: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",  # FIXED: CN→EN
                         detail={"from": current, "to": requested_state})
 
     async def create_device(self, device_config: DeviceConfig) -> str:
@@ -839,11 +839,11 @@ class EtherCATServer(ProtocolServer):
             "type": "object",
             "properties": {
                 "host": {"type": "string", "default": "0.0.0.0", "description": "Listen address"},  # FIXED: CN→EN,
-                "port": {"type": "integer", "default": 34980, "description": "EtherCAT帧服务端口"},
+                "port": {"type": "integer", "default": 34980, "description": "EtherCAT frame service port"},  # FIXED: CN→EN
                 "slave_address": {"type": "integer", "default": 4097, "description": "Slave Station Address"},  # FIXED: CN→EN,
-                "vendor_id": {"type": "integer", "default": 0, "description": "厂商ID(EEPROM)"},
-                "product_code": {"type": "integer", "default": 0, "description": "产品代码(EEPROM)"},
-                "revision_number": {"type": "integer", "default": 1, "description": "修订号(EEPROM)"},
-                "serial_number": {"type": "integer", "default": 1, "description": "序列号(EEPROM)"},
+                "vendor_id": {"type": "integer", "default": 0, "description": "Vendor ID (EEPROM)"},  # FIXED: CN→EN
+                "product_code": {"type": "integer", "default": 0, "description": "Product code (EEPROM)"},  # FIXED: CN→EN
+                "revision_number": {"type": "integer", "default": 1, "description": "Revision number (EEPROM)"},  # FIXED: CN→EN
+                "serial_number": {"type": "integer", "default": 1, "description": "Serial number (EEPROM)"},  # FIXED: CN→EN
             },
         }

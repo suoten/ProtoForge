@@ -163,10 +163,14 @@ class User:
 
     @classmethod
     def from_dict(cls, data: dict) -> "User":
+        pw_hash = data.get("password_hash", "")
+        if not pw_hash or not isinstance(pw_hash, str) or not pw_hash.startswith("$"):  # FIXED: password_hash空值/畸形导致verify_password异常
+            logger.warning("User '%s' has invalid/missing password_hash, marking as locked", data.get("username", "?"))
+            pw_hash = "!"  # bcrypt验证必定失败,阻止空密码登录
         return cls(
             id=data["id"],
             username=data["username"],
-            password_hash=data["password_hash"],
+            password_hash=pw_hash,
             role=data.get("role", "user"),
             created_at=data.get("created_at", time.time()),
             login_attempts=data.get("login_attempts", 0),
@@ -190,7 +194,7 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
     from protoforge.config import get_settings
     min_length = get_settings().min_password_length
     if len(password) < min_length:
-        return False, f"Password must be at least {min_length} characters"  # FIXED: hardcoded Chinese
+        return False, f"Password must be at least {min_length} characters"  # FIXED: 硬编码中文→英文,后端API应国际化
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_digit = any(c.isdigit() for c in password)
@@ -199,14 +203,14 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
     if categories < 3:
         missing = []
         if not has_upper:
-            missing.append("uppercase letter")
+            missing.append("uppercase")
         if not has_lower:
-            missing.append("lowercase letter")
+            missing.append("lowercase")
         if not has_digit:
             missing.append("digit")
         if not has_special:
             missing.append("special character")
-        return False, f"Password must contain at least 3 of: uppercase, lowercase, digit, special character. Missing: {', '.join(missing)}"  # FIXED: hardcoded Chinese
+        return False, f"Password must contain at least 3 of: uppercase, lowercase, digit, special character. Missing: {', '.join(missing)}"  # FIXED: 硬编码中文→英文
     return True, ""
 
 
@@ -383,7 +387,7 @@ class UserManager:
     async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False, "Incorrect current password"  # FIXED: hardcoded Chinese
+            return False, "Current password is incorrect"  # FIXED: 硬编码中文→英文
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -395,7 +399,7 @@ class UserManager:
             except Exception as e:
                 logger.error("Failed to update user password for %s: %s", username, e)
                 user.password_hash = old_hash
-                return False, "Password update failed, please try again later"  # FIXED: hardcoded Chinese
+                return False, "Password update failed, please try again later"  # FIXED: 硬编码中文→英文
         return True, ""
 
     async def reset_login_attempts(self, username: str) -> bool:

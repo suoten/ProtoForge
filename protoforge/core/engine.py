@@ -234,6 +234,12 @@ class SimulationEngine:
         info = self._get_device_info(instance)
         if edgelite_result:
             info.edgelite_status = edgelite_result
+        # FIXED: warn when device protocol is not running
+        server = self._protocol_servers.get(config.protocol)
+        if not server or server.status != ProtocolStatus.RUNNING:
+            info.protocol_active = False
+        else:
+            info.protocol_active = True
         return info
 
     async def remove_device(self, device_id: str) -> None:
@@ -431,7 +437,11 @@ class SimulationEngine:
                     "Failed to read points from protocol server for %s, falling back to memory: %s",
                     device_id, e,
                 )
-        return instance.read_all_points()
+        # FIXED: mark points as simulated when protocol is not running
+        memory_points = instance.read_all_points()
+        for p in memory_points:
+            p.simulated = True
+        return memory_points
 
     async def write_device_point(self, device_id: str, point_name: str, value: Any) -> bool:
         instance = self._devices.get(device_id)
@@ -468,6 +478,12 @@ class SimulationEngine:
                             logger.error("Rollback failed for %s/%s: %s", device_id, point_name, rollback_err)
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
+            else:
+                # FIXED: warn when writing to device whose protocol is not running
+                logger.warning(
+                    "Write to device %s/%s succeeded in memory, but protocol %s is not running - change not visible to external clients",
+                    device_id, point_name, instance.protocol,
+                )
         return success
 
     def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:

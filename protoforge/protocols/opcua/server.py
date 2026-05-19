@@ -138,6 +138,8 @@ class OpcUaServer(ProtocolServer):
         self._point_nodes: dict[str, Any] = {}
         self._device_namespaces: dict[str, str] = {}
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
+        self._host = "0.0.0.0"  # FIXED: initialize _host to avoid AttributeError
+        self._port = 4840  # FIXED: initialize _port to avoid AttributeError
         self._server_task: asyncio.Task | None = None
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
@@ -156,6 +158,8 @@ class OpcUaServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         host = config.get("host", "0.0.0.0")
         port = config.get("port", 4840)
+        self._host = host  # FIXED: store host for logging
+        self._port = port  # FIXED: store port for logging
         self._endpoint = f"opc.tcp://{host}:{port}/protoforge"
 
         try:

@@ -7,8 +7,6 @@
 [![Vue3](https://flat.badgen.net/badge/Vue/3.x/brightgreen)](https://vuejs.org)
 [![Naive UI](https://flat.badgen.net/badge/Naive_UI/2.x/5f25d4)](https://naiveui.com)
 [![License](https://flat.badgen.net/badge/License/MIT/yellow)](LICENSE)
-[![QQ群](https://flat.badgen.net/badge/QQ%E7%BE%A4/866599071/eb1923)](https://qm.qq.com/q/ProtoForge)
-**进群答案：ProtoForge**
 
 [中文](#中文) | [English](README_EN.md)
 
@@ -271,6 +269,8 @@ pip install -e ".[s7]"        # Siemens S7
 ### 🚀 5 分钟上手
 
 > **前提**：已按上述任一方式完成部署，浏览器能打开 <http://localhost:8000。>
+>
+> 🌐 **不想安装？直接体验演示站点**：[https://protoforge.jjtt.net/](https://protoforge.jjtt.net/) 用户名：`admin`　密码：`Protoforge123`
 
 1. **登录** — 输入 `admin` / `admin`
 2. **启动协议** — 左侧菜单「协议服务」→ 点击「一键启动」
@@ -1164,4 +1164,10 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 | 项目                                                           | 说明                        | 仓库地址                                                                                                    |
 | ------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [EdgeLiteGateway](https://github.com/suoten/EdgeLiteGateway) | 轻量级边缘计算物联网网关，22 种工业协议开箱即用 | [Gitee](https://gitee.com/suoten/EdgeLiteGateway) · [GitHub](https://github.com/suoten/EdgeLiteGateway) |
+
+***
+
+### 💬 社区交流
+
+[![QQ群](https://flat.badgen.net/badge/QQ%E7%BE%A4/866599071/eb1923)](https://qm.qq.com/q/ProtoForge) **进群答案：ProtoForge**
 

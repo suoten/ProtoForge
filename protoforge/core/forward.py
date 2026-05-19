@@ -34,9 +34,14 @@ def _get_blocked_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Networ
     return _BLOCKED_NETWORKS
 
 
+_ALLOWED_SCHEMES = {"http", "https"}  # FIXED: SSRF防护缺少scheme校验,file:///gopher://等可绕过
+
+
 def _is_url_allowed(url: str) -> tuple[bool, str]:
     try:
         parsed = urlparse(url)
+        if parsed.scheme.lower() not in _ALLOWED_SCHEMES:  # FIXED: SSRF防护缺少scheme校验
+            return False, f"URL scheme '{parsed.scheme}' not allowed, only http/https permitted"
         hostname = parsed.hostname
         if not hostname:
             return False, "URL has no hostname"

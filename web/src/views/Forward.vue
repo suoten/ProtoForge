@@ -223,7 +223,7 @@ async function addTarget() {
     }
     await api.addForwardTarget(cfg)
     showAddModal.value = false
-    addForm.value = { name: '', type: 'influxdb', host: '', port: '', database: 'protoforge', url: '', path: 'data/forward_output.log', format: 'jsonl', headers_json: '', protocol: '' }  // FIXED: removed hardcoded InfluxDB defaults
+    addForm.value = { name: '', type: 'influxdb', host: '', port: 0, database: 'protoforge', url: '', path: 'data/forward_output.log', format: 'jsonl', headers_json: '', protocol: '' }  // FIXED: port reset to 0 (number) instead of '' (string)
     message.success(t('forward.added'))
     await loadTargets()
   } catch (e) {

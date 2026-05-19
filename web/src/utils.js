@@ -14,13 +14,16 @@ export function validatePassword(password) {
   return { valid: true, reason: null }
 }
 
+const MS_THRESHOLD_MICRO = 1e15  // FIXED: 魔术数字→命名常量
+const MS_THRESHOLD_MILLI = 1e12  // FIXED: 魔术数字→命名常量
+
 export function formatTime(ts) {
   if (!ts) return '-'
   let ms = ts
   if (typeof ms === 'string') ms = Number(ms)
-  if (ms > 1e15) ms = ms / 1e6
-  else if (ms > 1e12 && ms < 1e15) ms = ms
-  else if (ms < 1e12) ms = ms * 1000
+  if (ms > MS_THRESHOLD_MICRO) ms = ms / 1e6
+  else if (ms > MS_THRESHOLD_MILLI && ms < MS_THRESHOLD_MICRO) ms = ms
+  else if (ms < MS_THRESHOLD_MILLI) ms = ms * 1000
   const d = new Date(ms)
   if (isNaN(d.getTime())) return String(ts)
   const pad = (n) => String(n).padStart(2, '0')

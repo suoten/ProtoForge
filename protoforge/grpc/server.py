@@ -354,10 +354,15 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             return pb2.OperationResponse(ok=False, error=str(e))
 
 
+class _NullGrpcServer:  # FIXED: start_grpc_server返回None导致调用方None.stop()崩溃
+    async def stop(self, grace=None):
+        pass
+
+
 async def start_grpc_server(port: int = 50051) -> Any:
     if not GRPC_AVAILABLE or not PB2_AVAILABLE:
         logger.warning("gRPC dependencies not available. Install: pip install grpcio grpcio-tools")
-        return None
+        return _NullGrpcServer()
     server = grpc_aio.server()
     pb2_grpc.add_ProtoForgeServiceServicer_to_server(ProtoForgeServicer(), server)
     server.add_insecure_port(f"[::]:{port}")

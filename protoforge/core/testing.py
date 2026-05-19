@@ -952,6 +952,8 @@ class TestRunner:
                 from urllib.parse import urlparse
                 import ipaddress
                 parsed = urlparse(url)
+                if parsed.scheme.lower() not in ("http", "https"):  # FIXED: SSRF防护缺少scheme校验
+                    return {"error": f"SSRF protection: scheme '{parsed.scheme}' not allowed, only http/https permitted"}
                 hostname = parsed.hostname or ""
                 allowed = False
                 if hostname in ("localhost", "127.0.0.1", "::1") or hostname.endswith(".local"):
@@ -965,6 +967,8 @@ class TestRunner:
                         logger.debug("SSRF check: could not parse hostname %r as IP address, treating as external", hostname)
                 if not allowed:
                     return {"error": f"SSRF protection: external URL not allowed (hostname={hostname}). Use relative paths for internal API calls."}
+            elif "://" in url:  # FIXED: 非http/https协议(如file:///gopher://)拒绝执行
+                return {"error": f"SSRF protection: URL with scheme not allowed (url={url[:80]})"}
             elif not url.startswith("/"):
                 url = f"/{url}"
             if not url.startswith("http"):

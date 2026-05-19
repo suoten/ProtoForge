@@ -200,8 +200,8 @@ const deviceColumns = computed(() => [
   {
     title: t('common.status'), key: 'status', width: 100,
     render: (row) => {
-      const [type, label] = deviceStatusMap[row.status] || ['default', row.status || 'offline']
-      return h(NTag, { size: 'tiny', type, bordered: false }, () => label)
+      const [type, labelKey] = deviceStatusMap[row.status] || ['default', 'common.offline']  // FIXED: deviceStatusMap标签改用i18n key
+      return h(NTag, { size: 'tiny', type, bordered: false }, () => t(labelKey))  // FIXED: deviceStatusMap标签改用i18n key
     }
   },
   { title: t('common.pointCount'), key: 'points', width: 80, render: (row) => row.point_count || (row.points || []).length },

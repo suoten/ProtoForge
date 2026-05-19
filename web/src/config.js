@@ -1,3 +1,5 @@
+const DEFAULT_SDK_URL = "http://localhost:8000"  // FIXED: extracted repeated URL to named constant
+
 const config = {
   edgeLite: {
     unsupportedProtocols: ['gb28181', 'bacnet', 'profinet', 'ethercat'],
@@ -9,7 +11,7 @@ const config = {
       python: `# ProtoForge Python SDK
 from protoforge.sdk import ProtoForgeClient
 
-with ProtoForgeClient("http://localhost:8000") as c:
+with ProtoForgeClient("${DEFAULT_SDK_URL}") as c:
     c.start_protocol("modbus_tcp")
     c.quick_create("modbus_temperature_sensor", "sensor-001")
     points = c.read_points("sensor-001")
@@ -21,7 +23,7 @@ with ProtoForgeClient("http://localhost:8000") as c:
       csharp: `// ProtoForge C# SDK
 using ProtoForge.SDK;
 
-using var client = new ProtoForgeClient("http://localhost:8000");
+using var client = new ProtoForgeClient("${DEFAULT_SDK_URL}");
 
 await client.StartProtocolAsync("modbus_tcp");
 await client.QuickCreateAsync("modbus_temperature_sensor", "sensor-001");
@@ -37,7 +39,7 @@ await client.StopProtocolAsync("modbus_tcp");`,
       java: `// ProtoForge Java SDK
 import com.protoforge.sdk.*;
 
-ProtoForgeClient client = new ProtoForgeClient("http://localhost:8000");
+ProtoForgeClient client = new ProtoForgeClient("${DEFAULT_SDK_URL}");
 
 client.startProtocol("modbus_tcp");
 client.quickCreate("modbus_temperature_sensor", "sensor-001");
@@ -57,16 +59,16 @@ package main
 import "github.com/protoforge/sdk-go"
 
 func main() {
-    client := protoforge.NewClient("http://localhost:8000")
-    
+    client := protoforge.NewClient("${DEFAULT_SDK_URL}")
+
     client.StartProtocol("modbus_tcp")
     client.QuickCreate("modbus_temperature_sensor", "sensor-001")
-    
+
     points, _ := client.ReadPoints("sensor-001")
     for _, p := range points {
         fmt.Printf("%s: %v %s\\n", p.Name, p.Value, p.Unit)
     }
-    
+
     client.CreateScenario("factory-001", "factory")
     client.StartScenario("factory-001")
     client.StopScenario("factory-001")

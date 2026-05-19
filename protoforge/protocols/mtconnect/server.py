@@ -80,7 +80,7 @@ class MtConnectServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("MTConnect server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"MTConnect服务启动 {self._host}:{self._port}",
+                            f"MTConnect service started {self._host}:{self._port}",  # FIXED: CN→EN
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -101,7 +101,7 @@ class MtConnectServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("MTConnect server stopped")
-            self._log_debug("system", "server_stop", "MTConnect服务停止")
+            self._log_debug("system", "server_stop", "MTConnect service stopped")  # FIXED: CN→EN
 
     async def _serve(self) -> None:
         try:
@@ -431,7 +431,7 @@ class MtConnectServer(ProtocolServer):
                      self._device_params[device_config.id]["device_uuid"][:8] + "...",
                      self._device_params[device_config.id]["manufacturer"])
         self._log_debug("system", "device_create",
-                        f"创建MTConnect设备 {device_config.name}",
+                        f"MTConnect device created: {device_config.name}",  # FIXED: CN→EN
                         device_id=device_config.id)
         return device_config.id
 
@@ -442,7 +442,7 @@ class MtConnectServer(ProtocolServer):
         self._clear_default_device(device_id)
         logger.info("MTConnect device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除MTConnect设备 {device_id}",
+                        f"MTConnect device removed: {device_id}",  # FIXED: CN→EN
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -463,7 +463,7 @@ class MtConnectServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "MTConnect 服务器监听地址"},
-                "port": {"type": "integer", "default": 7878, "description": "MTConnect 端口 (默认7878)"},
+                "host": {"type": "string", "default": "0.0.0.0", "description": "MTConnect server listen address"},  # FIXED: CN→EN
+                "port": {"type": "integer", "default": 7878, "description": "MTConnect port (default 7878)"},  # FIXED: CN→EN
             },
         }

@@ -122,13 +122,13 @@ export async function fetchDefaultPorts() {
   return { ...defaultPorts }
 }
 
-export const deviceStatusMap = {
-  online: ['success', 'Online'],
-  running: ['success', 'Running'],
-  error: ['error', 'Error'],
-  stopped: ['default', 'Stopped'],
-  offline: ['default', 'Offline'],
-  disabled: ['default', 'Disabled'],
+export const deviceStatusMap = {  // FIXED: 硬编码英文标签改为i18n key
+  online: ['success', 'common.online'],
+  running: ['success', 'common.running'],
+  error: ['error', 'common.error'],
+  stopped: ['default', 'common.stopped'],
+  offline: ['default', 'common.offline'],
+  disabled: ['default', 'common.disabled'],
 }
 
 export const directionColorMap = {
