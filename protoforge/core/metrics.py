@@ -53,15 +53,17 @@ class MetricsCollector:
                 "protocol": device.config.protocol,
             }
             for point in device.read_all_points():
-                if not isinstance(point.value, (int, float)):
-                    continue
                 labels = {**labels_base, "point": point.name}
                 point_config = next(
                     (p for p in device.config.points if p.name == point.name), None
                 )
                 if point_config and point_config.unit:
                     labels["unit"] = point_config.unit
-                self.set_gauge(point.name, float(point.value), labels)
+                key = self._make_key(point.name, labels)
+                if point.quality != "good":
+                    self._gauges.pop(key, None)
+                elif isinstance(point.value, (int, float)):
+                    self.set_gauge(point.name, float(point.value), labels)
 
     def collect_from_test_runner(self, runner: Any) -> None:
         self.set_gauge("protoforge_test_cases_total", len(runner._test_cases))

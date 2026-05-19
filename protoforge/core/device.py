@@ -59,9 +59,11 @@ class DeviceInstance:
             name=point_name,
             value=self._point_values[point_name],
             timestamp=time.time(),
+            quality="good" if self._status == DeviceStatus.ONLINE else "bad",
         )
 
     def read_all_points(self) -> list[PointValue]:
+        quality = "good" if self._status == DeviceStatus.ONLINE else "bad"
         result = []
         now = time.time()
         for name in self._point_values:
@@ -70,6 +72,7 @@ class DeviceInstance:
                     name=name,
                     value=self._point_values[name],
                     timestamp=now,
+                    quality=quality,
                 )
             )
         return result
