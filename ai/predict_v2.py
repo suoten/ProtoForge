@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-ProtoForge 预测服务 v3
+ProtoForge 预测服务 v4
 
 修复点：
-1. 解决 HORIZON_SECONDS > POLL_INTERVAL 时，多轮预测窗口重叠导致 Grafana 出现毛刺/竖线问题。
-2. 每轮写入新预测前，删除同一个预测 metric 的旧预测序列，只保留最新一轮预测。
-3. 预测时间戳按整秒写入，避免毫秒时间戳和 Grafana step 不对齐。
-4. 拟合使用真实 timestamp 相对时间，不再假设历史数据严格 1 秒等间隔。
-5. 对历史数据做排序、去重、NaN/Inf 清洗。
+1. 不再使用 VictoriaMetrics delete_series，避免预测历史被整条删除。
+2. 不再每 30 秒写未来 120 秒，避免多轮预测窗口重叠导致 Grafana 出现竖线/毛刺。
+3. 每轮只写未来 min(HORIZON_SECONDS, POLL_INTERVAL) 秒的数据。
+4. 使用 forecast="rolling_v2" 新标签，避免和上一版 forecast="latest" 的旧预测数据混在一起。
+5. 使用真实 timestamp 做拟合，不假设采样严格等间隔。
+6. 拟合失败时不再简单写平直线，而是尽量重复最近一个周期的波形。
 """
 
 import logging
@@ -44,28 +45,34 @@ PREDICT_TARGETS = [
 ]
 
 HISTORY_MINUTES = 30
+
+# 理论预测窗口
 HORIZON_SECONDS = 120
+
+# 轮询间隔
 POLL_INTERVAL = 30
+
+# 实际写入窗口。
+# 关键点：实际写入窗口不要大于轮询间隔，否则不同批次预测会重叠。
+WRITE_HORIZON_SECONDS = min(HORIZON_SECONDS, POLL_INTERVAL)
+
 MIN_POINTS = 120
 QUERY_STEP = "1s"
 
-# 关键修复：每轮写入前删除旧预测，避免 120s 预测窗口和 30s 轮询周期重叠
-CLEAR_OLD_PREDICTIONS = True
+# 不要再清理旧预测，否则历史预测会被整条删除。
+CLEAR_OLD_PREDICTIONS = False
 
-# 如果删除旧预测失败，是否跳过本轮写入。
-# 建议 True，避免继续叠加脏数据。
-SKIP_WRITE_IF_CLEAR_FAILED = True
-
-# 给新预测数据加一个稳定标签，方便 Grafana 查询过滤。
-# Grafana 可以查询：feed_rate_predicted{device_id="fanuc-cnc",forecast="latest"}
+# 使用新标签，避免和上一版 forecast="latest" 数据混在一起。
 EXTRA_PREDICT_LABELS = {
-    "forecast": "latest",
+    "forecast": "rolling_v2",
     "source": "protoforge",
 }
 
-# 正弦周期限制
 MIN_PERIOD_SECONDS = 5.0
 MAX_PERIOD_SECONDS = 3600.0
+
+# 进程内记录每条预测序列上次写到哪里，避免本进程运行期间重复写同一时间段
+LAST_WRITTEN_UNTIL: Dict[str, int] = {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -134,10 +141,10 @@ def fetch_history(query: str, minutes: int = HISTORY_MINUTES) -> Tuple[List[floa
 def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.ndarray]:
     """
     清洗历史数据：
-    1. 转换为整秒时间戳
+    1. 时间戳转为整秒
     2. 排序
     3. 同一秒多个值时保留最后一个
-    4. 插值补齐中间缺失秒
+    4. 插值补齐缺失秒
     """
     if not ts or not ys or len(ts) != len(ys):
         return np.array([]), np.array([])
@@ -173,7 +180,6 @@ def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.
     if end_sec <= start_sec:
         return ts_clean, ys_clean
 
-    # 统一为 1 秒网格，减少 query_range 缺点、抖动、缺失点对 FFT 的影响
     ts_grid = np.arange(start_sec, end_sec + 1, 1, dtype=float)
     ys_grid = np.interp(ts_grid, ts_clean, ys_clean)
 
@@ -187,7 +193,7 @@ def _sine_model(t: np.ndarray, A: float, T: float, phi: float, C: float) -> np.n
 def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
     """
     使用 FFT 估算主周期。
-    ys_arr 默认是 1 秒间隔。
+    ys_arr 默认已经是 1 秒间隔。
     """
     n = len(ys_arr)
 
@@ -205,8 +211,8 @@ def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
     if len(freqs) <= 1:
         return 60.0
 
-    # 跳过直流分量 index 0
     power = np.abs(fft_vals[1:])
+
     if len(power) == 0 or np.max(power) <= 0:
         return 60.0
 
@@ -222,58 +228,83 @@ def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
     return period
 
 
+def repeat_last_period(
+    ts_grid: np.ndarray,
+    ys_grid: np.ndarray,
+    ts_future_arr: np.ndarray,
+    period_seconds: float,
+) -> np.ndarray:
+    """
+    拟合失败时的降级策略：
+    不直接写平直线，而是把未来时间映射回最近一个周期的历史波形。
+    """
+    if len(ts_grid) < 2:
+        return np.full_like(ts_future_arr, float(ys_grid[-1]), dtype=float)
+
+    period = max(int(round(period_seconds)), 1)
+
+    y_pred = []
+
+    hist_start = float(ts_grid[0])
+    hist_end = float(ts_grid[-1])
+
+    for future_ts in ts_future_arr:
+        mapped_ts = float(future_ts)
+
+        while mapped_ts > hist_end:
+            mapped_ts -= period
+
+        while mapped_ts < hist_start:
+            mapped_ts += period
+
+        val = float(np.interp(mapped_ts, ts_grid, ys_grid))
+        y_pred.append(val)
+
+    return np.array(y_pred, dtype=float)
+
+
 def predict_next(
     ts: List[float],
     ys: List[float],
-    horizon: int = HORIZON_SECONDS,
-    start_from_now: bool = True,
+    horizon: int,
+    base_ts: int,
 ) -> Tuple[List[float], List[float]]:
     """
     用 FFT 检测主频，拟合正弦波，外推未来 horizon 秒。
-    返回：
-        future_timestamps: 未来整秒时间戳
-        predicted_values: 预测值
+
+    base_ts:
+        从 base_ts + 1 开始写预测。
     """
     ts_grid, ys_grid = normalize_history(ts, ys)
 
     if len(ys_grid) < MIN_POINTS:
         return [], []
 
-    n = len(ys_grid)
-
     y_min = float(np.min(ys_grid))
     y_max = float(np.max(ys_grid))
     y_mean = float(np.mean(ys_grid))
     y_range = y_max - y_min
 
-    # 数据几乎不波动时，直接使用最后一个值保持
-    if y_range <= 1e-9:
-        base_ts = int(time.time()) if start_from_now else int(ts_grid[-1])
-        base_ts = max(base_ts, int(ts_grid[-1]))
+    base_ts = max(int(base_ts), int(ts_grid[-1]))
 
-        ts_future = [base_ts + i + 1 for i in range(horizon)]
-        y_pred = [float(ys_grid[-1])] * horizon
-        return ts_future, y_pred
+    ts_future_arr = np.arange(
+        base_ts + 1,
+        base_ts + 1 + horizon,
+        1,
+        dtype=float,
+    )
+
+    if y_range <= 1e-9:
+        y_pred_arr = np.full_like(ts_future_arr, float(ys_grid[-1]), dtype=float)
+        return ts_future_arr.tolist(), y_pred_arr.tolist()
 
     period = estimate_period_by_fft(ys_grid)
 
-    # 用真实时间戳做相对时间，而不是 np.arange(n)
     t_fit = ts_grid - ts_grid[0]
+    t_future = ts_future_arr - ts_grid[0]
 
     amplitude = y_range / 2.0
     offset = y_mean
-
-    # 预测起点统一对齐到整秒
-    if start_from_now:
-        base_ts = int(time.time())
-    else:
-        base_ts = int(ts_grid[-1])
-
-    # 避免因为 VM 查询延迟导致预测点落在最后一个真实点之前
-    base_ts = max(base_ts, int(ts_grid[-1]))
-
-    ts_future_arr = np.arange(base_ts + 1, base_ts + 1 + horizon, 1, dtype=float)
-    t_future = ts_future_arr - ts_grid[0]
 
     try:
         popt, _ = curve_fit(
@@ -290,7 +321,6 @@ def predict_next(
 
         y_pred_arr = _sine_model(t_future, *popt)
 
-        # 裁剪到合理范围，避免拟合异常时飞出去
         margin = y_range * 0.2
         lower = y_min - margin
         upper = y_max + margin
@@ -309,16 +339,21 @@ def predict_next(
         return ts_future_arr.tolist(), y_pred_arr.astype(float).tolist()
 
     except Exception as e:
-        logger.warning("正弦拟合失败，降级为最近值平滑外推: %s", e)
+        logger.warning("正弦拟合失败，降级为最近周期波形复制: %s", e)
 
-        # 降级策略：用最近 10 个点的均值保持，避免线性外推越走越偏
-        tail = min(10, n)
-        last_value = float(np.mean(ys_grid[-tail:]))
+        y_pred_arr = repeat_last_period(
+            ts_grid=ts_grid,
+            ys_grid=ys_grid,
+            ts_future_arr=ts_future_arr,
+            period_seconds=period,
+        )
 
-        ts_future = ts_future_arr.tolist()
-        y_pred = [last_value] * horizon
+        margin = y_range * 0.2
+        lower = y_min - margin
+        upper = y_max + margin
+        y_pred_arr = np.clip(y_pred_arr, lower, upper)
 
-        return ts_future, y_pred
+        return ts_future_arr.tolist(), y_pred_arr.astype(float).tolist()
 
 
 def prom_escape_label_value(value: str) -> str:
@@ -333,83 +368,34 @@ def prom_escape_label_value(value: str) -> str:
     )
 
 
-def build_selector(metric_name: str, labels: Dict[str, str]) -> str:
-    """
-    构造 PromQL selector，用于 delete_series。
-
-    示例：
-        feed_rate_predicted{device_id="fanuc-cnc"}
-    """
+def labels_to_str(labels: Dict[str, str]) -> str:
     if not labels:
-        return metric_name
+        return ""
 
     parts = []
+
     for k in sorted(labels.keys()):
         v = prom_escape_label_value(labels[k])
         parts.append(f'{k}="{v}"')
 
-    return f'{metric_name}' + "{" + ",".join(parts) + "}"
-
-
-def delete_old_predictions(metric_name: str, base_labels: Dict[str, str]) -> bool:
-    """
-    删除旧预测序列，避免多轮预测窗口重叠。
-
-    注意：
-    这里故意只用 base_labels，比如 device_id。
-    不带 forecast/source 标签，是为了兼容旧版本脚本写入的无 forecast 标签数据。
-    """
-    selector = build_selector(metric_name, base_labels)
-
-    try:
-        resp = requests.post(
-            f"{VM_URL}/api/v1/admin/tsdb/delete_series",
-            params=[("match[]", selector)],
-            timeout=10,
-        )
-
-        if resp.status_code not in (200, 204):
-            logger.error(
-                "删除旧预测数据失败 metric=%s selector=%s status=%s body=%s",
-                metric_name,
-                selector,
-                resp.status_code,
-                resp.text[:500],
-            )
-            return False
-
-        logger.debug("已删除旧预测数据 selector=%s", selector)
-        return True
-
-    except requests.RequestException as e:
-        logger.error("删除旧预测数据异常 metric=%s selector=%s: %s", metric_name, selector, e)
-        return False
+    return "{" + ",".join(parts) + "}"
 
 
 def write_predictions(
     ts_future: List[float],
     y_pred: List[float],
     metric_name: str,
-    labels: Dict[str, str] = None,
+    labels: Dict[str, str],
 ) -> bool:
     """
     将预测值以 Prometheus exposition 格式写入 VictoriaMetrics。
     时间戳为毫秒级 Unix timestamp。
     """
-    if labels is None:
-        labels = {}
-
     if not ts_future or not y_pred or len(ts_future) != len(y_pred):
         logger.warning("预测数据为空或长度不一致 metric=%s", metric_name)
         return False
 
-    label_str = ""
-    if labels:
-        parts = []
-        for k in sorted(labels.keys()):
-            v = prom_escape_label_value(labels[k])
-            parts.append(f'{k}="{v}"')
-        label_str = "{" + ",".join(parts) + "}"
+    label_str = labels_to_str(labels)
 
     lines = []
 
@@ -449,7 +435,9 @@ def write_predictions(
         return False
 
 
-_LABEL_PATTERN = re.compile(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"])*)"\s*')
+_LABEL_PATTERN = re.compile(
+    r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"])*)"\s*'
+)
 
 
 def _parse_labels(query: str) -> Dict[str, str]:
@@ -489,6 +477,13 @@ def merge_labels(*dicts: Dict[str, str]) -> Dict[str, str]:
     return result
 
 
+def series_key(metric_name: str, labels: Dict[str, str]) -> str:
+    """
+    构造进程内唯一 key，用于记录上次写到哪个时间点。
+    """
+    return metric_name + labels_to_str(labels)
+
+
 def run_once():
     now_str = datetime.now().strftime("%H:%M:%S")
 
@@ -499,33 +494,27 @@ def run_once():
             logger.info("[%s] %s 数据不足（%d 点），跳过", now_str, query, len(ys))
             continue
 
+        base_labels = _parse_labels(query)
+        write_labels = merge_labels(base_labels, EXTRA_PREDICT_LABELS)
+
+        key = series_key(pred_metric, write_labels)
+
+        now_sec = int(time.time())
+        last_until = LAST_WRITTEN_UNTIL.get(key, 0)
+
+        # 防止同一进程内重复写入已经预测过的时间段
+        base_ts = max(now_sec, last_until)
+
         ts_future, y_pred = predict_next(
-            ts,
-            ys,
-            horizon=HORIZON_SECONDS,
-            start_from_now=True,
+            ts=ts,
+            ys=ys,
+            horizon=WRITE_HORIZON_SECONDS,
+            base_ts=base_ts,
         )
 
         if not ts_future or not y_pred:
             logger.warning("[%s] %s 预测结果为空，跳过", now_str, query)
             continue
-
-        base_labels = _parse_labels(query)
-
-        # 先删除旧预测，再写入新预测。
-        # 删除条件只带 base_labels，兼容老版本无 forecast/source 标签的脏数据。
-        if CLEAR_OLD_PREDICTIONS:
-            clear_ok = delete_old_predictions(pred_metric, base_labels)
-
-            if not clear_ok and SKIP_WRITE_IF_CLEAR_FAILED:
-                logger.error(
-                    "[%s] %s 删除旧预测失败，为避免继续制造重叠数据，本轮跳过写入",
-                    now_str,
-                    pred_metric,
-                )
-                continue
-
-        write_labels = merge_labels(base_labels, EXTRA_PREDICT_LABELS)
 
         ok = write_predictions(
             ts_future=ts_future,
@@ -537,26 +526,30 @@ def run_once():
         if not ok:
             continue
 
+        LAST_WRITTEN_UNTIL[key] = int(max(ts_future))
+
         future_start = datetime.fromtimestamp(ts_future[0]).strftime("%H:%M:%S")
         future_end = datetime.fromtimestamp(ts_future[-1]).strftime("%H:%M:%S")
 
         logger.info(
-            "[%s] %-40s → %-35s 写入 %d 点，预测区间 %s ~ %s",
+            "[%s] %-40s → %-35s 写入 %d 点，预测区间 %s ~ %s，标签=%s",
             now_str,
             query,
             pred_metric,
             len(y_pred),
             future_start,
             future_end,
+            labels_to_str(write_labels),
         )
 
 
 def main():
     logger.info(
-        "预测服务启动 VM=%s 历史窗口=%dmin 预测窗口=%ds 轮询间隔=%ds 清理旧预测=%s",
+        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds 清理旧预测=%s",
         VM_URL,
         HISTORY_MINUTES,
         HORIZON_SECONDS,
+        WRITE_HORIZON_SECONDS,
         POLL_INTERVAL,
         CLEAR_OLD_PREDICTIONS,
     )
