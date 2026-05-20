@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-ProtoForge 预测服务 v4
+ProtoForge 预测服务 v5
 
 修复点：
-1. 不再使用 VictoriaMetrics delete_series，避免预测历史被整条删除。
-2. 不再每 30 秒写未来 120 秒，避免多轮预测窗口重叠导致 Grafana 出现竖线/毛刺。
-3. 每轮只写未来 min(HORIZON_SECONDS, POLL_INTERVAL) 秒的数据。
-4. 使用 forecast="rolling_v2" 新标签，避免和上一版 forecast="latest" 的旧预测数据混在一起。
-5. 使用真实 timestamp 做拟合，不假设采样严格等间隔。
-6. 拟合失败时不再简单写平直线，而是尽量重复最近一个周期的波形。
+1. 不再使用“单正弦拟合”作为主预测算法。
+2. 主算法改为：周期模板预测（同相位历史值加权平均）。
+3. 周期估计使用 FFT 粗估 + 自相关细化，比单纯 FFT 更稳。
+4. 若可用完整周期不足，则降级为多谐波回归（而不是单正弦）。
+5. 每轮只写入未来 min(HORIZON_SECONDS, POLL_INTERVAL) 秒，避免预测窗口重叠。
+6. 不删除旧预测历史，避免历史预测消失。
 """
 
 import logging
@@ -20,16 +20,12 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import requests
-from scipy.optimize import curve_fit
-
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-
 logger = logging.getLogger(__name__)
-
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
 
@@ -45,45 +41,36 @@ PREDICT_TARGETS = [
 ]
 
 HISTORY_MINUTES = 30
-
-# 理论预测窗口
 HORIZON_SECONDS = 120
-
-# 轮询间隔
 POLL_INTERVAL = 30
-
-# 实际写入窗口。
-# 关键点：实际写入窗口不要大于轮询间隔，否则不同批次预测会重叠。
 WRITE_HORIZON_SECONDS = min(HORIZON_SECONDS, POLL_INTERVAL)
-
 MIN_POINTS = 120
 QUERY_STEP = "1s"
 
-# 不要再清理旧预测，否则历史预测会被整条删除。
-CLEAR_OLD_PREDICTIONS = False
+# 至少要有多少个完整周期，才使用“周期模板预测”
+MIN_FULL_CYCLES_FOR_TEMPLATE = 3
+MAX_CYCLES_FOR_TEMPLATE = 6
 
-# 使用新标签，避免和上一版 forecast="latest" 数据混在一起。
+# 周期范围
+MIN_PERIOD_SECONDS = 5
+MAX_PERIOD_SECONDS = 3600
+
+# 多谐波回归最高阶数（降级模式）
+MAX_HARMONICS = 4
+
 EXTRA_PREDICT_LABELS = {
-    "forecast": "rolling_v2",
+    "forecast": "seasonal_v1",
     "source": "protoforge",
 }
 
-MIN_PERIOD_SECONDS = 5.0
-MAX_PERIOD_SECONDS = 3600.0
-
-# 进程内记录每条预测序列上次写到哪里，避免本进程运行期间重复写同一时间段
+# 进程内记录每条预测序列上次写到哪里，避免本进程运行时重复写
 LAST_WRITTEN_UNTIL: Dict[str, int] = {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 def fetch_history(query: str, minutes: int = HISTORY_MINUTES) -> Tuple[List[float], List[float]]:
-    """
-    从 VictoriaMetrics 拉取历史时序数据。
-    返回：
-        timestamps: Unix 秒级时间戳
-        values: float 数值
-    """
+    """从 VictoriaMetrics 拉取历史时序数据。"""
     now = datetime.now()
     start = now - timedelta(minutes=minutes)
 
@@ -118,20 +105,16 @@ def fetch_history(query: str, minutes: int = HISTORY_MINUTES) -> Tuple[List[floa
 
     ts = []
     ys = []
-
     for item in values:
         if len(item) < 2:
             continue
-
         try:
             t = float(item[0])
             y = float(item[1])
         except Exception:
             continue
-
         if not math.isfinite(t) or not math.isfinite(y):
             continue
-
         ts.append(t)
         ys.append(y)
 
@@ -141,33 +124,29 @@ def fetch_history(query: str, minutes: int = HISTORY_MINUTES) -> Tuple[List[floa
 def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.ndarray]:
     """
     清洗历史数据：
-    1. 时间戳转为整秒
+    1. 时间戳整秒化
     2. 排序
-    3. 同一秒多个值时保留最后一个
-    4. 插值补齐缺失秒
+    3. 同一秒多个点保留最后一个
+    4. 按 1 秒插值补齐
     """
     if not ts or not ys or len(ts) != len(ys):
         return np.array([]), np.array([])
 
     data = {}
-
     for t, y in zip(ts, ys):
         try:
             sec = int(round(float(t)))
             val = float(y)
         except Exception:
             continue
-
         if not math.isfinite(sec) or not math.isfinite(val):
             continue
-
         data[sec] = val
 
     if not data:
         return np.array([]), np.array([])
 
     sorted_items = sorted(data.items(), key=lambda x: x[0])
-
     ts_clean = np.array([x[0] for x in sorted_items], dtype=float)
     ys_clean = np.array([x[1] for x in sorted_items], dtype=float)
 
@@ -186,22 +165,13 @@ def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.
     return ts_grid, ys_grid
 
 
-def _sine_model(t: np.ndarray, A: float, T: float, phi: float, C: float) -> np.ndarray:
-    return A * np.sin(2.0 * np.pi / T * t + phi) + C
-
-
 def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
-    """
-    使用 FFT 估算主周期。
-    ys_arr 默认已经是 1 秒间隔。
-    """
+    """FFT 粗估周期。"""
     n = len(ys_arr)
-
-    if n < 4:
+    if n < 8:
         return 60.0
 
     centered = ys_arr - np.mean(ys_arr)
-
     if np.allclose(centered, 0):
         return 60.0
 
@@ -212,55 +182,139 @@ def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
         return 60.0
 
     power = np.abs(fft_vals[1:])
-
     if len(power) == 0 or np.max(power) <= 0:
         return 60.0
 
     dominant_idx = int(np.argmax(power)) + 1
     dominant_freq = float(freqs[dominant_idx])
-
     if dominant_freq <= 0:
         return 60.0
 
     period = 1.0 / dominant_freq
-    period = float(np.clip(period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
-
-    return period
+    return float(np.clip(period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
 
-def repeat_last_period(
-    ts_grid: np.ndarray,
-    ys_grid: np.ndarray,
-    ts_future_arr: np.ndarray,
-    period_seconds: float,
-) -> np.ndarray:
+def refine_period_by_autocorr(ys_arr: np.ndarray, init_period: float) -> float:
     """
-    拟合失败时的降级策略：
-    不直接写平直线，而是把未来时间映射回最近一个周期的历史波形。
+    用自相关在 init_period 附近细化周期估计。
     """
-    if len(ts_grid) < 2:
-        return np.full_like(ts_future_arr, float(ys_grid[-1]), dtype=float)
+    n = len(ys_arr)
+    if n < 20:
+        return float(np.clip(init_period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
-    period = max(int(round(period_seconds)), 1)
+    centered = ys_arr - np.mean(ys_arr)
+    if np.allclose(centered, 0):
+        return float(np.clip(init_period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
-    y_pred = []
+    corr = np.correlate(centered, centered, mode="full")[n - 1:]
 
-    hist_start = float(ts_grid[0])
-    hist_end = float(ts_grid[-1])
+    p0 = int(round(init_period))
+    left = max(MIN_PERIOD_SECONDS, int(max(2, p0 * 0.7)))
+    right = min(n // 2, int(max(left + 1, p0 * 1.3)))
 
-    for future_ts in ts_future_arr:
-        mapped_ts = float(future_ts)
+    if right <= left:
+        return float(np.clip(init_period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
-        while mapped_ts > hist_end:
-            mapped_ts -= period
+    search = corr[left:right + 1]
+    if len(search) == 0:
+        return float(np.clip(init_period, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
-        while mapped_ts < hist_start:
-            mapped_ts += period
+    best_lag = left + int(np.argmax(search))
+    return float(np.clip(best_lag, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
-        val = float(np.interp(mapped_ts, ts_grid, ys_grid))
-        y_pred.append(val)
 
-    return np.array(y_pred, dtype=float)
+def estimate_period(ys_arr: np.ndarray) -> float:
+    """FFT + 自相关 的组合周期估计。"""
+    p_fft = estimate_period_by_fft(ys_arr)
+    p_refined = refine_period_by_autocorr(ys_arr, p_fft)
+    return p_refined
+
+
+def seasonal_template_predict(
+    ys_arr: np.ndarray,
+    horizon: int,
+    period: int,
+    gap: int = 0,
+    max_cycles: int = MAX_CYCLES_FOR_TEMPLATE,
+) -> List[float]:
+    """
+    同相位历史值加权平均预测。
+    对未来第 k 个点，取过去多个周期同相位点做加权平均：
+        y[n-1+gap+k] ≈ avg(y[n-1+gap+k-p], y[n-1+gap+k-2p], ...)
+    """
+    n = len(ys_arr)
+    preds = []
+
+    for k in range(1, horizon + 1):
+        target_idx = (n - 1) + gap + k
+
+        values = []
+        weights = []
+
+        # m=1 表示最近一个周期；m 越大越久远
+        for m in range(1, max_cycles + 1):
+            hist_idx = target_idx - m * period
+            if 0 <= hist_idx < n:
+                # 越近权重越大
+                w = 1.0 / m
+                values.append(float(ys_arr[hist_idx]))
+                weights.append(w)
+
+        if not values:
+            # 万一拿不到，退化为最后一个值
+            preds.append(float(ys_arr[-1]))
+        else:
+            preds.append(float(np.average(values, weights=weights)))
+
+    return preds
+
+
+def harmonic_regression_predict(
+    ys_arr: np.ndarray,
+    horizon: int,
+    period: int,
+    gap: int = 0,
+    max_harmonics: int = MAX_HARMONICS,
+) -> List[float]:
+    """
+    多谐波回归（降级模式）：
+    y = c + Σ [a_k sin(2πkt/P) + b_k cos(2πkt/P)]
+    相比单正弦，更能表达非标准正弦波形。
+    """
+    n = len(ys_arr)
+    if n < 10 or period <= 1:
+        return [float(ys_arr[-1])] * horizon
+
+    # 周期太短时，谐波数不能太大
+    K = min(max_harmonics, max(1, period // 4))
+
+    t = np.arange(n, dtype=float)
+    cols = [np.ones(n, dtype=float)]
+
+    for k in range(1, K + 1):
+        angle = 2.0 * np.pi * k * t / period
+        cols.append(np.sin(angle))
+        cols.append(np.cos(angle))
+
+    X = np.column_stack(cols)
+
+    try:
+        coef, _, _, _ = np.linalg.lstsq(X, ys_arr, rcond=None)
+    except Exception:
+        return [float(ys_arr[-1])] * horizon
+
+    t_future = np.arange(n + gap, n + gap + horizon, dtype=float)
+    cols_future = [np.ones(horizon, dtype=float)]
+
+    for k in range(1, K + 1):
+        angle = 2.0 * np.pi * k * t_future / period
+        cols_future.append(np.sin(angle))
+        cols_future.append(np.cos(angle))
+
+    X_future = np.column_stack(cols_future)
+    y_pred = X_future @ coef
+
+    return y_pred.astype(float).tolist()
 
 
 def predict_next(
@@ -270,96 +324,74 @@ def predict_next(
     base_ts: int,
 ) -> Tuple[List[float], List[float]]:
     """
-    用 FFT 检测主频，拟合正弦波，外推未来 horizon 秒。
-
-    base_ts:
-        从 base_ts + 1 开始写预测。
+    主预测函数：
+    1. 周期估计
+    2. 优先使用周期模板预测
+    3. 周期不够时降级为多谐波回归
     """
     ts_grid, ys_grid = normalize_history(ts, ys)
-
     if len(ys_grid) < MIN_POINTS:
         return [], []
 
     y_min = float(np.min(ys_grid))
     y_max = float(np.max(ys_grid))
-    y_mean = float(np.mean(ys_grid))
     y_range = y_max - y_min
 
-    base_ts = max(int(base_ts), int(ts_grid[-1]))
+    if y_range <= 1e-9:
+        base_ts = max(int(base_ts), int(ts_grid[-1]))
+        ts_future = [base_ts + i + 1 for i in range(horizon)]
+        y_pred = [float(ys_grid[-1])] * horizon
+        return ts_future, y_pred
 
-    ts_future_arr = np.arange(
-        base_ts + 1,
-        base_ts + 1 + horizon,
-        1,
-        dtype=float,
+    period_est = estimate_period(ys_grid)
+    period = int(round(period_est))
+    period = max(MIN_PERIOD_SECONDS, min(MAX_PERIOD_SECONDS, period))
+
+    last_real_ts = int(ts_grid[-1])
+    base_ts = max(int(base_ts), last_real_ts)
+
+    # 如果当前时间已经超过最后一个真实点，gap 表示中间“空过去”的秒数
+    gap = max(0, base_ts - last_real_ts)
+
+    ts_future = [base_ts + i + 1 for i in range(horizon)]
+
+    full_cycles = len(ys_grid) // period if period > 0 else 0
+
+    if full_cycles >= MIN_FULL_CYCLES_FOR_TEMPLATE:
+        y_pred = seasonal_template_predict(
+            ys_arr=ys_grid,
+            horizon=horizon,
+            period=period,
+            gap=gap,
+            max_cycles=min(MAX_CYCLES_FOR_TEMPLATE, full_cycles),
+        )
+        model_name = "seasonal_template"
+    else:
+        y_pred = harmonic_regression_predict(
+            ys_arr=ys_grid,
+            horizon=horizon,
+            period=period,
+            gap=gap,
+            max_harmonics=MAX_HARMONICS,
+        )
+        model_name = "harmonic_regression"
+
+    # 合理裁剪，避免偶然外推过大
+    margin = y_range * 0.15
+    lower = y_min - margin
+    upper = y_max + margin
+    y_pred = np.clip(np.array(y_pred, dtype=float), lower, upper).astype(float).tolist()
+
+    logger.debug(
+        "predict_next model=%s period=%ss full_cycles=%s gap=%s",
+        model_name, period, full_cycles, gap
     )
 
-    if y_range <= 1e-9:
-        y_pred_arr = np.full_like(ts_future_arr, float(ys_grid[-1]), dtype=float)
-        return ts_future_arr.tolist(), y_pred_arr.tolist()
-
-    period = estimate_period_by_fft(ys_grid)
-
-    t_fit = ts_grid - ts_grid[0]
-    t_future = ts_future_arr - ts_grid[0]
-
-    amplitude = y_range / 2.0
-    offset = y_mean
-
-    try:
-        popt, _ = curve_fit(
-            _sine_model,
-            t_fit,
-            ys_grid,
-            p0=[amplitude, period, 0.0, offset],
-            bounds=(
-                [0.0, MIN_PERIOD_SECONDS, -2.0 * np.pi, y_min - y_range],
-                [np.inf, MAX_PERIOD_SECONDS, 2.0 * np.pi, y_max + y_range],
-            ),
-            maxfev=12000,
-        )
-
-        y_pred_arr = _sine_model(t_future, *popt)
-
-        margin = y_range * 0.2
-        lower = y_min - margin
-        upper = y_max + margin
-        y_pred_arr = np.clip(y_pred_arr, lower, upper)
-
-        if not np.all(np.isfinite(y_pred_arr)):
-            raise ValueError("预测结果包含 NaN/Inf")
-
-        logger.debug(
-            "正弦拟合成功 period=%.2fs amplitude=%.4f offset=%.4f",
-            popt[1],
-            popt[0],
-            popt[3],
-        )
-
-        return ts_future_arr.tolist(), y_pred_arr.astype(float).tolist()
-
-    except Exception as e:
-        logger.warning("正弦拟合失败，降级为最近周期波形复制: %s", e)
-
-        y_pred_arr = repeat_last_period(
-            ts_grid=ts_grid,
-            ys_grid=ys_grid,
-            ts_future_arr=ts_future_arr,
-            period_seconds=period,
-        )
-
-        margin = y_range * 0.2
-        lower = y_min - margin
-        upper = y_max + margin
-        y_pred_arr = np.clip(y_pred_arr, lower, upper)
-
-        return ts_future_arr.tolist(), y_pred_arr.astype(float).tolist()
+    return ts_future, y_pred
 
 
 def prom_escape_label_value(value: str) -> str:
-    """
-    Prometheus exposition label value 转义。
-    """
+    """Prometheus label value 转义。"""
     return (
         str(value)
         .replace("\\", "\\\\")
@@ -371,13 +403,10 @@ def prom_escape_label_value(value: str) -> str:
 def labels_to_str(labels: Dict[str, str]) -> str:
     if not labels:
         return ""
-
     parts = []
-
     for k in sorted(labels.keys()):
         v = prom_escape_label_value(labels[k])
         parts.append(f'{k}="{v}"')
-
     return "{" + ",".join(parts) + "}"
 
 
@@ -387,16 +416,12 @@ def write_predictions(
     metric_name: str,
     labels: Dict[str, str],
 ) -> bool:
-    """
-    将预测值以 Prometheus exposition 格式写入 VictoriaMetrics。
-    时间戳为毫秒级 Unix timestamp。
-    """
+    """将预测值以 Prometheus exposition 格式写入 VictoriaMetrics。"""
     if not ts_future or not y_pred or len(ts_future) != len(y_pred):
         logger.warning("预测数据为空或长度不一致 metric=%s", metric_name)
         return False
 
     label_str = labels_to_str(labels)
-
     lines = []
 
     for t, y in zip(ts_future, y_pred):
@@ -422,14 +447,11 @@ def write_predictions(
         resp = requests.post(
             f"{VM_URL}/api/v1/import/prometheus",
             data=payload.encode("utf-8"),
-            headers={
-                "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
-            },
+            headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
             timeout=10,
         )
         resp.raise_for_status()
         return True
-
     except requests.RequestException as e:
         logger.error("写入预测数据失败 metric=%s: %s", metric_name, e)
         return False
@@ -441,12 +463,7 @@ _LABEL_PATTERN = re.compile(
 
 
 def _parse_labels(query: str) -> Dict[str, str]:
-    """
-    从查询表达式中解析标签。
-
-    示例：
-        feed_rate{device_id="fanuc-cnc"} -> {"device_id": "fanuc-cnc"}
-    """
+    """从查询表达式中解析标签。"""
     labels = {}
 
     if "{" not in query or "}" not in query:
@@ -468,19 +485,13 @@ def _parse_labels(query: str) -> Dict[str, str]:
 
 def merge_labels(*dicts: Dict[str, str]) -> Dict[str, str]:
     result = {}
-
     for d in dicts:
-        if not d:
-            continue
-        result.update(d)
-
+        if d:
+            result.update(d)
     return result
 
 
 def series_key(metric_name: str, labels: Dict[str, str]) -> str:
-    """
-    构造进程内唯一 key，用于记录上次写到哪个时间点。
-    """
     return metric_name + labels_to_str(labels)
 
 
@@ -489,7 +500,6 @@ def run_once():
 
     for query, pred_metric in PREDICT_TARGETS:
         ts, ys = fetch_history(query)
-
         if len(ys) < MIN_POINTS:
             logger.info("[%s] %s 数据不足（%d 点），跳过", now_str, query, len(ys))
             continue
@@ -502,7 +512,7 @@ def run_once():
         now_sec = int(time.time())
         last_until = LAST_WRITTEN_UNTIL.get(key, 0)
 
-        # 防止同一进程内重复写入已经预测过的时间段
+        # 避免同一进程内写重叠时间段
         base_ts = max(now_sec, last_until)
 
         ts_future, y_pred = predict_next(
@@ -522,7 +532,6 @@ def run_once():
             metric_name=pred_metric,
             labels=write_labels,
         )
-
         if not ok:
             continue
 
@@ -545,13 +554,12 @@ def run_once():
 
 def main():
     logger.info(
-        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds 清理旧预测=%s",
+        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds",
         VM_URL,
         HISTORY_MINUTES,
         HORIZON_SECONDS,
         WRITE_HORIZON_SECONDS,
         POLL_INTERVAL,
-        CLEAR_OLD_PREDICTIONS,
     )
 
     while True:
