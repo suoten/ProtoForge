@@ -90,14 +90,62 @@
       <n-modal v-model:show="showPointsModal" preset="card" title="设备测点" style="width:700px">
         <n-data-table :columns="pointColumns" :data="currentPoints" :bordered="false" size="small" />
       </n-modal>
+
+      <!-- 故障注入 Modal -->
+      <n-modal v-model:show="showFaultModal" preset="card" title="故障注入" style="width:480px">
+        <n-space vertical size="medium">
+          <n-text depth="3" style="font-size:13px">设备：{{ faultTargetDevice?.name }}</n-text>
+          <n-form-item label="故障类型" label-placement="left" label-width="80">
+            <n-select
+              v-model:value="faultTypeId"
+              :options="faultTypeOptions"
+              placeholder="选择故障类型"
+              @update:value="onFaultTypeChange"
+            />
+          </n-form-item>
+          <n-alert v-if="selectedFaultType" type="warning" :bordered="false" style="font-size:12px">
+            <div style="font-weight:500;margin-bottom:4px">{{ selectedFaultType.name }} · {{ faultCategoryLabel(selectedFaultType.category) }}</div>
+            <div style="color:#94a3b8">{{ selectedFaultType.description }}</div>
+            <div style="margin-top:6px;color:#94a3b8">
+              影响测点：{{ selectedFaultType.point_faults.map(p => p.point).join('、') }}
+            </div>
+          </n-alert>
+          <n-form-item label="持续时间" label-placement="left" label-width="80">
+            <n-input-number
+              v-model:value="faultDuration"
+              :min="5"
+              :max="3600"
+              style="width:100%"
+            >
+              <template #suffix>秒</template>
+            </n-input-number>
+          </n-form-item>
+          <n-form-item label="故障强度" label-placement="left" label-width="80">
+            <n-space vertical style="width:100%">
+              <n-slider v-model:value="faultIntensity" :min="0.1" :max="1.0" :step="0.1" />
+              <n-text depth="3" style="font-size:12px">
+                {{ faultIntensityLabel }}（{{ faultIntensity }}）
+              </n-text>
+            </n-space>
+          </n-form-item>
+        </n-space>
+        <template #action>
+          <n-space justify="end">
+            <n-button @click="showFaultModal = false">取消</n-button>
+            <n-button type="error" :loading="faultLoading" :disabled="!faultTypeId" @click="doInjectFault">
+              注入故障
+            </n-button>
+          </n-space>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { NSpace, NSelect, NButton, NDataTable, NModal, NForm, NFormItem, NInput, NTag,
-  NSteps, NStep, NText, NAlert, useMessage, useDialog } from 'naive-ui'
+  NSteps, NStep, NText, NAlert, NInputNumber, NSlider, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
 
@@ -122,6 +170,17 @@ const quickStep = ref(1)
 const qcTemplateId = ref(null)
 const qcDeviceName = ref('')
 const qcLoading = ref(false)
+
+// 故障注入状态
+const showFaultModal = ref(false)
+const faultTargetDevice = ref(null)
+const faultTypes = ref([])
+const faultTypeId = ref(null)
+const faultDuration = ref(120)
+const faultIntensity = ref(1.0)
+const faultLoading = ref(false)
+// device_id -> fault info，用于在列表中显示故障状态
+const activeFaults = ref({})
 
 const protocolLabels = {
   modbus_tcp: 'Modbus TCP', modbus_rtu: 'Modbus RTU', opcua: 'OPC-UA', mqtt: 'MQTT',
@@ -184,13 +243,25 @@ const columns = [
   },
   { title: '测点', key: 'points', width: 70, render: (row) => (row.points || []).length },
   {
-    title: '操作', key: 'actions', width: 280,
+    title: '故障', key: 'fault', width: 90,
+    render: (row) => {
+      const fault = activeFaults.value[row.id]
+      if (!fault || fault.status === 'none') return h(NTag, { size: 'tiny', bordered: false }, () => '正常')
+      const pct = Math.round((fault.progress || 0) * 100)
+      return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => `${fault.fault_type_name} ${pct}%`)
+    }
+  },
+  {
+    title: '操作', key: 'actions', width: 320,
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id) }, () => '测点'),
       h(NButton, { size: 'tiny', tertiary: true, onClick: () => openEditDevice(row) }, () => '编辑'),
       row.status === 'online' || row.status === 'running'
         ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => toggleDevice(row.id, 'stop') }, () => '停止')
         : h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => toggleDevice(row.id, 'start') }, () => '启动'),
+      activeFaults.value[row.id] && activeFaults.value[row.id].status !== 'none'
+        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopFault(row.id) }, () => '停止故障')
+        : h(NButton, { size: 'tiny', type: 'error', ghost: true, disabled: row.status !== 'online', onClick: () => openFaultModal(row) }, () => '注入故障'),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => confirmDeleteDevice(row) }, () => '删除'),
     ])
   },
@@ -218,13 +289,6 @@ async function doQuickCreate() {
   } catch (e) {
     message.error('创建失败: ' + (e.response?.data?.detail || e.message))
   } finally { qcLoading.value = false }
-}
-
-async function loadData() {
-  try {
-    const [devRes, protoRes, tmplRes] = await Promise.all([api.getDevices(), api.getProtocols(), api.getTemplates()])
-    devices.value = devRes; protocols.value = protoRes; templates.value = tmplRes
-  } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
 async function createDevice() {
@@ -282,5 +346,88 @@ async function viewPoints(id) {
   catch (e) { message.error('读取测点失败: ' + (e.response?.data?.detail || e.message)) }
 }
 
-onMounted(loadData)
+// 故障注入相关
+const faultTypeOptions = computed(() =>
+  faultTypes.value.map(t => ({ label: `${t.name}（${faultCategoryLabel(t.category)}）`, value: t.id }))
+)
+
+const selectedFaultType = computed(() =>
+  faultTypes.value.find(t => t.id === faultTypeId.value) || null
+)
+
+const faultIntensityLabel = computed(() => {
+  const v = faultIntensity.value
+  if (v <= 0.3) return '轻微'
+  if (v <= 0.6) return '中等'
+  if (v <= 0.8) return '严重'
+  return '极严重'
+})
+
+function faultCategoryLabel(category) {
+  const map = { mechanical: '机械', thermal: '热', electrical: '电气', process: '工艺' }
+  return map[category] || category
+}
+
+function onFaultTypeChange(val) {
+  const t = faultTypes.value.find(f => f.id === val)
+  if (t && t.default_duration) faultDuration.value = t.default_duration
+}
+
+function openFaultModal(row) {
+  faultTargetDevice.value = row
+  faultTypeId.value = null
+  faultDuration.value = 120
+  faultIntensity.value = 1.0
+  showFaultModal.value = true
+}
+
+async function doInjectFault() {
+  if (!faultTypeId.value || !faultTargetDevice.value) return
+  faultLoading.value = true
+  try {
+    await api.injectFault(faultTargetDevice.value.id, faultTypeId.value, faultDuration.value, faultIntensity.value)
+    message.success(`已向设备 "${faultTargetDevice.value.name}" 注入故障`)
+    showFaultModal.value = false
+    await loadFaultStatus()
+  } catch (e) {
+    message.error('注入失败: ' + (e.response?.data?.detail || e.message))
+  } finally { faultLoading.value = false }
+}
+
+async function stopFault(deviceId) {
+  try {
+    await api.clearDeviceFault(deviceId)
+    message.success('故障已停止')
+    await loadFaultStatus()
+  } catch (e) {
+    message.error('停止故障失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+async function loadFaultStatus() {
+  try {
+    const list = await api.getActiveFaults()
+    const map = {}
+    for (const f of list) map[f.device_id] = f
+    activeFaults.value = map
+  } catch (e) { /* 静默失败 */ }
+}
+
+async function loadData() {
+  try {
+    const [devRes, protoRes, tmplRes, ftRes] = await Promise.all([
+      api.getDevices(), api.getProtocols(), api.getTemplates(), api.getFaultTypes()
+    ])
+    devices.value = devRes; protocols.value = protoRes; templates.value = tmplRes; faultTypes.value = ftRes
+    await loadFaultStatus()
+  } catch (e) { message.error('加载数据失败: ' + (e.response?.data?.detail || e.message)) }
+}
+
+let faultPollTimer = null
+onMounted(() => {
+  loadData()
+  faultPollTimer = setInterval(loadFaultStatus, 3000)
+})
+
+onUnmounted(() => { if (faultPollTimer) clearInterval(faultPollTimer) })
 </script>
