@@ -545,8 +545,9 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 
 | 命令                   | 说明                                                     |
 | -------------------- | ------------------------------------------------------ |
-| `protoforge run`     | 启动服务（`--host` / `--port` / `--reload` / `--log-level`） |
-| `protoforge demo`    | 演示模式（自动创建示例设备和场景）                                      |
+| `protoforge run`     | 启动服务（`--host` / `--port` / `--reload` / `--log-level` / `--daemon`） |
+| `protoforge demo`    | 演示模式（自动创建示例设备和场景，`--daemon` / `-d` 后台运行）                 |
+| `protoforge stop`    | 停止后台运行的服务（仅 Linux / macOS）                              |
 | `protoforge init`    | 初始化数据目录和默认配置（创建 `data/` 目录，从 `.env.example` 复制 `.env`） |
 | `protoforge migrate` | 运行数据库迁移（`--revision head`）                             |
 | `protoforge version` | 查看版本号                                                  |
