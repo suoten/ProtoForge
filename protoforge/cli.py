@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 
 
@@ -10,31 +11,35 @@ def main():
 
     parser = argparse.ArgumentParser(
         prog="protoforge",
-        description="ProtoForge - IoT Protocol Simulation & Testing Platform",  # FIXED: 中文→英文
+        description="ProtoForge - IoT Protocol Simulation & Testing Platform",
     )
-    subparsers = parser.add_subparsers(dest="command", help="Available commands")  # FIXED: Chinese→English
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    run_parser = subparsers.add_parser("run", help="Start ProtoForge server")  # FIXED: Chinese→English
-    run_parser.add_argument("--host", default=default_host, help=f"Listen address (default: {default_host})")  # FIXED: Chinese→English
-    run_parser.add_argument("--port", type=int, default=default_port, help=f"Listen port (default: {default_port})")  # FIXED: Chinese→English
-    run_parser.add_argument("--reload", action="store_true", help="Enable hot reload for development")  # FIXED: Chinese→English
-    run_parser.add_argument("--log-level", default="info", help="Log level (debug/info/warning/error)")  # FIXED: Chinese→English
+    run_parser = subparsers.add_parser("run", help="Start ProtoForge server")
+    run_parser.add_argument("--host", default=default_host, help=f"Listen address (default: {default_host})")
+    run_parser.add_argument("--port", type=int, default=default_port, help=f"Listen port (default: {default_port})")
+    run_parser.add_argument("--reload", action="store_true", help="Enable hot reload for development")
+    run_parser.add_argument("--log-level", default="info", help="Log level (debug/info/warning/error)")
+    run_parser.add_argument("--daemon", "-d", action="store_true", help="Run as background daemon (survives terminal close)")
 
-    demo_parser = subparsers.add_parser("demo", help="Start demo mode with sample devices")  # FIXED: Chinese→English
-    demo_parser.add_argument("--host", default=default_host, help="Listen address")  # FIXED: Chinese→English
-    demo_parser.add_argument("--port", type=int, default=default_port, help="Listen port")  # FIXED: Chinese→English
+    demo_parser = subparsers.add_parser("demo", help="Start demo mode with sample devices")
+    demo_parser.add_argument("--host", default=default_host, help="Listen address")
+    demo_parser.add_argument("--port", type=int, default=default_port, help="Listen port")
+    demo_parser.add_argument("--daemon", "-d", action="store_true", help="Run as background daemon (survives terminal close)")
 
-    subparsers.add_parser("version", help="Show version")  # FIXED: Chinese→English
+    subparsers.add_parser("version", help="Show version")
 
-    subparsers.add_parser("init", help="Initialize data directory and default config")  # FIXED: Chinese→English
+    subparsers.add_parser("init", help="Initialize data directory and default config")
 
-    migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")  # FIXED: Chinese→English
-    migrate_parser.add_argument("--revision", default="head", help="Target revision (default: head)")  # FIXED: Chinese→English
+    migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
+    migrate_parser.add_argument("--revision", default="head", help="Target revision (default: head)")
+
+    stop_parser = subparsers.add_parser("stop", help="Stop background daemon")
 
     args = parser.parse_args()
 
     if args.command == "version":
-        print("ProtoForge v0.1.0 - IoT Protocol Simulation & Testing Platform")  # FIXED: 中文→英文
+        print("ProtoForge v0.1.0 - IoT Protocol Simulation & Testing Platform")
         return
 
     if args.command == "init":
@@ -45,8 +50,12 @@ def main():
         _migrate_command(getattr(args, "revision", "head"))
         return
 
+    if args.command == "stop":
+        _stop_command()
+        return
+
     if args.command == "demo":
-        _run_server(host=args.host, port=args.port, demo_mode=True)
+        _run_server(host=args.host, port=args.port, demo_mode=True, daemon=getattr(args, "daemon", False))
         return
 
     if args.command == "run" or args.command is None:
@@ -54,10 +63,75 @@ def main():
         port = getattr(args, "port", 8000)
         reload = getattr(args, "reload", False)
         log_level = getattr(args, "log_level", "info")
-        _run_server(host=host, port=port, reload=reload, log_level=log_level)
+        daemon = getattr(args, "daemon", False)
+        _run_server(host=host, port=port, reload=reload, log_level=log_level, daemon=daemon)
         return
 
     parser.print_help()
+
+
+def _get_pid_file():
+    from pathlib import Path
+    return Path("data") / "protoforge.pid"
+
+
+def _get_log_file():
+    from pathlib import Path
+    return Path("data") / "protoforge.log"
+
+
+def _stop_command():
+    pid_file = _get_pid_file()
+    if not pid_file.exists():
+        print("! No background daemon found (PID file not found)")
+        return
+    pid = int(pid_file.read_text().strip())
+    try:
+        os.kill(pid, 15)  # SIGTERM
+        print(f"+ Sent SIGTERM to daemon (PID {pid})")
+    except ProcessLookupError:
+        print(f"! Process {pid} not found (may have already stopped)")
+    except PermissionError:
+        print(f"! Permission denied to stop process {pid}")
+    finally:
+        pid_file.unlink(missing_ok=True)
+
+
+def _daemonize():
+    """Double-fork to fully detach from terminal (Linux/Unix only)."""
+    import signal
+
+    # First fork
+    pid = os.fork()
+    if pid > 0:
+        # Parent exits immediately
+        os._exit(0)
+
+    # Child becomes session leader
+    os.setsid()
+
+    # Second fork
+    pid = os.fork()
+    if pid > 0:
+        os._exit(0)
+
+    # Redirect standard file descriptors
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    log_file = _get_log_file()
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    si = open(os.devnull, 'r')
+    so = open(str(log_file), 'a')
+    se = open(str(log_file), 'a')
+
+    os.dup2(si.fileno(), sys.stdin.fileno())
+    os.dup2(so.fileno(), sys.stdout.fileno())
+    os.dup2(se.fileno(), sys.stderr.fileno())
+
+    # Ignore SIGHUP
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
 
 
 def _init_command():
@@ -70,17 +144,17 @@ def _init_command():
     if env_example.exists() and not env_file.exists():
         try:
             shutil.copy(env_example, env_file)
-            print("+ Created .env from .env.example")  # FIXED: Chinese->English, avoid Unicode on Windows
+            print("+ Created .env from .env.example")
         except (OSError, PermissionError) as e:
-            print(f"! Failed to create .env: {e}")  # FIXED: Chinese->English
-    print("+ Data directory created: data/")  # FIXED: Chinese->English
-    print("+ Done! Run 'protoforge run' to start the server")  # FIXED: Chinese->English
-    print("  or run 'protoforge demo' for a quick demo")  # FIXED: Chinese→English
+            print(f"! Failed to create .env: {e}")
+    print("+ Data directory created: data/")
+    print("+ Done! Run 'protoforge run' to start the server")
+    print("  or run 'protoforge demo' for a quick demo")
 
 
 def _migrate_command(revision: str = "head"):
     import subprocess
-    print(f"Running database migration to revision: {revision}")  # FIXED: Chinese→English
+    print(f"Running database migration to revision: {revision}")
     try:
         result = subprocess.run(
             ["alembic", "upgrade", revision],
@@ -88,17 +162,16 @@ def _migrate_command(revision: str = "head"):
             text=True,
         )
         if result.returncode == 0:
-            print("+ Database migration completed")  # FIXED: Chinese->English, avoid Unicode on Windows
+            print("+ Database migration completed")
         else:
-            print(f"! Migration failed:\n{result.stderr}")  # FIXED: Chinese->English
+            print(f"! Migration failed:\n{result.stderr}")
             sys.exit(1)
     except FileNotFoundError:
-        print("! alembic not found. Install it: pip install alembic")  # FIXED: Chinese->English
+        print("! alembic not found. Install it: pip install alembic")
         sys.exit(1)
 
 
-def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_mode=False):
-    import os
+def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_mode=False, daemon=False):
     import secrets
 
     if not demo_mode:
@@ -141,6 +214,21 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         print("║  " + access_content + " " * max(0, w - 2 - len(access_content)) + "║")
         print("╚" + "═" * w + "╝")
         print()
+
+    # Daemon mode: double-fork and detach from terminal
+    if daemon:
+        if sys.platform == "win32":
+            print("! Daemon mode is not supported on Windows. Use 'start /B' or run as a service.")
+            print("  On Linux/macOS, use: protoforge demo --daemon")
+            return
+        pid_file = _get_pid_file()
+        pid_file.parent.mkdir(parents=True, exist_ok=True)
+        _daemonize()
+        # Write PID after daemonizing (we are now the grandchild)
+        pid_file.write_text(str(os.getpid()))
+        # Register cleanup on exit
+        import atexit
+        atexit.register(lambda: _get_pid_file().unlink(missing_ok=True))
 
     import uvicorn
     uvicorn.run(
