@@ -1,22 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-ProtoForge Predictor v8
+ProtoForge Predictor v9
 
-功能：
-1. 从 VictoriaMetrics 拉取历史数据。
-2. 对 CNC 周期型指标进行相位对齐预测。
-3. 使用“谷底锚点”对齐周期，减少上升沿/下降沿相位偏差。
-4. 每轮只写入未来 min(HORIZON_SECONDS, POLL_INTERVAL) 秒，避免预测窗口重叠。
-5. 检测异常后冻结健康模板，不把故障数据学进去。
-6. 故障恢复后等待稳定一段时间，再恢复模板更新。
-7. 写入：
-   - xxx_predicted
-   - xxx_predicted_upper
-   - xxx_predicted_lower
-   - xxx_anomaly
-   - xxx_anomaly_outside_ratio
-   - xxx_anomaly_mean_abs_error
-   - xxx_anomaly_mean_rel_error
+修复重点：
+1. 预测时间轴改为锚定最后一个真实数据点 last_real_ts，而不是锚定 time.time()。
+2. 不再使用 LAST_WRITTEN_UNTIL 把预测不断推向更远未来，避免 Grafana 里预测线相对真实线出现延迟/错位。
+3. 如果真实数据时间戳没有推进，则跳过本轮预测写入，避免重复写同一段未来时间造成毛刺。
+4. 保留：相位对齐、健康模板冻结、故障期不学习、恢复后再学习、预测上下界、异常指标。
 """
 
 import json
@@ -50,14 +40,13 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 VM_URL = "http://localhost:8428"
-
-STATE_FILE = "/tmp/protoforge_predictor_state_v8.json"
+STATE_FILE = "/tmp/protoforge_predictor_state_v9.json"
 
 HISTORY_MINUTES = 30
 HORIZON_SECONDS = 120
 POLL_INTERVAL = 30
 
-# 实际写入窗口不要大于轮询间隔，否则多轮预测会重叠。
+# 实际每轮写入的预测长度。不要大于 POLL_INTERVAL，否则容易出现预测窗口重叠。
 WRITE_HORIZON_SECONDS = min(HORIZON_SECONDS, POLL_INTERVAL)
 
 QUERY_STEP = "1s"
@@ -76,14 +65,23 @@ HEALTHY_EMA_ALPHA = 0.12
 RECOVERY_EMA_ALPHA = 0.30
 
 OUTSIDE_RATIO_THRESHOLD = 0.60
-RECOVERY_INSIDE_RATIO_THRESHOLD = 0.80
-
 PHASE_SEARCH_RATIO = 0.15
 VALLEY_QUANTILE = 45
 
+# 关键修复：预测时间轴锚定真实数据最后一个点。
+# True：预测从 last_real_ts + 1 开始，适合 Grafana 与真实曲线对齐展示。
+# False：预测从当前系统时间 + 1 开始，适合只看纯未来预测，但容易与有采集延迟的真实数据错位。
+ALIGN_PREDICTION_TO_LAST_REAL_TS = True
+
+# 如果 last_real_ts 距离当前系统时间太久，说明采集链路可能断了，跳过预测，避免用陈旧数据继续画未来线。
+MAX_DATA_LAG_SECONDS = 180
+
+# 真实数据至少推进多少秒，才写入新预测，避免同一段未来时间被反复写入。
+MIN_REAL_ADVANCE_SECONDS = 1
+
 
 # =============================================================================
-# 预测指标配置
+# 指标配置
 # =============================================================================
 
 PREDICT_TARGETS = [
@@ -132,7 +130,7 @@ PREDICT_TARGETS = [
 ]
 
 EXTRA_PREDICT_LABELS = {
-    "forecast": "phase_aligned_health_v8",
+    "forecast": "phase_aligned_health_v9",
     "source": "protoforge",
 }
 
@@ -159,7 +157,10 @@ class BaselineState:
 
 
 BASELINE_STATES: Dict[str, BaselineState] = {}
-LAST_WRITTEN_UNTIL: Dict[str, int] = {}
+
+# 记录每条序列最后一次使用的真实数据时间戳，而不是预测写到哪里。
+# 这样不会把预测不断推向更远的未来。
+LAST_REAL_TS_WRITTEN: Dict[str, int] = {}
 
 
 # =============================================================================
@@ -243,7 +244,6 @@ def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.
         return np.array([]), np.array([])
 
     sorted_items = sorted(data.items(), key=lambda x: x[0])
-
     ts_clean = np.array([x[0] for x in sorted_items], dtype=float)
     ys_clean = np.array([x[1] for x in sorted_items], dtype=float)
 
@@ -263,7 +263,7 @@ def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.
 
 
 # =============================================================================
-# 周期估计
+# 周期估计与谷底检测
 # =============================================================================
 
 def moving_average(arr: np.ndarray, window: int) -> np.ndarray:
@@ -355,10 +355,6 @@ def estimate_period_rough(ys_arr: np.ndarray) -> int:
     return int(period)
 
 
-# =============================================================================
-# 谷底锚点检测
-# =============================================================================
-
 def find_valley_indices(
     ts_grid: np.ndarray,
     ys_grid: np.ndarray,
@@ -370,7 +366,6 @@ def find_valley_indices(
         return []
 
     period = max(3, int(expected_period))
-
     smooth_window = max(3, int(round(period * 0.08)))
     smooth_window = min(smooth_window, 21)
 
@@ -389,7 +384,6 @@ def find_valley_indices(
 
     if len(candidates) < MIN_FULL_CYCLES_FOR_TEMPLATE:
         candidates = []
-
         for i in range(1, n - 1):
             if ys_smooth[i] <= ys_smooth[i - 1] and ys_smooth[i] < ys_smooth[i + 1]:
                 candidates.append(i)
@@ -458,7 +452,7 @@ def detect_period_and_valleys(
 
 
 # =============================================================================
-# 相位对齐模板构建
+# 相位对齐模板
 # =============================================================================
 
 def build_template_from_valleys(
@@ -552,7 +546,7 @@ def build_current_baseline(
 
 
 # =============================================================================
-# 模板预测
+# 预测与模板合并
 # =============================================================================
 
 def circular_template_value(template: np.ndarray, phase: float) -> float:
@@ -562,10 +556,8 @@ def circular_template_value(template: np.ndarray, phase: float) -> float:
         return 0.0
 
     phase = float(phase) % period
-
     i0 = int(math.floor(phase)) % period
     i1 = (i0 + 1) % period
-
     frac = phase - math.floor(phase)
 
     return float((1.0 - frac) * template[i0] + frac * template[i1])
@@ -583,7 +575,6 @@ def predict_with_origin(
         return np.zeros(len(ts_list), dtype=float)
 
     origin = int(state.phase_origin_ts if phase_origin_ts is None else phase_origin_ts)
-
     values = []
 
     for ts in ts_list:
@@ -611,10 +602,7 @@ def resample_template(old_template: np.ndarray, new_period: int) -> np.ndarray:
     return np.interp(new_x, old_x_ext, old_y_ext).astype(float)
 
 
-def align_new_template_to_old(
-    old_template: np.ndarray,
-    new_template: np.ndarray,
-) -> np.ndarray:
+def align_new_template_to_old(old_template: np.ndarray, new_template: np.ndarray) -> np.ndarray:
     if len(old_template) != len(new_template):
         old_template = resample_template(old_template, len(new_template))
 
@@ -624,7 +612,6 @@ def align_new_template_to_old(
         return new_template.astype(float)
 
     max_shift = max(1, int(round(period * 0.10)))
-
     old_norm = old_template - np.mean(old_template)
 
     best_score = None
@@ -633,7 +620,6 @@ def align_new_template_to_old(
     for shift in range(-max_shift, max_shift + 1):
         shifted = np.roll(new_template, shift)
         shifted_norm = shifted - np.mean(shifted)
-
         score = float(np.dot(old_norm, shifted_norm))
 
         if best_score is None or score > best_score:
@@ -643,18 +629,13 @@ def align_new_template_to_old(
     return best_template.astype(float)
 
 
-def merge_template(
-    old_template: np.ndarray,
-    new_template: np.ndarray,
-    alpha: float,
-) -> np.ndarray:
+def merge_template(old_template: np.ndarray, new_template: np.ndarray, alpha: float) -> np.ndarray:
     alpha = float(np.clip(alpha, 0.0, 1.0))
 
     if len(old_template) != len(new_template):
         old_template = resample_template(old_template, len(new_template))
 
     new_template = align_new_template_to_old(old_template, new_template)
-
     merged = (1.0 - alpha) * old_template + alpha * new_template
 
     return merged.astype(float)
@@ -664,11 +645,7 @@ def merge_template(
 # 异常检测
 # =============================================================================
 
-def calc_threshold(
-    pred: np.ndarray,
-    abs_threshold: float,
-    rel_threshold: float,
-) -> np.ndarray:
+def calc_threshold(pred: np.ndarray, abs_threshold: float, rel_threshold: float) -> np.ndarray:
     return np.maximum(abs_threshold, np.abs(pred) * rel_threshold)
 
 
@@ -678,11 +655,7 @@ def calc_bounds(
     rel_threshold: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
     threshold = calc_threshold(pred, abs_threshold, rel_threshold)
-
-    lower = pred - threshold
-    upper = pred + threshold
-
-    return lower, upper
+    return pred - threshold, pred + threshold
 
 
 def find_best_phase_origin_for_recent(
@@ -692,7 +665,6 @@ def find_best_phase_origin_for_recent(
 ) -> Tuple[int, np.ndarray, float]:
     period = int(state.period)
     base_origin = int(state.phase_origin_ts)
-
     max_shift = max(1, int(round(period * PHASE_SEARCH_RATIO)))
 
     best_origin = base_origin
@@ -732,14 +704,12 @@ def detect_anomaly(
     )
 
     threshold = calc_threshold(pred, abs_threshold, rel_threshold)
-
     abs_err = np.abs(actual - pred)
     outside = abs_err > threshold
 
     outside_ratio = float(np.mean(outside))
     mean_abs_err = float(np.mean(abs_err))
     mean_rel_err = float(np.mean(abs_err / np.maximum(np.abs(pred), 1.0)))
-
     is_anomaly = outside_ratio >= OUTSIDE_RATIO_THRESHOLD
 
     return is_anomaly, outside_ratio, mean_abs_err, mean_rel_err, int(best_origin)
@@ -749,11 +719,7 @@ def detect_anomaly(
 # 健康基线状态管理
 # =============================================================================
 
-def create_initial_state(
-    ts_grid: np.ndarray,
-    ys_grid: np.ndarray,
-    now_sec: int,
-) -> Optional[BaselineState]:
+def create_initial_state(ts_grid: np.ndarray, ys_grid: np.ndarray, now_sec: int) -> Optional[BaselineState]:
     baseline = build_current_baseline(ts_grid, ys_grid)
 
     if baseline is None:
@@ -782,7 +748,6 @@ def maybe_update_state(
     rel_threshold: float,
 ) -> Tuple[Optional[BaselineState], bool, float, float, float]:
     now_sec = int(time.time())
-
     state = BASELINE_STATES.get(key)
 
     if state is None:
@@ -805,7 +770,6 @@ def maybe_update_state(
 
     elapsed = max(1, now_sec - int(state.last_seen_ts))
     elapsed = min(elapsed, POLL_INTERVAL * 2)
-
     state.last_seen_ts = now_sec
 
     is_anom, outside_ratio, mean_abs_err, mean_rel_err, best_origin = detect_anomaly(
@@ -819,7 +783,6 @@ def maybe_update_state(
     if is_anom:
         state.status = BASELINE_STATUS_ANOMALY
         state.clean_seconds = 0
-
         BASELINE_STATES[key] = state
 
         logger.warning(
@@ -846,15 +809,9 @@ def maybe_update_state(
     if state.status == BASELINE_STATUS_ANOMALY:
         state.status = BASELINE_STATUS_RECOVERING
         state.clean_seconds = elapsed
-
         BASELINE_STATES[key] = state
 
-        logger.info(
-            "异常开始恢复 key=%s clean_seconds=%ss",
-            key,
-            state.clean_seconds,
-        )
-
+        logger.info("异常开始恢复 key=%s clean_seconds=%ss", key, state.clean_seconds)
         return state, False, outside_ratio, mean_abs_err, mean_rel_err
 
     if state.status == BASELINE_STATUS_RECOVERING:
@@ -877,11 +834,7 @@ def maybe_update_state(
         int(state.period) * MAX_CYCLES_FOR_TEMPLATE,
     )
 
-    baseline = build_current_baseline(
-        ts_grid=ts_grid,
-        ys_grid=ys_grid,
-        tail_seconds=tail_seconds,
-    )
+    baseline = build_current_baseline(ts_grid=ts_grid, ys_grid=ys_grid, tail_seconds=tail_seconds)
 
     if baseline is None:
         BASELINE_STATES[key] = state
@@ -889,17 +842,9 @@ def maybe_update_state(
 
     new_period, new_origin, new_template = baseline
     old_template = np.array(state.template, dtype=float)
+    alpha = RECOVERY_EMA_ALPHA if state.status == BASELINE_STATUS_RECOVERING else HEALTHY_EMA_ALPHA
 
-    if state.status == BASELINE_STATUS_RECOVERING:
-        alpha = RECOVERY_EMA_ALPHA
-    else:
-        alpha = HEALTHY_EMA_ALPHA
-
-    merged = merge_template(
-        old_template=old_template,
-        new_template=new_template,
-        alpha=alpha,
-    )
+    merged = merge_template(old_template=old_template, new_template=new_template, alpha=alpha)
 
     state.period = int(new_period)
     state.phase_origin_ts = int(new_origin)
@@ -933,12 +878,7 @@ def maybe_update_state(
 # =============================================================================
 
 def prom_escape_label_value(value: str) -> str:
-    return (
-        str(value)
-        .replace("\\", "\\\\")
-        .replace("\n", "\\n")
-        .replace('"', '\\"')
-    )
+    return str(value).replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
 
 
 def labels_to_str(labels: Dict[str, str]) -> str:
@@ -975,8 +915,7 @@ def write_series(
         if not math.isfinite(ts_sec) or not math.isfinite(val):
             continue
 
-        ts_ms = ts_sec * 1000
-        lines.append(f"{metric_name}{label_str} {val:.6f} {ts_ms}")
+        lines.append(f"{metric_name}{label_str} {val:.6f} {ts_sec * 1000}")
 
     if not lines:
         return False
@@ -987,9 +926,7 @@ def write_series(
         resp = requests.post(
             f"{VM_URL}/api/v1/import/prometheus",
             data=payload.encode("utf-8"),
-            headers={
-                "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
-            },
+            headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
             timeout=10,
         )
         resp.raise_for_status()
@@ -1012,60 +949,19 @@ def write_prediction_bundle(
     outside_ratio: float,
     mean_abs_err: float,
     mean_rel_err: float,
+    event_ts: int,
 ) -> bool:
-    ok1 = write_series(
-        metric_name=pred_metric,
-        labels=labels,
-        ts_list=ts_future,
-        values=pred_values.astype(float).tolist(),
-    )
-
-    ok2 = write_series(
-        metric_name=f"{pred_metric}_lower",
-        labels=labels,
-        ts_list=ts_future,
-        values=lower_values.astype(float).tolist(),
-    )
-
-    ok3 = write_series(
-        metric_name=f"{pred_metric}_upper",
-        labels=labels,
-        ts_list=ts_future,
-        values=upper_values.astype(float).tolist(),
-    )
-
-    now_sec = int(time.time())
+    ok1 = write_series(pred_metric, labels, ts_future, pred_values.astype(float).tolist())
+    ok2 = write_series(f"{pred_metric}_lower", labels, ts_future, lower_values.astype(float).tolist())
+    ok3 = write_series(f"{pred_metric}_upper", labels, ts_future, upper_values.astype(float).tolist())
 
     anomaly_labels = dict(labels)
     anomaly_labels["type"] = "prediction_deviation"
 
-    ok4 = write_series(
-        metric_name=anomaly_metric,
-        labels=anomaly_labels,
-        ts_list=[now_sec],
-        values=[1.0 if is_anomaly else 0.0],
-    )
-
-    ok5 = write_series(
-        metric_name=f"{anomaly_metric}_outside_ratio",
-        labels=anomaly_labels,
-        ts_list=[now_sec],
-        values=[outside_ratio],
-    )
-
-    ok6 = write_series(
-        metric_name=f"{anomaly_metric}_mean_abs_error",
-        labels=anomaly_labels,
-        ts_list=[now_sec],
-        values=[mean_abs_err],
-    )
-
-    ok7 = write_series(
-        metric_name=f"{anomaly_metric}_mean_rel_error",
-        labels=anomaly_labels,
-        ts_list=[now_sec],
-        values=[mean_rel_err],
-    )
+    ok4 = write_series(anomaly_metric, anomaly_labels, [event_ts], [1.0 if is_anomaly else 0.0])
+    ok5 = write_series(f"{anomaly_metric}_outside_ratio", anomaly_labels, [event_ts], [outside_ratio])
+    ok6 = write_series(f"{anomaly_metric}_mean_abs_error", anomaly_labels, [event_ts], [mean_abs_err])
+    ok7 = write_series(f"{anomaly_metric}_mean_rel_error", anomaly_labels, [event_ts], [mean_rel_err])
 
     return ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
 
@@ -1074,9 +970,7 @@ def write_prediction_bundle(
 # 标签解析
 # =============================================================================
 
-_LABEL_PATTERN = re.compile(
-    r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"])*)"\s*'
-)
+_LABEL_PATTERN = re.compile(r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"])*)"\s*')
 
 
 def parse_labels_from_query(query: str) -> Dict[str, str]:
@@ -1093,14 +987,7 @@ def parse_labels_from_query(query: str) -> Dict[str, str]:
     for match in _LABEL_PATTERN.finditer(label_part):
         key = match.group(1)
         value = match.group(2)
-
-        value = (
-            value
-            .replace('\\"', '"')
-            .replace("\\n", "\n")
-            .replace("\\\\", "\\")
-        )
-
+        value = value.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
         labels[key] = value
 
     return labels
@@ -1155,12 +1042,7 @@ def load_state() -> None:
             states[key] = BaselineState(**value)
 
         BASELINE_STATES = states
-
-        logger.info(
-            "已加载预测状态文件 %s，状态数量=%d",
-            STATE_FILE,
-            len(BASELINE_STATES),
-        )
+        logger.info("已加载预测状态文件 %s，状态数量=%d", STATE_FILE, len(BASELINE_STATES))
 
     except Exception as e:
         logger.warning("加载预测状态文件失败，将重新学习: %s", e)
@@ -1187,6 +1069,44 @@ def save_state() -> None:
 
 
 # =============================================================================
+# 时间轴选择
+# =============================================================================
+
+def build_prediction_timestamps(key: str, last_real_ts: int, now_sec: int) -> Optional[List[int]]:
+    data_lag = now_sec - last_real_ts
+
+    if data_lag > MAX_DATA_LAG_SECONDS:
+        logger.warning(
+            "真实数据延迟过大，跳过预测 key=%s data_lag=%ss max=%ss",
+            key,
+            data_lag,
+            MAX_DATA_LAG_SECONDS,
+        )
+        return None
+
+    last_written_real_ts = LAST_REAL_TS_WRITTEN.get(key)
+
+    if last_written_real_ts is not None:
+        advance = last_real_ts - int(last_written_real_ts)
+
+        if advance < MIN_REAL_ADVANCE_SECONDS:
+            logger.info(
+                "真实数据时间戳未推进，跳过重复写入 key=%s last_real_ts=%s last_written_real_ts=%s",
+                key,
+                last_real_ts,
+                last_written_real_ts,
+            )
+            return None
+
+    if ALIGN_PREDICTION_TO_LAST_REAL_TS:
+        base_ts = last_real_ts
+    else:
+        base_ts = now_sec
+
+    return [base_ts + i + 1 for i in range(WRITE_HORIZON_SECONDS)]
+
+
+# =============================================================================
 # 主流程
 # =============================================================================
 
@@ -1203,28 +1123,17 @@ def run_once() -> None:
         ts, ys = fetch_history(query)
 
         if len(ys) < MIN_POINTS:
-            logger.info(
-                "[%s] %s 数据不足（%d 点），跳过",
-                now_str,
-                query,
-                len(ys),
-            )
+            logger.info("[%s] %s 数据不足（%d 点），跳过", now_str, query, len(ys))
             continue
 
         ts_grid, ys_grid = normalize_history(ts, ys)
 
         if len(ys_grid) < MIN_POINTS:
-            logger.info(
-                "[%s] %s 清洗后数据不足（%d 点），跳过",
-                now_str,
-                query,
-                len(ys_grid),
-            )
+            logger.info("[%s] %s 清洗后数据不足（%d 点），跳过", now_str, query, len(ys_grid))
             continue
 
         base_labels = parse_labels_from_query(query)
         write_labels = merge_labels(base_labels, EXTRA_PREDICT_LABELS)
-
         key = series_key(pred_metric, write_labels)
 
         state, is_anomaly, outside_ratio, mean_abs_err, mean_rel_err = maybe_update_state(
@@ -1236,26 +1145,23 @@ def run_once() -> None:
         )
 
         if state is None:
-            logger.info(
-                "[%s] %s 暂无可用健康模板，等待学习",
-                now_str,
-                query,
-            )
+            logger.info("[%s] %s 暂无可用健康模板，等待学习", now_str, query)
             continue
 
         now_sec = int(time.time())
-        last_until = LAST_WRITTEN_UNTIL.get(key, 0)
         last_real_ts = int(ts_grid[-1])
+        data_lag = now_sec - last_real_ts
 
-        base_ts = max(now_sec, last_until, last_real_ts)
+        ts_future = build_prediction_timestamps(
+            key=key,
+            last_real_ts=last_real_ts,
+            now_sec=now_sec,
+        )
 
-        ts_future = [
-            base_ts + i + 1
-            for i in range(WRITE_HORIZON_SECONDS)
-        ]
+        if not ts_future:
+            continue
 
         pred_values = predict_with_origin(state, ts_future)
-
         lower_values, upper_values = calc_bounds(
             pred=pred_values,
             abs_threshold=abs_threshold,
@@ -1274,24 +1180,22 @@ def run_once() -> None:
             outside_ratio=outside_ratio,
             mean_abs_err=mean_abs_err,
             mean_rel_err=mean_rel_err,
+            event_ts=last_real_ts,
         )
 
         if not ok:
-            logger.error(
-                "[%s] %s 写入预测数据失败",
-                now_str,
-                query,
-            )
+            logger.error("[%s] %s 写入预测数据失败", now_str, query)
             continue
 
-        LAST_WRITTEN_UNTIL[key] = int(max(ts_future))
+        LAST_REAL_TS_WRITTEN[key] = last_real_ts
 
         future_start = datetime.fromtimestamp(ts_future[0]).strftime("%H:%M:%S")
         future_end = datetime.fromtimestamp(ts_future[-1]).strftime("%H:%M:%S")
+        last_real_str = datetime.fromtimestamp(last_real_ts).strftime("%H:%M:%S")
         origin_str = datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S")
 
         logger.info(
-            "[%s] %-40s → %-35s status=%s anomaly=%s period=%ss origin=%s clean=%ss 写入 %d 点，预测区间 %s ~ %s",
+            "[%s] %-40s → %-35s status=%s anomaly=%s period=%ss origin=%s last_real=%s lag=%ss 写入 %d 点，预测区间 %s ~ %s",
             now_str,
             query,
             pred_metric,
@@ -1299,7 +1203,8 @@ def run_once() -> None:
             is_anomaly,
             state.period,
             origin_str,
-            state.clean_seconds,
+            last_real_str,
+            data_lag,
             len(ts_future),
             future_start,
             future_end,
@@ -1312,7 +1217,7 @@ def main() -> None:
     load_state()
 
     logger.info(
-        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s forecast=%s",
+        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s forecast=%s align_to_last_real=%s",
         VM_URL,
         HISTORY_MINUTES,
         HORIZON_SECONDS,
@@ -1320,6 +1225,7 @@ def main() -> None:
         POLL_INTERVAL,
         STATE_FILE,
         EXTRA_PREDICT_LABELS["forecast"],
+        ALIGN_PREDICTION_TO_LAST_REAL_TS,
     )
 
     while True:
@@ -1329,5 +1235,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-    
