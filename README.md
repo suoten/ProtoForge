@@ -2,11 +2,11 @@
 
 **物联网协议仿真与测试平台**
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
-[![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
-[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg)](https://naiveui.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen?logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4?logoColor=white)](https://naiveui.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
 [中文](#中文) | [English](README_EN.md)
 
@@ -1172,5 +1172,5 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 ### 💬 社区交流
 
-[![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-866599071-eb1923.svg)](https://qm.qq.com/q/ProtoForge) **进群答案：ProtoForge**
+[![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-866599071-eb1923?logo=tencentqq&logoColor=white)](https://qm.qq.com/q/ProtoForge) **进群答案：ProtoForge**
 
