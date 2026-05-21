@@ -159,7 +159,7 @@ class Recording:
 
 class Recorder:
     _MAX_MESSAGES = None
-    _MAX_MESSAGE_SIZE = 1024 * 1024  # FIXED: 单条消息无大小限制 — 添加1MB上限防止内存耗尽
+    _MAX_MESSAGE_SIZE = None
 
     @classmethod
     def _get_max_messages(cls) -> int:
@@ -171,6 +171,17 @@ class Recorder:
                 logger.debug("Failed to read recorder_max_messages from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
                 cls._MAX_MESSAGES = 100000
         return cls._MAX_MESSAGES
+
+    @classmethod
+    def _get_max_message_size(cls) -> int:
+        if cls._MAX_MESSAGE_SIZE is None:
+            try:
+                from protoforge.config import get_settings
+                cls._MAX_MESSAGE_SIZE = get_settings().recorder_max_message_size
+            except Exception as e:
+                logger.debug("Failed to read recorder_max_message_size from config, using default: %s", e)
+                cls._MAX_MESSAGE_SIZE = 1024 * 1024  # 1MB
+        return cls._MAX_MESSAGE_SIZE
 
     def __init__(self, log_bus: LogBus):
         self._log_bus = log_bus
@@ -388,8 +399,9 @@ class Recorder:
         # FIXED: 单条消息无大小限制 — 检查序列化后大小
         try:
             msg_size = len(json.dumps(data, ensure_ascii=False).encode("utf-8"))
-            if msg_size > self._MAX_MESSAGE_SIZE:
-                logger.debug("Dropping oversized recording message (%d bytes > %d limit)", msg_size, self._MAX_MESSAGE_SIZE)
+            max_size = Recorder._get_max_message_size()
+            if msg_size > max_size:
+                logger.debug("Dropping oversized recording message (%d bytes > %d limit)", msg_size, max_size)
                 return
         except (TypeError, ValueError):
             pass

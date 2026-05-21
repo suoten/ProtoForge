@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     log_bus_max_entries: int = 10000
     log_bus_subscriber_queue: int = 1000
     recorder_max_messages: int = 100000
+    recorder_max_message_size: int = 1024 * 1024  # 1MB
     recorder_queue_size: int = 50000
     webhook_queue_size: int = 5000
     webhook_rate_limit_seconds: float = 5.0
@@ -64,6 +65,12 @@ class Settings(BaseSettings):
     forward_batch_size: int = 100
     forward_flush_interval: float = 5.0
     forward_retry_count: int = 3
+    generator_max_complexity: int = 5000
+    generator_max_memory_kb: int = 50_000
+    generator_max_list_size: int = 10_000
+    generator_max_string_length: int = 10_000
+    generator_max_range_size: int = 100_000
+    generator_max_call_args: int = 10
     failover_max_failures: int = 3
     test_max_reports: int = 1000
     rate_limit_max_requests: int = 100

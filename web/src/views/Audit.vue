@@ -56,7 +56,7 @@ import api from '../api.js'
 import { useI18n } from '../i18n.js'
 
 const message = useMessage()
-const { t } = useI18n()
+const { t, formatDate } = useI18n()
 const entries = ref([])
 const loading = ref(false)
 const clearing = ref(false)
@@ -142,11 +142,7 @@ function getResourceTypeLabel(resourceType) {
 }
 
 const columns = computed(() => [
-  { title: t('common.time'), key: 'timestamp', width: 170, fixed: 'left', render: (row) => {
-    if (!row.timestamp) return '-'
-    const ts = row.timestamp > 1e12 ? row.timestamp : row.timestamp * 1000
-    return new Date(ts).toLocaleString()
-  }},
+  { title: t('common.time'), key: 'timestamp', width: 170, fixed: 'left', render: (row) => formatDate(row.timestamp) },
   { title: t('common.username'), key: 'username', width: 120 },
   { title: t('audit.actionType'), key: 'action', width: 140, render: (row) => h(NTag, { size: 'tiny', type: getActionTagType(row.action), bordered: false }, () => getActionLabel(row.action)) },
   { title: t('audit.resourceType'), key: 'resource_type', width: 100, render: (row) => getResourceTypeLabel(row.resource_type) },

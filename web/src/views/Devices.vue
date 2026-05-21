@@ -364,7 +364,7 @@ import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig
 
 const router = useRouter()
 const message = useMessage()
-const { t } = useI18n()
+const { t, formatDate } = useI18n()
 const dialog = useDialog()
 const devices = ref([])
 const selectedIds = ref([])
@@ -536,7 +536,7 @@ const columns = [
 const pointColumns = [
   { title: t('devices.name'), key: 'name', width: 120 },
   { title: t('devices.value'), key: 'value', width: 120 },
-  { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? new Date(row.timestamp * 1000).toLocaleString() : '-' },
+  { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? formatDate(row.timestamp) : '-' },
   { title: t('devices.quality'), key: 'quality', width: 80 },
 ]
 

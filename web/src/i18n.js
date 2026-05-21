@@ -4003,8 +4003,15 @@ function getLocale() {
   return currentLocale.value
 }
 
+function formatDate(timestamp) {
+  if (!timestamp) return '-'
+  const ts = timestamp > 1e12 ? timestamp : timestamp * 1000
+  const localeMap = { zh: 'zh-CN', en: 'en-US' }
+  return new Date(ts).toLocaleString(localeMap[currentLocale.value] || 'en-US')
+}
+
 const locale = computed(() => currentLocale.value)
 
 export function useI18n() {
-  return { t, setLocale, getLocale, locale }
+  return { t, setLocale, getLocale, locale, formatDate }
 }

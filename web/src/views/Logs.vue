@@ -56,7 +56,7 @@
 
     <n-modal v-model:show="detailVisible" preset="card" :title="t('logs.detailTitle')" style="width: 700px;">
       <n-descriptions v-if="selectedLog" bordered :column="1" label-placement="left" size="small">
-        <n-descriptions-item :label="t('logs.time')">{{ new Date(selectedLog.timestamp * 1000).toLocaleString() }}</n-descriptions-item>
+        <n-descriptions-item :label="t('logs.time')">{{ formatDate(selectedLog.timestamp) }}</n-descriptions-item>
         <n-descriptions-item :label="t('common.protocol')">{{ selectedLog.protocol }}</n-descriptions-item>
         <n-descriptions-item :label="t('logs.direction')">
           <n-tag :type="getDirectionColor(selectedLog.direction)" size="small">
@@ -83,7 +83,7 @@ import { directionTagTypeMap, directionLabelMap } from '../constants.js'
 import { formatTime as _formatTime } from '../utils.js'  // FIXED: 重复定义的格式化函数提取到utils.js
 
 const message = useMessage()
-const { t } = useI18n()
+const { t, formatDate } = useI18n()
 const dialog = useDialog()
 
 const logs = ref([])

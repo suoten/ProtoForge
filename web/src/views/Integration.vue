@@ -134,7 +134,7 @@
             <n-gi>
               <n-card size="small" style="text-align:center">
                 <div style="font-size:12px;color:#94a3b8;margin-bottom:4px">{{ t('integration.lastHeartbeat') }}</div>
-                <div style="font-size:13px;font-weight:500;color:#64748b">{{ intMetrics.last_heartbeat_at ? new Date(intMetrics.last_heartbeat_at * 1000).toLocaleString() : t('common.none') }}</div>
+                <div style="font-size:13px;font-weight:500;color:#64748b">{{ formatDate(intMetrics.last_heartbeat_at) || t('common.none') }}</div>
               </n-card>
             </n-gi>
           </n-grid>
@@ -434,7 +434,7 @@ import { useI18n } from '../i18n.js'
 import config from '../config.js'
 
 const message = useMessage()
-const { t } = useI18n()
+const { t, formatDate } = useI18n()
 const dialog = useDialog()
 const edgeLiteJson = ref('')
 const pygbsentryJson = ref('')
