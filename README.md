@@ -38,14 +38,17 @@
 ## ⚡ 30 秒启动（Docker 推荐）
 
 ```bash
-docker run -d --name protoforge -p 8000:8000 -v protoforge-data:/app/data suoten/protoforge:latest
+docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin -v protoforge-data:/app/data suoten/protoforge:latest
 ```
 
-浏览器打开 **http://localhost:8000**（Docker 模式后端直接托管前端），用 `admin` / `admin` 登录，立即看到预置的演示设备和实时数据。
+浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录。
 
 > 💡 第一次使用？这就是最简单的方式，不需要安装 Python、Node.js、Git。
 >
-> 🔐 **密码说明**：默认密码是 `admin`。如果你在 `.env` 文件中修改了 `PROTOFORGE_ADMIN_PASSWORD`，请使用你设置的密码登录。
+> 🔐 **密码说明**：
+> - 上面的命令通过 `-e PROTOFORGE_ADMIN_PASSWORD=admin` 指定了密码为 `admin`
+> - 如果不加这个参数，系统会自动生成随机密码，查看方式：`docker logs protoforge`（找 `Login:` 那一行）
+> - 生产环境请务必修改为强密码
 
 ---
 
@@ -408,7 +411,7 @@ PROTOFORGE_HOST=0.0.0.0          # Web 服务监听地址
 PROTOFORGE_PORT=8000             # Web 服务端口
 PROTOFORGE_DB_PATH=data/protoforge.db  # 数据库路径（SQLite 或 PostgreSQL）
 PROTOFORGE_JWT_SECRET=           # JWT 密钥（留空自动生成，生产环境建议设置）
-PROTOFORGE_ADMIN_PASSWORD=admin  # 管理员密码（默认 admin，生产环境务必修改！）
+PROTOFORGE_ADMIN_PASSWORD=admin  # 管理员密码（不设置则自动生成随机密码，生产环境务必设置强密码！）
 PROTOFORGE_DEMO_MODE=false       # 演示模式
 PROTOFORGE_LOG_LEVEL=info        # 日志级别
 PROTOFORGE_GRPC_PORT=0           # gRPC 端口（0=禁用，设为 50051 启用）
@@ -754,7 +757,7 @@ ProtoForge/
 - **Swagger UI**: <http://localhost:8000/docs>
 - **ReDoc**: <http://localhost:8000/redoc>
 
-> 这是后端 API 文档，不是前端页面。前端页面请访问前端地址（如 `http://localhost:5173`）。
+> 这是后端 API 文档，不是前端页面。前端页面请访问 `http://localhost:8000`（与后端同端口）。
 
 ***
 
@@ -1073,10 +1076,7 @@ A: 依赖还没装，先执行 `pip install -e .`。
 
 **Q: 启动后打开** **`http://localhost:8000`** **看到 Swagger 文档？**
 
-A: 8000 是后端 API 端口，那个文档是给开发者看的。前端访问地址是：
-
-- 开发模式：`http://localhost:5173`
-- 生产模式 / Docker：`http://localhost:8000`（后端直接托管前端）
+A: 你可能访问了 `http://localhost:8000/docs`。前端页面直接访问 `http://localhost:8000`（不带 `/docs`）。前端和后端都在 8000 端口上，由 FastAPI 统一托管。
 
 **Q: 某些协议（OPC-UA / MQTT / BACnet / S7）启动失败？**
 
@@ -1128,12 +1128,12 @@ A: 按你的部署方式排查：
 
 - 最常见原因：`web/dist/` 目录不存在。执行 `cd web && npm install && npm run build` 构建前端。
 - Nginx 部署：检查 `nginx -t` 配置是否正确，`root` 路径是否指向了正确的 `web/dist/`。
-- 开发模式：确认后端已启动（另一个终端里 `protoforge run` 在运行），且访问的是 `http://localhost:5173`（不是 8000）。
+- 确认访问的是 `http://localhost:8000`（前端和后端都在此端口，由 FastAPI 统一托管）。
 
 **Docker 部署：**
 
 - 检查容器日志：`docker logs protoforge`，看是否有 "前端静态文件目录不存在" 的警告。如果有，说明 Docker 镜像构建时前端编译失败了。
-- 确认访问的是 `http://localhost:8000`（Docker 模式后端直接托管前端）。
+- 确认访问的是 `http://localhost:8000`（不带 `/docs`）。
 
 **通用排查：**
 
@@ -1196,7 +1196,7 @@ docker run -d --name protoforge -p 8000:8000 suoten/protoforge:latest
 
 **Q: 忘记管理员密码怎么办？**
 
-A: 删除 `data/protoforge.db` 文件（SQLite 模式）然后重启，系统会自动创建默认账号 `admin / admin`。
+A: 删除 `data/protoforge.db` 文件（SQLite 模式）然后重启，系统会重新创建 admin 账号并生成新的随机密码（显示在终端日志中）。你也可以设置 `PROTOFORGE_ADMIN_PASSWORD` 环境变量来指定新密码。
 
 > ⚠️ 这会清空所有数据！如果数据重要，请先备份 `data/` 目录。
 
