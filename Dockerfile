@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
+COPY README.md .
 COPY protoforge/ protoforge/
-RUN pip install --no-cache-dir "." "alembic>=1.13.0"
-RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]" || echo "WARNING: Some optional protocol dependencies failed to install"
+RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]" || pip install --no-cache-dir "."
 
 COPY web/ web/
 RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
