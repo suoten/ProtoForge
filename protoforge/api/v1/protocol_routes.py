@@ -156,9 +156,10 @@ async def start_protocol(protocol_name: str, request: Request, config: Optional[
 
 
 @router.post("/protocols/{protocol_name}/stop")
-async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operator)):
+async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operator), request: Request = None):
     engine = _get_engine()
     log_bus = _get_log_bus()
+    lang = get_lang_from_request(request) if request else "zh"
 
     try:
         await engine.stop_protocol(protocol_name)
@@ -167,7 +168,8 @@ async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operat
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        error_detail = str(e)
+        friendly = get_friendly_error(error_detail, lang=lang)
+        raise HTTPException(status_code=503, detail=friendly)
     except Exception as e:
-        from protoforge.core.defaults import get_friendly_error
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang))

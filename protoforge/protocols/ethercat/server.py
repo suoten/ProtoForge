@@ -501,7 +501,7 @@ class EtherCATServer(ProtocolServer):
                     if response:
                         writer.write(response)
                         await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()

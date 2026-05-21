@@ -139,7 +139,7 @@ class AbServer(ProtocolServer):
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()
