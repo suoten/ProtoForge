@@ -12,21 +12,21 @@ from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
-_USERNAME_MAX_LENGTH = 63  # FIXED: named constant for username regex max length
-_SECRET_KEY_MIN_LENGTH = 32  # FIXED: named constant for minimum JWT secret key length
-_ACCESS_TOKEN_EXPIRE_SECONDS = 1800  # FIXED: named constant (30 min)
-_REFRESH_TOKEN_EXPIRE_SECONDS = 604800  # FIXED: named constant (7 days)
+_USERNAME_MAX_LENGTH = 63
+_SECRET_KEY_MIN_LENGTH = 32
+_ACCESS_TOKEN_EXPIRE_SECONDS = 1800
+_REFRESH_TOKEN_EXPIRE_SECONDS = 604800
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-_VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USERNAME_MAX_LENGTH) + r'}$')  # FIXED: use named constant
+_VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USERNAME_MAX_LENGTH) + r'}$')
 
 _SECRET_KEY: str = ""
 _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
 
 
 def _generate_secret_key() -> str:
-    return secrets.token_urlsafe(_SECRET_KEY_MIN_LENGTH)  # FIXED: use named constant
+    return secrets.token_urlsafe(_SECRET_KEY_MIN_LENGTH)
 
 
 def _load_persistent_secret_key() -> str:
@@ -37,7 +37,7 @@ def _load_persistent_secret_key() -> str:
         if os.path.exists(_SECRET_KEY_FILE):
             with open(_SECRET_KEY_FILE, "r") as f:
                 saved = f.read().strip()
-            if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:  # FIXED: use named constant
+            if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:
                 _SECRET_KEY = saved
                 return saved
     except Exception as e:
@@ -57,7 +57,8 @@ def _load_persistent_secret_key() -> str:
 
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
-    if not key or key.strip() == key[:8] and len(key) < 24:
+    # 因 and 优先级高于 or，9~31字符密钥会绕过校验。添加显式括号并统一使用 _SECRET_KEY_MIN_LENGTH
+    if not key or (key.strip() == key[:8] and len(key) < _SECRET_KEY_MIN_LENGTH):
         _load_persistent_secret_key()
         if not _SECRET_KEY:
             logger.warning(
@@ -164,7 +165,7 @@ class User:
     @classmethod
     def from_dict(cls, data: dict) -> "User":
         pw_hash = data.get("password_hash", "")
-        if not pw_hash or not isinstance(pw_hash, str) or not pw_hash.startswith("$"):  # FIXED: password_hash空值/畸形导致verify_password异常
+        if not pw_hash or not isinstance(pw_hash, str) or not pw_hash.startswith("$"):
             logger.warning("User '%s' has invalid/missing password_hash, marking as locked", data.get("username", "?"))
             pw_hash = "!"  # bcrypt验证必定失败,阻止空密码登录
         return cls(
@@ -194,7 +195,7 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
     from protoforge.config import get_settings
     min_length = get_settings().min_password_length
     if len(password) < min_length:
-        return False, f"Password must be at least {min_length} characters"  # FIXED: 硬编码中文→英文,后端API应国际化
+        return False, f"Password must be at least {min_length} characters"
     has_upper = any(c.isupper() for c in password)
     has_lower = any(c.islower() for c in password)
     has_digit = any(c.isdigit() for c in password)
@@ -210,7 +211,7 @@ def _is_password_strong(password: str) -> tuple[bool, str]:
             missing.append("digit")
         if not has_special:
             missing.append("special character")
-        return False, f"Password must contain at least 3 of: uppercase, lowercase, digit, special character. Missing: {', '.join(missing)}"  # FIXED: 硬编码中文→英文
+        return False, f"Password must contain at least 3 of: uppercase, lowercase, digit, special character. Missing: {', '.join(missing)}"
     return True, ""
 
 
@@ -249,17 +250,24 @@ class UserManager:
             default_password = None
         if not default_password:
             default_password = secrets.token_urlsafe(16)
-            logger.warning(
-                "SECURITY: No admin password configured. A random password has been generated. "
-                "Set the PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control. "
-                "Generated admin password (save this now, it will not be shown again): %s",
-                default_password,
-            )
+            try:
+                pw_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".admin_password")
+                os.makedirs(os.path.dirname(pw_file), exist_ok=True)
+                with open(pw_file, "w") as f:
+                    f.write(default_password)
+                logger.warning(
+                    "SECURITY: No admin password configured. A random password has been generated "
+                    "and saved to %s. Set PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control.",
+                    pw_file,
+                )
+            except Exception as e:
+                logger.warning("Could not save admin password to file: %s. Password is only shown this once.", e)
+                logger.warning("Generated admin password (save this now, it will not be shown again): %s", default_password)
         elif default_password == "admin":
             logger.warning(
                 "SECURITY: Using default admin password 'admin'. "
                 "Set PROTOFORGE_ADMIN_PASSWORD environment variable to change it in production!"
-            )  # FIXED: warn when using default password
+            )
         admin_hash = hash_password(default_password)
         admin_user = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",
@@ -312,7 +320,10 @@ class UserManager:
 
         user.login_attempts = 0
         user.locked_until = 0.0
-        await self._persist_user(user)
+        try:
+            await self._persist_user(user)
+        except RuntimeError as e:
+            logger.error("Failed to persist login state for %s after successful auth: %s", username, e)
         return user, ""
 
     async def _persist_user(self, user: User) -> None:
@@ -387,7 +398,7 @@ class UserManager:
     async def change_password(self, username: str, old_password: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user or not verify_password(old_password, user.password_hash):
-            return False, "Current password is incorrect"  # FIXED: 硬编码中文→英文
+            return False, "Current password is incorrect"
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -399,7 +410,7 @@ class UserManager:
             except Exception as e:
                 logger.error("Failed to update user password for %s: %s", username, e)
                 user.password_hash = old_hash
-                return False, "Password update failed, please try again later"  # FIXED: 硬编码中文→英文
+                return False, "Password update failed, please try again later"
         return True, ""
 
     async def reset_login_attempts(self, username: str) -> bool:
@@ -418,7 +429,7 @@ class UserManager:
     async def admin_reset_password(self, username: str, new_password: str) -> tuple[bool, str]:
         user = self._users.get(username)
         if not user:
-            return False, "User not found"  # FIXED: hardcoded Chinese
+            return False, "User not found"
         ok, msg = _is_password_strong(new_password)
         if not ok:
             return False, msg
@@ -436,7 +447,7 @@ class UserManager:
                 user.password_hash = old_hash
                 user.login_attempts = old_attempts
                 user.locked_until = old_locked
-                return False, "Password reset failed, please try again later"  # FIXED: hardcoded Chinese
+                return False, "Password reset failed, please try again later"
         return True, ""
 
     async def update_user_role(self, username: str, new_role: str) -> bool:

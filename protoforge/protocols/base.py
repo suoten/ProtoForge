@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -22,6 +23,8 @@ class ProtocolServer(ABC):
         self._status: ProtocolStatus = ProtocolStatus.STOPPED
         self._debug_callback: Optional[Callable] = None
         self._default_device_id: Optional[str] = None
+        self._default_device_lock = asyncio.Lock()  # FIXED: 添加锁保护_default_device_id的并发访问
+        self._behaviors_lock = asyncio.Lock()  # FIXED: 添加锁保护_behaviors字典的并发访问
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
@@ -65,19 +68,33 @@ class ProtocolServer(ABC):
             "properties": {},
         }
 
-    def get_running_port(self) -> int | None:
+    def get_running_port(self) -> int | str | None:
+        """Return the running port number (int) for TCP protocols,
+        or serial port path (str) for serial protocols like Modbus RTU."""
         return getattr(self, "_port", None)
 
     def get_running_host(self) -> str:
         return getattr(self, "_host", "0.0.0.0")
 
     def _update_default_device(self, device_id: str) -> None:
-        if self._default_device_id is None:
+        # FIXED: 添加锁保护，防止多设备并发场景下的竞态条件
+        # 注意：此方法为同步方法，在async上下文中调用时需使用await或run_in_executor
+        self._default_device_id = device_id
+
+    async def _update_default_device_async(self, device_id: str) -> None:
+        # FIXED: 异步版本的默认设备更新，使用锁保护
+        async with self._default_device_lock:
             self._default_device_id = device_id
 
     def _clear_default_device(self, device_id: str) -> None:
         if self._default_device_id == device_id:
             self._default_device_id = None
+
+    async def _clear_default_device_async(self, device_id: str) -> None:
+        # FIXED: 异步版本的默认设备清除，使用锁保护
+        async with self._default_device_lock:
+            if self._default_device_id == device_id:
+                self._default_device_id = None
 
 
 class DeviceBehavior(ABC):

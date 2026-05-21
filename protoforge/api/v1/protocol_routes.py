@@ -1,34 +1,40 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Any, Optional
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_log_bus
+from protoforge.core.messages import get_lang_from_request
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("/protocols")
-async def list_protocols(_user: dict = Depends(require_viewer)):
+async def list_protocols(request: Request, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
+    lang = get_lang_from_request(request)
     protocols = engine.get_protocols()
     from protoforge.core.defaults import get_protocol_defaults, PROTOCOL_DEFAULTS
+    from protoforge.core.messages import desc
     result = []
     for p in protocols:
         entry = dict(p)
-        defaults = get_protocol_defaults(entry.get("name", ""))
-        entry["description"] = PROTOCOL_DEFAULTS.get(entry.get("name", ""), {}).get("description", "")
+        name = entry.get("name", "")
+        defaults = get_protocol_defaults(name, lang=lang)
+        entry["description"] = desc(f"protocol.{name}.desc", lang, PROTOCOL_DEFAULTS.get(name, {}).get("description", ""))
+        entry["display_name"] = desc(f"protocol.{name}", lang, PROTOCOL_DEFAULTS.get(name, {}).get("display_name", name))
         entry["default_port"] = defaults.get("port", 0)
         result.append(entry)
     return {"protocols": result}
 
 
 @router.get("/protocols/info")
-async def get_protocols_info(_user: dict = Depends(require_viewer)):
+async def get_protocols_info(request: Request, _user: dict = Depends(require_viewer)):
     from protoforge.core.defaults import get_all_protocol_info
-    return {"protocols": get_all_protocol_info()}
+    lang = get_lang_from_request(request)
+    return {"protocols": get_all_protocol_info(lang=lang)}
 
 
 @router.get("/protocols/{protocol_name}/config")
@@ -52,9 +58,10 @@ async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(r
 
 
 @router.post("/protocols/start-all")
-async def start_all_protocols(_user: dict = Depends(require_operator)):
+async def start_all_protocols(request: Request, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
+    lang = get_lang_from_request(request)
     from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
     results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
     for p in engine.get_protocols():
@@ -62,7 +69,7 @@ async def start_all_protocols(_user: dict = Depends(require_operator)):
         if p.get("status") == "running":
             results["skipped"].append(name)
             continue
-        config = get_protocol_defaults(name)
+        config = get_protocol_defaults(name, lang=lang)
         original_port = config.get("port")
         try:
             await engine.start_protocol(name, config)
@@ -79,10 +86,10 @@ async def start_all_protocols(_user: dict = Depends(require_operator)):
                     "protocol": name,
                     "original_port": config_original_port or original_port,
                     "actual_port": actual_port,
-                    "message": f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}",  # FIXED: Chinese→English
+                    "message": f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}",
                 })
         except Exception as e:
-            friendly = get_friendly_error(str(e))
+            friendly = get_friendly_error(str(e), lang=lang)
             results["failed"].append({"protocol": name, "error": friendly})
             logger.warning("Failed to start protocol %s in start-all: %s", name, e)
     return results
@@ -109,12 +116,13 @@ async def stop_all_protocols(_user: dict = Depends(require_operator)):
 
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
+async def start_protocol(protocol_name: str, request: Request, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
+    lang = get_lang_from_request(request)
     from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
     if config is None:
-        config = get_protocol_defaults(protocol_name)
+        config = get_protocol_defaults(protocol_name, lang=lang)
     original_port = config.get("port")
 
     try:
@@ -132,7 +140,7 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
             result["port_changed"] = True
             result["original_port"] = config_original_port or original_port
             result["actual_port"] = actual_port
-            result["message"] = f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}"  # FIXED: Chinese→English
+            result["message"] = f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}"
 
         return result
 
@@ -140,11 +148,11 @@ async def start_protocol(protocol_name: str, config: Optional[dict[str, Any]] = 
         raise HTTPException(status_code=404, detail=str(e))
     except RuntimeError as e:
         error_detail = str(e)
-        friendly = get_friendly_error(error_detail)
+        friendly = get_friendly_error(error_detail, lang=lang)
         raise HTTPException(status_code=503, detail=friendly)
     except Exception as e:
         logger.error("Failed to start protocol %s: %s", protocol_name, e)
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang))
 
 
 @router.post("/protocols/{protocol_name}/stop")

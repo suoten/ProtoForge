@@ -20,6 +20,13 @@ class ProtoForgeClient:
     def close(self):
         self._client.close()
 
+    # FIXED: SDK ProtoForgeClient无__del__兜底 — 不使用with语句时连接池不释放
+    def __del__(self):
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
     def __enter__(self):
         return self
 
@@ -252,10 +259,10 @@ class ProtoForgeClient:
         return self._get("/tests/reports/trend", params={"count": count})
 
     def import_edgelite(self, config: dict) -> dict:
-        return self._post("/integration/edgelite", json=config)
+        return self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     def import_pygbsentry(self, config: dict) -> dict:
-        return self._post("/integration/pygbsentry", json=config)
+        return self._post("/edgelite/pygbsentry", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     def update_device(self, device_id: str, updates: dict) -> dict:
         current = self._get(f"/devices/{device_id}")
@@ -419,13 +426,13 @@ class ProtoForgeClient:
         return self._get("/integration/metrics")
 
     def push_device_integration(self, device_id: str) -> dict:
-        return self._post(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
+        return self._post(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
 
     def batch_push(self, device_ids: list[str]) -> dict:
         return self._post("/integration/batch-push", json={"device_ids": device_ids})
 
     def delete_device_from_edgelite(self, device_id: str) -> dict:
-        return self._delete(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
+        return self._delete(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
 
     def start_device_collect(self, device_id: str) -> dict:
         return self._post(f"/integration/device/{device_id}/start")
@@ -440,7 +447,7 @@ class ProtoForgeClient:
         return self._post("/integration/validate", json={"device_id": device_id})
 
     def test_integration_connection(self, config: dict) -> dict:
-        return self._post("/integration/edgelite/test", json=config)  # FIXED: 路由与后端edgelite_routes.py对齐
+        return self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
         params = {"limit": limit}
@@ -478,6 +485,18 @@ class AsyncProtoForgeClient:
 
     async def close(self):
         await self._client.aclose()
+
+    # FIXED: AsyncProtoForgeClient无__del__兜底 — 不使用with语句时连接池不释放
+    def __del__(self):
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self._client.aclose())
+            else:
+                loop.run_until_complete(self._client.aclose())
+        except Exception:
+            pass
 
     async def __aenter__(self):
         return self
@@ -642,10 +661,10 @@ class AsyncProtoForgeClient:
         return await self._get("/tests/reports/trend", params={"count": count})
 
     async def import_edgelite(self, config: dict) -> dict:
-        return await self._post("/integration/edgelite", json=config)
+        return await self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     async def import_pygbsentry(self, config: dict) -> dict:
-        return await self._post("/integration/pygbsentry", json=config)
+        return await self._post("/edgelite/pygbsentry", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     async def update_device(self, device_id: str, updates: dict) -> dict:
         try:
@@ -876,13 +895,13 @@ class AsyncProtoForgeClient:
         return await self._get("/integration/metrics")
 
     async def push_device_integration(self, device_id: str) -> dict:
-        return await self._post(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
+        return await self._post(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
 
     async def batch_push(self, device_ids: list[str]) -> dict:
         return await self._post("/integration/batch-push", json={"device_ids": device_ids})
 
     async def delete_device_from_edgelite(self, device_id: str) -> dict:
-        return await self._delete(f"/integration/edgelite/push/{device_id}")  # FIXED: 路由与后端edgelite_routes.py对齐
+        return await self._delete(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
 
     async def start_device_collect(self, device_id: str) -> dict:
         return await self._post(f"/integration/device/{device_id}/start")
@@ -897,7 +916,7 @@ class AsyncProtoForgeClient:
         return await self._post("/integration/validate", json={"device_id": device_id})
 
     async def test_integration_connection(self, config: dict) -> dict:
-        return await self._post("/integration/edgelite/test", json=config)  # FIXED: 路由与后端edgelite_routes.py对齐
+        return await self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
 
     async def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict:
         params = {"limit": limit}

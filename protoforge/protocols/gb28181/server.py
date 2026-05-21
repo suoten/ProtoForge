@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import socket
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
@@ -10,7 +11,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -224,6 +225,8 @@ class GB28181Server(ProtocolServer):
         self._server_id = "34020000002000000001"
         self._heartbeat_task: asyncio.Task | None = None
         self._rtp_tasks: list[asyncio.Task] = []
+        self._allocated_media_ports: set[int] = set()
+        self._media_ports_lock = threading.Lock()
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -244,12 +247,12 @@ class GB28181Server(ProtocolServer):
 
             self._status = ProtocolStatus.RUNNING
             self._log_debug("system", "server_start",
-                            msg("gb28181", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
+                            msg("gb28181", "service_started", host=self._host, port=self._port),
                             detail={"server_id": self._server_id, "port": self._port})
             logger.info("GB28181 server starting on %s:%d", self._host, self._port)
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            self._log_debug("system", "server_error", msg("gb28181", "service_start_failed", error=e))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_error", msg("gb28181", "service_start_failed", error=e))
             logger.error("Failed to start GB28181 server: %s", e)
             raise
 
@@ -281,14 +284,15 @@ class GB28181Server(ProtocolServer):
             logger.warning("GB28181 server stop error: %s", e)
         finally:
             self._status = ProtocolStatus.STOPPED
-            self._log_debug("system", "server_stop", msg("gb28181", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("gb28181", "service_stopped"))
             logger.info("GB28181 server stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = GB28181DeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         gb_device_id = proto_config.get("device_id", device_config.id)
@@ -314,7 +318,7 @@ class GB28181Server(ProtocolServer):
             await self._register_device(gb_device)
 
         self._log_debug("system", "device_created",
-                        f"Device created: {device_config.name} (GB ID={gb_device_id})"  ,  # FIXED: CN→EN
+                        f"Device created: {device_config.name} (GB ID={gb_device_id})",
                         device_id=device_config.id,
                         detail={"gb_id": gb_device_id, "server": f"{sip_server_addr}:{sip_server_port}"})
         logger.info("GB28181 device created: %s (gb_id=%s, server=%s:%d)",
@@ -327,10 +331,11 @@ class GB28181Server(ProtocolServer):
             if gb.rtp_streamer and gb.rtp_streamer.is_running:
                 await gb.rtp_streamer.stop()
             gb.registered = False
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
-        self._clear_default_device(device_id)
-        self._log_debug("system", "device_removed", msg("gb28181", "device_removed"))  # FIXED: 中文硬编码→i18n常量, device_id=device_id
+        await self._clear_default_device_async(device_id)
+        self._log_debug("system", "device_removed", msg("gb28181", "device_removed"), device_id=device_id)
         logger.info("GB28181 device removed: %s", device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -365,7 +370,7 @@ class GB28181Server(ProtocolServer):
                     "type": "string",
                     "default": "AES_CM_128_HMAC_SHA1_80",
                     "enum": ["AES_CM_128_HMAC_SHA1_80", "AES_CM_128_HMAC_SHA1_32"],
-                    "description": desc("srtp_crypto_suite")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("srtp_crypto_suite")},
             },
         }
 
@@ -380,7 +385,7 @@ class GB28181Server(ProtocolServer):
                     (server_host, server_port),
                 )
                 self._log_debug("out", "sip_register",
-                                f"Sending REGISTER to {server_host}:{server_port}"  ,  # FIXED: CN→EN
+                                f"Sending REGISTER to {server_host}:{server_port}",
                                 device_id=gb_device._protoforge_device_id,
                                 detail={"gb_id": gb_device.device_id,
                                         "server": f"{server_host}:{server_port}"})
@@ -388,7 +393,7 @@ class GB28181Server(ProtocolServer):
                             gb_device.device_id, server_host, server_port)
         except Exception as e:
             self._log_debug("out", "sip_register_error",
-                            msg("gb28181", "register_failed", error=e),  # FIXED: 中文硬编码→i18n常量
+                            msg("gb28181", "register_failed", error=e),
                             device_id=gb_device._protoforge_device_id)
             logger.warning("Failed to send REGISTER for %s: %s", gb_device.device_id, e)
 
@@ -455,7 +460,7 @@ class GB28181Server(ProtocolServer):
             message = data.decode("utf-8", errors="replace")
             first_line = message.split("\r\n")[0]
             self._log_debug("in", "sip_recv",
-                            f"SIP message received from {addr[0]}:{addr[1]}: {first_line[:80]}"  ,  # FIXED: CN→EN
+                            f"SIP message received from {addr[0]}:{addr[1]}: {first_line[:80]}",
                             detail={"from": f"{addr[0]}:{addr[1]}",
                                     "first_line": first_line[:120]})
             if "MESSAGE" in first_line:
@@ -472,9 +477,9 @@ class GB28181Server(ProtocolServer):
                 self._handle_401(message, addr)
             else:
                 self._log_debug("in", "sip_unknown",
-                                f"Unhandled SIP message: {first_line[:60]}")  # FIXED: CN→EN
+                                f"Unhandled SIP message: {first_line[:60]}")
         except Exception as e:
-            self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))
 
     def _handle_message(self, message: str, addr: tuple) -> None:
         body_start = message.find("\r\n\r\n")
@@ -494,12 +499,12 @@ class GB28181Server(ProtocolServer):
                     break
             if not gb_device:
                 self._log_debug("in", "sip_message_unknown",
-                                f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")  # FIXED: CN→EN
+                                f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")
                 return
 
             pf_id = gb_device._protoforge_device_id
             self._log_debug("in", f"sip_{cmd_type.lower()}",
-                            f"Received {cmd_type} request (SN={sn})"  ,  # FIXED: CN→EN
+                            f"Received {cmd_type} request (SN={sn})",
                             device_id=pf_id,
                             detail={"cmd": cmd_type, "sn": sn, "gb_id": device_id})
 
@@ -507,7 +512,7 @@ class GB28181Server(ProtocolServer):
                 response_body = gb_device.make_catalog_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_catalog_response",
-                                msg("gb28181", "catalog_response_sent"),  # FIXED: 中文硬编码→i18n常量
+                                msg("gb28181", "catalog_response_sent"),
                                 device_id=pf_id)
             elif cmd_type == "Keepalive":
                 response_body = gb_device.make_heartbeat_response(sn)
@@ -525,10 +530,10 @@ class GB28181Server(ProtocolServer):
                 response_body = gb_device.make_config_response(sn)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_config_response",
-                                msg("gb28181", "device_config_response_sent"),  # FIXED: 中文硬编码→i18n常量
+                                msg("gb28181", "device_config_response_sent"),
                                 device_id=pf_id)
         except ET.ParseError:
-            self._log_debug("in", "sip_xml_error", msg("gb28181", "xml_parse_failed"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("in", "sip_xml_error", msg("gb28181", "xml_parse_failed"))
 
     def _handle_200_ok(self, message: str, addr: tuple) -> None:
         call_id = ""
@@ -543,7 +548,7 @@ class GB28181Server(ProtocolServer):
                 pf_id = gb_device._protoforge_device_id
                 if not was_registered:
                     self._log_debug("in", "sip_register_ok",
-                                    msg("gb28181", "register_success"),  # FIXED: 中文硬编码→i18n常量
+                                    msg("gb28181", "register_success"),
                                     device_id=pf_id,
                                     detail={"gb_id": gb_device.device_id,
                                             "server": f"{gb_device.host}:{gb_device.port}"})
@@ -581,13 +586,13 @@ class GB28181Server(ProtocolServer):
                 if self._transport:
                     self._transport.sendto(auth_request.encode("utf-8"), addr)
                     self._log_debug("out", "sip_register_auth",
-                                    f"Sending authenticated REGISTER (Digest auth, nonce={nonce[:8]}...)"  ,  # FIXED: CN→EN
+                                    f"Sending authenticated REGISTER (Digest auth, nonce={nonce[:8]}...)",
                                     device_id=pf_id,
                                     detail={"realm": realm, "nonce": nonce[:16]})
                     logger.info("Sent authenticated REGISTER for %s", gb_device.device_id)
             except Exception as e:
                 self._log_debug("out", "sip_register_auth_error",
-                                msg("gb28181", "auth_register_failed", error=e),  # FIXED: 中文硬编码→i18n常量
+                                msg("gb28181", "auth_register_failed", error=e),
                                 device_id=pf_id)
 
     def _handle_invite(self, message: str, addr: tuple) -> None:
@@ -626,7 +631,7 @@ class GB28181Server(ProtocolServer):
                 break
         if not gb_device:
             self._log_debug("in", "sip_invite_no_device",
-                            f"INVITE but no matching device: {device_id}")  # FIXED: CN→EN
+                            f"INVITE but no matching device: {device_id}")
             return
 
         pf_id = gb_device._protoforge_device_id
@@ -640,7 +645,7 @@ class GB28181Server(ProtocolServer):
                 sdp_info["media_ip"] = addr[0]
 
         self._log_debug("in", "sip_invite",
-                        f"INVITE (video request) received from {addr[0]}:{addr[1]}"  ,  # FIXED: CN→EN
+                        f"INVITE (video request) received from {addr[0]}:{addr[1]}",
                         device_id=pf_id,
                         detail={"gb_id": device_id,
                                 "media_addr": f"{sdp_info['media_ip']}:{sdp_info['media_port']}"})
@@ -651,15 +656,14 @@ class GB28181Server(ProtocolServer):
         except (ValueError, IndexError):
             base_port = 6000
         media_port = base_port
-        if not hasattr(self, '_allocated_media_ports'):
-            self._allocated_media_ports = set()
-        while media_port in self._allocated_media_ports:
-            media_port += 2
-            if media_port > 6999:
-                media_port = 6000
-                break
-        self._allocated_media_ports.add(media_port)
-        self._allocated_media_ports.add(media_port + 1)
+        with self._media_ports_lock:
+            while media_port in self._allocated_media_ports:
+                media_port += 2
+                if media_port > 6999:
+                    media_port = 6000
+                    break
+            self._allocated_media_ports.add(media_port)
+            self._allocated_media_ports.add(media_port + 1)
         ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
 
         srtp_key_salt_b64 = ""
@@ -701,7 +705,7 @@ class GB28181Server(ProtocolServer):
         gb_device._srtp_context = srtp_context
 
         self._log_debug("out", "sip_invite_ok",
-                        msg("gb28181", "invite_ok_sent", detail=f"{media_ip}:{media_port}"),  # FIXED: 中文硬编码→i18n常量
+                        msg("gb28181", "invite_ok_sent", detail=f"{media_ip}:{media_port}"),
                         device_id=pf_id,
                         detail={"media": f"{media_ip}:{media_port}",
                                 "ssrc": ssrc,
@@ -751,7 +755,7 @@ class GB28181Server(ProtocolServer):
                         self._rtp_tasks.append(t)
 
                         self._log_debug("out", "rtp_stream_start",
-                                        f"ACK received, starting RTP video stream to {dest_ip}:{dest_port}"  ,  # FIXED: CN→EN
+                                        f"ACK received, starting RTP video stream to {dest_ip}:{dest_port}",
                                         device_id=pf_id,
                                         detail={"dest": f"{dest_ip}:{dest_port}",
                                                 "ssrc": ssrc,
@@ -759,11 +763,11 @@ class GB28181Server(ProtocolServer):
                                                 "fps": 25})
                     except Exception as e:
                         self._log_debug("out", "rtp_stream_error",
-                                        msg("gb28181", "rtp_start_failed", error=e),  # FIXED: 中文硬编码→i18n常量
+                                        msg("gb28181", "rtp_start_failed", error=e),
                                         device_id=pf_id)
                 else:
                     self._log_debug("in", "sip_ack_no_media",
-                                    msg("gb28181", "ack_no_media"),  # FIXED: 中文硬编码→i18n常量
+                                    msg("gb28181", "ack_no_media"),
                                     device_id=pf_id)
                 break
 
@@ -806,12 +810,12 @@ class GB28181Server(ProtocolServer):
                     t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
                     self._rtp_tasks.append(t)
                     self._log_debug("out", "rtp_stream_stop",
-                                    msg("gb28181", "bye_received"),  # FIXED: 中文硬编码→i18n常量
+                                    msg("gb28181", "bye_received"),
                                     device_id=pf_id)
                 gb_device._invite_call_id = ""
                 break
 
-        self._log_debug("out", "sip_bye_ok", msg("gb28181", "bye_ok_sent"))  # FIXED: 中文硬编码→i18n常量
+        self._log_debug("out", "sip_bye_ok", msg("gb28181", "bye_ok_sent"))
         logger.info("Sent BYE 200 OK")
 
     def _send_response(self, original_message: str, body: str, addr: tuple) -> None:

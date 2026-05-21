@@ -100,7 +100,7 @@ class EventBus:
                 try:
                     queue.put_nowait(event)
                 except asyncio.QueueFull:
-                    pass  # FIXED: 队列满时丢弃最旧事件后仍满则跳过，已有dropped_count警告
+                    pass
                 now = time.time()
                 if now - self._last_drop_warning > 60:
                     self._last_drop_warning = now

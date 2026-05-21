@@ -6,44 +6,15 @@ from typing import Any
 from xml.sax.saxutils import escape
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class MtConnectDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
-        if points:
-            for p in points:
-                name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
-
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
+class MtConnectDeviceBehavior(StandardDeviceBehavior):
     def on_write(self, point_name: str, value: Any) -> bool:
         return False
-
-    def set_value(self, point_name: str, value: Any) -> None:
-        self._values[point_name] = value
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def get_all_values(self) -> dict[str, Any]:
         return dict(self._values)
@@ -52,6 +23,7 @@ class MtConnectDeviceBehavior(DeviceBehavior):
 class MtConnectServer(ProtocolServer):
     protocol_name = "mtconnect"
     protocol_display_name = "MTConnect"
+    _MAX_SAMPLE_BUFFER = 131072
 
     def __init__(self):
         super().__init__()
@@ -67,7 +39,7 @@ class MtConnectServer(ProtocolServer):
         self._server_running = False
         self._device_uuid = str(uuid.uuid4())
         self._sample_buffer: list[dict] = []
-        self._sample_buffer_max = 131072
+        self._sample_buffer_max = self._MAX_SAMPLE_BUFFER  # FIXED: 魔法数字→类常量
         self._first_sequence = 1
 
     async def start(self, config: dict[str, Any]) -> None:
@@ -80,7 +52,7 @@ class MtConnectServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("MTConnect server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"MTConnect service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"MTConnect service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -101,7 +73,7 @@ class MtConnectServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("MTConnect server stopped")
-            self._log_debug("system", "server_stop", "MTConnect service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "MTConnect service stopped")
 
     async def _serve(self) -> None:
         try:
@@ -120,9 +92,10 @@ class MtConnectServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("MTConnect connection from %s", addr)
+        _READ_TIMEOUT = 30
         try:
             while self._server_running:
-                data = await reader.read(8192)
+                data = await asyncio.wait_for(reader.read(8192), timeout=_READ_TIMEOUT)
                 if not data:
                     break
                 try:
@@ -136,7 +109,7 @@ class MtConnectServer(ProtocolServer):
                     writer.write(response.encode("utf-8"))
                     await writer.drain()
                 break
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             writer.close()
@@ -210,7 +183,7 @@ class MtConnectServer(ProtocolServer):
             f'  <Header creationTime="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}" '
             f'instanceId="{self._instance_id}" '
             f'sender="ProtoForge" '
-            f'bufferSize="131072" '
+            f'bufferSize="{self._MAX_SAMPLE_BUFFER}" '  # FIXED: 魔法数字→类常量
             f'version="1.3.0"/>\n'
             '<Devices>\n'
             + "\n".join(devices_xml) + "\n"
@@ -416,9 +389,10 @@ class MtConnectServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = MtConnectDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -431,18 +405,19 @@ class MtConnectServer(ProtocolServer):
                      self._device_params[device_config.id]["device_uuid"][:8] + "...",
                      self._device_params[device_config.id]["manufacturer"])
         self._log_debug("system", "device_create",
-                        f"MTConnect device created: {device_config.name}",  # FIXED: CN→EN
+                        f"MTConnect device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("MTConnect device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"MTConnect device removed: {device_id}",  # FIXED: CN→EN
+                        f"MTConnect device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -463,7 +438,7 @@ class MtConnectServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "MTConnect server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 7878, "description": "MTConnect port (default 7878)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "MTConnect server listen address")},
+                "port": {"type": "integer", "default": 7878, "description": desc("mtconnect_port", "MTConnect port (default 7878)")},
             },
         }

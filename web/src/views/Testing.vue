@@ -849,7 +849,7 @@ async function loadMetadata() {
     const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
     if (failedIdx.length > 0) {
       const names = t('testing.metadataNames').split(',')
-      message.warning(t('testing.partialMetadataFailed', { items: failedIdx.map(i => names[i]).join(t('common.listSeparator') || '、') }))
+      message.warning(t('testing.partialMetadataFailed', { items: failedIdx.map(i => names[i]).join(t('common.listSeparator')) }))
     }
   } catch (e) { message.error(t('common.loadFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }

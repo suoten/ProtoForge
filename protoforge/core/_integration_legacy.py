@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:  # FIXED: json.loads without exception protection
+        try:
             config_data = json.loads(config_data)
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
@@ -57,7 +57,7 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {file_path}")
     content = path.read_text(encoding="utf-8")
-    try:  # FIXED: json.loads without exception protection
+    try:
         data = json.loads(content)
     except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid JSON in file '{file_path}': {e}") from e
@@ -66,7 +66,7 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
 
 def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:  # FIXED: json.loads without exception protection
+        try:
             config_data = json.loads(config_data)
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e

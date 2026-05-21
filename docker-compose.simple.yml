@@ -8,7 +8,7 @@
 
 services:
   protoforge:
-    image: suoten/protoforge:latest
+    image: suoten/protoforge:0.1.0  # FIXED: 版本号管理一致性—latest→0.1.0
     container_name: protoforge
     command:
       - sh

@@ -5,30 +5,24 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class FinsDeviceBehavior(DeviceBehavior):
+class FinsDeviceBehavior(StandardDeviceBehavior):
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)
         self._memory_areas: dict[int, bytearray] = {}
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
                 address = getattr(p, 'address', '0') or '0'
                 area, offset = self._parse_fins_address(str(address))
                 self._point_addresses[name] = (area, offset)
-                self._sync_value_to_area(name, self._values[name])
+                self._sync_value_to_area(name, self._values.get(name, 0))
 
     @staticmethod
     def _parse_fins_address(address: str) -> tuple[int, int]:
@@ -69,11 +63,7 @@ class FinsDeviceBehavior(DeviceBehavior):
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("FINS on_write value conversion error for %s: %s", point_name, e)
 
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
-    def on_write(self, point_name: str, value: Any) -> bool:
+    def on_write(self, point_name: str, value: Any) -> bool:  # FIXED: 重复代码→继承StandardDeviceBehavior
         if point_name in self._values:
             self._values[point_name] = value
             self._sync_value_to_area(point_name, value)
@@ -83,16 +73,6 @@ class FinsDeviceBehavior(DeviceBehavior):
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         self._sync_value_to_area(point_name, value)
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def read_area(self, area: int, offset: int, size: int) -> bytearray:
         if area not in self._memory_areas or len(self._memory_areas[area]) < offset + size:
@@ -135,7 +115,7 @@ class FinsServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("FINS server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"FINS service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"FINS service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -156,7 +136,7 @@ class FinsServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("FINS server stopped")
-            self._log_debug("system", "server_stop", "FINS service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "FINS service stopped")
 
     async def _serve(self) -> None:
         loop = asyncio.get_running_loop()
@@ -183,20 +163,21 @@ class FinsServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("FINS connection from %s", addr)
+        _READ_TIMEOUT = 30  # FIXED: Slowloris防护—无超时reader.readexactly可被恶意连接永久阻塞
         try:
             while self._server_running:
-                header = await reader.readexactly(8)
+                header = await asyncio.wait_for(reader.readexactly(8), timeout=_READ_TIMEOUT)
                 magic = header[0:4]
                 if magic != self.FINS_TCP_MAGIC:
                     break
                 body_len = struct.unpack(">I", header[4:8])[0]
-                body = await reader.readexactly(body_len) if body_len > 0 else b""
+                body = await asyncio.wait_for(reader.readexactly(body_len), timeout=_READ_TIMEOUT) if body_len > 0 else b""
                 response = self._process_fins(body)
                 if response:
                     resp_header = self.FINS_TCP_MAGIC + struct.pack(">I", len(response))
                     writer.write(resp_header + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             writer.close()
@@ -319,7 +300,7 @@ class FinsServer(ProtocolServer):
                         logger.warning("FINS write value sync error for %s: %s", name, e)
                     break
             self._log_debug("recv", "fins_write",
-                            f"Write area {area} offset {word_addr}",  # FIXED: CN→EN
+                            f"Write area {area} offset {word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
 
         resp = bytearray()
@@ -371,9 +352,10 @@ class FinsServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = FinsDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -386,18 +368,19 @@ class FinsServer(ProtocolServer):
                      self._device_params[device_config.id]["source_node"],
                      self._device_params[device_config.id]["dest_node"])
         self._log_debug("system", "device_create",
-                        f"FINS device created: {device_config.name}",  # FIXED: CN→EN
+                        f"FINS device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("FINS device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"FINS device removed: {device_id}",  # FIXED: CN→EN
+                        f"FINS device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -418,8 +401,8 @@ class FinsServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "FINS server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 9600, "description": "FINS port (default 9600, TCP+UDP shared)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "FINS server listen address")},
+                "port": {"type": "integer", "default": 9600, "description": desc("fins_port", "FINS port (default 9600, TCP+UDP shared)")},
             },
         }
 

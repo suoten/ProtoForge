@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml .
 COPY protoforge/ protoforge/
-RUN pip install --no-cache-dir "." "alembic>=1.13.0"  # FIXED: install core first to ensure base works
-RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]" || echo "WARNING: Some optional protocol dependencies failed to install"  # FIXED: optional deps fail gracefully
+RUN pip install --no-cache-dir "." "alembic>=1.13.0"
+RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]" || echo "WARNING: Some optional protocol dependencies failed to install"
 
 COPY web/ web/
 RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
@@ -22,7 +22,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl libffi8 && \
-    rm -rf /var/lib/apt/lists/*  # FIXED: libffi7 does not exist in Debian Bookworm; use libffi8
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin

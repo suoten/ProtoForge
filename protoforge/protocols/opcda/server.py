@@ -5,59 +5,41 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class OpcDaDeviceBehavior(DeviceBehavior):
+class OpcDaDeviceBehavior(StandardDeviceBehavior):
+    _OPC_QUALITY_GOOD = 192
+
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)
         self._quality: dict[str, int] = {}
         self._data_types: dict[str, str] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
                 data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "float64")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
-                self._quality[name] = 192
+                self._quality[name] = self._OPC_QUALITY_GOOD
                 self._data_types[name] = data_type
-
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
-            self._quality[point_name] = 192
+            self._quality[point_name] = self._OPC_QUALITY_GOOD
             return True
         self._values[point_name] = value
-        self._quality[point_name] = 192
+        self._quality[point_name] = self._OPC_QUALITY_GOOD
         return True
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
-        self._quality[point_name] = 192
+        self._quality[point_name] = self._OPC_QUALITY_GOOD
 
     def set_quality(self, point_name: str, quality: int) -> None:
         self._quality[point_name] = quality
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def get_quality(self, point_name: str) -> int:
         return self._quality.get(point_name, 0)
@@ -100,7 +82,7 @@ class OpcDaServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("OPC-DA server started on %s:%d (TCP bridge mode)", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"OPC-DA service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"OPC-DA service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -134,7 +116,7 @@ class OpcDaServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-DA server stopped")
-            self._log_debug("system", "server_stop", "OPC-DA service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "OPC-DA service stopped")
 
     async def _serve(self) -> None:
         try:
@@ -154,14 +136,15 @@ class OpcDaServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         logger.debug("OPC-DA connection from %s", addr)
         client_sub_ids = []
+        _READ_TIMEOUT = 30
         try:
             while self._server_running:
-                header = await reader.readexactly(8)
+                header = await asyncio.wait_for(reader.readexactly(8), timeout=_READ_TIMEOUT)
                 magic = header[0:4]
                 if magic != self.OPCDA_MAGIC:
                     break
                 body_len = struct.unpack("<I", header[4:8])[0]
-                body = await reader.readexactly(body_len) if body_len > 0 else b""
+                body = await asyncio.wait_for(reader.readexactly(body_len), timeout=_READ_TIMEOUT) if body_len > 0 else b""
                 response, sub_id = self._process_opcda_with_sub(body, writer)
                 if response:
                     resp_header = self.OPCDA_MAGIC + struct.pack("<I", len(response))
@@ -169,7 +152,7 @@ class OpcDaServer(ProtocolServer):
                     await writer.drain()
                 if sub_id:
                     client_sub_ids.append(sub_id)
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             for sid in client_sub_ids:
@@ -286,7 +269,7 @@ class OpcDaServer(ProtocolServer):
         value = self._unpack_typed_value(data_type, value_data)
         behavior.set_value(tag_name, value)
         self._log_debug("recv", "opcda_write",
-                        f"Write tag {tag_name}={value}",  # FIXED: CN→EN
+                        f"Write tag {tag_name}={value}",
                         detail={"tag": tag_name, "value": value})
 
         resp = bytearray()
@@ -434,9 +417,10 @@ class OpcDaServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcDaDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -447,18 +431,19 @@ class OpcDaServer(ProtocolServer):
         logger.info("OPC-DA device created: %s (ProgID=%s)",
                      device_config.id, self._device_params[device_config.id]["prog_id"])
         self._log_debug("system", "device_create",
-                        f"OPC-DA device created: {device_config.name}",  # FIXED: CN→EN
+                        f"OPC-DA device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("OPC-DA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"OPC-DA device removed: {device_id}",  # FIXED: CN→EN
+                        f"OPC-DA device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -479,7 +464,7 @@ class OpcDaServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "OPC-DA bridge server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 51340, "description": "OPC-DA bridge port (default 51340)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "OPC-DA bridge server listen address")},
+                "port": {"type": "integer", "default": 51340, "description": desc("opcda_port", "OPC-DA bridge port (default 51340)")},
             },
         }

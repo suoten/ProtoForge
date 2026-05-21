@@ -1,7 +1,10 @@
 import logging
+import logging.handlers
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,13 +27,15 @@ _database: Database | None = None
 _log_bus: LogBus | None = None
 _event_bus: EventBus | None = None
 _integration_manager: IntegrationManager | None = None
+_globals_lock = threading.Lock()
 
 
 def get_engine() -> SimulationEngine:
     global _engine
-    if _engine is None:
-        raise RuntimeError("Engine not initialized")
-    return _engine
+    with _globals_lock:
+        if _engine is None:
+            raise RuntimeError("Engine not initialized")
+        return _engine
 
 
 def get_template_manager() -> TemplateManager:
@@ -117,11 +122,11 @@ async def lifespan(app: FastAPI):
                 restored += 1
             except Exception as e:
                 dev.protocol_config.pop("_skip_auto_push", None)
-                logger.error("Failed to restore device %s: [%s] %s", dev.id, type(e).__name__, e)  # FIXED: 记录异常类型便于区分编程错误
+                logger.error("Failed to restore device %s: [%s] %s", dev.id, type(e).__name__, e)
         logger.info("Restored %d/%d devices from database", restored, len(saved_devices))
     except Exception as e:
         restore_errors.append(f"devices: {e}")
-        logger.error("Failed to load devices from database: [%s] %s", type(e).__name__, e)  # FIXED: 记录异常类型
+        logger.error("Failed to load devices from database: [%s] %s", type(e).__name__, e)
 
     try:
         saved_scenarios = await _database.load_all_scenarios()
@@ -129,7 +134,7 @@ async def lifespan(app: FastAPI):
             try:
                 _engine.create_scenario(sc)
             except Exception as e:
-                logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)  # FIXED: 记录异常类型
+                logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)
         logger.info("Restored %d scenarios from database", len(saved_scenarios))
     except Exception as e:
         restore_errors.append(f"scenarios: {e}")
@@ -141,7 +146,7 @@ async def lifespan(app: FastAPI):
             try:
                 _template_manager.add_template(tmpl)
             except Exception as e:
-                logger.error("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)  # FIXED: 记录异常类型
+                logger.error("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)
         logger.info("Restored %d templates from database", len(saved_templates))
     except Exception as e:
         restore_errors.append(f"templates: {e}")
@@ -224,6 +229,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start gRPC server: %s", e)
 
+    _deduplicate_file_handlers()
+    logging.getLogger("asyncua").setLevel(logging.WARNING)
+
     if restore_errors:
         logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
     else:
@@ -263,12 +271,98 @@ async def lifespan(app: FastAPI):
     logger.info("ProtoForge stopped")
 
 
+_logging_configured = False
+
+
+def _deduplicate_file_handlers() -> None:
+    """Remove duplicate RotatingFileHandler instances from root logger.
+
+    Called after app startup to clean up any handlers that were added by
+    multiple logging configuration passes (uvicorn dictConfig + _setup_file_logging).
+    """
+    root_logger = logging.getLogger()
+    file_handlers = [h for h in root_logger.handlers
+                     if isinstance(h, logging.handlers.RotatingFileHandler)]
+    if len(file_handlers) > 1:
+        for h in file_handlers[1:]:
+            root_logger.removeHandler(h)
+            h.close()
+        logger.info("Cleaned up %d duplicate file handler(s) after startup", len(file_handlers) - 1)
+
+
+def _setup_file_logging(settings) -> None:
+    """Configure Python logging to output to logs/ directory with rotation.
+
+    When running via cli.py (uvicorn.run), logging is configured via log_config
+    parameter which includes the file handler. This function is a fallback for
+    non-uvicorn usage (e.g., TestClient, gRPC server).
+    """
+    global _logging_configured
+    if _logging_configured:
+        return
+    _logging_configured = True
+
+    root_logger = logging.getLogger()
+
+    # 直接返回，不重复添加。同时清理可能存在的重复handler。
+    file_handlers = [h for h in root_logger.handlers
+                     if isinstance(h, logging.handlers.RotatingFileHandler)]
+    if file_handlers:
+        # 保留第一个，移除多余的
+        for h in file_handlers[1:]:
+            root_logger.removeHandler(h)
+            h.close()
+        if len(file_handlers) > 1:
+            logger.info("Removed %d duplicate file handler(s)", len(file_handlers) - 1)
+        return
+
+    # 如果检测到uvicorn进程（通过sys.argv或已有uvicorn logger handler），跳过手动添加。
+    import sys
+    is_uvicorn = any("uvicorn" in arg for arg in sys.argv)
+    if not is_uvicorn:
+        # 也检查uvicorn logger是否已被配置（dictConfig先于app import执行）
+        uvicorn_logger = logging.getLogger("uvicorn")
+        if uvicorn_logger.handlers:
+            is_uvicorn = True
+    if is_uvicorn:
+        logger.debug("Skipping file logging setup (uvicorn log_config will handle it)")
+        return
+
+    # No file handler found — fallback for non-uvicorn usage (TestClient, gRPC, etc.)
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "protoforge.log"
+
+    log_level_str = getattr(settings, 'log_level', 'info') or 'info'
+    log_level = getattr(logging, log_level_str.upper(), logging.INFO)
+
+    file_handler = logging.handlers.RotatingFileHandler(
+        str(log_file),
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter(
+        "%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    file_handler.setFormatter(file_formatter)
+
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(file_handler)
+
+    logger.info("File logging configured: %s (level=%s)", log_file, log_level_str)
+
+
 def create_app() -> FastAPI:
     from pathlib import Path
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
     from protoforge.config import get_settings
     settings = get_settings()
+
+    _setup_file_logging(settings)
 
     app = FastAPI(
         title="ProtoForge",
@@ -279,6 +373,10 @@ def create_app() -> FastAPI:
 
     from protoforge.api.v1.common import setup_exception_handlers
     setup_exception_handlers(app)
+
+    # FastAPI中间件是后注册先执行(洋葱模型)，所以audit要先注册才能在auth之后执行
+    from protoforge.core.audit import audit_middleware
+    app.middleware("http")(audit_middleware)
 
     from protoforge.api.v1.auth import auth_middleware
     app.middleware("http")(auth_middleware)
@@ -359,10 +457,10 @@ def create_app() -> FastAPI:
     fallback_dir = Path(__file__).parent.parent / "static"
 
     if not static_dir.is_dir():
-        env_static = os.environ.get("PROTOFORGE_STATIC_DIR", "")  # FIXED: configurable static dir via env var
+        env_static = os.environ.get("PROTOFORGE_STATIC_DIR", "")
         static_dir = Path(env_static) if env_static else Path("/app/web/dist")
     if not fallback_dir.is_dir():
-        env_fallback = os.environ.get("PROTOFORGE_FALLBACK_DIR", "")  # FIXED: configurable fallback dir via env var
+        env_fallback = os.environ.get("PROTOFORGE_FALLBACK_DIR", "")
         fallback_dir = Path(env_fallback) if env_fallback else Path("/app/static")
 
     spa_dir = static_dir if static_dir.is_dir() else (fallback_dir if fallback_dir.is_dir() else None)

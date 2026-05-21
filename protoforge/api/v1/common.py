@@ -35,27 +35,27 @@ class ProtoForgeException(Exception):
 
 
 class NotFoundException(ProtoForgeException):
-    def __init__(self, message: str = "Resource not found"):  # FIXED: 中文→英文
+    def __init__(self, message: str = "Resource not found"):
         super().__init__(message=message, code=404, status_code=404)
 
 
 class ValidationException(ProtoForgeException):
-    def __init__(self, message: str = "Validation failed"):  # FIXED: 中文→英文
+    def __init__(self, message: str = "Validation failed"):
         super().__init__(message=message, code=400, status_code=400)
 
 
 class UnauthorizedException(ProtoForgeException):
-    def __init__(self, message: str = "Unauthorized"):  # FIXED: 中文→英文
+    def __init__(self, message: str = "Unauthorized"):
         super().__init__(message=message, code=401, status_code=401)
 
 
 class ForbiddenException(ProtoForgeException):
-    def __init__(self, message: str = "Forbidden"):  # FIXED: 中文→英文
+    def __init__(self, message: str = "Forbidden"):
         super().__init__(message=message, code=403, status_code=403)
 
 
 class ConflictException(ProtoForgeException):
-    def __init__(self, message: str = "Resource conflict"):  # FIXED: 中文→英文
+    def __init__(self, message: str = "Resource conflict"):
         super().__init__(message=message, code=409, status_code=409)
 
 
@@ -78,9 +78,19 @@ def setup_exception_handlers(app) -> None:
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError):
+        import logging
+        logger = logging.getLogger("protoforge.api")
+        logger.warning("ValueError in API: %s", exc)
+        raw_msg = str(exc)
+        if "invalid literal for int()" in raw_msg:
+            friendly_msg = "Invalid parameter value: expected a number but received a non-numeric value"
+        elif "could not convert" in raw_msg:
+            friendly_msg = "Invalid parameter type: could not convert value to the expected format"
+        else:
+            friendly_msg = f"Invalid value: {raw_msg}" if len(raw_msg) < 100 else "Invalid parameter value"
         return JSONResponse(
             status_code=400,
-            content=APIResponse.error(message=str(exc), code=400),
+            content=APIResponse.error(message=friendly_msg, code=400),
         )
 
     @app.exception_handler(RuntimeError)
@@ -92,11 +102,12 @@ def setup_exception_handlers(app) -> None:
         if "not initialized" in msg.lower():
             return JSONResponse(
                 status_code=503,
-                content=APIResponse.error(message="Service is starting up, please try again later", code=503),  # FIXED: 中文→英文
+                content=APIResponse.error(message="Service is starting up, please try again later", code=503),
             )
+        friendly_msg = msg if len(msg) < 100 else "A runtime error occurred"
         return JSONResponse(
             status_code=500,
-            content=APIResponse.error(message=msg, code=500),
+            content=APIResponse.error(message=friendly_msg, code=500),
         )
 
     @app.exception_handler(Exception)
@@ -106,5 +117,5 @@ def setup_exception_handlers(app) -> None:
         logger.exception("Unhandled exception in API: %s", exc)
         return JSONResponse(
             status_code=500,
-            content=APIResponse.error(message="Internal server error", code=500),  # FIXED: 中文→英文
+            content=APIResponse.error(message="Internal server error", code=500),
         )

@@ -510,7 +510,7 @@ async function loadData() {
     const failedIdx = results.map((r, i) => r.status === 'rejected' ? i : -1).filter(i => i >= 0)
     if (failedIdx.length > 0) {
       const names = [t('scenarios.title'), t('templates.title'), t('protocols.title')]
-      message.warning(t('scenarioEditor.partialLoadFailed') + ': ' + failedIdx.map(i => names[i]).join('、'))
+      message.warning(t('scenarioEditor.partialLoadFailed') + ': ' + failedIdx.map(i => names[i]).join(t('common.listSeparator')))
     }
     const scenarioId = route.params.id
     if (scenarioId) {

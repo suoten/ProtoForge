@@ -1,4 +1,4 @@
-"""Integration data model"""  # FIXED: CN→EN
+"""Integration data model"""
 
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ class ChannelConfig(BaseModel):
 class IntegrationConfig(BaseModel):
     enabled: bool = False
     edgelite_url: str = ""
-    username: str = ""  # FIXED: removed hardcoded "admin" default
+    username: str = ""
     password: str = ""
     channel: ChannelConfig = Field(default_factory=ChannelConfig)
     backhaul: BackhaulConfig = Field(default_factory=BackhaulConfig)

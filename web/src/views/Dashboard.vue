@@ -155,15 +155,53 @@
 
       </n-space>
     </n-spin>
+
+    <!-- Start Progress Modal -->
+    <n-modal v-model:show="showProgressModal" :mask-closable="false" :close-on-esc="false" preset="card"
+      :title="progressDone ? t('protocols.batchSuccessTitle') : t('protocols.batchStartingTitle')" style="width: 520px">
+      <div style="min-height: 120px">
+        <div style="margin-bottom:12px">
+          <n-progress :percentage="batchPercentage" :show-indicator="true"
+            :status="batchHasError ? 'warning' : 'success'"
+            :height="8" :border-radius="4" />
+          <div style="text-align:center;margin-top:8px;font-size:13px;color:#64748b">
+            {{ t('protocols.batchProgress', { current: batchCurrent, total: batchTotal }) }}
+          </div>
+        </div>
+        <div style="max-height:240px;overflow-y:auto">
+          <div v-for="item in batchItems" :key="item.name"
+            :style="{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', borderRadius:'8px', marginBottom:'4px', background: item.status === 'active' ? '#f0f9ff' : item.status === 'success' ? '#f0fdf4' : item.status === 'error' ? '#fef2f2' : 'transparent', transition: 'all 0.3s ease' }">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div :style="{ width:'8px',height:'8px',borderRadius:'50%',background: item.status === 'success' ? '#18a058' : item.status === 'error' ? '#d03050' : item.status === 'active' ? '#2080f0' : '#c0c4cc', transition: 'all 0.3s ease' }">
+                <div v-if="item.status === 'active'" style="width:8px;height:8px;border-radius:50%;background:#2080f0;animation:pulse 1.5s ease-in-out infinite"></div>
+              </div>
+              <span style="font-size:13px;font-weight:500">{{ item.displayName || item.name }}</span>
+            </div>
+            <n-tag :type="item.status === 'success' ? 'success' : item.status === 'error' ? 'error' : item.status === 'active' ? 'info' : 'default'"
+              size="tiny" :bordered="false">
+              {{ item.status === 'success' ? t('protocols.batchItemSuccess')
+                : item.status === 'error' ? t('protocols.batchItemFailed')
+                : item.status === 'active' ? t('protocols.batchItemStarting')
+                : t('protocols.batchItemPending') }}
+            </n-tag>
+          </div>
+        </div>
+      </div>
+      <template #action>
+        <n-button v-if="progressDone" type="primary" @click="closeProgressModal">{{ t('common.close') }}</n-button>
+        <n-button v-else disabled>{{ t('protocols.batchItemStarting') }}</n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, h, onMounted, onUnmounted } from 'vue'
-import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, useMessage, useDialog } from 'naive-ui'
+import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, NModal, NProgress, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
 import { useI18n } from '../i18n.js'
+import { formatTime as _formatTime } from '../utils.js'  // FIXED: 重复定义的格式化函数提取到utils.js
 
 const { t } = useI18n()
 const message = useMessage()
@@ -177,6 +215,32 @@ const healthInfo = ref(null)
 const loading = ref(true)
 const loadError = ref('')
 const startingAll = ref(false)
+
+// Progress modal state
+const showProgressModal = ref(false)
+const progressDone = ref(false)
+const batchItems = ref([])
+const batchCurrent = ref(0)
+const batchTotal = ref(0)
+const batchHasError = ref(false)
+
+const batchPercentage = computed(() => {
+  if (batchTotal.value === 0) return 0
+  return Math.round((batchCurrent.value / batchTotal.value) * 100)
+})
+
+function closeProgressModal() {
+  showProgressModal.value = false
+  progressDone.value = false
+  batchItems.value = []
+  batchCurrent.value = 0
+  batchTotal.value = 0
+  batchHasError.value = false
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 let deviceWs = null
 let logWs = null
@@ -207,11 +271,8 @@ const deviceColumns = computed(() => [
   { title: t('common.pointCount'), key: 'points', width: 80, render: (row) => row.point_count || (row.points || []).length },
 ])
 
-function formatTime(ts) {
-  if (!ts) return ''
-  const ms = ts > 1e12 ? ts : ts * 1000
-  return new Date(ms).toLocaleTimeString()
-}
+// FIXED: 重复定义的格式化函数 — 委托到utils.js统一实现
+function formatTime(ts) { return _formatTime(ts) }
 
 async function startAllProtocols() {
   const stopped = protocols.value.filter(p => p.status !== 'running')
@@ -221,34 +282,56 @@ async function startAllProtocols() {
     content: t('dashboard.startAllWarning', { n: stopped.length }),
     positiveText: t('dashboard.startButton'),
     negativeText: t('common.cancel'),
-    onPositiveClick: async () => {
-      startingAll.value = true
-      try {
-        const res = await api.startAllProtocols()
-        const started = res.started || []
-        const failed = res.failed || []
-        const portWarnings = res.port_warnings || []
-        if (failed.length > 0) {
-          message.warning(t('dashboard.startedWithFail', { ok: started.length, fail: failed.length }))
-          for (const f of failed) {
-            message.error(`${f.protocol}: ${f.error}`, { duration: 8000 })
-          }
-        } else if (started.length > 0) {
-          message.success(t('dashboard.startedCount', { n: started.length }))
-        }
-        if (portWarnings.length > 0) {
-          for (const w of portWarnings) {
-            message.warning(w.message, { duration: 8000 })
-          }
-        }
-        await loadData()
-      } catch (e) {
-        message.error(t('dashboard.startFailed') + ': ' + (e.response?.data?.detail || e.message))
-      } finally {
-        startingAll.value = false
-      }
+    onPositiveClick: () => {
+      doStartAllProtocols(stopped)
     }
   })
+}
+
+async function doStartAllProtocols(stopped) {
+  startingAll.value = true
+  batchTotal.value = stopped.length
+  batchCurrent.value = 0
+  batchHasError.value = false
+  batchItems.value = stopped.map(p => ({
+    name: p.name,
+    displayName: p.display_name || p.name,
+    status: 'pending'
+  }))
+  showProgressModal.value = true
+  progressDone.value = false
+
+  let successCount = 0
+  let failCount = 0
+
+  for (let i = 0; i < stopped.length; i++) {
+    const p = stopped[i]
+    batchItems.value[i].status = 'active'
+    batchCurrent.value = i + 1
+
+    try {
+      await api.startProtocol(p.name, null)
+      batchItems.value[i].status = 'success'
+      successCount++
+    } catch (e) {
+      batchItems.value[i].status = 'error'
+      failCount++
+      batchHasError.value = true
+    }
+
+    if (i < stopped.length - 1) await delay(200)
+  }
+
+  progressDone.value = true
+  startingAll.value = false
+
+  if (failCount > 0 && successCount > 0) {
+    message.warning(t('dashboard.startedWithFail', { ok: successCount, fail: failCount }))
+  } else if (successCount > 0) {
+    message.success(t('dashboard.startedCount', { n: successCount }))
+  }
+
+  await loadData()
 }
 
 async function loadData() {
@@ -291,7 +374,11 @@ function connectDeviceWs() {
     }
     return
   }
-  deviceWs.onopen = () => { devWsReconnectDelay = 1000; devWsReconnectAttempts = 0 }
+  // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整数据
+  deviceWs.onopen = () => {
+    devWsReconnectDelay = 1000; devWsReconnectAttempts = 0
+    api.getDevices().then(data => { if (Array.isArray(data)) devices.value = data }).catch(() => {})
+  }
   deviceWs.onerror = () => { devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
   deviceWs.onclose = () => {
     if (manualClose) return
@@ -326,7 +413,11 @@ function connectLogWs() {
     }
     return
   }
-  logWs.onopen = () => { logWsReconnectDelay = 1000; logWsReconnectAttempts = 0 }
+  // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整日志
+  logWs.onopen = () => {
+    logWsReconnectDelay = 1000; logWsReconnectAttempts = 0
+    api.getLogs({ limit: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {})
+  }
   logWs.onerror = () => {
     console.debug('Log WebSocket error, will auto-reconnect')
   }
@@ -368,3 +459,11 @@ onUnmounted(() => {
   if (logWs) { logWs.close(); logWs = null }
 })
 </script>
+
+<style scoped>
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+</style>

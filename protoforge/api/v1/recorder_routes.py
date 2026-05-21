@@ -17,7 +17,7 @@ _recorder_lock = threading.Lock()
 
 def _get_recorder():
     global _recorder
-    if _recorder is None:  # FIXED: thread-safe singleton with double-checked locking
+    if _recorder is None:
         with _recorder_lock:
             if _recorder is None:
                 from protoforge.core.recorder import Recorder
@@ -101,7 +101,7 @@ async def replay_recording(rec_id: str, config: Optional[dict[str, Any]] = None,
     cfg = config or {}
     speed = cfg.get("speed", 1.0)
 
-    if not isinstance(speed, (int, float)) or speed <= 0 or speed > 100 or math.isinf(speed) or math.isnan(speed):  # FIXED: 排除NaN/Infinity
+    if not isinstance(speed, (int, float)) or speed <= 0 or speed > 100 or math.isinf(speed) or math.isnan(speed):
         raise HTTPException(status_code=400, detail="speed must be a positive finite number between 0 and 100")
 
     try:

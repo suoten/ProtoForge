@@ -47,7 +47,7 @@ async def list_template_tags(_user: dict = Depends(require_viewer)):
     return {"tags": sorted(list(tags))}
 
 
-@router.get("/templates/{template_id}")  # FIXED: 移除response_model=TemplateDetail，与create保持一致
+@router.get("/templates/{template_id}")
 async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
 
@@ -57,11 +57,11 @@ async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.post("/templates")  # FIXED: 移除response_model=TemplateDetail，避免过滤_persistence_warning
+@router.post("/templates")
 async def create_template(template: TemplateDetail, _user: dict = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
-    try:  # FIXED: 添加异常处理
+    try:
         tm.add_template(template)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -77,7 +77,7 @@ async def create_template(template: TemplateDetail, _user: dict = Depends(requir
             logger.error("Failed to persist template %s: %s", template.id, db_err)
     resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
     if not db_ok:
-        resp["_persistence_warning"] = f"Template created, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
+        resp["_persistence_warning"] = f"Template created, but persistence failed: {db_err_msg}. Data will be lost after restart."
     return resp
 
 
@@ -89,7 +89,7 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
         tm.get_template(template_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    try:  # FIXED: 添加异常处理
+    try:
         tm.remove_template(template_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -104,13 +104,13 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
             logger.error("Failed to delete template %s from DB: %s", template_id, db_err)
     resp = {"status": "ok"}
     if not db_ok:
-        resp["_persistence_warning"] = f"Template deleted from memory, but DB deletion failed: {db_err_msg}. Template may reappear after restart."  # FIXED: 中文→英文
+        resp["_persistence_warning"] = f"Template deleted from memory, but DB deletion failed: {db_err_msg}. Template may reappear after restart."
     return resp
 
 
 @router.put("/templates/{template_id}")
 async def update_template(template_id: str, data: dict[str, Any], _user: dict = Depends(require_operator)):
-    if not isinstance(data, dict) or not data:  # FIXED: 类型校验
+    if not isinstance(data, dict) or not data:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty object")
     tm = _get_template_manager()
     db = _get_database()
@@ -131,11 +131,11 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict = 
             logger.error("Failed to update template %s in DB: %s", template_id, db_err)
     resp = updated.model_dump() if hasattr(updated, 'model_dump') and callable(updated.model_dump()) else updated
     if not db_ok:
-        resp["_persistence_warning"] = f"Template updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."  # FIXED: 中文→英文
+        resp["_persistence_warning"] = f"Template updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
     return resp
 
 
-@router.post("/templates/{template_id}/instantiate")  # FIXED: 移除response_model=DeviceConfig，避免过滤额外字段
+@router.post("/templates/{template_id}/instantiate")
 async def instantiate_template(
     template_id: str,
     device_id: str = Query(...),

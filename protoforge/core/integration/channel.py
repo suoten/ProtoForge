@@ -250,7 +250,7 @@ class WebSocketChannel(ChannelBase):
         else:
             connect_url = self._url
 
-        self._ws = await websockets.connect(connect_url, ping_interval=None, close_timeout=5.0, open_timeout=10.0)  # FIXED: added open_timeout to prevent infinite blocking
+        self._ws = await websockets.connect(connect_url, ping_interval=None, close_timeout=5.0, open_timeout=10.0)
         self._connected = True
         self._missed_heartbeats = 0
 
@@ -267,7 +267,7 @@ class WebSocketChannel(ChannelBase):
         data = json.dumps(message)
         try:
             await self._ws.send(data)
-        except Exception as e:  # FIXED: clean up pending_responses on send failure
+        except Exception as e:
             self._connected = False
             if msg_id and msg_id in self._pending_responses:
                 self._pending_responses.pop(msg_id, None)
@@ -307,7 +307,7 @@ class WebSocketChannel(ChannelBase):
     async def _receive_loop(self) -> None:
         try:
             async for raw in self._ws:
-                try:  # FIXED: json.loads without exception protection
+                try:
                     message = json.loads(raw) if isinstance(raw, str) else raw
                 except (json.JSONDecodeError, TypeError):
                     logger.warning("Invalid JSON received on WebSocket")

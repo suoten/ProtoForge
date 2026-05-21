@@ -152,12 +152,19 @@ async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer
     db = _get_database()
 
     try:
-        config = await db.load_scenario(scenario_id)
+        config = None
+        try:
+            config = await db.load_scenario(scenario_id) if db else None  # FIXED: 添加空值检查和异常降级
+        except Exception as db_err:
+            logger.warning("Failed to load scenario %s from DB, falling back to engine: %s", scenario_id, db_err)
         if not config:
             config = engine.get_scenario_config(scenario_id)
         if not config:
             raise HTTPException(status_code=404, detail="Scenario not found")
-        return config.model_dump()
+        result = config.model_dump() if hasattr(config, 'model_dump') and callable(config.model_dump) else config
+        # FIXED: 场景导出JSON无版本标识 — 添加schema_version为未来兼容性预留
+        result["schema_version"] = "1.0"
+        return result
     except HTTPException:
         raise
     except ValueError as e:

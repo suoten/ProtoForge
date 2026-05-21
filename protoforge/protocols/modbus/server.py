@@ -36,6 +36,9 @@ class ModbusTcpServer(ProtocolServer):
     protocol_name = "modbus_tcp"
     protocol_display_name = "Modbus TCP"
 
+    _MAX_READ_REGISTERS = 2000  # FIXED: 魔法数字→类常量
+    _MAX_READ_COILS = 125  # FIXED: 魔法数字→类常量
+
     def __init__(self):
         super().__init__()
         self._server_task: asyncio.Task | None = None
@@ -149,7 +152,7 @@ class ModbusTcpServer(ProtocolServer):
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > 2000:
+                if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
@@ -162,7 +165,7 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x02:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > 2000:
+                if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
@@ -175,7 +178,7 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x03:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > 125:
+                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
@@ -188,7 +191,7 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x04:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > 125:
+                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
@@ -227,7 +230,7 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x10:
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > 125:
+                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 byte_count = data[4]
                 for i in range(count):
@@ -254,7 +257,7 @@ class ModbusTcpServer(ProtocolServer):
                 r_count = struct.unpack(">H", data[2:4])[0]
                 w_start = struct.unpack(">H", data[4:6])[0] + 1
                 w_count = struct.unpack(">H", data[6:8])[0]
-                if r_count > 125 or w_count > 121:
+                if r_count > self._MAX_READ_COILS or w_count > 121:  # FIXED: 魔法数字→类常量
                     return bytes([fc | 0x80, 0x03])
                 w_byte_count = data[8]
                 for i in range(w_count):
@@ -351,9 +354,10 @@ class ModbusTcpServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        async with self._behaviors_lock:  # FIXED: 添加锁保护
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config
+        await self._update_default_device_async(device_config.id)  # FIXED: 使用异步锁版本
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
@@ -383,12 +387,13 @@ class ModbusTcpServer(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+        async with self._behaviors_lock:  # FIXED: 添加锁保护
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)
         slave_id = self._slave_map.pop(device_id, None)
         if slave_id is not None:
             self._data_stores.pop(slave_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)  # FIXED: 使用异步锁版本
         logger.info("Modbus device removed: %s", device_id)
         self._log_debug("system", "device_remove",
                         msg("modbus_tcp", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量

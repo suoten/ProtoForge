@@ -6,6 +6,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class MqttBroker(ProtocolServer):
             self._publish_task = asyncio.create_task(self._publish_loop(publish_interval))
             logger.info("MQTT Broker starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"MQTT Broker启动 {self._host}:{self._port}",
+                            f"MQTT Broker started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -157,26 +158,28 @@ class MqttBroker(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("MQTT broker stopped")
-            self._log_debug("system", "server_stop", "MQTT服务停止")
+            self._log_debug("system", "server_stop", "MQTT broker stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = MqttDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
         logger.info("MQTT device created: %s", device_config.id)
         self._log_debug("system", "device_create",
-                        f"创建MQTT设备 {device_config.name}",
+                        f"MQTT device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("MQTT device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"移除MQTT设备 {device_id}",
+                        f"MQTT device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -209,47 +212,47 @@ class MqttBroker(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": "监听地址",
+                    "description": desc("listen_address", "Listen address"),
                 },
                 "port": {
                     "type": "integer",
                     "default": 1883,
-                    "description": "监听端口",
+                    "description": desc("listen_port", "Listen port"),
                 },
                 "publish_interval": {
                     "type": "integer",
                     "default": 5,
-                    "description": "数据发布间隔（秒）",
+                    "description": desc("mqtt_publish_interval", "Data publish interval (seconds)"),
                 },
                 "auth_required": {
                     "type": "boolean",
                     "default": False,
-                    "description": "是否启用用户名/密码认证",
+                    "description": desc("mqtt_auth_required", "Enable username/password authentication"),
                 },
                 "auth_username": {
                     "type": "string",
                     "default": "",
-                    "description": "认证用户名",
+                    "description": desc("mqtt_auth_username", "Authentication username"),
                 },
                 "auth_password": {
                     "type": "string",
                     "default": "",
-                    "description": "认证密码",
+                    "description": desc("mqtt_auth_password", "Authentication password"),
                 },
                 "tls_enabled": {
                     "type": "boolean",
                     "default": False,
-                    "description": "是否启用TLS加密",
+                    "description": desc("mqtt_tls_enabled", "Enable TLS encryption"),
                 },
                 "tls_cert_path": {
                     "type": "string",
                     "default": "",
-                    "description": "TLS 证书文件路径（PEM格式）",
+                    "description": desc("mqtt_tls_cert_path", "TLS certificate file path (PEM format)"),
                 },
                 "tls_key_path": {
                     "type": "string",
                     "default": "",
-                    "description": "TLS 私钥文件路径（PEM格式）",
+                    "description": desc("mqtt_tls_key_path", "TLS private key file path (PEM format)"),
                 },
             },
         }

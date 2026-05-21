@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:  # FIXED: json.loads without exception protection
+        try:
             config_data = json.loads(config_data)
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
@@ -24,13 +24,13 @@ def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConf
         device_list = [config_data]
 
     for dev in device_list:
-        if not isinstance(dev, dict):  # FIXED: device_list元素无类型校验
+        if not isinstance(dev, dict):
             logger.warning("Skipping non-dict device entry in EdgeLite config: %s", type(dev).__name__)
             continue
         protocol = dev.get("protocol", "modbus_tcp")
         points = []
         for pt in dev.get("points", []):
-            if not isinstance(pt, dict):  # FIXED: points元素无类型校验
+            if not isinstance(pt, dict):
                 logger.warning("Skipping non-dict point entry: %s", type(pt).__name__)
                 continue
             try:
@@ -75,9 +75,9 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
         raise FileNotFoundError(f"Config file not found: {file_path}")
     try:
         content = path.read_text(encoding="utf-8")
-    except (UnicodeDecodeError, PermissionError, OSError) as e:  # FIXED: 文件IO无异常保护
+    except (UnicodeDecodeError, PermissionError, OSError) as e:
         raise ValueError(f"Failed to read config file '{file_path}': {e}") from e
-    try:  # FIXED: json.loads without exception protection
+    try:
         data = json.loads(content)
     except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid JSON in file '{file_path}': {e}") from e
@@ -86,7 +86,7 @@ def import_edgelite_file(file_path: str) -> list[DeviceConfig]:
 
 def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceConfig]:
     if isinstance(config_data, str):
-        try:  # FIXED: json.loads without exception protection
+        try:
             config_data = json.loads(config_data)
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e
@@ -99,7 +99,7 @@ def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceCo
     cameras = config_data.get("cameras", config_data.get("devices", []))
 
     for cam in cameras:
-        if not isinstance(cam, dict):  # FIXED: cameras元素无类型校验
+        if not isinstance(cam, dict):
             logger.warning("Skipping non-dict camera entry in PyGBSentry config: %s", type(cam).__name__)
             continue
         device_id = cam.get("device_id", cam.get("id", ""))

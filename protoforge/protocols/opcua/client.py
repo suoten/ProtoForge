@@ -36,7 +36,7 @@ def parse_node_id(address: str):
 
 class OpcUaClientProtocol(ProtocolServer):
     protocol_name = "opcua_client"
-    protocol_display_name = "OPC-UA Client"  # FIXED: CN→EN
+    protocol_display_name = "OPC-UA Client"
 
     def __init__(self):
         super().__init__()
@@ -75,7 +75,7 @@ class OpcUaClientProtocol(ProtocolServer):
             logger.info("OPC-UA Client connected to %s (timeout=%.1fs, session_timeout=%dms)",
                         self._endpoint, self._request_timeout, self._session_timeout)
             self._log_debug("system", "client_connect",
-                            f"OPC-UA client connected: {self._endpoint}")  # FIXED: CN→EN
+                            f"OPC-UA client connected: {self._endpoint}")
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to connect to OPC-UA server: %s", e)
@@ -104,7 +104,7 @@ class OpcUaClientProtocol(ProtocolServer):
                     if not ASYNCUA_SYNC and hasattr(self._client, 'uaclient'):
                         if hasattr(self._client.uaclient, 'keepalive') and callable(self._client.uaclient.keepalive):
                             await self._client.uaclient.keepalive()
-                except Exception as ka_err:  # FIXED: keepalive异常被吞掉，连接状态不可知
+                except Exception as ka_err:
                     logger.debug("OPC-UA keepalive error: %s", ka_err)
             if self._max_reconnect_attempts > 0 and attempts >= self._max_reconnect_attempts:
                 logger.error("OPC-UA Client max reconnect attempts (%d) reached, giving up",
@@ -120,7 +120,7 @@ class OpcUaClientProtocol(ProtocolServer):
                             self._client.disconnect()
                         else:
                             await self._client.disconnect()
-                    except Exception as disc_err:  # FIXED: disconnect异常被吞掉
+                    except Exception as disc_err:
                         logger.debug("OPC-UA disconnect error during reconnect: %s", disc_err)
                     self._client = None
                 await self._connect()
@@ -128,7 +128,7 @@ class OpcUaClientProtocol(ProtocolServer):
                 attempts = 0
                 logger.info("OPC-UA Client reconnected to %s", self._endpoint)
                 self._log_debug("system", "client_reconnect",
-                                f"OPC-UA client reconnected: {self._endpoint}")  # FIXED: CN→EN
+                                f"OPC-UA client reconnected: {self._endpoint}")
             except Exception as e:
                 self._connected = False
                 self._status = ProtocolStatus.ERROR
@@ -157,7 +157,7 @@ class OpcUaClientProtocol(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-UA Client disconnected")
-            self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")  # FIXED: CN→EN
+            self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         self._device_configs[device_config.id] = device_config
@@ -170,7 +170,7 @@ class OpcUaClientProtocol(ProtocolServer):
         logger.info("OPC-UA Client device created: %s (%d points)",
                     device_config.id, len(device_config.points))
         self._log_debug("system", "device_create",
-                        f"Creating OPC-UA client device: {device_config.name}"  ,  # FIXED: CN→EN
+                        f"Creating OPC-UA client device: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
@@ -252,32 +252,32 @@ class OpcUaClientProtocol(ProtocolServer):
                 "endpoint": {
                     "type": "string",
                     "default": "opc.tcp://localhost:4840",
-                    "description": "OPC-UA server endpoint address"  ,  # FIXED: CN→EN
+                    "description": "OPC-UA server endpoint address",
                 },
                 "read_interval": {
                     "type": "number",
                     "default": 1.0,
-                    "description": "Data read interval (seconds)"  ,  # FIXED: CN→EN
+                    "description": "Data read interval (seconds)",
                 },
                 "request_timeout": {
                     "type": "number",
                     "default": 10.0,
-                    "description": "Request timeout (seconds), increase to reduce channel renewal timeout errors"  ,  # FIXED: CN→EN
+                    "description": "Request timeout (seconds), increase to reduce channel renewal timeout errors",
                 },
                 "session_timeout": {
                     "type": "integer",
                     "default": 3600000,
-                    "description": "Session timeout (ms), default 1 hour"  ,  # FIXED: CN→EN
+                    "description": "Session timeout (ms), default 1 hour",
                 },
                 "reconnect_interval": {
                     "type": "number",
                     "default": 5.0,
-                    "description": "Reconnect interval (seconds)"  ,  # FIXED: CN→EN
+                    "description": "Reconnect interval (seconds)",
                 },
                 "max_reconnect_attempts": {
                     "type": "integer",
                     "default": 0,
-                    "description": "Max reconnect attempts, 0 for unlimited"  ,  # FIXED: CN→EN
+                    "description": "Max reconnect attempts, 0 for unlimited",
                 },
             },
         }

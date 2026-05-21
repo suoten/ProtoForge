@@ -112,7 +112,7 @@ class WebhookManager:
             for item in data:
                 wh_id = item.get("id")
                 wh_url = item.get("url")
-                if not wh_id or not wh_url:  # FIXED: validate required fields to prevent KeyError on corrupt data
+                if not wh_id or not wh_url:
                     logger.warning("Skipping webhook with missing id or url: %s", item)
                     continue
                 wh = WebhookConfig(
@@ -187,8 +187,8 @@ class WebhookManager:
         webhook = self._webhooks.get(wh_id)
         if not webhook:
             return None
-        webhook.name = config.get("name", webhook.name)  # FIXED: direct dict access
-        new_url = config.get("url", webhook.url)  # FIXED: direct dict access
+        webhook.name = config.get("name", webhook.name)
+        new_url = config.get("url", webhook.url)
         if "url" in config:
             parsed = urlparse(new_url)
             if parsed.scheme not in ("http", "https"):
@@ -197,10 +197,10 @@ class WebhookManager:
             if _is_private_hostname(hostname):
                 raise ValueError(f"Webhook URL points to private/internal address: {new_url}")
         webhook.url = new_url
-        webhook.events = config.get("events", webhook.events)  # FIXED: direct dict access
-        webhook.headers = config.get("headers", webhook.headers)  # FIXED: direct dict access
-        webhook.enabled = config.get("enabled", webhook.enabled)  # FIXED: direct dict access
-        webhook.secret = config.get("secret", webhook.secret)  # FIXED: direct dict access
+        webhook.events = config.get("events", webhook.events)
+        webhook.headers = config.get("headers", webhook.headers)
+        webhook.enabled = config.get("enabled", webhook.enabled)
+        webhook.secret = config.get("secret", webhook.secret)
         self._persist()
         return webhook
 
@@ -224,7 +224,7 @@ class WebhookManager:
         if webhook.secret:
             try:
                 body_bytes = json.dumps(body).encode("utf-8")
-                sig = hmac.new(webhook.secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()  # FIXED: explicit utf-8 encoding to prevent UnicodeEncodeError
+                sig = hmac.new(webhook.secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
             except (UnicodeEncodeError, TypeError) as enc_err:
                 logger.error("Failed to compute HMAC for webhook %s: %s", webhook.id, enc_err)
                 return
@@ -242,9 +242,9 @@ class WebhookManager:
         self._persist()
 
     async def _dispatch(self, msg: dict) -> None:
-        event = msg.get("event")  # FIXED: direct dict access could raise KeyError
-        payload = msg.get("payload")  # FIXED: direct dict access could raise KeyError
-        timestamp = msg.get("timestamp")  # FIXED: direct dict access could raise KeyError
+        event = msg.get("event")
+        payload = msg.get("payload")
+        timestamp = msg.get("timestamp")
         if not event:
             logger.warning("Webhook message missing 'event' field")
             return

@@ -8,7 +8,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 
@@ -138,8 +138,8 @@ class OpcUaServer(ProtocolServer):
         self._point_nodes: dict[str, Any] = {}
         self._device_namespaces: dict[str, str] = {}
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
-        self._host = "0.0.0.0"  # FIXED: initialize _host to avoid AttributeError
-        self._port = 4840  # FIXED: initialize _port to avoid AttributeError
+        self._host = "0.0.0.0"
+        self._port = 4840
         self._server_task: asyncio.Task | None = None
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
@@ -158,8 +158,8 @@ class OpcUaServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         host = config.get("host", "0.0.0.0")
         port = config.get("port", 4840)
-        self._host = host  # FIXED: store host for logging
-        self._port = port  # FIXED: store port for logging
+        self._host = host
+        self._port = port
         self._endpoint = f"opc.tcp://{host}:{port}/protoforge"
 
         try:
@@ -220,15 +220,15 @@ class OpcUaServer(ProtocolServer):
                 except AttributeError:
                     self._idx = await self._server.get_namespace_index(uri)
 
-            for device_config in self._device_configs.values():
-                await self._create_opcua_device(device_config)
+            # 通过create_device()重新注册所有设备，提前创建会导致add_node
+            # 父节点不存在错误（server.start()尚未执行，地址空间未就绪）
 
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._server.start())
             self._server_task.add_done_callback(self._on_server_task_done)
             logger.info("OPC-UA server starting at %s", self._endpoint)
             self._log_debug("system", "server_start",
-                            msg("opcua", "service_started", host=self._host, port=self._port))  # FIXED: 中文硬编码→i18n常量
+                            msg("opcua", "service_started", host=self._host, port=self._port))
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to start OPC-UA server: %s", e)
@@ -251,13 +251,14 @@ class OpcUaServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-UA server stopped")
-            self._log_debug("system", "server_stop", msg("opcua", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("opcua", "service_stopped"))
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcUaDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         ns = proto_config.get("namespace", "protoforge")
@@ -268,15 +269,16 @@ class OpcUaServer(ProtocolServer):
 
         logger.info("OPC-UA device created: %s (namespace=%s)", device_config.id, ns)
         self._log_debug("system", "device_create",
-                        msg("opcua", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
+                        msg("opcua", "device_created", name=device_config.name),
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_namespaces.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         nodes = self._device_nodes.pop(device_id, None)
         if nodes and self._server:
             point_nodes = nodes.get("points", {})
@@ -295,7 +297,7 @@ class OpcUaServer(ProtocolServer):
                     logger.warning("OPC-UA folder node delete error: %s", e)
         logger.info("OPC-UA device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        msg("opcua", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
+                        msg("opcua", "device_removed", id=device_id),
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -342,33 +344,33 @@ class OpcUaServer(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("listen_address")},
                 "port": {
                     "type": "integer",
                     "default": 4840,
-                    "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("listen_port")},
                 "security_mode": {
                     "type": "string",
                     "default": "None",
                     "enum": ["None", "Sign", "SignAndEncrypt"],
-                    "description": desc("security_mode")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("security_mode")},
                 "security_policy": {
                     "type": "string",
                     "default": "None",
                     "enum": ["None", "Basic256Sha256"],
-                    "description": desc("security_policy")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("security_policy")},
                 "certificate_path": {
                     "type": "string",
                     "default": "",
-                    "description": desc("server_cert_path")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("server_cert_path")},
                 "private_key_path": {
                     "type": "string",
                     "default": "",
-                    "description": desc("server_key_path")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("server_key_path")},
                 "cert_dir": {
                     "type": "string",
                     "default": "",
-                    "description": desc("cert_store_dir")},  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("cert_store_dir")},
             },
         }
 

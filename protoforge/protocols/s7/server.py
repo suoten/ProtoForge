@@ -7,7 +7,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +183,13 @@ class S7Server(ProtocolServer):
     protocol_name = "s7"
     protocol_display_name = "Siemens S7"
 
+    _DEFAULT_PDU_SIZE = 480
+    _MIN_PDU_SIZE = 128
+    _MAX_PDU_SIZE = 960
+    _DEFAULT_AMQ = 8
+    _MAX_AMQ = 64
+    _CONNECTION_TIMEOUT = 30  # 与modbus保持一致
+
     def __init__(self):
         super().__init__()
         self._behaviors: dict[str, S7DeviceBehavior] = {}
@@ -209,7 +216,7 @@ class S7Server(ProtocolServer):
             logger.info("S7 server started on %s:%d (rack=%d, slot=%d)",
                          self._host, self._port, self._rack, self._slot)
             self._log_debug("system", "server_start",
-                            msg("s7", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
+                            msg("s7", "service_started", host=self._host, port=self._port),
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -230,7 +237,7 @@ class S7Server(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("S7 server stopped")
-            self._log_debug("system", "server_stop", msg("s7", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("s7", "service_stopped"))
 
     async def _serve(self) -> None:
         try:
@@ -252,8 +259,8 @@ class S7Server(ProtocolServer):
         connection_device_id: str | None = None
         try:
             while self._server_running:
-                try:  # FIXED: TCP connection had no read timeout (Slowloris vulnerability)
-                    tpkt_header = await asyncio.wait_for(reader.readexactly(4), timeout=30.0)
+                try:
+                    tpkt_header = await asyncio.wait_for(reader.readexactly(4), timeout=self._CONNECTION_TIMEOUT)
                 except asyncio.TimeoutError:
                     break
                 if len(tpkt_header) < 4:
@@ -273,7 +280,7 @@ class S7Server(ProtocolServer):
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
             logger.debug("S7 connection closed: %s", addr)
         finally:
             writer.close()
@@ -354,9 +361,9 @@ class S7Server(ProtocolServer):
         return self._default_device_id
 
     def _make_s7_connect_response(self, data: bytes) -> bytes:
-        pdu_size_req = 480
-        max_amq_caller = 8
-        max_amq_callee = 8
+        pdu_size_req = self._DEFAULT_PDU_SIZE
+        max_amq_caller = self._DEFAULT_AMQ
+        max_amq_callee = self._DEFAULT_AMQ
         try:
             s7_offset = 0
             for i in range(len(data) - 1):
@@ -368,14 +375,14 @@ class S7Server(ProtocolServer):
                 if data[param_start] == 0xF0 and len(data) > param_start + 5:
                     pdu_size_req = struct.unpack(">H", data[param_start + 3:param_start + 5])[0]
                     if len(data) > param_start + 7:
-                        max_amq_caller = struct.unpack(">H", data[param_start + 5:param_start + 7])[0] or 8
+                        max_amq_caller = struct.unpack(">H", data[param_start + 5:param_start + 7])[0] or self._DEFAULT_AMQ
                     if len(data) > param_start + 9:
-                        max_amq_callee = struct.unpack(">H", data[param_start + 7:param_start + 9])[0] or 8
+                        max_amq_callee = struct.unpack(">H", data[param_start + 7:param_start + 9])[0] or self._DEFAULT_AMQ
         except Exception as e:
             logger.debug("S7 connect param parse error: %s", e)
-        pdu_size = min(max(pdu_size_req, 128), 960)
-        max_amq_caller = min(max(max_amq_caller, 1), 64)
-        max_amq_callee = min(max(max_amq_callee, 1), 64)
+        pdu_size = min(max(pdu_size_req, self._MIN_PDU_SIZE), self._MAX_PDU_SIZE)
+        max_amq_caller = min(max(max_amq_caller, 1), self._MAX_AMQ)
+        max_amq_callee = min(max(max_amq_callee, 1), self._MAX_AMQ)
         resp = bytearray([
             0x03, 0x00, 0x00, 0x1D,
             0x02, 0xF0, 0x80,
@@ -571,7 +578,7 @@ class S7Server(ProtocolServer):
                             logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
-                                msg("s7", "point_written", area=area_name, db_number=db_number, offset=offset),  # FIXED: 中文硬编码→i18n常量
+                                msg("s7", "point_written", area=area_name, db_number=db_number, offset=offset),
                                 detail={"area": area_name, "db": db_number, "offset": offset, "len": len(write_data)})
             result_codes.append(0xFF)
 
@@ -702,7 +709,7 @@ class S7Server(ProtocolServer):
 
         behavior = S7DeviceBehavior(device_config.points)
         self._behaviors[device_id] = behavior
-        self._update_default_device(device_id)
+        await self._update_default_device_async(device_id)
 
         proto_config = device_config.protocol_config or {}
         rack = proto_config.get("rack", self._rack)
@@ -726,7 +733,7 @@ class S7Server(ProtocolServer):
         logger.info("S7 device created: %s (rack=%d, slot=%d)",
                      device_id, rack, slot)
         self._log_debug("system", "device_create",
-                        msg("s7", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
+                        msg("s7", "device_created", name=device_config.name),
                         device_id=device_id)
         return device_id
 
@@ -738,10 +745,10 @@ class S7Server(ProtocolServer):
             rack = info.get("rack", 0)
             slot = info.get("slot", 1)
             self._rack_slot_map.pop((rack, slot), None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("S7 device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        msg("s7", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
+                        msg("s7", "device_removed", id=device_id),
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -773,22 +780,22 @@ class S7Server(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": desc("listen_address"),  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("listen_address"),
                 },
                 "port": {
                     "type": "integer",
                     "default": 102,
-                    "description": desc("s7_port_desc"),  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("s7_port_desc"),
                 },
                 "rack": {
                     "type": "integer",
                     "default": 0,
-                    "description": desc("s7_rack"),  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("s7_rack"),
                 },
                 "slot": {
                     "type": "integer",
                     "default": 1,
-                    "description": desc("s7_slot"),  # FIXED: 中文硬编码→i18n常量
+                    "description": desc("s7_slot"),
                 },
             },
         }

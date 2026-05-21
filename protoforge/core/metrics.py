@@ -36,7 +36,7 @@ class MetricsCollector:
         key = self._make_key(name, labels)
         return self._gauges.get(key, 0)
 
-    def collect_from_engine(self, engine: Any) -> None:  # FIXED: added try-except to prevent metrics collection crash
+    def collect_from_engine(self, engine: Any) -> None:
         try:
             devices = engine.get_all_device_instances()
             self.set_gauge("protoforge_devices_total", len(devices))
@@ -55,7 +55,7 @@ class MetricsCollector:
         except Exception as e:
             logger.debug("Failed to collect engine metrics: %s", e)
 
-    def collect_from_test_runner(self, runner: Any) -> None:  # FIXED: added try-except and null-safe len()
+    def collect_from_test_runner(self, runner: Any) -> None:
         try:
             if runner is None:
                 return

@@ -8,6 +8,7 @@ import httpx
 
 from protoforge.config import get_settings
 from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT, HTTP_TIMEOUT_SHORT
+from protoforge.core.messages import desc
 from protoforge.core.integration.protocol import (
     ACCESS_MODE_MAP,
     PROTOCOL_MAP_BASE,
@@ -33,7 +34,7 @@ def get_global_edgelite_config() -> dict[str, str]:
     s = get_settings()
     return {
         "url": s.edgelite_url or "",
-        "username": s.edgelite_username,  # FIXED: removed hardcoded "admin" fallback, use config value
+        "username": s.edgelite_username,
         "password": s.edgelite_password or "",
     }
 
@@ -376,23 +377,23 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
             json={"username": username, "password": password},
         )
     except httpx.ConnectError as e:
-        raise EdgeLiteError("connection", f"Cannot connect to EdgeLite gateway: {e}", "Please verify the gateway address and network connectivity")  # FIXED: CN→EN
+        raise EdgeLiteError("connection", desc("edgelite.error.connection").format(error=e), desc("edgelite.suggestion.verify_gateway"))
     except httpx.TimeoutException:
-        raise EdgeLiteError("timeout", "Connection to EdgeLite gateway timed out", "Please check if the gateway is online and network latency is acceptable")  # FIXED: CN→EN
+        raise EdgeLiteError("timeout", desc("edgelite.error.timeout"), desc("edgelite.suggestion.check_online_latency"))
 
     if login_resp.status_code == 401:
-        raise EdgeLiteError("auth", "EdgeLite username or password is incorrect", "Please check the EdgeLite credentials in system settings")  # FIXED: CN→EN
+        raise EdgeLiteError("auth", desc("edgelite.error.auth"), desc("edgelite.suggestion.check_credentials"))
     if login_resp.status_code != 200:
-        raise EdgeLiteError("http", f"EdgeLite login failed: HTTP {login_resp.status_code}", f"Gateway returned error status code {login_resp.status_code}")  # FIXED: CN→EN
+        raise EdgeLiteError("http", desc("edgelite.error.http_login").format(status=login_resp.status_code), desc("edgelite.suggestion.gateway_status_code").format(status=login_resp.status_code))
 
     try:
         data = login_resp.json()
     except Exception as e:
-        raise EdgeLiteError("parse_error", f"EdgeLite login returned invalid JSON: {e}", "Please check if the EdgeLite gateway version is compatible")  # FIXED: CN→EN
+        raise EdgeLiteError("parse_error", desc("edgelite.error.parse_error").format(error=e), desc("edgelite.suggestion.check_version"))
     inner = data.get("data")
     token = (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
     if not token:
-        raise EdgeLiteError("token", "EdgeLite login succeeded but no token was returned", "Please check if the EdgeLite gateway version is compatible")  # FIXED: CN→EN
+        raise EdgeLiteError("token", desc("edgelite.error.token_missing"), desc("edgelite.suggestion.check_version"))
     return token
 
 
@@ -400,19 +401,19 @@ def _extract_token(login_resp: httpx.Response) -> str:
     try:
         data = login_resp.json()
     except Exception as e:
-        raise EdgeLiteError("token", f"EdgeLite login response is not in JSON format: {e}", "Please check if the EdgeLite gateway version is compatible") from e  # FIXED: CN→EN
+        raise EdgeLiteError("token", desc("edgelite.error.token_format").format(error=e), desc("edgelite.suggestion.check_version")) from e
     inner = data.get("data")
     return (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
 
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config.get("url"):  # FIXED: el_config["url"] direct dict access could raise KeyError
+    if not el_config.get("url"):
         return {
             "ok": False, "skipped": True,
             "reason": "edgelite_url not configured",
             "error_type": "not_configured",
-            "suggestion": "Please configure the EdgeLite gateway URL in System Settings, or set edgelite_url in the device protocol config",  # FIXED: CN→EN
+            "suggestion": desc("edgelite.suggestion.configure_url"),
         }
 
     payload = convert_device_to_edgelite(device, protoforge_host, el_config=el_config)
@@ -421,12 +422,12 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             "ok": False, "skipped": True,
             "reason": "Protocol not supported by EdgeLite",
             "error_type": "unsupported",
-            "suggestion": "This protocol does not support EdgeLite integration yet",  # FIXED: CN→EN
+            "suggestion": desc("edgelite.suggestion.unsupported_protocol"),
         }
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         except EdgeLiteError as e:
             return {
                 "ok": False,
@@ -435,21 +436,21 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                 "suggestion": e.suggestion,
             }
         except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "Please check network connection and gateway configuration"},  # FIXED: CN→EN
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
 
         headers = {"Authorization": f"Bearer {token}"}
 
         try:
             create_resp = await client.post(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",  # FIXED: direct dict access
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
                 json=payload, headers=headers,
             )
         except httpx.ConnectError:
-            return {"ok": False, "error": "Cannot connect to EdgeLite during push, please check if gateway is online", "error_type": "connection"}  # FIXED: CN→EN
+            return {"ok": False, "error": desc("edgelite.error.push_connection"), "error_type": "connection"}
         except httpx.TimeoutException:
-            return {"ok": False, "error": "Push request timed out, EdgeLite responded too slowly", "error_type": "timeout"}  # FIXED: CN→EN
+            return {"ok": False, "error": desc("edgelite.error.push_timeout"), "error_type": "timeout"}
         except Exception as e:
-            return {"ok": False, "error": f"Push request exception: {e}", "error_type": "unknown"}  # FIXED: CN→EN
+            return {"ok": False, "error": desc("edgelite.error.push_exception").format(error=e), "error_type": "unknown"}
 
         if create_resp.status_code in (200, 201):
             logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
@@ -459,7 +460,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
             try:
                 update_resp = await client.put(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",  # FIXED: direct dict access
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
                     json=update_payload, headers=headers,
                 )
             except httpx.ConnectError:
@@ -477,14 +478,14 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             return {
                 "ok": False,
                 "error": f"EdgeLite rejected push: {create_resp.text[:300]}", "error_type": "validation_error",
-                "suggestion": "Device config may have incompatible fields, please check protocol type and point configuration"  ,  # FIXED: CN→EN
+                "suggestion": desc("edgelite.suggestion.check_config"),
             }
 
         if create_resp.status_code >= 500:
             return {
                 "ok": False,
                 "error": f"EdgeLite server error: HTTP {create_resp.status_code}", "error_type": "edgelite_error",
-                "suggestion": f"EdgeLite ({el_config.get('url', '')}) 内部错误。请检查 EdgeLite 日志，确认已注册的协议驱动类型: {payload['protocol']}",  # FIXED: direct dict access
+                "suggestion": f"EdgeLite ({el_config.get('url', '')}) 内部错误。请检查 EdgeLite 日志，确认已注册的协议驱动类型: {payload['protocol']}",
             }
 
         return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
@@ -492,22 +493,22 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config.get("url"):  # FIXED: direct dict access
+    if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "Please check network connection and gateway configuration"},  # FIXED: CN→EN
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
 
         headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.delete(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",  # FIXED: direct dict access
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -523,17 +524,17 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
 
 async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config.get("url"):  # FIXED: direct dict access
+    if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "Please check network connection and gateway configuration"},  # FIXED: CN→EN
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
 
         headers = {"Authorization": f"Bearer {token}"}
         try:
@@ -568,22 +569,22 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
 
 async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config.get("url"):  # FIXED: direct dict access
+    if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = getattr(device, "id", "")
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         except EdgeLiteError as e:
             return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
         except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "Please check network connection and gateway configuration"},  # FIXED: CN→EN
+            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
 
         headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",  # FIXED: direct dict access
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
                 headers=headers,
             )
         except httpx.ConnectError:
@@ -606,12 +607,12 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
 
 _PROTOCOL_DISPLAY = {
     "modbus_tcp": "Modbus TCP", "modbus_rtu": "Modbus RTU", "opcua": "OPC-UA",
-    "mqtt": "MQTT", "http": "HTTP Webhook", "s7": "S7", "mc": "MC协议",
+    "mqtt": "MQTT", "http": "HTTP Webhook", "s7": "S7", "mc": "MC Protocol",
     "fins": "FINS", "ab": "EtherNet/IP", "fanuc": "FOCAS", "mtconnect": "MTConnect",
     "toledo": "Toledo", "opcda": "OPC DA", "onvif": "ONVIF", "dlt645": "DL/T 645",
     "iec104": "IEC 104", "kuka": "KUKA EKRL", "abb_robot": "ABB RWS",
-    "sparkplug_b": "Sparkplug B", "serial": "串口设备", "database": "数据库接入",
-    "barcode_scanner": "扫码枪", "profinet": "PROFINET", "ethercat": "EtherCAT",
+    "sparkplug_b": "Sparkplug B", "serial": "Serial Device", "database": "Database",
+    "barcode_scanner": "Barcode Scanner", "profinet": "PROFINET", "ethercat": "EtherCAT",
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
@@ -630,7 +631,7 @@ def _get_default_port(protocol: str) -> int:
         port_map = get_protocol_port_map()
         if protocol in port_map:
             return port_map[protocol].get("port", _PROTOCOL_DEFAULT_PORTS.get(protocol, 0))
-    except Exception as e:  # FIXED: 吞掉异常导致配置错误不可见
+    except Exception as e:
         logger.debug("Failed to get protocol port map for %s: %s", protocol, e)
     return _PROTOCOL_DEFAULT_PORTS.get(protocol, 0)
 
@@ -702,58 +703,58 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
 
     parts = []
     if not protoforge_running:
-        parts.append(f"ProtoForge {proto_name} protocol service is not running. Please start the {proto_name} service in Protocol Management")  # FIXED: CN→EN
+        parts.append(desc("edgelite.connect.service_not_running").format(proto=proto_name))
     elif not driver_host:
         if same_server:
-            parts.append(f"ProtoForge address not specified in driver_config. Since EdgeLite and ProtoForge are on the same server, ensure the ProtoForge address in System Settings > EdgeLite Config is set to 127.0.0.1")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.address_not_specified_same_server"))
         else:
-            parts.append("ProtoForge IP address not specified in driver_config. Please enter a reachable IP in System Settings > EdgeLite Config > ProtoForge Address")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.ip_not_specified"))
     else:
         if protocol == "s7":
-            parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host})")  # FIXED: CN→EN
-            parts.append("S7 protocol uses fixed port 102 (ISO-on-TCP), EdgeLite S7 driver does not support custom ports")  # FIXED: CN→EN
-            parts.append("Please ensure ProtoForge S7 service is running on the standard port 102")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.cannot_connect_no_port").format(proto=proto_name, host=driver_host))
+            parts.append(desc("edgelite.connect.s7_fixed_port"))
+            parts.append(desc("edgelite.connect.s7_check_port"))
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append("EdgeLite and ProtoForge are on the same server, it is recommended to set the ProtoForge address to 127.0.0.1 in System Settings > EdgeLite Config")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.same_server_set_localhost"))
         elif protocol == "http":
-            parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host}:{driver_port})")  # FIXED: CN→EN
-            parts.append("HTTP Webhook uses passive receive mode, please confirm ProtoForge is pushing data to EdgeLite")  # FIXED: CN→EN
-            parts.append(f"Please check: 1) Is the {proto_name} protocol service running  2) Is IP {driver_host} reachable from EdgeLite  3) Is port {driver_port} correct")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+            parts.append(desc("edgelite.connect.http_passive_mode"))
+            parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append("EdgeLite and ProtoForge are on the same server, it is recommended to set the ProtoForge address to 127.0.0.1 in System Settings > EdgeLite Config")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.same_server_set_localhost"))
         elif protocol == "mqtt":
-            parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host}:{driver_port})")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append("IMPORTANT: Try this first - EdgeLite and ProtoForge are on the same server, please set the ProtoForge address to 127.0.0.1 in System Settings > EdgeLite Config (currently using " + str(driver_host) + ")")  # FIXED: CN→EN
-            parts.append("1) Confirm MQTT Broker is started (status Running) in ProtoForge Protocol Management")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
+            parts.append(desc("edgelite.connect.confirm_mqtt_broker"))
             if driver_port and default_port and str(driver_port) != str(default_port):
-                parts.append(f"2) Port {driver_port} is not the default port {default_port}, please verify the ProtoForge MQTT service port configuration")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.port_not_default").format(port=driver_port, default_port=default_port))
             else:
-                parts.append(f"2) Confirm ProtoForge MQTT Broker port is {driver_port or 1883}")  # FIXED: CN→EN
-            parts.append(f"3) Test network from EdgeLite machine: telnet {driver_host} {driver_port or 1883}")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.confirm_mqtt_port").format(port=driver_port or 1883))
+            parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
             if same_server:
-                parts.append("4) If telnet fails, please check if the ProtoForge process started correctly")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.check_process"))
         elif protocol == "sparkplug_b":
-            parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host}:{driver_port})")  # FIXED: CN→EN
+            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
             if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append("IMPORTANT: Try this first - EdgeLite and ProtoForge are on the same server, please set the ProtoForge address to 127.0.0.1 in System Settings > EdgeLite Config (currently using " + str(driver_host) + ")")  # FIXED: CN→EN
-            parts.append("1) Sparkplug B is based on MQTT transport, please confirm MQTT Broker is started in ProtoForge Protocol Management")  # FIXED: CN→EN
-            parts.append(f"2) Confirm port is {driver_port or 1883}")  # FIXED: CN→EN
-            parts.append(f"3) Test network from EdgeLite machine: telnet {driver_host} {driver_port or 1883}")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
+            parts.append(desc("edgelite.connect.sparkplug_b_mqtt"))
+            parts.append(desc("edgelite.connect.confirm_port").format(port=driver_port or 1883))
+            parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
         else:
             if same_server:
-                parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host}:{driver_port})")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
                 if driver_host not in ("127.0.0.1", "localhost"):
-                    parts.append(f"EdgeLite and ProtoForge are on the same server, it is recommended to set the ProtoForge address to 127.0.0.1 in System Settings > EdgeLite Config, currently using {driver_host}")  # FIXED: CN→EN
+                    parts.append(desc("edgelite.connect.same_server_set_localhost_current").format(host=driver_host))
                 if driver_port and default_port and str(driver_port) != str(default_port):
-                    parts.append(f"Port {driver_port} is not the default port for {proto_name} ({default_port}), please verify if ProtoForge {proto_name} service is running on port {driver_port}")  # FIXED: CN→EN
-                parts.append(f"Please check: 1) Is the {proto_name} protocol service running  2) Is port {driver_port} correct")  # FIXED: CN→EN
+                    parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
+                parts.append(desc("edgelite.connect.check_service_port").format(proto=proto_name, port=driver_port))
             else:
-                parts.append(f"EdgeLite {proto_name} driver cannot connect to ProtoForge ({driver_host}:{driver_port})")  # FIXED: CN→EN
+                parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
                 if driver_port and default_port and str(driver_port) != str(default_port):
-                    parts.append(f"Port {driver_port} is not the default port for {proto_name} ({default_port}), please verify if ProtoForge {proto_name} service is running on port {driver_port}")  # FIXED: CN→EN
-                parts.append(f"Please check: 1) Is the {proto_name} protocol service running  2) Is IP {driver_host} reachable from EdgeLite  3) Is port {driver_port} correct")  # FIXED: CN→EN
-                parts.append(f"If the IP is incorrect, please enter a reachable IP in System Settings > EdgeLite Config > ProtoForge Address")  # FIXED: CN→EN
+                    parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
+                parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
+                parts.append(desc("edgelite.connect.enter_reachable_ip"))
 
     return {
         "ok": False,
@@ -766,7 +767,7 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
 
 async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     el_config = get_edgelite_config_from_device(device)
-    if not el_config.get("url"):  # FIXED: direct dict access
+    if not el_config.get("url"):
         return {
             "ok": False, "skipped": True,
             "reason": "edgelite_url not configured",
@@ -779,13 +780,13 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))  # FIXED: direct dict access
+            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         except EdgeLiteError as e:
             result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
             result["ok"] = False
             return result
         except Exception as e:
-            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": "Please check network connection and gateway configuration"},  # FIXED: CN→EN
+            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
             result["ok"] = False
             return result
         result["steps"]["auth"] = {"ok": True}
@@ -793,19 +794,19 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         try:
             dev_resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",  # FIXED: direct dict access
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
         except httpx.ConnectError:
-            result["steps"]["register"] = {"ok": False, "error": "Cannot connect to EdgeLite while querying device"},  # FIXED: CN→EN
+            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_connection")},
             result["ok"] = False
             return result
         except httpx.TimeoutException:
-            result["steps"]["register"] = {"ok": False, "error": "Device query request timed out"},  # FIXED: CN→EN
+            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_timeout")},
             result["ok"] = False
             return result
         except Exception as e:
-            result["steps"]["register"] = {"ok": False, "error": f"Device query request exception: {e}"},  # FIXED: CN→EN
+            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)},
             result["ok"] = False
             return result
         if dev_resp.status_code == 404:
@@ -820,7 +821,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         try:
             dev_data_raw = dev_resp.json()
         except Exception as e:
-            result["steps"]["register"] = {"ok": False, "error": f"EdgeLite response is not JSON: {e}"},  # FIXED: CN→EN
+            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)},
             result["ok"] = False
             return result
         dev_data = dev_data_raw.get("data", dev_data_raw)
@@ -853,26 +854,26 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         try:
             points_resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",  # FIXED: direct dict access
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
                 headers=headers,
             )
         except httpx.ConnectError:
-            result["steps"]["collect"] = {"ok": False, "error": "Cannot connect to EdgeLite while reading points"},  # FIXED: CN→EN
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_connection")},
             result["ok"] = False
             return result
         except httpx.TimeoutException:
-            result["steps"]["collect"] = {"ok": False, "error": "Read points request timed out"},  # FIXED: CN→EN
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_timeout")},
             result["ok"] = False
             return result
         except Exception as e:
-            result["steps"]["collect"] = {"ok": False, "error": f"Read points request exception: {e}"},  # FIXED: CN→EN
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)},
             result["ok"] = False
             return result
         if points_resp.status_code == 200:
             try:
                 raw_points = points_resp.json()
             except Exception as e:
-                result["steps"]["collect"] = {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}"},  # FIXED: CN→EN
+                result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)},
                 result["ok"] = False
                 return result
             points_data = raw_points.get("data", raw_points)
@@ -906,11 +907,11 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     return result
 
 
-async def test_edgelite_connection(url: str, username: str = "", password: str = "") -> dict[str, Any]:  # FIXED: removed hardcoded "admin" default
+async def test_edgelite_connection(url: str, username: str = "", password: str = "") -> dict[str, Any]:
     if not url:
-        return {"ok": False, "error": "EdgeLite URL cannot be empty"}  # FIXED: CN→EN
+        return {"ok": False, "error": desc("edgelite.error.url_empty")}
     if not url.startswith("http://") and not url.startswith("https://"):
-        return {"ok": False, "error": "EdgeLite URL must start with http:// or https://"}  # FIXED: CN→EN
+        return {"ok": False, "error": desc("edgelite.error.url_invalid")}
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
@@ -918,7 +919,7 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
                 try:
                     raw = resp.json()
                 except Exception:
-                    return {"ok": False, "error": "EdgeLite returned non-JSON response"}  # FIXED: was returning ok=True masking parse failure
+                    return {"ok": False, "error": "EdgeLite returned non-JSON response"}
                 data = raw.get("data", raw)
                 return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
 
@@ -927,7 +928,7 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
                 return {"ok": False, "error": f"HTTP {resp.status_code}"}
 
             if not password:
-                return {"ok": False, "error": "EdgeLite requires authentication, please enter username and password"}  # FIXED: CN→EN
+                return {"ok": False, "error": desc("edgelite.error.auth_required")}
 
             try:
                 login_resp = await client.post(
@@ -935,9 +936,9 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
                     json={"username": username, "password": password},
                 )
             except httpx.ConnectError:
-                return {"ok": False, "error": "Cannot connect to EdgeLite during authentication, please check if the gateway is online"}  # FIXED: CN→EN
+                return {"ok": False, "error": desc("edgelite.error.auth_connection")}
             except httpx.TimeoutException:
-                return {"ok": False, "error": "Authentication request timed out, EdgeLite response too slow"}  # FIXED: CN→EN
+                return {"ok": False, "error": desc("edgelite.error.auth_timeout")}
 
             if login_resp.status_code == 200:
                 token = _extract_token(login_resp)
@@ -945,30 +946,30 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
                 try:
                     status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
                 except httpx.ConnectError:
-                    return {"ok": False, "error": "Authentication succeeded but connection lost while querying status"}  # FIXED: CN→EN
+                    return {"ok": False, "error": desc("edgelite.error.auth_lost_connection")}
                 except httpx.TimeoutException:
-                    return {"ok": False, "error": "Authentication succeeded but status query timed out"}  # FIXED: CN→EN
+                    return {"ok": False, "error": desc("edgelite.error.auth_status_timeout")}
                 except Exception as e:
                     logger.debug("EdgeLite status query after auth failed: %s", e)
-                    return {"ok": False, "error": f"Status query failed after auth: {e}"}  # FIXED: was returning ok=True masking failure
+                    return {"ok": False, "error": f"Status query failed after auth: {e}"}
                 if status_resp.status_code == 200:
                     try:
                         raw = status_resp.json()
                     except Exception:
-                        return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}  # FIXED: was returning ok=True masking parse failure
+                        return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
                     data = raw.get("data", raw)
                     return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
-                return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}  # FIXED: was returning ok=True on non-200 status
+                return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}
 
             if login_resp.status_code == 401:
-                return {"ok": False, "error": "EdgeLite username or password is incorrect"}  # FIXED: CN→EN
+                return {"ok": False, "error": desc("edgelite.error.auth_failed")}
             if login_resp.status_code == 403:
-                return {"ok": False, "error": f"EdgeLite login denied (HTTP {login_resp.status_code}), please check account permissions"}  # FIXED: CN→EN
-            return {"ok": False, "error": f"EdgeLite login failed: HTTP {login_resp.status_code}"}  # FIXED: CN→EN
+                return {"ok": False, "error": desc("edgelite.error.login_denied").format(status=login_resp.status_code)}
+            return {"ok": False, "error": desc("edgelite.error.login_http_failed").format(status=login_resp.status_code)}
 
         except httpx.ConnectError:
-            return {"ok": False, "error": "Cannot connect to EdgeLite, please verify the URL and check if the gateway is online"}  # FIXED: CN→EN
+            return {"ok": False, "error": desc("edgelite.error.cannot_connect")}
         except httpx.TimeoutException:
-            return {"ok": False, "error": "Connection to EdgeLite timed out, please check network connectivity"}  # FIXED: CN→EN
+            return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
         except Exception as e:
             return {"ok": False, "error": str(e)}

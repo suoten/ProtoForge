@@ -212,6 +212,8 @@ source venv/bin/activate
 pip install -e ".[all]"
 cd web && npm install && npm run build && cd ..
 protoforge demo
+# 或后台运行：protoforge demo -d
+# 停止后台服务：protoforge stop
 # 浏览器打开 http://localhost:8000，用 admin / admin 登录
 ```
 

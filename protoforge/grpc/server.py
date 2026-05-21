@@ -140,13 +140,24 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         try:
             from protoforge.models.device import DeviceConfig
             import uuid
+            # FIXED: gRPC CreateDevice忽略template_id的点配置 — 从模板加载points
+            points = []
+            if request.template_id:
+                try:
+                    from protoforge.core.template import TemplateManager
+                    tm = TemplateManager()
+                    template = tm.get_template(request.template_id)
+                    if template and hasattr(template, 'points'):
+                        points = template.points
+                except Exception as e:
+                    logger.warning("gRPC CreateDevice: failed to load template %s: %s", request.template_id, e)
             config = DeviceConfig(
                 id=str(uuid.uuid4()),
                 name=request.name,
                 protocol=request.protocol,
                 template_id=request.template_id or None,
                 protocol_config=dict(request.protocol_config) if request.protocol_config else {},
-                points=[],
+                points=points,
             )
             result = await engine.create_device(config)
             dev_id = result.id if hasattr(result, "id") else str(result)

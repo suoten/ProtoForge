@@ -6,52 +6,21 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class BACnetDeviceBehavior(DeviceBehavior):
-    def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
-        if points:
-            for p in points:
-                name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
-
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
-    def on_write(self, point_name: str, value: Any) -> bool:
-        if point_name in self._values:
-            self._values[point_name] = value
-            return True
-        return False
-
-    def set_value(self, point_name: str, value: Any) -> None:
-        self._values[point_name] = value
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
+class BACnetDeviceBehavior(StandardDeviceBehavior):
+    pass
 
 
 class BACnetServer(ProtocolServer):
     protocol_name = "bacnet"
     protocol_display_name = "BACnet"
+
+    _BBMD_FWD_TTL = 3600
 
     def __init__(self):
         super().__init__()
@@ -94,7 +63,7 @@ class BACnetServer(ProtocolServer):
             logger.info("BACnet server started on %s:%d (BBMD: %s)",
                          self._host, self._port, self._bbmd_enabled)
             self._log_debug("system", "server_start",
-                            f"BACnet service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"BACnet service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -120,7 +89,7 @@ class BACnetServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("BACnet server stopped")
-            self._log_debug("system", "server_stop", "BACnet service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "BACnet service stopped")
 
     async def _serve_udp(self) -> None:
         loop = asyncio.get_running_loop()
@@ -425,7 +394,7 @@ class BACnetServer(ProtocolServer):
         if not self._bbmd_enabled or not self._sock:
             return
         now = time.time()
-        expired = [k for k, v in self._bbmd_fwd_table.items() if now - v > 3600]
+        expired = [k for k, v in self._bbmd_fwd_table.items() if now - v > self._BBMD_FWD_TTL]
         for k in expired:
             del self._bbmd_fwd_table[k]
         for peer_addr in self._bbmd_peers:
@@ -466,8 +435,9 @@ class BACnetServer(ProtocolServer):
         self._device_configs[device_id] = device_config
 
         behavior = BACnetDeviceBehavior(device_config.points)
-        self._behaviors[device_id] = behavior
-        self._update_default_device(device_id)
+        async with self._behaviors_lock:
+            self._behaviors[device_id] = behavior
+        await self._update_default_device_async(device_id)
 
         proto_config = device_config.protocol_config or {}
         bacnet_device_id = proto_config.get("device_id", self._device_id_base + len(self._device_configs))
@@ -509,18 +479,19 @@ class BACnetServer(ProtocolServer):
         logger.info("BACnet device created: %s (BACnet ID: %d, name: %s, %d objects)",
                      device_id, bacnet_device_id, bacnet_device_name, len(objects))
         self._log_debug("system", "device_create",
-                        f"BACnet device created: {device_config.name}",  # FIXED: CN→EN
+                        f"BACnet device created: {device_config.name}",
                         device_id=device_id)
         return device_id
 
     async def remove_device(self, device_id: str) -> None:
         self._device_configs.pop(device_id, None)
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_objects.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("BACnet device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"BACnet device removed: {device_id}",  # FIXED: CN→EN
+                        f"BACnet device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -558,28 +529,28 @@ class BACnetServer(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": "BACnet listen address",  # FIXED: CN→EN
+                    "description": desc("listen_address", "BACnet listen address"),
                 },
                 "port": {
                     "type": "integer",
                     "default": 47808,
-                    "description": "BACnet UDP port (default 47808)",  # FIXED: CN→EN
+                    "description": desc("bacnet_port", "BACnet UDP port (default 47808)"),
                 },
                 "device_id_base": {
                     "type": "integer",
                     "default": 100,
-                    "description": "BACnet device ID base value",  # FIXED: CN→EN
+                    "description": desc("bacnet_device_id_base", "BACnet device ID base value"),
                 },
                 "bbmd_enabled": {
                     "type": "boolean",
                     "default": False,
-                    "description": "Enable BBMD broadcast management",  # FIXED: CN→EN
+                    "description": desc("bacnet_bbmd_enabled", "Enable BBMD broadcast management"),
                 },
                 "bbmd_peers": {
                     "type": "array",
                     "items": {"type": "string"},
                     "default": [],
-                    "description": "BBMD peer list (format: host:port)",  # FIXED: CN→EN
+                    "description": desc("bacnet_bbmd_peers", "BBMD peer list (format: host:port)"),
                 },
             },
         }

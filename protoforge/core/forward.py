@@ -2,7 +2,7 @@ import asyncio
 import ipaddress
 import json
 import logging
-import socket  # FIXED: socket.gaierror was referenced without importing socket
+import socket
 import time
 from abc import ABC, abstractmethod
 from typing import Any, Optional
@@ -34,13 +34,13 @@ def _get_blocked_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Networ
     return _BLOCKED_NETWORKS
 
 
-_ALLOWED_SCHEMES = {"http", "https"}  # FIXED: SSRF防护缺少scheme校验,file:///gopher://等可绕过
+_ALLOWED_SCHEMES = {"http", "https"}
 
 
 def _is_url_allowed(url: str) -> tuple[bool, str]:
     try:
         parsed = urlparse(url)
-        if parsed.scheme.lower() not in _ALLOWED_SCHEMES:  # FIXED: SSRF防护缺少scheme校验
+        if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
             return False, f"URL scheme '{parsed.scheme}' not allowed, only http/https permitted"
         hostname = parsed.hostname
         if not hostname:
@@ -49,7 +49,7 @@ def _is_url_allowed(url: str) -> tuple[bool, str]:
             resolved_ips = socket.getaddrinfo(hostname, None)
         except socket.gaierror:
             return False, f"Cannot resolve hostname: {hostname}"
-        if not resolved_ips:  # FIXED: getaddrinfo可能返回空列表导致IndexError
+        if not resolved_ips:
             return False, f"No DNS records found for hostname: {hostname}"
         for family, _, _, _, sockaddr in resolved_ips:
             ip = ipaddress.ip_address(sockaddr[0])
@@ -120,18 +120,18 @@ class InfluxDBTarget(ForwardTarget):
             tags = f"device_id={device_id},protocol={protocol}"
             fields_parts = []
             if "value" in r:
-                value = r.get("value", "")  # FIXED: direct dict access
+                value = r.get("value", "")
                 try:
                     fields_parts.append(f"value={float(value)}")
                 except (ValueError, TypeError):
                     fields_parts.append(f'value="{_esc_field(value)}"')
-            point_name = r.get("point_name", "")  # FIXED: direct dict access
+            point_name = r.get("point_name", "")
             if point_name:
                 fields_parts.append(f'point_name="{_esc_field(point_name)}"')
             if not fields_parts:
                 continue
             fields = ",".join(fields_parts)
-            try:  # FIXED: timestamp可能为字符串导致TypeError
+            try:
                 ts = int(float(r.get("timestamp", time.time())) * 1e9)
             except (ValueError, TypeError):
                 ts = int(time.time() * 1e9)
@@ -139,7 +139,7 @@ class InfluxDBTarget(ForwardTarget):
         if not lines:
             return
         client = await self._ensure_client()
-        max_retries = 3  # FIXED: InfluxDB写入添加简单重试
+        max_retries = 3
         for attempt in range(max_retries):
             try:
                 resp = await client.post(
@@ -238,11 +238,11 @@ class FileTarget(ForwardTarget):
         except ValueError:
             raise
         except Exception as e:
-            logger.error("File forward write failed: %s", e)  # FIXED: elevated from warning to error, caller can detect failure
-            raise  # FIXED: re-raise so caller knows write failed
+            logger.error("File forward write failed: %s", e)
+            raise
 
     def _write_sync(self, records: list[dict[str, Any]]) -> None:
-        try:  # FIXED: 文件写入无try-catch(磁盘满/权限不足/路径不存在)
+        try:
             with open(self._path, "a", encoding="utf-8") as f:
                 for r in records:
                     if self._format == "jsonl":
@@ -284,7 +284,7 @@ class ForwardEngine:
     def remove_target(self, name: str) -> None:
         target = self._targets.pop(name, None)
         if target and hasattr(target, 'close'):
-            async def _safe_close():  # FIXED: wrap close in try-catch to prevent silent failure
+            async def _safe_close():
                 try:
                     await target.close()
                 except Exception as exc:
@@ -370,7 +370,7 @@ class ForwardEngine:
                         "detail": msg.detail,
                     })
             except asyncio.TimeoutError:
-                pass  # FIXED: 正常超时等待下一批，无需日志
+                pass
             if records and self._targets:
                 for name, target in self._targets.items():
                     for attempt in range(self._retry_count):
@@ -400,10 +400,10 @@ class ForwardEngine:
 def create_target(config: dict[str, Any]) -> ForwardTarget:
     target_type = config.get("type", "http")
     if target_type == "influxdb":
-        url = config.get("url")  # FIXED: direct dict access could raise KeyError
+        url = config.get("url")
         if not url:
             raise ValueError("InfluxDB target requires 'url' parameter")
-        token = config.get("token")  # FIXED: direct dict access could raise KeyError
+        token = config.get("token")
         if not token:
             raise ValueError("InfluxDB target requires 'token' parameter")
         allowed, reason = _is_url_allowed(url)
@@ -414,7 +414,7 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
         )
     elif target_type == "http":
-        url = config.get("url")  # FIXED: direct dict access could raise KeyError
+        url = config.get("url")
         if not url:
             raise ValueError("HTTP target requires 'url' parameter")
         allowed, reason = _is_url_allowed(url)

@@ -159,6 +159,7 @@ class Recording:
 
 class Recorder:
     _MAX_MESSAGES = None
+    _MAX_MESSAGE_SIZE = 1024 * 1024  # FIXED: 单条消息无大小限制 — 添加1MB上限防止内存耗尽
 
     @classmethod
     def _get_max_messages(cls) -> int:
@@ -384,6 +385,14 @@ class Recorder:
         if isinstance(msg.detail, dict):
             data["point_name"] = msg.detail.get("point", msg.detail.get("point_name", ""))
             data["value"] = msg.detail.get("value")
+        # FIXED: 单条消息无大小限制 — 检查序列化后大小
+        try:
+            msg_size = len(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+            if msg_size > self._MAX_MESSAGE_SIZE:
+                logger.debug("Dropping oversized recording message (%d bytes > %d limit)", msg_size, self._MAX_MESSAGE_SIZE)
+                return
+        except (TypeError, ValueError):
+            pass
         recorded = RecordedMessage(
             timestamp=msg.timestamp,
             protocol=msg.protocol,
