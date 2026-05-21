@@ -384,7 +384,7 @@ async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/devices/{device_id}/points/{point_name}")
+@router.put("/devices/{device_id}/points/{point_name}")  # FIXED: 添加try-except保护
 async def write_device_point(device_id: str, point_name: str, body: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
@@ -392,11 +392,15 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
     if value is None:
         raise HTTPException(status_code=400, detail="Missing 'value' in request body")
 
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail="Device not found")
+
     try:
         success = await engine.write_device_point(device_id, point_name, value)
         if not success:
             raise HTTPException(status_code=400, detail="Write failed")
-        log_bus.emit(instance.protocol if (instance := engine.get_device_instance(device_id)) else "", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
+        log_bus.emit(instance.protocol if instance else "", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
         await _trigger_webhook_safe("data_change", {"device_id": device_id, "point": point_name, "value": value})
         resp = {"status": "ok"}
         if instance:
@@ -406,3 +410,6 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         return resp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error("Write device point failed for %s/%s: %s", device_id, point_name, e)
+        raise HTTPException(status_code=500, detail=f"Write device point failed: {e}")

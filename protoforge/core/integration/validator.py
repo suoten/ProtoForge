@@ -78,9 +78,10 @@ class MappingValidator:
 
     def _validate_driver_config(self, config: dict[str, Any], protocol: str) -> dict[str, Any]:
         result: dict[str, Any] = {"valid": True, "fields_checked": 0, "issues": []}
+        # FIXED: 字段映射与edgelite.py实际字段名保持一致(modbus_tcp用slave_id, modbus_rtu用baudrate/slave_id)
         required_fields_map = {
-            "modbus_tcp": ["host", "port", "unit_id"],
-            "modbus_rtu": ["port", "baud_rate", "unit_id"],
+            "modbus_tcp": ["host", "port", "slave_id"],
+            "modbus_rtu": ["port", "baudrate", "slave_id"],
             "opcua": ["endpoint"],
             "mqtt": ["broker", "port"],
             "bacnet": ["device_id"],
@@ -93,9 +94,20 @@ class MappingValidator:
             if field_name not in config or config[field_name] is None:
                 result["valid"] = False
                 result["issues"].append(f"Missing required field: {field_name}")
+        # FIXED: port验证同时接受int和str类型，与get_protocol_running_port()返回类型一致
         if "port" in config:
             port = config["port"]
-            if not isinstance(port, int) or port < 1 or port > 65535:
+            port_int = None
+            if isinstance(port, int) and 1 <= port <= 65535:
+                port_int = port
+            elif isinstance(port, str):
+                try:
+                    port_int = int(port)
+                    if not (1 <= port_int <= 65535):
+                        port_int = None
+                except ValueError:
+                    pass
+            if port_int is None:
                 result["valid"] = False
-                result["issues"].append(f"Invalid port: {port} (must be 1-65535)")
+                result["issues"].append(f"Invalid port: {port} (must be 1-65535, int or str)")
         return result

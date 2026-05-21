@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 _USERNAME_MAX_LENGTH = 63
 _SECRET_KEY_MIN_LENGTH = 32
-_ACCESS_TOKEN_EXPIRE_SECONDS = 1800
+# Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)  # FIXED: 删除未使用的硬编码常量，统一从config读取
 _REFRESH_TOKEN_EXPIRE_SECONDS = 604800
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

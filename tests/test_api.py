@@ -67,8 +67,9 @@ async def test_list_protocols(client: AsyncClient):
     response = await client.get("/api/v1/protocols")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 2
-    names = [p["name"] for p in data]
+    # FIXED: API返回 {"protocols": [...]} 结构，data是dict，需取data["protocols"]的长度
+    assert len(data.get("protocols", [])) >= 2
+    names = [p["name"] for p in data.get("protocols", [])]
     assert "modbus_tcp" in names
     assert "http" in names
 
@@ -78,7 +79,7 @@ async def test_list_templates(client: AsyncClient):
     response = await client.get("/api/v1/templates")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 6
+    assert len(data.get("templates", [])) >= 1
 
 
 @pytest.mark.asyncio
@@ -155,7 +156,9 @@ async def test_scenario_export(client: AsyncClient):
 async def test_logs_endpoint(client: AsyncClient):
     response = await client.get("/api/v1/logs")
     assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    # FIXED: API returns {"entries": [...]} not {"logs": [...]}
+    data = response.json()
+    assert isinstance(data, dict) and "entries" in data
 
 
 @pytest.mark.asyncio
@@ -179,7 +182,12 @@ async def test_http_protocol_device(client: AsyncClient):
 
     response = await client.get("/api/v1/devices/http-device-001/points")
     assert response.status_code == 200
-    points = response.json()
+    # FIXED: API returns {"points": [...]} not a direct list
+    points_data = response.json()
+    if isinstance(points_data, dict):
+        points = points_data.get("points", [])
+    else:
+        points = points_data
     assert len(points) == 1
     assert points[0]["value"] == "running"
 

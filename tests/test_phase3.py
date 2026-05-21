@@ -59,7 +59,8 @@ async def test_batch_create_devices(client):
     data = response.json()
     assert data["created"] == 2
 
-    response = await client.request("DELETE", "/api/v1/devices/batch", json=["batch-001", "batch-002"])
+    # FIXED: batch-delete API uses POST with {"device_ids": [...]} body format
+    response = await client.post("/api/v1/devices/batch/delete", json={"device_ids": ["batch-001", "batch-002"]})
     assert response.status_code == 200
 
 
@@ -71,7 +72,8 @@ async def test_template_search(client):
     response = await client.get("/api/v1/templates/search", params={"protocol": "modbus_tcp"})
     assert response.status_code == 200
     data = response.json()
-    assert len(data) >= 3
+    # FIXED: search API returns {"templates": [...]} not a list
+    assert len(data.get("templates", [])) >= 3
 
     response = await client.get("/api/v1/templates/search", params={"tag": "环境监控"})
     assert response.status_code == 200
@@ -82,8 +84,9 @@ async def test_template_tags(client):
     response = await client.get("/api/v1/templates/tags")
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) > 0
+    # FIXED: tags API returns {"tags": [...]} not a list
+    assert isinstance(data, dict)
+    assert len(data.get("tags", [])) > 0
 
 
 @pytest.mark.asyncio
