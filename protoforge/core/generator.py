@@ -183,8 +183,15 @@ class SafeEval:
                 raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
             raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
         elif isinstance(node, ast.Subscript):
+            # FIXED: 添加边界检查和类型校验，避免IndexError/TypeError
             value = self._eval_node(node.value)
             slice_val = self._eval_node(node.slice) if isinstance(node.slice, ast.AST) else node.slice
+            if not hasattr(value, '__getitem__'):
+                raise TypeError(f"Cannot subscript type '{type(value).__name__}'")
+            if isinstance(slice_val, int):
+                if isinstance(value, (list, tuple, str)):
+                    if not (-len(value) <= slice_val < len(value)):
+                        raise IndexError(f"Index {slice_val} out of range for sequence of length {len(value)}")
             return value[slice_val]
         raise ValueError(f"Unsupported expression: {type(node).__name__}")
 

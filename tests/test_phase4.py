@@ -285,6 +285,7 @@ async def test_test_case_api_crud(client):
         ]
     }
     response = await client.post("/api/v1/tests/cases", json=case_def)
+    # FIXED: POST returns {"cases": [...]} not raw TestCase dict; check status and get back
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == "api-tc-001"
@@ -292,7 +293,7 @@ async def test_test_case_api_crud(client):
 
     response = await client.get("/api/v1/tests/cases")
     assert response.status_code == 200
-    cases = response.json()
+    cases = response.json().get("cases", [])
     assert any(c["id"] == "api-tc-001" for c in cases)
 
     response = await client.get("/api/v1/tests/cases/api-tc-001")
@@ -307,30 +308,8 @@ async def test_test_case_api_crud(client):
 
 
 @pytest.mark.asyncio
-async def test_test_suite_api(client):
-    suite_def = {
-        "id": "api-suite-001",
-        "name": "API Test Suite",
-        "description": "Created via API",
-        "test_case_ids": [],
-        "tags": ["api"],
-    }
-    response = await client.post("/api/v1/tests/suites", json=suite_def)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["id"] == "api-suite-001"
-
-    response = await client.get("/api/v1/tests/suites")
-    assert response.status_code == 200
-    suites = response.json()
-    assert any(s["id"] == "api-suite-001" for s in suites)
-
-    response = await client.delete("/api/v1/tests/suites/api-suite-001")
-    assert response.status_code == 200
-
-
-@pytest.mark.asyncio
 async def test_run_test_with_assertions(client):
+    # FIXED: API expects {"test_cases": [...]} not {"cases": [...]}
     test_cases = [{
         "id": "assert-tc-001",
         "name": "Assertion Test",
@@ -361,7 +340,8 @@ async def test_run_test_with_assertions(client):
             }
         ]
     }]
-    response = await client.post("/api/v1/tests/run", json=test_cases)
+    # FIXED: Use {"test_cases": ...} wrapper to match API's payload.get("test_cases", payload) logic
+    response = await client.post("/api/v1/tests/run", json={"test_cases": test_cases})
     assert response.status_code == 200
     report = response.json()
     assert report["total"] == 1
@@ -377,7 +357,8 @@ async def test_report_html_endpoint(client):
             {"name": "List devices", "action": "list_devices"}
         ]
     }]
-    response = await client.post("/api/v1/tests/run", json=test_cases)
+    # FIXED: Use {"test_cases": ...} wrapper
+    response = await client.post("/api/v1/tests/run", json={"test_cases": test_cases})
     report = response.json()
     report_id = report["id"]
 
@@ -387,17 +368,45 @@ async def test_report_html_endpoint(client):
 
 
 @pytest.mark.asyncio
+async def test_test_suite_api(client):
+    suite_def = {
+        "id": "api-suite-001",
+        "name": "API Test Suite",
+        "description": "Created via API",
+        "test_case_ids": [],
+        "tags": ["api"],
+    }
+    response = await client.post("/api/v1/tests/suites", json=suite_def)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "api-suite-001"
+
+    response = await client.get("/api/v1/tests/suites")
+    assert response.status_code == 200
+    # FIXED: suites API returns {"suites": [...]} not a list directly
+    suites = response.json().get("suites", [])
+    assert any(s["id"] == "api-suite-001" for s in suites)
+
+    response = await client.delete("/api/v1/tests/suites/api-suite-001")
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_report_trend_endpoint(client):
     test_cases = [{
         "id": "trend-tc-001",
         "name": "Trend Test",
         "steps": [{"name": "List devices", "action": "list_devices"}]
     }]
-    await client.post("/api/v1/tests/run", json=test_cases)
+    # FIXED: Use {"test_cases": ...} wrapper
+    await client.post("/api/v1/tests/run", json={"test_cases": test_cases})
 
     response = await client.get("/api/v1/tests/reports/trend")
     assert response.status_code == 200
-    trend = response.json()
+    # FIXED: API returns {"trends": [...]} not direct list
+    trend_data = response.json()
+    assert isinstance(trend_data, dict)
+    trend = trend_data.get("trends", [])
     assert isinstance(trend, list)
     assert len(trend) > 0
 
@@ -440,7 +449,8 @@ async def test_variable_extraction(client):
             }
         ]
     }]
-    response = await client.post("/api/v1/tests/run", json=test_cases)
+    # FIXED: Use {"test_cases": ...} wrapper
+    response = await client.post("/api/v1/tests/run", json={"test_cases": test_cases})
     assert response.status_code == 200
     report = response.json()
     tc = report["test_cases"][0]
@@ -460,7 +470,8 @@ async def test_step_skip_and_delay(client):
             {"name": "Normal step", "action": "list_devices"}
         ]
     }]
-    response = await client.post("/api/v1/tests/run", json=test_cases)
+    # FIXED: Use {"test_cases": ...} wrapper
+    response = await client.post("/api/v1/tests/run", json={"test_cases": test_cases})
     assert response.status_code == 200
     report = response.json()
     steps = report["test_cases"][0]["steps"]

@@ -72,7 +72,7 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
         raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}")
 
 
-@router.get("/edgelite/status/{device_id}")
+@router.get("/status/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
 async def get_edgelite_device_status(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import get_edgelite_device_status as _status
 
@@ -89,7 +89,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
         raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}")
 
 
-@router.get("/edgelite/points/{device_id}")
+@router.get("/points/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
 async def read_edgelite_device_points(device_id: str, _user: dict = Depends(require_viewer)):
     from protoforge.core.edgelite import read_edgelite_device_points as _read
 
@@ -123,8 +123,9 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
 
     try:
         result = await _verify(instance)
+        # FIXED: 添加链式空值保护，避免steps["collect"]潜在的KeyError
         if result.get("ok") and "collect" in result.get("steps", {}):
-            collect_step = result["steps"]["collect"]
+            collect_step = result.get("steps", {}).get("collect", {})
             if collect_step.get("ok") and collect_step.get("has_real_data"):
                 try:
                     local_points = await engine.read_device_points(device_id)
@@ -159,7 +160,7 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
 
 
-@router.delete("/edgelite/push/{device_id}")
+@router.delete("/push/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
 async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
     from protoforge.core.edgelite import remove_device_from_edgelite as _remove
 

@@ -143,6 +143,9 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict = D
             points=request.get("points", []),
             driver_config=driver_config,
         )
+        # FIXED: 添加report空值校验，避免report为None时AttributeError
+        if report is None:
+            raise HTTPException(status_code=500, detail="Validation failed: no compatibility report returned")
         return {
             "compatible": report.compatible,
             "protocol_result": report.protocol_result,

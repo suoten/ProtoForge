@@ -141,18 +141,26 @@ async def delete_test_case(case_id: str, _user: dict = Depends(require_user)):
     return {"status": "ok"}
 
 
-@router.post("/tests/suites")
+@router.post("/tests/suites")  # FIXED: 添加test_case_ids和tags的类型校验
 async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(require_user)):
     import time as _time
     from protoforge.core.testing import TestSuite
+
+    # FIXED: 类型校验，确保test_case_ids和tags是列表类型
+    test_case_ids = suite_def.get("test_case_ids", [])
+    if not isinstance(test_case_ids, list):
+        raise HTTPException(status_code=400, detail="test_case_ids must be a list")
+    tags = suite_def.get("tags", [])
+    if not isinstance(tags, list):
+        raise HTTPException(status_code=400, detail="tags must be a list")
 
     runner = _get_test_runner()
     suite = TestSuite(
         id=suite_def.get("id") or uuid.uuid4().hex[:12],
         name=suite_def.get("name", ""),
         description=suite_def.get("description", ""),
-        test_case_ids=suite_def.get("test_case_ids", []),
-        tags=suite_def.get("tags", []),
+        test_case_ids=test_case_ids,
+        tags=tags,
         created_at=_time.time(),
         updated_at=_time.time(),
     )
@@ -187,7 +195,7 @@ async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
 
 
 @router.post("/tests/run")
-async def run_test(payload: dict[str, Any] = Body(...), _user: dict = Depends(require_user)):
+async def run_test(request: Request, payload: dict[str, Any] = Body(...), _user: dict = Depends(require_user)):  # FIXED: 添加request参数
     test_cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
     if not isinstance(test_cases, list) or not test_cases:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty array of test cases")

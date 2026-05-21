@@ -17,10 +17,10 @@ class RateLimiter:
 
     def _cleanup(self) -> None:
         now = time.time()
-        if now - self._last_cleanup < self._cleanup_interval:
-            return
-        window_start = now - self._window_seconds
-        with self._lock:
+        with self._lock:  # FIXED: 整个cleanup在锁内执行，避免与is_allowed竞态
+            if now - self._last_cleanup < self._cleanup_interval:
+                return
+            window_start = now - self._window_seconds
             stale_keys = [k for k, ts_list in self._requests.items() if all(t <= window_start for t in ts_list)]
             for k in stale_keys:
                 del self._requests[k]
@@ -88,7 +88,8 @@ async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     client_ip = get_client_ip(request)
 
-    if path.startswith("/api/v1/auth/login") or path.startswith("/api/v1/auth/register") or path.startswith("/api/v1/auth/change-password"):
+    # FIXED: 改为精确匹配，避免change-password被login的startswith误匹配
+    if path in ("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/change-password"):
         limiter = _auth_limiter
         key = f"auth:{client_ip}"
     else:

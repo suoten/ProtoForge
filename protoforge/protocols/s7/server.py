@@ -5,14 +5,14 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改为继承StandardDeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class S7DeviceBehavior(DeviceBehavior):
+class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBehavior，复用_points/_values/_generators初始化
     S7_AREA_DB = 0x84
     S7_AREA_INPUTS = 0x81
     S7_AREA_OUTPUTS = 0x82
@@ -21,9 +21,7 @@ class S7DeviceBehavior(DeviceBehavior):
     S7_AREA_COUNTERS = 0x1C
 
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)  # FIXED: 调用super().__init__()初始化_points/_values/_generators
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
         self._marker_data: bytearray = bytearray(256)
         self._input_data: bytearray = bytearray(256)
@@ -32,13 +30,6 @@ class S7DeviceBehavior(DeviceBehavior):
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                self._points[name] = p
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                if fixed_val is not None:
-                    self._values[name] = fixed_val
-                else:
-                    self._values[name] = 0
-                self._generators[name] = DynamicValueGenerator(p)
                 address = getattr(p, 'address', '0') or '0'
                 db_number, offset = self._parse_s7_address(str(address))
                 self._point_addresses[name] = (db_number, offset)
@@ -105,10 +96,6 @@ class S7DeviceBehavior(DeviceBehavior):
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("S7 on_write value conversion error for %s: %s", point_name, e)
 
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
@@ -119,16 +106,6 @@ class S7DeviceBehavior(DeviceBehavior):
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         self._sync_value_to_db(point_name, value)
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def get_db_area(self, db_number: int, size: int) -> bytearray:
         if db_number not in self._db_data or len(self._db_data[db_number]) < size:
