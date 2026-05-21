@@ -289,6 +289,11 @@ async def get_test_report_html(report_id: str, request: Request, _user: dict = D
 
 @router.post("/tests/quick-test")
 async def quick_test(scope: str = "all", target_id: Optional[str] = None, request: Request = None, _user: dict = Depends(require_user)):
+    # FIXED: 添加scope参数校验，无效值返回400而非静默空结果
+    valid_scopes = {"all", "device", "scenario", "protocol"}
+    if scope not in valid_scopes:
+        raise HTTPException(status_code=400, detail=f"Invalid scope '{scope}'. Valid values: {sorted(valid_scopes)}")
+
     engine = _get_engine()
     from protoforge.core.testing import TestCase, TestStep, Assertion, AssertionType
     lang = get_lang_from_request(request) if request else "zh"

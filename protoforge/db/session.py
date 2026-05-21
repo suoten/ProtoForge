@@ -951,6 +951,8 @@ class Database:
             "test_reports": ["id", "name", "start_time", "end_time", "total", "passed", "failed", "errors", "skipped", "environment", "test_cases"],
             "users": ["username", "id", "password_hash", "role", "created_at", "login_attempts", "locked_until"],
             "recordings": ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"],
+            # FIXED: 添加alarm_reaction_rules到table_columns，使其支持导入导出
+            "alarm_reaction_rules": ["id", "name", "description", "condition", "actions", "enabled", "created_at"],
         }
         for table in list(data.keys()):
             if table not in self._VALID_TABLES:

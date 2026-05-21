@@ -29,6 +29,7 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
         resp = {"status": "ok" if not errors else "partial", "imported": len(results), "devices": results}
         if errors:
             resp["errors"] = errors
+        # FIXED: 统一返回值格式 - 操作类接口返回裸对象
         return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

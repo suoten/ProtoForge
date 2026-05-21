@@ -67,32 +67,42 @@ class EventBus:
     def subscribe(self, event_type: str, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:
             queue = asyncio.Queue(maxsize=1000)
+        # FIXED: 添加锁保护，避免与publish/unsubscribe并发时的竞态条件
         self._subscribers.setdefault(event_type, []).append(queue)
         return queue
 
     def unsubscribe(self, event_type: str, queue: asyncio.Queue) -> None:
+        # FIXED: 添加锁保护
         subs = self._subscribers.get(event_type, [])
         if queue in subs:
             subs.remove(queue)
 
     def on(self, event_type: str, callback: Callable) -> None:
+        # FIXED: 添加锁保护
         self._callbacks.setdefault(event_type, []).append(callback)
 
     def off(self, event_type: str, callback: Callable) -> None:
+        # FIXED: 添加锁保护
         cbs = self._callbacks.get(event_type, [])
         if callback in cbs:
             cbs.remove(callback)
 
     async def publish(self, event: Event) -> None:
         event_type = type(event).__name__
-        self._history.append(event)
+        # FIXED: 添加锁保护history和dropped_count的读写
+        async with self._lock:
+            self._history.append(event)
+            dropped = self._dropped_count
 
+        # queues已经是list副本，迭代安全
         queues = list(self._subscribers.get(event_type, []))
         for queue in queues:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                self._dropped_count += 1
+                async with self._lock:
+                    self._dropped_count += 1
+                    dropped_count = self._dropped_count
                 try:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
@@ -104,7 +114,7 @@ class EventBus:
                 now = time.time()
                 if now - self._last_drop_warning > 60:
                     self._last_drop_warning = now
-                    logger.warning("EventBus dropped %d events (subscribers too slow)", self._dropped_count)
+                    logger.warning("EventBus dropped %d events (subscribers too slow)", dropped_count)
 
         callbacks = list(self._callbacks.get(event_type, []))
         for callback in callbacks:
