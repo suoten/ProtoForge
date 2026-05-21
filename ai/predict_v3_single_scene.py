@@ -1,18 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-ProtoForge 预测服务 v6
+ProtoForge Predictor v8
 
-核心能力：
-1. 周期模板预测：适合 CNC 这类强周期、非标准正弦波形。
-2. 健康基线冻结：检测到异常后，不再用故障数据更新预测模板。
-3. 恢复冷却机制：故障恢复后，需要连续稳定多个周期，才恢复学习。
-4. 预测上下界：写入 predicted_upper / predicted_lower，方便 Grafana 展示预测带。
-5. 异常标记：写入 xxx_anomaly，1 表示异常，0 表示正常。
-6. 不删除历史预测，不使用 delete_series。
-"""
-
-"""
-场景：不考虑物料、不考虑跨程序场景算法预测
+功能：
+1. 从 VictoriaMetrics 拉取历史数据。
+2. 对 CNC 周期型指标进行相位对齐预测。
+3. 使用“谷底锚点”对齐周期，减少上升沿/下降沿相位偏差。
+4. 每轮只写入未来 min(HORIZON_SECONDS, POLL_INTERVAL) 秒，避免预测窗口重叠。
+5. 检测异常后冻结健康模板，不把故障数据学进去。
+6. 故障恢复后等待稳定一段时间，再恢复模板更新。
+7. 写入：
+   - xxx_predicted
+   - xxx_predicted_upper
+   - xxx_predicted_lower
+   - xxx_anomaly
+   - xxx_anomaly_outside_ratio
+   - xxx_anomaly_mean_abs_error
+   - xxx_anomaly_mean_rel_error
 """
 
 import json
@@ -29,6 +33,10 @@ import numpy as np
 import requests
 
 
+# =============================================================================
+# 日志配置
+# =============================================================================
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -37,18 +45,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ── 基础配置 ──────────────────────────────────────────────────────────────────
+# =============================================================================
+# 基础配置
+# =============================================================================
 
 VM_URL = "http://localhost:8428"
 
-STATE_FILE = "/tmp/protoforge_predictor_state.json"
+STATE_FILE = "/tmp/protoforge_predictor_state_v8.json"
 
 HISTORY_MINUTES = 30
 HORIZON_SECONDS = 120
 POLL_INTERVAL = 30
 
-# 实际每轮写入未来多少秒。
-# 不要大于 POLL_INTERVAL，否则多轮预测会重叠。
+# 实际写入窗口不要大于轮询间隔，否则多轮预测会重叠。
 WRITE_HORIZON_SECONDS = min(HORIZON_SECONDS, POLL_INTERVAL)
 
 QUERY_STEP = "1s"
@@ -57,34 +66,25 @@ MIN_POINTS = 120
 MIN_PERIOD_SECONDS = 5
 MAX_PERIOD_SECONDS = 3600
 
-# 至少多少个完整周期才允许构建健康模板
 MIN_FULL_CYCLES_FOR_TEMPLATE = 3
-
-# 构建模板最多使用最近多少个周期
 MAX_CYCLES_FOR_TEMPLATE = 6
 
-# 检测异常使用最近多少秒实际数据
 DETECT_WINDOW_SECONDS = 15
-
-# 恢复后，至少连续正常多少秒才考虑恢复学习
 RECOVERY_MIN_SECONDS = 60
 
-# 健康状态下模板更新速度，越小越保守
-HEALTHY_EMA_ALPHA = 0.15
+HEALTHY_EMA_ALPHA = 0.12
+RECOVERY_EMA_ALPHA = 0.30
 
-# 故障恢复后第一次重新学习时的更新速度
-RECOVERY_EMA_ALPHA = 0.35
-
-# 最近窗口里有多少比例的点超过阈值，才认为异常
 OUTSIDE_RATIO_THRESHOLD = 0.60
-
-# 最近窗口里有多少比例的点回到阈值内，才认为恢复正常
 RECOVERY_INSIDE_RATIO_THRESHOLD = 0.80
 
+PHASE_SEARCH_RATIO = 0.15
+VALLEY_QUANTILE = 45
 
-# ── 指标配置 ──────────────────────────────────────────────────────────────────
-# abs_threshold / rel_threshold 需要按指标单位调。
-# feed_rate 单位 mm/min，这里先给 400 和 25%。
+
+# =============================================================================
+# 预测指标配置
+# =============================================================================
 
 PREDICT_TARGETS = [
     {
@@ -132,21 +132,23 @@ PREDICT_TARGETS = [
 ]
 
 EXTRA_PREDICT_LABELS = {
-    "forecast": "health_gated_v1",
+    "forecast": "phase_aligned_health_v8",
     "source": "protoforge",
 }
 
 BASELINE_STATUS_HEALTHY = "healthy"
 BASELINE_STATUS_ANOMALY = "anomaly"
 BASELINE_STATUS_RECOVERING = "recovering"
-BASELINE_STATUS_LEARNING = "learning"
 
 
-# ── 状态结构 ──────────────────────────────────────────────────────────────────
+# =============================================================================
+# 状态结构
+# =============================================================================
 
 @dataclass
 class BaselineState:
     period: int
+    phase_origin_ts: int
     template: List[float]
     status: str
     clean_seconds: int
@@ -160,7 +162,9 @@ BASELINE_STATES: Dict[str, BaselineState] = {}
 LAST_WRITTEN_UNTIL: Dict[str, int] = {}
 
 
-# ── VM 读取 ───────────────────────────────────────────────────────────────────
+# =============================================================================
+# VictoriaMetrics 读取
+# =============================================================================
 
 def fetch_history(query: str, minutes: int = HISTORY_MINUTES) -> Tuple[List[float], List[float]]:
     now = datetime.now()
@@ -258,7 +262,25 @@ def normalize_history(ts: List[float], ys: List[float]) -> Tuple[np.ndarray, np.
     return ts_grid, ys_grid
 
 
-# ── 周期估计 ──────────────────────────────────────────────────────────────────
+# =============================================================================
+# 周期估计
+# =============================================================================
+
+def moving_average(arr: np.ndarray, window: int) -> np.ndarray:
+    if window <= 1 or len(arr) < window:
+        return arr.astype(float)
+
+    window = int(window)
+
+    if window % 2 == 0:
+        window += 1
+
+    kernel = np.ones(window, dtype=float) / window
+    pad = window // 2
+    padded = np.pad(arr.astype(float), (pad, pad), mode="edge")
+
+    return np.convolve(padded, kernel, mode="valid")
+
 
 def estimate_period_by_fft(ys_arr: np.ndarray) -> float:
     n = len(ys_arr)
@@ -307,7 +329,7 @@ def refine_period_by_autocorr(ys_arr: np.ndarray, init_period: float) -> float:
     corr = np.correlate(centered, centered, mode="full")[n - 1:]
 
     p0 = int(round(init_period))
-    left = max(MIN_PERIOD_SECONDS, int(max(2, p0 * 0.7)))
+    left = max(int(MIN_PERIOD_SECONDS), int(max(2, p0 * 0.7)))
     right = min(n // 2, int(max(left + 1, p0 * 1.3)))
 
     if right <= left:
@@ -323,96 +345,252 @@ def refine_period_by_autocorr(ys_arr: np.ndarray, init_period: float) -> float:
     return float(np.clip(best_lag, MIN_PERIOD_SECONDS, MAX_PERIOD_SECONDS))
 
 
-def estimate_period(ys_arr: np.ndarray) -> int:
+def estimate_period_rough(ys_arr: np.ndarray) -> int:
     p_fft = estimate_period_by_fft(ys_arr)
     p_refined = refine_period_by_autocorr(ys_arr, p_fft)
 
     period = int(round(p_refined))
-    period = max(MIN_PERIOD_SECONDS, min(MAX_PERIOD_SECONDS, period))
+    period = max(int(MIN_PERIOD_SECONDS), min(int(MAX_PERIOD_SECONDS), period))
 
     return int(period)
 
 
-# ── 模板构建与预测 ─────────────────────────────────────────────────────────────
+# =============================================================================
+# 谷底锚点检测
+# =============================================================================
 
-def fill_template_nan(template: np.ndarray) -> np.ndarray:
-    period = len(template)
+def find_valley_indices(
+    ts_grid: np.ndarray,
+    ys_grid: np.ndarray,
+    expected_period: int,
+) -> List[int]:
+    n = len(ys_grid)
 
-    if period == 0:
-        return template
+    if n < max(10, expected_period * 2):
+        return []
 
-    idx = np.arange(period)
-    valid = np.isfinite(template)
+    period = max(3, int(expected_period))
 
-    if not np.any(valid):
-        return np.zeros(period, dtype=float)
+    smooth_window = max(3, int(round(period * 0.08)))
+    smooth_window = min(smooth_window, 21)
 
-    if np.all(valid):
-        return template
+    ys_smooth = moving_average(ys_grid, smooth_window)
+    threshold = float(np.percentile(ys_smooth, VALLEY_QUANTILE))
 
-    x_valid = idx[valid]
-    y_valid = template[valid]
+    candidates = []
 
-    # 环形插值，处理 phase 0 附近缺口
-    x_ext = np.concatenate([x_valid - period, x_valid, x_valid + period])
-    y_ext = np.concatenate([y_valid, y_valid, y_valid])
+    for i in range(1, n - 1):
+        if (
+            ys_smooth[i] <= ys_smooth[i - 1]
+            and ys_smooth[i] < ys_smooth[i + 1]
+            and ys_smooth[i] <= threshold
+        ):
+            candidates.append(i)
 
-    filled = np.interp(idx, x_ext, y_ext)
+    if len(candidates) < MIN_FULL_CYCLES_FOR_TEMPLATE:
+        candidates = []
 
-    return filled.astype(float)
+        for i in range(1, n - 1):
+            if ys_smooth[i] <= ys_smooth[i - 1] and ys_smooth[i] < ys_smooth[i + 1]:
+                candidates.append(i)
+
+    if not candidates:
+        return []
+
+    min_distance = max(2, int(round(period * 0.55)))
+    selected = []
+
+    for idx in candidates:
+        if not selected:
+            selected.append(idx)
+            continue
+
+        if idx - selected[-1] >= min_distance:
+            selected.append(idx)
+            continue
+
+        if ys_smooth[idx] < ys_smooth[selected[-1]]:
+            selected[-1] = idx
+
+    if len(selected) < 2:
+        return selected
+
+    cleaned = [selected[0]]
+
+    for idx in selected[1:]:
+        diff = int(ts_grid[idx] - ts_grid[cleaned[-1]])
+
+        if int(period * 0.55) <= diff <= int(period * 1.60):
+            cleaned.append(idx)
+            continue
+
+        if diff < int(period * 0.55):
+            if ys_smooth[idx] < ys_smooth[cleaned[-1]]:
+                cleaned[-1] = idx
+            continue
+
+        cleaned.append(idx)
+
+    return cleaned
 
 
-def build_phase_template(
+def detect_period_and_valleys(
+    ts_grid: np.ndarray,
+    ys_grid: np.ndarray,
+) -> Tuple[int, List[int]]:
+    rough = estimate_period_rough(ys_grid)
+    valleys = find_valley_indices(ts_grid, ys_grid, rough)
+
+    if len(valleys) >= 3:
+        diffs = np.diff(ts_grid[valleys])
+        good = diffs[(diffs >= rough * 0.55) & (diffs <= rough * 1.60)]
+
+        if len(good) > 0:
+            period = int(round(float(np.median(good))))
+        else:
+            period = rough
+    else:
+        period = rough
+
+    period = max(int(MIN_PERIOD_SECONDS), min(int(MAX_PERIOD_SECONDS), period))
+
+    return int(period), valleys
+
+
+# =============================================================================
+# 相位对齐模板构建
+# =============================================================================
+
+def build_template_from_valleys(
     ts_grid: np.ndarray,
     ys_grid: np.ndarray,
     period: int,
+    valleys: List[int],
     max_cycles: int = MAX_CYCLES_FOR_TEMPLATE,
-    tail_seconds: Optional[int] = None,
 ) -> Optional[np.ndarray]:
-    if period <= 1 or len(ys_grid) < period * MIN_FULL_CYCLES_FOR_TEMPLATE:
+    if period <= 1 or len(valleys) < MIN_FULL_CYCLES_FOR_TEMPLATE + 1:
         return None
 
-    max_seconds = period * max_cycles
+    pairs = []
 
-    if tail_seconds is not None:
-        max_seconds = min(max_seconds, int(tail_seconds))
+    for a, b in zip(valleys[:-1], valleys[1:]):
+        cycle_len = float(ts_grid[b] - ts_grid[a])
 
-    max_seconds = max(period * MIN_FULL_CYCLES_FOR_TEMPLATE, max_seconds)
+        if period * 0.55 <= cycle_len <= period * 1.60:
+            pairs.append((a, b, cycle_len))
 
-    if len(ys_grid) < max_seconds:
-        start_idx = 0
+    if len(pairs) < MIN_FULL_CYCLES_FOR_TEMPLATE:
+        return None
+
+    pairs = pairs[-max_cycles:]
+
+    phase_grid = np.arange(period, dtype=float)
+    segments = []
+    weights = []
+
+    for idx, (a, b, cycle_len) in enumerate(pairs):
+        seg_ts = ts_grid[a:b + 1]
+        seg_y = ys_grid[a:b + 1]
+
+        if len(seg_y) < 3:
+            continue
+
+        x_old = (seg_ts - seg_ts[0]) / cycle_len * period
+        seg = np.interp(phase_grid, x_old, seg_y)
+
+        segments.append(seg.astype(float))
+
+        weight = 0.5 + 0.5 * ((idx + 1) / len(pairs))
+        weights.append(weight)
+
+    if len(segments) < MIN_FULL_CYCLES_FOR_TEMPLATE:
+        return None
+
+    arr = np.vstack(segments)
+    w_arr = np.array(weights, dtype=float)
+
+    template = np.average(arr, axis=0, weights=w_arr)
+
+    return template.astype(float)
+
+
+def build_current_baseline(
+    ts_grid: np.ndarray,
+    ys_grid: np.ndarray,
+    tail_seconds: Optional[int] = None,
+) -> Optional[Tuple[int, int, np.ndarray]]:
+    if len(ys_grid) < MIN_POINTS:
+        return None
+
+    if tail_seconds is not None and tail_seconds > 0:
+        cutoff = ts_grid[-1] - int(tail_seconds)
+        mask = ts_grid >= cutoff
+        ts_use = ts_grid[mask]
+        ys_use = ys_grid[mask]
     else:
-        start_idx = len(ys_grid) - max_seconds
+        ts_use = ts_grid
+        ys_use = ys_grid
 
-    ts_tail = ts_grid[start_idx:]
-    ys_tail = ys_grid[start_idx:]
-
-    if len(ys_tail) < period * MIN_FULL_CYCLES_FOR_TEMPLATE:
+    if len(ys_use) < MIN_POINTS:
         return None
 
-    sums = np.zeros(period, dtype=float)
-    weights = np.zeros(period, dtype=float)
+    period, valleys = detect_period_and_valleys(ts_use, ys_use)
 
-    total = len(ys_tail)
+    template = build_template_from_valleys(
+        ts_grid=ts_use,
+        ys_grid=ys_use,
+        period=period,
+        valleys=valleys,
+    )
 
-    for i, (t, y) in enumerate(zip(ts_tail, ys_tail)):
-        phase = int(t) % period
+    if template is None or len(valleys) == 0:
+        return None
 
-        # 越近的数据权重越高
-        recency = (i + 1) / total
-        weight = 0.3 + 0.7 * recency
+    phase_origin_ts = int(round(float(ts_use[valleys[-1]])))
 
-        sums[phase] += float(y) * weight
-        weights[phase] += weight
+    return int(period), phase_origin_ts, template
 
-    template = np.full(period, np.nan, dtype=float)
 
-    valid = weights > 0
-    template[valid] = sums[valid] / weights[valid]
+# =============================================================================
+# 模板预测
+# =============================================================================
 
-    template = fill_template_nan(template)
+def circular_template_value(template: np.ndarray, phase: float) -> float:
+    period = len(template)
 
-    return template
+    if period == 0:
+        return 0.0
+
+    phase = float(phase) % period
+
+    i0 = int(math.floor(phase)) % period
+    i1 = (i0 + 1) % period
+
+    frac = phase - math.floor(phase)
+
+    return float((1.0 - frac) * template[i0] + frac * template[i1])
+
+
+def predict_with_origin(
+    state: BaselineState,
+    ts_list: List[int],
+    phase_origin_ts: Optional[int] = None,
+) -> np.ndarray:
+    template = np.array(state.template, dtype=float)
+    period = int(state.period)
+
+    if period <= 1 or len(template) != period:
+        return np.zeros(len(ts_list), dtype=float)
+
+    origin = int(state.phase_origin_ts if phase_origin_ts is None else phase_origin_ts)
+
+    values = []
+
+    for ts in ts_list:
+        phase = (int(ts) - origin) % period
+        values.append(circular_template_value(template, phase))
+
+    return np.array(values, dtype=float)
 
 
 def resample_template(old_template: np.ndarray, new_period: int) -> np.ndarray:
@@ -433,6 +611,38 @@ def resample_template(old_template: np.ndarray, new_period: int) -> np.ndarray:
     return np.interp(new_x, old_x_ext, old_y_ext).astype(float)
 
 
+def align_new_template_to_old(
+    old_template: np.ndarray,
+    new_template: np.ndarray,
+) -> np.ndarray:
+    if len(old_template) != len(new_template):
+        old_template = resample_template(old_template, len(new_template))
+
+    period = len(new_template)
+
+    if period <= 2:
+        return new_template.astype(float)
+
+    max_shift = max(1, int(round(period * 0.10)))
+
+    old_norm = old_template - np.mean(old_template)
+
+    best_score = None
+    best_template = new_template
+
+    for shift in range(-max_shift, max_shift + 1):
+        shifted = np.roll(new_template, shift)
+        shifted_norm = shifted - np.mean(shifted)
+
+        score = float(np.dot(old_norm, shifted_norm))
+
+        if best_score is None or score > best_score:
+            best_score = score
+            best_template = shifted
+
+    return best_template.astype(float)
+
+
 def merge_template(
     old_template: np.ndarray,
     new_template: np.ndarray,
@@ -443,37 +653,64 @@ def merge_template(
     if len(old_template) != len(new_template):
         old_template = resample_template(old_template, len(new_template))
 
-    return ((1.0 - alpha) * old_template + alpha * new_template).astype(float)
+    new_template = align_new_template_to_old(old_template, new_template)
+
+    merged = (1.0 - alpha) * old_template + alpha * new_template
+
+    return merged.astype(float)
 
 
-def predict_by_state(state: BaselineState, ts_list: List[int]) -> np.ndarray:
-    template = np.array(state.template, dtype=float)
-    period = int(state.period)
+# =============================================================================
+# 异常检测
+# =============================================================================
 
-    if period <= 1 or len(template) != period:
-        return np.zeros(len(ts_list), dtype=float)
-
-    values = []
-
-    for ts in ts_list:
-        phase = int(ts) % period
-        values.append(float(template[phase]))
-
-    return np.array(values, dtype=float)
-
-
-def calc_threshold(pred: np.ndarray, abs_threshold: float, rel_threshold: float) -> np.ndarray:
+def calc_threshold(
+    pred: np.ndarray,
+    abs_threshold: float,
+    rel_threshold: float,
+) -> np.ndarray:
     return np.maximum(abs_threshold, np.abs(pred) * rel_threshold)
 
 
-def calc_bounds(pred: np.ndarray, abs_threshold: float, rel_threshold: float) -> Tuple[np.ndarray, np.ndarray]:
+def calc_bounds(
+    pred: np.ndarray,
+    abs_threshold: float,
+    rel_threshold: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     threshold = calc_threshold(pred, abs_threshold, rel_threshold)
+
     lower = pred - threshold
     upper = pred + threshold
+
     return lower, upper
 
 
-# ── 异常检测与状态更新 ────────────────────────────────────────────────────────
+def find_best_phase_origin_for_recent(
+    state: BaselineState,
+    ts_recent: List[int],
+    actual: np.ndarray,
+) -> Tuple[int, np.ndarray, float]:
+    period = int(state.period)
+    base_origin = int(state.phase_origin_ts)
+
+    max_shift = max(1, int(round(period * PHASE_SEARCH_RATIO)))
+
+    best_origin = base_origin
+    best_pred = predict_with_origin(state, ts_recent, base_origin)
+    best_mae = float(np.mean(np.abs(actual - best_pred)))
+
+    for shift in range(-max_shift, max_shift + 1):
+        origin = base_origin + shift
+        pred = predict_with_origin(state, ts_recent, origin)
+        mae = float(np.mean(np.abs(actual - pred)))
+
+        if mae < best_mae:
+            best_mae = mae
+            best_origin = origin
+            best_pred = pred
+
+    return best_origin, best_pred, best_mae
+
 
 def detect_anomaly(
     state: BaselineState,
@@ -481,14 +718,19 @@ def detect_anomaly(
     ys_grid: np.ndarray,
     abs_threshold: float,
     rel_threshold: float,
-) -> Tuple[bool, float, float, float]:
+) -> Tuple[bool, float, float, float, int]:
     if len(ys_grid) < DETECT_WINDOW_SECONDS:
-        return False, 0.0, 0.0, 0.0
+        return False, 0.0, 0.0, 0.0, int(state.phase_origin_ts)
 
     ts_recent = ts_grid[-DETECT_WINDOW_SECONDS:].astype(int).tolist()
     actual = ys_grid[-DETECT_WINDOW_SECONDS:].astype(float)
 
-    pred = predict_by_state(state, ts_recent)
+    best_origin, pred, _ = find_best_phase_origin_for_recent(
+        state=state,
+        ts_recent=ts_recent,
+        actual=actual,
+    )
+
     threshold = calc_threshold(pred, abs_threshold, rel_threshold)
 
     abs_err = np.abs(actual - pred)
@@ -500,56 +742,28 @@ def detect_anomaly(
 
     is_anomaly = outside_ratio >= OUTSIDE_RATIO_THRESHOLD
 
-    return is_anomaly, outside_ratio, mean_abs_err, mean_rel_err
+    return is_anomaly, outside_ratio, mean_abs_err, mean_rel_err, int(best_origin)
 
 
-def is_recovered(
-    state: BaselineState,
-    ts_grid: np.ndarray,
-    ys_grid: np.ndarray,
-    abs_threshold: float,
-    rel_threshold: float,
-) -> Tuple[bool, float]:
-    if len(ys_grid) < DETECT_WINDOW_SECONDS:
-        return False, 0.0
-
-    ts_recent = ts_grid[-DETECT_WINDOW_SECONDS:].astype(int).tolist()
-    actual = ys_grid[-DETECT_WINDOW_SECONDS:].astype(float)
-
-    pred = predict_by_state(state, ts_recent)
-    threshold = calc_threshold(pred, abs_threshold, rel_threshold)
-
-    abs_err = np.abs(actual - pred)
-    inside = abs_err <= threshold
-
-    inside_ratio = float(np.mean(inside))
-
-    return inside_ratio >= RECOVERY_INSIDE_RATIO_THRESHOLD, inside_ratio
-
+# =============================================================================
+# 健康基线状态管理
+# =============================================================================
 
 def create_initial_state(
     ts_grid: np.ndarray,
     ys_grid: np.ndarray,
     now_sec: int,
 ) -> Optional[BaselineState]:
-    if len(ys_grid) < MIN_POINTS:
+    baseline = build_current_baseline(ts_grid, ys_grid)
+
+    if baseline is None:
         return None
 
-    period = estimate_period(ys_grid)
-
-    template = build_phase_template(
-        ts_grid=ts_grid,
-        ys_grid=ys_grid,
-        period=period,
-        max_cycles=MAX_CYCLES_FOR_TEMPLATE,
-        tail_seconds=period * MAX_CYCLES_FOR_TEMPLATE,
-    )
-
-    if template is None:
-        return None
+    period, phase_origin_ts, template = baseline
 
     return BaselineState(
         period=int(period),
+        phase_origin_ts=int(phase_origin_ts),
         template=template.astype(float).tolist(),
         status=BASELINE_STATUS_HEALTHY,
         clean_seconds=int(period * MAX_CYCLES_FOR_TEMPLATE),
@@ -578,19 +792,23 @@ def maybe_update_state(
             return None, False, 0.0, 0.0, 0.0
 
         BASELINE_STATES[key] = state
+
         logger.info(
-            "初始化健康模板 key=%s period=%ss clean_seconds=%ss",
+            "初始化健康模板 key=%s period=%ss origin=%s clean=%ss",
             key,
             state.period,
+            datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S"),
             state.clean_seconds,
         )
+
         return state, False, 0.0, 0.0, 0.0
 
     elapsed = max(1, now_sec - int(state.last_seen_ts))
     elapsed = min(elapsed, POLL_INTERVAL * 2)
+
     state.last_seen_ts = now_sec
 
-    is_anom, outside_ratio, mean_abs_err, mean_rel_err = detect_anomaly(
+    is_anom, outside_ratio, mean_abs_err, mean_rel_err, best_origin = detect_anomaly(
         state=state,
         ts_grid=ts_grid,
         ys_grid=ys_grid,
@@ -602,6 +820,8 @@ def maybe_update_state(
         state.status = BASELINE_STATUS_ANOMALY
         state.clean_seconds = 0
 
+        BASELINE_STATES[key] = state
+
         logger.warning(
             "检测到异常，冻结模板 key=%s outside_ratio=%.2f mean_abs_err=%.2f mean_rel_err=%.2f",
             key,
@@ -610,47 +830,39 @@ def maybe_update_state(
             mean_rel_err,
         )
 
-        BASELINE_STATES[key] = state
         return state, True, outside_ratio, mean_abs_err, mean_rel_err
 
-    recovered, inside_ratio = is_recovered(
-        state=state,
-        ts_grid=ts_grid,
-        ys_grid=ys_grid,
-        abs_threshold=abs_threshold,
-        rel_threshold=rel_threshold,
-    )
+    old_origin = int(state.phase_origin_ts)
+    state.phase_origin_ts = int(best_origin)
+
+    if abs(state.phase_origin_ts - old_origin) >= 1:
+        logger.debug(
+            "相位校正 key=%s origin %s -> %s",
+            key,
+            datetime.fromtimestamp(old_origin).strftime("%H:%M:%S"),
+            datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S"),
+        )
 
     if state.status == BASELINE_STATUS_ANOMALY:
-        if recovered:
-            state.status = BASELINE_STATUS_RECOVERING
-            state.clean_seconds = elapsed
-            logger.info(
-                "异常开始恢复 key=%s inside_ratio=%.2f clean_seconds=%ss",
-                key,
-                inside_ratio,
-                state.clean_seconds,
-            )
-        else:
-            state.clean_seconds = 0
-            BASELINE_STATES[key] = state
-            return state, True, outside_ratio, mean_abs_err, mean_rel_err
+        state.status = BASELINE_STATUS_RECOVERING
+        state.clean_seconds = elapsed
 
-    elif state.status == BASELINE_STATUS_RECOVERING:
-        if recovered:
-            state.clean_seconds += elapsed
-        else:
-            state.status = BASELINE_STATUS_ANOMALY
-            state.clean_seconds = 0
-            BASELINE_STATES[key] = state
-            return state, True, outside_ratio, mean_abs_err, mean_rel_err
+        BASELINE_STATES[key] = state
 
+        logger.info(
+            "异常开始恢复 key=%s clean_seconds=%ss",
+            key,
+            state.clean_seconds,
+        )
+
+        return state, False, outside_ratio, mean_abs_err, mean_rel_err
+
+    if state.status == BASELINE_STATUS_RECOVERING:
+        state.clean_seconds += elapsed
     else:
         state.status = BASELINE_STATUS_HEALTHY
         state.clean_seconds += elapsed
 
-    # 故障恢复后，不要立刻学习。
-    # 必须至少连续正常：max(RECOVERY_MIN_SECONDS, 3 个周期)
     min_clean_for_update = max(
         RECOVERY_MIN_SECONDS,
         int(state.period) * MIN_FULL_CYCLES_FOR_TEMPLATE,
@@ -660,30 +872,26 @@ def maybe_update_state(
         BASELINE_STATES[key] = state
         return state, False, outside_ratio, mean_abs_err, mean_rel_err
 
-    # 只使用最近 clean_seconds 这段连续正常数据来更新模板，避免历史故障污染。
-    new_period = estimate_period(ys_grid)
     tail_seconds = min(
         int(state.clean_seconds),
-        int(new_period) * MAX_CYCLES_FOR_TEMPLATE,
+        int(state.period) * MAX_CYCLES_FOR_TEMPLATE,
     )
 
-    new_template = build_phase_template(
+    baseline = build_current_baseline(
         ts_grid=ts_grid,
         ys_grid=ys_grid,
-        period=new_period,
-        max_cycles=MAX_CYCLES_FOR_TEMPLATE,
         tail_seconds=tail_seconds,
     )
 
-    if new_template is None:
+    if baseline is None:
         BASELINE_STATES[key] = state
         return state, False, outside_ratio, mean_abs_err, mean_rel_err
 
+    new_period, new_origin, new_template = baseline
     old_template = np.array(state.template, dtype=float)
 
     if state.status == BASELINE_STATUS_RECOVERING:
         alpha = RECOVERY_EMA_ALPHA
-        state.status = BASELINE_STATUS_HEALTHY
     else:
         alpha = HEALTHY_EMA_ALPHA
 
@@ -694,18 +902,25 @@ def maybe_update_state(
     )
 
     state.period = int(new_period)
+    state.phase_origin_ts = int(new_origin)
     state.template = merged.astype(float).tolist()
+    state.status = BASELINE_STATUS_HEALTHY
     state.last_update_ts = now_sec
-    state.y_min = float(np.min(ys_grid[-tail_seconds:]))
-    state.y_max = float(np.max(ys_grid[-tail_seconds:]))
+
+    if tail_seconds > 0 and len(ys_grid) >= tail_seconds:
+        state.y_min = float(np.min(ys_grid[-tail_seconds:]))
+        state.y_max = float(np.max(ys_grid[-tail_seconds:]))
+    else:
+        state.y_min = float(np.min(ys_grid))
+        state.y_max = float(np.max(ys_grid))
 
     BASELINE_STATES[key] = state
 
     logger.info(
-        "更新健康模板 key=%s period=%ss status=%s clean_seconds=%ss alpha=%.2f",
+        "更新健康模板 key=%s period=%ss origin=%s clean=%ss alpha=%.2f",
         key,
         state.period,
-        state.status,
+        datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S"),
         state.clean_seconds,
         alpha,
     )
@@ -713,7 +928,9 @@ def maybe_update_state(
     return state, False, outside_ratio, mean_abs_err, mean_rel_err
 
 
-# ── Prometheus 格式写入 ───────────────────────────────────────────────────────
+# =============================================================================
+# Prometheus Exposition 写入
+# =============================================================================
 
 def prom_escape_label_value(value: str) -> str:
     return (
@@ -731,8 +948,7 @@ def labels_to_str(labels: Dict[str, str]) -> str:
     parts = []
 
     for k in sorted(labels.keys()):
-        v = prom_escape_label_value(labels[k])
-        parts.append(f'{k}="{v}"')
+        parts.append(f'{k}="{prom_escape_label_value(labels[k])}"')
 
     return "{" + ",".join(parts) + "}"
 
@@ -771,11 +987,14 @@ def write_series(
         resp = requests.post(
             f"{VM_URL}/api/v1/import/prometheus",
             data=payload.encode("utf-8"),
-            headers={"Content-Type": "text/plain; version=0.0.4; charset=utf-8"},
+            headers={
+                "Content-Type": "text/plain; version=0.0.4; charset=utf-8",
+            },
             timeout=10,
         )
         resp.raise_for_status()
         return True
+
     except requests.RequestException as e:
         logger.error("写入数据失败 metric=%s: %s", metric_name, e)
         return False
@@ -851,28 +1070,37 @@ def write_prediction_bundle(
     return ok1 and ok2 and ok3 and ok4 and ok5 and ok6 and ok7
 
 
-# ── 标签解析 ──────────────────────────────────────────────────────────────────
+# =============================================================================
+# 标签解析
+# =============================================================================
 
 _LABEL_PATTERN = re.compile(
     r'\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"((?:\\.|[^"])*)"\s*'
 )
 
 
-def _parse_labels(query: str) -> Dict[str, str]:
+def parse_labels_from_query(query: str) -> Dict[str, str]:
     labels = {}
 
     if "{" not in query or "}" not in query:
         return labels
 
     try:
-        label_part = query[query.index("{") + 1: query.rindex("}")]
+        label_part = query[query.index("{") + 1:query.rindex("}")]
     except Exception:
         return labels
 
     for match in _LABEL_PATTERN.finditer(label_part):
         key = match.group(1)
         value = match.group(2)
-        value = value.replace('\\"', '"').replace("\\n", "\n").replace("\\\\", "\\")
+
+        value = (
+            value
+            .replace('\\"', '"')
+            .replace("\\n", "\n")
+            .replace("\\\\", "\\")
+        )
+
         labels[key] = value
 
     return labels
@@ -892,9 +1120,11 @@ def series_key(metric_name: str, labels: Dict[str, str]) -> str:
     return metric_name + labels_to_str(labels)
 
 
-# ── 状态持久化 ────────────────────────────────────────────────────────────────
+# =============================================================================
+# 状态持久化
+# =============================================================================
 
-def load_state():
+def load_state() -> None:
     global BASELINE_STATES
 
     if not os.path.exists(STATE_FILE):
@@ -907,17 +1137,36 @@ def load_state():
         states = {}
 
         for key, value in raw.get("baseline_states", {}).items():
+            required_fields = {
+                "period",
+                "phase_origin_ts",
+                "template",
+                "status",
+                "clean_seconds",
+                "last_update_ts",
+                "last_seen_ts",
+                "y_min",
+                "y_max",
+            }
+
+            if not required_fields.issubset(set(value.keys())):
+                continue
+
             states[key] = BaselineState(**value)
 
         BASELINE_STATES = states
 
-        logger.info("已加载预测状态文件 %s，状态数量=%d", STATE_FILE, len(BASELINE_STATES))
+        logger.info(
+            "已加载预测状态文件 %s，状态数量=%d",
+            STATE_FILE,
+            len(BASELINE_STATES),
+        )
 
     except Exception as e:
         logger.warning("加载预测状态文件失败，将重新学习: %s", e)
 
 
-def save_state():
+def save_state() -> None:
     try:
         raw = {
             "baseline_states": {
@@ -937,9 +1186,11 @@ def save_state():
         logger.warning("保存预测状态文件失败: %s", e)
 
 
-# ── 主逻辑 ────────────────────────────────────────────────────────────────────
+# =============================================================================
+# 主流程
+# =============================================================================
 
-def run_once():
+def run_once() -> None:
     now_str = datetime.now().strftime("%H:%M:%S")
 
     for target in PREDICT_TARGETS:
@@ -952,16 +1203,26 @@ def run_once():
         ts, ys = fetch_history(query)
 
         if len(ys) < MIN_POINTS:
-            logger.info("[%s] %s 数据不足（%d 点），跳过", now_str, query, len(ys))
+            logger.info(
+                "[%s] %s 数据不足（%d 点），跳过",
+                now_str,
+                query,
+                len(ys),
+            )
             continue
 
         ts_grid, ys_grid = normalize_history(ts, ys)
 
         if len(ys_grid) < MIN_POINTS:
-            logger.info("[%s] %s 清洗后数据不足（%d 点），跳过", now_str, query, len(ys_grid))
+            logger.info(
+                "[%s] %s 清洗后数据不足（%d 点），跳过",
+                now_str,
+                query,
+                len(ys_grid),
+            )
             continue
 
-        base_labels = _parse_labels(query)
+        base_labels = parse_labels_from_query(query)
         write_labels = merge_labels(base_labels, EXTRA_PREDICT_LABELS)
 
         key = series_key(pred_metric, write_labels)
@@ -975,7 +1236,11 @@ def run_once():
         )
 
         if state is None:
-            logger.info("[%s] %s 暂无可用健康模板，等待学习", now_str, query)
+            logger.info(
+                "[%s] %s 暂无可用健康模板，等待学习",
+                now_str,
+                query,
+            )
             continue
 
         now_sec = int(time.time())
@@ -989,7 +1254,7 @@ def run_once():
             for i in range(WRITE_HORIZON_SECONDS)
         ]
 
-        pred_values = predict_by_state(state, ts_future)
+        pred_values = predict_with_origin(state, ts_future)
 
         lower_values, upper_values = calc_bounds(
             pred=pred_values,
@@ -1012,21 +1277,28 @@ def run_once():
         )
 
         if not ok:
+            logger.error(
+                "[%s] %s 写入预测数据失败",
+                now_str,
+                query,
+            )
             continue
 
         LAST_WRITTEN_UNTIL[key] = int(max(ts_future))
 
         future_start = datetime.fromtimestamp(ts_future[0]).strftime("%H:%M:%S")
         future_end = datetime.fromtimestamp(ts_future[-1]).strftime("%H:%M:%S")
+        origin_str = datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S")
 
         logger.info(
-            "[%s] %-40s → %-35s status=%s anomaly=%s period=%ss clean=%ss 写入 %d 点，预测区间 %s ~ %s",
+            "[%s] %-40s → %-35s status=%s anomaly=%s period=%ss origin=%s clean=%ss 写入 %d 点，预测区间 %s ~ %s",
             now_str,
             query,
             pred_metric,
             state.status,
             is_anomaly,
             state.period,
+            origin_str,
             state.clean_seconds,
             len(ts_future),
             future_start,
@@ -1036,17 +1308,18 @@ def run_once():
     save_state()
 
 
-def main():
+def main() -> None:
     load_state()
 
     logger.info(
-        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s",
+        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s forecast=%s",
         VM_URL,
         HISTORY_MINUTES,
         HORIZON_SECONDS,
         WRITE_HORIZON_SECONDS,
         POLL_INTERVAL,
         STATE_FILE,
+        EXTRA_PREDICT_LABELS["forecast"],
     )
 
     while True:
@@ -1056,3 +1329,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    
