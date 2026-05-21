@@ -360,7 +360,7 @@ class RtpStreamer:
                 local_addr=('0.0.0.0', 0),
             )
         except Exception as e:
-            self._log("out", "rtp_error", f"RTP传输创建失败: {e}")
+            self._log("out", "rtp_error", f"RTP transport creation failed: {e}")
             raise
         self._running = True
         self._task = asyncio.create_task(self._stream_loop())
@@ -368,7 +368,7 @@ class RtpStreamer:
         if self._srtp_context:
             srtp_info = f", SRTP={self._srtp_context.crypto_suite_name}"
         self._log("out", "rtp_start",
-                  f"RTP视频流开始推送 → {self._dest_ip}:{self._dest_port}{srtp_info}",
+                  f"RTP video stream started -> {self._dest_ip}:{self._dest_port}{srtp_info}",
                   {"ssrc": self._ssrc, "fps": self._fps,
                    "resolution": f"{self._width}x{self._height}",
                    "srtp": self._srtp_context is not None})
@@ -442,7 +442,7 @@ class RtpStreamer:
 
                 if self._frame_count % 25 == 0:
                     self._log("out", "rtp_stats",
-                              f"RTP流状态: {self._frame_count}帧, {self._width}x{self._height}@{self._fps}fps",
+                              f"RTP stream stats: {self._frame_count} frames, {self._width}x{self._height}@{self._fps}fps",
                               {"frames": self._frame_count, "seq": self._seq,
                                "dest": f"{self._dest_ip}:{self._dest_port}"})
 
@@ -450,5 +450,5 @@ class RtpStreamer:
         except asyncio.CancelledError:
             logger.debug("RTP streamer task cancelled")
         except Exception as e:
-            self._log("out", "rtp_error", f"RTP流异常: {e}")
+            self._log("out", "rtp_error", f"RTP stream error: {e}")
             logger.error("RTP stream error: %s", e)

@@ -3,7 +3,34 @@ import os
 import sys
 
 
+def _load_dotenv_to_environ():
+    """Load .env file values into os.environ if not already set.
+
+    pydantic-settings reads .env internally but doesn't set os.environ.
+    This ensures cli.py can read PROTOFORGE_ADMIN_PASSWORD via os.environ.get().
+    """
+    from pathlib import Path
+    env_file = Path(__file__).parent.parent / ".env"
+    if not env_file.exists():
+        return
+    try:
+        with open(env_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip("\"'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        pass
+
+
 def main():
+    _load_dotenv_to_environ()
+
     from protoforge.config import get_settings
     settings = get_settings()
     default_host = settings.host
@@ -77,7 +104,7 @@ def _get_pid_file():
 
 def _get_log_file():
     from pathlib import Path
-    return Path("data") / "protoforge.log"
+    return Path("logs") / "protoforge.log"
 
 
 def _stop_command():
@@ -231,12 +258,69 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         atexit.register(lambda: _get_pid_file().unlink(missing_ok=True))
 
     import uvicorn
+
+    from pathlib import Path as _Path
+    _log_dir = _Path("logs")
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _log_file = str(_log_dir / "protoforge.log")
+
     uvicorn.run(
         "protoforge.main:app",
         host=host,
         port=port,
         reload=reload,
         log_level=log_level,
+        log_config={
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "()": "uvicorn.logging.DefaultFormatter",
+                    "fmt": "%(levelprefix)s %(message)s",
+                    "use_colors": False,
+                },
+                "access": {
+                    "()": "uvicorn.logging.AccessFormatter",
+                    "fmt": "%(levelprefix)s %(client_addr)s - \"%(request_line)s\" %(status_code)s",
+                    "use_colors": False,
+                },
+                "file_fmt": {
+                    "format": "%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+                    "datefmt": "%Y-%m-%d %H:%M:%S",
+                },
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+                "access": {
+                    "formatter": "access",
+                    "class": "logging.StreamHandler",
+                    "stream": "ext://sys.stderr",
+                },
+                "file": {
+                    "formatter": "file_fmt",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": _log_file,
+                    "maxBytes": 10485760,
+                    "backupCount": 5,
+                    "encoding": "utf-8",
+                },
+            },
+            "root": {
+                "level": log_level.upper(),
+                "handlers": ["default", "file"],
+            },
+            "loggers": {
+                "uvicorn": {"level": log_level.upper(), "propagate": True},
+                "uvicorn.error": {"level": log_level.upper(), "propagate": True},
+                "uvicorn.access": {"handlers": ["access", "file"], "level": log_level.upper(), "propagate": False},
+                "protoforge": {"level": log_level.upper(), "propagate": True},
+                "asyncua": {"level": "WARNING", "propagate": True},
+            },
+        },
     )
 
 

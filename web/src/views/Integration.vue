@@ -29,7 +29,7 @@
               </n-form>
               <n-alert v-if="connResult" :type="connResult.ok ? 'success' : 'error'" :bordered="false" style="margin-top:4px">
                 <template v-if="connResult.ok">
-                  {{ t('integration.connectionSuccess') }} {{ connResult.version || t('common.unknown') }}，{{ t('integration.deviceCount') }}: {{ connResult.devices || 0 }}
+                  {{ t('integration.connectionSuccess') }} {{ connResult.version || t('common.unknown') }}{{ t('common.separator') }}{{ t('integration.deviceCount') }}: {{ connResult.devices || 0 }}
                 </template>
                 <template v-else>
                   {{ t('integration.connectionFailed') }}: {{ connResult.error }}
@@ -689,9 +689,10 @@ async function loadDeviceStatusCache() {
         .filter(([_, status]) => status !== null && status !== undefined)
         .map(([device_id, status]) => ({
           device_id,
-          status: typeof status === 'object' ? (status.status || 'unknown') : status,
-          protocol: typeof status === 'object' ? (status.protocol || '') : '',
-          last_updated: typeof status === 'object' ? (status.last_updated || '') : '',
+          // FIXED: typeof null === 'object' 陷阱 — 添加显式 null 检查
+          status: (status && typeof status === 'object') ? (status.status || 'unknown') : status,
+          protocol: (status && typeof status === 'object') ? (status.protocol || '') : '',
+          last_updated: (status && typeof status === 'object') ? (status.last_updated || '') : '',
         }))
     } else {
       deviceStatusCache.value = []
@@ -729,9 +730,10 @@ async function loadProtocolMappings() {
         .filter(([_, target]) => target !== null && target !== undefined)
         .map(([source, target]) => ({
           source_protocol: source,
-          target_protocol: typeof target === 'string' ? target : target.protocol || '',
-          driver_type: typeof target === 'object' ? target.driver || '' : '',
-          status: typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
+          // FIXED: typeof null === 'object' 陷阱 — 添加显式 null 检查
+          target_protocol: typeof target === 'string' ? target : (target && typeof target === 'object' ? target.protocol || '' : ''),
+          driver_type: target && typeof target === 'object' ? target.driver || '' : '',
+          status: target && typeof target === 'object' ? target.status || 'unknown' : (target ? 'available' : 'unsupported'),
         }))
     } else {
       protocolMappings.value = []

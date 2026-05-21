@@ -11,8 +11,10 @@ from protoforge.api.v1._helpers import _get_engine, _get_template_manager, _get_
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+_FALLBACK_VERSION = "0.1.0"
 
-def _get_version() -> str:  # FIXED: replaced __import__ with importlib.metadata
+
+def _get_version() -> str:
     try:
         from importlib.metadata import version as pkg_version
         return pkg_version("protoforge")
@@ -20,9 +22,9 @@ def _get_version() -> str:  # FIXED: replaced __import__ with importlib.metadata
         pass
     try:
         import protoforge
-        return getattr(protoforge, "__version__", "0.1.0")
+        return getattr(protoforge, "__version__", _FALLBACK_VERSION)
     except Exception:
-        return "0.1.0"
+        return _FALLBACK_VERSION
 
 
 @router.post("/setup/demo")
@@ -36,7 +38,7 @@ async def setup_demo(_user: dict = Depends(require_admin)):
         scenarios = engine.get_all_scenario_configs()
         return {
             "status": "ok",
-            "message": "Demo data created",  # FIXED: 中文→英文
+            "message": "Demo data created",
             "device_count": len(devices),
             "scenario_count": len(scenarios),
         }
@@ -75,7 +77,7 @@ async def get_settings(_user: dict = Depends(require_admin)):
         raise HTTPException(status_code=500, detail=f"Failed to get settings: {e}") from e
 
 
-_ALLOWED_SETTINGS_KEYS = {  # FIXED: update_settings字段白名单，防止修改敏感配置
+_ALLOWED_SETTINGS_KEYS = {
     "demo_mode", "log_level", "cors_origins", "min_password_length",
     "rate_limit_max_requests", "rate_limit_window_seconds",
     "rate_limit_auth_max_requests", "rate_limit_auth_window_seconds",
@@ -87,7 +89,7 @@ _ALLOWED_SETTINGS_KEYS = {  # FIXED: update_settings字段白名单，防止修�
 
 @router.put("/settings")
 async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
-    filtered = {k: v for k, v in updates.items() if k in _ALLOWED_SETTINGS_KEYS}  # FIXED: 过滤非法字段
+    filtered = {k: v for k, v in updates.items() if k in _ALLOWED_SETTINGS_KEYS}
     if not filtered:
         raise HTTPException(status_code=400, detail="No valid settings keys provided")
     try:
@@ -173,9 +175,11 @@ async def export_backup(_user: dict = Depends(require_admin)):
     try:
         from fastapi.responses import Response
         db = _get_database()
+        if db is None:
+            raise HTTPException(status_code=503, detail="Database not initialized, cannot export backup")
         data = await db.export_all()
         backup = {
-            "version": _get_version(),  # FIXED: replaced __import__ with importlib
+            "version": _get_version(),
             "timestamp": time.time(),
             "data": data,
         }
@@ -195,7 +199,7 @@ async def import_backup(payload: dict[str, Any], _user: dict = Depends(require_a
     try:
         db = _get_database()
         data = payload.get("data", {})
-        if not isinstance(data, dict):  # FIXED: 校验data类型必须为dict
+        if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Backup 'data' must be a dictionary")
         if not data:
             raise HTTPException(status_code=400, detail="No data found in backup")

@@ -183,7 +183,7 @@ async function batchStart() {
       })
       batchLoading.value = false
       selectedIds.value = []
-      const msg = t('scenarios.startedCount', { count: ok }) + (fail ? '，' + t('scenarios.failedCount', { count: fail }) : '')
+      const msg = t('scenarios.startedCount', { count: ok }) + (fail ? t('common.separator') + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
@@ -209,7 +209,7 @@ async function batchStop() {
       })
       batchLoading.value = false
       selectedIds.value = []
-      const msg = t('scenarios.stoppedCount', { count: ok }) + (fail ? '，' + t('scenarios.failedCount', { count: fail }) : '')
+      const msg = t('scenarios.stoppedCount', { count: ok }) + (fail ? t('common.separator') + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)

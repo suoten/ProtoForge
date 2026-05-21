@@ -6,7 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class HttpSimulatorServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("HTTP REST server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            msg("http", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
+                            msg("http", "service_started", host=self._host, port=self._port),
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -64,7 +64,7 @@ class HttpSimulatorServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("HTTP REST server stopped")
-            self._log_debug("system", "server_stop", msg("http", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("http", "service_stopped"))
 
     async def _serve(self) -> None:
         try:
@@ -84,7 +84,7 @@ class HttpSimulatorServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         try:
             while self._server_running:
-                try:  # FIXED: TCP connection had no read timeout (Slowloris vulnerability)
+                try:
                     request_line = await asyncio.wait_for(reader.readline(), timeout=30.0)
                 except asyncio.TimeoutError:
                     break
@@ -109,7 +109,7 @@ class HttpSimulatorServer(ProtocolServer):
                     if ":" in line_str:
                         key, val = line_str.split(":", 1)
                         headers[key.strip().lower()] = val.strip()
-                try:  # FIXED: content-length parsing had no exception handling
+                try:
                     content_length = int(headers.get("content-length", "0"))
                 except (ValueError, TypeError):
                     content_length = 0
@@ -169,14 +169,14 @@ class HttpSimulatorServer(ProtocolServer):
                     })
                 return self._json_response(200, {"device_id": device_id, "points": points})
             elif method == "POST" and body:
-                try:  # FIXED: json.loads without exception protection
+                try:
                     data = json.loads(body)
                 except (json.JSONDecodeError, TypeError):
                     return self._json_response(400, {"error": "Invalid JSON body"})
                 for name, value in data.items():
                     behavior.set_value(name, value)
                 self._log_debug("recv", "http_write",
-                                msg("http", "device_written", detail=device_id),  # FIXED: 中文硬编码→i18n常量
+                                msg("http", "device_written", detail=device_id),
                                 device_id=device_id,
                                 detail={"data": data})
                 return self._json_response(200, {"ok": True})
@@ -191,7 +191,7 @@ class HttpSimulatorServer(ProtocolServer):
                         "access": p.access, "timestamp": time.time(),
                     })
                 elif method in ("PUT", "POST") and body:
-                    try:  # FIXED: json.loads without exception protection
+                    try:
                         data = json.loads(body)
                     except (json.JSONDecodeError, TypeError):
                         return self._json_response(400, {"error": "Invalid JSON body"})
@@ -199,7 +199,7 @@ class HttpSimulatorServer(ProtocolServer):
                     if value is not None:
                         behavior.set_value(p.name, value)
                         self._log_debug("recv", "http_write",
-                                        msg("http", "point_written", detail=f"{p.name}={value}"),  # FIXED: 中文硬编码→i18n常量
+                                        msg("http", "point_written", detail=f"{p.name}={value}"),
                                         device_id=device_id)
                     return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)})
                 elif method == "DELETE":
@@ -237,9 +237,10 @@ class HttpSimulatorServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = HttpDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         api_prefix = proto_config.get("api_prefix", f"/api/{device_config.id}")
@@ -247,18 +248,19 @@ class HttpSimulatorServer(ProtocolServer):
 
         logger.info("HTTP device created: %s (api_prefix=%s)", device_config.id, api_prefix)
         self._log_debug("system", "device_create",
-                        msg("http", "device_created", name=device_config.name),  # FIXED: 中文硬编码→i18n常量
+                        msg("http", "device_created", name=device_config.name),
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_prefixes.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("HTTP device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        msg("http", "device_removed", id=device_id),  # FIXED: 中文硬编码→i18n常量
+                        msg("http", "device_removed", id=device_id),
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -283,8 +285,8 @@ class HttpSimulatorServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量,
-                "port": {"type": "integer", "default": 8080, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量,
-                "api_prefix": {"type": "string", "default": "/api", "description": desc("http_api_prefix")},  # FIXED: 中文硬编码→i18n常量,
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},
+                "port": {"type": "integer", "default": 8080, "description": desc("listen_port")},
+                "api_prefix": {"type": "string", "default": "/api", "description": desc("http_api_prefix")},
             },
         }

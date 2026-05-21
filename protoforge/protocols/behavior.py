@@ -150,11 +150,11 @@ class DynamicValueGenerator:
                 self._last_value = result
             return self._clamp(self._last_value)
         except Exception as e:
-            logger.debug("Script generator error: %s", e)
+            logger.warning("Script generator error: %s", e)
             return self._last_value
 
 
-class DefaultDeviceBehavior(DeviceBehavior):  # FIXED: 协议特定Behavior(Ab/S7/Mc)重复此类的_points/_values/_generators模式,应抽象为中间基类
+class DefaultDeviceBehavior(DeviceBehavior):
     def __init__(self, points: list[PointConfig]):
         self._points = {p.name: p for p in points}
         self._values: dict[str, Any] = {}
@@ -204,3 +204,46 @@ class DefaultDeviceBehavior(DeviceBehavior):  # FIXED: 协议特定Behavior(Ab/S
             self._written_values.pop(point_name, None)
         else:
             self._written_values.clear()
+
+
+class StandardDeviceBehavior(DeviceBehavior):
+    """Intermediate base class for protocol-specific behaviors.
+
+    FIXED: 8个协议(BACnet/AB/FANUC/FINS/MC/MTConnect/OPC-DA/Toledo)重复
+    _points/_values/_generators初始化和generate_value/on_write/set_value/get_value模式。
+    提取为中间基类，协议特定Behavior只需添加特有字段和覆写特有方法。
+    """
+    def __init__(self, points: list | None = None):
+        self._points: dict[str, Any] = {}
+        self._values: dict[str, Any] = {}
+        self._generators: dict[str, DynamicValueGenerator] = {}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
+                self._points[name] = p
+                self._values[name] = fixed_val if fixed_val is not None else 0
+                self._generators[name] = DynamicValueGenerator(p)
+
+    def generate_value(self, point_config: dict[str, Any]) -> Any:
+        name = point_config.get("name", "")
+        return self._values.get(name, 0)
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+
+    def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
+        return self._values.get(point_name, 0)

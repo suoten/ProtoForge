@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from protoforge.api.v1.auth import require_admin, require_user
+from protoforge.core.messages import desc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -142,11 +143,9 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
         is_admin = _user.get("role") == "admin"
         is_self = data.username == _user.get("username", "")
 
-        # FIXED: admin can change anyone's password; non-admin can only change own
         if not is_admin and not is_self:
-            raise HTTPException(status_code=403, detail="只能修改自己的密码")
+            raise HTTPException(status_code=403, detail=desc("auth.change_own_password_only"))
 
-        # FIXED: admin changing other user's password doesn't need old_password
         if is_admin and not is_self:
             ok, msg = await user_manager.admin_reset_password(data.username, data.new_password)
         else:
@@ -160,7 +159,7 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
         raise
     except Exception as e:
         logger.error("Change password failed: %s", e)
-        raise HTTPException(status_code=500, detail="密码修改失败，请稍后重试") from e
+        raise HTTPException(status_code=500, detail=desc("auth.password_change_failed")) from e
 
 
 @router.post("/auth/admin/reset-password")
@@ -217,7 +216,7 @@ async def delete_user(username: str, _user: dict = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         if not await user_manager.delete_user(username):
-            raise HTTPException(status_code=400, detail="Cannot delete this user")
+            raise HTTPException(status_code=404, detail="User not found")
         return {"status": "ok"}
     except HTTPException:
         raise

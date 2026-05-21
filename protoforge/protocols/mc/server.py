@@ -5,30 +5,24 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class McDeviceBehavior(DeviceBehavior):
+class McDeviceBehavior(StandardDeviceBehavior):
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)
         self._device_memory: dict[int, bytearray] = {}
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
                 address = getattr(p, 'address', '0') or '0'
                 device_code, offset = self._parse_mc_address(str(address))
                 self._point_addresses[name] = (device_code, offset)
-                self._sync_value_to_memory(name, self._values[name])
+                self._sync_value_to_memory(name, self._values.get(name, 0))
 
     DEVICE_CODE_MAP: dict[str, int] = {
         'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
@@ -69,10 +63,6 @@ class McDeviceBehavior(DeviceBehavior):
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
 
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
-
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
@@ -89,16 +79,6 @@ class McDeviceBehavior(DeviceBehavior):
                 self.write_memory(area_code, offset, data)
             except (ValueError, TypeError, struct.error) as e:
                 logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def read_memory(self, area_code: int, size: int) -> bytearray:
         if area_code not in self._device_memory:
@@ -151,7 +131,7 @@ class McServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("MC server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"MC service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"MC service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -172,7 +152,7 @@ class McServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("MC server stopped")
-            self._log_debug("system", "server_stop", "MC service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "MC service stopped")
 
     async def _serve(self) -> None:
         try:
@@ -193,23 +173,23 @@ class McServer(ProtocolServer):
         logger.debug("MC connection from %s", addr)
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(9), timeout=30.0)  # FIXED: 连接无读超时(Slowloris漏洞)
+                header = await asyncio.wait_for(reader.readexactly(9), timeout=30.0)
                 if len(header) < 9:
                     break
                 if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
                     data_len_field = int(header[7:9], 16)
-                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=30.0)  # FIXED: 读超时
+                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=30.0)
                     data = header + remaining
                 else:
                     data_len = struct.unpack("<H", header[7:9])[0]
                     total_len = 9 + data_len
-                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=30.0)  # FIXED: 读超时
+                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=30.0)
                     data = header + remaining
                 response = self._process_slmp(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 捕获读超时异常
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             writer.close()
@@ -317,7 +297,7 @@ class McServer(ProtocolServer):
                         logger.warning("MC write value sync error: %s", e)
                     break
             self._log_debug("recv", "mc_write",
-                            f"Write device {device_code} offset {start_addr}",  # FIXED: CN→EN
+                            f"Write device {device_code} offset {start_addr}",
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
 
         resp = bytearray()
@@ -424,9 +404,10 @@ class McServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = McDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -441,18 +422,19 @@ class McServer(ProtocolServer):
                      self._device_params[device_config.id]["station"],
                      self._device_params[device_config.id]["pc"])
         self._log_debug("system", "device_create",
-                        f"MC device created: {device_config.name}",  # FIXED: CN→EN
+                        f"MC device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("MC device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"MC device removed: {device_id}",  # FIXED: CN→EN
+                        f"MC device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -473,11 +455,11 @@ class McServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "MC server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 5000, "description": "MC port (default 5000)"},  # FIXED: CN→EN
-                "network": {"type": "integer", "default": 0, "description": "Network number"},  # FIXED: CN→EN
-                "station": {"type": "integer", "default": 0, "description": "Station number"},  # FIXED: CN→EN
-                "pc": {"type": "integer", "default": 255, "description": "PC number (0xFF=self)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "MC server listen address")},
+                "port": {"type": "integer", "default": 5000, "description": desc("mc_port", "MC port (default 5000)")},
+                "network": {"type": "integer", "default": 0, "description": desc("mc_network", "Network number")},
+                "station": {"type": "integer", "default": 0, "description": desc("mc_station", "Station number")},
+                "pc": {"type": "integer", "default": 255, "description": desc("mc_pc", "PC number (0xFF=self)")},
             },
         }
 

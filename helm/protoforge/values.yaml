@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: suoten/protoforge
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "0.1.0"  # FIXED: 版本号管理一致性—latest→0.1.0
 
 service:
   type: ClusterIP

@@ -57,6 +57,7 @@ class SafeEval:
     _MAX_DEPTH = 50
     _MAX_CALL_ARGS = 10
     _MAX_STR_LEN = 10000
+    _MAX_RANGE_SIZE = 100000  # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
 
     def __init__(self, variables: dict[str, Any] | None = None):
         self._variables = variables or {}
@@ -162,6 +163,15 @@ class SafeEval:
             if len(node.args) > self._MAX_CALL_ARGS:
                 raise ValueError(f"Too many call arguments (max {self._MAX_CALL_ARGS})")
             args = [self._eval_node(a) for a in node.args]
+            # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
+            if isinstance(node.func, ast.Name) and node.func.id == "range":
+                if args and isinstance(args[0], int) and len(args) <= 3:
+                    size = args[0] if len(args) == 1 else (args[1] - args[0]) if len(args) == 2 else ((args[1] - args[0]) // args[2])
+                    if abs(size) > self._MAX_RANGE_SIZE:
+                        raise ValueError(f"range size {abs(size)} exceeds limit ({self._MAX_RANGE_SIZE})")
+            if isinstance(node.func, ast.Name) and node.func.id == "list":
+                if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
+                    raise ValueError(f"list() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
             return func(*args)
         elif isinstance(node, ast.Attribute):
             value = self._eval_node(node.value)

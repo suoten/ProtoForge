@@ -15,84 +15,84 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         return port_map.get(name, {"host": "0.0.0.0", "port": 0})
 
     await engine.start_protocol("modbus_tcp", _cfg("modbus_tcp"))
-    logger.info("  ✓ Modbus TCP started (port %s)", _cfg("modbus_tcp").get("port"))  # FIXED: CN→EN
+    logger.info("  ✓ Modbus TCP started (port %s)", _cfg("modbus_tcp").get("port"))
 
     try:
         await engine.start_protocol("mqtt", _cfg("mqtt"))
-        logger.info("  ✓ MQTT started (port %s)", _cfg("mqtt").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ MQTT started (port %s)", _cfg("mqtt").get("port"))
     except Exception as e:
-        logger.warning("  ✗ MQTT start failed (requires amqtt): %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ MQTT start failed (requires amqtt): %s", e)
 
     try:
         await engine.start_protocol("mc", _cfg("mc"))
-        logger.info("  ✓ MC started (port %s)", _cfg("mc").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ MC started (port %s)", _cfg("mc").get("port"))
     except Exception as e:
-        logger.warning("  ✗ MC start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ MC start failed: %s", e)
 
     try:
         await engine.start_protocol("fanuc", _cfg("fanuc"))
-        logger.info("  ✓ FANUC started (port %s)", _cfg("fanuc").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ FANUC started (port %s)", _cfg("fanuc").get("port"))
     except Exception as e:
-        logger.warning("  ✗ FANUC start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ FANUC start failed: %s", e)
 
     try:
         await engine.start_protocol("toledo", _cfg("toledo"))
-        logger.info("  ✓ Toledo started (port %s)", _cfg("toledo").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ Toledo started (port %s)", _cfg("toledo").get("port"))
     except Exception as e:
-        logger.warning("  ✗ Toledo start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ Toledo start failed: %s", e)
 
     try:
         await engine.start_protocol("profinet", _cfg("profinet"))
-        logger.info("  ✓ PROFINET IO started (port %s)", _cfg("profinet").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ PROFINET IO started (port %s)", _cfg("profinet").get("port"))
     except Exception as e:
-        logger.warning("  ✗ PROFINET IO start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ PROFINET IO start failed: %s", e)
 
     try:
         await engine.start_protocol("ethercat", _cfg("ethercat"))
-        logger.info("  ✓ EtherCAT started (port %s)", _cfg("ethercat").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ EtherCAT started (port %s)", _cfg("ethercat").get("port"))
     except Exception as e:
-        logger.warning("  ✗ EtherCAT start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ EtherCAT start failed: %s", e)
 
     try:
         await engine.start_protocol("http", _cfg("http"))
-        logger.info("  ✓ HTTP REST started (port %s)", _cfg("http").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ HTTP REST started (port %s)", _cfg("http").get("port"))
     except Exception as e:
-        logger.warning("  ✗ HTTP REST start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ HTTP REST start failed: %s", e)
 
     try:
         await engine.start_protocol("gb28181", _cfg("gb28181"))
-        logger.info("  ✓ GB28181 started (port %s)", _cfg("gb28181").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ GB28181 started (port %s)", _cfg("gb28181").get("port"))
     except Exception as e:
-        logger.warning("  ✗ GB28181 start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ GB28181 start failed: %s", e)
 
     try:
         await engine.start_protocol("opcua", _cfg("opcua"))
-        logger.info("  ✓ OPC-UA started (port %s)", _cfg("opcua").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ OPC-UA started (port %s)", _cfg("opcua").get("port"))
     except Exception as e:
-        logger.warning("  ✗ OPC-UA start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ OPC-UA start failed: %s", e)
 
     try:
         await engine.start_protocol("s7", _cfg("s7"))
-        logger.info("  ✓ S7 started (port %s)", _cfg("s7").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ S7 started (port %s)", _cfg("s7").get("port"))
     except Exception as e:
-        logger.warning("  ✗ S7 start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ S7 start failed: %s", e)
 
     try:
         await engine.start_protocol("bacnet", _cfg("bacnet"))
-        logger.info("  ✓ BACnet started (port %s)", _cfg("bacnet").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ BACnet started (port %s)", _cfg("bacnet").get("port"))
     except Exception as e:
-        logger.warning("  ✗ BACnet start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ BACnet start failed: %s", e)
 
     try:
         await engine.start_protocol("ab", _cfg("ab"))
-        logger.info("  ✓ AB started (port %s)", _cfg("ab").get("port"))  # FIXED: CN→EN
+        logger.info("  ✓ AB started (port %s)", _cfg("ab").get("port"))
     except Exception as e:
-        logger.warning("  ✗ AB start failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ AB start failed: %s", e)
 
     demo_devices = [
         {
             "id": "demo-temp-sensor",
-            "name": "Temp-Humidity Sensor-1",  # FIXED: CN→EN
+            "name": "Temp-Humidity Sensor-1",
             "protocol": "modbus_tcp",
             "template_id": "modbus_temperature_sensor",
             "points": [
@@ -103,7 +103,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-plc-s7",
-            "name": "Siemens S7-1200",  # FIXED: CN→EN
+            "name": "Siemens S7-1200",
             "protocol": "s7",
             "template_id": "siemens_s7_1200",
             "points": [
@@ -114,7 +114,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-smart-lock",
-            "name": "Smart Lock",  # FIXED: CN→EN
+            "name": "Smart Lock",
             "protocol": "mqtt",
             "template_id": "smart_lock",
             "points": [
@@ -124,7 +124,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-flow-meter",
-            "name": "Flow Meter",  # FIXED: CN→EN
+            "name": "Flow Meter",
             "protocol": "modbus_tcp",
             "template_id": "flow_meter",
             "points": [
@@ -135,7 +135,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-mc-fx5u",
-            "name": "Mitsubishi FX5U PLC",  # FIXED: CN→EN
+            "name": "Mitsubishi FX5U PLC",
             "protocol": "mc",
             "template_id": "mc_fx5u",
             "points": [
@@ -157,7 +157,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-toledo-scale",
-            "name": "Mettler-Toledo Scale",  # FIXED: CN→EN
+            "name": "Mettler-Toledo Scale",
             "protocol": "toledo",
             "template_id": "toledo_scale",
             "points": [
@@ -168,7 +168,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-profinet-io",
-            "name": "PROFINET Remote IO Module",  # FIXED: CN→EN
+            "name": "PROFINET Remote IO Module",
             "protocol": "profinet",
             "template_id": "profinet_io_device",
             "points": [
@@ -179,7 +179,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-ethercat-servo",
-            "name": "EtherCAT Servo Drive",  # FIXED: CN→EN
+            "name": "EtherCAT Servo Drive",
             "protocol": "ethercat",
             "template_id": "ethercat_servo_drive",
             "points": [
@@ -191,7 +191,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-http-sensor",
-            "name": "HTTP Temperature Sensor",  # FIXED: CN→EN
+            "name": "HTTP Temperature Sensor",
             "protocol": "http",
             "template_id": "http_rest_sensor",
             "points": [
@@ -202,7 +202,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-gb28181-camera",
-            "name": "GB28181 Camera",  # FIXED: CN→EN
+            "name": "GB28181 Camera",
             "protocol": "gb28181",
             "template_id": "gb28181_camera",
             "points": [
@@ -213,7 +213,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-opcua-motor",
-            "name": "OPC-UA Motor Controller",  # FIXED: CN→EN
+            "name": "OPC-UA Motor Controller",
             "protocol": "opcua",
             "template_id": "opcua_motor_controller",
             "points": [
@@ -224,7 +224,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-bacnet-controller",
-            "name": "BACnet Building Controller",  # FIXED: CN→EN
+            "name": "BACnet Building Controller",
             "protocol": "bacnet",
             "template_id": "bacnet_ahu",
             "points": [
@@ -246,19 +246,19 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
             )
             await engine.create_device(config)
             await engine.start_device(dev_config["id"])
-            logger.info("  ✓ Device created and started: %s", dev_config["name"])  # FIXED: CN→EN
+            logger.info("  ✓ Device created and started: %s", dev_config["name"])
         except Exception as e:
-            logger.warning("  ✗ Device creation failed %s: %s", dev_config["name"], e)  # FIXED: CN→EN
+            logger.warning("  ✗ Device creation failed %s: %s", dev_config["name"], e)
 
     demo_scenario = {
         "id": "demo-smart-factory",
-        "name": "Smart Factory Demo",  # FIXED: CN→EN
-        "description": "A complete demo scenario with 13 devices including temp-humidity sensor, PLC, smart lock, flow meter, HTTP sensor, GB28181 camera, OPC-UA motor, and BACnet building controller",  # FIXED: CN→EN
+        "name": "Smart Factory Demo",
+        "description": "A complete demo scenario with 13 devices including temp-humidity sensor, PLC, smart lock, flow meter, HTTP sensor, GB28181 camera, OPC-UA motor, and BACnet building controller",
         "devices": demo_devices,
         "rules": [
             {
                 "id": "rule-temp-alarm",
-                "name": "High Temperature Alarm",  # FIXED: CN→EN
+                "name": "High Temperature Alarm",
                 "rule_type": "threshold",
                 "source_device_id": "demo-temp-sensor",
                 "source_point": "temperature",
@@ -270,7 +270,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
             },
             {
                 "id": "rule-flow-alarm",
-                "name": "Flow Anomaly Alarm",  # FIXED: CN→EN
+                "name": "Flow Anomaly Alarm",
                 "rule_type": "threshold",
                 "source_device_id": "demo-flow-meter",
                 "source_point": "flow_rate",
@@ -311,8 +311,8 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         )
         engine.create_scenario(scenario_config)
         await engine.start_scenario(demo_scenario["id"])
-        logger.info("  ✓ Scenario created and started: %s", demo_scenario["name"])  # FIXED: CN→EN
+        logger.info("  ✓ Scenario created and started: %s", demo_scenario["name"])
     except Exception as e:
-        logger.warning("  ✗ Scenario creation failed: %s", e)  # FIXED: CN→EN
+        logger.warning("  ✗ Scenario creation failed: %s", e)
 
     logger.info("Demo data seeded! %d devices + 1 scenario ready.", len(demo_devices))

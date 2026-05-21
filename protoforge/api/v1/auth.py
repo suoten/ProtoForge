@@ -10,9 +10,23 @@ from protoforge.core.auth import verify_token, verify_token_with_reason
 logger = logging.getLogger(__name__)
 
 
+_no_auth_warning_shown = False
+
 def is_no_auth() -> bool:
+    global _no_auth_warning_shown
     from protoforge.config import get_settings
-    return get_settings().no_auth
+    settings = get_settings()
+    if settings.no_auth:
+        host = getattr(settings, 'host', '0.0.0.0')
+        if host not in ('127.0.0.1', 'localhost', '::1') and not _no_auth_warning_shown:
+            logger.critical(
+                "SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to %s (non-localhost). "
+                "Anyone on the network can access all APIs without authentication! "
+                "Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.",
+                host
+            )
+            _no_auth_warning_shown = True
+    return settings.no_auth
 
 
 class RoleChecker:
@@ -86,15 +100,13 @@ def _check_role(request: Request, allowed_roles: list[str]) -> Optional[JSONResp
     if user_role not in allowed_roles:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            content={"code": 403, "data": None, "message": f"Role '{user_role}' not allowed for this operation", "detail": f"Role '{user_role}' not allowed for this operation", "timestamp": int(time.time() * 1000)},  # FIXED: hardcoded Chinese
+            content={"code": 403, "data": None, "message": f"Role '{user_role}' not allowed for this operation", "detail": f"Role '{user_role}' not allowed for this operation", "timestamp": int(time.time() * 1000)},
         )
     return None
 
 
-_ADMIN_PATHS = {
-    "/api/v1/auth/admin/reset-password": ["admin"],
-    "/api/v1/auth/admin/unlock": ["admin"],
-}
+# 移除硬编码管理员路径检查，统一依赖路由级Depends(require_admin)做角色校验
+_ADMIN_PATHS = {}  # Deprecated: role checking is now done via Depends(require_admin) at route level
 _ADMIN_ROLE_PATH = "/api/v1/auth/users/"
 _ADMIN_ROLE_SUFFIX = "/role"
 
@@ -112,6 +124,7 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     if is_no_auth():
+        request.state.user = {"username": "admin", "role": "admin"}
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")
@@ -125,7 +138,7 @@ async def auth_middleware(request: Request, call_next):
     token = auth_header[7:]
     payload, reason = verify_token_with_reason(token)
     if payload is None:
-        detail = "Token expired, please log in again" if reason == "token_expired" else "Invalid authentication token"  # FIXED: hardcoded Chinese
+        detail = "Token expired, please log in again" if reason == "token_expired" else "Invalid authentication token"
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"code": 401, "data": None, "message": detail, "detail": detail, "reason": reason, "timestamp": int(time.time() * 1000)},

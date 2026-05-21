@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 from typing import Any, Optional
 
+from protoforge.core.messages import tmsg
+
 
 class TestStatus(str, Enum):
     PENDING = "pending"
@@ -196,6 +198,7 @@ class TestReport:
     errors: int = 0
     skipped: int = 0
     environment: dict[str, Any] = field(default_factory=dict)
+    lang: str = "zh"
 
     @property
     def success_rate(self) -> float:
@@ -246,7 +249,7 @@ class TestReport:
             ],
         }
 
-    def to_html(self) -> str:
+    def to_html(self, lang: str = "zh") -> str:
         passed_pct = round(self.success_rate, 1)
         failed_pct = round((self.failed / self.total * 100) if self.total else 0, 1)
         error_pct = round((self.errors / self.total * 100) if self.total else 0, 1)
@@ -289,7 +292,7 @@ class TestReport:
                 </div>
                 {f'<div class="case-error">{html.escape(tc.error)}</div>' if tc.error else ''}
                 <table class="steps-table">
-                    <thead><tr><th>Step</th><th>Status</th><th>Duration</th><th>Error</th></tr></thead>  <!-- FIXED: CN→EN -->
+                    <thead><tr><th>{tmsg('html_step', lang)}</th><th>{tmsg('html_status', lang)}</th><th>{tmsg('html_duration', lang)}</th><th>{tmsg('html_error', lang)}</th></tr></thead>
                     <tbody>{step_rows}</tbody>
                 </table>
             </div>"""
@@ -299,10 +302,10 @@ class TestReport:
             env_rows += f"<tr><td>{html.escape(str(k))}</td><td>{html.escape(str(v))}</td></tr>"
 
         return f"""<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="{lang}">
 <head>
 <meta charset="UTF-8">
-<title>ProtoForge Test Report - {html.escape(self.name)}</title>  <!-- FIXED: CN→EN -->
+<title>{tmsg('html_title', lang)} - {html.escape(self.name)}</title>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
 body {{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f5f5f5; color:#333; padding:20px; }}
@@ -334,15 +337,15 @@ h1 {{ font-size:24px; margin-bottom:20px; color:#1a1a1a; }}
 </head>
 <body>
 <div class="container">
-<h1>🧪 ProtoForge Test Report</h1>  <!-- FIXED: CN→EN -->
-<p class="timestamp">Report ID: {self.id} | Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>  <!-- FIXED: CN→EN -->
+<h1>🧪 {tmsg('html_title', lang)}</h1>
+<p class="timestamp">{tmsg('html_report_id', lang)}: {self.id} | {tmsg('html_generated', lang)}: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
 <div class="summary">
-    <div class="summary-card"><div class="number">{self.total}</div><div class="label">Total</div></div>  <!-- FIXED: CN→EN -->
-    <div class="summary-card"><div class="number" style="color:#18a058">{self.passed}</div><div class="label">Passed</div></div>  <!-- FIXED: CN→EN -->
-    <div class="summary-card"><div class="number" style="color:#d03050">{self.failed}</div><div class="label">Failed</div></div>  <!-- FIXED: CN→EN -->
-    <div class="summary-card"><div class="number" style="color:#f0a020">{self.errors}</div><div class="label">Errors</div></div>  <!-- FIXED: CN→EN -->
-    <div class="summary-card"><div class="number" style="color:#909399">{self.skipped}</div><div class="label">Skipped</div></div>  <!-- FIXED: CN→EN -->
-    <div class="summary-card"><div class="number" style="color:#2080f0">{passed_pct}%</div><div class="label">Pass Rate</div></div>  <!-- FIXED: CN→EN -->
+    <div class="summary-card"><div class="number">{self.total}</div><div class="label">{tmsg('html_total', lang)}</div></div>
+    <div class="summary-card"><div class="number" style="color:#18a058">{self.passed}</div><div class="label">{tmsg('html_passed', lang)}</div></div>
+    <div class="summary-card"><div class="number" style="color:#d03050">{self.failed}</div><div class="label">{tmsg('html_failed', lang)}</div></div>
+    <div class="summary-card"><div class="number" style="color:#f0a020">{self.errors}</div><div class="label">{tmsg('html_errors', lang)}</div></div>
+    <div class="summary-card"><div class="number" style="color:#909399">{self.skipped}</div><div class="label">{tmsg('html_skipped', lang)}</div></div>
+    <div class="summary-card"><div class="number" style="color:#2080f0">{passed_pct}%</div><div class="label">{tmsg('html_pass_rate', lang)}</div></div>
 </div>
 <div class="progress-bar">
     <div class="passed" style="width:{passed_pct}%"></div>
@@ -350,7 +353,7 @@ h1 {{ font-size:24px; margin-bottom:20px; color:#1a1a1a; }}
     <div class="errors" style="width:{error_pct}%"></div>
 </div>
 {case_rows}
-{f'<h2 style="margin-top:24px;font-size:18px">Environment</h2><table class="env-table"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}  <!-- FIXED: CN→EN -->
+{f'<h2 style="margin-top:24px;font-size:18px">{tmsg('html_environment', lang)}</h2><table class="env-table"><thead><tr><th>{tmsg('html_key', lang)}</th><th>{tmsg('html_value', lang)}</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}
 </div>
 </body>
 </html>"""
@@ -395,25 +398,25 @@ class AssertionEngine:
             if assertion.type == AssertionType.EQUALS:
                 passed = target_value == assertion.expected
                 result["passed"] = passed
-                result["message"] = f"Expected {assertion.expected}, got {target_value}" if not passed else f"equals {assertion.expected}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_expected_got", expected=assertion.expected, actual=target_value) if not passed else tmsg("ae_equals", expected=assertion.expected)
 
             elif assertion.type == AssertionType.NOT_EQUALS:
                 passed = target_value != assertion.expected
                 result["passed"] = passed
-                result["message"] = f"should not equal {assertion.expected}" if not passed else f"not equal to {assertion.expected}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_should_not_equal", expected=assertion.expected) if not passed else tmsg("ae_not_equal_to", expected=assertion.expected)
 
             elif assertion.type == AssertionType.CONTAINS:
                 passed = assertion.expected in str(target_value) if target_value is not None else False
                 result["passed"] = passed
-                result["message"] = f"contains '{assertion.expected}'" if passed else f"does not contain '{assertion.expected}', Actual: {target_value}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_contains", expected=assertion.expected) if passed else tmsg("ae_does_not_contain", expected=assertion.expected, actual=target_value)
 
             elif assertion.type == AssertionType.NOT_CONTAINS:
                 passed = assertion.expected not in str(target_value) if target_value is not None else True
                 result["passed"] = passed
-                result["message"] = f"does not contain '{assertion.expected}'" if passed else f"contains '{assertion.expected}'"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_not_contains_pass", expected=assertion.expected) if passed else tmsg("ae_not_contains_fail", expected=assertion.expected)
 
             elif assertion.type == AssertionType.GREATER_THAN:
-                try:  # FIXED: wrap float() conversion with type validation
+                try:
                     tv = float(target_value) if target_value is not None else None
                     ev = float(assertion.expected)
                 except (ValueError, TypeError) as conv_err:
@@ -425,7 +428,7 @@ class AssertionEngine:
                     result["message"] = f"{target_value} > {assertion.expected}" if passed else f"{target_value} not greater than {assertion.expected}"
 
             elif assertion.type == AssertionType.LESS_THAN:
-                try:  # FIXED: wrap float() conversion with type validation
+                try:
                     tv = float(target_value) if target_value is not None else None
                     ev = float(assertion.expected)
                 except (ValueError, TypeError) as conv_err:
@@ -443,35 +446,35 @@ class AssertionEngine:
                 except re.error:
                     passed = False
                 result["passed"] = passed
-                result["message"] = f"matches regex '{assertion.expected}'" if passed else f"does not match regex '{assertion.expected}'"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_regex_match_pass", pattern=assertion.expected) if passed else tmsg("ae_regex_match_fail", pattern=assertion.expected)
 
             elif assertion.type == AssertionType.JSON_PATH:
                 json_value = self._extract_json_path(actual, assertion.json_path)
                 passed = json_value == assertion.expected
                 result["passed"] = passed
-                result["message"] = f"JSON path '{assertion.json_path}' = {json_value}" if passed else f"JSON path '{assertion.json_path}' Expected {assertion.expected}, got {json_value}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_json_path_pass", path=assertion.json_path, value=json_value) if passed else tmsg("ae_json_path_fail", path=assertion.json_path, expected=assertion.expected, actual=json_value)
 
             elif assertion.type == AssertionType.NOT_NULL:
                 passed = target_value is not None and target_value != ""
                 result["passed"] = passed
-                result["message"] = "value is not null" if passed else "value is null"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_not_null_pass") if passed else tmsg("ae_not_null_fail")
 
             elif assertion.type == AssertionType.TYPE_CHECK:
                 type_map = {"str": str, "int": int, "float": float, "bool": bool, "list": list, "dict": dict}
                 expected_type = type_map.get(str(assertion.expected), str)
                 passed = isinstance(target_value, expected_type)
                 result["passed"] = passed
-                result["message"] = f"type is {assertion.expected}" if passed else f"type is not {assertion.expected}, Actual {type(target_value).__name__}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_type_check_pass", expected=assertion.expected) if passed else tmsg("ae_type_check_fail", expected=assertion.expected, actual=type(target_value).__name__)
 
             elif assertion.type == AssertionType.STATUS_CODE:
                 status = self._extract_json_path(actual, "status_code") if isinstance(actual, dict) else None
                 passed = str(status) == str(assertion.expected)
                 result["passed"] = passed
-                result["message"] = f"Status code {status}" if passed else f"Expected status code {assertion.expected}, got {status}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_status_code_pass", status=status) if passed else tmsg("ae_status_code_fail", expected=assertion.expected, status=status)
 
             elif assertion.type == AssertionType.LENGTH_EQUALS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                try:  # FIXED: wrap int() conversion with type validation
+                try:
                     expected_len = int(assertion.expected)
                 except (ValueError, TypeError):
                     passed = False
@@ -483,7 +486,7 @@ class AssertionEngine:
 
             elif assertion.type == AssertionType.LENGTH_GREATER:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                try:  # FIXED: wrap int() conversion with type validation
+                try:
                     expected_len = int(assertion.expected)
                 except (ValueError, TypeError):
                     passed = False
@@ -495,7 +498,7 @@ class AssertionEngine:
 
             elif assertion.type == AssertionType.LENGTH_LESS:
                 length = len(target_value) if target_value is not None and hasattr(target_value, "__len__") else 0
-                try:  # FIXED: wrap int() conversion with type validation
+                try:
                     expected_len = int(assertion.expected)
                 except (ValueError, TypeError):
                     passed = False
@@ -506,11 +509,11 @@ class AssertionEngine:
                     result["message"] = f"Length {length} < {assertion.expected}" if passed else f"Length {length} not less than {assertion.expected}"
 
             else:
-                result["message"] = f"Unknown assertion type: {assertion.type}"  # FIXED: CN→EN
+                result["message"] = tmsg("ae_unknown_assertion", type=assertion.type)
 
         except Exception as e:
             result["passed"] = False
-            result["message"] = f"Assertion execution error: {str(e)}"  # FIXED: CN→EN
+            result["message"] = tmsg("ae_assertion_error", error=str(e))
 
         if assertion.message:
             result["message"] = f"{assertion.message}: {result['message']}"
@@ -537,10 +540,10 @@ class AssertionEngine:
                 try:
                     current = current[int(part)]
                 except (ValueError, IndexError):
-                    logger.debug("JSON path traversal failed at segment %d ('%s'): index error on %s", i, part, type(current).__name__)  # FIXED: add debug log for silent None return
+                    logger.debug("JSON path traversal failed at segment %d ('%s'): index error on %s", i, part, type(current).__name__)
                     return None
             else:
-                logger.debug("JSON path traversal failed at segment %d ('%s'): unexpected type %s", i, part, type(current).__name__)  # FIXED: add debug log for silent None return
+                logger.debug("JSON path traversal failed at segment %d ('%s'): unexpected type %s", i, part, type(current).__name__)
                 return None
         return current
 
@@ -555,7 +558,7 @@ class TestRunner:
                 from protoforge.config import get_settings
                 cls._MAX_REPORTS = get_settings().test_max_reports
             except Exception as e:
-                logger.debug("Failed to read test_max_reports from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
+                logger.debug("Failed to read test_max_reports from config, using default: %s", e)
                 cls._MAX_REPORTS = 1000
         return cls._MAX_REPORTS
 
@@ -783,7 +786,7 @@ class TestRunner:
 
         return test_case
 
-    async def run_test_suite_by_id(self, suite_id: str, api_client=None) -> TestReport:
+    async def run_test_suite_by_id(self, suite_id: str, api_client=None, lang: str = "zh") -> TestReport:
         suite = self._test_suites.get(suite_id)
         if not suite:
             raise ValueError(f"Test suite not found: {suite_id}")
@@ -792,16 +795,17 @@ class TestRunner:
             tc = self._test_cases.get(cid)
             if tc:
                 cases.append(tc)
-        return await self.run_test_suite(suite.name, cases, api_client)
+        return await self.run_test_suite(suite.name, cases, api_client, lang=lang)
 
     async def run_test_suite(self, name: str, test_cases: list[TestCase],
-                             api_client=None) -> TestReport:
+                             api_client=None, lang: str = "zh") -> TestReport:
         report = TestReport(
             id=uuid.uuid4().hex[:12],
             name=name,
             start_time=time.time(),
             environment={"platform": "ProtoForge", "version": "1.0"},
         )
+        report.lang = lang
 
         for tc in test_cases:
             await self.run_test(tc, api_client)
@@ -833,10 +837,10 @@ class TestRunner:
                 return r.to_dict()
         return None
 
-    def get_report_html(self, report_id: str) -> str | None:
+    def get_report_html(self, report_id: str, lang: str = "zh") -> str | None:
         for r in self._reports:
             if r.id == report_id:
-                return r.to_html()
+                return r.to_html(lang=lang)
         return None
 
     def get_report_trend(self, count: int = 20) -> list[dict[str, Any]]:
@@ -952,7 +956,7 @@ class TestRunner:
                 from urllib.parse import urlparse
                 import ipaddress
                 parsed = urlparse(url)
-                if parsed.scheme.lower() not in ("http", "https"):  # FIXED: SSRF防护缺少scheme校验
+                if parsed.scheme.lower() not in ("http", "https"):
                     return {"error": f"SSRF protection: scheme '{parsed.scheme}' not allowed, only http/https permitted"}
                 hostname = parsed.hostname or ""
                 allowed = False
@@ -967,7 +971,7 @@ class TestRunner:
                         logger.debug("SSRF check: could not parse hostname %r as IP address, treating as external", hostname)
                 if not allowed:
                     return {"error": f"SSRF protection: external URL not allowed (hostname={hostname}). Use relative paths for internal API calls."}
-            elif "://" in url:  # FIXED: 非http/https协议(如file:///gopher://)拒绝执行
+            elif "://" in url:
                 return {"error": f"SSRF protection: URL with scheme not allowed (url={url[:80]})"}
             elif not url.startswith("/"):
                 url = f"/{url}"

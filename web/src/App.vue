@@ -503,11 +503,31 @@ body {
   background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
   border: none !important;
   font-weight: 500 !important;
+  color: #fff !important;
 }
 
 .n-button--success-type {
   background: linear-gradient(135deg, #10b981, #059669) !important;
   border: none !important;
+  color: #fff !important;
+}
+
+.n-button--warning-type {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-button--error-type {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-button--info-type {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  border: none !important;
+  color: #fff !important;
 }
 
 .n-tag--success-type {

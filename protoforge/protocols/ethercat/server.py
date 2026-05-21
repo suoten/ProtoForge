@@ -7,7 +7,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ class EtherCATServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("EtherCAT server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            msg("ethercat", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
+                            msg("ethercat", "service_started", host=self._host, port=self._port),
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -259,7 +259,7 @@ class EtherCATServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("EtherCAT server stopped")
-            self._log_debug("system", "server_stop", msg("ethercat", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
+            self._log_debug("system", "server_stop", msg("ethercat", "service_stopped"))
 
     def _init_eeprom(self) -> None:
         self._eeprom = bytearray(EEPROM_SIZE * 2)
@@ -483,25 +483,25 @@ class EtherCATServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         logger.info("EtherCAT connection from %s", addr)
         self._log_debug("inbound", "connect",
-                        f"EtherCAT Master connected: {addr[0]}:{addr[1]}"  ,  # FIXED: CN→EN
+                        f"EtherCAT Master connected: {addr[0]}:{addr[1]}",
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
                 try:
-                    header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: 添加读取超时
+                    header = await asyncio.wait_for(reader.readexactly(2), timeout=30)
                 except asyncio.IncompleteReadError:
                     break
                 length = struct.unpack("<H", header)[0]
                 if length > 0:
                     try:
-                        payload = await asyncio.wait_for(reader.readexactly(length), timeout=30)  # FIXED: 添加读取超时
+                        payload = await asyncio.wait_for(reader.readexactly(length), timeout=30)
                     except asyncio.IncompleteReadError:
                         break
                     response = self._process_frame(header + payload)
                     if response:
                         writer.write(response)
                         await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):  # FIXED: 添加TimeoutError捕获
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
             pass
         finally:
             writer.close()
@@ -599,7 +599,7 @@ class EtherCATServer(ProtocolServer):
             if behavior and config:
                 behavior.set_pd_output(config, payload[:length])
                 self._log_debug("inbound", "pdo_write",
-                                f"EtherCAT PDO write {length} bytes"  ,  # FIXED: CN→EN
+                                f"EtherCAT PDO write {length} bytes",
                                 device_id=self._default_device_id or "",
                                 detail={"size": length})
             return b"", 0x0001
@@ -674,7 +674,7 @@ class EtherCATServer(ProtocolServer):
             end = min(offset + len(data), FMMU_REG_SIZE)
             ch[offset:end] = data[:end - offset]
             self._log_debug("inbound", "fmmu_config",
-                            f"EtherCAT FMMU[{ch_idx}] config written"  ,  # FIXED: CN→EN
+                            f"EtherCAT FMMU[{ch_idx}] config written",
                             detail={"channel": ch_idx, "address": hex(address)})
             self._configure_fmmu_for_pd()
 
@@ -696,7 +696,7 @@ class EtherCATServer(ProtocolServer):
             ch[offset:end] = data[:end - offset]
             sm_type = "Output" if ch_idx == 2 else "Input" if ch_idx == 3 else f"SM{ch_idx}"
             self._log_debug("inbound", "sm_config",
-                            f"EtherCAT SM[{ch_idx}]({sm_type}) config written"  ,  # FIXED: CN→EN
+                            f"EtherCAT SM[{ch_idx}]({sm_type}) config written",
                             detail={"channel": ch_idx, "address": hex(address),
                                     "physical_start": struct.unpack("<H", ch[0:2])[0],
                                     "length": struct.unpack("<H", ch[2:4])[0],
@@ -743,7 +743,7 @@ class EtherCATServer(ProtocolServer):
             self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0016)
             self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
             self._log_debug("inbound", "state_change_error",
-                            f"EtherCAT AL illegal state transition: 0x{current:02X} -> 0x{requested_state:02X}",  # FIXED: CN→EN
+                            f"EtherCAT AL illegal state transition: 0x{current:02X} -> 0x{requested_state:02X}",
                             detail={"from": current, "to": requested_state, "error_code": 0x0016})
             return
 
@@ -751,7 +751,7 @@ class EtherCATServer(ProtocolServer):
             self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
             self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
             self._log_debug("inbound", "state_change_error",
-                            "EtherCAT AL: PREOP->SAFEOP failed, SM not configured"  ,  # FIXED: CN→EN
+                            "EtherCAT AL: PREOP->SAFEOP failed, SM not configured",
                             detail={"error_code": 0x001A, "reason": "SM not configured"})
             return
 
@@ -760,14 +760,14 @@ class EtherCATServer(ProtocolServer):
                 self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001A)
                 self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
                 self._log_debug("inbound", "state_change_error",
-                                "EtherCAT AL: ->OP failed, SM not configured"  ,  # FIXED: CN→EN
+                                "EtherCAT AL: ->OP failed, SM not configured",
                                 detail={"error_code": 0x001A})
                 return
             if not self._check_fmmu_configured():
                 self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x001B)
                 self._esc_regs[ECAT_AL_STATUS] = struct.pack("<B", self._al_state | 0x10)
                 self._log_debug("inbound", "state_change_error",
-                                "EtherCAT AL: ->OP failed, FMMU not configured"  ,  # FIXED: CN→EN
+                                "EtherCAT AL: ->OP failed, FMMU not configured",
                                 detail={"error_code": 0x001B})
                 return
 
@@ -776,7 +776,7 @@ class EtherCATServer(ProtocolServer):
         self._esc_regs[ECAT_AL_STATUS_CODE] = struct.pack("<H", 0x0000)
         state_names = {0x01: "INIT", 0x02: "PREOP", 0x03: "BOOT", 0x04: "SAFEOP", 0x08: "OP"}
         self._log_debug("inbound", "state_change",
-                        f"EtherCAT AL state: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",  # FIXED: CN→EN
+                        f"EtherCAT AL state: {state_names.get(current, hex(current))} -> {state_names.get(requested_state, hex(requested_state))}",
                         detail={"from": current, "to": requested_state})
 
     async def create_device(self, device_config: DeviceConfig) -> str:
@@ -784,7 +784,7 @@ class EtherCATServer(ProtocolServer):
         behavior._config = device_config
         self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         if proto_config.get("slave_address"):
@@ -795,7 +795,7 @@ class EtherCATServer(ProtocolServer):
         logger.info("EtherCAT device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
         self._log_debug("system", "device_created",
-                        f"EtherCAT device created: {device_config.name}"  ,  # FIXED: CN→EN
+                        f"EtherCAT device created: {device_config.name}",
                         device_id=device_config.id,
                         detail={"input_size": self._input_size,
                                 "output_size": self._output_size})
@@ -804,11 +804,11 @@ class EtherCATServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         self._recalc_data_sizes()
         logger.info("EtherCAT device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"Removed EtherCAT device: {device_id}"  ,  # FIXED: CN→EN
+                        f"Removed EtherCAT device: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -830,7 +830,7 @@ class EtherCATServer(ProtocolServer):
         success = behavior.on_write(point_name, value)
         if success:
             self._log_debug("system", "write_point",
-                            f"EtherCAT write point: {point_name}={value}"  ,  # FIXED: CN→EN
+                            f"EtherCAT write point: {point_name}={value}",
                             device_id=device_id)
         return success
 
@@ -838,12 +838,12 @@ class EtherCATServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "Listen address"},  # FIXED: CN→EN,
-                "port": {"type": "integer", "default": 34980, "description": "EtherCAT frame service port"},  # FIXED: CN→EN
-                "slave_address": {"type": "integer", "default": 4097, "description": "Slave Station Address"},  # FIXED: CN→EN,
-                "vendor_id": {"type": "integer", "default": 0, "description": "Vendor ID (EEPROM)"},  # FIXED: CN→EN
-                "product_code": {"type": "integer", "default": 0, "description": "Product code (EEPROM)"},  # FIXED: CN→EN
-                "revision_number": {"type": "integer", "default": 1, "description": "Revision number (EEPROM)"},  # FIXED: CN→EN
-                "serial_number": {"type": "integer", "default": 1, "description": "Serial number (EEPROM)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "Listen address")},
+                "port": {"type": "integer", "default": 34980, "description": desc("ethercat_port", "EtherCAT frame service port")},
+                "slave_address": {"type": "integer", "default": 4097, "description": desc("ethercat_slave_address", "Slave Station Address")},
+                "vendor_id": {"type": "integer", "default": 0, "description": desc("ethercat_vendor_id", "Vendor ID (EEPROM)")},
+                "product_code": {"type": "integer", "default": 0, "description": desc("ethercat_product_code", "Product code (EEPROM)")},
+                "revision_number": {"type": "integer", "default": 1, "description": desc("ethercat_revision_number", "Revision number (EEPROM)")},
+                "serial_number": {"type": "integer", "default": 1, "description": desc("ethercat_serial_number", "Serial number (EEPROM)")},
             },
         }

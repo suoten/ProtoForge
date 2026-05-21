@@ -46,8 +46,8 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
         raise HTTPException(status_code=500, detail=f"Failed to add webhook: {e}") from e  # FIXED: 中文→英文
 
 
-@router.put("/webhooks/{wh_id}")
-async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):
+@router.put("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
+async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
 
@@ -57,7 +57,7 @@ async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depen
         if url and not re.match(r'^https?://', url):
             raise HTTPException(status_code=400, detail="url must start with http:// or https://")  # FIXED: 中文→英文
 
-        webhook = webhook_manager.update_webhook(wh_id, config)
+        webhook = webhook_manager.update_webhook(webhook_id, config)  # FIXED: wh_id→webhook_id 命名统一
         if not webhook:
             raise HTTPException(status_code=404, detail="Webhook not found")
         return webhook.to_dict()
@@ -66,32 +66,32 @@ async def update_webhook(wh_id: str, config: dict[str, Any], _user: dict = Depen
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to update webhook %s: %s", wh_id, e)
+        logger.error("Failed to update webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
         raise HTTPException(status_code=500, detail=f"Failed to update webhook: {e}") from e  # FIXED: 中文→英文
 
 
-@router.delete("/webhooks/{wh_id}")
-async def delete_webhook(wh_id: str, _user: dict = Depends(require_operator)):
+@router.delete("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
+async def delete_webhook(webhook_id: str, _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
-        if not webhook_manager.remove_webhook(wh_id):
+        if not webhook_manager.remove_webhook(webhook_id):  # FIXED: wh_id→webhook_id 命名统一
             raise HTTPException(status_code=404, detail="Webhook not found")
         return {"status": "ok"}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete webhook %s: %s", wh_id, e)
+        logger.error("Failed to delete webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
         raise HTTPException(status_code=500, detail=f"Failed to delete webhook: {e}") from e  # FIXED: 中文→英文
 
 
-@router.post("/webhooks/{wh_id}/test")
-async def test_webhook(wh_id: str, _user: dict = Depends(require_operator)):
+@router.post("/webhooks/{webhook_id}/test")  # FIXED: wh_id→webhook_id 命名统一
+async def test_webhook(webhook_id: str, _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
-        webhook = webhook_manager.get_webhook(wh_id)
+        webhook = webhook_manager.get_webhook(webhook_id)  # FIXED: wh_id→webhook_id 命名统一
         if not webhook:
             raise HTTPException(status_code=404, detail="Webhook not found")
-        await webhook_manager._send_single(webhook, {"event": "test", "message": "Test webhook from ProtoForge", "webhook_id": wh_id, "timestamp": time.time()})
+        await webhook_manager._send_single(webhook, {"event": "test", "message": "Test webhook from ProtoForge", "webhook_id": webhook_id, "timestamp": time.time()})  # FIXED: wh_id→webhook_id 命名统一
         return {"status": "ok"}
     except HTTPException:
         raise

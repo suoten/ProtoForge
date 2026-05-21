@@ -132,6 +132,7 @@ import { NSpace, NButton, NAlert, NCard, NDataTable, NModal, NForm, NFormItem,
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { protocolLabels } from '../constants.js'
+import { formatTime as _formatTime, formatBytes as _formatBytes, formatDuration as _formatDuration } from '../utils.js'  // FIXED: 重复定义的格式化函数提取到utils.js
 
 const message = useMessage()
 const { t } = useI18n()
@@ -343,29 +344,10 @@ async function deleteRec(id) {
   }
 }
 
-function formatTime(ts) {
-  if (!ts) return '-'
-  const ms = ts > 1e12 ? ts : ts * 1000
-  const d = new Date(ms)
-  return d.toLocaleString()
-}
-
-function formatDuration(seconds) {
-  if (seconds == null) return '-'
-  const s = Number(seconds)
-  if (s < 60) return s + t('recorder.seconds')
-  if (s < 3600) return Math.floor(s / 60) + t('recorder.minutes') + (s % 60) + t('recorder.seconds')
-  return Math.floor(s / 3600) + t('recorder.hours') + Math.floor((s % 3600) / 60) + t('recorder.minutes')
-}
-
-function formatBytes(bytes) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let i = 0
-  let v = bytes
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
-  return v.toFixed(1) + ' ' + units[i]
-}
+// FIXED: 重复定义的格式化函数 — 委托到utils.js统一实现
+function formatTime(ts) { return _formatTime(ts) }
+function formatDuration(seconds) { return _formatDuration(seconds) }
+function formatBytes(bytes) { return _formatBytes(bytes) }
 
 onMounted(() => {
   loadRecordings()

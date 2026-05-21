@@ -107,7 +107,7 @@ class FailoverManager:
         self._failover_count += 1
         self._last_failover_time = time.time()
         for callback in self._on_failover_callbacks:
-            try:  # FIXED: callback without exception protection
+            try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback()
                 else:
@@ -120,7 +120,7 @@ class FailoverManager:
         self._is_primary = False
         self._status = "standby"
         for callback in self._on_recovery_callbacks:
-            try:  # FIXED: callback without exception protection
+            try:
                 if asyncio.iscoroutinefunction(callback):
                     await callback()
                 else:

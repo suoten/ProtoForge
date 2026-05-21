@@ -23,10 +23,10 @@ def _safe_json_loads(value: str, default=None):
 
 _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
-_BUSY_TIMEOUT_MS = 5000  # FIXED: named constant for SQLite busy timeout
-_MAX_QUERY_COUNT = 10000  # FIXED: named constant for max query result count
-_MAX_QUERY_OFFSET = 1000000  # FIXED: named constant for max query offset
-_AUDIT_LOG_LIMIT = 5000  # FIXED: named constant for audit log query limit
+_BUSY_TIMEOUT_MS = 5000
+_MAX_QUERY_COUNT = 10000
+_MAX_QUERY_OFFSET = 1000000
+_AUDIT_LOG_LIMIT = 5000
 
 
 class Database:
@@ -52,7 +52,7 @@ class Database:
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")
-            await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")  # FIXED: use named constant
+            await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
         except Exception as e:
@@ -209,7 +209,6 @@ class Database:
             );
         """)
         await self._db.commit()
-        # FIXED: migrate existing tables - add missing columns for older databases
         await self._migrate_sqlite_tables()
 
     async def _migrate_sqlite_tables(self) -> None:
@@ -656,7 +655,7 @@ class Database:
         )
 
     async def load_test_reports(self, count: int = 50) -> list[dict[str, Any]]:
-        count = max(1, min(count, _MAX_QUERY_COUNT))  # FIXED: use named constant
+        count = max(1, min(count, _MAX_QUERY_COUNT))
         limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
         rows = await self._fetchall(
             f"SELECT * FROM test_reports ORDER BY created_at DESC {limit_clause}",
@@ -756,8 +755,8 @@ class Database:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        limit = max(1, min(limit, _MAX_QUERY_COUNT))  # FIXED: use named constant
-        offset = max(0, min(offset, _MAX_QUERY_OFFSET))  # FIXED: use named constant
+        limit = max(1, min(limit, _MAX_QUERY_COUNT))
+        offset = max(0, min(offset, _MAX_QUERY_OFFSET))
         conditions = []
         params: list[Any] = []
         idx = 1
@@ -767,9 +766,20 @@ class Database:
             params.append(username)
             idx += 1
         if action:
-            conditions.append(f"action = ${idx}" if self._is_postgres else "action = ?")
-            params.append(action)
-            idx += 1
+            # 同时支持别名映射，搜索run_test也能匹配post_tests等旧格式
+            from protoforge.core.audit import _get_action_aliases
+            aliases = _get_action_aliases(action)
+            if len(aliases) == 1:
+                conditions.append(f"action LIKE ${idx}" if self._is_postgres else "action LIKE ?")
+                params.append(f"%{aliases[0]}%")
+                idx += 1
+            else:
+                like_clauses = []
+                for alias in aliases:
+                    like_clauses.append(f"action LIKE ${idx}" if self._is_postgres else "action LIKE ?")
+                    params.append(f"%{alias}%")
+                    idx += 1
+                conditions.append(f"({') OR ('.join(like_clauses)})")
         if resource_type:
             conditions.append(f"resource_type = ${idx}" if self._is_postgres else "resource_type = ?")
             params.append(resource_type)
@@ -789,12 +799,12 @@ class Database:
         params.extend([limit, offset])
 
         rows = await self._fetchall(
-            f"SELECT timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent "
+            f"SELECT id, timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent "
             f"FROM audit_log {where_clause} ORDER BY timestamp DESC {limit_clause} {offset_clause}",
             tuple(params),
         )
         entries = [{
-            "timestamp": r["timestamp"], "action": r["action"],
+            "id": r["id"], "timestamp": r["timestamp"], "action": r["action"],
             "username": r["username"], "resource_type": r["resource_type"],
             "resource_id": r["resource_id"], "detail": r["detail"],
             "ip_address": r["ip_address"], "user_agent": r["user_agent"],
@@ -812,11 +822,11 @@ class Database:
     async def load_audit_entries(self, limit: int = 1000) -> list[dict[str, Any]]:
         limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
         rows = await self._fetchall(
-            f"SELECT timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent FROM audit_log ORDER BY timestamp DESC {limit_clause}",
+            f"SELECT id, timestamp, action, username, resource_type, resource_id, detail, ip_address, user_agent FROM audit_log ORDER BY timestamp DESC {limit_clause}",
             (limit,),
         )
         return [{
-            "timestamp": r["timestamp"], "action": r["action"],
+            "id": r["id"], "timestamp": r["timestamp"], "action": r["action"],
             "username": r["username"], "resource_type": r["resource_type"],
             "resource_id": r["resource_id"], "detail": r["detail"],
             "ip_address": r["ip_address"], "user_agent": r["user_agent"],
@@ -922,7 +932,7 @@ class Database:
                 logger.debug("Failed to export table %s: %s", table, e)
                 result[table] = []
         try:
-            rows = await self._fetchall(f"SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT {_AUDIT_LOG_LIMIT}")  # FIXED: use named constant
+            rows = await self._fetchall(f"SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT {_AUDIT_LOG_LIMIT}")
             result["audit_log"] = rows
         except Exception as e:
             logger.debug("Failed to export audit_log: %s", e)

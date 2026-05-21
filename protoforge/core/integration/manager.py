@@ -58,7 +58,7 @@ class IntegrationManager:
         event_bus: EventBus,
         enabled: bool = False,
         edgelite_url: str = "",
-        username: str = "",  # FIXED: removed hardcoded "admin" default, callers should pass from config
+        username: str = "",
         password: str = "",
     ):
         self._event_bus = event_bus
@@ -152,7 +152,7 @@ class IntegrationManager:
         self._running = False
         self._cleanup_event_handlers()
 
-        for ch_name, ch in [("ws_channel", self._ws_channel), ("channel", self._channel), ("auth", self._auth)]:  # FIXED: wrap each close in try-catch to prevent blocking cleanup
+        for ch_name, ch in [("ws_channel", self._ws_channel), ("channel", self._channel), ("auth", self._auth)]:
             if ch:
                 try:
                     await ch.close()
@@ -425,7 +425,7 @@ class IntegrationManager:
                     generator_type = params.get("generator_type", "")
                     generator_config = params.get("generator_config", {})
                     instance = engine.get_device_instance(target_id)
-                    point_configs = getattr(instance, 'point_configs', None) or getattr(instance, '_point_configs', None)  # FIXED: try public attr first, then private fallback
+                    point_configs = getattr(instance, 'point_configs', None) or getattr(instance, '_point_configs', None)
                     if instance and point_name and point_configs:
                         if generator_config:
                             point_cfg = point_configs.get(point_name)

@@ -13,6 +13,9 @@ api.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // FIXED: 发送语言偏好给后端，使测试报告等API返回对应语言
+  const locale = localStorage.getItem('locale') || 'zh'
+  config.headers['Accept-Language'] = locale
   return config
 })
 
@@ -152,10 +155,7 @@ function normalizeList(data, ...keys) {
     for (const k of keys) {
       if (Array.isArray(data[k])) return data[k]
     }
-    if (data.code === 0 && data.data !== undefined) {  // FIXED: handle APIResponse wrapper {code, data, message}
-      if (Array.isArray(data.data)) return data.data
-      if (data.data && typeof data.data === 'object') return normalizeList(data.data, ...keys)
-    }
+    // FIXED: APIResponse死代码分支清理 — 后端成功响应不包装为APIResponse格式，移除data.code===0分支
     const commonKeys = ['items', 'results', 'records', 'list', 'rows']  // FIXED: removed 'data' to avoid false match on APIResponse
     for (const k of commonKeys) {
       if (Array.isArray(data[k])) return data[k]
@@ -200,7 +200,14 @@ export default {
   deleteDevice: (id) => d(api.delete(`/devices/${id}`)),
   startDevice: (id) => d(api.post(`/devices/${id}/start`)),
   stopDevice: (id) => d(api.post(`/devices/${id}/stop`)),
-  getDevicePoints: (id) => d(api.get(`/devices/${id}/points`)).then(r => normalizeList(r, 'points')),
+  getDevicePoints: (id) => d(api.get(`/devices/${id}/points`)).then(r => {
+    // FIXED: getDevicePoints丢弃后端返回的protocol_active字段 — 保留完整响应结构
+    if (r && typeof r === 'object') {
+      const points = normalizeList(r, 'points')
+      return { points, protocol_active: r.protocol_active ?? false }
+    }
+    return { points: [], protocol_active: false }
+  }),
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
   writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
@@ -263,14 +270,14 @@ export default {
   },
   getReportTrend: (params) => d(api.get('/tests/reports/trend', { params })).then(r => normalizeList(r, 'trends')),
 
-  importEdgelite: (config) => d(api.post('/integration/edgelite', config)),
-  importPygbsentry: (config) => d(api.post('/integration/pygbsentry', config)),
-  pushToEdgelite: (deviceId) => d(api.post(`/integration/edgelite/push/${deviceId}`)),
-  removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/integration/edgelite/push/${deviceId}`)),
-  getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/integration/edgelite/status/${deviceId}`)),
-  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/integration/edgelite/points/${deviceId}`)).then(r => normalizeList(r, 'points')),
-  verifyEdgelitePipeline: (deviceId) => d(api.get(`/integration/edgelite/pipeline/${deviceId}`)),
-  testEdgeliteConnection: (config) => d(api.post('/integration/edgelite/test', config)),
+  importEdgelite: (config) => d(api.post('/edgelite', config)),
+  importPygbsentry: (config) => d(api.post('/edgelite/pygbsentry', config)),
+  pushToEdgelite: (deviceId) => d(api.post(`/edgelite/push/${deviceId}`)),
+  removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/edgelite/push/${deviceId}`)),
+  getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/edgelite/status/${deviceId}`)),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/edgelite/points/${deviceId}`)).then(r => normalizeList(r, 'points')),
+  verifyEdgelitePipeline: (deviceId) => d(api.get(`/edgelite/pipeline/${deviceId}`)),
+  testEdgeliteConnection: (config) => d(api.post('/edgelite/test', config)),
 
   getIntegrationStatus: () => d(api.get('/integration/status')),
   getIntegrationMetrics: () => d(api.get('/integration/metrics')),
@@ -385,7 +392,12 @@ export default {
 
   queryAuditLog: (params) => d(api.get('/audit', { params })),
   getAuditStats: () => d(api.get('/audit/stats')),
-  deleteAuditEntry: (id) => d(api.delete(`/audit/${Number(id)}`)),
+  deleteAuditEntry: (id) => {
+    // FIXED: Number(id)对非数字id产生NaN，后端返回422 — 添加NaN防护
+    const numId = Number(id)
+    if (!Number.isFinite(numId)) return Promise.reject(new Error('Invalid audit entry ID'))
+    return d(api.delete(`/audit/${numId}`))
+  },
   clearAuditLog: (before) => d(api.delete('/audit', { params: before ? { before } : {} })),
 
   exportBackup: () => api.get('/backup', { responseType: 'blob' }).then(r => {

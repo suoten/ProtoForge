@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     modbus_tcp_port: int = 5020
     modbus_rtu_port: str = "COM1" if sys.platform == "win32" else "/dev/ttyUSB0"
-    modbus_rtu_host: str = "COM1" if sys.platform == "win32" else "/dev/ttyUSB0"
+    modbus_rtu_host: str = ""  # FIXED: modbus_rtu_host默认值与modbus_rtu_port重复(均为COM1/ttyUSB0)，改为空字符串表示未配置
     opcua_port: int = 4840
     mqtt_port: int = 1883
     http_port: int = 8080
@@ -153,6 +153,10 @@ def _validate_setting(key: str, value: Any) -> str | None:
             p = int(value)
             if not (1 <= p <= 65535):
                 return f"Port must be between 1 and 65535, got: {p}"  # FIXED: hardcoded Chinese
+            # FIXED: 端口冲突校验 — 检查新端口是否与已有协议端口冲突
+            conflict = _check_port_conflict(key, p)
+            if conflict:
+                return f"Port {p} conflicts with {conflict}"
         except (ValueError, TypeError):
             return f"Port must be an integer, got: {value}"  # FIXED: hardcoded Chinese
     if key == "log_level":
@@ -162,6 +166,20 @@ def _validate_setting(key: str, value: Any) -> str | None:
     if key == "host" and value:
         if not isinstance(value, str) or not value.strip():
             return "Host address cannot be empty"  # FIXED: hardcoded Chinese
+    return None
+
+
+def _check_port_conflict(current_key: str, port: int) -> str | None:
+    """Check if port conflicts with any other configured protocol port."""
+    s = get_settings()
+    port_keys = [attr for attr in dir(s) if attr.endswith("_port") and attr != "modbus_rtu_port" and attr != current_key]
+    for pk in port_keys:
+        try:
+            existing = int(getattr(s, pk, 0))
+            if existing == port:
+                return pk
+        except (ValueError, TypeError):
+            continue
     return None
 
 

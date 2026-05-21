@@ -80,6 +80,7 @@ import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescrip
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { directionTagTypeMap, directionLabelMap } from '../constants.js'
+import { formatTime as _formatTime } from '../utils.js'  // FIXED: 重复定义的格式化函数提取到utils.js
 
 const message = useMessage()
 const { t } = useI18n()
@@ -138,11 +139,8 @@ const filteredLogs = computed(() => {
   return result
 })
 
-function formatTime(ts) {
-  if (!ts || isNaN(ts)) return '--:--:--.---'
-  const d = new Date(ts * 1000)
-  return d.toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(d.getMilliseconds()).padStart(3, '0')
-}
+// FIXED: 重复定义的格式化函数 — 委托到utils.js统一实现
+function formatTime(ts) { return _formatTime(ts) }
 
 function getDirectionColor(dir) {
   return directionTagTypeMap[dir] || 'default'
@@ -237,9 +235,16 @@ async function connectWebSocket() {
     return
   }
 
+  // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整日志
   ws.onopen = () => {
     wsConnected.value = true
     reconnectAttempts = 0
+    api.getLogs({ limit: 200 }).then(data => {
+      if (Array.isArray(data) && data.length > 0) {
+        logs.value = data.slice(-MAX_LOGS)
+        scrollToBottom()
+      }
+    }).catch(() => {})
   }
 
   ws.onmessage = (event) => {

@@ -40,7 +40,7 @@ async def get_logs(
 async def clear_logs(_user: dict = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
-    return {"status": "ok", "message": "Logs cleared"}  # FIXED: 中文→英文
+    return {"status": "ok", "message": "Logs cleared"}
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
@@ -60,7 +60,7 @@ async def _ws_authenticate(websocket: WebSocket) -> tuple[bool, str]:
     if not token:
         try:
             msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
-            try:  # FIXED: json.loads without exception protection
+            try:
                 msg_data = json.loads(msg)
                 token = msg_data.get("token", "")
             except (json.JSONDecodeError, TypeError):
@@ -124,7 +124,7 @@ async def ws_devices(websocket: WebSocket):
                         },
                     })
                 except asyncio.TimeoutError:
-                    pass  # FIXED: WebSocket发送超时正常跳过，客户端可能暂时不活跃
+                    pass
                 except Exception as exc:
                     logger.debug("Protocol event send failed: %s", exc)
 

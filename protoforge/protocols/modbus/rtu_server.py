@@ -110,13 +110,13 @@ class ModbusRtuServer(ProtocolServer):
             raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
 
         if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
-            logger.info("Non-standard serial port path %s, attempting direct connection", self._port)  # FIXED: 串口路径不匹配时if分支为空
+            logger.info("Non-standard serial port path %s, attempting direct connection", self._port)
         elif not os.path.exists(self._port):
             logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port 5021", self._port)
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._serve_datastore_only())
             self._log_debug("system", "server_start",
-                            f"Modbus RTU serial port {self._port} not found, falling back to TCP bridge mode on port 5021")  # FIXED: CN→EN
+                            f"Modbus RTU serial port {self._port} not found, falling back to TCP bridge mode on port 5021")
             return
 
         try:
@@ -175,7 +175,7 @@ class ModbusRtuServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("Modbus RTU server starting on %s @ %d (simdata=%s)", self._port, self._baudrate, self._use_simdata)
             self._log_debug("system", "server_start",
-                            f"Modbus RTU service started: {self._port} @ {self._baudrate}"  ,  # FIXED: CN→EN
+                            f"Modbus RTU service started: {self._port} @ {self._baudrate}",
                             detail={"port": self._port, "baudrate": self._baudrate, "simdata": self._use_simdata})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -344,13 +344,14 @@ class ModbusRtuServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("Modbus RTU server stopped")
-            self._log_debug("system", "server_stop", "Modbus RTU service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "Modbus RTU service stopped")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
@@ -374,21 +375,22 @@ class ModbusRtuServer(ProtocolServer):
 
         logger.info("Modbus RTU device created: %s (slave_id=%d)", device_config.id, slave_id)
         self._log_debug("system", "device_created",
-                        f"Modbus RTU device created: {device_config.name} (slave_id={slave_id})",  # FIXED: CN→EN
+                        f"Modbus RTU device created: {device_config.name} (slave_id={slave_id})",
                         device_id=device_config.id,
                         detail={"slave_id": slave_id, "points": len(device_config.points)})
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         slave_id = self._slave_map.pop(device_id, None)
         if slave_id is not None:
             self._data_stores.pop(slave_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("Modbus RTU device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"Removed Modbus RTU device: {device_id}"  ,  # FIXED: CN→EN
+                        f"Removed Modbus RTU device: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -420,11 +422,11 @@ class ModbusRtuServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "port": {"type": "string", "default": "/dev/ttyUSB0", "description": "Serial port path (Linux: /dev/ttyUSB0, Windows: COM1)"},  # FIXED: CN→EN,
-                "baudrate": {"type": "integer", "default": 9600, "description": "Baud rate"},  # FIXED: CN→EN,
-                "parity": {"type": "string", "default": "N", "description": "Parity (N/E/O)"},  # FIXED: CN→EN,
-                "stopbits": {"type": "integer", "default": 1, "description": "Stop bits"},  # FIXED: CN→EN,
-                "bytesize": {"type": "integer", "default": 8, "description": "Data bits"},  # FIXED: CN→EN,
+                "port": {"type": "string", "default": "/dev/ttyUSB0", "description": "Serial port path (Linux: /dev/ttyUSB0, Windows: COM1)"},
+                "baudrate": {"type": "integer", "default": 9600, "description": "Baud rate"},
+                "parity": {"type": "string", "default": "N", "description": "Parity (N/E/O)"},
+                "stopbits": {"type": "integer", "default": 1, "description": "Stop bits"},
+                "bytesize": {"type": "integer", "default": 8, "description": "Data bits"},
             },
         }
 

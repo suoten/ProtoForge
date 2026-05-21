@@ -5,17 +5,15 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class ToledoDeviceBehavior(DeviceBehavior):
+class ToledoDeviceBehavior(StandardDeviceBehavior):
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)
         self._weight = 0.0
         self._tare = 0.0
         self._unit = "kg"
@@ -24,19 +22,10 @@ class ToledoDeviceBehavior(DeviceBehavior):
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                val = fixed_val if fixed_val is not None else 0
-                self._points[name] = p
-                self._values[name] = val
-                self._generators[name] = DynamicValueGenerator(p)
                 if name == "weight":
-                    self._weight = float(val)
+                    self._weight = float(self._values.get(name, 0))
                 elif name == "tare":
-                    self._tare = float(val)
-
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
+                    self._tare = float(self._values.get(name, 0))
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
@@ -54,16 +43,6 @@ class ToledoDeviceBehavior(DeviceBehavior):
             self._weight = float(value)
         elif point_name == "tare":
             self._tare = float(value)
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
 
     def get_weight_string(self) -> str:
         net = self._weight - self._tare
@@ -112,7 +91,7 @@ class ToledoServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("Toledo server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"Toledo service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"Toledo service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -147,7 +126,7 @@ class ToledoServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("Toledo server stopped")
-            self._log_debug("system", "server_stop", "Toledo service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "Toledo service stopped")
 
     async def _serve(self) -> None:
         try:
@@ -166,16 +145,17 @@ class ToledoServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("Toledo connection from %s", addr)
+        _READ_TIMEOUT = 30
         try:
             while self._server_running:
-                data = await reader.read(1024)
+                data = await asyncio.wait_for(reader.read(1024), timeout=_READ_TIMEOUT)
                 if not data:
                     break
                 response = self._process_toledo(data, writer)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             self._continuous_writers.discard(writer)
@@ -302,9 +282,10 @@ class ToledoServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ToledoDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         scale_addr = proto_config.get("scale_addr", "1")
@@ -314,17 +295,18 @@ class ToledoServer(ProtocolServer):
         logger.info("Toledo device created: %s (addr=%s, unit=%s)",
                      device_config.id, scale_addr, unit)
         self._log_debug("system", "device_create",
-                        f"Toledo device created: {device_config.name}",  # FIXED: CN→EN
+                        f"Toledo device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("Toledo device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"Toledo device removed: {device_id}",  # FIXED: CN→EN
+                        f"Toledo device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -345,7 +327,7 @@ class ToledoServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "Toledo server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 1701, "description": "Toledo port (default 1701)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "Toledo server listen address")},
+                "port": {"type": "integer", "default": 1701, "description": desc("toledo_port", "Toledo port (default 1701)")},
             },
         }

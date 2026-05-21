@@ -48,7 +48,7 @@ class Scenario:
         self._status = ScenarioStatus.STOPPED
         self._start_time = None
         for device in self._devices.values():
-            try:  # FIXED: device.stop() without exception protection
+            try:
                 device.stop()
             except Exception as e:
                 logger.error("Failed to stop device %s: %s", device.id, e)
@@ -85,7 +85,7 @@ class Scenario:
         if not source or source.status != DeviceStatus.ONLINE:
             return False
         point_value = source.read_point(rule.source_point)
-        if not point_value or point_value.value is None:  # FIXED: 检查point_value.value为None
+        if not point_value or point_value.value is None:
             return False
         if not rule.condition or not isinstance(rule.condition, dict):
             return False
@@ -104,7 +104,7 @@ class Scenario:
         return False
 
     def _check_value_change(self, rule: Rule) -> bool:
-        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+        if not rule.condition or not isinstance(rule.condition, dict):
             return False
         source = self._devices.get(rule.source_device_id)
         if not source or source.status != DeviceStatus.ONLINE:
@@ -130,7 +130,7 @@ class Scenario:
         return False
 
     def _check_timer(self, rule: Rule) -> bool:
-        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+        if not rule.condition or not isinstance(rule.condition, dict):
             return False
         if not self._start_time:
             return False
@@ -146,7 +146,7 @@ class Scenario:
         return False
 
     def _check_script(self, rule: Rule) -> bool:
-        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+        if not rule.condition or not isinstance(rule.condition, dict):
             return False
         source = self._devices.get(rule.source_device_id)
         if not source or source.status != DeviceStatus.ONLINE:
@@ -168,7 +168,7 @@ class Scenario:
         return False
 
     def _check_cooldown(self, rule: Rule) -> bool:
-        if not rule.condition or not isinstance(rule.condition, dict):  # FIXED: rule.condition None crash
+        if not rule.condition or not isinstance(rule.condition, dict):
             return True
         cooldown = rule.condition.get("cooldown", 0)
         if cooldown <= 0:

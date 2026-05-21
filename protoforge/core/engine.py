@@ -106,6 +106,10 @@ class SimulationEngine:
         server = self._protocol_servers.get(protocol_name)
         return server is not None and server.status == ProtocolStatus.RUNNING
 
+    _MAX_START_RETRIES = 3
+    _RETRY_DELAY_SECONDS = 2.0
+    _RETRYABLE_ERRORS = ("connection refused", "timed out", "connection reset", "temporarily unavailable")
+
     async def start_protocol(self, protocol_name: str, config: dict[str, Any]) -> None:
         server = self._protocol_servers.get(protocol_name)
         if not server:
@@ -128,40 +132,55 @@ class SimulationEngine:
                 config["port"] = new_port
                 config["_port_changed"] = True
                 config["_original_port"] = original_port
-        try:
-            await server.start(config)
-            for i in range(5):
-                await asyncio.sleep(0.2)
+
+        last_error = None
+        for attempt in range(1, self._MAX_START_RETRIES + 1):
+            try:
+                await server.start(config)
+                for i in range(5):
+                    await asyncio.sleep(0.2)
+                    if server.status == ProtocolStatus.ERROR:
+                        break
                 if server.status == ProtocolStatus.ERROR:
-                    break
-            if server.status == ProtocolStatus.ERROR:
-                port_info = ""
-                if "port" in config:
-                    port_info = f" (port {config['port']})"
-                error_msg = f"Protocol server entered ERROR state after start{port_info}. Possible causes: port conflict, permission denied, or config error. Check server logs for details."
-                logger.error("Protocol %s: %s", protocol_name, error_msg)
-                try:
-                    await server.stop()
-                except Exception as stop_err:  # FIXED: 吞掉异常导致原始错误信息丢失
-                    logger.warning("Error stopping protocol %s after ERROR state: %s", protocol_name, stop_err)
-                raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
-            logger.info("Protocol %s started", protocol_name)
-            for dev_id, instance in list(self._devices.items()):
-                if instance.protocol == protocol_name:
+                    port_info = ""
+                    if "port" in config:
+                        port_info = f" (port {config['port']})"
+                    error_msg = f"Protocol server entered ERROR state after start{port_info}. Possible causes: port conflict, permission denied, or config error. Check server logs for details."
+                    logger.error("Protocol %s: %s", protocol_name, error_msg)
                     try:
-                        await server.create_device(instance.config)
-                        logger.info("Re-registered device %s to newly started protocol %s", dev_id, protocol_name)
-                    except Exception as reg_err:
-                        logger.debug("Device %s already registered or registration failed: %s", dev_id, reg_err)
-            if self._event_bus:
-                await self._event_bus.publish_safe(ProtocolStatusEvent(
-                    protocol_name=protocol_name,
-                    old_status="stopped",
-                    new_status="running",
-                ))
-        except Exception as e:
-            logger.error("Failed to start protocol %s: %s", protocol_name, e)
-            raise RuntimeError(f"Failed to start protocol {protocol_name}: {e}") from e
+                        await server.stop()
+                    except Exception as stop_err:
+                        logger.warning("Error stopping protocol %s after ERROR state: %s", protocol_name, stop_err)
+                    raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
+                logger.info("Protocol %s started", protocol_name)
+                for dev_id, instance in list(self._devices.items()):
+                    if instance.protocol == protocol_name:
+                        try:
+                            await server.create_device(instance.config)
+                            logger.info("Re-registered device %s to newly started protocol %s", dev_id, protocol_name)
+                        except Exception as reg_err:
+                            logger.debug("Device %s already registered or registration failed: %s", dev_id, reg_err)
+                if self._event_bus:
+                    await self._event_bus.publish_safe(ProtocolStatusEvent(
+                        protocol_name=protocol_name,
+                        old_status="stopped",
+                        new_status="running",
+                    ))
+                return  # SUCCESS
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                is_retryable = any(err in error_str for err in self._RETRYABLE_ERRORS)
+                if is_retryable and attempt < self._MAX_START_RETRIES:
+                    logger.warning(
+                        "Protocol %s start attempt %d/%d failed (retryable): %s — retrying in %.1fs",
+                        protocol_name, attempt, self._MAX_START_RETRIES, e, self._RETRY_DELAY_SECONDS,
+                    )
+                    await asyncio.sleep(self._RETRY_DELAY_SECONDS)
+                    continue
+                else:
+                    logger.error("Failed to start protocol %s: %s", protocol_name, e)
+                    raise RuntimeError(f"Failed to start protocol {protocol_name}: {e}") from e
 
     async def stop_protocol(self, protocol_name: str) -> None:
         server = self._protocol_servers.get(protocol_name)
@@ -191,7 +210,7 @@ class SimulationEngine:
 
         server = self._protocol_servers.get(config.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
-            try:  # FIXED: create_device on running server had no exception handling
+            try:
                 await server.create_device(config)
                 instance.start()
             except Exception as e:
@@ -234,7 +253,6 @@ class SimulationEngine:
         info = self._get_device_info(instance)
         if edgelite_result:
             info.edgelite_status = edgelite_result
-        # FIXED: warn when device protocol is not running
         server = self._protocol_servers.get(config.protocol)
         if not server or server.status != ProtocolStatus.RUNNING:
             info.protocol_active = False
@@ -249,7 +267,7 @@ class SimulationEngine:
 
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
-            try:  # FIXED: remove_device on running server had no exception handling
+            try:
                 await server.remove_device(device_id)
             except Exception as e:
                 logger.warning("Failed to remove device %s from protocol server: %s", device_id, e)
@@ -257,7 +275,7 @@ class SimulationEngine:
         try:
             instance.stop()
         except Exception as e:
-            logger.warning("Failed to stop device %s during removal: %s", device_id, e)  # FIXED: wrap stop() in try-catch to allow removal to continue
+            logger.warning("Failed to stop device %s during removal: %s", device_id, e)
 
         proto_config = instance.config.protocol_config or {}
         edgelite_url = proto_config.get("edgelite_url", "")
@@ -319,13 +337,13 @@ class SimulationEngine:
             logger.error("Failed to create new device %s during update: %s, restoring old", device_id, e)
             try:
                 await self.create_device(old_config)
-                if was_running:  # FIXED: 回滚后尝试恢复运行状态
+                if was_running:
                     try:
                         await self.start_device(device_id)
                     except Exception as restart_err:
                         logger.warning("Failed to restart restored device %s: %s", device_id, restart_err)
             except Exception as restore_err:
-                logger.critical("Failed to restore old device %s: %s. Device may be lost!", device_id, restore_err)  # FIXED: 回滚失败提升日志级别
+                logger.critical("Failed to restore old device %s: %s. Device may be lost!", device_id, restore_err)
             raise
 
     def get_all_device_ids(self) -> list[str]:
@@ -340,7 +358,7 @@ class SimulationEngine:
         try:
             instance.start()
         except Exception as e:
-            logger.error("Failed to start device %s: %s", device_id, e)  # FIXED: wrap start() in try-catch to prevent state inconsistency
+            logger.error("Failed to start device %s: %s", device_id, e)
             raise
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
@@ -363,7 +381,7 @@ class SimulationEngine:
         try:
             instance.stop()
         except Exception as e:
-            logger.error("Failed to stop device %s: %s", device_id, e)  # FIXED: wrap stop() in try-catch to ensure event is still published
+            logger.error("Failed to stop device %s: %s", device_id, e)
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
             try:
@@ -400,7 +418,7 @@ class SimulationEngine:
     def get_all_protocol_servers(self) -> dict[str, ProtocolServer]:
         return dict(self._protocol_servers)
 
-    def get_protocol_running_port(self, protocol_name: str) -> int | None:
+    def get_protocol_running_port(self, protocol_name: str) -> int | str | None:
         server = self._protocol_servers.get(protocol_name)
         if server and server.status == ProtocolStatus.RUNNING:
             return server.get_running_port()
@@ -437,7 +455,6 @@ class SimulationEngine:
                     "Failed to read points from protocol server for %s, falling back to memory: %s",
                     device_id, e,
                 )
-        # FIXED: mark points as simulated when protocol is not running
         memory_points = instance.read_all_points()
         for p in memory_points:
             p.simulated = True
@@ -479,7 +496,6 @@ class SimulationEngine:
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
             else:
-                # FIXED: warn when writing to device whose protocol is not running
                 logger.warning(
                     "Write to device %s/%s succeeded in memory, but protocol %s is not running - change not visible to external clients",
                     device_id, point_name, instance.protocol,
@@ -536,7 +552,7 @@ class SimulationEngine:
 
         scenario = Scenario(config, on_write_point=self.write_device_point)
         self._scenario_status[scenario_id] = ScenarioStatus.STARTING
-        created_device_ids: list[str] = []  # FIXED: 场景启动失败时回滚已创建设备
+        created_device_ids: list[str] = []
 
         try:
             failed_devices = []
@@ -581,7 +597,7 @@ class SimulationEngine:
             logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
         except Exception as e:
             self._scenario_status[scenario_id] = ScenarioStatus.ERROR
-            for dev_id in created_device_ids:  # FIXED: 回滚场景启动时创建的设备
+            for dev_id in created_device_ids:
                 try:
                     await self.remove_device(dev_id)
                     logger.info("Rolled back device %s after scenario start failure", dev_id)
@@ -685,7 +701,7 @@ class SimulationEngine:
                 try:
                     await scenario.tick()
                 except Exception as e:
-                    logger.warning("Tick error for scenario %s: %s", getattr(scenario.config, 'id', 'unknown') if scenario.config else 'unknown', e)  # FIXED: guard against None config
+                    logger.warning("Tick error for scenario %s: %s", getattr(scenario.config, 'id', 'unknown') if scenario.config else 'unknown', e)
             await asyncio.sleep(self._tick_interval)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:

@@ -768,7 +768,7 @@ async function batchPushToEdgelite() {
   if (unsupported) parts.push(t('devices.protocolUnsupportedCount', { count: unsupported }))
   if (fail) parts.push(t('devices.failedCount', { count: fail }))
   if (parts.length > 0 && !notConfigured && !(fail > 0 && errorDetails.length > 0)) {
-    message.success(parts.join('，'))
+    message.success(parts.join(t('common.separator')))
   }
   await loadData()
   selectedIds.value = []

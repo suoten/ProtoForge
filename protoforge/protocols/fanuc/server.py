@@ -5,43 +5,35 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class FanucDeviceBehavior(DeviceBehavior):
+class FanucDeviceBehavior(StandardDeviceBehavior):
+    _DEFAULT_SPINDLE_SPEED = 3000
+    _DEFAULT_FEED_RATE = 500
+    _DEFAULT_OVERRIDE = 100
+    _DEFAULT_AXIS_COUNT = 5
+
     def __init__(self, points: list | None = None):
-        self._points: dict[str, Any] = {}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)
         self._cnc_status = {
             "alarm": 0,
             "mode": 3,
             "execution": 1,
             "motion": 0,
             "program": "O0001",
-            "speed_override": 100,
-            "feed_override": 100,
-            "spindle_speed": 3000,
-            "feed_rate": 500,
-            "absolute_pos": [0.0] * 5,
-            "machine_pos": [0.0] * 5,
-            "relative_pos": [0.0] * 5,
-            "distance_pos": [0.0] * 5,
+            "speed_override": self._DEFAULT_OVERRIDE,
+            "feed_override": self._DEFAULT_OVERRIDE,
+            "spindle_speed": self._DEFAULT_SPINDLE_SPEED,
+            "feed_rate": self._DEFAULT_FEED_RATE,
+            "absolute_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "machine_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "relative_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "distance_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
         }
-        if points:
-            for p in points:
-                name = p.name if hasattr(p, 'name') else p.get("name", "")
-                fixed_val = p.fixed_value if hasattr(p, 'fixed_value') else p.get("fixed_value")
-                self._points[name] = p
-                self._values[name] = fixed_val if fixed_val is not None else 0
-                self._generators[name] = DynamicValueGenerator(p)
-
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
@@ -104,19 +96,6 @@ class FanucDeviceBehavior(DeviceBehavior):
             return True
         return False
 
-    def set_value(self, point_name: str, value: Any) -> None:
-        self._values[point_name] = value
-
-    def get_value(self, point_name: str) -> Any:
-        gen = self._generators.get(point_name)
-        if gen:
-            pt = self._points.get(point_name)
-            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
-                value = gen.generate()
-                self._values[point_name] = value
-                return value
-        return self._values.get(point_name, 0)
-
 
 class FanucServer(ProtocolServer):
     protocol_name = "fanuc"
@@ -144,7 +123,7 @@ class FanucServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("FANUC FOCAS server started on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            f"FANUC service started {self._host}:{self._port}",  # FIXED: CN→EN
+                            f"FANUC service started {self._host}:{self._port}",
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
@@ -165,7 +144,7 @@ class FanucServer(ProtocolServer):
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("FANUC server stopped")
-            self._log_debug("system", "server_stop", "FANUC service stopped")  # FIXED: CN→EN
+            self._log_debug("system", "server_stop", "FANUC service stopped")
 
     async def _serve(self) -> None:
         try:
@@ -184,16 +163,17 @@ class FanucServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("FANUC connection from %s", addr)
+        _READ_TIMEOUT = 30
         try:
             while self._server_running:
-                data = await reader.read(4096)
+                data = await asyncio.wait_for(reader.read(4096), timeout=_READ_TIMEOUT)
                 if not data:
                     break
                 response = self._process_focas(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
             pass
         finally:
             writer.close()
@@ -354,7 +334,7 @@ class FanucServer(ProtocolServer):
 
     def _handle_cnc_rdspindlespd(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        speed = behavior._cnc_status.get("spindle_speed", 3000) if behavior else 3000
+        speed = behavior._cnc_status.get("spindle_speed", self._DEFAULT_SPINDLE_SPEED) if behavior else self._DEFAULT_SPINDLE_SPEED
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0110)
@@ -365,7 +345,7 @@ class FanucServer(ProtocolServer):
 
     def _handle_cnc_rdfeed(self, req_id: int) -> bytes:
         behavior = self._behaviors.get(self._default_device_id)
-        feed = behavior._cnc_status.get("feed_rate", 500) if behavior else 500
+        feed = behavior._cnc_status.get("feed_rate", self._DEFAULT_FEED_RATE) if behavior else self._DEFAULT_FEED_RATE
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0111)
@@ -414,9 +394,10 @@ class FanucServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = FanucDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         self._device_params[device_config.id] = {
@@ -435,18 +416,19 @@ class FanucServer(ProtocolServer):
                      self._device_params[device_config.id]["cnc_type"],
                      axis_count)
         self._log_debug("system", "device_create",
-                        f"FANUC device created: {device_config.name}",  # FIXED: CN→EN
+                        f"FANUC device created: {device_config.name}",
                         device_id=device_config.id)
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         self._device_params.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         logger.info("FANUC device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        f"FANUC device removed: {device_id}",  # FIXED: CN→EN
+                        f"FANUC device removed: {device_id}",
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -467,7 +449,7 @@ class FanucServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": "FOCAS server listen address"},  # FIXED: CN→EN
-                "port": {"type": "integer", "default": 8193, "description": "FOCAS port (default 8193)"},  # FIXED: CN→EN
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "FOCAS server listen address")},
+                "port": {"type": "integer", "default": 8193, "description": desc("fanuc_port", "FOCAS port (default 8193)")},
             },
         }

@@ -9,7 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import DynamicValueGenerator
-from protoforge.core.messages import msg, desc  # FIXED: i18n message constants
+from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
@@ -203,9 +203,9 @@ class ProfinetServer(ProtocolServer):
         self._input_size = 0
         self._output_size = 0
         self._connections: set[asyncio.StreamWriter] = set()
-        self._ip_address = ""  # FIXED: removed hardcoded 192.168.1.1; set via config in start()
+        self._ip_address = ""
         self._subnet_mask = "255.255.255.0"
-        self._gateway = ""  # FIXED: removed hardcoded 192.168.1.254; set via config in start()
+        self._gateway = ""
         self._ar_counter = 0
         self._active_ars: dict[int, ApplicationRelation] = {}
         self._alarm_seq = 0
@@ -230,7 +230,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
-                            msg("profinet", "service_started", host=self._host, port=self._port),  # FIXED: hardcoded CN -> i18n constants
+                            msg("profinet", "service_started", host=self._host, port=self._port),
                             detail={"host": self._host, "port": self._port,
                                     "device_name": self._device_name})
         except Exception as e:
@@ -253,7 +253,7 @@ class ProfinetServer(ProtocolServer):
             self._status = ProtocolStatus.STOPPED
             self._active_ars.clear()
             logger.info("PROFINET IO server stopped")
-            self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))  # FIXED: hardcoded CN -> i18n constants
+            self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -297,19 +297,19 @@ class ProfinetServer(ProtocolServer):
         logger.info("PROFINET IO connection from %s", addr)
         self._connections.add(writer)
         self._log_debug("inbound", "connect",
-                        f"IO Controller connected: {addr[0]}:{addr[1]}",  # FIXED: CN→EN
+                        f"IO Controller connected: {addr[0]}:{addr[1]}",
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)  # FIXED: added read timeout
+                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)
                 body_len = struct.unpack(">H", header)[0]
-                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""  # FIXED: added read timeout
+                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""
                 response = self._process_tunnel_message(data, addr, writer)
                 if response:
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):  # FIXED: added TimeoutError catch
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):
             pass
         finally:
             self._connections.discard(writer)
@@ -318,7 +318,7 @@ class ProfinetServer(ProtocolServer):
                 if ar.state == ARState.W_DATA:
                     ar.state = ARState.W_ABORT
                     self._log_debug("outbound", "ar_abort",
-                                    msg("profinet", "ar_disconnected", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
+                                    msg("profinet", "ar_disconnected", ar_id=ar_id),
                                     detail={"ar_id": ar_id})
             writer.close()
             try:
@@ -471,7 +471,7 @@ class ProfinetServer(ProtocolServer):
             resp += struct.pack(">B", 0x01 if cr.is_consumer else 0x00)
 
         self._log_debug("inbound", "cm_connect",
-                        msg("profinet", "cm_connect", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
+                        msg("profinet", "cm_connect", ar_id=ar_id),
                         f"CRs={len(ar.crs)}, input={self._input_size}, output={self._output_size}",
                         detail={"ar_id": ar_id, "session_key": ar.session_key,
                                 "send_clock": ar.send_clock, "crs": len(ar.crs)})
@@ -485,11 +485,11 @@ class ProfinetServer(ProtocolServer):
         if ar:
             ar.state = ARState.W_ABORT
             self._log_debug("inbound", "cm_release",
-                            msg("profinet", "cm_release", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
+                            msg("profinet", "cm_release", ar_id=ar_id),
                             detail={"ar_id": ar_id})
         else:
             self._log_debug("inbound", "cm_release_error",
-                            msg("profinet", "cm_release_not_found", ar_id=ar_id),  # FIXED: hardcoded CN -> i18n constants
+                            msg("profinet", "cm_release_not_found", ar_id=ar_id),
                             detail={"ar_id": ar_id})
 
         resp = bytearray()
@@ -574,7 +574,7 @@ class ProfinetServer(ProtocolServer):
         frame = struct.pack(">H", len(payload)) + payload
 
         self._log_debug("outbound", "alarm_send",
-                        f"PROFINET Alarm sent: AR[{ar_id}] type=0x{alarm_type:04X}"  ,  # FIXED: CN→EN
+                        f"PROFINET Alarm sent: AR[{ar_id}] type=0x{alarm_type:04X}",
                         detail={"ar_id": ar_id, "alarm_type": alarm_type,
                                 "alarm_seq": self._alarm_seq})
 
@@ -613,7 +613,7 @@ class ProfinetServer(ProtocolServer):
             output_data = rt_payload[:self._output_size]
             behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
-                            f"PROFINET IO cyclic write {len(output_data)} bytes cycle={cycle_counter}",  # FIXED: CN→EN
+                            f"PROFINET IO cyclic write {len(output_data)} bytes cycle={cycle_counter}",
                             device_id=self._default_device_id or "",
                             detail={"size": len(output_data), "cycle": cycle_counter})
 
@@ -627,7 +627,7 @@ class ProfinetServer(ProtocolServer):
         resp += input_data
 
         self._log_debug("outbound", "cyclic_read",
-                        f"PROFINET IO cyclic response {len(input_data)} bytes cycle={resp_cycle}",  # FIXED: CN→EN
+                        f"PROFINET IO cyclic response {len(input_data)} bytes cycle={resp_cycle}",
                         device_id=self._default_device_id or "",
                         detail={"size": len(input_data), "cycle": resp_cycle})
 
@@ -635,14 +635,15 @@ class ProfinetServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ProfinetDeviceBehavior(device_config.points)
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
-        self._update_default_device(device_config.id)
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
-        self._device_name = proto_config.get("device_name", "profinet-device")  # FIXED: direct dict access
-        self._vendor_id = int(proto_config.get("vendor_id", 0))  # FIXED: direct dict access + type conversion
-        self._device_id = int(proto_config.get("device_id", 0))  # FIXED: direct dict access + type conversion
+        self._device_name = proto_config.get("device_name", "profinet-device")
+        self._vendor_id = int(proto_config.get("vendor_id", 0))
+        self._device_id = int(proto_config.get("device_id", 0))
 
         self._recalc_data_sizes()
 
@@ -653,20 +654,21 @@ class ProfinetServer(ProtocolServer):
         logger.info("PROFINET IO device created: %s (input=%d, output=%d)",
                      device_config.id, self._input_size, self._output_size)
         self._log_debug("system", "device_created",
-                        msg("profinet", "device_created", name=device_config.name),  # FIXED: hardcoded CN -> i18n constants
+                        msg("profinet", "device_created", name=device_config.name),
                         device_id=device_config.id,
                         detail={"input_size": self._input_size,
                                 "output_size": self._output_size})
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
-        self._clear_default_device(device_id)
+        await self._clear_default_device_async(device_id)
         self._recalc_data_sizes()
         logger.info("PROFINET device removed: %s", device_id)
         self._log_debug("system", "device_remove",
-                        msg("profinet", "device_removed", id=device_id),  # FIXED: hardcoded CN -> i18n constants
+                        msg("profinet", "device_removed", id=device_id),
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
@@ -688,7 +690,7 @@ class ProfinetServer(ProtocolServer):
         success = behavior.on_write(point_name, value)
         if success:
             self._log_debug("system", "write_point",
-                            f"PROFINET write point: {point_name}={value}"  ,  # FIXED: CN→EN
+                            f"PROFINET write point: {point_name}={value}",
                             device_id=device_id)
         return success
 
@@ -696,16 +698,16 @@ class ProfinetServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
-                "host": {"type": "string", "default": "0.0.0.0", "description": desc("tcp_tunnel_address")},  # FIXED: hardcoded CN -> i18n constants
-                "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},  # FIXED: hardcoded CN -> i18n constants
-                "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},  # FIXED: hardcoded CN -> i18n constants
-                "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},  # FIXED: hardcoded CN -> i18n constants
-                "device_id": {"type": "integer", "default": 256, "description": "Device ID"},  # FIXED: CN→EN,
-                "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},  # FIXED: hardcoded CN -> i18n constants
-                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},  # FIXED: hardcoded CN -> i18n constants
-                "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},  # FIXED: hardcoded CN -> i18n constants
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("tcp_tunnel_address")},
+                "port": {"type": "integer", "default": 34964, "description": desc("tcp_tunnel_port")},
+                "device_name": {"type": "string", "default": "protoforge-device", "description": desc("profinet_device_name")},
+                "vendor_id": {"type": "integer", "default": 266, "description": desc("vendor_id")},
+                "device_id": {"type": "integer", "default": 256, "description": "Device ID"},
+                "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},
+                "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},
+                "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},
             },
-            "description": desc("tcp_tunnel_mode_desc"),  # FIXED: hardcoded CN -> i18n constants
+            "description": desc("tcp_tunnel_mode_desc"),
         }
 
     @staticmethod
