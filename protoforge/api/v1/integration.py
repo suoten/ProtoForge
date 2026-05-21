@@ -136,7 +136,8 @@ async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
 async def validate_device_compatibility(request: dict[str, Any], _user: dict = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
-        driver_config = request.get("driver_config", request.get("config", {}))
+        # FIXED: 统一参数名 - 只接受driver_config，移除对config的隐式兼容，避免前端必须猜测参数名
+        driver_config = request.get("driver_config", {})
         report = manager.validator.validate(
             device_id=request.get("device_id", ""),
             protocol=request.get("protocol", ""),
