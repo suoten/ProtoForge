@@ -41,9 +41,11 @@
 docker run -d --name protoforge -p 8000:8000 -v protoforge-data:/app/data suoten/protoforge:latest
 ```
 
-浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录，立即看到预置的演示设备和实时数据。
+浏览器打开 **http://localhost:8000**（Docker 模式后端直接托管前端），用 `admin` / `admin` 登录，立即看到预置的演示设备和实时数据。
 
 > 💡 第一次使用？这就是最简单的方式，不需要安装 Python、Node.js、Git。
+>
+> 🔐 **密码说明**：默认密码是 `admin`。如果你在 `.env` 文件中修改了 `PROTOFORGE_ADMIN_PASSWORD`，请使用你设置的密码登录。
 
 ---
 
