@@ -189,7 +189,8 @@ class McServer(ProtocolServer):
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError,
+                asyncio.IncompleteReadError, ConnectionAbortedError, BrokenPipeError):
             pass
         finally:
             writer.close()

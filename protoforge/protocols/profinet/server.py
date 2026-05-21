@@ -309,7 +309,7 @@ class ProfinetServer(ProtocolServer):
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             self._connections.discard(writer)

@@ -280,7 +280,7 @@ class S7Server(ProtocolServer):
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             logger.debug("S7 connection closed: %s", addr)
         finally:
             writer.close()

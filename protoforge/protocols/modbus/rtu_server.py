@@ -215,7 +215,7 @@ class ModbusRtuServer(ProtocolServer):
                 mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
                 writer.write(mbap + resp)
                 await writer.drain()
-        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError):
+        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()

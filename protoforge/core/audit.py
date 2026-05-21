@@ -100,7 +100,9 @@ class AuditLogger:
                 continue
             if end_time and entry.timestamp > end_time:
                 continue
-            results.append(entry.to_dict())
+            d = entry.to_dict()
+            d["action"] = _normalize_action(d["action"])
+            results.append(d)
         total = len(results)
         return results[offset:offset + limit], total
 
@@ -109,7 +111,7 @@ class AuditLogger:
         today_start = now - (now % 86400)
         today_count = sum(1 for e in self._entries if e.timestamp >= today_start)
         active_users = list(set(e.username for e in self._entries)) if self._entries else []
-        last_action = self._entries[-1].action if self._entries else ""
+        last_action = _normalize_action(self._entries[-1].action) if self._entries else ""
         last_timestamp = self._entries[-1].timestamp if self._entries else 0
         return {
             "total_entries": len(self._entries),
@@ -117,7 +119,7 @@ class AuditLogger:
             "active_users": active_users,
             "last_action": last_action,
             "last_timestamp": last_timestamp,
-            "actions": list(set(e.action for e in self._entries)) if self._entries else [],
+            "actions": list(set(_normalize_action(e.action) for e in self._entries)) if self._entries else [],
         }
 
     async def delete_entry(self, entry_id: int) -> bool:
@@ -211,6 +213,28 @@ def _get_action_aliases(action: str) -> list[str]:
     if action not in aliases:
         aliases.append(action)
     return aliases
+
+
+def _normalize_action(action: str) -> str:
+    """Normalize raw action names (e.g. post_protocols_profinet_start) to canonical names (e.g. start_protocol).
+
+    Used when returning data to frontend so i18n can find the correct translation key.
+    """
+    if not action:
+        return action
+    # 1. Exact match in _ACTION_ALIASES keys
+    if action in _ACTION_ALIASES:
+        return action
+    # 2. Check if action matches any alias
+    for canonical, aliases in _ACTION_ALIASES.items():
+        if action in aliases:
+            return canonical
+    # 3. Substring match: e.g. "post_protocols_profinet_start" contains "post_protocols"
+    for canonical, aliases in _ACTION_ALIASES.items():
+        for alias in aliases:
+            if alias and alias in action:
+                return canonical
+    return action
 
 
 # Action mapping: HTTP method + path pattern -> audit action + resource_type

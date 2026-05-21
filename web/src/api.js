@@ -136,6 +136,10 @@ api.interceptors.response.use(
     } else if (status === 404) {
       console.error('Resource not found:', detail)
       _notifyUser('warning', 'common.apiResourceNotFound', { detail: detail || '' })
+    } else if (status === 503) {
+      // Service unavailable - show backend friendly error message (e.g. protocol start failure)
+      console.warn('Service unavailable:', detail)
+      _notifyUser('warning', 'common.apiServiceUnavailable', { detail: detail || '' })
     } else if (status >= 500) {
       console.error('Server error:', detail)
       _notifyUser('error', 'common.apiServerError')

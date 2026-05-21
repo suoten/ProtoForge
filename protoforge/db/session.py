@@ -803,8 +803,9 @@ class Database:
             f"FROM audit_log {where_clause} ORDER BY timestamp DESC {limit_clause} {offset_clause}",
             tuple(params),
         )
+        from protoforge.core.audit import _normalize_action
         entries = [{
-            "id": r["id"], "timestamp": r["timestamp"], "action": r["action"],
+            "id": r["id"], "timestamp": r["timestamp"], "action": _normalize_action(r["action"]),
             "username": r["username"], "resource_type": r["resource_type"],
             "resource_id": r["resource_id"], "detail": r["detail"],
             "ip_address": r["ip_address"], "user_agent": r["user_agent"],

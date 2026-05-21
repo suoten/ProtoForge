@@ -2,11 +2,11 @@
 
 **物联网协议仿真与测试平台**
 
-[![Python](https://flat.badgen.net/badge/Python/3.10+/blue)](https://python.org)
-[![FastAPI](https://flat.badgen.net/badge/FastAPI/0.115+/green)](https://fastapi.tiangolo.com)
-[![Vue3](https://flat.badgen.net/badge/Vue/3.x/brightgreen)](https://vuejs.org)
-[![Naive UI](https://flat.badgen.net/badge/Naive_UI/2.x/5f25d4)](https://naiveui.com)
-[![License](https://flat.badgen.net/badge/License/MIT/yellow)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
+[![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen.svg)](https://vuejs.org)
+[![Naive UI](https://img.shields.io/badge/Naive_UI-2.x-5f25d4.svg)](https://naiveui.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [中文](#中文) | [English](README_EN.md)
 
@@ -1172,5 +1172,5 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 ### 💬 社区交流
 
-[![QQ群](https://flat.badgen.net/badge/QQ%E7%BE%A4/866599071/eb1923)](https://qm.qq.com/q/ProtoForge) **进群答案：ProtoForge**
+[![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-866599071-eb1923.svg)](https://qm.qq.com/q/ProtoForge) **进群答案：ProtoForge**
 

@@ -177,7 +177,7 @@ class FinsServer(ProtocolServer):
                     resp_header = self.FINS_TCP_MAGIC + struct.pack(">I", len(response))
                     writer.write(resp_header + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()

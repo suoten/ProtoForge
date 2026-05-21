@@ -123,7 +123,7 @@ class HttpSimulatorServer(ProtocolServer):
 
                 if headers.get("connection", "").lower() == "close":
                     break
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError):
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()

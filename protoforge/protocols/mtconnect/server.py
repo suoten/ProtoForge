@@ -109,7 +109,7 @@ class MtConnectServer(ProtocolServer):
                     writer.write(response.encode("utf-8"))
                     await writer.drain()
                 break
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             writer.close()

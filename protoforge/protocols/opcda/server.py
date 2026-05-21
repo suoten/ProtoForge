@@ -152,7 +152,7 @@ class OpcDaServer(ProtocolServer):
                     await writer.drain()
                 if sub_id:
                     client_sub_ids.append(sub_id)
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError):
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         finally:
             for sid in client_sub_ids:

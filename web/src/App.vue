@@ -1,4 +1,5 @@
 <template>
+  <n-config-provider :locale="naiveLocale" :date-locale="naiveDateLocale">
   <n-message-provider>
     <n-dialog-provider>
       <div v-if="!loggedIn" class="login-wrapper">
@@ -132,12 +133,13 @@
   </n-modal>
     </n-dialog-provider>
   </n-message-provider>
+  </n-config-provider>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput, NConfigProvider, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api, { setNotifyFunction } from './api.js'
@@ -149,6 +151,9 @@ const route = useRoute()
 const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
 const message = discreteMessage
 const { t, locale, setLocale } = useI18n()
+
+const naiveLocale = computed(() => locale.value === 'zh' ? zhCN : enUS)
+const naiveDateLocale = computed(() => locale.value === 'zh' ? dateZhCN : dateEnUS)
 
 setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }), t)
 const loggedIn = ref(false)
