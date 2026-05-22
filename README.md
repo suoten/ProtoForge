@@ -45,6 +45,8 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 > 💡 第一次使用？这就是最简单的方式，不需要安装 Python、Node.js、Git。
 >
+> 🌐 **http://localhost:8000 就是 Web 界面**，不是只有 API。ProtoForge 的后端（FastAPI）会自动托管前端页面，不需要单独的 Nginx 或前端服务器。API 文档在 `/docs`，前端页面直接访问根路径 `/`。
+>
 > 🔐 **密码说明**：
 > - 上面的命令通过 `-e PROTOFORGE_ADMIN_PASSWORD=admin` 指定了密码为 `admin`
 > - 如果不加这个参数，系统会自动生成随机密码，查看方式：`docker logs protoforge`（找 `Login:` 那一行）
@@ -176,20 +178,11 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
   ./install.sh
   ```
 
-脚本会自动检测 Python 版本、创建虚拟环境、安装依赖、构建前端，最后告诉你如何启动。
+脚本会自动检测 Python 版本、创建虚拟环境、安装依赖、构建前端，然后自动启动服务。
 
-**第 3 步：启动服务**
+**启动后**，浏览器打开 **http://localhost:8000**（即脚本窗口显示的地址），用 `admin` / 你设置的密码 登录。
 
-```bash
-# Windows（在文件夹空白处 Shift+右键 → 在此处打开 PowerShell，然后运行）：
-.\venv\Scripts\python.exe -m protoforge.cli demo
-
-# Linux / macOS：
-source venv/bin/activate
-protoforge demo
-```
-
-浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录。
+> 🌐 **http://localhost:8000 就是 Web 界面**。后端自动托管前端，不需要 Nginx。
 
 > 💡 如果脚本安装依赖时卡住不动，通常是网络问题。可以先设置国内镜像再重试：
 >

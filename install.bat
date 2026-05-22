@@ -139,7 +139,7 @@ if not exist .env (
 :: Read admin password from .env
 set "ADMIN_PW=admin"
 if exist .env (
-    for /f "tokens=1,* delims==" %%a in ('findstr /b "PROTOFORGE_ADMIN_PASSWORD=" .env') do (
+    for /f "usebackq tokens=1,* delims==" %%a in (`findstr /b "PROTOFORGE_ADMIN_PASSWORD=" .env`) do (
         set "ADMIN_PW=%%b"
     )
 )
@@ -147,7 +147,7 @@ if exist .env (
 :: Read port from .env
 set "ADMIN_PORT=8000"
 if exist .env (
-    for /f "tokens=1,* delims==" %%a in ('findstr /b "PROTOFORGE_PORT=" .env') do (
+    for /f "usebackq tokens=1,* delims==" %%a in (`findstr /b "PROTOFORGE_PORT=" .env`) do (
         set "ADMIN_PORT=%%b"
     )
 )
@@ -167,5 +167,14 @@ echo.
 
 :: Auto-start the server (demo mode)
 echo   正在启动服务（演示模式）...
+echo   启动后浏览器打开上面的地址即可访问 Web 界面
 echo.
+
+:: Keep window open if server crashes
 .\venv\Scripts\python.exe -m protoforge.cli demo
+if %errorlevel% neq 0 (
+    echo.
+    echo   [错误] 服务启动失败，请检查上方错误信息
+    echo.
+    pause
+)
