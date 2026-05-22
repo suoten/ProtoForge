@@ -177,8 +177,8 @@ class FinsServer(ProtocolServer):
                     resp_header = self.FINS_TCP_MAGIC + struct.pack(">I", len(response))
                     writer.write(resp_header + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             writer.close()
             try:

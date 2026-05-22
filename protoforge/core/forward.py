@@ -290,7 +290,10 @@ class ForwardEngine:
                 except Exception as exc:
                     logger.warning("Failed to close forward target %s: %s", name, exc)
             try:
-                asyncio.get_running_loop().create_task(_safe_close())
+                task = asyncio.get_running_loop().create_task(_safe_close())
+                self._pending_close_tasks = getattr(self, '_pending_close_tasks', [])
+                self._pending_close_tasks.append(task)  # FIXED: 保持引用，防止GC回收导致任务未执行
+                task.add_done_callback(lambda t: self._pending_close_tasks.remove(t) if t in self._pending_close_tasks else None)
             except RuntimeError:
                 try:
                     asyncio.ensure_future(_safe_close())

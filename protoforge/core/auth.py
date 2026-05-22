@@ -2,6 +2,7 @@ import logging
 import os
 import re
 import secrets
+import threading  # FIXED: _SECRET_KEY_LOCK需要threading.Lock
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -23,6 +24,7 @@ _VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USE
 
 _SECRET_KEY: str = ""
 _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
+_SECRET_KEY_LOCK = threading.Lock()  # FIXED: 添加锁保护，避免并发读写_SECRET_KEY
 
 
 def _generate_secret_key() -> str:
@@ -31,28 +33,29 @@ def _generate_secret_key() -> str:
 
 def _load_persistent_secret_key() -> str:
     global _SECRET_KEY
-    try:
-        key_dir = os.path.dirname(_SECRET_KEY_FILE)
-        os.makedirs(key_dir, exist_ok=True)
-        if os.path.exists(_SECRET_KEY_FILE):
-            with open(_SECRET_KEY_FILE, "r") as f:
-                saved = f.read().strip()
-            if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:
-                _SECRET_KEY = saved
-                return saved
-    except Exception as e:
-        logger.debug("Could not load persistent JWT secret: %s", e)
-    new_key = _generate_secret_key()
-    _SECRET_KEY = new_key
-    try:
-        key_dir = os.path.dirname(_SECRET_KEY_FILE)
-        os.makedirs(key_dir, exist_ok=True)
-        with open(_SECRET_KEY_FILE, "w") as f:
-            f.write(new_key)
-        logger.info("Generated and saved new JWT secret to %s", _SECRET_KEY_FILE)
-    except Exception as e:
-        logger.warning("Could not persist JWT secret: %s. Tokens will invalidate on restart.", e)
-    return new_key
+    with _SECRET_KEY_LOCK:  # FIXED: 添加锁保护，避免并发读写_SECRET_KEY
+        try:
+            key_dir = os.path.dirname(_SECRET_KEY_FILE)
+            os.makedirs(key_dir, exist_ok=True)
+            if os.path.exists(_SECRET_KEY_FILE):
+                with open(_SECRET_KEY_FILE, "r") as f:
+                    saved = f.read().strip()
+                if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:
+                    _SECRET_KEY = saved
+                    return saved
+        except Exception as e:
+            logger.debug("Could not load persistent JWT secret: %s", e)
+        new_key = _generate_secret_key()
+        _SECRET_KEY = new_key
+        try:
+            key_dir = os.path.dirname(_SECRET_KEY_FILE)
+            os.makedirs(key_dir, exist_ok=True)
+            with open(_SECRET_KEY_FILE, "w") as f:
+                f.write(new_key)
+            logger.info("Generated and saved new JWT secret to %s", _SECRET_KEY_FILE)
+        except Exception as e:
+            logger.warning("Could not persist JWT secret: %s. Tokens will invalidate on restart.", e)
+        return new_key
 
 
 def set_secret_key(key: str) -> None:
@@ -261,8 +264,7 @@ class UserManager:
                     pw_file,
                 )
             except Exception as e:
-                logger.warning("Could not save admin password to file: %s. Password is only shown this once.", e)
-                logger.warning("Generated admin password (save this now, it will not be shown again): %s", default_password)
+                logger.warning("Could not save admin password to file: %s. Check the file manually after startup.", e)  # FIXED: 不再明文打印密码到日志
         elif default_password == "admin":
             logger.warning(
                 "SECURITY: Using default admin password 'admin'. "

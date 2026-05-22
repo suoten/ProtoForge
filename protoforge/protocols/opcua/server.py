@@ -9,7 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior
+from protoforge.protocols.behavior import StandardDeviceBehavior  # FIXED: 改继承StandardDeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 
 logger = logging.getLogger(__name__)
@@ -91,14 +91,9 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
     return cert_path, key_path
 
 
-class OpcUaDeviceBehavior(DeviceBehavior):
+class OpcUaDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDeviceBehavior，复用_points/_values/_generators初始化
     def __init__(self, points: list[PointConfig]):
-        self._points = {p.name: p for p in points}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
-        for p in points:
-            self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
-            self._generators[p.name] = DynamicValueGenerator(p)
+        super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")

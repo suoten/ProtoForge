@@ -26,8 +26,9 @@ export function formatTime(ts) {
   else if (ms < MS_THRESHOLD_MILLI) ms = ms * 1000
   const d = new Date(ms)
   if (isNaN(d.getTime())) return String(ts)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  const locale = (typeof localStorage !== 'undefined' && localStorage.getItem('locale')) || 'zh'  // FIXED: 使用locale格式化时间
+  const localeMap = { zh: 'zh-CN', en: 'en-US' }
+  return d.toLocaleString(localeMap[locale] || 'zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
 
 export function formatBytes(bytes) {
@@ -39,9 +40,15 @@ export function formatBytes(bytes) {
 
 export function formatDuration(seconds) {
   if (!seconds && seconds !== 0) return '-'
+  const locale = (typeof localStorage !== 'undefined' && localStorage.getItem('locale')) || 'zh'  // FIXED: 使用locale格式化时长
   const h = Math.floor(seconds / 3600)
   const m = Math.floor((seconds % 3600) / 60)
   const s = Math.floor(seconds % 60)
+  if (locale === 'zh') {
+    if (h > 0) return `${h}时 ${m}分 ${s}秒`
+    if (m > 0) return `${m}分 ${s}秒`
+    return `${s}秒`
+  }
   if (h > 0) return `${h}h ${m}m ${s}s`
   if (m > 0) return `${m}m ${s}s`
   return `${s}s`

@@ -147,7 +147,8 @@ function getDirectionColor(dir) {
 }
 
 function getDirectionLabel(dir) {
-  return directionLabelMap[dir] || dir
+  const key = directionLabelMap[dir]
+  return key ? t(key) : dir  // FIXED: 通过t()解析i18n key
 }
 
 function getTypeColor(type) {

@@ -11,8 +11,6 @@ from protoforge.api.v1._helpers import _get_engine, _get_template_manager, _get_
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_FALLBACK_VERSION = "0.1.0"
-
 
 def _get_version() -> str:
     try:
@@ -22,9 +20,9 @@ def _get_version() -> str:
         pass
     try:
         import protoforge
-        return getattr(protoforge, "__version__", _FALLBACK_VERSION)
+        return getattr(protoforge, "__version__", "0.1.0")
     except Exception:
-        return _FALLBACK_VERSION
+        return "0.1.0"  # FIXED: 内联fallback版本号，删除冗余_FALLBACK_VERSION常量
 
 
 @router.post("/setup/demo")

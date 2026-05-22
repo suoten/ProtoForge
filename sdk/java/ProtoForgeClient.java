@@ -171,7 +171,7 @@ public class ProtoForgeClient {
     public JsonNode batchDeleteDevices(List<String> deviceIds) throws Exception {
         Map<String, Object> body = new HashMap<>();
         body.put("device_ids", deviceIds);
-        return deleteWithBody("/api/v1/devices/batch", body);
+        return post("/api/v1/devices/batch/delete", body);  // FIXED: 后端为POST /devices/batch/delete
     }
 
     public JsonNode batchStartDevices(List<String> deviceIds) throws Exception {
@@ -211,7 +211,7 @@ public class ProtoForgeClient {
     }
 
     public JsonNode searchTemplates(String query) throws Exception {
-        return get("/api/v1/templates/search?q=" + query);
+        return get("/api/v1/templates/search?q=" + java.net.URLEncoder.encode(query, "UTF-8"));  // FIXED: URL编码query参数
     }
 
     public JsonNode listTemplateTags() throws Exception {
@@ -320,6 +320,14 @@ public class ProtoForgeClient {
 
     public JsonNode quickTest(String scope) throws Exception {
         return post("/api/v1/tests/quick-test?scope=" + scope, new HashMap<>());
+    }
+
+    public JsonNode quickTest(String scope, String targetId) throws Exception {  // FIXED: 添加target_id参数，与后端对齐
+        StringBuilder params = new StringBuilder("?scope=").append(java.net.URLEncoder.encode(scope, "UTF-8"));
+        if (targetId != null && !targetId.isEmpty()) {
+            params.append("&target_id=").append(java.net.URLEncoder.encode(targetId, "UTF-8"));
+        }
+        return post("/api/v1/tests/quick-test" + params, new HashMap<>());
     }
 
     public JsonNode listTestReports() throws Exception {
@@ -482,12 +490,40 @@ public class ProtoForgeClient {
         return delete("/api/v1/integration/alarm-rules/" + ruleId);
     }
 
+    public JsonNode sendIntegrationMessage(String type, Map<String, Object> payload) throws Exception {  // FIXED: 添加缺失的POST /integration/message方法
+        Map<String, Object> body = new HashMap<>();
+        body.put("type", type);
+        body.put("payload", payload);
+        return post("/api/v1/integration/message", body);
+    }
+
     public JsonNode importEdgelite(Map<String, Object> config) throws Exception {
-        return post("/api/v1/integration/edgelite", config);
+        return post("/api/v1/edgelite", config);  // FIXED: 后端路由为POST /edgelite，非/integration/edgelite
     }
 
     public JsonNode importPygbsentry(Map<String, Object> config) throws Exception {
-        return post("/api/v1/integration/pygbsentry", config);
+        return post("/api/v1/edgelite/pygbsentry", config);  // FIXED: 后端路由为POST /edgelite/pygbsentry，非/integration/pygbsentry
+    }
+
+    // FIXED: 添加缺失的EdgeLite方法，与Go/C# SDK对齐
+    public JsonNode testIntegrationConnection(Map<String, Object> config) throws Exception {
+        return post("/api/v1/edgelite/test", config);
+    }
+
+    public JsonNode pushDeviceIntegration(String deviceId) throws Exception {
+        return post("/api/v1/edgelite/push/" + deviceId, new HashMap<>());
+    }
+
+    public void deleteDeviceFromEdgelite(String deviceId) throws Exception {
+        delete("/api/v1/edgelite/push/" + deviceId);
+    }
+
+    public JsonNode getEdgeliteDeviceStatus(String deviceId) throws Exception {
+        return get("/api/v1/edgelite/status/" + deviceId);
+    }
+
+    public JsonNode getEdgeliteDevicePoints(String deviceId) throws Exception {
+        return get("/api/v1/edgelite/points/" + deviceId);
     }
 
     public JsonNode getSettings() throws Exception {
@@ -508,6 +544,15 @@ public class ProtoForgeClient {
 
     public JsonNode queryAuditLog(int limit) throws Exception {
         return get("/api/v1/audit?limit=" + limit);
+    }
+
+    public JsonNode queryAuditLog(int limit, String action, String username, String startTime, String endTime) throws Exception {  // FIXED: 支持完整审计日志查询参数
+        StringBuilder params = new StringBuilder("?limit=").append(limit);
+        if (action != null && !action.isEmpty()) params.append("&action=").append(java.net.URLEncoder.encode(action, "UTF-8"));
+        if (username != null && !username.isEmpty()) params.append("&username=").append(java.net.URLEncoder.encode(username, "UTF-8"));
+        if (startTime != null && !startTime.isEmpty()) params.append("&start_time=").append(java.net.URLEncoder.encode(startTime, "UTF-8"));  // FIXED: 后端参数名为start_time
+        if (endTime != null && !endTime.isEmpty()) params.append("&end_time=").append(java.net.URLEncoder.encode(endTime, "UTF-8"));  // FIXED: 后端参数名为end_time
+        return get("/api/v1/audit" + params);
     }
 
     public JsonNode getAuditStats() throws Exception {

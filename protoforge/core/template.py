@@ -100,7 +100,7 @@ class TemplateManager:
             name=device_name,
             protocol=template.protocol,
             template_id=template_id,
-            points=list(template.points),
+            points=[p.model_copy() for p in template.points],  # FIXED: 深拷贝PointConfig，避免修改实例影响模板
             protocol_config=protocol_config or dict(template.protocol_config),
         )
 

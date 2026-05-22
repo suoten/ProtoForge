@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -62,45 +63,44 @@ class EventBus:
         self._history: deque[Event] = deque(maxlen=max_history)
         self._dropped_count: int = 0
         self._last_drop_warning: float = 0.0
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()  # FIXED: 使用threading.Lock替代asyncio.Lock，保护subscribe/unsubscribe/on/off/publish并发安全
 
     def subscribe(self, event_type: str, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:
             queue = asyncio.Queue(maxsize=1000)
-        # FIXED: 添加锁保护，避免与publish/unsubscribe并发时的竞态条件
-        self._subscribers.setdefault(event_type, []).append(queue)
+        with self._lock:  # FIXED: 添加锁保护，避免与publish/unsubscribe并发时的竞态条件
+            self._subscribers.setdefault(event_type, []).append(queue)
         return queue
 
     def unsubscribe(self, event_type: str, queue: asyncio.Queue) -> None:
-        # FIXED: 添加锁保护
-        subs = self._subscribers.get(event_type, [])
-        if queue in subs:
-            subs.remove(queue)
+        with self._lock:  # FIXED: 添加锁保护，避免与publish/subscribe并发时的竞态条件
+            subs = self._subscribers.get(event_type, [])
+            if queue in subs:
+                subs.remove(queue)
 
     def on(self, event_type: str, callback: Callable) -> None:
-        # FIXED: 添加锁保护
-        self._callbacks.setdefault(event_type, []).append(callback)
+        with self._lock:  # FIXED: 添加锁保护，避免与publish/off并发时的竞态条件
+            self._callbacks.setdefault(event_type, []).append(callback)
 
     def off(self, event_type: str, callback: Callable) -> None:
-        # FIXED: 添加锁保护
-        cbs = self._callbacks.get(event_type, [])
-        if callback in cbs:
-            cbs.remove(callback)
+        with self._lock:  # FIXED: 添加锁保护，避免与publish/on并发时的竞态条件
+            cbs = self._callbacks.get(event_type, [])
+            if callback in cbs:
+                cbs.remove(callback)
 
     async def publish(self, event: Event) -> None:
         event_type = type(event).__name__
-        # FIXED: 添加锁保护history和dropped_count的读写
-        async with self._lock:
+        with self._lock:  # FIXED: 添加锁保护history和dropped_count的读写
             self._history.append(event)
             dropped = self._dropped_count
+            queues = list(self._subscribers.get(event_type, []))
+            callbacks = list(self._callbacks.get(event_type, []))
 
-        # queues已经是list副本，迭代安全
-        queues = list(self._subscribers.get(event_type, []))
         for queue in queues:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                async with self._lock:
+                with self._lock:
                     self._dropped_count += 1
                     dropped_count = self._dropped_count
                 try:
@@ -116,7 +116,6 @@ class EventBus:
                     self._last_drop_warning = now
                     logger.warning("EventBus dropped %d events (subscribers too slow)", dropped_count)
 
-        callbacks = list(self._callbacks.get(event_type, []))
         for callback in callbacks:
             try:
                 result = callback(event)

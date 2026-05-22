@@ -152,8 +152,8 @@ class OpcDaServer(ProtocolServer):
                     await writer.drain()
                 if sub_id:
                     client_sub_ids.append(sub_id)
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             for sid in client_sub_ids:
                 self._sub_clients.pop(sid, None)

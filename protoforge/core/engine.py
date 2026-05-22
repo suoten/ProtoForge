@@ -689,6 +689,9 @@ class SimulationEngine:
             except Exception as e:
                 logger.warning("Error stopping device %s: %s", instance.id, e)
         logger.info("Simulation engine stopped")
+        self._devices.clear()  # FIXED: stop后清理字典，避免重启时状态残留
+        self._scenarios.clear()
+        self._protocol_servers.clear()
 
     async def _tick_loop(self) -> None:
         while self._running:

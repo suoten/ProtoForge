@@ -39,12 +39,13 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
         result = await engine.create_device(config)
         db_ok = True
         db_err_msg = ""
-        try:
-            await db.save_device(config)
-        except Exception as db_err:
-            db_ok = False
-            db_err_msg = str(db_err)
-            logger.error("Failed to save device %s to DB: %s", config.id, db_err)
+        if db is not None:  # FIXED: 添加db空值检查，避免AttributeError
+            try:
+                await db.save_device(config)
+            except Exception as db_err:
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to save device %s to DB: %s", config.id, db_err)
         try:
             await engine.start_device(config.id)
         except Exception as start_err:
@@ -103,12 +104,13 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
         result = await engine.create_device(config)
         db_ok = True
         db_err_msg = ""
-        try:
-            await db.save_device(config)
-        except Exception as db_err:
-            db_ok = False
-            db_err_msg = str(db_err)
-            logger.error("Failed to save device %s to DB (quick-create): %s", config.id, db_err)
+        if db is not None:  # FIXED: 添加db空值检查，避免AttributeError
+            try:
+                await db.save_device(config)
+            except Exception as db_err:
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to save device %s to DB (quick-create): %s", config.id, db_err)
         try:
             await engine.start_device(device_id)
         except Exception as start_err:
@@ -320,12 +322,13 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
         result = await engine.update_device(device_id, config)
         db_ok = True
         db_err_msg = ""
-        try:
-            await db.save_device(config)
-        except Exception as db_err:
-            db_ok = False
-            db_err_msg = str(db_err)
-            logger.error("Failed to update device %s in DB: %s", device_id, db_err)
+        if db is not None:  # FIXED: 添加db空值检查，避免AttributeError
+            try:
+                await db.save_device(config)
+            except Exception as db_err:
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to update device %s in DB: %s", device_id, db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
         response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else {"id": device_id, "name": config.name, "protocol": config.protocol}
         if not db_ok:

@@ -432,11 +432,10 @@ class BACnetServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
-        self._device_configs[device_id] = device_config
-
         behavior = BACnetDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:
+        async with self._behaviors_lock:  # FIXED: 将_device_configs放入锁保护范围，与其他协议一致
             self._behaviors[device_id] = behavior
+            self._device_configs[device_id] = device_config
         await self._update_default_device_async(device_id)
 
         proto_config = device_config.protocol_config or {}
@@ -484,9 +483,9 @@ class BACnetServer(ProtocolServer):
         return device_id
 
     async def remove_device(self, device_id: str) -> None:
-        self._device_configs.pop(device_id, None)
-        async with self._behaviors_lock:
+        async with self._behaviors_lock:  # FIXED: 将_device_configs放入锁保护范围，与其他协议一致
             self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)
         self._device_objects.pop(device_id, None)
         await self._clear_default_device_async(device_id)
         logger.info("BACnet device removed: %s", device_id)

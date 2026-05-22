@@ -22,6 +22,7 @@ _PROTOCOL_CLASSES: dict[str, str] = {
 }
 
 PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {}
+PROTOCOL_LOAD_ERRORS: dict[str, str] = {}  # FIXED: 记录加载失败的协议及原因，供API查询
 
 
 def _load_protocols() -> None:
@@ -37,6 +38,7 @@ def _load_protocols() -> None:
             cls = getattr(mod, class_name)
             PROTOCOL_REGISTRY[name] = cls
         except Exception as e:
+            PROTOCOL_LOAD_ERRORS[name] = str(e)  # FIXED: 记录加载失败原因
             logger.warning("Failed to load protocol %s (%s): %s", name, qual, e)
 
 
@@ -47,4 +49,5 @@ __all__ = [
     "ProtocolStatus",
     "DeviceBehavior",
     "PROTOCOL_REGISTRY",
+    "PROTOCOL_LOAD_ERRORS",
 ]

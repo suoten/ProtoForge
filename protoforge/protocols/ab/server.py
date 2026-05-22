@@ -67,6 +67,7 @@ class AbServer(ProtocolServer):
     protocol_display_name = "Rockwell AB"
 
     EIP_HEADER_SIZE = 24
+    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
 
     def __init__(self):
         super().__init__()
@@ -132,15 +133,15 @@ class AbServer(ProtocolServer):
         logger.debug("AB connection from %s", addr)
         try:
             while self._server_running:
-                data = await asyncio.wait_for(reader.read(4096), timeout=30.0)
+                data = await asyncio.wait_for(reader.read(4096), timeout=_READ_TIMEOUT)
                 if not data:
                     break
                 response = self._process_eip(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             writer.close()
             try:

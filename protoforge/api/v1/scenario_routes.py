@@ -30,12 +30,13 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
         result = engine.create_scenario(config)
         db_ok = True
         db_err_msg = ""
-        try:
-            await db.save_scenario(config)
-        except Exception as db_err:
-            db_ok = False
-            db_err_msg = str(db_err)
-            logger.error("Failed to persist scenario %s: %s", config.id, db_err)
+        if db is not None:  # FIXED: 添加db空值检查，避免AttributeError
+            try:
+                await db.save_scenario(config)
+            except Exception as db_err:
+                db_ok = False
+                db_err_msg = str(db_err)
+                logger.error("Failed to persist scenario %s: %s", config.id, db_err)
         resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文

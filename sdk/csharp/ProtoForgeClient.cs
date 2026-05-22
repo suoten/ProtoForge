@@ -177,17 +177,20 @@ namespace ProtoForge
 
         public async Task<JsonElement?> BatchDeleteDevicesAsync(object deviceIds)
         {
-            return await DeleteWithBodyAsync("/api/v1/devices/batch", deviceIds);
+            var body = new { device_ids = deviceIds };  // FIXED: 后端期望{device_ids:[...]}格式
+            return await PostAsync("/api/v1/devices/batch/delete", body);
         }
 
         public async Task<JsonElement?> BatchStartDevicesAsync(object deviceIds)
         {
-            return await PostAsync("/api/v1/devices/batch/start", deviceIds);
+            var body = new { device_ids = deviceIds };  // FIXED: 后端期望{device_ids:[...]}格式
+            return await PostAsync("/api/v1/devices/batch/start", body);
         }
 
         public async Task<JsonElement?> BatchStopDevicesAsync(object deviceIds)
         {
-            return await PostAsync("/api/v1/devices/batch/stop", deviceIds);
+            var body = new { device_ids = deviceIds };  // FIXED: 后端期望{device_ids:[...]}格式
+            return await PostAsync("/api/v1/devices/batch/stop", body);
         }
 
         public async Task<JsonElement?> ListTemplatesAsync(string? protocol = null)
@@ -535,12 +538,12 @@ namespace ProtoForge
 
         public async Task<JsonElement?> TestIntegrationConnectionAsync(object config)
         {
-            return await PostAsync("/api/v1/integration/edgelite/test", config);  // FIXED: 路由与后端edgelite_routes.py对齐
+            return await PostAsync("/api/v1/edgelite/test", config);  // FIXED: 后端路由为POST /edgelite/test，非/integration/edgelite/test
         }
 
         public async Task<JsonElement?> PushDeviceIntegrationAsync(string deviceId)
         {
-            return await PostAsync($"/api/v1/integration/edgelite/push/{deviceId}", new { });  // FIXED: 路由与后端edgelite_routes.py对齐
+            return await PostAsync($"/api/v1/edgelite/push/{deviceId}", new { });  // FIXED: 后端路由为POST /edgelite/push/{id}，非/integration/edgelite/push/{id}
         }
 
         public async Task<JsonElement?> BatchPushAsync(object deviceIds)
@@ -550,7 +553,7 @@ namespace ProtoForge
 
         public async Task DeleteDeviceFromEdgeliteAsync(string deviceId)
         {
-            await DeleteAsync($"/api/v1/integration/device/{deviceId}");
+            await DeleteAsync($"/api/v1/edgelite/push/{deviceId}");  // FIXED: 后端路由为DELETE /edgelite/push/{id}，非/integration/device/{id}
         }
 
         public async Task<JsonElement?> StartDeviceCollectAsync(string deviceId)
@@ -590,14 +593,20 @@ namespace ProtoForge
             await DeleteAsync($"/api/v1/integration/alarm-rules/{ruleId}");
         }
 
+        public async Task<JsonElement?> SendIntegrationMessageAsync(string type, object payload)  // FIXED: 添加缺失的POST /integration/message方法
+        {
+            var body = new { type, payload };
+            return await PostAsync("/api/v1/integration/message", body);
+        }
+
         public async Task<JsonElement?> ImportEdgeliteAsync(object config)
         {
-            return await PostAsync("/api/v1/integration/edgelite", config);
+            return await PostAsync("/api/v1/edgelite", config);  // FIXED: 后端为POST /edgelite
         }
 
         public async Task<JsonElement?> ImportPygbsentryAsync(object config)
         {
-            return await PostAsync("/api/v1/integration/pygbsentry", config);
+            return await PostAsync("/api/v1/edgelite/pygbsentry", config);  // FIXED: 后端为POST /edgelite/pygbsentry
         }
 
         public async Task<JsonElement?> GetSettingsAsync()
@@ -626,8 +635,8 @@ namespace ProtoForge
             if (limit.HasValue) queryParams.Add($"limit={limit.Value}");
             if (!string.IsNullOrEmpty(action)) queryParams.Add($"action={Uri.EscapeDataString(action)}");
             if (!string.IsNullOrEmpty(username)) queryParams.Add($"username={Uri.EscapeDataString(username)}");
-            if (!string.IsNullOrEmpty(start)) queryParams.Add($"start={Uri.EscapeDataString(start)}");
-            if (!string.IsNullOrEmpty(end)) queryParams.Add($"end={Uri.EscapeDataString(end)}");
+            if (!string.IsNullOrEmpty(start)) queryParams.Add($"start_time={Uri.EscapeDataString(start)}");  // FIXED: 后端参数名为start_time
+            if (!string.IsNullOrEmpty(end)) queryParams.Add($"end_time={Uri.EscapeDataString(end)}");  // FIXED: 后端参数名为end_time
             var path = "/api/v1/audit";
             if (queryParams.Count > 0) path += "?" + string.Join("&", queryParams);
             return await GetAsync(path);

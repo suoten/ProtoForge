@@ -104,6 +104,7 @@ class McServer(ProtocolServer):
 
     SLMP_3E_BIN_SUBHEADER = 0x0054
     SLMP_3E_ASCII_SUBHEADER = b"5000"
+    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
 
     def __init__(self):
         super().__init__()
@@ -173,25 +174,25 @@ class McServer(ProtocolServer):
         logger.debug("MC connection from %s", addr)
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(9), timeout=30.0)
+                header = await asyncio.wait_for(reader.readexactly(9), timeout=_READ_TIMEOUT)
                 if len(header) < 9:
                     break
                 if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
                     data_len_field = int(header[7:9], 16)
-                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=30.0)
+                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=_READ_TIMEOUT)
                     data = header + remaining
                 else:
                     data_len = struct.unpack("<H", header[7:9])[0]
                     total_len = 9 + data_len
-                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=30.0)
+                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=_READ_TIMEOUT)
                     data = header + remaining
                 response = self._process_slmp(data)
                 if response:
                     writer.write(response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError,
-                asyncio.IncompleteReadError, ConnectionAbortedError, BrokenPipeError):
-            pass
+                asyncio.IncompleteReadError, ConnectionAbortedError, BrokenPipeError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             writer.close()
             try:

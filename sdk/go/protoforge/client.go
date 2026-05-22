@@ -170,15 +170,18 @@ func (c *Client) BatchCreateDevices(configs []map[string]interface{}) (map[strin
 }
 
 func (c *Client) BatchDeleteDevices(deviceIDs []string) (map[string]interface{}, error) {
-	return c.deleteWithBody("/api/v1/devices/batch", deviceIDs)
+	body := map[string]interface{}{"device_ids": deviceIDs}  // FIXED: 后端为POST /devices/batch/delete，期望{device_ids:[...]}格式
+	return c.post("/api/v1/devices/batch/delete", body)
 }
 
 func (c *Client) BatchStartDevices(deviceIDs []string) (map[string]interface{}, error) {
-	return c.post("/api/v1/devices/batch/start", deviceIDs)
+	body := map[string]interface{}{"device_ids": deviceIDs}  // FIXED: 后端期望{device_ids:[...]}格式
+	return c.post("/api/v1/devices/batch/start", body)
 }
 
 func (c *Client) BatchStopDevices(deviceIDs []string) (map[string]interface{}, error) {
-	return c.post("/api/v1/devices/batch/stop", deviceIDs)
+	body := map[string]interface{}{"device_ids": deviceIDs}  // FIXED: 后端期望{device_ids:[...]}格式，与BatchStartDevices一致
+	return c.post("/api/v1/devices/batch/stop", body)
 }
 
 func (c *Client) ListTemplates(protocol string) (map[string]interface{}, error) {
@@ -521,11 +524,11 @@ func (c *Client) ValidateDeviceCompatibility(deviceID string) (map[string]interf
 }
 
 func (c *Client) TestIntegrationConnection(config map[string]interface{}) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/edgelite/test", config)  // FIXED: 路由与后端edgelite_routes.py对齐
+	return c.post("/api/v1/edgelite/test", config)  // FIXED: 路由与后端edgelite_routes.py对齐
 }
 
 func (c *Client) PushDeviceIntegration(deviceID string) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/edgelite/push/"+deviceID, nil)  // FIXED: 路由与后端edgelite_routes.py对齐
+	return c.post("/api/v1/edgelite/push/"+deviceID, nil)  // FIXED: 路由与后端edgelite_routes.py对齐
 }
 
 func (c *Client) BatchPush(deviceIDs []string) (map[string]interface{}, error) {
@@ -534,7 +537,7 @@ func (c *Client) BatchPush(deviceIDs []string) (map[string]interface{}, error) {
 }
 
 func (c *Client) DeleteDeviceFromEdgelite(deviceID string) (map[string]interface{}, error) {
-	return c.delete("/api/v1/integration/device/" + deviceID)
+	return c.delete("/api/v1/edgelite/push/" + deviceID)  // FIXED: 后端路由为DELETE /edgelite/push/{id}，非/integration/device/{id}
 }
 
 func (c *Client) StartDeviceCollect(deviceID string) (map[string]interface{}, error) {
@@ -570,12 +573,17 @@ func (c *Client) DeleteAlarmRule(ruleID string) (map[string]interface{}, error) 
 	return c.delete("/api/v1/integration/alarm-rules/" + ruleID)
 }
 
+func (c *Client) SendIntegrationMessage(msgType string, payload map[string]interface{}) (map[string]interface{}, error) {  // FIXED: 添加缺失的POST /integration/message方法
+	body := map[string]interface{}{"type": msgType, "payload": payload}
+	return c.post("/api/v1/integration/message", body)
+}
+
 func (c *Client) ImportEdgelite(config map[string]interface{}) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/edgelite", config)
+	return c.post("/api/v1/edgelite", config)  // FIXED: 后端路由为POST /edgelite，非/integration/edgelite
 }
 
 func (c *Client) ImportPygbsentry(config map[string]interface{}) (map[string]interface{}, error) {
-	return c.post("/api/v1/integration/pygbsentry", config)
+	return c.post("/api/v1/edgelite/pygbsentry", config)  // FIXED: 后端路由为POST /edgelite/pygbsentry，非/integration/pygbsentry
 }
 
 func (c *Client) GetSettings() (map[string]interface{}, error) {
@@ -594,7 +602,7 @@ func (c *Client) GetSetupStatus() (map[string]interface{}, error) {
 	return c.get("/api/v1/setup/status")
 }
 
-func (c *Client) QueryAuditLog(limit int, action, username, start, end string) (map[string]interface{}, error) {
+func (c *Client) QueryAuditLog(limit int, action, username, start, end string) (map[string]interface{}, error) {  // FIXED: 参数名start/end→start_time/end_time
 	params := url.Values{}
 	if limit > 0 {
 		params.Set("limit", strconv.Itoa(limit))
@@ -606,10 +614,10 @@ func (c *Client) QueryAuditLog(limit int, action, username, start, end string) (
 		params.Set("username", username)
 	}
 	if start != "" {
-		params.Set("start", start)
+		params.Set("start_time", start)  // FIXED: 后端参数名为start_time
 	}
 	if end != "" {
-		params.Set("end", end)
+		params.Set("end_time", end)  // FIXED: 后端参数名为end_time
 	}
 	path := "/api/v1/audit"
 	if len(params) > 0 {

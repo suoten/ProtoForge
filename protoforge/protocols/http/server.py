@@ -85,7 +85,7 @@ class HttpSimulatorServer(ProtocolServer):
         try:
             while self._server_running:
                 try:
-                    request_line = await asyncio.wait_for(reader.readline(), timeout=30.0)
+                    request_line = await asyncio.wait_for(reader.readline(), timeout=_READ_TIMEOUT)
                 except asyncio.TimeoutError:
                     break
                 if not request_line:
@@ -123,8 +123,8 @@ class HttpSimulatorServer(ProtocolServer):
 
                 if headers.get("connection", "").lower() == "close":
                     break
-        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             writer.close()
             try:

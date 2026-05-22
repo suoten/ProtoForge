@@ -210,14 +210,16 @@ const ruleTypeOptions = computed(() => [
 const pointEditColumns = computed(() => [
   { title: t('common.name'), key: 'name', width: 120, render: (row, idx) => h(NInput, { value: row.name, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].name = v } }) },
   { title: t('common.address'), key: 'address', width: 80, render: (row, idx) => h(NInput, { value: row.address, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].address = v } }) },
-  { title: t('common.dataType'), key: 'data_type', width: 100, render: (row, idx) => h(NSelect, { value: row.data_type, size: 'tiny', options: dataTypeOptions, onUpdateValue: v => { editingPoints.value[idx].data_type = v } }) },
-  { title: t('common.generator'), key: 'generator_type', width: 100, render: (row, idx) => h(NSelect, { value: row.generator_type, size: 'tiny', options: generatorOptions, onUpdateValue: v => { editingPoints.value[idx].generator_type = v } }) },
+  { title: t('common.dataType'), key: 'data_type', width: 100, render: (row, idx) => h(NSelect, { value: row.data_type, size: 'tiny', options: i18nDataTypeOptions.value, onUpdateValue: v => { editingPoints.value[idx].data_type = v } }) },
+  { title: t('common.generator'), key: 'generator_type', width: 100, render: (row, idx) => h(NSelect, { value: row.generator_type, size: 'tiny', options: i18nGeneratorOptions.value, onUpdateValue: v => { editingPoints.value[idx].generator_type = v } }) },
   { title: t('common.minValue'), key: 'min_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.min_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].min_value = v } }) },
   { title: t('common.maxValue'), key: 'max_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.max_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].max_value = v } }) },
   { title: t('common.action'), key: 'actions', width: 60, render: (row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editingPoints.value.splice(idx, 1) }, () => t('common.delete')) },
 ])
 
-const generatorOptions = generatorTypeOptions
+const i18nDataTypeOptions = computed(() => dataTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
+const i18nGeneratorOptions = computed(() => generatorTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
+const generatorOptions = i18nGeneratorOptions
 
 function onConnect(params) {
   pendingConnection.value = params

@@ -226,8 +226,10 @@ const filteredTemplates = computed(() => {
   return result
 })
 
-const dataTypeOptions = _dataTypeOptions
-const generatorOptions = _generatorTypeOptions
+const i18nDataTypeOptions = computed(() => _dataTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
+const i18nGeneratorOptions = computed(() => _generatorTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
+const dataTypeOptions = i18nDataTypeOptions
+const generatorOptions = i18nGeneratorOptions
 
 const pointEditColumns = computed(() => [
   { title: t('common.name'), key: 'name', width: 100, render: makeEditRenderer('name', newTemplate, NInput) },

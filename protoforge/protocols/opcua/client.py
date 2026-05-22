@@ -171,12 +171,12 @@ class OpcUaClientProtocol(ProtocolServer):
             self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        self._device_configs[device_config.id] = device_config
-
-        for point in device_config.points:
-            node_id = parse_node_id(point.address)
-            if node_id:
-                self._point_nodes[f"{device_config.id}.{point.name}"] = node_id
+        async with self._lock:  # FIXED: 添加锁保护，避免并发create/remove/read竞态
+            self._device_configs[device_config.id] = device_config
+            for point in device_config.points:
+                node_id = parse_node_id(point.address)
+                if node_id:
+                    self._point_nodes[f"{device_config.id}.{point.name}"] = node_id
 
         logger.info("OPC-UA Client device created: %s (%d points)",
                     device_config.id, len(device_config.points))
@@ -186,10 +186,11 @@ class OpcUaClientProtocol(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._device_configs.pop(device_id, None)
-        keys_to_remove = [k for k in self._point_nodes.keys() if k.startswith(f"{device_id}.")]
-        for k in keys_to_remove:
-            self._point_nodes.pop(k, None)
+        async with self._lock:  # FIXED: 添加锁保护，避免并发create/remove/read竞态
+            self._device_configs.pop(device_id, None)
+            keys_to_remove = [k for k in self._point_nodes.keys() if k.startswith(f"{device_id}.")]
+            for k in keys_to_remove:
+                self._point_nodes.pop(k, None)
         logger.info("OPC-UA Client device removed: %s", device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:

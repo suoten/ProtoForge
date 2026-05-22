@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 from protoforge.core.messages import msg, desc
 
@@ -74,16 +74,11 @@ EEPROM_STATUS_NOT_LOADED = 0x1000
 EEPROM_STATUS_ADDR_ERR = 0x0400
 
 
-class EtherCATDeviceBehavior(DeviceBehavior):
+class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDeviceBehavior，复用_points/_values/_generators初始化
     def __init__(self, points: list[PointConfig]):
-        self._points = {p.name: p for p in points}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
+        super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
         self._config: DeviceConfig | None = None
         self._pd_input: bytearray = bytearray()
-        for p in points:
-            self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
-            self._generators[p.name] = DynamicValueGenerator(p)
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -488,21 +483,21 @@ class EtherCATServer(ProtocolServer):
         try:
             while self._server_running:
                 try:
-                    header = await asyncio.wait_for(reader.readexactly(2), timeout=30)
+                    header = await asyncio.wait_for(reader.readexactly(2), timeout=_READ_TIMEOUT)
                 except asyncio.IncompleteReadError:
                     break
                 length = struct.unpack("<H", header)[0]
                 if length > 0:
                     try:
-                        payload = await asyncio.wait_for(reader.readexactly(length), timeout=30)
+                        payload = await asyncio.wait_for(reader.readexactly(length), timeout=_READ_TIMEOUT)
                     except asyncio.IncompleteReadError:
                         break
                     response = self._process_frame(header + payload)
                     if response:
                         writer.write(response)
                         await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             writer.close()
             try:
@@ -782,7 +777,8 @@ class EtherCATServer(ProtocolServer):
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = EtherCATDeviceBehavior(device_config.points)
         behavior._config = device_config
-        self._behaviors[device_config.id] = behavior
+        async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
+            self._behaviors[device_config.id] = behavior
         self._device_configs[device_config.id] = device_config
         await self._update_default_device_async(device_config.id)
 
@@ -802,7 +798,8 @@ class EtherCATServer(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        self._behaviors.pop(device_id, None)
+        async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
+            self._behaviors.pop(device_id, None)
         self._device_configs.pop(device_id, None)
         await self._clear_default_device_async(device_id)
         self._recalc_data_sizes()

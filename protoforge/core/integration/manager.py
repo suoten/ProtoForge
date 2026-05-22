@@ -152,6 +152,16 @@ class IntegrationManager:
         self._running = False
         self._cleanup_event_handlers()
 
+        # FIXED: 取消可能正在进行的重试/心跳任务
+        for task_attr in ("_retry_task", "_heartbeat_task", "_ws_task"):
+            task = getattr(self, task_attr, None)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+
         for ch_name, ch in [("ws_channel", self._ws_channel), ("channel", self._channel), ("auth", self._auth)]:
             if ch:
                 try:

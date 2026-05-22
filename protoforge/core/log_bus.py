@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -26,6 +27,7 @@ class LogBus:
         self._callbacks: list[Callable[[LogEntry], Coroutine]] = []
         self._dropped_count: int = 0
         self._last_drop_warning: float = 0.0
+        self._lock = threading.Lock()  # FIXED: 添加锁保护，避免并发emit/subscribe/unsubscribe竞态
 
     def emit(self, protocol: str, direction: str, device_id: str,
              message_type: str, summary: str, detail: dict[str, Any] | None = None) -> None:
@@ -38,12 +40,16 @@ class LogBus:
             summary=summary,
             detail=detail or {},
         )
-        self._entries.append(entry)
-        for queue in list(self._subscribers):
+        with self._lock:  # FIXED: 添加锁保护，避免并发emit/subscribe竞态
+            self._entries.append(entry)
+            queues = list(self._subscribers)
+        for queue in queues:
             try:
                 queue.put_nowait(entry)
             except asyncio.QueueFull:
-                self._dropped_count += 1
+                with self._lock:  # FIXED: 添加锁保护dropped_count
+                    self._dropped_count += 1
+                    dropped_count = self._dropped_count
                 try:
                     queue.get_nowait()
                 except asyncio.QueueEmpty:
@@ -55,17 +61,19 @@ class LogBus:
                 now = time.time()
                 if now - self._last_drop_warning > 60:
                     self._last_drop_warning = now
-                    logger.warning("LogBus dropped %d entries (subscribers too slow)", self._dropped_count)
+                    logger.warning("LogBus dropped %d entries (subscribers too slow)", dropped_count)
 
     def subscribe(self, queue: asyncio.Queue | None = None) -> asyncio.Queue:
         if queue is None:
             queue = asyncio.Queue(maxsize=1000)
-        self._subscribers.append(queue)
+        with self._lock:  # FIXED: 添加锁保护，避免与emit并发
+            self._subscribers.append(queue)
         return queue
 
     def unsubscribe(self, queue: asyncio.Queue) -> None:
-        if queue in self._subscribers:
-            self._subscribers.remove(queue)
+        with self._lock:  # FIXED: 添加锁保护，避免与emit并发
+            if queue in self._subscribers:
+                self._subscribers.remove(queue)
 
     def get_recent(self, count: int = 100, protocol: str | None = None,
                    device_id: str | None = None) -> list[dict[str, Any]]:

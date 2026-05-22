@@ -4,8 +4,9 @@ import hmac
 import json
 import logging
 import os
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
+import threading  # FIXED: WebhookManager._lock需要threading.Lock
 import time
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT  # FIXED: 恢复导入，webhook使用此超时常量
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -85,6 +86,7 @@ class WebhookManager:
         self._running = False
         self._rate_limit_seconds = rate_limit_seconds
         self._auto_disable_threshold = auto_disable_threshold
+        self._lock = threading.Lock()  # FIXED: 添加锁保护，避免add/remove/update与_dispatch并发
 
     def _persist(self) -> None:
         try:
@@ -165,17 +167,27 @@ class WebhookManager:
             headers=config.get("headers", {}), enabled=config.get("enabled", True),
             secret=config.get("secret"),
         )
-        self._webhooks[wh_id] = webhook
-        self._persist()
+        with self._lock:  # FIXED: 添加锁保护，避免与_dispatch并发
+            self._webhooks[wh_id] = webhook
+        try:
+            self._persist()
+        except Exception as e:  # FIXED: 持久化失败时回滚内存状态
+            with self._lock:
+                self._webhooks.pop(wh_id, None)
+            raise RuntimeError(f"Failed to persist webhook: {e}") from e
         logger.info("Webhook added: %s -> %s", wh_id, webhook.url)
         return webhook
 
     def remove_webhook(self, wh_id: str) -> bool:
-        if wh_id in self._webhooks:
-            del self._webhooks[wh_id]
+        with self._lock:  # FIXED: 添加锁保护，避免与_dispatch并发
+            if wh_id in self._webhooks:
+                del self._webhooks[wh_id]
+                removed = True
+            else:
+                removed = False
+        if removed:
             self._persist()
-            return True
-        return False
+        return removed
 
     def get_webhook(self, wh_id: str) -> Optional[WebhookConfig]:
         return self._webhooks.get(wh_id)

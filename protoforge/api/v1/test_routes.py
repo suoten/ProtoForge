@@ -1,4 +1,5 @@
 import logging
+import threading  # FIXED: 全局变量锁保护需要
 import time
 import uuid
 from typing import Any, Optional
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 _test_runner = None
 _internal_client = None
 _internal_token_exp = 0.0
+_test_globals_lock = threading.Lock()  # FIXED: 添加锁保护，避免并发初始化竞态
 
 _INTERNAL_TOKEN_EXPIRES_IN = 86400  # 24 hours in seconds
 
@@ -22,15 +24,16 @@ _INTERNAL_TOKEN_EXPIRES_IN = 86400  # 24 hours in seconds
 def _get_test_runner():
     global _test_runner
 
-    if _test_runner is None:
-        from protoforge.core.testing import TestRunner
-        _test_runner = TestRunner()
+    with _test_globals_lock:  # FIXED: 添加锁保护，避免并发初始化竞态
+        if _test_runner is None:
+            from protoforge.core.testing import TestRunner
+            _test_runner = TestRunner()
 
-        try:
-            db = _get_database()
-            _test_runner.set_database(db)
-        except RuntimeError as e:
-            logger.debug("Test runner database not available: %s", e)
+            try:
+                db = _get_database()
+                _test_runner.set_database(db)
+            except RuntimeError as e:
+                logger.debug("Test runner database not available: %s", e)
     return _test_runner
 
 

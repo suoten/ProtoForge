@@ -6,7 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends  # FIXED: 导入Depends用于/metrics认证
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
@@ -383,7 +383,7 @@ def create_app() -> FastAPI:
     from protoforge.core.audit import audit_middleware
     app.middleware("http")(audit_middleware)
 
-    from protoforge.api.v1.auth import auth_middleware
+    from protoforge.api.v1.auth import auth_middleware, require_viewer  # FIXED: 导入require_viewer用于/metrics认证
     app.middleware("http")(auth_middleware)
 
     cors_origins_raw = settings.cors_origins or ""
@@ -443,7 +443,7 @@ def create_app() -> FastAPI:
 
     @app.get("/metrics", response_class=PlainTextResponse)
     @app.get("/api/v1/metrics", response_class=PlainTextResponse)
-    async def prometheus_metrics():
+    async def prometheus_metrics(_user: dict = Depends(require_viewer)):  # FIXED: 添加认证保护，防止内部指标泄露
         from protoforge.core.metrics import metrics
         try:
             engine = get_engine()

@@ -66,7 +66,8 @@ def main():
     args = parser.parse_args()
 
     if args.command == "version":
-        print("ProtoForge v0.1.0 - IoT Protocol Simulation & Testing Platform")
+        from protoforge import __version__  # FIXED: 引用__version__单一来源，避免硬编码版本号
+        print(f"ProtoForge v{__version__} - IoT Protocol Simulation & Testing Platform")
         return
 
     if args.command == "init":
@@ -112,7 +113,12 @@ def _stop_command():
     if not pid_file.exists():
         print("! No background daemon found (PID file not found)")
         return
-    pid = int(pid_file.read_text().strip())
+    try:  # FIXED: 添加异常保护，PID文件内容可能损坏
+        pid = int(pid_file.read_text().strip())
+    except (ValueError, OSError) as e:
+        print(f"! Invalid PID file: {e}")
+        pid_file.unlink(missing_ok=True)
+        return
     try:
         os.kill(pid, 15)  # SIGTERM
         print(f"+ Sent SIGTERM to daemon (PID {pid})")
@@ -156,6 +162,10 @@ def _daemonize():
     os.dup2(si.fileno(), sys.stdin.fileno())
     os.dup2(so.fileno(), sys.stdout.fileno())
     os.dup2(se.fileno(), sys.stderr.fileno())
+
+    si.close()  # FIXED: 关闭原始文件描述符，避免泄漏
+    so.close()
+    se.close()
 
     # Ignore SIGHUP
     signal.signal(signal.SIGHUP, signal.SIG_IGN)

@@ -7,7 +7,7 @@ from enum import IntEnum
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
 from protoforge.protocols.behavior import DynamicValueGenerator
 from protoforge.core.messages import msg, desc
 
@@ -99,14 +99,9 @@ class ApplicationRelation:
         }
 
 
-class ProfinetDeviceBehavior(DeviceBehavior):
+class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDeviceBehavior，复用_points/_values/_generators初始化
     def __init__(self, points: list[PointConfig]):
-        self._points = {p.name: p for p in points}
-        self._values: dict[str, Any] = {}
-        self._generators: dict[str, DynamicValueGenerator] = {}
-        for p in points:
-            self._values[p.name] = p.fixed_value if p.fixed_value is not None else 0
-            self._generators[p.name] = DynamicValueGenerator(p)
+        super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -188,6 +183,7 @@ class ProfinetDeviceBehavior(DeviceBehavior):
 class ProfinetServer(ProtocolServer):
     protocol_name = "profinet"
     protocol_display_name = "PROFINET IO"
+    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
 
     def __init__(self):
         super().__init__()
@@ -301,16 +297,16 @@ class ProfinetServer(ProtocolServer):
                         detail={"peer": str(addr)})
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(2), timeout=30)
+                header = await asyncio.wait_for(reader.readexactly(2), timeout=_READ_TIMEOUT)
                 body_len = struct.unpack(">H", header)[0]
-                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=30) if body_len > 0 else b""
+                data = await asyncio.wait_for(reader.readexactly(body_len), timeout=_READ_TIMEOUT) if body_len > 0 else b""
                 response = self._process_tunnel_message(data, addr, writer)
                 if response:
                     resp_len = struct.pack(">H", len(response))
                     writer.write(resp_len + response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
             self._connections.discard(writer)
             for ar_id in list(self._active_ars.keys()):

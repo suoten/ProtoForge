@@ -141,9 +141,9 @@ export const directionTagTypeMap = {
   recv: 'success', send: 'info', inbound: 'info', outbound: 'success',
 }
 
-export const directionLabelMap = {
-  in: '\u2190Recv', out: 'Send\u2192', system: 'System', write: '\u270eWrite',
-  recv: '\u2190Recv', send: 'Send\u2192', inbound: '\u2190In', outbound: 'Out\u2192',
+export const directionLabelMap = {  // FIXED: 硬编码英文标签改为i18n key
+  in: 'logs.directionLabels.in', out: 'logs.directionLabels.out', system: 'logs.directionLabels.system', write: 'logs.directionLabels.write',
+  recv: 'logs.directionLabels.recv', send: 'logs.directionLabels.send', inbound: 'logs.directionLabels.inbound', outbound: 'logs.directionLabels.outbound',
 }
 
 export function getProtocolLabel(name) {
@@ -177,24 +177,24 @@ export const defaultProtocol = 'modbus_tcp'
 
 export const PASSWORD_MASK = '***'
 
-export const dataTypeOptions = [
-  { label: 'BOOL', value: 'bool' },
-  { label: 'INT16', value: 'int16' },
-  { label: 'INT32', value: 'int32' },
-  { label: 'UINT16', value: 'uint16' },
-  { label: 'UINT32', value: 'uint32' },
-  { label: 'FLOAT32', value: 'float32' },
-  { label: 'FLOAT64', value: 'float64' },
-  { label: 'STRING', value: 'string' },
+export const dataTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
+  { label: 'points.dataTypes.bool', value: 'bool' },
+  { label: 'points.dataTypes.int16', value: 'int16' },
+  { label: 'points.dataTypes.int32', value: 'int32' },
+  { label: 'points.dataTypes.uint16', value: 'uint16' },
+  { label: 'points.dataTypes.uint32', value: 'uint32' },
+  { label: 'points.dataTypes.float32', value: 'float32' },
+  { label: 'points.dataTypes.float64', value: 'float64' },
+  { label: 'points.dataTypes.string', value: 'string' },
 ]
 
-export const generatorTypeOptions = [
-  { label: 'Fixed', value: 'fixed' },
-  { label: 'Random', value: 'random' },
-  { label: 'Sine', value: 'sine' },
-  { label: 'Triangle', value: 'triangle' },
-  { label: 'Sawtooth', value: 'sawtooth' },
-  { label: 'Square', value: 'square' },
-  { label: 'Increment', value: 'increment' },
-  { label: 'Script', value: 'script' },
+export const generatorTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
+  { label: 'points.generatorTypes.fixed', value: 'fixed' },
+  { label: 'points.generatorTypes.random', value: 'random' },
+  { label: 'points.generatorTypes.sine', value: 'sine' },
+  { label: 'points.generatorTypes.triangle', value: 'triangle' },
+  { label: 'points.generatorTypes.sawtooth', value: 'sawtooth' },
+  { label: 'points.generatorTypes.square', value: 'square' },
+  { label: 'points.generatorTypes.increment', value: 'increment' },
+  { label: 'points.generatorTypes.script', value: 'script' },
 ]
