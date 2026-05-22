@@ -3,10 +3,10 @@ chcp 65001 >nul
 title ProtoForge 一键安装
 
 echo.
-echo   ╔══════════════════════════════════════════════════╗
-echo   ║        ProtoForge 一键安装脚本 (Windows)         ║
-echo   ║         物联网协议仿真与测试平台                    ║
-echo   ╚══════════════════════════════════════════════════╝
+echo   +--------------------------------------------------+
+echo   ^|        ProtoForge 一键安装脚本 (Windows)         ^|
+echo   ^|         物联网协议仿真与测试平台                    ^|
+echo   +--------------------------------------------------+
 echo.
 echo   [提示] 如果下载很慢，按 Ctrl+C 退出，然后：
 echo   pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
@@ -137,21 +137,21 @@ if not exist .env (
 )
 
 echo.
-echo   ╔══════════════════════════════════════════════════╗
-echo   ║                                                  ║
-echo   ║   安装成功！现在可以启动 ProtoForge 了：           ║
-echo   ║                                                  ║
-echo   ║   方式一：演示模式（推荐新手）                      ║
-echo   ║     .\venv\Scripts\python.exe -m protoforge.cli demo ║
-echo   ║     浏览器打开 http://localhost:8000               ║
-echo   ║     登录：admin / admin                           ║
-echo   ║                                                  ║
-echo   ║   方式二：普通模式                                 ║
-echo   ║     .\venv\Scripts\python.exe -m protoforge.cli run  ║
-echo   ║     浏览器打开 http://localhost:8000               ║
-echo   ║     登录：admin / admin                           ║
-echo   ║                                                  ║
-echo   ╚══════════════════════════════════════════════════╝
+echo   +--------------------------------------------------+
+echo   ^|                                                  ^|
+echo   ^|   安装成功！现在可以启动 ProtoForge 了：           ^|
+echo   ^|                                                  ^|
+echo   ^|   方式一：演示模式（推荐新手）                      ^|
+echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli demo ^|
+echo   ^|     浏览器打开 http://localhost:8000               ^|
+echo   ^|     登录：admin / admin                           ^|
+echo   ^|                                                  ^|
+echo   ^|   方式二：普通模式                                 ^|
+echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli run  ^|
+echo   ^|     浏览器打开 http://localhost:8000               ^|
+echo   ^|     登录：admin / admin                           ^|
+echo   ^|                                                  ^|
+echo   +--------------------------------------------------+
 echo.
 echo   提示：窗口关闭后，如需重新查看上面的命令，打开 README.md 找"方式二"。
 echo.

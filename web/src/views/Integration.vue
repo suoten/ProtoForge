@@ -29,10 +29,10 @@
               </n-form>
               <n-alert v-if="connResult" :type="connResult.ok ? 'success' : 'error'" :bordered="false" style="margin-top:4px">
                 <template v-if="connResult.ok">
-                  {{ t('integration.connectionSuccess') }} {{ connResult.version || t('common.unknown') }}{{ t('common.separator') }}{{ t('integration.deviceCount') }}: {{ connResult.devices || 0 }}
+                  {{ t('integration.connectionSuccess', { version: connResult.version || t('common.unknown'), count: connResult.devices ?? 0 }) }}
                 </template>
                 <template v-else>
-                  {{ t('integration.connectionFailed') }}: {{ connResult.error }}
+                  {{ t('integration.connectionFailed', { error: connResult.error }) }}
                 </template>
               </n-alert>
             </n-space>

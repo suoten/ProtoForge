@@ -74,15 +74,17 @@ class OpcUaClientProtocol(ProtocolServer):
 
         try:
             await self._connect()
-            self._status = ProtocolStatus.RUNNING
             logger.info("OPC-UA Client connected to %s (timeout=%.1fs, session_timeout=%dms)",
                         self._endpoint, self._request_timeout, self._session_timeout)
             self._log_debug("system", "client_connect",
                             f"OPC-UA client connected: {self._endpoint}")
         except Exception as e:
             self._connected = False
-            self._status = ProtocolStatus.STARTING
-            logger.warning("OPC-UA Client initial connect failed: %s, will retry in background", e)
+            self._client = None
+            logger.warning("OPC-UA Client initial connect failed: %s, will retry in background (interval=%.1fs)", e, self._reconnect_interval)
+
+        # Protocol is RUNNING once start() completes (reconnect loop handles connection)
+        self._status = ProtocolStatus.RUNNING
 
         # Always start reconnect loop - handles both keepalive and initial connect retry
         self._reconnect_task = asyncio.create_task(self._reconnect_loop())
@@ -113,9 +115,8 @@ class OpcUaClientProtocol(ProtocolServer):
                             await self._client.uaclient.keepalive()
                     continue
                 except Exception as ka_err:
-                    logger.debug("OPC-UA keepalive error: %s", ka_err)
+                    logger.warning("OPC-UA keepalive error: %s, will reconnect", ka_err)
                     self._connected = False
-                    self._status = ProtocolStatus.STARTING
             # Check max reconnect attempts
             if self._max_reconnect_attempts > 0 and attempts >= self._max_reconnect_attempts:
                 logger.error("OPC-UA Client max reconnect attempts (%d) reached, giving up",
@@ -127,7 +128,9 @@ class OpcUaClientProtocol(ProtocolServer):
             log_level = logger.info if attempts <= 1 else logger.debug
             log_level("OPC-UA Client attempting reconnect #%d to %s", attempts, self._endpoint)
             try:
-                if self._client:
+                # Only disconnect if previously connected to avoid
+                # asyncua "disconnect_socket was called but transport is None" warnings
+                if self._client and self._connected:
                     try:
                         if ASYNCUA_SYNC:
                             self._client.disconnect()
@@ -135,14 +138,13 @@ class OpcUaClientProtocol(ProtocolServer):
                             await self._client.disconnect()
                     except Exception as disc_err:
                         logger.debug("OPC-UA disconnect error during reconnect: %s", disc_err)
-                    self._client = None
+                self._client = None
                 await self._connect()
-                self._status = ProtocolStatus.RUNNING
                 attempts = 0
                 logger.info("OPC-UA Client connected to %s", self._endpoint)
             except Exception as e:
                 self._connected = False
-                self._status = ProtocolStatus.STARTING
+                self._client = None
                 logger.debug("OPC-UA Client reconnect failed (attempt %d): %s", attempts, e)
 
     async def stop(self) -> None:
@@ -155,6 +157,7 @@ class OpcUaClientProtocol(ProtocolServer):
                 pass
             self._reconnect_task = None
         try:
+            was_connected = self._connected
             self._connected = False
             if self._client:
                 try:
@@ -163,11 +166,12 @@ class OpcUaClientProtocol(ProtocolServer):
                     else:
                         await self._client.disconnect()
                 except Exception as e:
-                    logger.warning("OPC-UA Client disconnect error: %s", e)
+                    # Silently ignore disconnect errors (e.g. "transport is None" when never connected)
+                    logger.debug("OPC-UA Client disconnect cleanup: %s", e)
                 self._client = None
         finally:
             self._status = ProtocolStatus.STOPPED
-            logger.info("OPC-UA Client disconnected")
+            logger.info("OPC-UA Client stopped (was_connected=%s)", was_connected)
             self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
@@ -254,7 +258,6 @@ class OpcUaClientProtocol(ProtocolServer):
     def _mark_disconnected(self) -> None:
         if self._connected:
             self._connected = False
-            self._status = ProtocolStatus.ERROR
             logger.warning("OPC-UA Client connection lost, will attempt auto-reconnect")
 
     def get_config_schema(self) -> dict[str, Any]:
