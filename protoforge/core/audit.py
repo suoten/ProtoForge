@@ -113,8 +113,16 @@ class AuditLogger:
         active_users = list(set(e.username for e in self._entries)) if self._entries else []
         last_action = _normalize_action(self._entries[-1].action) if self._entries else ""
         last_timestamp = self._entries[-1].timestamp if self._entries else 0
+        # 优先从数据库获取真实总数，避免内存条目不完整导致统计不准确
+        total_entries = len(self._entries)
+        if self._database:
+            try:
+                _, db_total = await self._database.query_audit_entries(limit=1, offset=0)
+                total_entries = db_total
+            except Exception:
+                pass
         return {
-            "total_entries": len(self._entries),
+            "total_entries": total_entries,
             "today_count": today_count,
             "active_users": active_users,
             "last_action": last_action,
