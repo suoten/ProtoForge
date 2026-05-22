@@ -149,7 +149,7 @@
               <span class="pf-section-title" style="font-size:16px">{{ t('dashboard.deviceOverview') }}</span>
             </n-space>
           </template>
-          <n-data-table :columns="deviceColumns" :data="devices.slice(0, 10)" :bordered="false" size="small"
+          <n-data-table :columns="deviceColumns" :data="devices" :bordered="false" size="small"
             :pagination="devices.length > 10 ? { pageSize: 10 } : false" />
         </n-card>
 

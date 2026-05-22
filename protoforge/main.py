@@ -236,6 +236,15 @@ async def lifespan(app: FastAPI):
 
     _deduplicate_file_handlers()
     logging.getLogger("asyncua").setLevel(logging.WARNING)
+    # Suppress noisy asyncua internal warnings/errors that flood the log
+    logging.getLogger("asyncua.client.ua_client.UASocketProtocol").setLevel(logging.CRITICAL)
+    logging.getLogger("asyncua.client.ua_client.UaClient").setLevel(logging.CRITICAL)
+    logging.getLogger("asyncua.client.client").setLevel(logging.CRITICAL)
+    logging.getLogger("asyncua.server.binary_server_asyncio").setLevel(logging.CRITICAL)
+    # Suppress noisy amqtt broker client disconnection logs
+    logging.getLogger("amqtt.broker").setLevel(logging.CRITICAL)
+    # Suppress noisy transitions library state machine logs
+    logging.getLogger("transitions.core").setLevel(logging.WARNING)
 
     if restore_errors:
         logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))

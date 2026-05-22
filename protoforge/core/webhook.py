@@ -248,6 +248,9 @@ class WebhookManager:
             raise RuntimeError(f"Webhook network error: {e}") from e
         if resp.status_code >= 400:
             webhook.error_count += 1
+            # Client errors (4xx) like 405 indicate misconfiguration - auto-disable quickly
+            if 400 <= resp.status_code < 500:
+                raise RuntimeError(f"Webhook client error HTTP {resp.status_code} (likely misconfigured)")
             raise RuntimeError(f"Webhook returned HTTP {resp.status_code}")
         webhook.trigger_count += 1
         webhook.last_triggered = time.time()
@@ -269,9 +272,12 @@ class WebhookManager:
             if timestamp - webhook.last_triggered < self._rate_limit_seconds:
                 continue
 
-            if webhook.error_count >= self._auto_disable_threshold:
+            # Auto-disable threshold: use lower threshold for client errors (4xx = misconfiguration)
+            effective_threshold = self._auto_disable_threshold
+            if webhook.error_count >= effective_threshold:
                 webhook.enabled = False
                 logger.warning("Webhook %s auto-disabled due to %d errors", webhook.id, webhook.error_count)
+                self._persist()
                 continue
 
             body = {
@@ -283,7 +289,14 @@ class WebhookManager:
             try:
                 await self._send_single(webhook, body)
             except Exception as e:
-                logger.warning("Webhook %s dispatch error: %s", webhook.id, e)
+                err_str = str(e)
+                # Client errors (4xx) mean misconfiguration - auto-disable after just 3 failures
+                if "client error" in err_str.lower() and webhook.error_count >= 3:
+                    webhook.enabled = False
+                    logger.warning("Webhook %s auto-disabled: client error (4xx) indicates misconfiguration: %s", webhook.id, e)
+                    self._persist()
+                else:
+                    logger.warning("Webhook %s dispatch error: %s", webhook.id, e)
 
     def get_stats(self) -> dict[str, Any]:
         total_success = sum(w.trigger_count for w in self._webhooks.values())

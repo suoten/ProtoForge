@@ -222,12 +222,12 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
             logger_banner_msg = f"admin / ********"
         w = 50
         print()
-        print("╔" + "═" * w + "╗")
-        print("║  ProtoForge is starting" + " " * (w - 25) + "║")
-        print("║  Access:  http://localhost:" + port_str + " " * max(0, w - 28 - len(port_str)) + "║")
-        print("║  API Docs: http://localhost:" + port_str + "/docs" + " " * max(0, w - 34 - len(port_str)) + "║")
-        print("║  Admin:   " + logger_banner_msg + " " * max(0, w - 12 - len(logger_banner_msg)) + "║")
-        print("╚" + "═" * w + "╝")
+        print("+" + "-" * w + "+")
+        print("|  ProtoForge is starting" + " " * (w - 25) + "|")
+        print("|  Access:  http://localhost:" + port_str + " " * max(0, w - 28 - len(port_str)) + "|")
+        print("|  API Docs: http://localhost:" + port_str + "/docs" + " " * max(0, w - 34 - len(port_str)) + "|")
+        print("|  Admin:   " + logger_banner_msg + " " * max(0, w - 12 - len(logger_banner_msg)) + "|")
+        print("+" + "-" * w + "+")
         print()
 
     if demo_mode:
@@ -239,17 +239,17 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         os.environ.setdefault("PROTOFORGE_NO_AUTH", "0")
         w = 50
         print()
-        print("╔" + "═" * w + "╗")
-        print("║  ProtoForge Demo Mode" + " " * (w - 22) + "║")
-        print("║" + " " * w + "║")
-        print("║  + Auto-create sample devices and scenarios" + " " * max(0, w - 46) + "║")
-        print("║  + Auto-start all protocol services" + " " * max(0, w - 39) + "║")
-        print("║  + Login: admin / " + demo_pw + " " * max(0, w - 21 - len(demo_pw)) + "║")
-        print("║" + " " * w + "║")
+        print("+" + "-" * w + "+")
+        print("|  ProtoForge Demo Mode" + " " * (w - 22) + "|")
+        print("|" + " " * w + "|")
+        print("|  + Auto-create sample devices and scenarios" + " " * max(0, w - 46) + "|")
+        print("|  + Auto-start all protocol services" + " " * max(0, w - 39) + "|")
+        print("|  + Login: admin / " + demo_pw + " " * max(0, w - 21 - len(demo_pw)) + "|")
+        print("|" + " " * w + "|")
         port_str = str(port)
         access_content = f"Access URL: http://localhost:{port_str}"
-        print("║  " + access_content + " " * max(0, w - 2 - len(access_content)) + "║")
-        print("╚" + "═" * w + "╝")
+        print("|  " + access_content + " " * max(0, w - 2 - len(access_content)) + "|")
+        print("+" + "-" * w + "+")
         print()
 
     # Daemon mode: double-fork and detach from terminal

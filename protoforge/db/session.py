@@ -49,6 +49,34 @@ class Database:
     async def _connect_sqlite(self) -> None:
         try:
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+            # Check database integrity before connecting
+            try:
+                check_conn = await aiosqlite.connect(self._db_path)
+                try:
+                    cursor = await check_conn.execute("PRAGMA integrity_check")
+                    row = await cursor.fetchone()
+                    if row and row[0] != "ok":
+                        logger.warning("SQLite database integrity check failed: %s, attempting rebuild", row[0])
+                        await check_conn.close()
+                        # Backup and remove corrupted database
+                        import shutil
+                        backup_path = self._db_path + ".corrupted"
+                        try:
+                            shutil.move(self._db_path, backup_path)
+                            logger.warning("Corrupted database moved to %s, will recreate", backup_path)
+                        except OSError as move_err:
+                            logger.error("Failed to backup corrupted database: %s", move_err)
+                    else:
+                        await check_conn.close()
+                except Exception as check_err:
+                    logger.warning("Database integrity check error: %s, will attempt reconnect", check_err)
+                    try:
+                        await check_conn.close()
+                    except Exception:
+                        pass
+            except Exception as pre_check_err:
+                logger.debug("Pre-connect integrity check skipped: %s", pre_check_err)
+
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")

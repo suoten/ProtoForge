@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import uuid
 from typing import Any
 from urllib.parse import quote
@@ -21,6 +22,49 @@ logger = logging.getLogger(__name__)
 PROTOCOL_MAP: dict[str, str] = {
     k: v for k, v in PROTOCOL_MAP_BASE.items() if v is not None
 }
+
+EDGELITE_DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$")
+
+
+def _normalize_device_id(device_id: str) -> str:
+    """Convert device_id to EdgeLite-compatible format.
+
+    EdgeLite requires device_id to match: ^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$
+    - lowercase only
+    - start and end with [a-z0-9]
+    - only [a-z0-9_-] in between
+    - length 2~64
+    """
+    if not device_id:
+        return "device-0"
+
+    # Lowercase
+    result = device_id.lower()
+
+    # Replace invalid chars with hyphens
+    result = re.sub(r"[^a-z0-9_-]", "-", result)
+
+    # Remove consecutive hyphens/underscores
+    result = re.sub(r"[-_]{2,}", "-", result)
+
+    # Strip leading/trailing non-alphanumeric
+    result = result.strip("-_")
+
+    # Ensure at least 2 chars
+    if len(result) < 2:
+        result = result + "0"
+
+    # Truncate to 64 chars, then strip trailing non-alphanumeric
+    if len(result) > 64:
+        result = result[:64]
+        result = result.rstrip("-_")
+
+    # After truncation, ensure still at least 2 chars
+    if len(result) < 2:
+        result = result + "0"
+
+    return result
+
 
 EDGELITE_PUSH_FIELDS = [
     {"key": "edgelite_enabled", "label": "启用EdgeLite联调", "type": "boolean", "default": False,
@@ -339,8 +383,13 @@ def convert_device_to_edgelite(
     driver_config = _build_driver_config(protocol, config, protoforge_host, el_config)
     edgelite_points = _build_points(points_data, data_type_mapper)
 
+    raw_device_id = getattr(device, "id", "")
+    normalized_id = _normalize_device_id(raw_device_id)
+    if raw_device_id != normalized_id:
+        logger.info("Device ID normalized for EdgeLite: %s -> %s", raw_device_id, normalized_id)
+
     return {
-        "device_id": getattr(device, "id", ""),
+        "device_id": normalized_id,
         "name": getattr(device, "name", ""),
         "protocol": edgelite_protocol,
         "config": driver_config,
@@ -496,7 +545,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
-    device_id = getattr(device, "id", "")
+    device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
         try:
             token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
@@ -527,7 +576,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
-    device_id = getattr(device, "id", "")
+    device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
@@ -572,7 +621,7 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
-    device_id = getattr(device, "id", "")
+    device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
         try:
             token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
@@ -775,7 +824,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             "suggestion": "Please configure the EdgeLite gateway URL in System Settings, or set edgelite_url in the device protocol config",
         }
 
-    device_id = getattr(device, "id", "")
+    device_id = _normalize_device_id(getattr(device, "id", ""))
     result: dict[str, Any] = {"device_id": device_id, "steps": {}}
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
