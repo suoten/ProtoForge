@@ -76,9 +76,24 @@ class WebhookManager:
             cls._PERSIST_FILE = os.path.join(cls._PERSIST_DIR, "webhooks.json")
         return cls._PERSIST_FILE
 
-    def __init__(self, queue_maxsize: int = 5000,
-                 rate_limit_seconds: float = 5.0,
-                 auto_disable_threshold: int = 50):
+    def __init__(self, queue_maxsize: int = 0,
+                 rate_limit_seconds: float = 0.0,
+                 auto_disable_threshold: int = 0):
+        # FIXED: P4 - Q5 魔法数字→常量，从 settings 获取默认值而非硬编码
+        if queue_maxsize <= 0 or rate_limit_seconds <= 0 or auto_disable_threshold <= 0:
+            try:
+                from protoforge.config import get_settings
+                settings = get_settings()
+                if queue_maxsize <= 0:
+                    queue_maxsize = settings.webhook_queue_size
+                if rate_limit_seconds <= 0:
+                    rate_limit_seconds = settings.webhook_rate_limit_seconds
+                if auto_disable_threshold <= 0:
+                    auto_disable_threshold = settings.webhook_auto_disable_threshold
+            except Exception:
+                queue_maxsize = queue_maxsize or 5000
+                rate_limit_seconds = rate_limit_seconds or 5.0
+                auto_disable_threshold = auto_disable_threshold or 50
         self._webhooks: dict[str, WebhookConfig] = {}
         self._client: Optional[httpx.AsyncClient] = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)

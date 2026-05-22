@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import time
 from typing import Any, Optional
 
@@ -9,8 +10,11 @@ import httpx
 
 
 class ProtoForgeClient:
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 30.0,
+    def __init__(self, base_url: str = "", timeout: float = 30.0,
                  retries: int = 0, retry_delay: float = 1.0):
+        # FIXED: P4 - Q6 写死配置修复，base_url 默认为空，连接时检查
+        if not base_url:
+            base_url = os.environ.get("PROTOFORGE_SDK_URL", "http://localhost:8000")
         self._base_url = base_url.rstrip("/")
         self._api_url = f"{self._base_url}/api/v1"
         self._retries = retries
@@ -475,8 +479,11 @@ class ProtoForgeClient:
 
 
 class AsyncProtoForgeClient:
-    def __init__(self, base_url: str = "http://localhost:8000", timeout: float = 30.0,
+    def __init__(self, base_url: str = "", timeout: float = 30.0,
                  retries: int = 0, retry_delay: float = 1.0):
+        # FIXED: P4 - Q6 写死配置修复，base_url 默认为空，连接时检查
+        if not base_url:
+            base_url = os.environ.get("PROTOFORGE_SDK_URL", "http://localhost:8000")
         self._base_url = base_url.rstrip("/")
         self._api_url = f"{self._base_url}/api/v1"
         self._retries = retries

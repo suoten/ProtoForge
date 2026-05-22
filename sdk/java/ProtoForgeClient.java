@@ -130,11 +130,13 @@ public class ProtoForgeClient {
         return post("/api/v1/devices", config);
     }
 
-    public JsonNode quickCreateDevice(String templateId, String name) throws Exception {
+    public JsonNode quickCreateDevice(String templateId, String name, String deviceId, Map<String, Object> protocolConfig) throws Exception {
+        // FIXED: P1 - Q17: 后端 POST /devices/quick-create 接受 protocol_config 参数；id 不应始终等于 name
         Map<String, Object> body = new HashMap<>();
         body.put("template_id", templateId);
         body.put("name", name);
-        body.put("id", name);
+        body.put("id", deviceId != null && !deviceId.isEmpty() ? deviceId : name);
+        body.put("protocol_config", protocolConfig != null ? protocolConfig : new HashMap<>());
         return post("/api/v1/devices/quick-create", body);
     }
 
@@ -218,8 +220,11 @@ public class ProtoForgeClient {
         return get("/api/v1/templates/tags");
     }
 
-    public JsonNode instantiateTemplate(String templateId, String deviceId, String deviceName) throws Exception {
-        return post("/api/v1/templates/" + templateId + "/instantiate?device_id=" + deviceId + "&device_name=" + deviceName, new HashMap<>());
+    public JsonNode instantiateTemplate(String templateId, String deviceId, String deviceName, Map<String, Object> protocolConfig) throws Exception {
+        // FIXED: S4 - wrap protocolConfig in {"protocol_config": ...} to match backend body.get("protocol_config")
+        Map<String, Object> body = new HashMap<>();
+        body.put("protocol_config", protocolConfig != null ? protocolConfig : new HashMap<>());
+        return post("/api/v1/templates/" + templateId + "/instantiate?device_id=" + deviceId + "&device_name=" + deviceName, body);
     }
 
     public JsonNode listScenarios() throws Exception {
@@ -307,7 +312,10 @@ public class ProtoForgeClient {
     }
 
     public JsonNode runTests(List<Map<String, Object>> testCases) throws Exception {
-        return post("/api/v1/tests/run", testCases);
+        // FIXED: P1 - W19-21: 后端 POST /tests/run 期望 {test_cases: [...]} 而非裸数组
+        Map<String, Object> body = new HashMap<>();
+        body.put("test_cases", testCases);
+        return post("/api/v1/tests/run", body);
     }
 
     public JsonNode runTestCase(String caseId) throws Exception {
@@ -452,8 +460,14 @@ public class ProtoForgeClient {
         return get("/api/v1/integration/protocols");
     }
 
-    public JsonNode validateDeviceCompatibility(Map<String, Object> data) throws Exception {
-        return post("/api/v1/integration/validate", data);
+    public JsonNode validateDeviceCompatibility(String deviceId, String protocol, List<Map<String, Object>> points, Map<String, Object> driverConfig) throws Exception {
+        // FIXED: P1 - W26: 后端 integration.py 读取 device_id, protocol, points, driver_config，不能只发 device_id
+        Map<String, Object> body = new HashMap<>();
+        body.put("device_id", deviceId);
+        body.put("protocol", protocol != null ? protocol : "");
+        body.put("points", points != null ? points : new ArrayList<>());
+        body.put("driver_config", driverConfig != null ? driverConfig : new HashMap<>());
+        return post("/api/v1/integration/validate", body);
     }
 
     public JsonNode batchPush(List<String> deviceIds) throws Exception {

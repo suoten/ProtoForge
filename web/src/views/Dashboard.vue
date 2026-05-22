@@ -121,14 +121,14 @@
               {{ t('settings.database') }}: <n-tag :type="healthInfo.database ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.database ? t('common.running') : t('common.abnormal') }}</n-tag>
             </n-text>
             <n-text depth="3" style="font-size:12px">
-              Engine: <n-tag :type="healthInfo.engine ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.engine ? t('common.running') : t('common.abnormal') }}</n-tag>
+              {{ t('dashboard.engine') }}: <n-tag :type="healthInfo.engine ? 'success' : 'error'" size="tiny" :bordered="false">{{ healthInfo.engine ? t('common.running') : t('common.abnormal') }}</n-tag>
             </n-text>
             <n-text depth="3" style="font-size:12px" v-if="healthInfo.protocols">
               {{ t('common.protocol') }}: {{ healthInfo.protocols.running || 0 }}/{{ healthInfo.protocols.total || 0 }} {{ t('common.running') }}
             </n-text>
             <n-button size="tiny" quaternary @click="openMetrics">
               <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/></svg></template>
-              Prometheus
+              {{ t('dashboard.prometheus') }}
             </n-button>
           </n-space>
         </n-card>

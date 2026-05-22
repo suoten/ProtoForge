@@ -419,7 +419,7 @@ class OpcDaServer(ProtocolServer):
         behavior = OpcDaDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -438,7 +438,7 @@ class OpcDaServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         self._device_params.pop(device_id, None)
         await self._clear_default_device_async(device_id)
         logger.info("OPC-DA device removed: %s", device_id)

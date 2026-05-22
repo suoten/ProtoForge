@@ -415,8 +415,13 @@ class Database:
             async with self._pg_pool.acquire() as conn:
                 await conn.execute(sql, *params)
         else:
-            await self._db.execute(sql, params)
-            await self._db.commit()
+            # FIXED: W4 - SQLite 分支 commit 失败时 rollback 保护
+            try:
+                await self._db.execute(sql, params)
+                await self._db.commit()
+            except Exception:
+                await self._db.rollback()
+                raise
 
     async def _fetchone(self, sql: str, params: tuple = ()) -> Optional[dict]:
         if self._is_postgres:
@@ -991,21 +996,31 @@ class Database:
             "failed": 0, "errors": 0, "skipped": 0, "created_at": 0,
             "updated_at": 0, "login_attempts": 0, "locked_until": 0,
         }
-        for table, columns in table_columns.items():
-            rows = data.get(table, [])
-            count = 0
-            for row in rows:
-                try:
-                    values = []
-                    for c in columns:
-                        v = row.get(c)
-                        if v is None or v == "":
-                            v = numeric_defaults.get(c, "")
-                        values.append(v)
-                    sql = self._upsert_sql(table, columns)
-                    await self._execute(sql, tuple(values))
-                    count += 1
-                except Exception as e:
-                    logger.debug("Failed to import row into %s: %s", table, e)
-            restored[table] = count
+        # FIXED: W5 - import_all 添加事务保护，失败时回滚已导入行
+        if not self._is_postgres:
+            await self._db.execute("BEGIN TRANSACTION")
+        try:
+            for table, columns in table_columns.items():
+                rows = data.get(table, [])
+                count = 0
+                for row in rows:
+                    try:
+                        values = []
+                        for c in columns:
+                            v = row.get(c)
+                            if v is None or v == "":
+                                v = numeric_defaults.get(c, "")
+                            values.append(v)
+                        sql = self._upsert_sql(table, columns)
+                        await self._execute(sql, tuple(values))
+                        count += 1
+                    except Exception as e:
+                        logger.debug("Failed to import row into %s: %s", table, e)
+                restored[table] = count
+            if not self._is_postgres:
+                await self._db.commit()
+        except Exception:
+            if not self._is_postgres:
+                await self._db.rollback()
+            raise
         return restored

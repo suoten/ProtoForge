@@ -159,7 +159,7 @@ class MqttBroker(ProtocolServer):
         behavior = MqttDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
         logger.info("MQTT device created: %s", device_config.id)
         self._log_debug("system", "device_create",
@@ -170,7 +170,7 @@ class MqttBroker(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._clear_default_device_async(device_id)
         logger.info("MQTT device removed: %s", device_id)
         self._log_debug("system", "device_remove",

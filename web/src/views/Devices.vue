@@ -417,15 +417,17 @@ const currentViewDeviceInfo = ref(null)
 const togglingIds = ref(new Set())
 const deletingIds = ref(new Set())
 
-const pipelineSteps = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const pipelineSteps = computed(() => [
   { label: t('devices.pipelineAuth'), key: 'auth' },
   { label: t('devices.pipelineRegister'), key: 'register' },
   { label: t('devices.pipelineConnect'), key: 'connect' },
   { label: t('devices.pipelineCollect'), key: 'collect' },
   { label: t('devices.pipelineVerify'), key: 'verify' },
-]
+])
 
-const pipelineComparisonColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const pipelineComparisonColumns = computed(() => [
   { title: t('devices.point'), key: 'point', width: 120 },
   { title: t('devices.protoforgeValue'), key: 'protoforge_value', width: 140 },
   { title: t('devices.edgeliteValue'), key: 'edgelite_value', width: 140 },
@@ -438,7 +440,7 @@ const pipelineComparisonColumns = [
         : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('devices.inconsistent'))
     }
   },
-]
+])
 
 const protocolOptions = computed(() => [
   { label: t('common.all'), value: null },
@@ -492,7 +494,8 @@ async function loadDeviceConfig(protocol) {
   } catch (e) { message.warning(t('devices.loadConfigFailed')); return { fields: [], defaults: {} } }
 }
 
-const columns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const columns = computed(() => [
   { type: 'selection' },
   { title: t('devices.device'), key: 'name', width: 160, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
@@ -531,14 +534,15 @@ const columns = [
       h(NButton, { size: 'tiny', type: 'error', secondary: true, loading: deletingIds.value.has(row.id), onClick: () => confirmDeleteDevice(row) }, () => t('common.delete')),
     ])
   },
-]
+])
 
-const pointColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const pointColumns = computed(() => [
   { title: t('devices.name'), key: 'name', width: 120 },
   { title: t('devices.value'), key: 'value', width: 120 },
   { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? formatDate(row.timestamp) : '-' },
   { title: t('devices.quality'), key: 'quality', width: 80 },
-]
+])
 
 function openQuickCreate() {
   quickStep.value = 1; qcTemplateId.value = null; qcDeviceName.value = ''
@@ -617,9 +621,9 @@ async function batchStart() {
         const res = await api.batchStartDevices(selectedIds.value)
         const ok = res.started || 0
         const fail = res.errors?.length || 0
-        selectedIds.value = []
+        await loadData()
+        selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
         message.success(t('devices.batchStarted', { ok, fail }))
-        await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
       } catch (e) {
         message.error(t('devices.batchStartFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
@@ -639,9 +643,9 @@ async function batchStop() {
         const res = await api.batchStopDevices(selectedIds.value)
         const ok = res.stopped || 0
         const fail = res.errors?.length || 0
-        selectedIds.value = []
+        await loadData()
+        selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
         message.success(t('devices.batchStopped', { ok, fail }))
-        await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
       } catch (e) {
         message.error(t('devices.batchStopFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
@@ -661,9 +665,9 @@ async function batchDelete() {
         const res = await api.batchDeleteDevices(selectedIds.value)
         const ok = res.deleted || 0
         const fail = res.errors?.length || 0
-        selectedIds.value = []
+        await loadData()
+        selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
         message.success(t('devices.batchDeleted', { ok, fail }))
-        await loadData()  // FIXED: await loadData to prevent stale data display
       } catch (e) {
         message.error(t('devices.batchDeleteFailed') + ': ' + (e.response?.data?.detail || e.message))
       } finally { batchLoading.value = false }
@@ -1007,7 +1011,7 @@ async function pushFromPipeline() {
 
 function getPipelineStepStatus(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return 'pending'
-  const key = pipelineSteps[idx].key
+  const key = pipelineSteps.value[idx].key
   if (key === 'verify') {
     const collectOk = pipelineResult.value.steps.collect?.ok
     const hasComparison = pipelineResult.value.data_comparison?.length > 0
@@ -1021,7 +1025,7 @@ function getPipelineStepStatus(idx) {
 
 function getPipelineStepDesc(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return ''
-  const key = pipelineSteps[idx].key
+  const key = pipelineSteps.value[idx].key
   if (key === 'verify') {
     const comp = pipelineResult.value.data_comparison
     if (comp && comp.length > 0) {

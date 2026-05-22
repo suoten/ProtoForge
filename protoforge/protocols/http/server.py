@@ -5,13 +5,13 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import DefaultDeviceBehavior as DeviceBehavior, ProtocolServer, ProtocolStatus
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
 
-class HttpDeviceBehavior(DeviceBehavior):
+class HttpDeviceBehavior(StandardDeviceBehavior):  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
     def __init__(self, points: list[PointConfig]):
         super().__init__(points)
 
@@ -32,11 +32,14 @@ class HttpSimulatorServer(ProtocolServer):
         self._port = 8080
         self._server_task: asyncio.Task | None = None
         self._server_running = False
+        self._cors_origin: str = "*"  # FIXED: P4 - W23 CORS origin 从配置获取，默认 * 仅用于开发
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 8080)
+        # FIXED: P4 - W23 CORS origin 从配置获取，未配置时默认 * 仅用于开发环境
+        self._cors_origin = config.get("cors_origin", "*")
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
@@ -209,9 +212,11 @@ class HttpSimulatorServer(ProtocolServer):
         return self._json_response(404, {"error": f"Point not found: {point_name}"})
 
     def _cors_preflight_response(self) -> bytes:
+        # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *
+        origin = self._cors_origin
         header = (
             "HTTP/1.1 204 No Content\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Origin: {origin}\r\n"
             "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH\r\n"
             "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
             "Access-Control-Max-Age: 86400\r\n"
@@ -223,12 +228,14 @@ class HttpSimulatorServer(ProtocolServer):
     def _json_response(self, status: int, body: dict) -> bytes:
         status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *
+        origin = self._cors_origin
         header = (
             f"HTTP/1.1 {status} {status_text}\r\n"
             f"Content-Type: application/json; charset=utf-8\r\n"
             f"Content-Length: {len(body_bytes)}\r\n"
             f"Connection: keep-alive\r\n"
-            f"Access-Control-Allow-Origin: *\r\n"
+            f"Access-Control-Allow-Origin: {origin}\r\n"
             f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH\r\n"
             f"Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
             f"\r\n"
@@ -239,7 +246,7 @@ class HttpSimulatorServer(ProtocolServer):
         behavior = HttpDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -255,7 +262,7 @@ class HttpSimulatorServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         self._device_prefixes.pop(device_id, None)
         await self._clear_default_device_async(device_id)
         logger.info("HTTP device removed: %s", device_id)
@@ -288,5 +295,6 @@ class HttpSimulatorServer(ProtocolServer):
                 "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},
                 "port": {"type": "integer", "default": 8080, "description": desc("listen_port")},
                 "api_prefix": {"type": "string", "default": "/api", "description": desc("http_api_prefix")},
+                "cors_origin": {"type": "string", "default": "*", "description": "CORS Access-Control-Allow-Origin (use * for dev only)"},  # FIXED: P4 - W23
             },
         }

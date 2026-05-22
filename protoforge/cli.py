@@ -155,17 +155,13 @@ def _daemonize():
     log_file = _get_log_file()
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    si = open(os.devnull, 'r')
-    so = open(str(log_file), 'a')
-    se = open(str(log_file), 'a')
-
-    os.dup2(si.fileno(), sys.stdin.fileno())
-    os.dup2(so.fileno(), sys.stdout.fileno())
-    os.dup2(se.fileno(), sys.stderr.fileno())
-
-    si.close()  # FIXED: 关闭原始文件描述符，避免泄漏
-    so.close()
-    se.close()
+    # FIXED: P4 - W29 使用 with 语句包裹 open()，确保文件描述符关闭
+    with open(os.devnull, 'r') as si, \
+         open(str(log_file), 'a') as so, \
+         open(str(log_file), 'a') as se:
+        os.dup2(si.fileno(), sys.stdin.fileno())
+        os.dup2(so.fileno(), sys.stdout.fileno())
+        os.dup2(se.fileno(), sys.stderr.fileno())
 
     # Ignore SIGHUP
     signal.signal(signal.SIGHUP, signal.SIG_IGN)

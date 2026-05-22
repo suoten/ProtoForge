@@ -13,6 +13,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+# FIXED: P4 - W19 环境变量覆盖 alembic.ini 中的硬编码 SQLite URL
+# 优先使用 PROTOFORGE_DB_PATH 环境变量，支持 PostgreSQL 和 SQLite 两种数据库
+# alembic.ini 中的 sqlalchemy.url 仅为占位默认值，生产环境必须设置环境变量
 db_path = os.environ.get("PROTOFORGE_DB_PATH", "")
 if db_path:
     if db_path.startswith("postgresql"):

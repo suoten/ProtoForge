@@ -682,11 +682,10 @@ class S7Server(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
-        self._device_configs[device_id] = device_config
-
         behavior = S7DeviceBehavior(device_config.points)
-        async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors[device_id] = behavior
+            self._device_configs[device_id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_id)
 
         proto_config = device_config.protocol_config or {}
@@ -716,9 +715,9 @@ class S7Server(ProtocolServer):
         return device_id
 
     async def remove_device(self, device_id: str) -> None:
-        self._device_configs.pop(device_id, None)
-        async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         info = self._device_info.pop(device_id, None)
         if info:
             rack = info.get("rack", 0)

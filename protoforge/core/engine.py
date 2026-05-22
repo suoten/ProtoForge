@@ -54,6 +54,7 @@ class SimulationEngine:
     def __init__(self, event_bus: EventBus | None = None, tick_interval: float = 1.0):
         self._protocol_servers: dict[str, ProtocolServer] = {}
         self._devices: dict[str, DeviceInstance] = {}
+        self._devices_lock = asyncio.Lock()  # FIXED: S7 - add lock for _devices dict concurrent access
         self._scenarios: dict[str, ScenarioConfig] = {}
         self._scenario_instances: dict[str, Scenario] = {}
         self._scenario_status: dict[str, ScenarioStatus] = {}
@@ -200,13 +201,20 @@ class SimulationEngine:
             raise RuntimeError(f"Failed to stop protocol {protocol_name}: {e}") from e
 
     async def create_device(self, config: DeviceConfig, allow_update: bool = False) -> DeviceInfo:
-        if config.id in self._devices:
-            if allow_update:
-                logger.warning("Device %s already exists, updating instead", config.id)
-                return await self.update_device(config.id, config)
-            raise ValueError(f"Device '{config.id}' already exists. Use update_device() to modify it, or delete it first.")
-        instance = DeviceInstance(config, self._generator)
-        self._devices[config.id] = instance
+        async with self._devices_lock:  # FIXED: S7 - protect _devices dict access
+            if config.id in self._devices:
+                if allow_update:
+                    logger.warning("Device %s already exists, updating instead", config.id)
+                    # Release lock before calling update_device which also acquires it
+                else:
+                    raise ValueError(f"Device '{config.id}' already exists. Use update_device() to modify it, or delete it first.")
+            if config.id not in self._devices:
+                instance = DeviceInstance(config, self._generator)
+                self._devices[config.id] = instance
+
+        if allow_update and config.id in self._devices and self._devices[config.id].config != config:
+            # Need to update - release lock first to avoid deadlock with update_device
+            return await self.update_device(config.id, config)
 
         server = self._protocol_servers.get(config.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
@@ -261,7 +269,8 @@ class SimulationEngine:
         return info
 
     async def remove_device(self, device_id: str) -> None:
-        instance = self._devices.pop(device_id, None)
+        async with self._devices_lock:  # FIXED: S7 - protect _devices dict access
+            instance = self._devices.pop(device_id, None)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
 
@@ -695,7 +704,9 @@ class SimulationEngine:
 
     async def _tick_loop(self) -> None:
         while self._running:
-            for instance in list(self._devices.values()):
+            async with self._devices_lock:  # FIXED: S7 - snapshot devices under lock
+                devices_snapshot = list(self._devices.values())
+            for instance in devices_snapshot:
                 try:
                     await instance.tick()
                 except Exception as e:

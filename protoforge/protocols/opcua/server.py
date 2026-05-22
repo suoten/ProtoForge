@@ -230,9 +230,8 @@ class OpcUaServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
+        # FIXED: W10 - 先cancel task再stop server，避免先stop再cancel导致的冲突
         try:
-            if self._server:
-                await self._server.stop()
             if self._server_task:
                 self._server_task.cancel()
                 try:
@@ -241,8 +240,13 @@ class OpcUaServer(ProtocolServer):
                     logger.debug("OPC-UA task cancelled")
                 except Exception as e:
                     logger.warning("OPC-UA server task error: %s", e)
+            if self._server:
+                try:
+                    await self._server.stop()
+                except Exception as e:
+                    logger.warning("OPC-UA server stop error: %s", e)
         except Exception as e:
-            logger.warning("OPC-UA server stop error: %s", e)
+            logger.warning("OPC-UA stop error: %s", e)
         finally:
             self._status = ProtocolStatus.STOPPED
             logger.info("OPC-UA server stopped")
@@ -252,7 +256,7 @@ class OpcUaServer(ProtocolServer):
         behavior = OpcUaDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -271,7 +275,7 @@ class OpcUaServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         self._device_namespaces.pop(device_id, None)
         await self._clear_default_device_async(device_id)
         nodes = self._device_nodes.pop(device_id, None)

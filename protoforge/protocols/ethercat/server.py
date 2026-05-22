@@ -779,7 +779,7 @@ class EtherCATServer(ProtocolServer):
         behavior._config = device_config
         async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -800,7 +800,7 @@ class EtherCATServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:  # FIXED: 添加锁保护，与其余15个协议一致
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._clear_default_device_async(device_id)
         self._recalc_data_sizes()
         logger.info("EtherCAT device removed: %s", device_id)
