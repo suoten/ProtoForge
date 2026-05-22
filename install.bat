@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title ProtoForge 一键安装
+title ProtoForge 一键启动
 
 echo.
 echo   +--------------------------------------------------+
-echo   ^|        ProtoForge 一键安装脚本 (Windows)         ^|
+echo   ^|        ProtoForge 一键安装并启动 (Windows)       ^|
 echo   ^|         物联网协议仿真与测试平台                    ^|
 echo   +--------------------------------------------------+
 echo.
@@ -122,7 +122,7 @@ if %errorlevel% neq 0 (
     cd ..
 )
 
-:: Step 5: 完成
+:: Step 5: 初始化配置
 echo.
 echo [5/5] 初始化配置 ...
 if not exist .env (
@@ -155,21 +155,17 @@ if exist .env (
 echo.
 echo   +--------------------------------------------------+
 echo   ^|                                                  ^|
-echo   ^|   安装成功！现在可以启动 ProtoForge 了：           ^|
+echo   ^|   安装成功！正在启动 ProtoForge ...               ^|
 echo   ^|                                                  ^|
-echo   ^|   方式一：演示模式（推荐新手）                      ^|
-echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli demo ^|
-echo   ^|     浏览器打开 http://localhost:%ADMIN_PORT%       ^|
-echo   ^|     登录：admin / %ADMIN_PW%                      ^|
+echo   ^|   浏览器打开 http://localhost:%ADMIN_PORT%       ^|
+echo   ^|   登录：admin / %ADMIN_PW%                      ^|
 echo   ^|                                                  ^|
-echo   ^|   方式二：普通模式                                 ^|
-echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli run  ^|
-echo   ^|     浏览器打开 http://localhost:%ADMIN_PORT%       ^|
-echo   ^|     登录：admin / %ADMIN_PW%                      ^|
+echo   ^|   按 Ctrl+C 可停止服务                           ^|
 echo   ^|                                                  ^|
 echo   +--------------------------------------------------+
 echo.
-echo   提示：窗口关闭后，如需重新查看上面的命令，打开 README.md 找"方式二"。
+
+:: Auto-start the server (demo mode)
+echo   正在启动服务（演示模式）...
 echo.
-echo   按任意键退出 ...
-pause >nul
+.\venv\Scripts\python.exe -m protoforge.cli demo
