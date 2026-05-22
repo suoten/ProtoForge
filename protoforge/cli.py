@@ -219,7 +219,7 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
             os.environ["PROTOFORGE_ADMIN_PASSWORD"] = admin_pw
             logger_banner_msg = f"admin / {admin_pw} (auto-generated, save this now!)"
         else:
-            logger_banner_msg = f"admin / ********"
+            logger_banner_msg = f"admin / {admin_pw}"
         w = 50
         print()
         print("+" + "-" * w + "+")

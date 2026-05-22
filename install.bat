@@ -136,6 +136,22 @@ if not exist .env (
     echo        配置文件 .env 已存在，跳过
 )
 
+:: Read admin password from .env
+set "ADMIN_PW=admin"
+if exist .env (
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "PROTOFORGE_ADMIN_PASSWORD=" .env') do (
+        set "ADMIN_PW=%%b"
+    )
+)
+
+:: Read port from .env
+set "ADMIN_PORT=8000"
+if exist .env (
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "PROTOFORGE_PORT=" .env') do (
+        set "ADMIN_PORT=%%b"
+    )
+)
+
 echo.
 echo   +--------------------------------------------------+
 echo   ^|                                                  ^|
@@ -143,13 +159,13 @@ echo   ^|   安装成功！现在可以启动 ProtoForge 了：           ^|
 echo   ^|                                                  ^|
 echo   ^|   方式一：演示模式（推荐新手）                      ^|
 echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli demo ^|
-echo   ^|     浏览器打开 http://localhost:8000               ^|
-echo   ^|     登录：admin / admin                           ^|
+echo   ^|     浏览器打开 http://localhost:%ADMIN_PORT%       ^|
+echo   ^|     登录：admin / %ADMIN_PW%                      ^|
 echo   ^|                                                  ^|
 echo   ^|   方式二：普通模式                                 ^|
 echo   ^|     .\venv\Scripts\python.exe -m protoforge.cli run  ^|
-echo   ^|     浏览器打开 http://localhost:8000               ^|
-echo   ^|     登录：admin / admin                           ^|
+echo   ^|     浏览器打开 http://localhost:%ADMIN_PORT%       ^|
+echo   ^|     登录：admin / %ADMIN_PW%                      ^|
 echo   ^|                                                  ^|
 echo   +--------------------------------------------------+
 echo.
