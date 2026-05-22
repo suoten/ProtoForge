@@ -35,7 +35,7 @@
           <n-select v-model:value="filterUsername" :placeholder="t('common.username')" size="small" style="width:150px" clearable filterable :options="usernameOptions" />
           <n-select v-model:value="filterAction" :placeholder="t('audit.actionType')" size="small" style="width:180px" clearable filterable :options="actionOptions" />
           <n-select v-model:value="filterResource" :placeholder="t('audit.resourceType')" size="small" style="width:150px" clearable :options="resourceOptions" />
-          <n-button size="small" type="primary" @click="loadData">{{ t('common.search') }}</n-button>
+          <n-button size="small" type="primary" @click="onSearch">{{ t('common.search') }}</n-button>
         </n-space>
       </n-space>
       <n-data-table :columns="columns" :data="entries" :bordered="true" size="small"
@@ -186,6 +186,11 @@ async function loadData() {
 }
 
 function onPageSizeChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function onSearch() {
   currentPage.value = 1
   loadData()
 }
