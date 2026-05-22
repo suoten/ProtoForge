@@ -45,28 +45,24 @@ def upgrade() -> None:
     )
     op.create_index("idx_recordings_protocol", "recordings", ["protocol"])
 
+    # FIXED: S1 - integration_config schema aligned with session.py (key TEXT PK, not id SERIAL PK)
     op.create_table(
         "integration_config",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("key", sa.Text, nullable=False, unique=True),
-        sa.Column("value", sa.Text, nullable=False),
-        sa.Column("description", sa.Text, server_default=""),
-        sa.Column("created_at", sa.TIMESTAMP, server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("updated_at", sa.TIMESTAMP, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("key", sa.Text, primary_key=True),
+        sa.Column("value", sa.Text, nullable=False, server_default="{}"),
+        sa.Column("updated_at", sa.Float, server_default="0"),
     )
 
+    # FIXED: S1 - alarm_reaction_rules schema aligned with session.py (id TEXT PK, not id INTEGER PK)
     op.create_table(
         "alarm_reaction_rules",
-        sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("rule_id", sa.Text, nullable=False, unique=True),
-        sa.Column("source_device_id", sa.Text, server_default=""),
-        sa.Column("alarm_severity", sa.Text, server_default=""),
-        sa.Column("action", sa.Text, nullable=False, server_default="stop_device"),
-        sa.Column("target_device_id", sa.Text, server_default=""),
-        sa.Column("action_params", sa.Text, server_default="{}"),
+        sa.Column("id", sa.Text, primary_key=True),
+        sa.Column("name", sa.Text, nullable=False),
+        sa.Column("description", sa.Text, server_default=""),
+        sa.Column("condition", sa.Text, nullable=False, server_default="{}"),
+        sa.Column("actions", sa.Text, nullable=False, server_default="[]"),
         sa.Column("enabled", sa.Integer, nullable=False, server_default="1"),
-        sa.Column("created_at", sa.TIMESTAMP, server_default=sa.text("CURRENT_TIMESTAMP")),
-        sa.Column("updated_at", sa.TIMESTAMP, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column("created_at", sa.Float, server_default="0"),
     )
 
 

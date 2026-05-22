@@ -348,9 +348,9 @@ class ModbusRtuServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -381,9 +381,9 @@ class ModbusRtuServer(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        async with self._behaviors_lock:
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)
         slave_id = self._slave_map.pop(device_id, None)
         if slave_id is not None:
             self._data_stores.pop(slave_id, None)

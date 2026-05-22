@@ -134,9 +134,15 @@ namespace ProtoForge
             return await PostAsync("/api/v1/devices", config);
         }
 
-        public async Task<JsonElement?> QuickCreateAsync(string templateId, string name, string? deviceId = null)
+        public async Task<JsonElement?> QuickCreateAsync(string templateId, string name, string? deviceId = null, object? protocolConfig = null)
         {
-            var body = new { template_id = templateId, name, id = deviceId ?? name };
+            // FIXED: P1 - Q17: 后端 POST /devices/quick-create 接受 protocol_config 参数
+            var body = new Dictionary<string, object> {
+                { "template_id", templateId },
+                { "name", name },
+                { "id", deviceId ?? name },
+                { "protocol_config", protocolConfig ?? new { } },
+            };
             return await PostAsync("/api/v1/devices/quick-create", body);
         }
 
@@ -240,7 +246,9 @@ namespace ProtoForge
         public async Task<JsonElement?> InstantiateTemplateAsync(string templateId, string deviceId, string deviceName, object? protocolConfig = null)
         {
             var path = $"/api/v1/templates/{templateId}/instantiate?device_id={Uri.EscapeDataString(deviceId)}&device_name={Uri.EscapeDataString(deviceName)}";
-            return await PostAsync(path, protocolConfig ?? new { });
+            // FIXED: S4 - wrap protocolConfig in {"protocol_config": ...} to match backend body.get("protocol_config")
+            var body = new Dictionary<string, object> { { "protocol_config", protocolConfig ?? new { } } };
+            return await PostAsync(path, body);
         }
 
         public async Task<JsonElement?> ListScenariosAsync()
@@ -355,7 +363,9 @@ namespace ProtoForge
 
         public async Task<JsonElement?> RunTestsAsync(object testCases)
         {
-            return await PostAsync("/api/v1/tests/run", testCases);
+            // FIXED: P1 - W19-21: 后端 POST /tests/run 期望 {test_cases: [...]} 而非裸数组
+            var body = new Dictionary<string, object> { { "test_cases", testCases } };
+            return await PostAsync("/api/v1/tests/run", body);
         }
 
         public async Task<JsonElement?> RunTestCaseAsync(string caseId)
@@ -531,9 +541,16 @@ namespace ProtoForge
             return await GetAsync("/api/v1/integration/protocols");
         }
 
-        public async Task<JsonElement?> ValidateDeviceCompatibilityAsync(string deviceId)
+        public async Task<JsonElement?> ValidateDeviceCompatibilityAsync(string deviceId, string? protocol = null, object? points = null, object? driverConfig = null)
         {
-            return await PostAsync("/api/v1/integration/validate", new { device_id = deviceId });
+            // FIXED: P1 - W26: 后端 integration.py 读取 device_id, protocol, points, driver_config，不能只发 device_id
+            var body = new Dictionary<string, object> {
+                { "device_id", deviceId },
+                { "protocol", protocol ?? "" },
+                { "points", points ?? new { } },
+                { "driver_config", driverConfig ?? new { } },
+            };
+            return await PostAsync("/api/v1/integration/validate", body);
         }
 
         public async Task<JsonElement?> TestIntegrationConnectionAsync(object config)
@@ -548,7 +565,9 @@ namespace ProtoForge
 
         public async Task<JsonElement?> BatchPushAsync(object deviceIds)
         {
-            return await PostAsync("/api/v1/integration/batch-push", deviceIds);
+            // FIXED: S5 - wrap deviceIds in {"device_ids": [...]} to match backend request.get("device_ids", [])
+            var body = new Dictionary<string, object> { { "device_ids", deviceIds } };
+            return await PostAsync("/api/v1/integration/batch-push", body);
         }
 
         public async Task DeleteDeviceFromEdgeliteAsync(string deviceId)

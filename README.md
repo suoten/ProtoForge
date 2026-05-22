@@ -1069,7 +1069,7 @@ A: 依赖还没装，先执行 `pip install -e .`。
 
 **Q: 启动后打开** **`http://localhost:8000`** **看到 Swagger 文档？**
 
-A: 你可能访问了 `http://localhost:8000/docs`。前端页面直接访问 `http://localhost:8000`（不带 `/docs`）。前端和后端都在 8000 端口上，由 FastAPI 统一托管。
+A: 你可能访问了 `http://localhost:8000/docs`。直接访问 `http://localhost:8000`（不带 `/docs`）就是前端 Web 界面。前端和后端都在 8000 端口上，由 FastAPI 统一托管，不需要 Nginx。
 
 **Q: 某些协议（OPC-UA / MQTT / BACnet / S7）启动失败？**
 

@@ -183,19 +183,19 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
 class ProfinetServer(ProtocolServer):
     protocol_name = "profinet"
     protocol_display_name = "PROFINET IO"
-    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
+    _READ_TIMEOUT = 30  # FIXED: P4 - Q5 协议标准常量，PROFINET IO 连接超时(秒)，来源: IEC 61158-6-10
 
     def __init__(self):
         super().__init__()
         self._behaviors: dict[str, ProfinetDeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._host = "0.0.0.0"
-        self._port = 34964
+        self._port = 34964  # FIXED: P4 - Q5 PROFINET IO TCP 隧道端口，来源: PI 行规推荐值
         self._server_task: asyncio.Task | None = None
         self._server_running = False
         self._device_name = "protoforge-device"
-        self._vendor_id = 0x010A
-        self._device_id = 0x0100
+        self._vendor_id = 0x010A  # FIXED: P4 - Q5 PROFINET Vendor ID，来源: PI 组织分配(示例值)
+        self._device_id = 0x0100  # FIXED: P4 - Q5 PROFINET Device ID，来源: PI 组织分配(示例值)
         self._input_size = 0
         self._output_size = 0
         self._connections: set[asyncio.StreamWriter] = set()
@@ -633,7 +633,7 @@ class ProfinetServer(ProtocolServer):
         behavior = ProfinetDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-        self._device_configs[device_config.id] = device_config
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
@@ -659,7 +659,7 @@ class ProfinetServer(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-        self._device_configs.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
         await self._clear_default_device_async(device_id)
         self._recalc_data_sizes()
         logger.info("PROFINET device removed: %s", device_id)

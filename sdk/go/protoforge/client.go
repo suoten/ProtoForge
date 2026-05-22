@@ -133,11 +133,17 @@ func (c *Client) CreateDevice(config map[string]interface{}) (map[string]interfa
 	return c.post("/api/v1/devices", config)
 }
 
-func (c *Client) QuickCreate(templateID, name, deviceID string) (map[string]interface{}, error) {
+func (c *Client) QuickCreate(templateID, name, deviceID string, protocolConfig map[string]interface{}) (map[string]interface{}, error) {
+	// FIXED: P1 - Q17: 后端 POST /devices/quick-create 接受 protocol_config 参数
 	if deviceID == "" {
 		deviceID = name
 	}
-	body := map[string]string{"template_id": templateID, "name": name, "id": deviceID}
+	body := map[string]interface{}{
+		"template_id":     templateID,
+		"name":            name,
+		"id":              deviceID,
+		"protocol_config": protocolConfig,
+	}
 	return c.post("/api/v1/devices/quick-create", body)
 }
 
@@ -235,10 +241,9 @@ func (c *Client) InstantiateTemplate(templateID, deviceID, deviceName string, pr
 	params.Set("device_id", deviceID)
 	params.Set("device_name", deviceName)
 	path := "/api/v1/templates/" + templateID + "/instantiate?" + params.Encode()
-	if protocolConfig != nil {
-		return c.post(path, protocolConfig)
-	}
-	return c.post(path, nil)
+	// FIXED: S4 - wrap protocolConfig in {"protocol_config": ...} to match backend body.get("protocol_config")
+	body := map[string]interface{}{"protocol_config": protocolConfig}
+	return c.post(path, body)
 }
 
 func (c *Client) ListScenarios() (map[string]interface{}, error) {
@@ -351,7 +356,9 @@ func (c *Client) DeleteTestSuite(suiteID string) (map[string]interface{}, error)
 }
 
 func (c *Client) RunTests(testCases []map[string]interface{}) (map[string]interface{}, error) {
-	return c.post("/api/v1/tests/run", testCases)
+	// FIXED: P1 - W19-21: 后端 POST /tests/run 期望 {test_cases: [...]} 而非裸数组
+	body := map[string]interface{}{"test_cases": testCases}
+	return c.post("/api/v1/tests/run", body)
 }
 
 func (c *Client) RunTestCase(caseID string) (map[string]interface{}, error) {
@@ -518,8 +525,14 @@ func (c *Client) GetProtocolMappings() (map[string]interface{}, error) {
 	return c.get("/api/v1/integration/protocols")
 }
 
-func (c *Client) ValidateDeviceCompatibility(deviceID string) (map[string]interface{}, error) {
-	body := map[string]string{"device_id": deviceID}
+func (c *Client) ValidateDeviceCompatibility(deviceID, protocol string, points []map[string]interface{}, driverConfig map[string]interface{}) (map[string]interface{}, error) {
+	// FIXED: P1 - W26: 后端 integration.py 读取 device_id, protocol, points, driver_config，不能只发 device_id
+	body := map[string]interface{}{
+		"device_id":     deviceID,
+		"protocol":      protocol,
+		"points":        points,
+		"driver_config": driverConfig,
+	}
 	return c.post("/api/v1/integration/validate", body)
 }
 

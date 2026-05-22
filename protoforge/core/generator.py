@@ -58,15 +58,18 @@ class SafeEval:
     _MAX_CALL_ARGS = 10
     _MAX_STR_LEN = 10000
     _MAX_RANGE_SIZE = 100000  # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
+    _MAX_COMPLEXITY = 100000  # FIXED: W7 - 执行步骤计数上限，防止无限循环/超长表达式
 
     def __init__(self, variables: dict[str, Any] | None = None):
         self._variables = variables or {}
         self._depth = 0
+        self._step_counter = 0  # FIXED: W7 - 步骤计数器
 
     def eval_expr(self, expr: str) -> Any:
         try:
             tree = ast.parse(expr, mode="eval")
             self._depth = 0
+            self._step_counter = 0  # FIXED: W7 - 重置步骤计数器
             return self._eval_node(tree.body)
         except Exception as e:
             logger.warning("SafeEval error for expression '%s': %s", expr[:100], e)
@@ -77,6 +80,7 @@ class SafeEval:
             tree = ast.parse(code, mode="exec")
             local_vars = dict(self._variables)
             self._depth = 0
+            self._step_counter = 0  # FIXED: W7 - 重置步骤计数器
             for node in tree.body:
                 if isinstance(node, ast.Assign):
                     value = self._eval_node(node.value)
@@ -96,8 +100,11 @@ class SafeEval:
 
     def _eval_node(self, node: ast.AST) -> Any:
         self._depth += 1
+        self._step_counter += 1  # FIXED: W7 - 递增步骤计数器
         if self._depth > self._MAX_DEPTH:
             raise RecursionError(f"Expression too deeply nested (max {self._MAX_DEPTH})")
+        if self._step_counter > self._MAX_COMPLEXITY:  # FIXED: W7 - 超过复杂度上限时抛出异常
+            raise RuntimeError(f"Expression too complex (max {self._MAX_COMPLEXITY} steps)")
         try:
             return self._eval_node_inner(node)
         finally:
@@ -172,10 +179,16 @@ class SafeEval:
             if isinstance(node.func, ast.Name) and node.func.id == "list":
                 if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
                     raise ValueError(f"list() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
+            # FIXED: W7 - dict()构造器大小限制
+            if isinstance(node.func, ast.Name) and node.func.id == "dict":
+                if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
+                    raise ValueError(f"dict() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
+                if len(node.keywords) > self._MAX_CALL_ARGS:
+                    raise ValueError(f"dict() too many keyword arguments (max {self._MAX_CALL_ARGS})")
             return func(*args)
         elif isinstance(node, ast.Attribute):
             value = self._eval_node(node.value)
-            if isinstance(value, math.__class__):
+            if value is math:  # FIXED: W7 - isinstance(value, math.__class__)不严谨，改为value is math
                 allowed = {"pi", "e", "sin", "cos", "tan", "sqrt", "log", "log10", "ceil", "floor", "fabs"}
                 if node.attr in allowed:
                     return getattr(value, node.attr)

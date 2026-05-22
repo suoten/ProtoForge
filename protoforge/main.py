@@ -21,6 +21,8 @@ from protoforge.protocols import PROTOCOL_REGISTRY
 
 logger = logging.getLogger(__name__)
 
+_LOG_MAX_BYTES = 10 * 1024 * 1024  # FIXED: P4 - Q5 日志文件最大字节数(10MB)，提取为模块级常量
+
 _engine: SimulationEngine | None = None
 _template_manager: TemplateManager | None = None
 _database: Database | None = None
@@ -84,6 +86,28 @@ async def lifespan(app: FastAPI):
 
     from protoforge.config import get_settings
     settings = get_settings()
+
+    # FIXED: S2/S3 - startup security warnings for empty JWT secret, no_auth mode, and default password
+    if not settings.jwt_secret or settings.jwt_secret == "mlLn6iuAEpJ_DrTojBDWqodv5wBE9O6-xrkS3jsltGI":
+        logger.warning(
+            "SECURITY: JWT secret is empty or using example default. "
+            "Set PROTOFORGE_JWT_SECRET to a strong random value for production."
+        )
+    if settings.no_auth:
+        logger.warning(
+            "SECURITY: Authentication is DISABLED (PROTOFORGE_NO_AUTH=true). "
+            "Never use this in production."
+        )
+    if settings.admin_password in ("admin", "admin123", ""):
+        logger.warning(
+            "SECURITY: Admin password is weak or default. "
+            "Set PROTOFORGE_ADMIN_PASSWORD to a strong password for production."
+        )
+    if settings.cors_origins == "*":
+        logger.warning(
+            "SECURITY: CORS allows all origins (*). "
+            "Set PROTOFORGE_CORS_ORIGINS to specific domain(s) for production."
+        )
 
     from protoforge.core.auth import set_secret_key
     set_secret_key(settings.jwt_secret)
@@ -352,7 +376,7 @@ def _setup_file_logging(settings) -> None:
 
     file_handler = logging.handlers.RotatingFileHandler(
         str(log_file),
-        maxBytes=10 * 1024 * 1024,
+        maxBytes=_LOG_MAX_BYTES,
         backupCount=5,
         encoding="utf-8",
     )

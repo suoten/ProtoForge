@@ -477,45 +477,50 @@ const validateResult = ref(null)
 const msgForm = ref({ type: 'sync', payloadJson: '' })
 const sendingMsg = ref(false)
 const msgResult = ref(null)
-const msgTypeOptions = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const msgTypeOptions = computed(() => [
   { label: t('integration.sync'), value: 'sync' },
   { label: t('integration.heartbeat'), value: 'heartbeat' },
   { label: t('integration.statusQuery'), value: 'status_query' },
   { label: t('integration.reconnect'), value: 'reconnect' },
   { label: t('integration.reloadConfig'), value: 'reload_config' },
-]
+])
 
 const showEdgelitePointsModal = ref(false)
 const loadingElPoints = ref(false)
 const edgelitePoints = ref([])
-const edgelitePointColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const edgelitePointColumns = computed(() => [
   { title: t('integration.pointName'), key: 'name', width: 120 },
   { title: t('integration.pointValue'), key: 'value', width: 120 },
   { title: t('integration.pointQuality'), key: 'quality', width: 80 },
   { title: t('integration.pointTimestamp'), key: 'timestamp', width: 180 },
-]
+])
 
-const severityOptions = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const severityOptions = computed(() => [
   { label: t('integration.severityCritical'), value: 'critical' },
   { label: t('integration.severityMajor'), value: 'major' },
   { label: t('integration.severityMinor'), value: 'minor' },
   { label: t('integration.severityInfo'), value: 'info' },
-]
-const actionOptions = [
+])
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const actionOptions = computed(() => [
   { label: t('integration.actionStopDevice'), value: 'stop_device' },
   { label: t('integration.actionStartDevice'), value: 'start_device' },
   { label: t('integration.actionInjectFault'), value: 'inject_fault' },
   { label: t('integration.actionAdjustGenerator'), value: 'adjust_generator' },
   { label: t('integration.actionLogOnly'), value: 'log_only' },
-]
+])
 
-const pipelineSteps = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const pipelineSteps = computed(() => [
   { label: t('integration.pipelineAuth'), color: '#6366f1', key: 'auth' },
   { label: t('integration.pipelineRegister'), color: '#3b82f6', key: 'register' },
   { label: t('integration.pipelineConnect'), color: '#f59e0b', key: 'connect' },
   { label: t('integration.pipelineCollect'), color: '#10b981', key: 'collect' },
   { label: t('integration.pipelineVerify'), color: '#8b5cf6', key: 'verify' },
-]
+])
 
 const EL_UNSUPPORTED_PROTOCOLS = new Set(config.edgeLite.unsupportedProtocols)
 
@@ -544,14 +549,16 @@ const alarmDeviceOptions = computed(() => {
   return allDevices.value.map(d => ({ label: `${d.name || d.id} (${d.protocol})`, value: d.id }))
 })
 
-const resultColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const resultColumns = computed(() => [
   { title: t('integration.deviceId'), key: 'id', width: 180 },
   { title: t('integration.nameCol'), key: 'name', width: 180 },
   { title: t('integration.protocol'), key: 'protocol', width: 100 },
   { title: t('integration.status'), key: 'status', width: 80 },
-]
+])
 
-const comparisonColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const comparisonColumns = computed(() => [
   { title: t('integration.pointName'), key: 'point', width: 120 },
   { title: t('integration.protoforgeValue'), key: 'protoforge_value', width: 140 },
   { title: t('integration.edgeliteValue'), key: 'edgelite_value', width: 140 },
@@ -564,9 +571,10 @@ const comparisonColumns = [
         : h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => t('integration.inconsistent'))
     }
   },
-]
+])
 
-const deviceColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const deviceColumns = computed(() => [
   { title: t('integration.deviceCol'), key: 'name', width: 150, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
     h('div', { style: 'font-size:11px;color:#94a3b8' }, row.id),
@@ -602,9 +610,10 @@ const deviceColumns = [
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => t('integration.remove')),
     ])
   },
-]
+])
 
-const statusCacheColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const statusCacheColumns = computed(() => [
   { title: t('integration.deviceId'), key: 'device_id', width: 180 },
   { title: t('integration.status'), key: 'status', width: 100, render: (row) => {
     const map = { online: 'success', offline: 'error' }
@@ -612,16 +621,18 @@ const statusCacheColumns = [
   }},
   { title: t('integration.protocol'), key: 'protocol', width: 120 },
   { title: t('integration.lastUpdated'), key: 'last_updated', width: 180 },
-]
+])
 
-const backhaulColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const backhaulColumns = computed(() => [
   { title: t('integration.deviceId'), key: 'device_id', width: 160 },
   { title: t('integration.pointName'), key: 'point_name', width: 120 },
   { title: t('integration.pointValue'), key: 'value', width: 120 },
   { title: t('integration.pointTimestamp'), key: 'timestamp', width: 180 },
-]
+])
 
-const protocolMapColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const protocolMapColumns = computed(() => [
   { title: t('integration.sourceProtocol'), key: 'source_protocol', width: 160 },
   { title: t('integration.targetProtocol'), key: 'target_protocol', width: 160 },
   { title: t('integration.driverType'), key: 'driver_type', width: 140 },
@@ -630,9 +641,10 @@ const protocolMapColumns = [
     const [tp, lb] = m[row.status] || ['info', row.status || t('common.unknown')]
     return h(NTag, { size: 'tiny', type: tp, bordered: false }, () => lb)
   }},
-]
+])
 
-const alarmRuleColumns = [
+// FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
+const alarmRuleColumns = computed(() => [
   { title: t('integration.ruleId'), key: 'rule_id', width: 150 },
   { title: t('integration.sourceDevice'), key: 'source_device_id', width: 150 },
   {
@@ -655,7 +667,7 @@ const alarmRuleColumns = [
       default: () => t('integration.confirmDeleteRule', { id: row.rule_id }),
     })
   },
-]
+])
 
 const sdkLang = ref('python')
 const sdkExamples = config.sdk.examples
@@ -998,7 +1010,7 @@ async function pushFromPipeline() {
 
 function getStepStatus(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return 'pending'
-  const key = pipelineSteps[idx].key
+  const key = pipelineSteps.value[idx].key
   if (key === 'verify') {
     const collectOk = pipelineResult.value.steps.collect?.ok
     const hasComparison = pipelineResult.value?.data_comparison?.length > 0  // FIXED: added null check for pipelineResult.value
@@ -1013,7 +1025,7 @@ function getStepStatus(idx) {
 
 function getStepDesc(idx) {
   if (!pipelineResult.value || !pipelineResult.value.steps) return ''
-  const key = pipelineSteps[idx].key
+  const key = pipelineSteps.value[idx].key
   if (key === 'verify') {
     const comp = pipelineResult.value.data_comparison
     if (comp && comp.length > 0) {

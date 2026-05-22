@@ -461,6 +461,8 @@ const messages = {
       startedCount: '已启动 {n} 个协议',
       startedWithFail: '已启动 {ok} 个协议，{fail} 个启动失败',
       startFailed: '启动协议失败',
+      engine: '引擎',  // FIXED: P3 - i18n缺失key
+      prometheus: 'Prometheus',  // FIXED: P3 - i18n缺失key
     },
     devices: {
       title: '设备管理',
@@ -2465,6 +2467,8 @@ const messages = {
       startedCount: 'Started {n} protocols',
       startedWithFail: 'Started {ok} protocols, {fail} failed',
       startFailed: 'Failed to start protocols',
+      engine: 'Engine',  // FIXED: P3 - i18n缺失key
+      prometheus: 'Prometheus',  // FIXED: P3 - i18n缺失key
     },
     devices: {
       title: 'Device Management',

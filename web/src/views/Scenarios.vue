@@ -181,13 +181,13 @@ async function batchStart() {
         if (r.status === 'fulfilled') ok++
         else { fail++; message.warning(t('scenarios.sceneStartFailed', { id: selectedIds.value[i] }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
-      batchLoading.value = false
-      selectedIds.value = []
       const msg = t('scenarios.startedCount', { count: ok }) + (fail ? t('common.separator') + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
-      await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
+      await loadData()
+      batchLoading.value = false  // FIXED: W12 - reset loading after loadData
+      selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
     }
   })
 }
@@ -207,13 +207,13 @@ async function batchStop() {
         if (r.status === 'fulfilled') ok++
         else { fail++; message.warning(t('scenarios.sceneStopFailed', { id: selectedIds.value[i] }) + ': ' + (r.reason?.response?.data?.detail || r.reason?.message || t('common.error'))) }
       })
-      batchLoading.value = false
-      selectedIds.value = []
       const msg = t('scenarios.stoppedCount', { count: ok }) + (fail ? t('common.separator') + t('scenarios.failedCount', { count: fail }) : '')
       if (fail > 0 && ok === 0) message.error(msg)
       else if (fail > 0) message.warning(msg)
       else message.success(msg)
-      await loadData()  // FIXED: loadData未await导致用户可能看到旧数据
+      await loadData()
+      batchLoading.value = false  // FIXED: W12 - reset loading after loadData
+      selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
     }
   })
 }
@@ -239,7 +239,8 @@ async function startAllScenes() {
         batchLoading.value = false
       }
       if (fail > 0) { message.warning(t('scenarios.startAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.startedCount', { count: ok })) }
-      await loadData()  // FIXED: await loadData to prevent stale data display
+      await loadData()
+      selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
     }
   })
 }
@@ -265,7 +266,8 @@ async function stopAllScenes() {
         batchLoading.value = false
       }
       if (fail > 0) { message.warning(t('scenarios.stopAllPartial', { success: ok, fail })) } else { message.success(t('scenarios.stoppedCount', { count: ok })) }
-      await loadData()  // FIXED: was not awaited, could cause race condition
+      await loadData()
+      selectedIds.value = []  // FIXED: W12 - clear selection after loadData succeeds
     }
   })
 }
@@ -327,7 +329,7 @@ async function importScenario() {
       message.error(t('scenarios.importFailed') + ': ' + (e.response?.data?.detail || e.message))
     }
   } finally {
-    importing.value = false
+    importing.value = false  // FIXED: W13 - reset importing state in finally to cover JSON validation failures
   }
 }
 
