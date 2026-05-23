@@ -716,16 +716,23 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
             json=payload, headers=headers,
         )
-        # FIXED: 缓存 token 失效时自动重新登录重试
-        if create_resp.status_code == 401:
-            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-            try:
-                create_resp = await client.post(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
-                    json=payload, headers=headers,
-                )
-            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-                return {"ok": False, "error": str(e), "error_type": "unknown"}
+    except httpx.ConnectError:  # FIXED-P0: except需与try体同级；原代码except缩进进if块导致外层try无except
+        return {"ok": False, "error": "Cannot connect to EdgeLite during device creation", "error_type": "connection"}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "Device creation request timed out", "error_type": "timeout"}
+    except Exception as e:
+        return {"ok": False, "error": f"Device creation request exception: {e}", "error_type": "unknown"}
+
+    # FIXED: 缓存 token 失效时自动重新登录重试
+    if create_resp.status_code == 401:
+        headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        try:
+            create_resp = await client.post(
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+                json=payload, headers=headers,
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+            return {"ok": False, "error": str(e), "error_type": "unknown"}
 
         if create_resp.status_code in (200, 201):
             logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
@@ -889,27 +896,27 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
             f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
             headers=headers,
         )
-        except httpx.ConnectError:
-            return {"ok": False, "error": "Cannot connect to EdgeLite during removal", "error_type": "connection"}
-        except httpx.TimeoutException:
-            return {"ok": False, "error": "Removal request timed out", "error_type": "timeout"}
-        except Exception as e:
-            return {"ok": False, "error": f"Removal request exception: {e}", "error_type": "unknown"}
+    except httpx.ConnectError:  # FIXED-P0: except需与try体同级，否则except块脱离try变为死代码
+        return {"ok": False, "error": "Cannot connect to EdgeLite during removal", "error_type": "connection"}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "Removal request timed out", "error_type": "timeout"}
+    except Exception as e:
+        return {"ok": False, "error": f"Removal request exception: {e}", "error_type": "unknown"}
 
-        # FIXED: 缓存 token 失效时自动重新登录重试
-        if resp.status_code == 401:
-            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-            try:
-                resp = await client.delete(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-                    headers=headers,
-                )
-            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-                return {"ok": False, "error": str(e), "error_type": "unknown"}
+    # FIXED: 缓存 token 失效时自动重新登录重试
+    if resp.status_code == 401:
+        headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        try:
+            resp = await client.delete(
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                headers=headers,
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+            return {"ok": False, "error": str(e), "error_type": "unknown"}
 
-        if resp.status_code in (200, 204, 404):
-            return {"ok": True, "action": "deleted", "device_id": device_id}
-        return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}", "error_type": "delete_failed"}
+    if resp.status_code in (200, 204, 404):
+        return {"ok": True, "action": "deleted", "device_id": device_id}
+    return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}", "error_type": "delete_failed"}
 
 
 async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
@@ -925,50 +932,6 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
     if auth_err:
         return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type}
-        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        if auth_err:
-            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
-
-        try:
-            resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-                headers=headers,
-            )
-        except httpx.ConnectError:
-            return {"ok": False, "error": "Cannot connect to EdgeLite while querying status", "error_type": "connection"}
-        except httpx.TimeoutException:
-            return {"ok": False, "error": "Status query request timed out", "error_type": "timeout"}
-        except Exception as e:
-            return {"ok": False, "error": f"Status query request exception: {e}", "error_type": "unknown"}
-
-        # FIXED: 缓存 token 失效时自动重新登录重试
-        if resp.status_code == 401:
-            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-            try:
-                resp = await client.get(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-                    headers=headers,
-                )
-            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-                return {"ok": False, "error": str(e), "error_type": "unknown"}
-
-        if resp.status_code == 200:
-            try:
-                raw = resp.json()
-            except Exception as e:
-                return {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}", "error_type": "parse_error"}
-            data = raw.get("data", raw)
-            return {
-                "ok": True,
-                "device_id": device_id,
-                "status": data.get("status", "unknown"),
-                "name": data.get("name", ""),
-                "protocol": data.get("protocol", ""),
-                "collect_interval": data.get("collect_interval", 0),
-            }
-        if resp.status_code == 404:
-            return {"ok": True, "device_id": device_id, "status": "not_registered"}
-        return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
 
 
 async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
@@ -990,34 +953,34 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
             f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
             headers=headers,
         )
-        except httpx.ConnectError:
-            return {"ok": False, "error": "Cannot connect to EdgeLite while reading points", "error_type": "connection"}
-        except httpx.TimeoutException:
-            return {"ok": False, "error": "Read points request timed out", "error_type": "timeout"}
+    except httpx.ConnectError:  # FIXED-P0: except需与try体同级，否则except块脱离try变为死代码
+        return {"ok": False, "error": "Cannot connect to EdgeLite while reading points", "error_type": "connection"}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "Read points request timed out", "error_type": "timeout"}
+    except Exception as e:
+        return {"ok": False, "error": f"Read points request exception: {e}", "error_type": "unknown"}
+
+    # FIXED: 缓存 token 失效时自动重新登录重试
+    if resp.status_code == 401:
+        headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        try:
+            resp = await client.get(
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                headers=headers,
+            )
+        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+            return {"ok": False, "error": str(e), "error_type": "unknown"}
+
+    if resp.status_code == 200:
+        try:
+            raw = resp.json()
         except Exception as e:
-            return {"ok": False, "error": f"Read points request exception: {e}", "error_type": "unknown"}
-
-        # FIXED: 缓存 token 失效时自动重新登录重试
-        if resp.status_code == 401:
-            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-            try:
-                resp = await client.get(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
-                    headers=headers,
-                )
-            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-                return {"ok": False, "error": str(e), "error_type": "unknown"}
-
-        if resp.status_code == 200:
-            try:
-                raw = resp.json()
-            except Exception as e:
-                return {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}", "error_type": "parse_error"}
-            data = raw.get("data", raw)
-            return {"ok": True, "device_id": device_id, "points": data}
-        if resp.status_code == 404:
-            return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
-        return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
+            return {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}", "error_type": "parse_error"}
+        data = raw.get("data", raw)
+        return {"ok": True, "device_id": device_id, "points": data}
+    if resp.status_code == 404:
+        return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
+    return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
 
 
 _PROTOCOL_DISPLAY = {
@@ -1208,16 +1171,16 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
             headers=headers,
         )
-    except httpx.ConnectError:
-        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_connection")},
+    except httpx.ConnectError:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_connection")}
         result["ok"] = False
         return result
     except httpx.TimeoutException:
-        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_timeout")},
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_timeout")}
         result["ok"] = False
         return result
     except Exception as e:
-        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)},
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)}
         result["ok"] = False
         return result
 
@@ -1245,8 +1208,8 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
         try:
             dev_data_raw = dev_resp.json()
-        except Exception as e:
-            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)},
+        except Exception as e:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
+            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)}
             result["ok"] = False
             return result
         dev_data = dev_data_raw.get("data", dev_data_raw)
@@ -1282,23 +1245,23 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
                 headers=headers,
             )
-        except httpx.ConnectError:
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_connection")},
+        except httpx.ConnectError:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_connection")}
             result["ok"] = False
             return result
         except httpx.TimeoutException:
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_timeout")},
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_timeout")}
             result["ok"] = False
             return result
         except Exception as e:
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)},
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)}
             result["ok"] = False
             return result
         if points_resp.status_code == 200:
             try:
                 raw_points = points_resp.json()
-            except Exception as e:
-                result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)},
+            except Exception as e:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
+                result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)}
                 result["ok"] = False
                 return result
             points_data = raw_points.get("data", raw_points)
@@ -1342,61 +1305,61 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
     client = _get_http_client()
     try:
         resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
-            if resp.status_code == 200:
-                try:
-                    raw = resp.json()
-                except Exception:
-                    return {"ok": False, "error": "EdgeLite returned non-JSON response"}
-                data = raw.get("data", raw)
-                return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
+    except httpx.ConnectError:  # FIXED-P0: except必须与try同级；原代码except缩进与if同级导致except被吞进try内部
+        return {"ok": False, "error": desc("edgelite.error.cannot_connect")}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
-            needs_auth = resp.status_code in (401, 403)
-            if not needs_auth:
-                return {"ok": False, "error": f"HTTP {resp.status_code}"}
+    if resp.status_code == 200:
+        try:
+            raw = resp.json()
+        except Exception:
+            return {"ok": False, "error": "EdgeLite returned non-JSON response"}
+        data = raw.get("data", raw)
+        return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
 
-            if not password:
-                return {"ok": False, "error": desc("edgelite.error.auth_required")}
+    needs_auth = resp.status_code in (401, 403)
+    if not needs_auth:
+        return {"ok": False, "error": f"HTTP {resp.status_code}"}
 
-            try:
-                login_resp = await client.post(
-                    f"{url.rstrip('/')}/api/v1/auth/login",
-                    json={"username": username, "password": password},
-                )
-            except httpx.ConnectError:
-                return {"ok": False, "error": desc("edgelite.error.auth_connection")}
-            except httpx.TimeoutException:
-                return {"ok": False, "error": desc("edgelite.error.auth_timeout")}
+    if not password:
+        return {"ok": False, "error": desc("edgelite.error.auth_required")}
 
-            if login_resp.status_code == 200:
-                token = _extract_token(login_resp)
-                headers = {"Authorization": f"Bearer {token}"} if token else {}
-                try:
-                    status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
-                except httpx.ConnectError:
-                    return {"ok": False, "error": desc("edgelite.error.auth_lost_connection")}
-                except httpx.TimeoutException:
-                    return {"ok": False, "error": desc("edgelite.error.auth_status_timeout")}
-                except Exception as e:
-                    logger.debug("EdgeLite status query after auth failed: %s", e)
-                    return {"ok": False, "error": f"Status query failed after auth: {e}"}
-                if status_resp.status_code == 200:
-                    try:
-                        raw = status_resp.json()
-                    except Exception:
-                        return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
-                    data = raw.get("data", raw)
-                    return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
-                return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}
+    try:
+        login_resp = await client.post(
+            f"{url.rstrip('/')}/api/v1/auth/login",
+            json={"username": username, "password": password},
+        )
+    except httpx.ConnectError:
+        return {"ok": False, "error": desc("edgelite.error.auth_connection")}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": desc("edgelite.error.auth_timeout")}
 
-            if login_resp.status_code == 401:
-                return {"ok": False, "error": desc("edgelite.error.auth_failed")}
-            if login_resp.status_code == 403:
-                return {"ok": False, "error": desc("edgelite.error.login_denied").format(status=login_resp.status_code)}
-            return {"ok": False, "error": desc("edgelite.error.login_http_failed").format(status=login_resp.status_code)}
-
+    if login_resp.status_code == 200:
+        token = _extract_token(login_resp)
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        try:
+            status_resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status", headers=headers)
         except httpx.ConnectError:
-            return {"ok": False, "error": desc("edgelite.error.cannot_connect")}
+            return {"ok": False, "error": desc("edgelite.error.auth_lost_connection")}
         except httpx.TimeoutException:
-            return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
+            return {"ok": False, "error": desc("edgelite.error.auth_status_timeout")}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            logger.debug("EdgeLite status query after auth failed: %s", e)
+            return {"ok": False, "error": f"Status query failed after auth: {e}"}
+        if status_resp.status_code == 200:
+            try:
+                raw = status_resp.json()
+            except Exception:
+                return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
+            data = raw.get("data", raw)
+            return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
+        return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}
+
+    if login_resp.status_code == 401:
+        return {"ok": False, "error": desc("edgelite.error.auth_failed")}
+    if login_resp.status_code == 403:
+        return {"ok": False, "error": desc("edgelite.error.login_denied").format(status=login_resp.status_code)}
+    return {"ok": False, "error": desc("edgelite.error.login_http_failed").format(status=login_resp.status_code)}
