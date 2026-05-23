@@ -138,7 +138,8 @@ class Database:
         shm_path = db_path + "-shm"
 
         # If WAL file is very large relative to main db, the WAL itself may be the problem
-        if wal_path.exists() and db_file.exists():
+        wal_path_obj = Path(wal_path)
+        if wal_path_obj.exists() and db_file.exists():
             try:
                 wal_size = db_file.stat().st_size
                 if wal_size > 0:
