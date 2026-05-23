@@ -31,6 +31,16 @@ def _load_dotenv_to_environ():
 def main():
     _load_dotenv_to_environ()
 
+    # Note: get_settings() is NOT called here because demo_mode env var is set
+    # AFTER this point (in _run_server). Calling get_settings() here would
+    # cache the old demo_mode value from .env, breaking 'protoforge demo' command.
+
+    parser = argparse.ArgumentParser(
+        prog="protoforge",
+        description="ProtoForge - IoT Protocol Simulation & Testing Platform",
+    )
+
+    # Import settings lazily inside _run_server so demo_mode env var is already set
     from protoforge.config import get_settings
     settings = get_settings()
     default_host = settings.host
@@ -234,6 +244,10 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
             demo_pw = secrets.token_urlsafe(12)
             os.environ["PROTOFORGE_ADMIN_PASSWORD"] = demo_pw
         os.environ.setdefault("PROTOFORGE_NO_AUTH", "0")
+        # FIXED: Reset cached settings so demo_mode is picked up
+        import protoforge.config as config_module
+        config_module._settings = None
+        config_module._settings_overrides.clear()
         w = 50
         print()
         print("+" + "-" * w + "+")

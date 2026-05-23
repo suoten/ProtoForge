@@ -47,10 +47,21 @@ class ModbusTcpServer(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._host = "0.0.0.0"
         self._port = 5020
+        self._requested_port = 5020
         self._slave_map: dict[str, int] = {}
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
+
+    @property
+    def actual_port(self) -> int:
+        """返回协议服务器实际监听的端口"""
+        return self._port
+
+    @property
+    def requested_port(self) -> int:
+        """返回用户配置的端口"""
+        return self._requested_port
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
@@ -150,6 +161,8 @@ class ModbusTcpServer(ProtocolServer):
         fc_name = fc_names.get(fc, f"FC{fc:02X}")
         try:
             if fc == 0x01:
+                if len(data) < 4:  # FIXED-P1: 前置长度校验，数据不足返回Illegal Data Value(0x03)而非被外层捕获返回0x02
+                    return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
@@ -163,6 +176,8 @@ class ModbusTcpServer(ProtocolServer):
                         bits[i // 8] |= (1 << (i % 8))
                 return bytes([fc, byte_count]) + bytes(bits)
             elif fc == 0x02:
+                if len(data) < 4:  # FIXED-P1: 前置长度校验
+                    return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
@@ -189,6 +204,8 @@ class ModbusTcpServer(ProtocolServer):
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
                 return bytes([fc, byte_count]) + bytes(regs)
             elif fc == 0x04:
+                if len(data) < 4:  # FIXED-P1: 前置长度校验
+                    return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
@@ -216,6 +233,8 @@ class ModbusTcpServer(ProtocolServer):
                                 detail={"fc": fc, "start": start-1, "value": val, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
+                if len(data) < 5:  # FIXED-P1: 前置长度校验(需start+count+byte_count=5字节)
+                    return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = data[4]
@@ -242,6 +261,8 @@ class ModbusTcpServer(ProtocolServer):
                                 detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x16:
+                if len(data) < 6:  # FIXED-P1: 前置长度校验(需addr+and_mask+or_mask=6字节)
+                    return bytes([fc | 0x80, 0x03])
                 addr = struct.unpack(">H", data[0:2])[0] + 1
                 and_mask = struct.unpack(">H", data[2:4])[0]
                 or_mask = struct.unpack(">H", data[4:6])[0]
@@ -253,6 +274,8 @@ class ModbusTcpServer(ProtocolServer):
                                 detail={"fc": fc, "addr": addr-1, "unit": slave_id})
                 return bytes([fc]) + data[0:6]
             elif fc == 0x17:
+                if len(data) < 9:  # FIXED-P1: 前置长度校验(需r_start+r_count+w_start+w_count+w_byte_count=9字节)
+                    return bytes([fc | 0x80, 0x03])
                 r_start = struct.unpack(">H", data[0:2])[0] + 1
                 r_count = struct.unpack(">H", data[2:4])[0]
                 w_start = struct.unpack(">H", data[4:6])[0] + 1
@@ -281,7 +304,8 @@ class ModbusTcpServer(ProtocolServer):
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
-        self._port = config.get("port", 5020)
+        self._requested_port = config.get("port", 5020)
+        self._port = self._requested_port
 
         if not StartAsyncTcpServer:
             raise RuntimeError("pymodbus is not installed. Install with: pip install pymodbus")
@@ -361,8 +385,9 @@ class ModbusTcpServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
-        self._slave_map[device_config.id] = slave_id
-        self._next_slave_id = max(self._next_slave_id, slave_id + 1)
+        async with self._behaviors_lock:  # FIXED-P1: _slave_map写入移入锁保护，防止与remove_device并发
+            self._slave_map[device_config.id] = slave_id
+            self._next_slave_id = max(self._next_slave_id, slave_id + 1)
 
         if self._status == ProtocolStatus.RUNNING:
             self._get_data_store(slave_id)
@@ -390,9 +415,9 @@ class ModbusTcpServer(ProtocolServer):
         async with self._behaviors_lock:  # FIXED: 添加锁保护
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)
-        slave_id = self._slave_map.pop(device_id, None)
-        if slave_id is not None:
-            self._data_stores.pop(slave_id, None)
+            slave_id = self._slave_map.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock保护，防止与_process_modbus_frame并发
+            if slave_id is not None:
+                self._data_stores.pop(slave_id, None)
         await self._clear_default_device_async(device_id)  # FIXED: 使用异步锁版本
         logger.info("Modbus device removed: %s", device_id)
         self._log_debug("system", "device_remove",
@@ -439,8 +464,8 @@ class ModbusTcpServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            address = int(point.address) + 1
-            try:
+            try:  # FIXED-P1: int(point.address)移入try内，非数字地址时跳过该点而非崩溃
+                address = int(point.address) + 1
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
                 elif point.data_type.value in ("float32",):

@@ -27,6 +27,36 @@ def _validate_entity_id(entity_id: str, entity_type: str = "Entity") -> None:
         )
 
 
+# FIXED: 扩展敏感字段列表，覆盖更多可能泄露的敏感信息
+SENSITIVE_KEYS: set[str] = {
+    "password", "passwd", "pwd",  # 密码
+    "secret", "token", "api_key", "apikey", "api-key",  # 密钥/令牌
+    "auth", "authorization", "auth_key", "authkey",  # 认证
+    "credential", "credentials",  # 凭证
+    "private", "private_key", "privatekey",  # 私钥
+    "access_key", "accesskey", "access_token",  # 访问密钥
+    "bearer", "jwt",  # Bearer/JWT
+    "session", "session_id",  # 会话
+    "cookie", "csrf",  # Cookie/CSRF
+    "crypt_key", "encrypt_key", "encryption_key",  # 加密密钥
+}
+
+# 不参与日志记录的字段（这些字段不应出现在日志中）
+EXCLUDED_KEYS: set[str] = {
+    "auth_password", "secret", "token",
+}
+
+
+def _sanitize_config(config: dict[str, Any]) -> dict[str, Any]:
+    """脱敏配置中的敏感字段"""
+    if not config:
+        return config
+    return {
+        k: ("***") if k.lower() in SENSITIVE_KEYS or k in EXCLUDED_KEYS else v
+        for k, v in config.items()
+    }
+
+
 def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
@@ -119,7 +149,12 @@ class SimulationEngine:
         if server.status == ProtocolStatus.RUNNING:
             logger.info("Protocol %s is already running, skipping", protocol_name)
             return
-        logger.info("Starting protocol %s with config: %s", protocol_name, {k: v for k, v in config.items() if k not in ("auth_password", "secret")})
+        logger.info("Starting protocol %s with config: %s", protocol_name, _sanitize_config(config))
+
+        original_port = config.get("port")
+        port_changed_by_engine = False
+
+        # 引擎层端口检测：启动前检查端口是否被占用
         if "port" in config and isinstance(config["port"], int):
             if config["port"] < 1 or config["port"] > 65535:
                 raise ValueError(f"Invalid port {config['port']}, must be between 1 and 65535")
@@ -134,11 +169,26 @@ class SimulationEngine:
                 config["port"] = new_port
                 config["_port_changed"] = True
                 config["_original_port"] = original_port
+                port_changed_by_engine = True
 
         last_error = None
         for attempt in range(1, self._MAX_START_RETRIES + 1):
             try:
                 await server.start(config)
+
+                # FIXED: 协议启动后再次检测实际端口（协议内部可能自动更换端口）
+                # 从协议服务器获取实际端口（如果有 actual_port 属性）
+                if hasattr(server, 'actual_port'):
+                    actual_port = server.actual_port
+                    if original_port and actual_port != original_port:
+                        config["port"] = actual_port
+                        config["_port_changed"] = True
+                        config["_original_port"] = original_port
+                        logger.info(
+                            "Protocol %s is actually listening on port %d (requested: %d)",
+                            protocol_name, actual_port, original_port
+                        )
+
                 for i in range(5):
                     await asyncio.sleep(0.2)
                     if server.status == ProtocolStatus.ERROR:
@@ -271,7 +321,7 @@ class SimulationEngine:
             info.protocol_active = True
         return info
 
-    async def remove_device(self, device_id: str) -> None:
+    async def remove_device(self, device_id: str, persist: bool = True) -> None:
         async with self._devices_lock:  # FIXED: S7 - protect _devices dict access
             instance = self._devices.pop(device_id, None)
         if not instance:
@@ -312,6 +362,18 @@ class SimulationEngine:
                     logger.warning("Device %s EdgeLite remove failed: %s", device_id, result.get("error") or result.get("reason", "unknown"))
             except Exception as e:
                 logger.warning("Device %s EdgeLite remove error: %s", device_id, e)
+
+        # FIXED: 删除设备时同时删除数据库记录，保持一致性
+        if persist:
+            try:
+                from protoforge.main import get_database
+                db = get_database()
+                if db is not None:
+                    await db.delete_device(device_id)
+                    logger.debug("Device %s removed from database", device_id)
+            except Exception as db_err:
+                # 数据库删除失败不影响内存中的删除操作，只记录警告
+                logger.warning("Failed to remove device %s from database: %s (device removed from memory)", device_id, db_err)
 
         if self._event_bus:
             await self._event_bus.publish_safe(DeviceRemovedEvent(device_id=device_id))

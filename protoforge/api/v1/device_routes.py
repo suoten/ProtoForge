@@ -131,37 +131,91 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 
 
 @router.post("/devices/batch")
-async def batch_create_devices(configs: list[DeviceConfig], _user: dict = Depends(require_operator)):
+async def batch_create_devices(
+    configs: list[DeviceConfig],
+    atomic: bool = False,
+    _user: dict = Depends(require_operator),
+):
+    """批量创建设备
+
+    Args:
+        atomic: 如果为 True，则所有设备要么全部创建成功，要么全部回滚
+    """
     if not configs:
         raise HTTPException(status_code=400, detail="configs must not be empty")
+
     engine = _get_engine()
     db = _get_database()
     results = []
+    created_devices = []  # 跟踪已创建的设备，用于回滚
 
-    for config in configs:
-        try:
-            info = await engine.create_device(config)
-            db_ok = True
-            if db:
-                try:
-                    await db.save_device(config)
-                except Exception as db_err:
-                    db_ok = False
-                    logger.error("Failed to persist device %s: %s", config.id, db_err)
+    try:
+        for config in configs:
             try:
-                await engine.start_device(config.id)
-            except Exception as start_err:
-                logger.warning("Device %s batch-created but auto-start failed: %s", config.id, start_err)
-            item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
-            if not db_ok:
-                item["_persistence_warning"] = "Persistence failed, data will be lost after restart"
-            results.append(item)
-        except Exception as e:
-            logger.warning("Batch create device %s failed: [%s] %s", config.id, type(e).__name__, e)
-            results.append({"id": config.id, "error": str(e)})
+                info = await engine.create_device(config)
+                created_devices.append(config.id)
+                db_ok = True
+                if db:
+                    try:
+                        await db.save_device(config)
+                    except Exception as db_err:
+                        db_ok = False
+                        logger.error("Failed to persist device %s: %s", config.id, db_err)
+                try:
+                    await engine.start_device(config.id)
+                except Exception as start_err:
+                    logger.warning("Device %s batch-created but auto-start failed: %s", config.id, start_err)
+                item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
+                if not db_ok:
+                    item["_persistence_warning"] = "Persistence failed, data will be lost after restart"
+                results.append(item)
+            except Exception as e:
+                logger.warning("Batch create device %s failed: [%s] %s", config.id, type(e).__name__, e)
 
-    created_count = sum(1 for r in results if "error" not in r)
-    return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
+                # FIXED: 原子模式下，失败时回滚已创建的设备
+                if atomic and created_devices:
+                    logger.info("Atomic batch failed, rolling back %d devices", len(created_devices))
+                    for dev_id in reversed(created_devices):
+                        try:
+                            await engine.remove_device(dev_id)
+                            if db:
+                                try:
+                                    await db.delete_device(dev_id)
+                                except Exception:
+                                    pass
+                            logger.info("Rolled back device: %s", dev_id)
+                        except Exception as rollback_err:
+                            logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
+
+                    return {
+                        "status": "failed",
+                        "reason": f"Device {config.id} creation failed: {str(e)}",
+                        "rolled_back": len(created_devices),
+                        "failed_at": config.id,
+                        "error": str(e),
+                    }
+
+                results.append({"id": config.id, "error": str(e)})
+
+        created_count = sum(1 for r in results if "error" not in r)
+        return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
+
+    except Exception as e:
+        # 捕获意外错误，确保回滚
+        if atomic and created_devices:
+            logger.info("Atomic batch failed with unexpected error, rolling back %d devices", len(created_devices))
+            for dev_id in reversed(created_devices):
+                try:
+                    await engine.remove_device(dev_id)
+                    if db:
+                        try:
+                            await db.delete_device(dev_id)
+                        except Exception:
+                            pass
+                except Exception as rollback_err:
+                    logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
+
+        raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}")
 
 
 @router.post("/devices/batch/delete")

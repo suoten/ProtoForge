@@ -19,6 +19,7 @@ class GeneratorType(str, Enum):
     FIXED = "fixed"
     CONSTANT = "constant"
     RANDOM = "random"
+    RANDOM_WALK = "random_walk"
     SINE = "sine"
     TRIANGLE = "triangle"
     SAWTOOTH = "sawtooth"

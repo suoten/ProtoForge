@@ -10,6 +10,8 @@ from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
+_READ_TIMEOUT = 30  # FIXED-P0: 定义缺失的读取超时常量，否则_handle_connection中NameError导致服务器完全不可用
+
 
 class HttpDeviceBehavior(StandardDeviceBehavior):  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
     def __init__(self, points: list[PointConfig]):

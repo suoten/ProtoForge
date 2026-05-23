@@ -175,15 +175,27 @@ class S7Server(ProtocolServer):
         self._rack_slot_map: dict[tuple[int, int], str] = {}
         self._host = "0.0.0.0"
         self._port = 102
+        self._requested_port = 102  # 用户请求的端口
         self._rack = 0
         self._slot = 1
+
+    @property
+    def actual_port(self) -> int:
+        """返回协议服务器实际监听的端口"""
+        return self._port
+
+    @property
+    def requested_port(self) -> int:
+        """返回用户配置的端口"""
+        return self._requested_port
         self._server_task: asyncio.Task | None = None
         self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
-        self._port = config.get("port", 102)
+        self._requested_port = config.get("port", 102)
+        self._port = self._requested_port
         self._rack = config.get("rack", 0)
         self._slot = config.get("slot", 1)
         try:
@@ -636,7 +648,8 @@ class S7Server(ProtocolServer):
         info = self._device_info.get(self._default_device_id, {})
         module_name = info.get("module_name", "ProtoForge S7")
         serial = info.get("serial_number", "PF-00000000")
-        hw_rev = int(info.get("hardware_revision", "1"))
+        # FIXED-P1: hardware_revision非数字时回退默认值，与firmware_revision的isdigit()保护一致
+        hw_rev = int(info.get("hardware_revision", "1")) if info.get("hardware_revision", "1").isdigit() else 1
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
         fw_parts = fw_rev_str.replace("V", "").split(".")
         fw_major = int(fw_parts[0]) if fw_parts and fw_parts[0].isdigit() else 1
@@ -657,7 +670,8 @@ class S7Server(ProtocolServer):
         info = self._device_info.get(self._default_device_id, {})
         order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
         serial = info.get("serial_number", "PF-00000000")
-        hw_rev = int(info.get("hardware_revision", "1"))
+        # FIXED-P1: hardware_revision非数字时回退默认值
+        hw_rev = int(info.get("hardware_revision", "1")) if info.get("hardware_revision", "1").isdigit() else 1
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
         order_bytes = order_num.encode("utf-8")[:20].ljust(20, b"\x00")
         serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")

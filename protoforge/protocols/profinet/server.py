@@ -13,6 +13,8 @@ from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
+_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+
 PROFINET_ETH_TYPE = 0x8892
 DCP_ETH_TYPE = 0x8892
 DCP_SERVICE_GET = 0x03
@@ -181,7 +183,6 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
 class ProfinetServer(ProtocolServer):
     protocol_name = "profinet"
     protocol_display_name = "PROFINET IO"
-    _READ_TIMEOUT = 30  # FIXED: P4 - Q5 协议标准常量，PROFINET IO 连接超时(秒)，来源: IEC 61158-6-10
 
     def __init__(self):
         super().__init__()
@@ -473,7 +474,9 @@ class ProfinetServer(ProtocolServer):
         return bytes([MSG_TYPE_CM, 0x01, cm_seq]) + resp
 
     def _handle_cm_release(self, data: bytes, cm_seq: int) -> bytes:
-        ar_id = struct.unpack(">H", data[3:5])[0] if len(data) >= 5 else 0
+        if len(data) < 5:  # FIXED-P1: 数据不足5字节时返回错误，防止struct.unpack(">H", data[3:5])抛出struct.error
+            return bytes([MSG_TYPE_CM, 0x02, cm_seq]) + struct.pack(">H", 0x8001)
+        ar_id = struct.unpack(">H", data[3:5])[0]
         ar = self._active_ars.pop(ar_id, None)
 
         if ar:
@@ -586,7 +589,7 @@ class ProfinetServer(ProtocolServer):
             return None
 
         active_ar = None
-        for ar in self._active_ars.values():
+        for ar in list(self._active_ars.values()):  # FIXED-P0: 快照迭代，防止与cm_release的pop()并发导致RuntimeError
             if ar.state == ARState.W_DATA:
                 active_ar = ar
                 break
@@ -636,12 +639,18 @@ class ProfinetServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         self._device_name = proto_config.get("device_name", "profinet-device")
-        self._vendor_id = int(proto_config.get("vendor_id", 0))
-        self._device_id = int(proto_config.get("device_id", 0))
+        try:  # FIXED-P1: int()对用户配置做异常保护，非数字时回退默认值
+            self._vendor_id = int(proto_config.get("vendor_id", 0))
+        except (ValueError, TypeError):
+            self._vendor_id = 0x010A
+        try:
+            self._device_id = int(proto_config.get("device_id", 0))
+        except (ValueError, TypeError):
+            self._device_id = 0x0100
 
         self._recalc_data_sizes()
 
-        for ar in self._active_ars.values():
+        for ar in list(self._active_ars.values()):  # FIXED-P0: 快照迭代，防止与cm_release的pop()并发导致RuntimeError
             if ar.state == ARState.W_DATA:
                 ar.setup_default_crs(self._input_size, self._output_size)
 

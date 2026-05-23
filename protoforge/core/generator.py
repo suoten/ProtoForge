@@ -239,6 +239,7 @@ class ScriptEngine:
 class DataGenerator:
     def __init__(self):
         self._start_time: dict[str, float] = {}
+        self._random_walk_state: dict[str, float] = {}
         self._script_engine = ScriptEngine()
 
     def generate(self, point: PointConfig) -> Any:
@@ -266,6 +267,8 @@ class DataGenerator:
             return self._generate_increment(point, elapsed)
         elif point.generator_type == GeneratorType.SCRIPT:
             return self._generate_script(point, elapsed)
+        elif point.generator_type == GeneratorType.RANDOM_WALK:
+            return self._generate_random_walk(point)
         else:
             return self._generate_fixed(point)
 
@@ -356,6 +359,23 @@ class DataGenerator:
         }
         value = self._script_engine.execute(script, context)
         return self._cast_value(value, point.data_type)
+
+    def _generate_random_walk(self, point: PointConfig) -> Any:
+        """Generate a value using random walk (Brownian motion)."""
+        key = f"{point.name}_{point.address}"
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        step_size = point.generator_config.get("step_size", (hi - lo) * 0.05)
+        if step_size <= 0:
+            step_size = (hi - lo) * 0.05
+        if key not in self._random_walk_state:
+            self._random_walk_state[key] = (lo + hi) / 2
+        current = self._random_walk_state[key]
+        delta = random.uniform(-step_size, step_size)
+        new_value = current + delta
+        new_value = max(lo, min(hi, new_value))
+        self._random_walk_state[key] = new_value
+        return self._cast_value(new_value, point.data_type)
 
     def _cast_value(self, value: Any, data_type: DataType) -> Any:
         try:

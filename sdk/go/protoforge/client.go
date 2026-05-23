@@ -147,10 +147,12 @@ func (c *Client) QuickCreate(templateID, name, deviceID string, protocolConfig m
 		deviceID = name
 	}
 	body := map[string]interface{}{
-		"template_id":     templateID,
-		"name":            name,
-		"id":              deviceID,
-		"protocol_config": protocolConfig,
+		"template_id": templateID,
+		"name":        name,
+		"id":          deviceID,
+	}
+	if protocolConfig != nil {  // FIXED-P0: protocolConfig为nil时不发送，避免json.Marshal序列化为null导致后端400
+		body["protocol_config"] = protocolConfig
 	}
 	return c.post("/api/v1/devices/quick-create", body)
 }
@@ -250,8 +252,11 @@ func (c *Client) InstantiateTemplate(templateID, deviceID, deviceName string, pr
 	params.Set("device_name", deviceName)
 	path := "/api/v1/templates/" + templateID + "/instantiate?" + params.Encode()
 	// FIXED: S4 - wrap protocolConfig in {"protocol_config": ...} to match backend body.get("protocol_config")
-	body := map[string]interface{}{"protocol_config": protocolConfig}
-	return c.post(path, body)
+	if protocolConfig != nil {  // FIXED-P0: protocolConfig为nil时发送空body，避免null导致后端异常
+		body := map[string]interface{}{"protocol_config": protocolConfig}
+		return c.post(path, body)
+	}
+	return c.post(path, nil)
 }
 
 func (c *Client) ListScenarios() (map[string]interface{}, error) {

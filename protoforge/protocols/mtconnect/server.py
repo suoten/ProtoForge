@@ -145,12 +145,20 @@ class MtConnectServer(ProtocolServer):
             elif path_base == "/current" or path_base.startswith("/current"):
                 return self._make_http_response(self._build_current())
             elif path_base == "/sample" or path_base.startswith("/sample"):
-                from_seq = int(query_params.get("from", 0))
-                count = int(query_params.get("count", 100))
+                # FIXED-P1: int()对用户输入做异常保护，避免ValueError导致连接中断
+                try:
+                    from_seq = int(query_params.get("from", 0))
+                    count = int(query_params.get("count", 100))
+                except (ValueError, TypeError):
+                    return self._make_http_response(self._build_error("QUERY_ERROR", "Invalid from/count parameter"), status=400)
                 return self._make_http_response(self._build_sample(from_seq, count))
             elif path_base.startswith("/asset"):
                 asset_id = query_params.get("id", "")
-                count = int(query_params.get("count", 100))
+                # FIXED-P1: int()对用户输入做异常保护
+                try:
+                    count = int(query_params.get("count", 100))
+                except (ValueError, TypeError):
+                    return self._make_http_response(self._build_error("QUERY_ERROR", "Invalid count parameter"), status=400)
                 return self._make_http_response(self._build_assets(asset_id, count))
 
         return self._make_http_response(self._build_error("UNSUPPORTED", f"Path {path} not supported"), status=404)

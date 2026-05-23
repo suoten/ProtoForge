@@ -70,6 +70,7 @@ class OpcDaServer(ProtocolServer):
         self._next_sub_id: int = 1
         self._sub_clients: dict[int, asyncio.StreamWriter] = {}
         self._sub_push_task: asyncio.Task | None = None
+        self._subs_lock = asyncio.Lock()  # FIXED-P0: 保护_subscriptions/_sub_clients并发读写
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -155,9 +156,10 @@ class OpcDaServer(ProtocolServer):
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         finally:
-            for sid in client_sub_ids:
-                self._sub_clients.pop(sid, None)
-                self._subscriptions.pop(sid, None)
+            async with self._subs_lock:  # FIXED-P0: 保护_subscriptions/_sub_clients并发pop
+                for sid in client_sub_ids:
+                    self._sub_clients.pop(sid, None)
+                    self._subscriptions.pop(sid, None)
             writer.close()
             try:
                 await writer.wait_closed()
@@ -209,23 +211,26 @@ class OpcDaServer(ProtocolServer):
 
     @staticmethod
     def _pack_typed_value(data_type: str, value: Any) -> bytes:
-        if data_type == "bool":
-            return struct.pack("<BB", 0, 1 if value else 0)
-        elif data_type == "int16":
-            return struct.pack("<Bh", 1, int(value))
-        elif data_type == "uint16":
-            return struct.pack("<BH", 2, int(value))
-        elif data_type == "int32":
-            return struct.pack("<Bi", 3, int(value))
-        elif data_type == "uint32":
-            return struct.pack("<BI", 4, int(value))
-        elif data_type == "float32":
-            return struct.pack("<Bf", 5, float(value))
-        elif data_type == "string":
-            s = str(value).encode("utf-8")
-            return struct.pack("<BH", 7, len(s)) + s
-        else:
-            return struct.pack("<Bd", 6, float(value))
+        try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0
+            if data_type == "bool":
+                return struct.pack("<BB", 0, 1 if value else 0)
+            elif data_type == "int16":
+                return struct.pack("<Bh", 1, int(value))
+            elif data_type == "uint16":
+                return struct.pack("<BH", 2, int(value))
+            elif data_type == "int32":
+                return struct.pack("<Bi", 3, int(value))
+            elif data_type == "uint32":
+                return struct.pack("<BI", 4, int(value))
+            elif data_type == "float32":
+                return struct.pack("<Bf", 5, float(value))
+            elif data_type == "string":
+                s = str(value).encode("utf-8")
+                return struct.pack("<BH", 7, len(s)) + s
+            else:
+                return struct.pack("<Bd", 6, float(value))
+        except (ValueError, TypeError):
+            return struct.pack("<Bd", 6, 0.0)
 
     def _handle_read(self, data: bytes) -> bytes:
         if len(data) < 8:
@@ -317,7 +322,7 @@ class OpcDaServer(ProtocolServer):
             tag_name = data[offset:offset + tag_len].decode("utf-8", errors="replace").rstrip("\x00")
             tags.append(tag_name)
             offset += tag_len
-        self._subscriptions[sub_id] = {"rate": actual_rate, "tags": tags}
+        self._subscriptions[sub_id] = {"rate": actual_rate, "tags": tags}  # FIXED-P0: 写操作在_subs_lock外但同步调用中原子，push_loop用快照迭代
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
         resp += struct.pack("<I", sub_id)
@@ -391,8 +396,9 @@ class OpcDaServer(ProtocolServer):
                     except (ConnectionResetError, OSError):
                         dead_subs.append(sub_id)
                 for sid in dead_subs:
-                    self._sub_clients.pop(sid, None)
-                    self._subscriptions.pop(sid, None)
+                    async with self._subs_lock:  # FIXED-P0: 保护_subscriptions/_sub_clients并发pop
+                        self._sub_clients.pop(sid, None)
+                        self._subscriptions.pop(sid, None)
         except asyncio.CancelledError:
             logger.debug("OPC-DA task cancelled")
         except Exception as e:

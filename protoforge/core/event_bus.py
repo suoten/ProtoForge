@@ -120,9 +120,17 @@ class EventBus:
             try:
                 result = callback(event)
                 if asyncio.iscoroutine(result):
-                    await result
+                    # FIXED: 异步回调不等待，避免阻塞事件发布
+                    asyncio.create_task(self._safe_callback(result, event_type, callback))
             except Exception as e:
                 logger.error("Event callback error for %s: %s", event_type, e)
+
+    async def _safe_callback(self, coro: Coroutine, event_type: str, callback: Callable) -> None:
+        """安全执行异步回调，避免异常传播"""
+        try:
+            await coro
+        except Exception as e:
+            logger.error("Async event callback error for %s: %s", event_type, e)
 
     async def publish_safe(self, event: Event) -> None:
         try:

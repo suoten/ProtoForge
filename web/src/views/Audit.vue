@@ -89,11 +89,18 @@ const actionOptions = computed(() => [
   { label: t('audit.action.delete_user'), value: 'delete_user' },
   { label: t('audit.action.update_user_role'), value: 'update_user_role' },
   { label: t('audit.action.import_backup'), value: 'import_backup' },
+  { label: t('audit.action.export_backup'), value: 'export_backup' },
   { label: t('audit.action.create_webhook'), value: 'create_webhook' },
   { label: t('audit.action.delete_webhook'), value: 'delete_webhook' },
   { label: t('audit.action.update_webhook'), value: 'update_webhook' },
   { label: t('audit.action.create_forward'), value: 'create_forward' },
   { label: t('audit.action.delete_forward'), value: 'delete_forward' },
+  { label: t('audit.action.update_forward'), value: 'update_forward' },
+  { label: t('audit.action.start_recording'), value: 'start_recording' },
+  { label: t('audit.action.stop_recording'), value: 'stop_recording' },
+  { label: t('audit.action.push_edgelite'), value: 'push_edgelite' },
+  { label: t('audit.action.test_edgelite'), value: 'test_edgelite' },
+  { label: t('audit.action.import_edgelite'), value: 'import_edgelite' },
 ])
 const resourceOptions = computed(() => [
   { label: t('audit.resource.device'), value: 'device' },

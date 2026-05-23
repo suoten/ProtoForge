@@ -1780,6 +1780,7 @@ const messages = {
         delete_user: '删除用户',
         update_user_role: '修改用户角色',
         import_backup: '导入备份',
+        export_backup: '导出备份',
         create_webhook: '创建Webhook',
         delete_webhook: '删除Webhook',
         update_webhook: '更新Webhook',
@@ -1960,6 +1961,7 @@ const messages = {
         unlock_user: '解锁用户',
         // System operations
         import_backup: '导入备份',
+        export_backup: '导出备份',
         restore_backup: '恢复备份',
         setup_demo: '初始化演示',
         update_settings: '更新设置',
@@ -1988,7 +1990,9 @@ const messages = {
         replay_recording: '回放录制',
         // EdgeLite operations
         register_edgelite: '注册EdgeLite',
+        push_edgelite: '推送至EdgeLite',
         test_edgelite: '测试EdgeLite',
+        import_edgelite: '导入EdgeLite配置',
         remove_edgelite: '移除EdgeLite',
         // Generic/fallback
         system: '系统操作',
@@ -3994,7 +3998,9 @@ const messages = {
         replay_recording: 'Replay Recording',
         // EdgeLite operations
         register_edgelite: 'Register EdgeLite',
+        push_edgelite: 'Push to EdgeLite',
         test_edgelite: 'Test EdgeLite',
+        import_edgelite: 'Import EdgeLite Config',
         remove_edgelite: 'Remove EdgeLite',
         // Generic/fallback
         system: 'System Operation',

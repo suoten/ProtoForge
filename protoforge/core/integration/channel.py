@@ -250,7 +250,13 @@ class WebSocketChannel(ChannelBase):
         else:
             connect_url = self._url
 
-        self._ws = await websockets.connect(connect_url, ping_interval=None, close_timeout=5.0, open_timeout=10.0)
+        self._ws = await websockets.connect(
+            connect_url,
+            ping_interval=self._heartbeat_interval,  # FIXED: 启用 WebSocket ping/pong 心跳
+            ping_timeout=self._heartbeat_timeout * self._heartbeat_interval,  # pong 响应超时
+            close_timeout=5.0,
+            open_timeout=10.0,
+        )
         self._connected = True
         self._missed_heartbeats = 0
 

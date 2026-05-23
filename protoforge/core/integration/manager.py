@@ -75,34 +75,72 @@ class IntegrationManager:
         self._protocol_mapper = ProtocolMapper()
         self._data_type_mapper = DataTypeMapper()
         self._validator = MappingValidator(self._protocol_mapper, self._data_type_mapper)
-        self._device_status_cache: dict[str, str] = {}
+class DeviceStatusCache:
+    """带过期时间的设备状态缓存"""
+
+    def __init__(self, ttl_seconds: float = 60.0):
+        self._cache: dict[str, tuple[str, float]] = {}  # device_id -> (status, timestamp)
+        self._ttl = ttl_seconds
+
+    def get(self, device_id: str) -> str | None:
+        if device_id not in self._cache:
+            return None
+        status, timestamp = self._cache[device_id]
+        if time.time() - timestamp > self._ttl:
+            del self._cache[device_id]
+            return None
+        return status
+
+    def set(self, device_id: str, status: str) -> None:
+        self._cache[device_id] = (status, time.time())
+
+    def remove(self, device_id: str) -> None:
+        self._cache.pop(device_id, None)
+
+    def clear(self) -> None:
+        self._cache.clear()
+
+    def cleanup_expired(self) -> int:
+        """清理过期条目，返回清理数量"""
+        now = time.time()
+        expired = [k for k, (_, ts) in self._cache.items() if now - ts > self._ttl]
+        for k in expired:
+            del self._cache[k]
+        return len(expired)
+
+    def size(self) -> int:
+        return len(self._cache)
+
+
+class IntegrationManager:
+    def __init__(
+        self,
+        event_bus: EventBus,
+        enabled: bool = False,
+        edgelite_url: str = "",
+        username: str = "admin",
+        password: str = "",
+    ):
+        self._event_bus = event_bus
+        self._enabled = enabled
+        self._edgelite_url = edgelite_url
+        self._username = username
+        self._password = password
+        self._channel: Optional[ChannelBase] = None
+        self._ws_channel: Optional[WebSocketChannel] = None
+        self._auth: Optional[IntegrationAuth] = None
+        self._state = ConnectionStateMachine(on_change=self._on_state_change)
+        self._retry = RetryPolicy()
+        self._metrics = IntegrationMetrics()
+        self._protocol_mapper = ProtocolMapper()
+        self._data_type_mapper = DataTypeMapper()
+        self._validator = MappingValidator(self._protocol_mapper, self._data_type_mapper)
+        self._device_status_cache = DeviceStatusCache()
         self._alarm_reaction_rules: list[AlarmReactionRule] = []
         self._backhaul_data: dict[str, list[dict[str, Any]]] = {}
         self._running = False
-
-    @property
-    def enabled(self) -> bool:
-        return self._enabled
-
-    @property
-    def state(self) -> ConnectionStateMachine:
-        return self._state
-
-    @property
-    def metrics(self) -> IntegrationMetrics:
-        return self._metrics
-
-    @property
-    def protocol_mapper(self) -> ProtocolMapper:
-        return self._protocol_mapper
-
-    @property
-    def data_type_mapper(self) -> DataTypeMapper:
-        return self._data_type_mapper
-
-    @property
-    def validator(self) -> MappingValidator:
-        return self._validator
+        self._retry_queue: asyncio.Queue = asyncio.Queue()
+        self._retry_task: Optional[asyncio.Task] = None
 
     def configure(self, edgelite_url: str, username: str = "admin", password: str = "") -> None:
         self._edgelite_url = edgelite_url
@@ -139,6 +177,9 @@ class IntegrationManager:
             await self._connect_websocket()
         except Exception as e:
             logger.warning("IntegrationManager WebSocket connection failed (non-fatal): %s", e)
+
+        # FIXED: 启动重连后批量重试队列处理器
+        self._retry_task = asyncio.create_task(self._retry_queue_consumer())
 
         logger.info("IntegrationManager started, target: %s", self._edgelite_url)
 
@@ -182,6 +223,8 @@ class IntegrationManager:
             self._channel = channel
             await self._state.transition(ConnectionState.CONNECTED)
             self._metrics.set_connected()
+            # FIXED: 连接成功后，触发重连后批量重试
+            await self._flush_retry_queue()
         except Exception as e:
             await self._state.transition(ConnectionState.DISCONNECTED)
             logger.warning("Connection failed: %s", e)
@@ -240,6 +283,65 @@ class IntegrationManager:
 
     async def _on_ws_alarm(self, message: dict[str, Any]) -> None:
         await self.handle_backhaul_message(message)
+
+    async def _enqueue_retry(self, message: dict[str, Any]) -> None:
+        """将失败的消息加入重试队列，等待重连后处理"""
+        try:
+            self._retry_queue.put_nowait(message)
+            logger.debug("Enqueued message for retry: type=%s", message.get("type"))
+        except asyncio.QueueFull:
+            logger.warning("Retry queue full, dropping message: type=%s", message.get("type"))
+
+    async def _retry_queue_consumer(self) -> None:
+        """后台任务：持续消费重试队列中的消息"""
+        while self._running:
+            try:
+                message = await asyncio.wait_for(self._retry_queue.get(), timeout=5.0)
+                try:
+                    if self._channel and self._channel.is_connected:
+                        result = await self._channel.send(message)
+                        if result and not result.get("ok"):
+                            # 仍然失败，重新入队
+                            await self._enqueue_retry(message)
+                        else:
+                            logger.debug("Retry successful: type=%s", message.get("type"))
+                    else:
+                        # 断连，重新入队
+                        await self._enqueue_retry(message)
+                except Exception as e:
+                    logger.warning("Retry failed: %s, re-enqueueing", e)
+                    await self._enqueue_retry(message)
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Retry queue consumer error: %s", e)
+
+    async def _flush_retry_queue(self) -> None:
+        """连接成功后，批量处理重试队列中的所有消息"""
+        if self._retry_queue.empty():
+            return
+        items = []
+        while not self._retry_queue.empty():
+            try:
+                item = self._retry_queue.get_nowait()
+                items.append(item)
+            except asyncio.QueueEmpty:
+                break
+
+        if items:
+            logger.info("Flushing %d queued messages after reconnection", len(items))
+            for msg in items:
+                try:
+                    if self._channel and self._channel.is_connected:
+                        result = await self._channel.send(msg)
+                        if result and not result.get("ok"):
+                            # 仍然失败，重新入队
+                            await self._enqueue_retry(msg)
+                except Exception as e:
+                    logger.warning("Flush retry failed: %s, re-enqueueing", e)
+                    await self._enqueue_retry(msg)
 
     async def _ensure_connected(self) -> bool:
         if self._channel and self._channel.is_connected:
@@ -362,7 +464,7 @@ class IntegrationManager:
         if msg_type == "device_status_changed":
             device_id = payload.get("device_id", "")
             new_status = payload.get("new_status", "")
-            self._device_status_cache[device_id] = new_status
+            self._device_status_cache.set(device_id, new_status)
             self._metrics.record_sync_event()
             logger.info("Device %s status changed to %s (from EdgeLite)", device_id, new_status)
 
@@ -496,7 +598,7 @@ class IntegrationManager:
         return all_data[:limit]
 
     def get_device_status_cache(self) -> dict[str, str]:
-        return dict(self._device_status_cache)
+        return dict(self._device_status_cache._cache)
 
     async def _on_device_created(self, event: DeviceCreatedEvent) -> None:
         proto_config = event.protocol_config or {}
@@ -520,38 +622,41 @@ class IntegrationManager:
             logger.warning("IntegrationManager auto-push failed for %s: %s", event.device_id, e)
 
     async def _on_device_started(self, event: DeviceStartedEvent) -> None:
+        msg = {"type": "device_control", "payload": {"device_id": event.device_id, "action": "start_collect"}}
         if self._channel and self._channel.is_connected:
             try:
-                await self._channel.send({
-                    "type": "device_control",
-                    "payload": {"device_id": event.device_id, "action": "start_collect"},
-                })
+                await self._channel.send(msg)
                 self._metrics.record_sync_event()
             except Exception as e:
-                logger.warning("Failed to send start_collect for %s: %s", event.device_id, e)
+                logger.warning("Failed to send start_collect for %s: %s, enqueueing for retry", event.device_id, e)
+                await self._enqueue_retry(msg)
+        else:
+            await self._enqueue_retry(msg)
 
     async def _on_device_stopped(self, event: DeviceStoppedEvent) -> None:
+        msg = {"type": "device_control", "payload": {"device_id": event.device_id, "action": "stop_collect"}}
         if self._channel and self._channel.is_connected:
             try:
-                await self._channel.send({
-                    "type": "device_control",
-                    "payload": {"device_id": event.device_id, "action": "stop_collect"},
-                })
+                await self._channel.send(msg)
                 self._metrics.record_sync_event()
             except Exception as e:
-                logger.warning("Failed to send stop_collect for %s: %s", event.device_id, e)
+                logger.warning("Failed to send stop_collect for %s: %s, enqueueing for retry", event.device_id, e)
+                await self._enqueue_retry(msg)
+        else:
+            await self._enqueue_retry(msg)
 
     async def _on_device_removed(self, event: DeviceRemovedEvent) -> None:
         self._backhaul_data.pop(event.device_id, None)
+        msg = {"type": "delete_device", "payload": {"device_id": event.device_id}}
         if self._channel and self._channel.is_connected:
             try:
-                await self._channel.send({
-                    "type": "delete_device",
-                    "payload": {"device_id": event.device_id},
-                })
+                await self._channel.send(msg)
                 self._metrics.record_sync_event()
             except Exception as e:
-                logger.warning("Failed to send delete_device for %s: %s", event.device_id, e)
+                logger.warning("Failed to send delete_device for %s: %s, enqueueing for retry", event.device_id, e)
+                await self._enqueue_retry(msg)
+        else:
+            await self._enqueue_retry(msg)
 
     def _on_state_change(self, old_state: ConnectionState, new_state: ConnectionState) -> None:
         if new_state == ConnectionState.CONNECTED:

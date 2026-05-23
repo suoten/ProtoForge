@@ -57,10 +57,21 @@ class MqttBroker(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._host = "0.0.0.0"
         self._port = 1883
+        self._requested_port = 1883  # 用户请求的端口
         self._publish_task: asyncio.Task | None = None
         self._auth_required = False
         self._auth_username = ""
         self._auth_password = ""
+
+    @property
+    def actual_port(self) -> int:
+        """返回 MQTT Broker 实际监听的端口（可能与配置不同）"""
+        return self._port
+
+    @property
+    def requested_port(self) -> int:
+        """返回用户配置的端口"""
+        return self._requested_port
 
     async def start(self, config: dict[str, Any]) -> None:
         if not ASYNC_MQTT_AVAILABLE:
@@ -68,7 +79,8 @@ class MqttBroker(ProtocolServer):
 
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
-        self._port = config.get("port", 1883)
+        self._requested_port = config.get("port", 1883)
+        self._port = self._requested_port
         publish_interval = config.get("publish_interval", 5)
         self._auth_required = config.get("auth_required", False)
         self._auth_username = config.get("auth_username", "")
@@ -125,6 +137,23 @@ class MqttBroker(ProtocolServer):
 
             self._status = ProtocolStatus.RUNNING
             self._publish_task = asyncio.create_task(self._publish_loop(publish_interval))
+
+            # FIXED: 检测端口是否被自动更换（EdgeLite社区版会处理端口冲突）
+            actual_port = self._get_actual_port()
+            if actual_port and actual_port != self._requested_port:
+                self._port = actual_port  # 更新为实际端口
+                config["port"] = actual_port  # 写回config，让engine能获取
+                config["_port_changed"] = True
+                config["_original_port"] = self._requested_port
+                logger.warning(
+                    "MQTT Broker requested port %d but is running on port %d. "
+                    "EdgeLite may need to connect to port %d instead of %d",
+                    self._requested_port, actual_port, actual_port, self._requested_port
+                )
+                self._log_debug("system", "port_changed",
+                                f"MQTT Broker port changed from {self._requested_port} to {actual_port}",
+                                detail={"requested_port": self._requested_port, "actual_port": actual_port})
+
             logger.info("MQTT Broker starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
                             f"MQTT Broker started {self._host}:{self._port}",
@@ -308,3 +337,45 @@ class MqttBroker(ProtocolServer):
                     )
             except Exception as e:
                 logger.debug("MQTT publish failed for %s: %s", topic, e)
+
+    def _get_actual_port(self) -> int | None:
+        """检测 MQTT Broker 实际监听的端口（可能与配置不同，如果端口被占用会自动更换）"""
+        import socket
+
+        # 先尝试获取 amqtt broker 内部信息
+        try:
+            if hasattr(self._broker, 'listeners') and self._broker.listeners:
+                for name, listener in self._broker.listeners.items():
+                    if hasattr(listener, 'server') and listener.server:
+                        sock = getattr(listener.server, 'socket', None)
+                        if sock:
+                            addr = sock.getsockname()
+                            if addr:
+                                return addr[1]
+        except Exception:
+            pass
+
+        # Fallback: 尝试连接检测
+        for port in [self._requested_port, self._requested_port + 1, self._requested_port - 1]:
+            if port == self._port:
+                continue
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.5)
+                    result = s.connect_ex((self._host, port))
+                    if result == 0:
+                        return port
+            except Exception:
+                pass
+
+        # 如果请求的端口正在监听，返回它
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.5)
+                result = s.connect_ex((self._host, self._requested_port))
+                if result == 0:
+                    return self._requested_port
+        except Exception:
+            pass
+
+        return self._port  # 返回配置的端口作为默认值

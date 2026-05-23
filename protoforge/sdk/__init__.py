@@ -67,11 +67,23 @@ class ProtoForgeClient:
         resp = self._request("DELETE", path, **kwargs)
         return resp.json()
 
+    def _unwrap_list(self, path: str, key: str | None = None, **kwargs) -> list:  # FIXED-P1: 从后端{"key":[...]}格式中提取内层数组
+        result = self._get(path, **kwargs)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and key:
+            return result.get(key, [])
+        if isinstance(result, dict):
+            for v in result.values():
+                if isinstance(v, list):
+                    return v
+        return []
+
     def health(self) -> dict:
         return self._request("GET", "/health").json()
 
     def list_protocols(self) -> list:
-        return self._get("/protocols")
+        return self._unwrap_list("/protocols", "protocols")
 
     def start_protocol(self, name: str, config: dict | None = None) -> dict:
         # FIXED-P1: config为None时不发送{}，让后端使用默认配置
@@ -84,7 +96,7 @@ class ProtoForgeClient:
         params = {}
         if protocol:
             params["protocol"] = protocol
-        return self._get("/devices", params=params)
+        return self._unwrap_list("/devices", "devices", params=params)
 
     def create_device(self, device_id: str, name: str, protocol: str,
                       points: list[dict] | None = None,
@@ -122,7 +134,7 @@ class ProtoForgeClient:
         return self._delete(f"/devices/{device_id}")
 
     def read_points(self, device_id: str) -> list:
-        return self._get(f"/devices/{device_id}/points")
+        return self._unwrap_list(f"/devices/{device_id}/points", "points")
 
     def write_point(self, device_id: str, point_name: str, value: Any) -> dict:
         return self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
@@ -146,7 +158,7 @@ class ProtoForgeClient:
         params = {}
         if protocol:
             params["protocol"] = protocol
-        return self._get("/templates", params=params)
+        return self._unwrap_list("/templates", "templates", params=params)
 
     def get_template(self, template_id: str) -> dict:
         return self._get(f"/templates/{template_id}")
@@ -163,10 +175,10 @@ class ProtoForgeClient:
             params["protocol"] = protocol
         if tag:
             params["tag"] = tag
-        return self._get("/templates/search", params=params)
+        return self._unwrap_list("/templates/search", "templates", params=params)
 
     def list_template_tags(self) -> list:
-        return self._get("/templates/tags")
+        return self._unwrap_list("/templates/tags", "tags")
 
     def instantiate_template(self, template_id: str, device_id: str,
                              device_name: str, protocol_config: dict | None = None) -> dict:
@@ -175,7 +187,7 @@ class ProtoForgeClient:
         return self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
 
     def list_scenarios(self) -> list:
-        return self._get("/scenarios")
+        return self._unwrap_list("/scenarios", "scenarios")
 
     def create_scenario(self, scenario_id: str, name: str,
                         description: str = "", devices: list | None = None,
@@ -214,7 +226,7 @@ class ProtoForgeClient:
             params["protocol"] = protocol
         if device_id:
             params["device_id"] = device_id
-        return self._get("/logs", params=params)
+        return self._unwrap_list("/logs", "entries", params=params)
 
     def create_test_case(self, case_def: dict) -> dict:
         return self._post("/tests/cases", json=case_def)
@@ -223,7 +235,7 @@ class ProtoForgeClient:
         params = {}
         if tag:
             params["tag"] = tag
-        return self._get("/tests/cases", params=params)
+        return self._unwrap_list("/tests/cases", "cases", params=params)
 
     def get_test_case(self, case_id: str) -> dict:
         return self._get(f"/tests/cases/{case_id}")
@@ -238,7 +250,7 @@ class ProtoForgeClient:
         return self._post("/tests/suites", json=suite_def)
 
     def list_test_suites(self) -> list:
-        return self._get("/tests/suites")
+        return self._unwrap_list("/tests/suites", "suites")
 
     def get_test_suite(self, suite_id: str) -> dict:
         return self._get(f"/tests/suites/{suite_id}")
@@ -257,7 +269,7 @@ class ProtoForgeClient:
         return self._post(f"/tests/run/suite/{suite_id}")
 
     def list_test_reports(self) -> list:
-        return self._get("/tests/reports")
+        return self._unwrap_list("/tests/reports", "reports")
 
     def get_test_report(self, report_id: str) -> dict:
         return self._get(f"/tests/reports/{report_id}")
@@ -267,7 +279,7 @@ class ProtoForgeClient:
         return resp.text
 
     def get_report_trend(self, count: int = 20) -> list:
-        return self._get("/tests/reports/trend", params={"count": count})
+        return self._unwrap_list("/tests/reports/trend", "trends", params={"count": count})
 
     def import_edgelite(self, config: dict) -> dict:
         return self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
@@ -309,7 +321,7 @@ class ProtoForgeClient:
         return self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
 
     def list_forward_targets(self) -> list:
-        return self._get("/forward/targets")
+        return self._unwrap_list("/forward/targets", "targets")
 
     def add_forward_target(self, target: dict) -> dict:
         return self._post("/forward/targets", json=target)
@@ -335,7 +347,7 @@ class ProtoForgeClient:
         return self._post("/recorder/stop")
 
     def list_recordings(self) -> list:
-        return self._get("/recorder/recordings")
+        return self._unwrap_list("/recorder/recordings", "recordings")
 
     def get_recording(self, recording_id: str) -> dict:
         return self._get(f"/recorder/recordings/{recording_id}")
@@ -371,7 +383,7 @@ class ProtoForgeClient:
         return self._post("/tests/quick-test", params=params)
 
     def list_webhooks(self) -> list:
-        return self._get("/webhooks")
+        return self._unwrap_list("/webhooks", "webhooks")
 
     def add_webhook(self, config: dict) -> dict:
         return self._post("/webhooks", json=config)
@@ -390,7 +402,7 @@ class ProtoForgeClient:
         return self._post("/auth/register", json={"username": username, "password": password})
 
     def list_users(self) -> list:
-        return self._get("/auth/users")
+        return self._unwrap_list("/auth/users", "users")
 
     def admin_reset_password(self, username: str, new_password: str) -> dict:
         return self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
@@ -405,7 +417,7 @@ class ProtoForgeClient:
         return self._delete(f"/auth/users/{username}")
 
     def get_protocols_info(self) -> list:
-        return self._get("/protocols/info")
+        return self._unwrap_list("/protocols/info", "protocols")
 
     def get_protocol_device_config(self, protocol_name: str) -> dict:
         return self._get(f"/protocols/{protocol_name}/device-config")
@@ -414,13 +426,13 @@ class ProtoForgeClient:
         return self._delete("/logs")
 
     def get_test_suggestions(self) -> list:
-        return self._get("/tests/suggestions")
+        return self._unwrap_list("/tests/suggestions", "suggestions")
 
     def get_test_action_types(self) -> list:
-        return self._get("/tests/action-types")
+        return self._unwrap_list("/tests/action-types", "action_types")
 
     def get_test_assertion_types(self) -> list:
-        return self._get("/tests/assertion-types")
+        return self._unwrap_list("/tests/assertion-types", "assertion_types")
 
     def update_webhook(self, webhook_id: str, config: dict) -> dict:
         return self._put(f"/webhooks/{webhook_id}", json=config)
@@ -452,7 +464,7 @@ class ProtoForgeClient:
     def stop_device_collect(self, device_id: str) -> dict:
         return self._post(f"/integration/device/{device_id}/stop")
 
-    def get_protocol_mappings(self) -> list:
+    def get_protocol_mappings(self) -> dict:
         return self._get("/integration/protocols")
 
     def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict:
@@ -472,7 +484,7 @@ class ProtoForgeClient:
         return self._get("/integration/device-status")
 
     def get_alarm_rules(self) -> list:
-        return self._get("/integration/alarm-rules")
+        return self._unwrap_list("/integration/alarm-rules", "rules")
 
     def add_alarm_rule(self, rule: dict) -> dict:
         return self._post("/integration/alarm-rules", json=rule)
@@ -550,17 +562,29 @@ class AsyncProtoForgeClient:
         resp = await self._request("DELETE", path, **kwargs)
         return resp.json()
 
+    async def _unwrap_list(self, path: str, key: str | None = None, **kwargs) -> list:  # FIXED-P1: 从后端{"key":[...]}格式中提取内层数组
+        result = await self._get(path, **kwargs)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and key:
+            return result.get(key, [])
+        if isinstance(result, dict):
+            for v in result.values():
+                if isinstance(v, list):
+                    return v
+        return []
+
     async def health(self) -> dict:
         return await self._request("GET", "/health").json()
 
     async def list_protocols(self) -> list:
-        return await self._get("/protocols")
+        return await self._unwrap_list("/protocols", "protocols")
 
     async def list_devices(self, protocol: str | None = None) -> list:
         params = {}
         if protocol:
             params["protocol"] = protocol
-        return await self._get("/devices", params=params)
+        return await self._unwrap_list("/devices", "devices", params=params)
 
     async def create_device(self, device_id: str, name: str, protocol: str,
                             points: list[dict] | None = None,
@@ -593,7 +617,7 @@ class AsyncProtoForgeClient:
         return await self._delete(f"/devices/{device_id}")
 
     async def read_points(self, device_id: str) -> list:
-        return await self._get(f"/devices/{device_id}/points")
+        return await self._unwrap_list(f"/devices/{device_id}/points", "points")
 
     async def write_point(self, device_id: str, point_name: str, value: Any) -> dict:
         return await self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
@@ -609,7 +633,7 @@ class AsyncProtoForgeClient:
         params = {}
         if protocol:
             params["protocol"] = protocol
-        return await self._get("/templates", params=params)
+        return await self._unwrap_list("/templates", "templates", params=params)
 
     async def search_templates(self, q: str = "", protocol: str | None = None,
                                tag: str | None = None) -> list:
@@ -620,7 +644,7 @@ class AsyncProtoForgeClient:
             params["protocol"] = protocol
         if tag:
             params["tag"] = tag
-        return await self._get("/templates/search", params=params)
+        return await self._unwrap_list("/templates/search", "templates", params=params)
 
     async def create_scenario(self, scenario_id: str, name: str,
                               description: str = "", devices: list | None = None,
@@ -645,7 +669,7 @@ class AsyncProtoForgeClient:
             params["protocol"] = protocol
         if device_id:
             params["device_id"] = device_id
-        return await self._get("/logs", params=params)
+        return await self._unwrap_list("/logs", "entries", params=params)
 
     async def create_test_case(self, case_def: dict) -> dict:
         return await self._post("/tests/cases", json=case_def)
@@ -654,7 +678,7 @@ class AsyncProtoForgeClient:
         params = {}
         if tag:
             params["tag"] = tag
-        return await self._get("/tests/cases", params=params)
+        return await self._unwrap_list("/tests/cases", "cases", params=params)
 
     async def run_tests(self, test_cases: list[dict]) -> dict:
         # FIXED-P0: 后端期望dict类型payload，非裸数组
@@ -667,7 +691,7 @@ class AsyncProtoForgeClient:
         return await self._post(f"/tests/run/suite/{suite_id}")
 
     async def list_test_reports(self) -> list:
-        return await self._get("/tests/reports")
+        return await self._unwrap_list("/tests/reports", "reports")
 
     async def get_test_report(self, report_id: str) -> dict:
         return await self._get(f"/tests/reports/{report_id}")
@@ -677,7 +701,7 @@ class AsyncProtoForgeClient:
         return resp.text
 
     async def get_report_trend(self, count: int = 20) -> list:
-        return await self._get("/tests/reports/trend", params={"count": count})
+        return await self._unwrap_list("/tests/reports/trend", "trends", params={"count": count})
 
     async def import_edgelite(self, config: dict) -> dict:
         return await self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
@@ -747,7 +771,7 @@ class AsyncProtoForgeClient:
         return await self._post("/templates", json=template)
 
     async def list_template_tags(self) -> list:
-        return await self._get("/templates/tags")
+        return await self._unwrap_list("/templates/tags", "tags")
 
     async def instantiate_template(self, template_id: str, device_id: str,
                                    device_name: str, protocol_config: dict | None = None) -> dict:
@@ -756,7 +780,7 @@ class AsyncProtoForgeClient:
         return await self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
 
     async def list_scenarios(self) -> list:
-        return await self._get("/scenarios")
+        return await self._unwrap_list("/scenarios", "scenarios")
 
     async def get_scenario(self, scenario_id: str) -> dict:
         return await self._get(f"/scenarios/{scenario_id}")
@@ -780,7 +804,7 @@ class AsyncProtoForgeClient:
         return await self._post("/tests/suites", json=suite_def)
 
     async def list_test_suites(self) -> list:
-        return await self._get("/tests/suites")
+        return await self._unwrap_list("/tests/suites", "suites")
 
     async def get_test_suite(self, suite_id: str) -> dict:
         return await self._get(f"/tests/suites/{suite_id}")
@@ -789,7 +813,7 @@ class AsyncProtoForgeClient:
         return await self._delete(f"/tests/suites/{suite_id}")
 
     async def list_forward_targets(self) -> list:
-        return await self._get("/forward/targets")
+        return await self._unwrap_list("/forward/targets", "targets")
 
     async def add_forward_target(self, target: dict) -> dict:
         return await self._post("/forward/targets", json=target)
@@ -815,7 +839,7 @@ class AsyncProtoForgeClient:
         return await self._post("/recorder/stop")
 
     async def list_recordings(self) -> list:
-        return await self._get("/recorder/recordings")
+        return await self._unwrap_list("/recorder/recordings", "recordings")
 
     async def get_recording(self, recording_id: str) -> dict:
         return await self._get(f"/recorder/recordings/{recording_id}")
@@ -851,7 +875,7 @@ class AsyncProtoForgeClient:
         return await self._post("/tests/quick-test", params=params)
 
     async def list_webhooks(self) -> list:
-        return await self._get("/webhooks")
+        return await self._unwrap_list("/webhooks", "webhooks")
 
     async def add_webhook(self, config: dict) -> dict:
         return await self._post("/webhooks", json=config)
@@ -870,7 +894,7 @@ class AsyncProtoForgeClient:
         return await self._post("/auth/register", json={"username": username, "password": password})
 
     async def list_users(self) -> list:
-        return await self._get("/auth/users")
+        return await self._unwrap_list("/auth/users", "users")
 
     async def admin_reset_password(self, username: str, new_password: str) -> dict:
         return await self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
@@ -885,7 +909,7 @@ class AsyncProtoForgeClient:
         return await self._delete(f"/auth/users/{username}")
 
     async def get_protocols_info(self) -> list:
-        return await self._get("/protocols/info")
+        return await self._unwrap_list("/protocols/info", "protocols")
 
     async def get_protocol_device_config(self, protocol_name: str) -> dict:
         return await self._get(f"/protocols/{protocol_name}/device-config")
@@ -894,13 +918,13 @@ class AsyncProtoForgeClient:
         return await self._delete("/logs")
 
     async def get_test_suggestions(self) -> list:
-        return await self._get("/tests/suggestions")
+        return await self._unwrap_list("/tests/suggestions", "suggestions")
 
     async def get_test_action_types(self) -> list:
-        return await self._get("/tests/action-types")
+        return await self._unwrap_list("/tests/action-types", "action_types")
 
     async def get_test_assertion_types(self) -> list:
-        return await self._get("/tests/assertion-types")
+        return await self._unwrap_list("/tests/assertion-types", "assertion_types")
 
     async def update_webhook(self, webhook_id: str, config: dict) -> dict:
         return await self._put(f"/webhooks/{webhook_id}", json=config)
@@ -932,7 +956,7 @@ class AsyncProtoForgeClient:
     async def stop_device_collect(self, device_id: str) -> dict:
         return await self._post(f"/integration/device/{device_id}/stop")
 
-    async def get_protocol_mappings(self) -> list:
+    async def get_protocol_mappings(self) -> dict:
         return await self._get("/integration/protocols")
 
     async def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict:
@@ -952,7 +976,7 @@ class AsyncProtoForgeClient:
         return await self._get("/integration/device-status")
 
     async def get_alarm_rules(self) -> list:
-        return await self._get("/integration/alarm-rules")
+        return await self._unwrap_list("/integration/alarm-rules", "rules")
 
     async def add_alarm_rule(self, rule: dict) -> dict:
         return await self._post("/integration/alarm-rules", json=rule)

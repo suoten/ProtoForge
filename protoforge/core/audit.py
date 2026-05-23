@@ -20,7 +20,11 @@ class AuditEntry:
     user_agent: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        d = asdict(self)
+        # FIXED-P1: 添加action_label友好提示语
+        canonical = _normalize_action(self.action)
+        d["action_label"] = _ACTION_LABELS.get(canonical, canonical)
+        return d
 
 
 class AuditLogger:
@@ -83,6 +87,11 @@ class AuditLogger:
                     start_time=start_time, end_time=end_time,
                     limit=limit, offset=offset,
                 )
+                # FIXED-P1: 数据库查询结果也需要添加action_label
+                for e in entries:
+                    if isinstance(e, dict) and "action_label" not in e:
+                        canonical = _normalize_action(e.get("action", ""))
+                        e["action_label"] = _ACTION_LABELS.get(canonical, canonical)
                 return entries, total
             except Exception as e:
                 logger.warning("Audit DB query failed, falling back to memory: %s", e)
@@ -199,6 +208,7 @@ _ACTION_ALIASES = {
     "delete_user": ["delete_user", "delete_users"],
     "update_user_role": ["update_user_role", "put_users"],
     "import_backup": ["import_backup", "post_backup"],
+    "export_backup": ["export_backup", "get_backup"],
     "create_webhook": ["create_webhook", "post_webhooks"],
     "delete_webhook": ["delete_webhook", "delete_webhooks"],
     "update_webhook": ["update_webhook", "put_webhooks"],
@@ -208,6 +218,44 @@ _ACTION_ALIASES = {
     "update_settings": ["update_settings", "put_settings"],
     "start_recording": ["start_recording", "post_recorder"],
     "stop_recording": ["stop_recording", "delete_recorder"],
+    "push_edgelite": ["push_edgelite", "post_edgelite"],
+    "test_edgelite": ["test_edgelite", "post_edgelite_test"],
+    "import_edgelite": ["import_edgelite", "post_edgelite_import"],
+}
+
+# FIXED-P1: 审计日志操作类型友好提示语映射
+_ACTION_LABELS = {
+    "run_test": "运行测试",
+    "create_device": "创建设备",
+    "delete_device": "删除设备",
+    "update_device": "更新设备",
+    "start_protocol": "启动协议",
+    "stop_protocol": "停止协议",
+    "create_scenario": "创建场景",
+    "delete_scenario": "删除场景",
+    "update_scenario": "更新场景",
+    "create_template": "创建模板",
+    "delete_template": "删除模板",
+    "update_template": "更新模板",
+    "login": "用户登录",
+    "register": "用户注册",
+    "change_password": "修改密码",
+    "delete_user": "删除用户",
+    "update_user_role": "修改用户角色",
+    "import_backup": "导入备份",
+    "export_backup": "导出备份",
+    "create_webhook": "创建Webhook",
+    "delete_webhook": "删除Webhook",
+    "update_webhook": "更新Webhook",
+    "create_forward": "创建转发目标",
+    "delete_forward": "删除转发目标",
+    "update_forward": "更新转发目标",
+    "update_settings": "更新系统设置",
+    "start_recording": "开始录制",
+    "stop_recording": "停止录制",
+    "push_edgelite": "推送至EdgeLite",
+    "test_edgelite": "测试EdgeLite连接",
+    "import_edgelite": "导入EdgeLite配置",
 }
 
 
@@ -290,6 +338,11 @@ _AUDIT_ACTION_MAP = [
     ("POST", "/forward", "create_forward", "forward"),
     ("DELETE", "/forward", "delete_forward", "forward"),
     ("PUT", "/forward", "update_forward", "forward"),
+    # EdgeLite
+    ("POST", "/edgelite", "import_edgelite", "edgelite"),
+    ("POST", "/edgelite/push", "push_edgelite", "edgelite"),
+    ("DELETE", "/edgelite/push", "delete_device", "edgelite"),
+    ("POST", "/edgelite/test", "test_edgelite", "edgelite"),
 ]
 
 # Paths to skip entirely

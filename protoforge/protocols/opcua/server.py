@@ -133,7 +133,18 @@ class OpcUaServer(ProtocolServer):
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
         self._host = "0.0.0.0"
         self._port = 4840
+        self._requested_port = 4840
         self._server_task: asyncio.Task | None = None
+
+    @property
+    def actual_port(self) -> int:
+        """返回协议服务器实际监听的端口"""
+        return self._port
+
+    @property
+    def requested_port(self) -> int:
+        """返回用户配置的端口"""
+        return self._requested_port
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
@@ -150,7 +161,8 @@ class OpcUaServer(ProtocolServer):
 
         self._status = ProtocolStatus.STARTING
         host = config.get("host", "0.0.0.0")
-        port = config.get("port", 4840)
+        self._requested_port = config.get("port", 4840)
+        port = self._requested_port
         self._host = host
         self._port = port
         self._endpoint = f"opc.tcp://{host}:{port}/protoforge"
