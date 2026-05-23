@@ -116,6 +116,10 @@ class HttpSimulatorServer(ProtocolServer):
                     content_length = int(headers.get("content-length", "0"))
                 except (ValueError, TypeError):
                     content_length = 0
+                if content_length > 10 * 1024 * 1024:  # FIXED-P0: 限制请求体大小为10MB，防止OOM攻击
+                    writer.write(self._json_response(413, {"error": "Payload too large"}))
+                    await writer.drain()
+                    break
                 body = b""
                 if content_length > 0:
                     body = await reader.readexactly(content_length)
@@ -226,7 +230,7 @@ class HttpSimulatorServer(ProtocolServer):
         return header.encode("utf-8")
 
     def _json_response(self, status: int, body: dict) -> bytes:
-        status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 500: "Internal Server Error"}.get(status, "OK")
+        status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
         # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *
         origin = self._cors_origin
@@ -244,14 +248,13 @@ class HttpSimulatorServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = HttpDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        api_prefix = proto_config.get("api_prefix", f"/api/{device_config.id}")
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_prefixes[device_config.id] = api_prefix  # FIXED-P1: 移入_behaviors_lock内保护
         await self._update_default_device_async(device_config.id)
-
-        proto_config = device_config.protocol_config or {}
-        api_prefix = proto_config.get("api_prefix", f"/api/{device_config.id}")
-        self._device_prefixes[device_config.id] = api_prefix
 
         logger.info("HTTP device created: %s (api_prefix=%s)", device_config.id, api_prefix)
         self._log_debug("system", "device_create",
@@ -263,7 +266,7 @@ class HttpSimulatorServer(ProtocolServer):
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
-        self._device_prefixes.pop(device_id, None)
+            self._device_prefixes.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
         await self._clear_default_device_async(device_id)
         logger.info("HTTP device removed: %s", device_id)
         self._log_debug("system", "device_remove",

@@ -58,6 +58,7 @@ class SimulationEngine:
         self._scenarios: dict[str, ScenarioConfig] = {}
         self._scenario_instances: dict[str, Scenario] = {}
         self._scenario_status: dict[str, ScenarioStatus] = {}
+        self._scenarios_lock = asyncio.Lock()  # FIXED-P1: 保护场景字典并发访问
         self._generator = DataGenerator()
         self._tick_task: Optional[asyncio.Task] = None
         self._running = False
@@ -211,8 +212,10 @@ class SimulationEngine:
             if config.id not in self._devices:
                 instance = DeviceInstance(config, self._generator)
                 self._devices[config.id] = instance
+            else:
+                instance = self._devices[config.id]  # FIXED-P0: 锁内获取instance引用，避免锁释放后KeyError
 
-        if allow_update and config.id in self._devices and self._devices[config.id].config != config:
+        if allow_update and instance.config != config:  # FIXED-P0: 使用锁内获取的instance引用，避免锁释放后访问_devices
             # Need to update - release lock first to avoid deadlock with update_device
             return await self.update_device(config.id, config)
 
@@ -316,11 +319,11 @@ class SimulationEngine:
         logger.info("Device removed: %s", device_id)
 
     async def update_device(self, device_id: str, config: DeviceConfig) -> DeviceInfo:
-        instance = self._devices.get(device_id)
-        if not instance:
-            raise ValueError(f"Device not found: {device_id}")
-
-        old_config = instance.config
+        async with self._devices_lock:  # FIXED-P0: 添加锁保护，防止并发update_device导致设备丢失
+            instance = self._devices.get(device_id)
+            if not instance:
+                raise ValueError(f"Device not found: {device_id}")
+            old_config = instance.config
         was_running = instance.status == DeviceStatus.ONLINE
         if was_running:
             try:
@@ -511,10 +514,11 @@ class SimulationEngine:
                 )
         return success
 
-    def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:
+    async def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:  # FIXED-P1: 改为async以支持锁
         _validate_entity_id(config.id, "Scenario")
-        self._scenarios[config.id] = config
-        self._scenario_status[config.id] = ScenarioStatus.STOPPED
+        async with self._scenarios_lock:
+            self._scenarios[config.id] = config
+            self._scenario_status[config.id] = ScenarioStatus.STOPPED
         logger.info("Scenario created: %s", config.id)
         return ScenarioInfo(
             id=config.id,
@@ -525,24 +529,26 @@ class SimulationEngine:
             rule_count=len(config.rules),
         )
 
-    def remove_scenario(self, scenario_id: str) -> None:
-        if scenario_id not in self._scenarios:
-            raise ValueError(f"Scenario not found: {scenario_id}")
-        status = self._scenario_status.get(scenario_id)
-        if status in (ScenarioStatus.RUNNING, ScenarioStatus.STARTING):
-            raise ValueError("Cannot delete a running or starting scenario, stop it first")
-        del self._scenarios[scenario_id]
-        self._scenario_status.pop(scenario_id, None)
+    async def remove_scenario(self, scenario_id: str) -> None:  # FIXED-P1: 改为async以支持锁
+        async with self._scenarios_lock:
+            if scenario_id not in self._scenarios:
+                raise ValueError(f"Scenario not found: {scenario_id}")
+            status = self._scenario_status.get(scenario_id)
+            if status in (ScenarioStatus.RUNNING, ScenarioStatus.STARTING):
+                raise ValueError("Cannot delete a running or starting scenario, stop it first")
+            del self._scenarios[scenario_id]
+            self._scenario_status.pop(scenario_id, None)
         logger.info("Scenario removed: %s", scenario_id)
 
-    def update_scenario(self, scenario_id: str, config: ScenarioConfig) -> ScenarioInfo:
-        if scenario_id not in self._scenarios:
-            raise ValueError(f"Scenario not found: {scenario_id}")
-        config.id = scenario_id
-        self._scenarios[scenario_id] = config
-        instance = self._scenario_instances.get(scenario_id)
-        if instance and hasattr(instance, 'config'):
-            instance.config = config
+    async def update_scenario(self, scenario_id: str, config: ScenarioConfig) -> ScenarioInfo:  # FIXED-P1: 改为async以支持锁
+        async with self._scenarios_lock:
+            if scenario_id not in self._scenarios:
+                raise ValueError(f"Scenario not found: {scenario_id}")
+            config.id = scenario_id
+            self._scenarios[scenario_id] = config
+            instance = self._scenario_instances.get(scenario_id)
+            if instance and hasattr(instance, 'config'):
+                instance.config = config
         logger.info("Scenario updated: %s", scenario_id)
         status = self._scenario_status.get(scenario_id, ScenarioStatus.STOPPED)
         return ScenarioInfo(
@@ -555,12 +561,11 @@ class SimulationEngine:
         )
 
     async def start_scenario(self, scenario_id: str) -> None:
-        config = self._scenarios.get(scenario_id)
-        if not config:
-            raise ValueError(f"Scenario not found: {scenario_id}")
-
-        scenario = Scenario(config, on_write_point=self.write_device_point)
-        self._scenario_status[scenario_id] = ScenarioStatus.STARTING
+        async with self._scenarios_lock:  # FIXED-P1: 保护场景状态并发访问
+            config = self._scenarios.get(scenario_id)
+            if not config:
+                raise ValueError(f"Scenario not found: {scenario_id}")
+            self._scenario_status[scenario_id] = ScenarioStatus.STARTING
         created_device_ids: list[str] = []
 
         try:
@@ -601,11 +606,13 @@ class SimulationEngine:
                 )
 
             scenario.start()
-            self._scenario_status[scenario_id] = ScenarioStatus.RUNNING
-            self._scenario_instances[scenario_id] = scenario
+            async with self._scenarios_lock:  # FIXED-P1: 保护场景状态并发访问
+                self._scenario_status[scenario_id] = ScenarioStatus.RUNNING
+                self._scenario_instances[scenario_id] = scenario
             logger.info("Scenario started: %s (failed devices: %s)", scenario_id, failed_devices or "none")
         except Exception as e:
-            self._scenario_status[scenario_id] = ScenarioStatus.ERROR
+            async with self._scenarios_lock:  # FIXED-P1: 保护场景状态并发访问
+                self._scenario_status[scenario_id] = ScenarioStatus.ERROR
             for dev_id in created_device_ids:
                 try:
                     await self.remove_device(dev_id)
@@ -616,15 +623,14 @@ class SimulationEngine:
             raise
 
     async def stop_scenario(self, scenario_id: str) -> None:
-        config = self._scenarios.get(scenario_id)
-        if not config:
-            raise ValueError(f"Scenario not found: {scenario_id}")
-
-        scenario = self._scenario_instances.pop(scenario_id, None)
+        async with self._scenarios_lock:  # FIXED-P1: 保护场景状态并发访问
+            config = self._scenarios.get(scenario_id)
+            if not config:
+                raise ValueError(f"Scenario not found: {scenario_id}")
+            scenario = self._scenario_instances.pop(scenario_id, None)
+            self._scenario_status[scenario_id] = ScenarioStatus.STOPPED
         if scenario:
             scenario.stop()
-
-        self._scenario_status[scenario_id] = ScenarioStatus.STOPPED
 
         for device_config in config.devices:
             try:

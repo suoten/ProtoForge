@@ -58,6 +58,35 @@ class Database:
                     if row and row[0] != "ok":
                         logger.warning("SQLite database integrity check failed: %s, attempting rebuild", row[0])
                         await check_conn.close()
+                        # FIXED: 先尝试 WAL checkpoint 恢复，再决定是否丢弃
+                        try:
+                            recover_conn = await aiosqlite.connect(self._db_path)
+                            try:
+                                await recover_conn.execute("PRAGMA journal_mode=WAL")
+                                await recover_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                                # 重新检查完整性
+                                cursor2 = await recover_conn.execute("PRAGMA integrity_check")
+                                row2 = await cursor2.fetchone()
+                                if row2 and row2[0] == "ok":
+                                    logger.info("Database recovered after WAL checkpoint, no data loss")
+                                    await recover_conn.close()
+                                    # 恢复成功，跳过备份步骤
+                                    self._db = await aiosqlite.connect(self._db_path)
+                                    self._db.row_factory = aiosqlite.Row
+                                    await self._db.execute("PRAGMA journal_mode=WAL")
+                                    await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+                                    await self._create_tables_sqlite()
+                                    logger.info("SQLite database connected after recovery: %s", self._db_path)
+                                    return
+                            except Exception as recover_err:
+                                logger.debug("WAL checkpoint recovery attempt failed: %s", recover_err)
+                            finally:
+                                try:
+                                    await recover_conn.close()
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
                         # Backup and remove corrupted database
                         import shutil
                         backup_path = self._db_path + ".corrupted"
@@ -80,6 +109,7 @@ class Database:
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")
+            await self._db.execute("PRAGMA synchronous=NORMAL")  # FIXED: WAL模式下NORMAL已足够安全，比FULL性能更好
             await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
@@ -110,6 +140,11 @@ class Database:
             await self._pg_pool.close()
             self._pg_pool = None
         elif self._db:
+            # FIXED: 关闭前执行 WAL checkpoint，确保数据完整落盘，避免下次启动时损坏
+            try:
+                await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception as e:
+                logger.debug("WAL checkpoint on close failed: %s", e)
             await self._db.close()
             self._db = None
 

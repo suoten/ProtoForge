@@ -26,9 +26,9 @@ namespace ProtoForge
             _token = response?.GetProperty("access_token").GetString();
         }
 
-        public async Task<JsonElement?> RegisterAsync(string username, string password, string role = "user")
+        public async Task<JsonElement?> RegisterAsync(string username, string password)  // FIXED: P1-Q2 - remove extra role parameter, backend RegisterRequest has no role field
         {
-            var body = new { username, password, role };
+            var body = new { username, password };
             return await PostAsync("/api/v1/auth/register", body);
         }
 
@@ -98,12 +98,25 @@ namespace ProtoForge
 
         public async Task<JsonElement?> StartProtocolAsync(string name, object? config = null)
         {
-            return await PostAsync($"/api/v1/protocols/{name}/start", config ?? new { });
+            // FIXED: S3 - send null body when config is empty, backend applies defaults only when body is None
+            return await PostAsync($"/api/v1/protocols/{name}/start", config);
         }
 
         public async Task<JsonElement?> StopProtocolAsync(string name)
         {
             return await PostAsync($"/api/v1/protocols/{name}/stop", new { });
+        }
+
+        public async Task<JsonElement?> StartAllProtocolsAsync()
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            return await PostAsync("/api/v1/protocols/start-all", new { });
+        }
+
+        public async Task<JsonElement?> StopAllProtocolsAsync()
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            return await PostAsync("/api/v1/protocols/stop-all", new { });
         }
 
         public async Task<JsonElement?> ListDevicesAsync(string? protocol = null)
@@ -575,6 +588,24 @@ namespace ProtoForge
             await DeleteAsync($"/api/v1/edgelite/push/{deviceId}");  // FIXED: 后端路由为DELETE /edgelite/push/{id}，非/integration/device/{id}
         }
 
+        public async Task<JsonElement?> GetEdgeliteDeviceStatusAsync(string deviceId)
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            return await GetAsync($"/api/v1/edgelite/status/{deviceId}");
+        }
+
+        public async Task<JsonElement?> ReadEdgeliteDevicePointsAsync(string deviceId)
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            return await GetAsync($"/api/v1/edgelite/points/{deviceId}");
+        }
+
+        public async Task<JsonElement?> VerifyEdgelitePipelineAsync(string deviceId)
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            return await GetAsync($"/api/v1/edgelite/pipeline/{deviceId}");
+        }
+
         public async Task<JsonElement?> StartDeviceCollectAsync(string deviceId)
         {
             return await PostAsync($"/api/v1/integration/device/{deviceId}/start", new { });
@@ -664,6 +695,21 @@ namespace ProtoForge
         public async Task<JsonElement?> GetAuditStatsAsync()
         {
             return await GetAsync("/api/v1/audit/stats");
+        }
+
+        public async Task DeleteAuditEntryAsync(string entryId)
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            await DeleteAsync($"/api/v1/audit/{entryId}");
+        }
+
+        public async Task<JsonElement?> ClearAuditLogAsync(string? before = null)
+        {
+            // FIXED: P1-Q1 - add missing SDK method
+            var path = "/api/v1/audit";
+            if (!string.IsNullOrEmpty(before))
+                path += $"?before={Uri.EscapeDataString(before)}";
+            return await DeleteAsync(path);
         }
 
         public async Task<JsonElement?> ExportBackupAsync()

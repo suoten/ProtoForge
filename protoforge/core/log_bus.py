@@ -97,4 +97,5 @@ class LogBus:
         ]
 
     def clear(self) -> None:
-        self._entries.clear()
+        with self._lock:  # FIXED-P0: 添加锁保护，避免与emit并发导致deque迭代中修改
+            self._entries.clear()

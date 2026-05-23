@@ -174,19 +174,23 @@ class OpcUaServer(ProtocolServer):
                 server_name = "ProtoForge OPC-UA Server"
             self._server.set_server_name(server_name)
 
-            if security_mode != "None" and ASYNCUA_AVAILABLE:
+            # FIXED: 显式设置安全策略，避免 asyncua 内部注册非开放端点时发出警告
+            if ASYNCUA_AVAILABLE:
                 try:
                     from asyncua import ua
-                    mode_map = {
-                        "None": ua.MessageSecurityMode.None_,
-                        "Sign": ua.MessageSecurityMode.Sign,
-                        "SignAndEncrypt": ua.MessageSecurityMode.SignAndEncrypt,
-                    }
-                    policy_map = {
-                        "None": ua.SecurityPolicyType.NoSecurity,
-                        "Basic256Sha256": ua.SecurityPolicyType.Basic256Sha256,
-                    }
-                    if security_mode in mode_map:
+                    if security_mode == "None":
+                        # 仅允许无安全策略，避免 asyncua 尝试注册加密端点
+                        self._server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
+                    else:
+                        policy_map = {
+                            "None": ua.SecurityPolicyType.NoSecurity,
+                            "Basic256Sha256": ua.SecurityPolicyType.Basic256Sha256,
+                        }
+                        mode_map = {
+                            "None": ua.MessageSecurityMode.None_,
+                            "Sign": ua.MessageSecurityMode.Sign,
+                            "SignAndEncrypt": ua.MessageSecurityMode.SignAndEncrypt,
+                        }
                         try:
                             cert_path = proto_config.get("certificate_path", "")
                             key_path = proto_config.get("private_key_path", "")
@@ -203,6 +207,7 @@ class OpcUaServer(ProtocolServer):
                             logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
                         except Exception as se:
                             logger.warning("Failed to set OPC-UA security policy: %s, falling back to None", se)
+                            self._server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
                 except Exception as e:
                     logger.warning("OPC-UA security configuration error: %s", e)
 

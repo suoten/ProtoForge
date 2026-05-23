@@ -38,11 +38,8 @@ func (c *Client) Login(username, password string) (map[string]interface{}, error
 	return resp, nil
 }
 
-func (c *Client) Register(username, password, role string) (map[string]interface{}, error) {
-	if role == "" {
-		role = "user"
-	}
-	body := map[string]string{"username": username, "password": password, "role": role}
+func (c *Client) Register(username, password string) (map[string]interface{}, error) {  // FIXED: P1-Q2 - remove extra role parameter, backend RegisterRequest has no role field
+	body := map[string]string{"username": username, "password": password}
 	return c.post("/api/v1/auth/register", body)
 }
 
@@ -99,14 +96,25 @@ func (c *Client) GetProtocolDeviceConfig(protocolName string) (map[string]interf
 }
 
 func (c *Client) StartProtocol(name string, config map[string]interface{}) (map[string]interface{}, error) {
-	if config == nil {
-		config = map[string]interface{}{}
+	// FIXED: S3 - send nil body when config is empty, backend applies defaults only when body is None
+	if config == nil || len(config) == 0 {
+		return c.post("/api/v1/protocols/"+name+"/start", nil)
 	}
 	return c.post("/api/v1/protocols/"+name+"/start", config)
 }
 
 func (c *Client) StopProtocol(name string) (map[string]interface{}, error) {
 	return c.post("/api/v1/protocols/"+name+"/stop", nil)
+}
+
+func (c *Client) StartAllProtocols() (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.post("/api/v1/protocols/start-all", nil)
+}
+
+func (c *Client) StopAllProtocols() (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.post("/api/v1/protocols/stop-all", nil)
 }
 
 func (c *Client) ListDevices(protocol string) (map[string]interface{}, error) {
@@ -553,6 +561,21 @@ func (c *Client) DeleteDeviceFromEdgelite(deviceID string) (map[string]interface
 	return c.delete("/api/v1/edgelite/push/" + deviceID)  // FIXED: 后端路由为DELETE /edgelite/push/{id}，非/integration/device/{id}
 }
 
+func (c *Client) GetEdgeliteDeviceStatus(deviceID string) (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.get("/api/v1/edgelite/status/" + deviceID)
+}
+
+func (c *Client) ReadEdgeliteDevicePoints(deviceID string) (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.get("/api/v1/edgelite/points/" + deviceID)
+}
+
+func (c *Client) VerifyEdgelitePipeline(deviceID string) (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.get("/api/v1/edgelite/pipeline/" + deviceID)
+}
+
 func (c *Client) StartDeviceCollect(deviceID string) (map[string]interface{}, error) {
 	return c.post("/api/v1/integration/device/"+deviceID+"/start", nil)
 }
@@ -641,6 +664,20 @@ func (c *Client) QueryAuditLog(limit int, action, username, start, end string) (
 
 func (c *Client) GetAuditStats() (map[string]interface{}, error) {
 	return c.get("/api/v1/audit/stats")
+}
+
+func (c *Client) DeleteAuditEntry(entryID string) (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	return c.delete("/api/v1/audit/" + entryID)
+}
+
+func (c *Client) ClearAuditLog(before string) (map[string]interface{}, error) {
+	// FIXED: P1-Q1 - add missing SDK method
+	path := "/api/v1/audit"
+	if before != "" {
+		path += "?before=" + url.QueryEscape(before)
+	}
+	return c.delete(path)
 }
 
 func (c *Client) ExportBackup() (map[string]interface{}, error) {

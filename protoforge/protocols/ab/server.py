@@ -500,13 +500,12 @@ class AbServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = AbDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_slots[device_config.id] = proto_config.get("slot", 0)  # FIXED-P1: 移入_behaviors_lock内保护
         await self._update_default_device_async(device_config.id)
-
-        proto_config = device_config.protocol_config or {}
-        self._device_slots[device_config.id] = proto_config.get("slot", 0)
 
         logger.info("AB device created: %s (slot=%d)",
                      device_config.id, self._device_slots[device_config.id])
@@ -519,7 +518,7 @@ class AbServer(ProtocolServer):
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
-        self._device_slots.pop(device_id, None)
+            self._device_slots.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
         await self._clear_default_device_async(device_id)
         logger.info("AB device removed: %s", device_id)
         self._log_debug("system", "device_remove",

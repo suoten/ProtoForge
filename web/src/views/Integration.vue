@@ -810,7 +810,7 @@ async function validateDevice() {
       device_id: validateForm.value.device_id,
       protocol: validateForm.value.protocol || (dev ? dev.protocol : ''),
       points: dev ? (dev.points || []) : [],
-      config: dev ? (dev.protocol_config || {}) : {},
+      driver_config: dev ? (dev.protocol_config || {}) : {},  // FIXED: S1 - use driver_config to match backend integration.py:140
     }
     validateResult.value = await api.validateDeviceCompatibility(payload)
   } catch (e) {

@@ -45,6 +45,8 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
         device_ids = request.get("device_ids", [])
         if not isinstance(device_ids, list):
             raise HTTPException(status_code=400, detail="device_ids must be an array")
+        if not all(isinstance(d, str) for d in device_ids):  # FIXED-P1: 校验device_ids元素类型
+            raise HTTPException(status_code=400, detail="device_ids must be an array of strings")
         if not device_ids:
             raise HTTPException(status_code=400, detail="device_ids must not be empty")
         protocol_filter = request.get("protocol", "")
@@ -135,6 +137,8 @@ async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
 @router.post("/validate")
 async def validate_device_compatibility(request: dict[str, Any], _user: dict = Depends(require_viewer)):
     try:
+        if not isinstance(request, dict):  # FIXED-P1: 添加请求体类型校验
+            raise HTTPException(status_code=400, detail="Request body must be a JSON object")
         manager = _get_integration_manager()
         # FIXED: 统一参数名 - 只接受driver_config，移除对config的隐式兼容，避免前端必须猜测参数名
         driver_config = request.get("driver_config", {})
@@ -207,6 +211,8 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends
         target_device_id = request.get("target_device_id", "")
         if not rule_id or not source_device_id or not target_device_id:
             raise HTTPException(status_code=400, detail="rule_id, source_device_id and target_device_id are required")
+        if not isinstance(rule_id, str) or not isinstance(source_device_id, str) or not isinstance(target_device_id, str):  # FIXED-P1: 校验字段类型
+            raise HTTPException(status_code=400, detail="rule_id, source_device_id and target_device_id must be strings")
         valid_actions = {"stop_device", "start_device", "inject_fault", "adjust_generator", "log_only", "send_alarm", "custom"}
         action = request.get("action", "stop_device")
         if action not in valid_actions:

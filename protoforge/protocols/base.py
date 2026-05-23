@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -24,6 +25,7 @@ class ProtocolServer(ABC):
         self._debug_callback: Optional[Callable] = None
         self._default_device_id: Optional[str] = None
         self._default_device_lock = asyncio.Lock()  # FIXED: 添加锁保护_default_device_id的并发访问
+        self._default_device_sync_lock = threading.Lock()  # FIXED-P1: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         self._behaviors_lock = asyncio.Lock()  # FIXED: 添加锁保护_behaviors字典的并发访问
 
     def set_debug_callback(self, callback: Callable) -> None:
@@ -77,9 +79,8 @@ class ProtocolServer(ABC):
         return getattr(self, "_host", "0.0.0.0")
 
     def _update_default_device(self, device_id: str) -> None:
-        # FIXED: 添加锁保护，防止多设备并发场景下的竞态条件
-        # 注意：此方法为同步方法，在async上下文中调用时需使用await或run_in_executor
-        self._default_device_id = device_id
+        with self._default_device_sync_lock:  # FIXED-P1: 同步方法加锁保护_default_device_id
+            self._default_device_id = device_id
 
     async def _update_default_device_async(self, device_id: str) -> None:
         # FIXED: 异步版本的默认设备更新，使用锁保护
@@ -87,8 +88,9 @@ class ProtocolServer(ABC):
             self._default_device_id = device_id
 
     def _clear_default_device(self, device_id: str) -> None:
-        if self._default_device_id == device_id:
-            self._default_device_id = None
+        with self._default_device_sync_lock:  # FIXED-P1: 同步方法加锁保护_default_device_id
+            if self._default_device_id == device_id:
+                self._default_device_id = None
 
     async def _clear_default_device_async(self, device_id: str) -> None:
         # FIXED: 异步版本的默认设备清除，使用锁保护

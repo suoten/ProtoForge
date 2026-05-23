@@ -95,7 +95,8 @@ public class ProtoForgeClient {
     }
 
     public JsonNode startProtocol(String name) throws Exception {
-        return post("/api/v1/protocols/" + name + "/start", new HashMap<>());
+        // FIXED: S3 - send null body when no config, backend applies defaults only when body is null
+        return post("/api/v1/protocols/" + name + "/start", null);
     }
 
     public JsonNode startProtocol(String name, Map<String, Object> config) throws Exception {
@@ -212,8 +213,15 @@ public class ProtoForgeClient {
         return delete("/api/v1/templates/" + templateId);
     }
 
-    public JsonNode searchTemplates(String query) throws Exception {
-        return get("/api/v1/templates/search?q=" + java.net.URLEncoder.encode(query, "UTF-8"));  // FIXED: URL编码query参数
+    public JsonNode searchTemplates(String query, String protocol, String tag) throws Exception {  // FIXED: P1-Q3 - add missing parameters to match backend API
+        StringBuilder params = new StringBuilder("?q=").append(java.net.URLEncoder.encode(query, "UTF-8"));
+        if (protocol != null && !protocol.isEmpty()) {
+            params.append("&protocol=").append(java.net.URLEncoder.encode(protocol, "UTF-8"));
+        }
+        if (tag != null && !tag.isEmpty()) {
+            params.append("&tag=").append(java.net.URLEncoder.encode(tag, "UTF-8"));
+        }
+        return get("/api/v1/templates/search" + params);
     }
 
     public JsonNode listTemplateTags() throws Exception {
@@ -484,8 +492,16 @@ public class ProtoForgeClient {
         return post("/api/v1/integration/device/" + deviceId + "/stop", new HashMap<>());
     }
 
-    public JsonNode getBackhaulData(String deviceId) throws Exception {
-        return get("/api/v1/integration/backhaul-data?device_id=" + deviceId);
+    public JsonNode getBackhaulData(String deviceId, String limit) throws Exception {  // FIXED: P1-Q3 - add missing parameters to match backend API
+        StringBuilder params = new StringBuilder();
+        if (deviceId != null && !deviceId.isEmpty()) {
+            params.append("device_id=").append(java.net.URLEncoder.encode(deviceId, "UTF-8"));
+        }
+        if (limit != null && !limit.isEmpty()) {
+            if (params.length() > 0) params.append("&");
+            params.append("limit=").append(java.net.URLEncoder.encode(limit, "UTF-8"));
+        }
+        return get("/api/v1/integration/backhaul-data?" + params);
     }
 
     public JsonNode getDeviceStatusCache() throws Exception {
@@ -560,12 +576,14 @@ public class ProtoForgeClient {
         return get("/api/v1/audit?limit=" + limit);
     }
 
-    public JsonNode queryAuditLog(int limit, String action, String username, String startTime, String endTime) throws Exception {  // FIXED: 支持完整审计日志查询参数
+    public JsonNode queryAuditLog(int limit, String action, String username, String startTime, String endTime, String resourceType, String offset) throws Exception {  // FIXED: P1-Q3 - add missing parameters to match backend API
         StringBuilder params = new StringBuilder("?limit=").append(limit);
         if (action != null && !action.isEmpty()) params.append("&action=").append(java.net.URLEncoder.encode(action, "UTF-8"));
         if (username != null && !username.isEmpty()) params.append("&username=").append(java.net.URLEncoder.encode(username, "UTF-8"));
         if (startTime != null && !startTime.isEmpty()) params.append("&start_time=").append(java.net.URLEncoder.encode(startTime, "UTF-8"));  // FIXED: 后端参数名为start_time
         if (endTime != null && !endTime.isEmpty()) params.append("&end_time=").append(java.net.URLEncoder.encode(endTime, "UTF-8"));  // FIXED: 后端参数名为end_time
+        if (resourceType != null && !resourceType.isEmpty()) params.append("&resource_type=").append(java.net.URLEncoder.encode(resourceType, "UTF-8"));
+        if (offset != null && !offset.isEmpty()) params.append("&offset=").append(java.net.URLEncoder.encode(offset, "UTF-8"));
         return get("/api/v1/audit" + params);
     }
 

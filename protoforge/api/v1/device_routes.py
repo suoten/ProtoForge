@@ -46,6 +46,11 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
                 db_ok = False
                 db_err_msg = str(db_err)
                 logger.error("Failed to save device %s to DB: %s", config.id, db_err)
+                try:  # FIXED-P1: 持久化失败时回滚内存中的设备创建
+                    await engine.remove_device(config.id)
+                except Exception as rollback_err:
+                    logger.error("Failed to rollback device %s after DB save failure: %s", config.id, rollback_err)
+                raise HTTPException(status_code=500, detail=f"Device persistence failed: {db_err_msg}")
         try:
             await engine.start_device(config.id)
         except Exception as start_err:

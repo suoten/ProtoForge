@@ -138,7 +138,7 @@ def main():
     print("  |   安装成功！正在启动 ProtoForge ...               |")
     print("  |                                                  |")
     print(f"  |   浏览器打开 http://localhost:{port}              |")
-    print(f"  |   登录：admin / {password}                       |")
+    print(f"  |   登录：admin / {'*' * len(password)}                       |")  # FIXED-P0: 密码脱敏显示，不打印明文
     print("  |                                                  |")
     print("  |   按 Ctrl+C 可停止服务                           |")
     print("  |                                                  |")

@@ -373,7 +373,7 @@ class ForwardEngine:
                         "detail": msg.detail,
                     })
             except asyncio.TimeoutError:
-                pass
+                logger.debug("ForwardEngine flush timeout, no records in queue")  # FIXED-P1: 超时时记录日志而非静默忽略
             if records and self._targets:
                 for name, target in self._targets.items():
                     for attempt in range(self._retry_count):

@@ -19,7 +19,7 @@ services:
     environment:
       PROTOFORGE_DB_PATH: data/protoforge.db
       PROTOFORGE_LOG_LEVEL: info
-      PROTOFORGE_ADMIN_PASSWORD: admin
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-changeme}
       PROTOFORGE_DEMO_MODE: "1"
     volumes:
       - protoforge-data:/app/data

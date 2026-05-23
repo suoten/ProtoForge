@@ -1,6 +1,8 @@
 import logging
 import os
 import re
+import threading
+import time
 import uuid
 from typing import Any
 from urllib.parse import quote
@@ -24,6 +26,39 @@ PROTOCOL_MAP: dict[str, str] = {
 }
 
 EDGELITE_DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$")
+
+# FIXED: 添加 token 缓存，避免每次 API 调用都重新登录
+_token_cache: dict[str, dict[str, Any]] = {}  # url -> {token, expires_at, refresh_token}
+_token_cache_lock = threading.Lock()
+_TOKEN_REFRESH_MARGIN = 30  # token 过期前30秒视为需要刷新
+
+
+def _get_cached_token(url: str) -> str | None:
+    """从缓存中获取有效的 access token，过期则返回 None"""
+    url_key = url.rstrip("/")
+    with _token_cache_lock:
+        entry = _token_cache.get(url_key)
+        if entry and time.time() < entry.get("expires_at", 0) - _TOKEN_REFRESH_MARGIN:
+            return entry.get("token")
+    return None
+
+
+def _cache_token(url: str, token: str, expires_in: int = 86400, refresh_token: str = "") -> None:
+    """缓存 access token"""
+    url_key = url.rstrip("/")
+    with _token_cache_lock:
+        _token_cache[url_key] = {
+            "token": token,
+            "expires_at": time.time() + expires_in,
+            "refresh_token": refresh_token,
+        }
+
+
+def _invalidate_token(url: str) -> None:
+    """使缓存的 token 失效"""
+    url_key = url.rstrip("/")
+    with _token_cache_lock:
+        _token_cache.pop(url_key, None)
 
 
 def _normalize_device_id(device_id: str) -> str:
@@ -420,6 +455,11 @@ class EdgeLiteError(Exception):
 
 
 async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, password: str) -> str:
+    # FIXED: 优先使用缓存的 token，避免每次请求都重新登录
+    cached = _get_cached_token(url)
+    if cached:
+        return cached
+
     try:
         login_resp = await client.post(
             f"{url.rstrip('/')}/api/v1/auth/login",
@@ -443,6 +483,17 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     token = (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
     if not token:
         raise EdgeLiteError("token", desc("edgelite.error.token_missing"), desc("edgelite.suggestion.check_version"))
+
+    # FIXED: 缓存获取到的 token，默认24小时过期
+    expires_in = 86400
+    if isinstance(inner, dict):
+        try:
+            expires_in = int(inner.get("expires_in", inner.get("exp", 86400)))
+        except (ValueError, TypeError):
+            pass
+    refresh_token = (inner.get("refresh_token", "") if isinstance(inner, dict) else "") or data.get("refresh_token", "")
+    _cache_token(url, token, expires_in, refresh_token)
+
     return token
 
 
@@ -453,6 +504,28 @@ def _extract_token(login_resp: httpx.Response) -> str:
         raise EdgeLiteError("token", desc("edgelite.error.token_format").format(error=e), desc("edgelite.suggestion.check_version")) from e
     inner = data.get("data")
     return (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
+
+
+async def _get_auth_headers(
+    client: httpx.AsyncClient, url: str, username: str, password: str
+) -> tuple[dict[str, str], None] | tuple[dict[str, str], EdgeLiteError]:
+    """获取认证头，优先使用缓存 token。返回 (headers, error)，error 为 None 表示成功。"""
+    try:
+        token = await _login_edgelite(client, url, username, password)
+    except EdgeLiteError as e:
+        return {}, e
+    except Exception as e:
+        return {}, EdgeLiteError("unknown", str(e), desc("edgelite.suggestion.check_network"))
+    return {"Authorization": f"Bearer {token}"}, None
+
+
+async def _relogin_on_401(
+    client: httpx.AsyncClient, url: str, username: str, password: str
+) -> dict[str, str]:
+    """当缓存的 token 失效（API 返回 401）时，清除缓存并重新登录。返回新的 headers。"""
+    _invalidate_token(url)
+    token = await _login_edgelite(client, url, username, password)
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
@@ -475,19 +548,10 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
         }
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        except EdgeLiteError as e:
-            return {
-                "ok": False,
-                "error": str(e),
-                "error_type": e.error_type,
-                "suggestion": e.suggestion,
-            }
-        except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
-
-        headers = {"Authorization": f"Bearer {token}"}
+        # FIXED: 使用带缓存的认证，避免每次重新登录
+        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        if auth_err:
+            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
         try:
             create_resp = await client.post(
@@ -500,6 +564,17 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             return {"ok": False, "error": desc("edgelite.error.push_timeout"), "error_type": "timeout"}
         except Exception as e:
             return {"ok": False, "error": desc("edgelite.error.push_exception").format(error=e), "error_type": "unknown"}
+
+        # FIXED: 缓存 token 失效时自动重新登录重试
+        if create_resp.status_code == 401:
+            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+            try:
+                create_resp = await client.post(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+                    json=payload, headers=headers,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                return {"ok": False, "error": str(e), "error_type": "unknown"}
 
         if create_resp.status_code in (200, 201):
             logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
@@ -547,14 +622,11 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        except EdgeLiteError as e:
-            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
-        except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
+        # FIXED: 使用带缓存的认证
+        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        if auth_err:
+            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
-        headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.delete(
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
@@ -566,6 +638,18 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": "Removal request timed out", "error_type": "timeout"}
         except Exception as e:
             return {"ok": False, "error": f"Removal request exception: {e}", "error_type": "unknown"}
+
+        # FIXED: 缓存 token 失效时自动重新登录重试
+        if resp.status_code == 401:
+            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+            try:
+                resp = await client.delete(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                    headers=headers,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                return {"ok": False, "error": str(e), "error_type": "unknown"}
+
         if resp.status_code in (200, 204, 404):
             return {"ok": True, "action": "deleted", "device_id": device_id}
         return {"ok": False, "error": f"Delete failed: HTTP {resp.status_code}", "error_type": "delete_failed"}
@@ -578,14 +662,11 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
-        try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        except EdgeLiteError as e:
-            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
-        except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
+        # FIXED: 使用带缓存的认证
+        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        if auth_err:
+            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
-        headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.get(
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
@@ -597,6 +678,18 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": "Status query request timed out", "error_type": "timeout"}
         except Exception as e:
             return {"ok": False, "error": f"Status query request exception: {e}", "error_type": "unknown"}
+
+        # FIXED: 缓存 token 失效时自动重新登录重试
+        if resp.status_code == 401:
+            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+            try:
+                resp = await client.get(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                    headers=headers,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                return {"ok": False, "error": str(e), "error_type": "unknown"}
+
         if resp.status_code == 200:
             try:
                 raw = resp.json()
@@ -623,14 +716,11 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
-        try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        except EdgeLiteError as e:
-            return {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
-        except Exception as e:
-            return {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
+        # FIXED: 使用带缓存的认证
+        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        if auth_err:
+            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
-        headers = {"Authorization": f"Bearer {token}"}
         try:
             resp = await client.get(
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
@@ -642,6 +732,18 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
             return {"ok": False, "error": "Read points request timed out", "error_type": "timeout"}
         except Exception as e:
             return {"ok": False, "error": f"Read points request exception: {e}", "error_type": "unknown"}
+
+        # FIXED: 缓存 token 失效时自动重新登录重试
+        if resp.status_code == 401:
+            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+            try:
+                resp = await client.get(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+                    headers=headers,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                return {"ok": False, "error": str(e), "error_type": "unknown"}
+
         if resp.status_code == 200:
             try:
                 raw = resp.json()
@@ -828,18 +930,13 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     result: dict[str, Any] = {"device_id": device_id, "steps": {}}
 
     async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        try:
-            token = await _login_edgelite(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        except EdgeLiteError as e:
-            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": e.error_type, "suggestion": e.suggestion}
-            result["ok"] = False
-            return result
-        except Exception as e:
-            result["steps"]["auth"] = {"ok": False, "error": str(e), "error_type": "unknown", "suggestion": desc("edgelite.suggestion.check_network")},
+        # FIXED: 使用带缓存的认证
+        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        if auth_err:
+            result["steps"]["auth"] = {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
             result["ok"] = False
             return result
         result["steps"]["auth"] = {"ok": True}
-        headers = {"Authorization": f"Bearer {token}"}
 
         try:
             dev_resp = await client.get(
@@ -858,6 +955,20 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)},
             result["ok"] = False
             return result
+
+        # FIXED: 缓存 token 失效时自动重新登录重试
+        if dev_resp.status_code == 401:
+            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+            try:
+                dev_resp = await client.get(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                    headers=headers,
+                )
+            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                result["steps"]["register"] = {"ok": False, "error": str(e)}
+                result["ok"] = False
+                return result
+
         if dev_resp.status_code == 404:
             result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
             result["ok"] = False

@@ -240,7 +240,7 @@ async function connectWebSocket() {
   ws.onopen = () => {
     wsConnected.value = true
     reconnectAttempts = 0
-    api.getLogs({ limit: 200 }).then(data => {
+    api.getLogs({ count: 200 }).then(data => {
       if (Array.isArray(data) && data.length > 0) {
         logs.value = data.slice(-MAX_LOGS)
         scrollToBottom()

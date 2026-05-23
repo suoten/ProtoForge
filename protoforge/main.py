@@ -1,6 +1,7 @@
 import logging
 import logging.handlers
 import os
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -20,6 +21,34 @@ from protoforge.db.session import Database
 from protoforge.protocols import PROTOCOL_REGISTRY
 
 logger = logging.getLogger(__name__)
+
+# FIXED: 脱敏 uvicorn 访问日志中的 JWT token，避免敏感信息泄露到日志
+class _TokenRedactingFilter(logging.Filter):
+    _TOKEN_PATTERN = re.compile(r'token=eyJ[A-Za-z0-9_-]+')
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, 'msg') and isinstance(record.msg, str):
+            record.msg = self._TOKEN_PATTERN.sub('token=***', record.msg)
+        if hasattr(record, 'args') and record.args:
+            try:
+                if isinstance(record.args, dict):
+                    for k, v in record.args.items():
+                        if isinstance(v, str):
+                            record.args[k] = self._TOKEN_PATTERN.sub('token=***', v)
+                elif isinstance(record.args, (tuple, list)):
+                    record.args = tuple(
+                        self._TOKEN_PATTERN.sub('token=***', a) if isinstance(a, str) else a
+                        for a in record.args
+                    )
+            except Exception:
+                pass
+        return True
+
+
+# 安装脱敏过滤器到 uvicorn 访问日志
+for _uv_logger_name in ("uvicorn.access", "uvicorn.error"):
+    _uv_logger = logging.getLogger(_uv_logger_name)
+    _uv_logger.addFilter(_TokenRedactingFilter())
 
 _LOG_MAX_BYTES = 10 * 1024 * 1024  # FIXED: P4 - Q5 日志文件最大字节数(10MB)，提取为模块级常量
 
@@ -88,7 +117,19 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     # FIXED: S2/S3 - startup security warnings for empty JWT secret, no_auth mode, and default password
-    if not settings.jwt_secret or settings.jwt_secret == "mlLn6iuAEpJ_DrTojBDWqodv5wBE9O6-xrkS3jsltGI":
+    # FIXED: 不再硬编码示例密钥值，改为检查密钥是否来自 .env.example（与示例文件内容相同）
+    _EXAMPLE_SECRET = ""
+    try:
+        from pathlib import Path
+        _example_env = Path(__file__).resolve().parent.parent / ".env.example"
+        if _example_env.exists():
+            for _line in _example_env.read_text(encoding="utf-8").splitlines():
+                if _line.strip().startswith("PROTOFORGE_JWT_SECRET="):
+                    _EXAMPLE_SECRET = _line.strip().split("=", 1)[1].strip()
+                    break
+    except Exception:
+        pass
+    if not settings.jwt_secret or (_EXAMPLE_SECRET and settings.jwt_secret == _EXAMPLE_SECRET):
         logger.warning(
             "SECURITY: JWT secret is empty or using example default. "
             "Set PROTOFORGE_JWT_SECRET to a strong random value for production."

@@ -416,7 +416,7 @@ function connectLogWs() {
   // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整日志
   logWs.onopen = () => {
     logWsReconnectDelay = 1000; logWsReconnectAttempts = 0
-    api.getLogs({ limit: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {})
+    api.getLogs({ count: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {})
   }
   logWs.onerror = () => {
     console.debug('Log WebSocket error, will auto-reconnect')

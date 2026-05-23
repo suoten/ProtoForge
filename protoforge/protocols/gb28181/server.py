@@ -38,6 +38,7 @@ class GB28181Device:
         self._invite_call_id = ""
         self._invite_media_ip = ""
         self._invite_media_port = 0
+        self._local_media_port = 0  # FIXED-P0: 记录本地分配的媒体端口，BYE时释放
 
     def make_register_request(self) -> str:
         self.call_id = uuid.uuid4().hex[:16]
@@ -214,6 +215,7 @@ class GB28181Server(ProtocolServer):
         self._behaviors: dict[str, GB28181DeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._gb_devices: dict[str, GB28181Device] = {}
+        self._gb_devices_lock = asyncio.Lock()  # FIXED-P0: 保护_gb_devices并发读写
         self._transport: asyncio.DatagramTransport | None = None
         self._host = "0.0.0.0"
         self._port = 5060
@@ -253,7 +255,7 @@ class GB28181Server(ProtocolServer):
 
     async def stop(self) -> None:
         try:
-            for gb_device in self._gb_devices.values():
+            for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
                 if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
                     await gb_device.rtp_streamer.stop()
             if self._heartbeat_task:
@@ -307,7 +309,8 @@ class GB28181Server(ProtocolServer):
         )
         gb_device._protoforge_device_id = device_config.id
         gb_device._register_interval = register_interval
-        self._gb_devices[device_config.id] = gb_device
+        async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发写入
+            self._gb_devices[device_config.id] = gb_device
 
         if self._status == ProtocolStatus.RUNNING:
             await self._register_device(gb_device)
@@ -321,11 +324,15 @@ class GB28181Server(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        gb = self._gb_devices.pop(device_id, None)
+        async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发读写
+            gb = self._gb_devices.pop(device_id, None)
         if gb:
             if gb.rtp_streamer and gb.rtp_streamer.is_running:
                 await gb.rtp_streamer.stop()
             gb.registered = False
+            with self._media_ports_lock:  # FIXED-P0: remove_device时释放已分配的媒体端口
+                self._allocated_media_ports.discard(gb._local_media_port)
+                self._allocated_media_ports.discard(gb._local_media_port + 1)
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
@@ -394,9 +401,13 @@ class GB28181Server(ProtocolServer):
 
     async def _heartbeat_loop(self) -> None:
         while self._status == ProtocolStatus.RUNNING:
-            for gb_device in self._gb_devices.values():
+            async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发迭代
+                devices_snapshot = list(self._gb_devices.values())
+            for gb_device in devices_snapshot:
                 await self._send_keepalive(gb_device)
-            refresh_interval = max(60, min((gb_device.expires for gb_device in self._gb_devices.values()), default=3600) // 2)
+            async with self._gb_devices_lock:
+                expires_list = [gb.expires for gb in self._gb_devices.values()]
+            refresh_interval = max(60, min(expires_list, default=3600) // 2)
             await asyncio.sleep(refresh_interval)
 
     async def _send_keepalive(self, gb_device) -> None:
@@ -488,10 +499,11 @@ class GB28181Server(ProtocolServer):
             device_id = root.findtext("DeviceID", "")
 
             gb_device = None
-            for did, dev in self._gb_devices.items():
-                if dev.device_id == device_id:
-                    gb_device = dev
-                    break
+            async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发读取
+                for did, dev in self._gb_devices.items():
+                    if dev.device_id == device_id:
+                        gb_device = dev
+                        break
             if not gb_device:
                 self._log_debug("in", "sip_message_unknown",
                                 f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")
@@ -536,7 +548,7 @@ class GB28181Server(ProtocolServer):
             if line.startswith("Call-ID:"):
                 call_id = line.split(":", 1)[1].strip().split("@")[0]
                 break
-        for gb_device in self._gb_devices.values():
+        for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
             if gb_device.call_id and gb_device.call_id == call_id:
                 was_registered = gb_device.registered
                 gb_device.registered = True
@@ -697,6 +709,7 @@ class GB28181Server(ProtocolServer):
         gb_device._invite_call_id = call_id
         gb_device._invite_media_ip = sdp_info["media_ip"]
         gb_device._invite_media_port = sdp_info["media_port"]
+        gb_device._local_media_port = media_port  # FIXED-P0: 记录本地端口用于BYE时释放
         gb_device._srtp_context = srtp_context
 
         self._log_debug("out", "sip_invite_ok",
@@ -715,7 +728,8 @@ class GB28181Server(ProtocolServer):
                 call_id = line
                 break
 
-        for gb_device in self._gb_devices.values():
+        gb_devices_snapshot = dict(self._gb_devices)  # FIXED-P0: 快照读取避免并发迭代
+        for gb_device in gb_devices_snapshot.values():
             if gb_device._invite_call_id and call_id == gb_device._invite_call_id:
                 pf_id = gb_device._protoforge_device_id
                 dest_ip = gb_device._invite_media_ip
@@ -797,7 +811,7 @@ class GB28181Server(ProtocolServer):
         if self._transport:
             self._transport.sendto(response.encode("utf-8"), addr)
 
-        for gb_device in self._gb_devices.values():
+        for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
             if gb_device._invite_call_id and call_id == gb_device._invite_call_id:
                 pf_id = gb_device._protoforge_device_id
                 if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
@@ -808,6 +822,10 @@ class GB28181Server(ProtocolServer):
                                     msg("gb28181", "bye_received"),
                                     device_id=pf_id)
                 gb_device._invite_call_id = ""
+                with self._media_ports_lock:  # FIXED-P0: BYE时释放已分配的媒体端口
+                    self._allocated_media_ports.discard(gb_device._local_media_port)
+                    self._allocated_media_ports.discard(gb_device._local_media_port + 1)
+                gb_device._local_media_port = 0
                 break
 
         self._log_debug("out", "sip_bye_ok", msg("gb28181", "bye_ok_sent"))

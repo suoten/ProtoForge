@@ -433,11 +433,6 @@ class BACnetServer(ProtocolServer):
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
         behavior = BACnetDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:  # FIXED: 将_device_configs放入锁保护范围，与其他协议一致
-            self._behaviors[device_id] = behavior
-            self._device_configs[device_id] = device_config
-        await self._update_default_device_async(device_id)
-
         proto_config = device_config.protocol_config or {}
         bacnet_device_id = proto_config.get("device_id", self._device_id_base + len(self._device_configs))
         bacnet_device_name = proto_config.get("device_name", device_config.name)
@@ -458,22 +453,26 @@ class BACnetServer(ProtocolServer):
             }
             objects.append(obj)
 
-        self._device_objects[device_id] = {
-            "device_id": bacnet_device_id,
-            "device_name": bacnet_device_name,
-            "vendor_name": "ProtoForge",
-            "vendor_id": 999,
-            "model_name": "PF-BAC-100",
-            "firmware_revision": "1.0.0",
-            "application_software_revision": "1.0.0",
-            "protocol_version": 1,
-            "protocol_revision": 24,
-            "max_apdu_length_accepted": 1024,
-            "segmentation_supported": "segmented-both",
-            "apdu_timeout": 3000,
-            "number_of_apdu_retries": 3,
-            "objects": objects,
-        }
+        async with self._behaviors_lock:  # FIXED: 将_device_configs放入锁保护范围，与其他协议一致
+            self._behaviors[device_id] = behavior
+            self._device_configs[device_id] = device_config
+            self._device_objects[device_id] = {  # FIXED-P1: 移入_behaviors_lock内保护
+                "device_id": bacnet_device_id,
+                "device_name": bacnet_device_name,
+                "vendor_name": "ProtoForge",
+                "vendor_id": 999,
+                "model_name": "PF-BAC-100",
+                "firmware_revision": "1.0.0",
+                "application_software_revision": "1.0.0",
+                "protocol_version": 1,
+                "protocol_revision": 24,
+                "max_apdu_length_accepted": 1024,
+                "segmentation_supported": "segmented-both",
+                "apdu_timeout": 3000,
+                "number_of_apdu_retries": 3,
+                "objects": objects,
+            }
+        await self._update_default_device_async(device_id)
 
         logger.info("BACnet device created: %s (BACnet ID: %d, name: %s, %d objects)",
                      device_id, bacnet_device_id, bacnet_device_name, len(objects))
@@ -486,7 +485,7 @@ class BACnetServer(ProtocolServer):
         async with self._behaviors_lock:  # FIXED: 将_device_configs放入锁保护范围，与其他协议一致
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)
-        self._device_objects.pop(device_id, None)
+            self._device_objects.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
         await self._clear_default_device_async(device_id)
         logger.info("BACnet device removed: %s", device_id)
         self._log_debug("system", "device_remove",

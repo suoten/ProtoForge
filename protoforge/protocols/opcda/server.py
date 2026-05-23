@@ -417,16 +417,15 @@ class OpcDaServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcDaDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_params[device_config.id] = {  # FIXED-P1: 移入_behaviors_lock内保护
+                "prog_id": proto_config.get("prog_id", "ProtoForge.SimServer"),
+                "clsid": proto_config.get("clsid", ""),
+            }
         await self._update_default_device_async(device_config.id)
-
-        proto_config = device_config.protocol_config or {}
-        self._device_params[device_config.id] = {
-            "prog_id": proto_config.get("prog_id", "ProtoForge.SimServer"),
-            "clsid": proto_config.get("clsid", ""),
-        }
 
         logger.info("OPC-DA device created: %s (ProgID=%s)",
                      device_config.id, self._device_params[device_config.id]["prog_id"])
@@ -439,7 +438,7 @@ class OpcDaServer(ProtocolServer):
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
-        self._device_params.pop(device_id, None)
+            self._device_params.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
         await self._clear_default_device_async(device_id)
         logger.info("OPC-DA device removed: %s", device_id)
         self._log_debug("system", "device_remove",

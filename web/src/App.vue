@@ -366,7 +366,7 @@ function connectWebSocket() {
     }
     return
   }
-  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
+  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000; wsReconnectAttempts = 0; loadSearchData() }  // FIXED-P0: WS重连后刷新数据
   ws.onclose = () => {
     wsConnected.value = false
     if (loggedIn.value) {

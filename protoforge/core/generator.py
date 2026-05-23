@@ -59,6 +59,8 @@ class SafeEval:
     _MAX_STR_LEN = 10000
     _MAX_RANGE_SIZE = 100000  # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
     _MAX_COMPLEXITY = 100000  # FIXED: W7 - 执行步骤计数上限，防止无限循环/超长表达式
+    _MAX_POW_EXPONENT = 10000  # FIXED: S4 - Pow指数上限，防止 2**1000000 导致CPU/内存DoS
+    _MAX_SEQ_MULTIPLY = 100000  # FIXED: S5 - 列表乘法上限，防止 [0]*1000000 导致内存DoS
 
     def __init__(self, variables: dict[str, Any] | None = None):
         self._variables = variables or {}
@@ -125,9 +127,21 @@ class SafeEval:
             op = _SAFE_OPS.get(type(node.op))
             if op is None:
                 raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-            result = op(self._eval_node(node.left), self._eval_node(node.right))
+            # FIXED: S4 - check Pow exponent before computing
+            if isinstance(node.op, ast.Pow):
+                right = self._eval_node(node.right)
+                if isinstance(right, (int, float)) and abs(right) > self._MAX_POW_EXPONENT:
+                    raise ValueError(f"Exponent too large (max {self._MAX_POW_EXPONENT})")
+                left = self._eval_node(node.left)
+                result = op(left, right)
+            else:
+                result = op(self._eval_node(node.left), self._eval_node(node.right))
             if isinstance(result, str) and len(result) > self._MAX_STR_LEN:
                 raise ValueError(f"String too long (max {self._MAX_STR_LEN})")
+            # FIXED: S5 - check sequence multiplication size
+            if isinstance(node.op, (ast.Mult, ast.Repeat)) and isinstance(result, (list, tuple)):
+                if len(result) > self._MAX_SEQ_MULTIPLY:
+                    raise ValueError(f"Sequence too long after multiply (max {self._MAX_SEQ_MULTIPLY})")
             return result
         elif isinstance(node, ast.UnaryOp):
             op = _SAFE_OPS.get(type(node.op))
