@@ -254,7 +254,8 @@ class MqttBroker(ProtocolServer):
         import json as json_lib
 
         while self._status == ProtocolStatus.RUNNING:
-            for device_id, config in self._device_configs.items():
+            # FIXED-P1: 使用快照迭代，避免与 create_device/remove_device 并发修改时 RuntimeError
+            for device_id, config in dict(self._device_configs).items():
                 behavior = self._behaviors.get(device_id)
                 if not behavior:
                     continue

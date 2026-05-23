@@ -157,7 +157,8 @@ class MtConnectServer(ProtocolServer):
 
     def _build_probe(self) -> str:
         devices_xml = []
-        for dev_id, config in self._device_configs.items():
+        # FIXED-P1: 使用快照迭代，避免与 create_device/remove_device 并发修改时 RuntimeError
+        for dev_id, config in dict(self._device_configs).items():
             params = self._device_params.get(dev_id, {})
             dev_uuid = params.get("device_uuid", self._device_uuid)
             manufacturer = params.get("manufacturer", "ProtoForge")
@@ -193,7 +194,8 @@ class MtConnectServer(ProtocolServer):
 
     def _build_current(self) -> str:
         streams_xml = []
-        for dev_id, behavior in self._behaviors.items():
+        # FIXED-P1: 使用快照迭代
+        for dev_id, behavior in dict(self._behaviors).items():
             config = self._device_configs.get(dev_id)
             if not config:
                 continue
@@ -328,7 +330,8 @@ class MtConnectServer(ProtocolServer):
 
     def _build_assets(self, asset_id: str = "", count: int = 100) -> str:
         assets_xml = []
-        for dev_id, config in self._device_configs.items():
+        # FIXED-P1: 使用快照迭代
+        for dev_id, config in dict(self._device_configs).items():
             params = self._device_params.get(dev_id, {})
             dev_uuid = params.get("device_uuid", self._device_uuid)
             manufacturer = params.get("manufacturer", "ProtoForge")

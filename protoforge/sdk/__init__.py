@@ -74,7 +74,8 @@ class ProtoForgeClient:
         return self._get("/protocols")
 
     def start_protocol(self, name: str, config: dict | None = None) -> dict:
-        return self._post(f"/protocols/{name}/start", json=config or {})
+        # FIXED-P1: config为None时不发送{}，让后端使用默认配置
+        return self._post(f"/protocols/{name}/start", json=config)
 
     def stop_protocol(self, name: str) -> dict:
         return self._post(f"/protocols/{name}/stop")
@@ -128,13 +129,16 @@ class ProtoForgeClient:
         return self._post("/devices/batch", json=configs)
 
     def batch_delete_devices(self, device_ids: list[str]) -> dict:
-        return self._request("DELETE", "/devices/batch", json=device_ids).json()
+        # FIXED-P0: 后端为POST /devices/batch/delete，请求体为{device_ids:[...]}
+        return self._post("/devices/batch/delete", json={"device_ids": device_ids})
 
     def batch_start_devices(self, device_ids: list[str]) -> dict:
-        return self._post("/devices/batch/start", json=device_ids)
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return self._post("/devices/batch/start", json={"device_ids": device_ids})
 
     def batch_stop_devices(self, device_ids: list[str]) -> dict:
-        return self._post("/devices/batch/stop", json=device_ids)
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return self._post("/devices/batch/stop", json={"device_ids": device_ids})
 
     def list_templates(self, protocol: str | None = None) -> list:
         params = {}
@@ -241,7 +245,8 @@ class ProtoForgeClient:
         return self._delete(f"/tests/suites/{suite_id}")
 
     def run_tests(self, test_cases: list[dict]) -> dict:
-        return self._post("/tests/run", json=test_cases)
+        # FIXED-P0: 后端期望dict类型payload，非裸数组
+        return self._post("/tests/run", json={"test_cases": test_cases})
 
     def run_test_case(self, case_id: str) -> dict:
         return self._post(f"/tests/run/case/{case_id}")
@@ -591,8 +596,8 @@ class AsyncProtoForgeClient:
         return await self._post("/devices/batch", json=configs)
 
     async def batch_delete_devices(self, device_ids: list[str]) -> dict:
-        resp = await self._request("DELETE", "/devices/batch", json=device_ids)
-        return resp.json()
+        # FIXED-P0: 后端为POST /devices/batch/delete，请求体为{device_ids:[...]}
+        return await self._post("/devices/batch/delete", json={"device_ids": device_ids})
 
     async def list_templates(self, protocol: str | None = None) -> list:
         params = {}
@@ -646,7 +651,8 @@ class AsyncProtoForgeClient:
         return await self._get("/tests/cases", params=params)
 
     async def run_tests(self, test_cases: list[dict]) -> dict:
-        return await self._post("/tests/run", json=test_cases)
+        # FIXED-P0: 后端期望dict类型payload，非裸数组
+        return await self._post("/tests/run", json={"test_cases": test_cases})
 
     async def run_test_case(self, case_id: str) -> dict:
         return await self._post(f"/tests/run/case/{case_id}")
@@ -714,16 +720,19 @@ class AsyncProtoForgeClient:
         return await self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
 
     async def start_protocol(self, name: str, config: dict | None = None) -> dict:
-        return await self._post(f"/protocols/{name}/start", json=config or {})
+        # FIXED-P1: config为None时不发送{}，让后端使用默认配置
+        return await self._post(f"/protocols/{name}/start", json=config)
 
     async def stop_protocol(self, name: str) -> dict:
         return await self._post(f"/protocols/{name}/stop")
 
     async def batch_start_devices(self, device_ids: list[str]) -> dict:
-        return await self._post("/devices/batch/start", json=device_ids)
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return await self._post("/devices/batch/start", json={"device_ids": device_ids})
 
     async def batch_stop_devices(self, device_ids: list[str]) -> dict:
-        return await self._post("/devices/batch/stop", json=device_ids)
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return await self._post("/devices/batch/stop", json={"device_ids": device_ids})
 
     async def get_template(self, template_id: str) -> dict:
         return await self._get(f"/templates/{template_id}")

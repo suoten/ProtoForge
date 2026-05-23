@@ -142,7 +142,8 @@ class HttpSimulatorServer(ProtocolServer):
     def _route(self, method: str, path: str, body: bytes) -> bytes:
         if method == "OPTIONS":
             return self._cors_preflight_response()
-        for device_id, prefix in self._device_prefixes.items():
+        # FIXED-P1: 使用快照迭代，避免与 create_device/remove_device 并发修改时 RuntimeError
+        for device_id, prefix in dict(self._device_prefixes).items():
             if path.startswith(prefix):
                 rel_path = path[len(prefix):] or "/"
                 behavior = self._behaviors.get(device_id)
@@ -155,7 +156,8 @@ class HttpSimulatorServer(ProtocolServer):
 
         if path == "/devices":
             devices = []
-            for did, config in self._device_configs.items():
+            # FIXED-P1: 使用快照迭代
+            for did, config in dict(self._device_configs).items():
                 devices.append({"id": did, "name": config.name, "prefix": self._device_prefixes.get(did, "/api")})
             return self._json_response(200, {"devices": devices})
 

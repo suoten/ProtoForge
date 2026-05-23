@@ -276,17 +276,22 @@ class OpcUaServer(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
+        # FIXED-P1: 将所有共享字典的 pop 操作移入 _behaviors_lock 内，避免与 OPC-UA 回调并发时 RuntimeError
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
-            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
-        self._device_namespaces.pop(device_id, None)
+            self._device_configs.pop(device_id, None)
+            self._device_namespaces.pop(device_id, None)
+            nodes = self._device_nodes.pop(device_id, None)
+            if nodes:
+                point_nodes = nodes.get("points", {})
+                for point_name in list(point_nodes.keys()):
+                    point_node_key = f"{device_id}.{point_name}"
+                    self._point_nodes.pop(point_node_key, None)
         await self._clear_default_device_async(device_id)
-        nodes = self._device_nodes.pop(device_id, None)
-        if nodes and self._server:
+        # 节点删除操作（网络IO）在锁外执行，避免持锁时间过长
+        if nodes:
             point_nodes = nodes.get("points", {})
             for point_name, point_node in point_nodes.items():
-                point_node_key = f"{device_id}.{point_name}"
-                self._point_nodes.pop(point_node_key, None)
                 try:
                     await point_node.delete()
                 except Exception as e:

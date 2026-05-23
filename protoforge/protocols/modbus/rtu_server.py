@@ -215,8 +215,9 @@ class ModbusRtuServer(ProtocolServer):
                 mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
                 writer.write(mbap + resp)
                 await writer.drain()
-        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, BrokenPipeError, ConnectionAbortedError):
-            pass
+        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, BrokenPipeError, ConnectionAbortedError) as e:
+            # FIXED-P1: 添加日志记录，与其他协议保持一致，便于排查连接中断
+            logger.debug("Modbus RTU connection handler error: %s", e)
         finally:
             writer.close()
             try:
