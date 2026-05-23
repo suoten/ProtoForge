@@ -182,9 +182,7 @@ class GB28181DeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standard
     def __init__(self, points: list[PointConfig]):
         super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
 
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
+    # FIXED-P1: 删除有缺陷的 generate_value 覆写，继承 StandardDeviceBehavior 已修复的实现
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
@@ -499,11 +497,11 @@ class GB28181Server(ProtocolServer):
             device_id = root.findtext("DeviceID", "")
 
             gb_device = None
-            async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发读取
-                for did, dev in self._gb_devices.items():
-                    if dev.device_id == device_id:
-                        gb_device = dev
-                        break
+            # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+            for did, dev in dict(self._gb_devices).items():
+                if dev.device_id == device_id:
+                    gb_device = dev
+                    break
             if not gb_device:
                 self._log_debug("in", "sip_message_unknown",
                                 f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")
@@ -581,12 +579,12 @@ class GB28181Server(ProtocolServer):
                 call_id = line.split(":", 1)[1].strip().split("@")[0]
                 break
 
-        for gb_device in self._gb_devices.values():
+        # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+        for gb_device in dict(self._gb_devices).values():
             if not call_id:
                 continue
             if gb_device.call_id != call_id:
                 continue
-            gb_device.realm = realm
             auth_request = gb_device.make_register_with_auth(nonce)
             pf_id = gb_device._protoforge_device_id
             try:
@@ -632,7 +630,8 @@ class GB28181Server(ProtocolServer):
             self._transport.sendto(trying.encode("utf-8"), addr)
 
         gb_device = None
-        for did, dev in self._gb_devices.items():
+        # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+        for did, dev in dict(self._gb_devices).items():
             if dev.device_id == device_id:
                 gb_device = dev
                 break

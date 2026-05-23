@@ -80,9 +80,7 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
         self._config: DeviceConfig | None = None
         self._pd_input: bytearray = bytearray()
 
-    def generate_value(self, point_config: dict[str, Any]) -> Any:
-        name = point_config.get("name", "")
-        return self._values.get(name, 0)
+    # FIXED-P1: 删除有缺陷的 generate_value 覆写，继承 StandardDeviceBehavior 已修复的实现
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:

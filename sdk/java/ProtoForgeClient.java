@@ -556,6 +556,27 @@ public class ProtoForgeClient {
         return get("/api/v1/edgelite/points/" + deviceId);
     }
 
+    // FIXED-P1: 补充 Java SDK 缺失的 4 个方法，与 Go/C# SDK 对齐
+    public JsonNode startAllProtocols() throws Exception {
+        return post("/api/v1/protocols/start-all", new HashMap<>());
+    }
+
+    public JsonNode stopAllProtocols() throws Exception {
+        return post("/api/v1/protocols/stop-all", new HashMap<>());
+    }
+
+    public JsonNode verifyEdgelitePipeline(String deviceId) throws Exception {
+        return get("/api/v1/edgelite/pipeline/" + java.net.URLEncoder.encode(deviceId, "UTF-8"));
+    }
+
+    public JsonNode clearAuditLog(String before) throws Exception {
+        String path = "/api/v1/audit";
+        if (before != null && !before.isEmpty()) {
+            path += "?before=" + java.net.URLEncoder.encode(before, "UTF-8");
+        }
+        return delete(path);
+    }
+
     public JsonNode getSettings() throws Exception {
         return get("/api/v1/settings");
     }

@@ -229,6 +229,9 @@ class ModbusRtuServer(ProtocolServer):
         store = self._data_stores.get(slave_id)
         if not store:
             store = self._get_data_store(slave_id)
+        # FIXED-P0: 校验 data 最小长度，避免畸形报文导致 struct.unpack 崩溃
+        if len(data) < 4 and fc in (0x01, 0x02, 0x03, 0x04, 0x05, 0x06):
+            return bytes([fc | 0x80, 0x02])  # Illegal Data Address
         try:
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0] + 1
@@ -277,6 +280,9 @@ class ModbusRtuServer(ProtocolServer):
                 store.set_point(6, start, val)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
+                # FIXED-P0: 校验最小长度
+                if len(data) < 5:
+                    return bytes([fc | 0x80, 0x02])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 for i in range(count):
@@ -286,6 +292,9 @@ class ModbusRtuServer(ProtocolServer):
                         store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x10:
+                # FIXED-P0: 校验最小长度
+                if len(data) < 5:
+                    return bytes([fc | 0x80, 0x02])
                 start = struct.unpack(">H", data[0:2])[0] + 1
                 count = struct.unpack(">H", data[2:4])[0]
                 for i in range(count):

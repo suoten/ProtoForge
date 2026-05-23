@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -243,6 +244,8 @@ class UserManager:
         self._users: dict[str, User] = {}
         self._users_by_id: dict[str, User] = {}
         self._db = None
+        # FIXED-P1: 添加异步锁保护 _users/_users_by_id 并发访问，防止 TOCTOU 竞态
+        self._users_lock = asyncio.Lock()
         try:
             from protoforge.config import get_settings
             default_password = get_settings().admin_password
@@ -347,43 +350,47 @@ class UserManager:
             )
         if username.lower() in ("root", "system", "administrator", "null", "undefined"):
             raise ValueError(f"Username '{username}' is reserved and cannot be used")
-        if username in self._users:
-            return None
-        ok, msg = _is_password_strong(password)
-        if not ok:
-            logger.warning("Password too weak for user %s: %s", username, msg)
-            raise ValueError(msg)
-        user = User(
-            id=uuid.uuid4().hex[:12],
-            username=username,
-            password_hash=hash_password(password),
-            role=role,
-        )
-        if self._db:
-            try:
-                await self._db.save_user(user.to_dict(include_hash=True))
-            except Exception as e:
-                logger.error("Failed to persist user %s: %s", username, e)
-                raise RuntimeError(f"Failed to create user: {e}") from e
-        self._users[username] = user
-        self._users_by_id[user.id] = user
-        return user
+        # FIXED-P1: 加锁保护检查+创建的原子性，防止并发创建同名用户
+        async with self._users_lock:
+            if username in self._users:
+                return None
+            ok, msg = _is_password_strong(password)
+            if not ok:
+                logger.warning("Password too weak for user %s: %s", username, msg)
+                raise ValueError(msg)
+            user = User(
+                id=uuid.uuid4().hex[:12],
+                username=username,
+                password_hash=hash_password(password),
+                role=role,
+            )
+            if self._db:
+                try:
+                    await self._db.save_user(user.to_dict(include_hash=True))
+                except Exception as e:
+                    logger.error("Failed to persist user %s: %s", username, e)
+                    raise RuntimeError(f"Failed to create user: {e}") from e
+            self._users[username] = user
+            self._users_by_id[user.id] = user
+            return user
 
     async def delete_user(self, username: str) -> bool:
         if username == "admin":
             return False
-        if username in self._users:
-            user = self._users[username]
-            if self._db:
-                try:
-                    await self._db.delete_user(username)
-                except Exception as e:
-                    logger.error("Failed to delete user %s from DB: %s", username, e)
-                    raise RuntimeError(f"Failed to delete user: {e}") from e
-            del self._users[username]
-            self._users_by_id.pop(user.id, None)
-            return True
-        return False
+        # FIXED-P1: 加锁保护删除操作的原子性
+        async with self._users_lock:
+            if username in self._users:
+                user = self._users[username]
+                if self._db:
+                    try:
+                        await self._db.delete_user(username)
+                    except Exception as e:
+                        logger.error("Failed to delete user %s from DB: %s", username, e)
+                        raise RuntimeError(f"Failed to delete user: {e}") from e
+                del self._users[username]
+                self._users_by_id.pop(user.id, None)
+                return True
+            return False
 
     def list_users(self) -> list[dict]:
         return [

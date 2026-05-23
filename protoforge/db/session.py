@@ -1034,6 +1034,13 @@ class Database:
         # FIXED: W5 - import_all 添加事务保护，失败时回滚已导入行
         if not self._is_postgres:
             await self._db.execute("BEGIN TRANSACTION")
+        # FIXED-P1: PostgreSQL 使用 conn.transaction() 实现事务保护
+        pg_conn = None
+        pg_txn = None
+        if self._is_postgres:
+            pg_conn = await self._pg_pool.acquire()
+            pg_txn = pg_conn.transaction()
+            await pg_txn.start()
         try:
             for table, columns in table_columns.items():
                 rows = data.get(table, [])
@@ -1054,8 +1061,16 @@ class Database:
                 restored[table] = count
             if not self._is_postgres:
                 await self._db.commit()
+            elif pg_txn:
+                await pg_txn.commit()
         except Exception:
             if not self._is_postgres:
                 await self._db.rollback()
+            elif pg_txn:
+                await pg_txn.rollback()
             raise
+        finally:
+            # FIXED-P1: 释放 PostgreSQL 连接回连接池
+            if pg_conn and self._is_postgres:
+                await self._pg_pool.release(pg_conn)
         return restored

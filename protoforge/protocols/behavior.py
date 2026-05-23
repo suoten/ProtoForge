@@ -226,7 +226,15 @@ class StandardDeviceBehavior(DeviceBehavior):
                 self._generators[name] = DynamicValueGenerator(p)
 
     def generate_value(self, point_config: dict[str, Any]) -> Any:
+        # FIXED-P1: 使用生成器产生动态值，与 get_value() 和 DefaultDeviceBehavior 保持一致
         name = point_config.get("name", "")
+        gen = self._generators.get(name)
+        if gen:
+            pt = self._points.get(name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[name] = value
+                return value
         return self._values.get(name, 0)
 
     def on_write(self, point_name: str, value: Any) -> bool:
