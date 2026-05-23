@@ -355,15 +355,21 @@ class OpcUaServer(ProtocolServer):
             node = self._point_nodes.get(point_node_key)
             if node:
                 try:
-                    # FIXED: 使用正确的数据类型写入，避免 BadTypeMismatch 错误
+                    # FIXED: 使用 asyncua Variant 明确指定类型，避免 BadTypeMismatch 错误
+                    from asyncua import ua as asyncua_ua
                     data_type = self._point_types.get(point_node_key, "float64")
-                    # Python float 默认是 float64，需要根据节点类型转换
-                    if data_type == "float32":
-                        import struct
-                        value = struct.unpack('f', struct.pack('f', float(value)))[0]
-                    elif data_type in ("int16", "int32", "uint16", "uint32"):
-                        value = int(float(value))
-                    await node.set_value(value)
+                    type_map = {
+                        "bool": asyncua_ua.VariantType.Boolean,
+                        "int16": asyncua_ua.VariantType.Int16,
+                        "uint16": asyncua_ua.VariantType.UInt16,
+                        "int32": asyncua_ua.VariantType.Int32,
+                        "uint32": asyncua_ua.VariantType.UInt32,
+                        "float32": asyncua_ua.VariantType.Float,
+                        "float64": asyncua_ua.VariantType.Double,
+                        "string": asyncua_ua.VariantType.String,
+                    }
+                    variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
+                    await node.set_value(asyncua_ua.Variant(value, variant_type))
                 except Exception as e:
                     logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
                     return False
