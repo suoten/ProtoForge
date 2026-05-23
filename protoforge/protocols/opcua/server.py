@@ -94,13 +94,16 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
 class OpcUaDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDeviceBehavior，复用_points/_values/_generators初始化
     def __init__(self, points: list[PointConfig]):
         super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
+        logger.debug("OpcUaDeviceBehavior initialized with points: %s", list(self._points.keys()))
 
     # FIXED-P1: 删除有缺陷的 generate_value 覆写，继承 StandardDeviceBehavior 已修复的实现
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            logger.debug("OpcUaDeviceBehavior.on_write success: %s = %s", point_name, value)
             return True
+        logger.warning("OpcUaDeviceBehavior.on_write failed: point '%s' not found in _values. Available keys: %s", point_name, list(self._values.keys()))
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
@@ -343,6 +346,7 @@ class OpcUaServer(ProtocolServer):
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
         behavior = self._behaviors.get(device_id)
         if not behavior:
+            logger.warning("OPC-UA write_point: behavior not found for device %s", device_id)
             return False
         success = behavior.on_write(point_name, value)
         if success:
@@ -352,8 +356,10 @@ class OpcUaServer(ProtocolServer):
                 try:
                     await node.set_value(value)
                 except Exception as e:
-                    logger.warning("OPC-UA write node value error: %s", e)
+                    logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
                     return False
+        else:
+            logger.warning("OPC-UA write_point: behavior.on_write returned False for %s.%s (value=%s)", device_id, point_name, value)
         return success
 
     def get_config_schema(self) -> dict[str, Any]:
