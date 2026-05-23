@@ -102,10 +102,12 @@ class ProtoForgeClient:
             data["protocol_config"] = protocol_config
         return self._post("/devices", json=data)
 
-    def quick_create(self, template_id: str, name: str, device_id: str | None = None) -> dict:
-        return self._post("/devices/quick-create", json={
-            "template_id": template_id, "name": name, "id": device_id or name,
-        })
+    def quick_create(self, template_id: str, name: str, device_id: str | None = None, protocol_config: dict | None = None) -> dict:
+        # FIXED-P1: 补充protocol_config参数，与Go/C#/Java SDK和前端对齐
+        data = {"template_id": template_id, "name": name, "id": device_id or name}
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return self._post("/devices/quick-create", json=data)
 
     def start_device(self, device_id: str) -> dict:
         return self._post(f"/devices/{device_id}/start")
@@ -383,8 +385,9 @@ class ProtoForgeClient:
     def get_setup_status(self) -> dict:
         return self._get("/setup/status")
 
-    def register(self, username: str, password: str, role: str = "user") -> dict:
-        return self._post("/auth/register", json={"username": username, "password": password, "role": role})
+    def register(self, username: str, password: str) -> dict:
+        # FIXED-P1: 移除后端不接受的role字段，与Go/C#/Java SDK对齐
+        return self._post("/auth/register", json={"username": username, "password": password})
 
     def list_users(self) -> list:
         return self._get("/auth/users")
@@ -452,8 +455,9 @@ class ProtoForgeClient:
     def get_protocol_mappings(self) -> list:
         return self._get("/integration/protocols")
 
-    def validate_device_compatibility(self, device_id: str) -> dict:
-        return self._post("/integration/validate", json={"device_id": device_id})
+    def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict:
+        # FIXED-P1: 补充protocol/points/driver_config参数，与Go/C#/Java SDK对齐
+        return self._post("/integration/validate", json={"device_id": device_id, "protocol": protocol, "points": points or [], "driver_config": driver_config or {}})
 
     def test_integration_connection(self, config: dict) -> dict:
         return self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
@@ -569,10 +573,12 @@ class AsyncProtoForgeClient:
             data["protocol_config"] = protocol_config
         return await self._post("/devices", json=data)
 
-    async def quick_create(self, template_id: str, name: str, device_id: str | None = None) -> dict:
-        return await self._post("/devices/quick-create", json={
-            "template_id": template_id, "name": name, "id": device_id or name,
-        })
+    async def quick_create(self, template_id: str, name: str, device_id: str | None = None, protocol_config: dict | None = None) -> dict:
+        # FIXED-P1: 补充protocol_config参数，与Go/C#/Java SDK和前端对齐
+        data = {"template_id": template_id, "name": name, "id": device_id or name}
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return await self._post("/devices/quick-create", json=data)
 
     async def start_device(self, device_id: str) -> dict:
         return await self._post(f"/devices/{device_id}/start")
@@ -859,8 +865,9 @@ class AsyncProtoForgeClient:
     async def get_setup_status(self) -> dict:
         return await self._get("/setup/status")
 
-    async def register(self, username: str, password: str, role: str = "user") -> dict:
-        return await self._post("/auth/register", json={"username": username, "password": password, "role": role})
+    async def register(self, username: str, password: str) -> dict:
+        # FIXED-P1: 移除后端不接受的role字段，与Go/C#/Java SDK对齐
+        return await self._post("/auth/register", json={"username": username, "password": password})
 
     async def list_users(self) -> list:
         return await self._get("/auth/users")
@@ -928,8 +935,9 @@ class AsyncProtoForgeClient:
     async def get_protocol_mappings(self) -> list:
         return await self._get("/integration/protocols")
 
-    async def validate_device_compatibility(self, device_id: str) -> dict:
-        return await self._post("/integration/validate", json={"device_id": device_id})
+    async def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict:
+        # FIXED-P1: 补充protocol/points/driver_config参数，与Go/C#/Java SDK对齐
+        return await self._post("/integration/validate", json={"device_id": device_id, "protocol": protocol, "points": points or [], "driver_config": driver_config or {}})
 
     async def test_integration_connection(self, config: dict) -> dict:
         return await self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
