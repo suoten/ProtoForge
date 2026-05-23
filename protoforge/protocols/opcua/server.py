@@ -132,6 +132,7 @@ class OpcUaServer(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._device_nodes: dict[str, Any] = {}
         self._point_nodes: dict[str, Any] = {}
+        self._point_types: dict[str, str] = {}  # FIXED: 存储每个点位的数据类型
         self._device_namespaces: dict[str, str] = {}
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
         self._host = "0.0.0.0"
@@ -354,6 +355,14 @@ class OpcUaServer(ProtocolServer):
             node = self._point_nodes.get(point_node_key)
             if node:
                 try:
+                    # FIXED: 使用正确的数据类型写入，避免 BadTypeMismatch 错误
+                    data_type = self._point_types.get(point_node_key, "float64")
+                    # Python float 默认是 float64，需要根据节点类型转换
+                    if data_type == "float32":
+                        import struct
+                        value = struct.unpack('f', struct.pack('f', float(value)))[0]
+                    elif data_type in ("int16", "int32", "uint16", "uint32"):
+                        value = int(float(value))
                     await node.set_value(value)
                 except Exception as e:
                     logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
@@ -441,6 +450,7 @@ class OpcUaServer(ProtocolServer):
                     await node.set_writable()
                 point_nodes[point.name] = node
                 self._point_nodes[f"{config.id}.{point.name}"] = node
+                self._point_types[f"{config.id}.{point.name}"] = point.data_type.value  # FIXED: 保存点位数据类型
             except Exception as e:
                 logger.warning("Failed to create OPC-UA point %s.%s: %s", config.id, point.name, e)
         self._device_nodes[config.id] = {"folder": device_folder, "points": point_nodes}
