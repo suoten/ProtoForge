@@ -125,7 +125,7 @@ class Database:
                 "PostgreSQL support requires asyncpg. Install it with: pip install asyncpg"
             )
         try:
-            self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10, autocommit=True)
+            self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10)
             self._is_postgres = True
             async with self._pg_pool.acquire() as conn:
                 await self._create_tables_postgres(conn)

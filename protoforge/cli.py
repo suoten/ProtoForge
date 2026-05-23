@@ -215,7 +215,8 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
             os.environ["PROTOFORGE_ADMIN_PASSWORD"] = admin_pw
             logger_banner_msg = f"admin / {admin_pw} (auto-generated, save this now!)"
         else:
-            logger_banner_msg = f"admin / {admin_pw}"
+            # FIXED-P1: 预配置密码脱敏显示，与installer.py保持一致，避免密码泄露到终端/日志
+            logger_banner_msg = f"admin / {'*' * len(admin_pw)} (configured)"
         w = 50
         print()
         print("+" + "-" * w + "+")

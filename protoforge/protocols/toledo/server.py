@@ -261,7 +261,8 @@ class ToledoServer(ProtocolServer):
                 if behavior:
                     weight_str = behavior.get_weight_string().encode("ascii")
                     dead_writers = []
-                    for w in self._continuous_writers:
+                    # FIXED-P0: 使用list()快照迭代，避免await让出控制权时其他协程修改_continuous_writers导致RuntimeError
+                    for w in list(self._continuous_writers):
                         try:
                             w.write(weight_str)
                             await w.drain()
