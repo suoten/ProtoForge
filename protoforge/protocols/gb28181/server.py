@@ -311,7 +311,10 @@ class GB28181Server(ProtocolServer):
             self._gb_devices[device_config.id] = gb_device
 
         if self._status == ProtocolStatus.RUNNING:
-            await self._register_device(gb_device)
+            if sip_server_addr:  # FIXED-P1: 空地址时跳过注册，避免sendto到('', port)导致socket family mismatch
+                await self._register_device(gb_device)
+            else:
+                logger.warning("GB28181 device %s has no sip_server_addr configured, skipping REGISTER", device_config.id)
 
         self._log_debug("system", "device_created",
                         f"Device created: {device_config.name} (GB ID={gb_device_id})",
@@ -410,6 +413,8 @@ class GB28181Server(ProtocolServer):
 
     async def _send_keepalive(self, gb_device) -> None:
         if not self._transport:
+            return
+        if not gb_device.host:  # FIXED-P1: 空地址时跳过keepalive，避免sendto到('', port)导致socket错误
             return
         keepalive_body = f'<?xml version="1.0"?>\r\n<Notify>\r\n<CmdType>Keepalive</CmdType>\r\n<SN>{int(time.time()) % 100000}</SN>\r\n<DeviceID>{gb_device.device_id}</DeviceID>\r\n<Status>OK</Status>\r\n</Notify>'
         local_host = self._host if self._host != "0.0.0.0" else "127.0.0.1"
@@ -738,11 +743,14 @@ class GB28181Server(ProtocolServer):
                     if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
                         t = asyncio.create_task(gb_device.rtp_streamer.stop())
                         t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                        self._rtp_tasks = [t for t in self._rtp_tasks if not t.done()]  # FIXED-P0: 先清理再append，避免后append的任务被列表推导覆盖丢失
                         self._rtp_tasks.append(t)
-                        self._rtp_tasks = [t for t in self._rtp_tasks if not t.done()]
                     try:
                         from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
-                        ssrc = int(gb_device.device_id[-10:]) if len(gb_device.device_id) >= 10 else 0
+                        try:  # FIXED-P1: int()对设备ID做异常保护，非数字时回退0
+                            ssrc = int(gb_device.device_id[-10:]) if len(gb_device.device_id) >= 10 else 0
+                        except (ValueError, IndexError):
+                            ssrc = 0
                         ssrc = ssrc % 0x3FFFFFFF
                         streamer = RtpStreamer(
                             dest_ip=dest_ip,

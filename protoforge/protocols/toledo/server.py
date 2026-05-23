@@ -31,18 +31,30 @@ class ToledoDeviceBehavior(StandardDeviceBehavior):
         if point_name in self._values:
             self._values[point_name] = value
             if point_name == "weight":
-                self._weight = float(value)
+                try:  # FIXED-P1: float()异常保护，非数字值时保持原值
+                    self._weight = float(value)
+                except (ValueError, TypeError):
+                    pass
             elif point_name == "tare":
-                self._tare = float(value)
+                try:
+                    self._tare = float(value)
+                except (ValueError, TypeError):
+                    pass
             return True
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         if point_name == "weight":
-            self._weight = float(value)
+            try:  # FIXED-P1: float()异常保护，非数字值时保持原值
+                self._weight = float(value)
+            except (ValueError, TypeError):
+                pass
         elif point_name == "tare":
-            self._tare = float(value)
+            try:
+                self._tare = float(value)
+            except (ValueError, TypeError):
+                pass
 
     def get_weight_string(self) -> str:
         net = self._weight - self._tare

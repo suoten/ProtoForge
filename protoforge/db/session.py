@@ -47,75 +47,182 @@ class Database:
             await self._connect_sqlite()
 
     async def _connect_sqlite(self) -> None:
+        import shutil
+        import sqlite3
+
         try:
             Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-            # Check database integrity before connecting
-            try:
-                check_conn = await aiosqlite.connect(self._db_path)
-                try:
-                    cursor = await check_conn.execute("PRAGMA integrity_check")
-                    row = await cursor.fetchone()
-                    if row and row[0] != "ok":
-                        logger.warning("SQLite database integrity check failed: %s, attempting rebuild", row[0])
-                        await check_conn.close()
-                        # FIXED: 先尝试 WAL checkpoint 恢复，再决定是否丢弃
-                        try:
-                            recover_conn = await aiosqlite.connect(self._db_path)
-                            try:
-                                await recover_conn.execute("PRAGMA journal_mode=WAL")
-                                await recover_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-                                # 重新检查完整性
-                                cursor2 = await recover_conn.execute("PRAGMA integrity_check")
-                                row2 = await cursor2.fetchone()
-                                if row2 and row2[0] == "ok":
-                                    logger.info("Database recovered after WAL checkpoint, no data loss")
-                                    await recover_conn.close()
-                                    # 恢复成功，跳过备份步骤
-                                    self._db = await aiosqlite.connect(self._db_path)
-                                    self._db.row_factory = aiosqlite.Row
-                                    await self._db.execute("PRAGMA journal_mode=WAL")
-                                    await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
-                                    await self._create_tables_sqlite()
-                                    logger.info("SQLite database connected after recovery: %s", self._db_path)
-                                    return
-                            except Exception as recover_err:
-                                logger.debug("WAL checkpoint recovery attempt failed: %s", recover_err)
-                            finally:
-                                try:
-                                    await recover_conn.close()
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-                        # Backup and remove corrupted database
-                        import shutil
-                        backup_path = self._db_path + ".corrupted"
-                        try:
-                            shutil.move(self._db_path, backup_path)
-                            logger.warning("Corrupted database moved to %s, will recreate", backup_path)
-                        except OSError as move_err:
-                            logger.error("Failed to backup corrupted database: %s", move_err)
-                    else:
-                        await check_conn.close()
-                except Exception as check_err:
-                    logger.warning("Database integrity check error: %s, will attempt reconnect", check_err)
-                    try:
-                        await check_conn.close()
-                    except Exception:
-                        pass
-            except Exception as pre_check_err:
-                logger.debug("Pre-connect integrity check skipped: %s", pre_check_err)
 
+            # ---- Phase 1: Check and recover corrupted database ----
+            await self._attempt_db_recovery(self._db_path, shutil, sqlite3)
+
+            # ---- Phase 2: Connect normally ----
             self._db = await aiosqlite.connect(self._db_path)
             self._db.row_factory = aiosqlite.Row
             await self._db.execute("PRAGMA journal_mode=WAL")
-            await self._db.execute("PRAGMA synchronous=NORMAL")  # FIXED: WAL模式下NORMAL已足够安全，比FULL性能更好
+            await self._db.execute("PRAGMA synchronous=NORMAL")
             await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
         except Exception as e:
             logger.error("Failed to connect to SQLite database at %s: %s", self._db_path, e)
             raise RuntimeError(f"SQLite connection failed: {e}") from e
+
+    async def _attempt_db_recovery(self, db_path: str, shutil, sqlite3) -> None:
+        """Attempt to detect and recover a corrupted SQLite database, trying multiple strategies."""
+        db_file = Path(db_path)
+        db_exists = db_file.exists()
+
+        # ---- Strategy 1: WAL checkpoint recovery ----
+        if db_exists:
+            await self._try_wal_recovery(db_path)
+
+        # ---- Strategy 2: Check integrity after WAL recovery ----
+        if db_exists and db_file.exists():
+            try:
+                check_conn = await aiosqlite.connect(db_path)
+                try:
+                    cursor = await check_conn.execute("PRAGMA integrity_check")
+                    row = await cursor.fetchone()
+                    if row and row[0] == "ok":
+                        logger.info("Database integrity check passed")
+                        return
+                    else:
+                        logger.warning("Database integrity check failed: %s, will attempt rebuild", row[0] if row else "unknown")
+                finally:
+                    await check_conn.close()
+            except Exception as check_err:
+                logger.warning("Database integrity check error: %s, will attempt rebuild", check_err)
+
+        # ---- Strategy 3: SQLite .recover ----
+        if db_exists and db_file.exists():
+            await self._try_sqlite_recover(db_path, sqlite3)
+
+        # ---- Strategy 4: Final check ----
+        if db_exists and db_file.exists():
+            try:
+                check_conn = await aiosqlite.connect(db_path)
+                try:
+                    cursor = await check_conn.execute("PRAGMA integrity_check")
+                    row = await cursor.fetchone()
+                    if row and row[0] == "ok":
+                        logger.info("Database recovered successfully after repair attempts")
+                        return
+                finally:
+                    await check_conn.close()
+            except Exception:
+                pass
+
+            # ---- Strategy 5: Backup corrupted and recreate ----
+            backup_path = db_path + ".corrupted"
+            try:
+                shutil.move(db_path, backup_path)
+                logger.warning("Corrupted database moved to %s, will recreate", backup_path)
+            except OSError as move_err:
+                logger.error("Failed to backup corrupted database: %s", move_err)
+                # Last resort: try to delete and recreate
+                try:
+                    db_file.unlink(missing_ok=True)
+                    logger.warning("Deleted corrupted database, will recreate")
+                except OSError as del_err:
+                    logger.error("Failed to delete corrupted database: %s", del_err)
+                    raise RuntimeError(
+                        f"Database is corrupted and could not be recovered or backed up. "
+                        f"Please manually delete {db_path} and restart."
+                    )
+
+    async def _try_wal_recovery(self, db_path: str) -> bool:
+        """Try to recover database via WAL checkpoint. Returns True if recovery succeeded."""
+        db_file = Path(db_path)
+        wal_path = db_path + "-wal"
+        shm_path = db_path + "-shm"
+
+        # If WAL file is very large relative to main db, the WAL itself may be the problem
+        if wal_path.exists() and db_file.exists():
+            try:
+                wal_size = db_file.stat().st_size
+                if wal_size > 0:
+                    wal_size_ratio = Path(wal_path).stat().st_size / wal_size
+                    if wal_size_ratio > 10:
+                        logger.warning("WAL file is %dx larger than database, removing corrupted WAL", wal_size_ratio)
+                        try:
+                            Path(wal_path).unlink()
+                        except OSError:
+                            pass
+                        try:
+                            Path(shm_path).unlink()
+                        except OSError:
+                            pass
+            except Exception:
+                pass
+
+        try:
+            recover_conn = await aiosqlite.connect(db_path)
+            try:
+                await recover_conn.execute("PRAGMA journal_mode=WAL")
+                await recover_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                cursor2 = await recover_conn.execute("PRAGMA integrity_check")
+                row2 = await cursor2.fetchone()
+                if row2 and row2[0] == "ok":
+                    logger.info("Database recovered after WAL checkpoint")
+                    return True
+            finally:
+                try:
+                    await recover_conn.close()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug("WAL checkpoint recovery attempt failed: %s", e)
+        return False
+
+    async def _try_sqlite_recover(self, db_path: str, sqlite3) -> None:
+        """Use SQLite's .recover command-line utility to recover data from corrupted database."""
+        import tempfile, os, subprocess
+
+        db_file = Path(db_path)
+        if not db_file.exists():
+            return
+
+        try:
+            # Use sqlite3 CLI .recover if available
+            temp_db = None
+            temp_conn = None
+            try:
+                temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+                temp_db.close()
+                temp_path = temp_db.name
+
+                # Try to recover using sqlite3 CLI
+                result = subprocess.run(
+                    ["sqlite3", db_path, ".recover", ".output", temp_path, ".quit"],
+                    capture_output=True, timeout=60
+                )
+                if result.returncode == 0 and Path(temp_path).stat().st_size > 0:
+                    # Verify recovered database
+                    verify_conn = sqlite3.connect(temp_path)
+                    try:
+                        cursor = verify_conn.execute("PRAGMA integrity_check")
+                        row = cursor.fetchone()
+                        verify_conn.close()
+                        if row and row[0] == "ok":
+                            shutil.move(temp_path, db_path)
+                            logger.info("Database recovered using sqlite3 .recover")
+                            return
+                    except Exception:
+                        pass
+                    try:
+                        os.unlink(temp_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.debug("sqlite3 .recover failed: %s", e)
+                if temp_db and Path(temp_path).exists():
+                    try:
+                        os.unlink(temp_path)
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug("SQLite recover strategy failed: %s", e)
 
     async def _connect_postgres(self) -> None:
         try:
@@ -995,7 +1102,11 @@ class Database:
             if table not in self._VALID_TABLES:
                 continue
             try:
-                rows = await self._fetchall(f"SELECT * FROM {table}")
+                if table == "users":  # FIXED-P1: 导出时排除password_hash，防止备份文件泄露后离线暴力破解
+                    rows = await self._fetchall(f"SELECT username, id, role, created_at, login_attempts, locked_until FROM {table}")
+                    rows = [{**r, "password_hash": ""} for r in rows]
+                else:
+                    rows = await self._fetchall(f"SELECT * FROM {table}")
                 result[table] = rows
             except Exception as e:
                 logger.debug("Failed to export table %s: %s", table, e)
@@ -1054,7 +1165,10 @@ class Database:
                                 v = numeric_defaults.get(c, "")
                             values.append(v)
                         sql = self._upsert_sql(table, columns)
-                        await self._execute(sql, tuple(values))
+                        if self._is_postgres and pg_conn:  # FIXED-P0: 使用同一pg_conn执行SQL，确保事务保护生效
+                            await pg_conn.execute(sql, *values)
+                        else:
+                            await self._execute(sql, tuple(values))
                         count += 1
                     except Exception as e:
                         logger.debug("Failed to import row into %s: %s", table, e)

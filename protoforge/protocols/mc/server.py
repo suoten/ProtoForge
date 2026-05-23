@@ -10,6 +10,8 @@ from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
+_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+
 
 class McDeviceBehavior(StandardDeviceBehavior):
     def __init__(self, points: list | None = None):
@@ -104,7 +106,6 @@ class McServer(ProtocolServer):
 
     SLMP_3E_BIN_SUBHEADER = 0x0054
     SLMP_3E_ASCII_SUBHEADER = b"5000"
-    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
 
     def __init__(self):
         super().__init__()
@@ -178,7 +179,10 @@ class McServer(ProtocolServer):
                 if len(header) < 9:
                     break
                 if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
-                    data_len_field = int(header[7:9], 16)
+                    try:  # FIXED-P1: int(header,16)对网络数据做异常保护，非法16进制字符导致ValueError崩溃
+                        data_len_field = int(header[7:9], 16)
+                    except (ValueError, IndexError):
+                        break
                     remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=_READ_TIMEOUT)
                     data = header + remaining
                 else:

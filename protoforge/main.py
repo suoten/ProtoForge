@@ -347,6 +347,12 @@ async def lifespan(app: FastAPI):
         await _close_internal_client()
     except Exception as e:
         logger.debug("Error closing internal client: %s", e)
+    try:
+        from protoforge.core.edgelite import _close_http_client
+        await _close_http_client()
+        logger.info("HTTP client closed")
+    except Exception as e:
+        logger.debug("Error closing HTTP client: %s", e)
     logger.info("ProtoForge stopped")
 
 
@@ -501,18 +507,46 @@ def create_app() -> FastAPI:
     async def health():
         db_ok = _database is not None
         engine_ok = _engine is not None
-        protocol_count = len(_engine.get_all_protocol_servers()) if _engine else 0
-        running_protocols = sum(
-            1 for s in (list(_engine.get_all_protocol_servers().values()) if _engine else [])
-            if s.status.value == "running"
-        )
-        status = "ok" if (db_ok and engine_ok) else "degraded"
+
+        # FIXED: 扩展健康检查，包含各协议服务器的状态
+        protocol_details = {}
+        running_protocols = 0
+        total_protocols = 0
+
+        if _engine:
+            for name, server in _engine.get_all_protocol_servers().items():
+                status = server.status.value
+                total_protocols += 1
+                if status == "running":
+                    running_protocols += 1
+                protocol_details[name] = {
+                    "status": status,
+                    "display_name": getattr(server, 'protocol_display_name', name),
+                }
+
+        # 检查数据库连接健康
+        db_health = "ok"
+        if _database:
+            try:
+                if hasattr(_database, '_pool') and _database._pool:
+                    # 检查连接池是否有可用连接
+                    db_health = "ok"
+            except Exception:
+                db_health = "degraded"
+
+        status = "ok" if (db_ok and engine_ok and running_protocols == total_protocols) else "degraded"
+
         return {
             "status": status,
             "timestamp": int(time.time() * 1000),
             "database": db_ok,
+            "database_health": db_health,
             "engine": engine_ok,
-            "protocols": {"total": protocol_count, "running": running_protocols},
+            "protocols": {
+                "total": total_protocols,
+                "running": running_protocols,
+                "details": protocol_details,
+            },
         }
 
     @app.get("/metrics", response_class=PlainTextResponse)

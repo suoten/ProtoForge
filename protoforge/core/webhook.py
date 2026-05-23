@@ -148,7 +148,15 @@ class WebhookManager:
             return
         self._running = True
         self._restore()
-        self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        # FIXED: 使用连接池配置，提高 Webhook 发送性能
+        self._client = httpx.AsyncClient(
+            timeout=HTTP_TIMEOUT_DEFAULT,
+            limits=httpx.Limits(
+                max_connections=20,
+                max_keepalive_connections=10,
+                keepalive_expiry=30.0,
+            ),
+        )
         self._task = asyncio.create_task(self._send_loop())
         logger.info("Webhook manager started with %d webhooks", len(self._webhooks))
 

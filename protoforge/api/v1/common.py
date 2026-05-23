@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 
 
 class APIResponse:
+    """统一的 API 响应格式"""
+
     @staticmethod
     def success(data: Any = None, message: str = "ok") -> dict:
         return {
@@ -16,21 +18,67 @@ class APIResponse:
         }
 
     @staticmethod
-    def error(message: str = "error", code: int = 500, data: Any = None) -> dict:
-        return {
+    def error(
+        message: str = "error",
+        code: int = 500,
+        data: Any = None,
+        error_type: str = "",
+        detail: Any = None,
+    ) -> dict:
+        result = {
             "code": code,
-            "data": data,
             "message": message,
-            "detail": message,
             "timestamp": int(time.time() * 1000),
         }
+        if data is not None:
+            result["data"] = data
+        if error_type:
+            result["error_type"] = error_type
+        if detail is not None:
+            result["detail"] = detail
+        return result
+
+    @staticmethod
+    def created(data: Any = None, message: str = "Created successfully") -> dict:
+        return APIResponse.success(data=data, message=message)
+
+    @staticmethod
+    def updated(data: Any = None, message: str = "Updated successfully") -> dict:
+        return APIResponse.success(data=data, message=message)
+
+    @staticmethod
+    def deleted(message: str = "Deleted successfully") -> dict:
+        return APIResponse.success(message=message)
+
+    @staticmethod
+    def not_found(resource: str, identifier: str = "") -> dict:
+        msg = f"{resource} not found"
+        if identifier:
+            msg += f": {identifier}"
+        return APIResponse.error(message=msg, code=404, error_type="NotFoundError")
+
+    @staticmethod
+    def validation_error(field: str, reason: str = "") -> dict:
+        msg = f"Validation failed for '{field}'"
+        if reason:
+            msg += f": {reason}"
+        return APIResponse.error(message=msg, code=400, error_type="ValidationError", detail={"field": field})
+
+    @staticmethod
+    def unauthorized(message: str = "Authentication required") -> dict:
+        return APIResponse.error(message=message, code=401, error_type="UnauthorizedError")
+
+    @staticmethod
+    def forbidden(message: str = "Access denied") -> dict:
+        return APIResponse.error(message=message, code=403, error_type="ForbiddenError")
 
 
 class ProtoForgeException(Exception):
-    def __init__(self, message: str = "error", code: int = 500, status_code: int = 400):
+    def __init__(self, message: str = "error", code: int = 500, status_code: int = 400, error_type: str = ""):
         self.message = message
         self.code = code
         self.status_code = status_code
+        self.error_type = error_type
         super().__init__(message)
 
 

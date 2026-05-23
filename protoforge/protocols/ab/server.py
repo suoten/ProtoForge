@@ -10,6 +10,8 @@ from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
+_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+
 _CIP_TYPE_MAP = {
     "bool": (0xC1, 1),
     "int16": (0xC3, 2),
@@ -67,7 +69,6 @@ class AbServer(ProtocolServer):
     protocol_display_name = "Rockwell AB"
 
     EIP_HEADER_SIZE = 24
-    _READ_TIMEOUT = 30  # FIXED: 魔法数字→类常量
 
     def __init__(self):
         super().__init__()
@@ -324,25 +325,28 @@ class AbServer(ProtocolServer):
     def _pack_cip_value(data_type: str, value: Any) -> bytes:
         type_info = _CIP_TYPE_MAP.get(data_type, (0xC1, 4))
         type_code, size = type_info
-        if data_type == "bool":
-            return bytes([type_code, 0x00, 0x01, 0x00, 0x01 if value else 0x00])
-        elif data_type == "string":
-            s = str(value).encode("utf-8")
-            return struct.pack("<BH", type_code, len(s)) + s + b"\x00"
-        elif data_type in ("int16",):
-            return struct.pack("<BHh", type_code, size, int(value))
-        elif data_type in ("uint16",):
-            return struct.pack("<BHH", type_code, size, int(value))
-        elif data_type in ("int32",):
-            return struct.pack("<BHi", type_code, size, int(value))
-        elif data_type in ("uint32",):
-            return struct.pack("<BHI", type_code, size, int(value))
-        elif data_type in ("float32",):
-            return struct.pack("<BHf", type_code, size, float(value))
-        elif data_type in ("float64",):
-            return struct.pack("<BHd", type_code, size, float(value))
-        else:
-            return struct.pack("<BHi", type_code, 4, int(value))
+        try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0
+            if data_type == "bool":
+                return bytes([type_code, 0x00, 0x01, 0x00, 0x01 if value else 0x00])
+            elif data_type == "string":
+                s = str(value).encode("utf-8")
+                return struct.pack("<BH", type_code, len(s)) + s + b"\x00"
+            elif data_type in ("int16",):
+                return struct.pack("<BHh", type_code, size, int(value))
+            elif data_type in ("uint16",):
+                return struct.pack("<BHH", type_code, size, int(value))
+            elif data_type in ("int32",):
+                return struct.pack("<BHi", type_code, size, int(value))
+            elif data_type in ("uint32",):
+                return struct.pack("<BHI", type_code, size, int(value))
+            elif data_type in ("float32",):
+                return struct.pack("<BHf", type_code, size, float(value))
+            elif data_type in ("float64",):
+                return struct.pack("<BHd", type_code, size, float(value))
+            else:
+                return struct.pack("<BHi", type_code, 4, int(value))
+        except (ValueError, TypeError):
+            return struct.pack("<BHi", type_code, 4, 0)
 
     def _parse_cip_tag_path(self, cip_data: bytes) -> str:
         tag_parts = []

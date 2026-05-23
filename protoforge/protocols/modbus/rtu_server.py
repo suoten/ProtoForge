@@ -365,8 +365,9 @@ class ModbusRtuServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
-        self._slave_map[device_config.id] = slave_id
-        self._next_slave_id = max(self._next_slave_id, slave_id + 1)
+        async with self._behaviors_lock:  # FIXED-P1: _slave_map写入移入锁保护，防止与remove_device并发
+            self._slave_map[device_config.id] = slave_id
+            self._next_slave_id = max(self._next_slave_id, slave_id + 1)
 
         if self._status == ProtocolStatus.RUNNING:
             self._get_data_store(slave_id)
@@ -394,9 +395,9 @@ class ModbusRtuServer(ProtocolServer):
         async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)
-        slave_id = self._slave_map.pop(device_id, None)
-        if slave_id is not None:
-            self._data_stores.pop(slave_id, None)
+            slave_id = self._slave_map.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock保护，防止与帧处理并发
+            if slave_id is not None:
+                self._data_stores.pop(slave_id, None)
         await self._clear_default_device_async(device_id)
         logger.info("Modbus RTU device removed: %s", device_id)
         self._log_debug("system", "device_remove",
@@ -446,8 +447,8 @@ class ModbusRtuServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            address = int(point.address) + 1
-            try:
+            try:  # FIXED-P1: int(point.address)移入try内，非数字地址时跳过该点而非崩溃
+                address = int(point.address) + 1
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
                 elif point.data_type.value in ("float32",):

@@ -27,10 +27,51 @@ PROTOCOL_MAP: dict[str, str] = {
 
 EDGELITE_DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$")
 
+# EdgeLite 驱动缺失依赖包的 pip 安装命令映射
+EDGELITE_PIP_PACKAGES: dict[str, list[str]] = {
+    "pymcprotocol": ["pymcprotocol"],
+    "pylogix": ["pylogix"],
+    "pyfanuc": ["pyfanuc"],
+    "pyfins": ["pyfins"],
+    "OpenOPC": ["OpenOPC-Python3"],
+    "pymodbus": ["pymodbus"],
+    "snap7": ["python-snap7"],
+    "BACnet": ["bacpypes"],
+}
+
 # FIXED: 添加 token 缓存，避免每次 API 调用都重新登录
 _token_cache: dict[str, dict[str, Any]] = {}  # url -> {token, expires_at, refresh_token}
 _token_cache_lock = threading.Lock()
 _TOKEN_REFRESH_MARGIN = 30  # token 过期前30秒视为需要刷新
+
+# FIXED: 添加 HTTP 连接池，避免每次请求都创建新连接
+_http_client: httpx.AsyncClient | None = None
+_http_client_lock = threading.Lock()
+
+
+def _get_http_client() -> httpx.AsyncClient:
+    """获取全局 HTTP 客户端（带连接池）"""
+    global _http_client
+    with _http_client_lock:
+        if _http_client is None:
+            _http_client = httpx.AsyncClient(
+                limits=httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=20,
+                    keepalive_expiry=30.0,
+                ),
+                timeout=HTTP_TIMEOUT_DEFAULT,
+            )
+        return _http_client
+
+
+async def _close_http_client() -> None:
+    """关闭全局 HTTP 客户端"""
+    global _http_client
+    with _http_client_lock:
+        if _http_client is not None:
+            await _http_client.aclose()
+            _http_client = None
 
 
 def _get_cached_token(url: str) -> str | None:
@@ -189,6 +230,48 @@ def _is_edgelite_local(el_config: dict[str, str]) -> bool:
         return "127.0.0.1" in url or "localhost" in url
 
 
+def _get_protocol_status(protocol: str) -> str:
+    """Get the running status of a protocol server. Returns 'running', 'stopped', or 'unknown'."""
+    try:
+        from protoforge.main import get_engine
+        from protoforge.protocols.base import ProtocolStatus
+        engine = get_engine()
+        server = engine._protocol_servers.get(protocol)
+        if server is None:
+            return "stopped"
+        return "running" if server.status == ProtocolStatus.RUNNING else "stopped"
+    except Exception:
+        return "unknown"
+
+
+def _format_driver_config_for_display(config: dict) -> str:
+    """Format driver_config as human-readable connection info for error messages."""
+    if not config:
+        return ""
+    # 提取关键连接参数，隐藏密码
+    parts = []
+    for key in ("server_url", "url", "push_url", "broker"):
+        if config.get(key):
+            parts.append(key)
+    host = config.get("host") or config.get("ip")
+    port = config.get("port")
+    if host:
+        parts.append(f"host/ip={host}")
+    if port:
+        parts.append(f"port={port}")
+    if not parts:
+        return str(config)
+    display = ", ".join(f"{k}={config[k]}" for k in ("server_url", "url", "push_url", "broker") if config.get(k))
+    if host:
+        display += f", host={host}"
+    if port:
+        display += f", port={port}"
+    # 隐藏密码
+    if config.get("password"):
+        display += ", password=***"
+    return display
+
+
 def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) -> int | None:
     device_port = protocol_config.get("port")
     if device_port is not None:
@@ -209,6 +292,53 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
     proto_info = port_map.get(protocol)
     if proto_info and isinstance(proto_info.get("port"), int):
         return proto_info["port"]
+    return None
+
+
+async def _get_edgelite_device_config(client: httpx.AsyncClient, el_url: str, headers: dict, device_id: str) -> dict[str, Any] | None:
+    """查询 EdgeLite 设备配置，返回设备详情（包含实际使用的端口）"""
+    try:
+        resp = await client.get(
+            f"{el_url.rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+            headers=headers,
+            timeout=HTTP_TIMEOUT_SHORT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("data", data)
+    except Exception as e:
+        logger.debug("Failed to get EdgeLite device %s config: %s", device_id, e)
+    return None
+
+
+async def _get_edgelite_protocol_port_from_existing_device(
+    client: httpx.AsyncClient,
+    el_url: str,
+    headers: dict,
+    protocol: str,
+    protoforge_device_id: str,
+) -> int | None:
+    """从 EdgeLite 已有的同协议设备中提取端口配置（EdgeLite 可能修改了默认端口）"""
+    try:
+        resp = await client.get(
+            f"{el_url.rstrip('/')}/api/v1/devices",
+            headers=headers,
+            params={"protocol": PROTOCOL_MAP.get(protocol, protocol), "limit": 10},
+            timeout=HTTP_TIMEOUT_SHORT,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            devices = data.get("data", data.get("devices", []))
+            for dev in devices:
+                config = dev.get("config", {})
+                if protocol == "mqtt":
+                    return config.get("port")
+                elif protocol in ("modbus_tcp", "s7", "mc", "opcua", "fins", "ab"):
+                    return config.get("port")
+                elif protocol == "http":
+                    return config.get("server_port") or config.get("port")
+    except Exception as e:
+        logger.debug("Failed to get EdgeLite existing devices for port detection: %s", e)
     return None
 
 
@@ -547,24 +677,45 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             "suggestion": desc("edgelite.suggestion.unsupported_protocol"),
         }
 
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        # FIXED: 使用带缓存的认证，避免每次重新登录
-        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        if auth_err:
-            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
+    # FIXED: 尝试从 EdgeLite 已有的同协议设备获取端口（EdgeLite 可能修改了默认端口）
+    protocol = getattr(device, "protocol", "") or ""
+    driver_config = payload.get("config", {})
 
-        try:
-            create_resp = await client.post(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
-                json=payload, headers=headers,
-            )
-        except httpx.ConnectError:
-            return {"ok": False, "error": desc("edgelite.error.push_connection"), "error_type": "connection"}
-        except httpx.TimeoutException:
-            return {"ok": False, "error": desc("edgelite.error.push_timeout"), "error_type": "timeout"}
-        except Exception as e:
-            return {"ok": False, "error": desc("edgelite.error.push_exception").format(error=e), "error_type": "unknown"}
+    # FIXED: 使用全局 HTTP 连接池，避免每次请求创建新连接
+    client = _get_http_client()
+    # FIXED: 使用带缓存的认证，避免每次重新登录
+    headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+    if auth_err:
+        return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
+    # 尝试获取 EdgeLite 已有的同协议设备端口
+    el_device_port = await _get_edgelite_protocol_port_from_existing_device(
+        client, el_config.get("url", ""), headers, protocol, payload.get("device_id", "")
+    )
+    if el_device_port is not None:
+        # 用 EdgeLite 的端口覆盖驱动配置
+        logger.info("Detected EdgeLite %s port %d, using it instead of ProtoForge's config", protocol, el_device_port)
+        driver_config["port"] = el_device_port
+        if protocol == "mqtt":
+            driver_config["broker_port"] = el_device_port
+        payload["config"] = driver_config
+
+    # FIXED-P1: Push前检查协议服务器是否运行，避免EdgeLite驱动连接失败后回滚
+    protocol_status = _get_protocol_status(protocol)
+    if protocol_status != "running":
+        return {
+            "ok": False,
+            "error": f"Protocol {protocol} is not running (status: {protocol_status})",
+            "error_type": "protocol_not_running",
+            "suggestion": desc("edgelite.suggestion.protocol_not_running"),
+            "driver_config": driver_config,
+        }
+
+    try:
+        create_resp = await client.post(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+            json=payload, headers=headers,
+        )
         # FIXED: 缓存 token 失效时自动重新登录重试
         if create_resp.status_code == 401:
             headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
@@ -581,10 +732,114 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
 
         if create_resp.status_code == 409:
+            # FIXED-P1: 区分EdgeLite 409的两种原因：
+            # 1. device_id主键冲突(ERR_REPO_DEVICE_EXISTS) → 设备已存在，应PUT更新
+            # 2. 驱动启动失败(Device driver start failed) → 设备已被回滚删除，应重试POST
+            conflict_detail = ""
+            try:
+                conflict_data = create_resp.json()
+                if isinstance(conflict_data, dict):
+                    conflict_detail = str(conflict_data.get("detail", ""))
+            except Exception:
+                pass
+
+            is_driver_failure = "driver" in conflict_detail.lower() or "start failed" in conflict_detail.lower() or "connection" in conflict_detail.lower()
+
+            # FIXED: 从错误消息中提取缺失的pip包名，给出pip install提示
+            pip_hint = ""
+            missing_packages = []
+            try:
+                import re as _re
+                # 匹配多种格式:
+                # 1. "xxx未安装，请执行: pip install xxx"
+                # 2. "xxx not installed. Run: pip install xxx"
+                # 3. "pip install xxx" (直接提取包名)
+                patterns = [
+                    r"(?:未安装[，,]?\s*请执行|not installed[.,]?\s*(?:Run|run)[.:]?\s*)pip install\s+(\S+)",
+                    r"pip install\s+(\S+)",
+                    r"(\w+(?:-\w+)?(?:-\w+)?)\s+未安装",
+                ]
+                for pattern in patterns:
+                    for m in _re.finditer(pattern, conflict_detail):
+                        pkg = m.group(1).strip().rstrip('.')
+                        # 过滤掉非包名的匹配
+                        if pkg and len(pkg) > 2 and not pkg.startswith("http"):
+                            # 映射到正确的 pip 包名
+                            correct_pkg = EDGELITE_PIP_PACKAGES.get(pkg.lower(), [pkg])[0]
+                            if correct_pkg not in missing_packages:
+                                missing_packages.append(correct_pkg)
+            except Exception:
+                pass
+
+            if missing_packages:
+                pip_hint = "pip install " + " ".join(missing_packages)
+
+            if is_driver_failure:
+                # 驱动启动失败，设备已被EdgeLite回滚删除，返回失败信息
+                # FIXED-P1: 包含实际连接参数，方便用户排查IP/端口问题
+                # FIXED: 包含pip安装提示
+                logger.warning("EdgeLite device %s driver start failed: %s", payload["device_id"], conflict_detail)
+                conn_info = _format_driver_config_for_display(payload.get("config", {}))
+                suggestion = desc("edgelite.suggestion.check_driver_config")
+                if pip_hint:
+                    suggestion = f"{suggestion}\n\n安装缺失依赖: {pip_hint}"
+                return {
+                    "ok": False,
+                    "error": f"EdgeLite driver start failed: {conflict_detail}",
+                    "error_type": "driver_failed",
+                    "suggestion": suggestion,
+                    "driver_config": payload.get("config", {}),
+                    "connection_info": conn_info,
+                    "pip_hint": pip_hint if pip_hint else None,
+                }
+
+            # device_id冲突，设备已存在，通过GET确认存在后再PUT更新
+            # FIXED: rtu-plc等设备EdgeLite返回409后设备已被回滚删除，PUT会返回404
+            # 改为：先用GET确认设备存在；如404则重新POST（设备已被服务器删除）
+            remote_device_id = payload["device_id"]
+            try:
+                dev_resp = await client.get(
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(remote_device_id), safe='')}",
+                    headers=headers,
+                )
+                if dev_resp.status_code == 404:
+                    # 设备已被服务器删除，直接重新POST创建
+                    logger.info("Device %s not found on EdgeLite (deleted server-side), re-creating...", remote_device_id)
+                    try:
+                        create_resp2 = await client.post(
+                            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+                            json=payload, headers=headers,
+                        )
+                    except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                        return {"ok": False, "error": str(e), "error_type": "unknown"}
+                    if create_resp2.status_code in (200, 201):
+                        logger.info("Device %s re-created on EdgeLite", payload["device_id"])
+                        return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
+                    # 即使再次失败也不走PUT路径，直接返回
+                    try:
+                        err_data = create_resp2.json()
+                        err_detail = err_data.get("detail", str(create_resp2.text[:200]))
+                    except Exception:
+                        err_detail = str(create_resp2.text[:200])
+                    return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
+                elif dev_resp.status_code == 200:
+                    # 设备确实存在，提取真实device_id并PUT更新
+                    try:
+                        dev_data = dev_resp.json()
+                        dev_data_inner = dev_data.get("data", dev_data)
+                        remote_device_id = dev_data_inner.get("device_id", remote_device_id)
+                    except Exception:
+                        pass
+                # 其他状态码不处理，继续走PUT流程
+            except httpx.ConnectError:
+                pass  # 网络错误时跳过此检查，继续尝试PUT
+            except httpx.TimeoutException:
+                pass
+
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
             try:
                 update_resp = await client.put(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(payload['device_id']), safe='')}",
+                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(remote_device_id), safe='')}",
                     json=update_payload, headers=headers,
                 )
             except httpx.ConnectError:
@@ -621,17 +876,19 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        # FIXED: 使用带缓存的认证
-        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        if auth_err:
-            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
-        try:
-            resp = await client.delete(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-                headers=headers,
-            )
+    # FIXED: 使用全局 HTTP 连接池
+    client = _get_http_client()
+    # FIXED: 使用带缓存的认证
+    headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+    if auth_err:
+        return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
+
+    try:
+        resp = await client.delete(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+            headers=headers,
+        )
         except httpx.ConnectError:
             return {"ok": False, "error": "Cannot connect to EdgeLite during removal", "error_type": "connection"}
         except httpx.TimeoutException:
@@ -661,8 +918,13 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
-        # FIXED: 使用带缓存的认证
+
+    # FIXED: 使用全局 HTTP 连接池
+    client = _get_http_client()
+    # FIXED: 使用带缓存的认证
+    headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+    if auth_err:
+        return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type}
         headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         if auth_err:
             return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
@@ -715,17 +977,19 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
-        # FIXED: 使用带缓存的认证
-        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        if auth_err:
-            return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
 
-        try:
-            resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
-                headers=headers,
-            )
+    # FIXED: 使用全局 HTTP 连接池
+    client = _get_http_client()
+    # FIXED: 使用带缓存的认证
+    headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+    if auth_err:
+        return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
+
+    try:
+        resp = await client.get(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+            headers=headers,
+        )
         except httpx.ConnectError:
             return {"ok": False, "error": "Cannot connect to EdgeLite while reading points", "error_type": "connection"}
         except httpx.TimeoutException:
@@ -929,45 +1193,46 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     device_id = _normalize_device_id(getattr(device, "id", ""))
     result: dict[str, Any] = {"device_id": device_id, "steps": {}}
 
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT) as client:
-        # FIXED: 使用带缓存的认证
-        headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-        if auth_err:
-            result["steps"]["auth"] = {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
-            result["ok"] = False
-            return result
-        result["steps"]["auth"] = {"ok": True}
+    # FIXED: 使用全局 HTTP 连接池
+    client = _get_http_client()
+    # FIXED: 使用带缓存的认证
+    headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+    if auth_err:
+        result["steps"]["auth"] = {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type, "suggestion": auth_err.suggestion}
+        result["ok"] = False
+        return result
+    result["steps"]["auth"] = {"ok": True}
 
+    try:
+        dev_resp = await client.get(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+            headers=headers,
+        )
+    except httpx.ConnectError:
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_connection")},
+        result["ok"] = False
+        return result
+    except httpx.TimeoutException:
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_timeout")},
+        result["ok"] = False
+        return result
+    except Exception as e:
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)},
+        result["ok"] = False
+        return result
+
+    # FIXED: 缓存 token 失效时自动重新登录重试
+    if dev_resp.status_code == 401:
+        headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         try:
             dev_resp = await client.get(
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
-        except httpx.ConnectError:
-            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_connection")},
+        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+            result["steps"]["register"] = {"ok": False, "error": str(e)}
             result["ok"] = False
             return result
-        except httpx.TimeoutException:
-            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_timeout")},
-            result["ok"] = False
-            return result
-        except Exception as e:
-            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)},
-            result["ok"] = False
-            return result
-
-        # FIXED: 缓存 token 失效时自动重新登录重试
-        if dev_resp.status_code == 401:
-            headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
-            try:
-                dev_resp = await client.get(
-                    f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
-                    headers=headers,
-                )
-            except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
-                result["steps"]["register"] = {"ok": False, "error": str(e)}
-                result["ok"] = False
-                return result
 
         if dev_resp.status_code == 404:
             result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
@@ -1072,9 +1337,11 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
         return {"ok": False, "error": desc("edgelite.error.url_empty")}
     if not url.startswith("http://") and not url.startswith("https://"):
         return {"ok": False, "error": desc("edgelite.error.url_invalid")}
-    async with httpx.AsyncClient(timeout=HTTP_TIMEOUT_SHORT) as client:
-        try:
-            resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
+
+    # FIXED: 使用全局 HTTP 连接池
+    client = _get_http_client()
+    try:
+        resp = await client.get(f"{url.rstrip('/')}/api/v1/system/status")
             if resp.status_code == 200:
                 try:
                     raw = resp.json()

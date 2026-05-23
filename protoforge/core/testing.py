@@ -210,7 +210,16 @@ class TestReport:
     def duration(self) -> float:
         return self.end_time - self.start_time if self.end_time and self.start_time else 0.0
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, lang: str = "zh") -> dict[str, Any]:
+        # FIXED-P1: 添加status_label i18n状态文本，之前只有英文status值
+        _status_i18n = {
+            "passed": tmsg("status_passed", lang),
+            "failed": tmsg("status_failed", lang),
+            "error": tmsg("status_error", lang),
+            "skipped": tmsg("status_skipped", lang),
+            "running": tmsg("status_running", lang),
+            "pending": tmsg("status_pending", lang),
+        }
         return {
             "id": self.id,
             "name": self.name,
@@ -231,12 +240,14 @@ class TestReport:
                     "description": tc.description,
                     "tags": tc.tags,
                     "status": tc.status.value,
+                    "status_label": _status_i18n.get(tc.status.value, tc.status.value),
                     "duration": round(tc.end_time - tc.start_time, 3) if tc.end_time else 0,
                     "error": tc.error,
                     "steps": [
                         {
                             **s.to_dict(),
                             "status": s.status.value,
+                            "status_label": _status_i18n.get(s.status.value, s.status.value),
                             "duration": round(s.duration, 3),
                             "error": s.error,
                             "extracted_vars": s.extracted_vars,
@@ -258,6 +269,15 @@ class TestReport:
             "passed": "#18a058", "failed": "#d03050", "error": "#f0a020",
             "skipped": "#909399", "running": "#2080f0", "pending": "#c0c0c0",
         }
+        # FIXED-P1: 状态文本i18n，之前硬编码英文PASSED/FAILED
+        _status_i18n = {
+            "passed": tmsg("status_passed", lang),
+            "failed": tmsg("status_failed", lang),
+            "error": tmsg("status_error", lang),
+            "skipped": tmsg("status_skipped", lang),
+            "running": tmsg("status_running", lang),
+            "pending": tmsg("status_pending", lang),
+        }
 
         case_rows = ""
         for tc in self.test_cases:
@@ -269,7 +289,7 @@ class TestReport:
                 step_rows += f"""
                 <tr>
                     <td>{html.escape(s.name)}</td>
-                    <td><span style="color:{s_color};font-weight:600">{s.status.value.upper()}</span></td>
+                    <td><span style="color:{s_color};font-weight:600">{_status_i18n.get(s.status.value, s.status.value)}</span></td>
                     <td>{round(s.duration, 3)}s</td>
                     <td>{html.escape(s.error or '-')}</td>
                 </tr>"""
@@ -287,7 +307,7 @@ class TestReport:
             <div class="case-card">
                 <div class="case-header" style="border-left:4px solid {tc_status_color}">
                     <span class="case-name">{html.escape(tc.name)}</span>
-                    <span class="case-status" style="color:{tc_status_color}">{tc.status.value.upper()}</span>
+                    <span class="case-status" style="color:{tc_status_color}">{_status_i18n.get(tc.status.value, tc.status.value)}</span>
                     <span class="case-duration">{tc_duration}s</span>
                 </div>
                 {f'<div class="case-error">{html.escape(tc.error)}</div>' if tc.error else ''}

@@ -239,7 +239,10 @@ class BACnetServer(ProtocolServer):
                         resp += encoded
                     else:
                         resp.append(0x44)
-                        resp += struct.pack(">f", float(value) if value else 0.0)
+                        try:  # FIXED-P1: float()异常保护，非数字值时回退0.0
+                            resp += struct.pack(">f", float(value) if value else 0.0)
+                        except (ValueError, TypeError):
+                            resp += struct.pack(">f", 0.0)
                     resp[3] = len(resp) - 4
                     return bytes(resp)
         return self._make_error_response(invoke_id, 0x0C, 1, 31)
@@ -311,7 +314,10 @@ class BACnetServer(ProtocolServer):
                                 prop_list += encoded
                             else:
                                 prop_list.append(0x44)
-                                prop_list += struct.pack(">f", float(value) if value else 0.0)
+                                try:  # FIXED-P1: float()异常保护，非数字值时回退0.0
+                                    prop_list += struct.pack(">f", float(value) if value else 0.0)
+                                except (ValueError, TypeError):
+                                    prop_list += struct.pack(">f", 0.0)
                         obj_data += prop_list
                         break
                 if found:

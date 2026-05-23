@@ -6,6 +6,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
+from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,63 @@ class Settings(BaseSettings):
     toledo_port: int = 1701
     profinet_port: int = 34964
     ethercat_port: int = 34980
+
+    # FIXED: 添加配置验证器
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, v: int) -> int:
+        if v < 1 or v > 65535:
+            raise ValueError(f"port must be between 1 and 65535, got {v}")
+        return v
+
+    @field_validator("grpc_port")
+    @classmethod
+    def validate_grpc_port(cls, v: int) -> int:
+        if v < 0 or v > 65535:
+            raise ValueError(f"grpc_port must be between 0 and 65535, got {v}")
+        return v
+
+    @field_validator("log_level")
+    @classmethod
+    def validate_log_level(cls, v: str) -> str:
+        valid_levels = {"debug", "info", "warning", "error", "critical"}
+        if v.lower() not in valid_levels:
+            raise ValueError(f"log_level must be one of {valid_levels}, got {v}")
+        return v.lower()
+
+    @field_validator("edgelite_url")
+    @classmethod
+    def validate_edgelite_url(cls, v: str) -> str:
+        if v and not v.startswith(("http://", "https://")):
+            raise ValueError(f"edgelite_url must start with http:// or https://, got {v}")
+        return v
+
+    @field_validator("tick_interval")
+    @classmethod
+    def validate_tick_interval(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"tick_interval must be positive, got {v}")
+        if v > 60:
+            raise ValueError(f"tick_interval must be at most 60 seconds, got {v}")
+        return v
+
+    @field_validator("min_password_length")
+    @classmethod
+    def validate_min_password_length(cls, v: int) -> int:
+        if v < 4:
+            raise ValueError(f"min_password_length must be at least 4, got {v}")
+        if v > 128:
+            raise ValueError(f"min_password_length must be at most 128, got {v}")
+        return v
+
+    @field_validator("http_timeout", "http_timeout_short", "http_timeout_long")
+    @classmethod
+    def validate_http_timeout(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError(f"http_timeout must be positive, got {v}")
+        if v > 300:
+            raise ValueError(f"http_timeout must be at most 300 seconds, got {v}")
+        return v
 
     @property
     def protocol_ports(self) -> dict[str, Any]:

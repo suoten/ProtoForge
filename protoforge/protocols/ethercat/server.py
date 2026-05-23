@@ -11,6 +11,8 @@ from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
 
+_READ_TIMEOUT = 30  # FIXED-P0: 定义缺失的读取超时常量，否则_handle_connection中NameError导致服务器完全不可用
+
 ETHERCAT_ETH_TYPE = 0x88A4
 
 ECAT_CMD_NOP = 0x00
@@ -782,7 +784,10 @@ class EtherCATServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         if proto_config.get("slave_address"):
-            self._slave_addr = int(proto_config["slave_address"])
+            try:  # FIXED-P1: int()对用户配置做异常保护，非数字时保持默认值
+                self._slave_addr = int(proto_config["slave_address"])
+            except (ValueError, TypeError):
+                pass
 
         self._recalc_data_sizes()
 
