@@ -1,13 +1,33 @@
+"""EdgeLite 联调 API 路由 — 统一通过 IntegrationManager 调用
+
+重构要点:
+- 所有 EdgeLite 操作统一通过 IntegrationManager，不再直接调用 edgelite.py
+- 新增 auto_fix 参数支持管线自修复
+- 新增批量推送端点
+"""
+
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine
 
 router = APIRouter(prefix="/edgelite", tags=["edgelite"])
 logger = logging.getLogger(__name__)
+
+
+def _get_integration_manager():
+    """获取 IntegrationManager 实例。"""
+    from protoforge.main import get_integration_manager
+    try:
+        mgr = get_integration_manager()
+    except RuntimeError:
+        mgr = None
+    if not mgr:
+        raise HTTPException(status_code=503, detail="IntegrationManager not initialized")
+    return mgr
 
 
 @router.post("")
@@ -29,7 +49,6 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
         resp = {"status": "ok" if not errors else "partial", "imported": len(results), "devices": results}
         if errors:
             resp["errors"] = errors
-        # FIXED: 统一返回值格式 - 操作类接口返回裸对象
         return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -37,7 +56,8 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
 
 @router.post("/push/{device_id}")
 async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
-    from protoforge.core.edgelite import push_device_to_edgelite as _push
+    """推送设备到 EdgeLite — 通过 IntegrationManager 统一入口。"""
+    mgr = _get_integration_manager()
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -45,7 +65,9 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        result = await _push(instance)
+        result = await mgr.push_device(instance)
+        if result is None:
+            return {"ok": False, "error": "EdgeLite push returned no result", "error_type": "empty_response"}
         if result.get("ok") is False and not result.get("skipped"):
             logger.warning("EdgeLite push failed for %s: %s", device_id, result.get("error", ""))
         return result
@@ -54,9 +76,41 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
         raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
 
 
+@router.post("/push")
+async def batch_push_devices(
+    device_ids: list[str] = Body(default=[], embed=True),
+    _user: dict = Depends(require_operator),
+):
+    """批量推送设备到 EdgeLite。"""
+    mgr = _get_integration_manager()
+    engine = _get_engine()
+
+    devices = []
+    not_found = []
+    for did in device_ids:
+        instance = engine.get_device_instance(did)
+        if instance:
+            devices.append(instance)
+        else:
+            not_found.append(did)
+
+    if not devices:
+        raise HTTPException(status_code=404, detail="No devices found")
+
+    try:
+        result = await mgr.batch_push(devices)
+        if not_found:
+            result["not_found"] = not_found
+        return result
+    except Exception as e:
+        logger.error("Batch push exception: %s", e)
+        raise HTTPException(status_code=502, detail=f"Batch push failed: {e}")
+
+
 @router.post("/test")
 async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(default=None), _user: dict = Depends(require_operator)):
-    from protoforge.core.edgelite import test_edgelite_connection as _test
+    """测试 EdgeLite 网关连通性。"""
+    mgr = _get_integration_manager()
     if config is None:
         config = {}
 
@@ -67,16 +121,16 @@ async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(defau
     if not url:
         raise HTTPException(status_code=400, detail="EdgeLite address is required")
     try:
-        return await _test(url, username, password)
+        return await mgr.test_connection(url, username, password)
     except Exception as e:
         logger.error("EdgeLite connection test failed: %s", e)
         raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}")
 
 
-@router.get("/status/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
+@router.get("/status/{device_id}")
 async def get_edgelite_device_status(device_id: str, _user: dict = Depends(require_viewer)):
-    from protoforge.core.edgelite import get_edgelite_device_status as _status
-
+    """查询 EdgeLite 设备状态。"""
+    mgr = _get_integration_manager()
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -84,16 +138,16 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        return await _status(instance)
+        return await mgr.get_device_status(instance)
     except Exception as e:
         logger.error("EdgeLite status check exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}")
 
 
-@router.get("/points/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
+@router.get("/points/{device_id}")
 async def read_edgelite_device_points(device_id: str, _user: dict = Depends(require_viewer)):
-    from protoforge.core.edgelite import read_edgelite_device_points as _read
-
+    """从 EdgeLite 读取设备数据点。"""
+    mgr = _get_integration_manager()
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -101,21 +155,23 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        points = await _read(instance)
-        if isinstance(points, list):
-            return {"points": points}
-        if isinstance(points, dict) and "points" in points:
-            return points
-        return {"points": points if points else []}
+        result = await mgr.read_device_points(instance)
+        if result.get("ok"):
+            return result
+        return result
     except Exception as e:
         logger.error("EdgeLite read points exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}")
 
 
 @router.get("/pipeline/{device_id}")
-async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require_viewer)):
-    from protoforge.core.edgelite import verify_edgelite_pipeline as _verify
-
+async def verify_edgelite_pipeline(
+    device_id: str,
+    auto_fix: bool = Query(default=True, description="自动修复管线问题"),
+    _user: dict = Depends(require_viewer),
+):
+    """端到端管线验证，支持自动修复。"""
+    mgr = _get_integration_manager()
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -123,8 +179,8 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        result = await _verify(instance)
-        # FIXED: 添加链式空值保护，避免steps["collect"]潜在的KeyError
+        result = await mgr.verify_pipeline(instance, auto_fix=auto_fix)
+        # 数据比对
         if result.get("ok") and "collect" in result.get("steps", {}):
             collect_step = result.get("steps", {}).get("collect", {})
             if collect_step.get("ok") and collect_step.get("has_real_data"):
@@ -146,11 +202,18 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
 
                     for name, local_val in local_map.items():
                         el_val = edgelite_data.get(name)
+                        # 浮点数比较：容差 0.01
+                        match = None
+                        if el_val is not None:
+                            try:
+                                match = abs(float(local_val) - float(el_val)) < 0.01
+                            except (ValueError, TypeError):
+                                match = str(local_val) == str(el_val)
                         comparison.append({
                             "point": name,
                             "protoforge_value": local_val,
                             "edgelite_value": el_val,
-                            "match": str(local_val) == str(el_val) if el_val is not None else None,
+                            "match": match,
                         })
                     result["data_comparison"] = comparison
                 except Exception as exc:
@@ -161,10 +224,10 @@ async def verify_edgelite_pipeline(device_id: str, _user: dict = Depends(require
         raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
 
 
-@router.delete("/push/{device_id}")  # FIXED: 去掉多余的/edgelite前缀，router已有prefix="/edgelite"
+@router.delete("/push/{device_id}")
 async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
-    from protoforge.core.edgelite import remove_device_from_edgelite as _remove
-
+    """从 EdgeLite 删除设备。"""
+    mgr = _get_integration_manager()
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -172,7 +235,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
         raise HTTPException(status_code=404, detail="Device not found")
 
     try:
-        return await _remove(instance)
+        return await mgr.delete_device(instance)
     except Exception as e:
         logger.error("EdgeLite remove device exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}")
@@ -200,3 +263,35 @@ async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(requir
         return resp
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/integration/status")
+async def get_integration_status(_user: dict = Depends(require_viewer)):
+    """获取 IntegrationManager 状态。"""
+    mgr = _get_integration_manager()
+    return mgr.get_status()
+
+
+@router.get("/integration/metrics")
+async def get_integration_metrics(_user: dict = Depends(require_viewer)):
+    """获取 IntegrationManager 指标。"""
+    mgr = _get_integration_manager()
+    return mgr.get_metrics()
+
+
+@router.get("/integration/backhaul-data")
+async def get_backhaul_data(
+    device_id: str = Query(default="", description="设备ID，为空则返回全部"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    _user: dict = Depends(require_viewer),
+):
+    """获取 EdgeLite 回传数据。"""
+    mgr = _get_integration_manager()
+    return {"data": mgr.get_backhaul_data(device_id=device_id, limit=limit)}
+
+
+@router.get("/integration/protocols")
+async def get_supported_protocols(_user: dict = Depends(require_viewer)):
+    """获取 EdgeLite 支持的协议映射。"""
+    mgr = _get_integration_manager()
+    return {"protocol_map": mgr.get_protocol_map(), "supported_source_protocols": mgr.get_supported_source_protocols()}

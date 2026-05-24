@@ -29,7 +29,7 @@ async def get_integration_status(_user: dict = Depends(require_viewer)):
 async def get_integration_metrics(_user: dict = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
-        return manager.metrics.to_dict()
+        return manager.get_metrics()
     except Exception as e:
         logger.error("Failed to get integration metrics: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get integration metrics: {e}") from e
@@ -116,18 +116,19 @@ async def stop_device_collect(device_id: str, _user: dict = Depends(require_oper
 async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
-        raw_map = manager.protocol_mapper.get_map()
+        raw_map = manager.get_protocol_map()
         protocol_map = {}
         for source, target in raw_map.items():
-            result = manager.protocol_mapper.map(source)
+            mapping_result = manager.map_protocol(source)
             protocol_map[source] = {
                 "protocol": target or "",
                 "driver": target or "",
-                "status": result.status,
+                "status": mapping_result.status,
+                "warning": mapping_result.warning,
             }
         return {
             "protocol_map": protocol_map,
-            "supported_source_protocols": manager.protocol_mapper.get_supported_source_protocols(),
+            "supported_source_protocols": manager.get_supported_source_protocols(),
         }
     except Exception as e:
         logger.error("Failed to get protocol mappings: %s", e)
@@ -179,7 +180,7 @@ async def get_device_status_cache(_user: dict = Depends(require_viewer)):
         manager = _get_integration_manager()
         status = manager.get_device_status_cache()
         if isinstance(status, dict):
-            return {"devices": list(status.values())}
+            return {"devices": [{"device_id": did, "status": s} for did, s in status.items()]}
         return {"devices": status if isinstance(status, list) else []}
     except Exception as e:
         logger.error("Failed to get device status cache: %s", e)

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import struct
+import threading
 import time
 from typing import Any
 
@@ -173,6 +174,7 @@ class S7Server(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._device_info: dict[str, dict] = {}
         self._rack_slot_map: dict[tuple[int, int], str] = {}
+        self._behaviors_sync_lock = threading.Lock()
         self._host = "0.0.0.0"
         self._port = 102
         self._requested_port = 102  # 用户请求的端口
@@ -244,7 +246,7 @@ class S7Server(ProtocolServer):
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
-        logger.debug("S7 connection from %s", addr)
+        logger.info("S7 connection from %s", addr)
         connection_device_id: str | None = None
         try:
             while self._server_running:
@@ -295,7 +297,15 @@ class S7Server(ProtocolServer):
             if len(data) < 7 + cotp_len:
                 return None, None
             resolved_id = self._resolve_device_from_cotp(data)
-            return self._make_cotp_cr_response(), resolved_id
+            # Ensure device is registered before COTP CR response, so it's ready for S7 Setup
+            if resolved_id and resolved_id not in self._behaviors:
+                device_config = self._device_configs.get(resolved_id)
+                if device_config:
+                    with self._behaviors_sync_lock:
+                        if resolved_id not in self._behaviors:
+                            self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points)
+                            logger.debug("S7 pre-registered device from COTP CR: %s", resolved_id)
+            return self._make_cotp_cr_response(data), resolved_id
 
         if len(data) < 17:
             return None, None
@@ -312,18 +322,54 @@ class S7Server(ProtocolServer):
 
         return None, None
 
-    def _make_cotp_cr_response(self) -> bytes:
-        return bytes([
-            0x03, 0x00, 0x00, 0x14,
-            0x0F,
-            0xD0,
-            0x00, 0x01,
-            0x00, 0x01,
-            0xC0,
-            0xC1, 0x02, 0x01, 0x00,
-            0xC2, 0x02, 0x01, 0x02,
-            0xC0, 0x01, 0x07,
+    def _make_cotp_cr_response(self, data: bytes = b"") -> bytes:
+        """构建 COTP Connection Confirm 响应，回显请求中的 TSAP 参数。"""
+        # 尝试从请求中提取 TSAP 参数，用于正确回显
+        local_tsap = b"\x01\x00"   # 默认本地 TSAP
+        remote_tsap = b"\x01\x02"  # 默认远程 TSAP
+        try:
+            offset = 11
+            while offset + 1 < len(data):
+                param_code = data[offset]
+                param_len = data[offset + 1]
+                if offset + 2 + param_len > len(data):
+                    break
+                if param_code == 0xC1 and param_len >= 2:
+                    remote_tsap = data[offset + 2:offset + 2 + min(param_len, 2)]
+                elif param_code == 0xC2 and param_len >= 2:
+                    local_tsap = data[offset + 2:offset + 2 + min(param_len, 2)]
+                offset += 2 + param_len
+        except (IndexError, struct.error):
+            pass
+
+        # COTP CC: TPKT header + COTP DT + TSAP parameters
+        # 交换 TSAP：响应中的本地 TSAP = 请求中的远程 TSAP，反之亦然
+        tsap_payload = bytes([
+            0xC1, len(remote_tsap),  # Called TSAP = 请求中的 Calling TSAP
+        ]) + remote_tsap + bytes([
+            0xC2, len(local_tsap),   # Calling TSAP = 请求中的 Called TSAP
+        ]) + local_tsap + bytes([
+            0xC0, 0x01, 0x07,       # TPDU size = 0x07 (2048)
         ])
+
+        cotp_len = 2 + len(tsap_payload)  # 2 bytes for header (0xD0 + dst-ref high)
+        tpkt_len = 4 + 1 + cotp_len + len(tsap_payload)
+        # 重新计算：TPKT(4) + COTP header(1+2+2) + payload
+        # COTP CC header: LI(1) + 0xD0(1) + dst-ref(2) + src-ref(2) + class(1) = 7
+        cotp_header = bytes([
+            0x19,   # LI = 25 (length from here to end: 7+2+2+3+11 = 25)
+            0x0D,   # COTP CR Connection Confirm type
+            0x00, 0x01,  # Destination reference (echoed from request)
+            0x00, 0x01,  # Source reference
+            0x00,        # Class 0 (no class byte for type 0x0D)
+        ])
+        payload = cotp_header + tsap_payload
+        tpkt_len = 4 + len(payload)
+
+        return bytes([
+            0x03, 0x00,
+            (tpkt_len >> 8) & 0xFF, tpkt_len & 0xFF,
+        ]) + payload
 
     def _resolve_device_from_cotp(self, data: bytes) -> str | None:
         try:

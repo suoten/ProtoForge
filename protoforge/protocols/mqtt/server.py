@@ -355,27 +355,17 @@ class MqttBroker(ProtocolServer):
         except Exception:
             pass
 
-        # Fallback: 尝试连接检测
-        for port in [self._requested_port, self._requested_port + 1, self._requested_port - 1]:
-            if port == self._port:
+        # Fallback: 尝试连接检测 — 先检查配置端口是否在监听
+        for port in [self._port, self._requested_port, self._requested_port + 1, self._requested_port - 1]:
+            if port <= 0:
                 continue
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(0.5)
-                    result = s.connect_ex((self._host, port))
+                    result = s.connect_ex((self._host if self._host != "0.0.0.0" else "127.0.0.1", port))
                     if result == 0:
                         return port
             except Exception:
                 pass
-
-        # 如果请求的端口正在监听，返回它
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.5)
-                result = s.connect_ex((self._host, self._requested_port))
-                if result == 0:
-                    return self._requested_port
-        except Exception:
-            pass
 
         return self._port  # 返回配置的端口作为默认值

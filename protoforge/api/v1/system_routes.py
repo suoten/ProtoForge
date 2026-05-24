@@ -76,11 +76,12 @@ async def get_settings(_user: dict = Depends(require_admin)):
 
 
 _ALLOWED_SETTINGS_KEYS = {
-    "demo_mode", "log_level", "cors_origins", "min_password_length",
+    "port", "demo_mode", "log_level", "cors_origins", "min_password_length",
     "rate_limit_max_requests", "rate_limit_window_seconds",
     "rate_limit_auth_max_requests", "rate_limit_auth_window_seconds",
     "edgelite_url", "edgelite_username", "edgelite_password",
     "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
+    "protoforge_public_host", "protocol_ports",
     "forward_enabled", "forward_interval",
 }
 
@@ -93,6 +94,31 @@ async def update_settings(updates: dict[str, Any], _user: dict = Depends(require
     try:
         from protoforge.config import update_settings as _update_settings, get_all_settings_dict, ConfigValidationError
         changed = _update_settings(filtered)
+
+        # 热更新 IntegrationManager：当 EdgeLite 连接配置变更时，自动重新配置并重连
+        edgelite_keys = {"edgelite_url", "edgelite_username", "edgelite_password"}
+        if edgelite_keys & set(filtered.keys()):
+            try:
+                from protoforge.main import get_integration_manager
+                from protoforge.config import get_settings
+                mgr = get_integration_manager()
+                settings = get_settings()
+                # 先停止旧连接
+                await mgr.stop()
+                # 重新配置
+                mgr.configure(
+                    edgelite_url=settings.edgelite_url,
+                    username=settings.edgelite_username,
+                    password=settings.edgelite_password,
+                )
+                # 重新启动连接
+                await mgr.start()
+                logger.info("IntegrationManager hot-reloaded after settings update")
+            except RuntimeError:
+                pass  # IntegrationManager 未初始化
+            except Exception as e:
+                logger.warning("Failed to hot-reload IntegrationManager: %s", e)
+
         return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
     except ConfigValidationError as e:
         raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e

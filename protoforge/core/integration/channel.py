@@ -252,16 +252,17 @@ class WebSocketChannel(ChannelBase):
 
         self._ws = await websockets.connect(
             connect_url,
-            ping_interval=self._heartbeat_interval,  # FIXED: 启用 WebSocket ping/pong 心跳
-            ping_timeout=self._heartbeat_timeout * self._heartbeat_interval,  # pong 响应超时
+            ping_interval=None,  # 禁用 WebSocket 协议级 ping，使用应用层心跳
+            ping_timeout=None,
             close_timeout=5.0,
             open_timeout=10.0,
         )
         self._connected = True
         self._missed_heartbeats = 0
+        self._ready = False  # 认证/握手完成后才启动心跳
 
         self._receive_task = asyncio.create_task(self._receive_loop())
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        # 心跳延迟到 mark_ready() 后启动
 
         logger.info("WebSocket channel connected to %s", self._url)
 
@@ -337,12 +338,18 @@ class WebSocketChannel(ChannelBase):
             logger.warning("WebSocket connection lost: %s", e)
             self._connected = False
 
+    def mark_ready(self) -> None:
+        """标记连接已通过认证/握手，启动心跳。"""
+        if not self._ready and self._connected:
+            self._ready = True
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
     async def _heartbeat_loop(self) -> None:
         try:
             while self._connected:
                 await asyncio.sleep(self._heartbeat_interval)
-                if not self._connected:
-                    break
+                if not self._connected or not self._ready:
+                    continue
                 try:
                     await self.send({
                         "type": "heartbeat",
@@ -354,8 +361,6 @@ class WebSocketChannel(ChannelBase):
                     if self._missed_heartbeats >= self._heartbeat_timeout:
                         await self._handle_timeout()
                     continue
-                if self._missed_heartbeats > 0:
-                    self._missed_heartbeats = 0
         except asyncio.CancelledError:
             pass
 

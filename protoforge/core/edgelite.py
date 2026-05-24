@@ -273,12 +273,7 @@ def _format_driver_config_for_display(config: dict) -> str:
 
 
 def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) -> int | None:
-    device_port = protocol_config.get("port")
-    if device_port is not None:
-        try:
-            return int(device_port)
-        except (ValueError, TypeError):
-            logger.warning("Invalid port value %r for protocol %s, ignoring", device_port, protocol)
+    # 1. 优先从运行中的协议服务器获取实际端口（端口可能因占用而自动切换）
     try:
         from protoforge.main import get_engine
         engine = get_engine()
@@ -287,6 +282,14 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
             return running_port
     except Exception as e:
         logger.debug("Failed to get protocol running port for %s: %s", protocol, e)
+    # 2. 其次从设备配置中取端口
+    device_port = protocol_config.get("port")
+    if device_port is not None:
+        try:
+            return int(device_port)
+        except (ValueError, TypeError):
+            logger.warning("Invalid port value %r for protocol %s, ignoring", device_port, protocol)
+    # 3. 最后从配置文件的端口映射表获取默认端口
     from protoforge.config import get_protocol_port_map
     port_map = get_protocol_port_map()
     proto_info = port_map.get(protocol)
@@ -364,7 +367,13 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         }
     elif protocol == "opcua":
         ua_port = port or 4840
-        base = {"server_url": protocol_config.get("server_url", protocol_config.get("endpoint", f"opc.tcp://{host}:{ua_port}")),
+        # 优先使用用户配置的 server_url/endpoint，但需要更新端口（可能因冲突自动切换）
+        user_url = protocol_config.get("server_url") or protocol_config.get("endpoint") or ""
+        if user_url:
+            # 替换 URL 中的端口号
+            import re
+            user_url = re.sub(r':(\d+)(/?)$', f':{ua_port}\\2', user_url)
+        base = {"server_url": user_url or f"opc.tcp://{host}:{ua_port}",
                 "username": protocol_config.get("username", ""),
                 "password": protocol_config.get("password", ""),
                 "security_mode": protocol_config.get("security_mode", "None"),
@@ -389,7 +398,9 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         base = {"push_url": f"http://{host}:{http_port}/webhook/data",
                 "timeout": timeout}
     elif protocol == "s7":
+        s7_port = port or 102
         base = {"ip": host,
+                "port": s7_port,
                 "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1)}
     elif protocol == "mc":
@@ -397,7 +408,8 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     elif protocol == "fins":
         base = {"ip": host, "port": port or 9600, "timeout": timeout}
     elif protocol == "ab":
-        base = {"ip": host, "slot": protocol_config.get("slot", 0),
+        ab_port = port or 44818
+        base = {"ip": host, "port": ab_port, "slot": protocol_config.get("slot", 0),
                 "micrologix": protocol_config.get("micrologix", False), "timeout": timeout}
     elif protocol == "fanuc":
         base = {"ip": host, "port": port or 8193, "timeout": timeout}
@@ -659,6 +671,16 @@ async def _relogin_on_401(
 
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
+    """推送设备到 EdgeLite。
+
+    已弃用：请使用 IntegrationManager.push_device()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "push_device_to_edgelite() is deprecated, use IntegrationManager.push_device()",
+        DeprecationWarning, stacklevel=2,
+    )
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):
         return {
@@ -878,6 +900,16 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
+    """从 EdgeLite 删除设备。
+
+    已弃用：请使用 IntegrationManager.delete_device()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "remove_device_from_edgelite() is deprecated, use IntegrationManager.delete_device()",
+        DeprecationWarning, stacklevel=2,
+    )
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
@@ -920,21 +952,80 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
 
 
 async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
+    """查询 EdgeLite 设备状态。
+
+    已弃用：请使用 IntegrationManager.get_device_status()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "get_edgelite_device_status() is deprecated, use IntegrationManager.get_device_status()",
+        DeprecationWarning, stacklevel=2,
+    )
+    try:
+        from protoforge.main import get_integration_manager
+        mgr = get_integration_manager()
+        return await mgr.get_device_status(device)
+    except RuntimeError:
+        pass  # IntegrationManager not initialized, fallback to direct call
+
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
 
     device_id = _normalize_device_id(getattr(device, "id", ""))
 
-    # FIXED: 使用全局 HTTP 连接池
     client = _get_http_client()
-    # FIXED: 使用带缓存的认证
     headers, auth_err = await _get_auth_headers(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
     if auth_err:
         return {"ok": False, "error": str(auth_err), "error_type": auth_err.error_type}
 
+    # FIX: 原函数此处函数体为空，现在补充实际的状态查询逻辑
+    try:
+        resp = await client.get(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+            headers=headers,
+        )
+    except httpx.ConnectError:
+        return {"ok": False, "error": "Cannot connect to EdgeLite", "error_type": "connection"}
+    except httpx.TimeoutException:
+        return {"ok": False, "error": "Status query timed out", "error_type": "timeout"}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "error_type": "unknown"}
+
+    if resp.status_code == 401:
+        headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
+        try:
+            resp = await client.get(
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
+                headers=headers,
+            )
+        except Exception as e:
+            return {"ok": False, "error": str(e), "error_type": "unknown"}
+
+    if resp.status_code == 200:
+        try:
+            raw = resp.json()
+        except Exception:
+            return {"ok": False, "error": "Invalid JSON response", "error_type": "parse_error"}
+        data = raw.get("data", raw)
+        return {"ok": True, "device_id": device_id, "status": data.get("status", "unknown"), "data": data}
+    if resp.status_code == 404:
+        return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
+    return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
+
 
 async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
+    """从 EdgeLite 读取设备数据点。
+
+    已弃用：请使用 IntegrationManager.read_device_points()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "read_edgelite_device_points() is deprecated, use IntegrationManager.read_device_points()",
+        DeprecationWarning, stacklevel=2,
+    )
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):
         return {"ok": False, "skipped": True, "reason": "edgelite_url not configured"}
@@ -1144,6 +1235,16 @@ def _build_connect_error(driver_config: dict, protocol: str, protoforge_running:
 
 
 async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
+    """端到端管线验证。
+
+    已弃用：请使用 IntegrationManager.verify_pipeline()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "verify_edgelite_pipeline() is deprecated, use IntegrationManager.verify_pipeline()",
+        DeprecationWarning, stacklevel=2,
+    )
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):
         return {
@@ -1296,6 +1397,16 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
 
 
 async def test_edgelite_connection(url: str, username: str = "", password: str = "") -> dict[str, Any]:
+    """测试 EdgeLite 网关连通性。
+
+    已弃用：请使用 IntegrationManager.test_connection()。
+    保留此函数仅为向后兼容。
+    """
+    import warnings
+    warnings.warn(
+        "test_edgelite_connection() is deprecated, use IntegrationManager.test_connection()",
+        DeprecationWarning, stacklevel=2,
+    )
     if not url:
         return {"ok": False, "error": desc("edgelite.error.url_empty")}
     if not url.startswith("http://") and not url.startswith("https://"):

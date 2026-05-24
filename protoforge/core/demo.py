@@ -92,7 +92,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     demo_devices = [
         {
             "id": "demo-temp-sensor",
-            "name": "Temp-Humidity Sensor-1",
+            "name": "温湿度传感器-1",
             "protocol": "modbus_tcp",
             "template_id": "modbus_temperature_sensor",
             "points": [
@@ -103,7 +103,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-plc-s7",
-            "name": "Siemens S7-1200",
+            "name": "西门子 S7-1200",
             "protocol": "s7",
             "template_id": "siemens_s7_1200",
             "points": [
@@ -114,7 +114,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-smart-lock",
-            "name": "Smart Lock",
+            "name": "智能门锁",
             "protocol": "mqtt",
             "template_id": "smart_lock",
             "points": [
@@ -124,7 +124,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-flow-meter",
-            "name": "Flow Meter",
+            "name": "流量计",
             "protocol": "modbus_tcp",
             "template_id": "flow_meter",
             "points": [
@@ -135,7 +135,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-mc-fx5u",
-            "name": "Mitsubishi FX5U PLC",
+            "name": "三菱 FX5U PLC",
             "protocol": "mc",
             "template_id": "mc_fx5u",
             "points": [
@@ -146,7 +146,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-fanuc-cnc",
-            "name": "FANUC 0i-F CNC",
+            "name": "FANUC 0i-F 数控系统",
             "protocol": "fanuc",
             "template_id": "fanuc_0if_plus",
             "points": [
@@ -157,7 +157,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-toledo-scale",
-            "name": "Mettler-Toledo Scale",
+            "name": "梅特勒-托利多电子秤",
             "protocol": "toledo",
             "template_id": "toledo_scale",
             "points": [
@@ -168,7 +168,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-profinet-io",
-            "name": "PROFINET Remote IO Module",
+            "name": "PROFINET 远程IO模块",
             "protocol": "profinet",
             "template_id": "profinet_io_device",
             "points": [
@@ -179,7 +179,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-ethercat-servo",
-            "name": "EtherCAT Servo Drive",
+            "name": "EtherCAT 伺服驱动器",
             "protocol": "ethercat",
             "template_id": "ethercat_servo_drive",
             "points": [
@@ -191,7 +191,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-http-sensor",
-            "name": "HTTP Temperature Sensor",
+            "name": "HTTP 温度传感器",
             "protocol": "http",
             "template_id": "http_rest_sensor",
             "points": [
@@ -202,7 +202,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-gb28181-camera",
-            "name": "GB28181 Camera",
+            "name": "GB28181 摄像头",
             "protocol": "gb28181",
             "template_id": "gb28181_camera",
             "points": [
@@ -213,7 +213,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-opcua-motor",
-            "name": "OPC-UA Motor Controller",
+            "name": "OPC-UA 电机控制器",
             "protocol": "opcua",
             "template_id": "opcua_motor_controller",
             "points": [
@@ -224,7 +224,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "demo-bacnet-controller",
-            "name": "BACnet Building Controller",
+            "name": "BACnet 楼宇控制器",
             "protocol": "bacnet",
             "template_id": "bacnet_ahu",
             "points": [
@@ -236,12 +236,12 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     ]
 
     # ---------------------------------------------------------------------------
-    # Scenario 2: Water Treatment Plant
+    # Scenario 2: 水处理厂
     # ---------------------------------------------------------------------------
     water_devices = [
         {
             "id": "wtp-s7-controller",
-            "name": "WTP S7-1200 Controller",
+            "name": "水处理 S7-1200 控制器",
             "protocol": "s7",
             "template_id": "siemens_s7_1200",
             "points": [
@@ -253,7 +253,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "wtp-inlet-flow",
-            "name": "Inlet Flow Meter",
+            "name": "进水流量计",
             "protocol": "modbus_tcp",
             "template_id": "flow_meter",
             "points": [
@@ -264,7 +264,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "wtp-ph-sensor",
-            "name": "pH Water Quality Sensor",
+            "name": "pH水质传感器",
             "protocol": "modbus_tcp",
             "template_id": "modbus_ph_sensor",
             "points": [
@@ -275,7 +275,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "wtp-turbidity",
-            "name": "Turbidity Sensor",
+            "name": "浊度传感器",
             "protocol": "modbus_tcp",
             "template_id": "modbus_turbidity",
             "points": [
@@ -285,7 +285,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "wtp-chlorine",
-            "name": "Chlorine Residual Analyzer",
+            "name": "余氯分析仪",
             "protocol": "modbus_tcp",
             "template_id": "modbus_chlorine",
             "points": [
@@ -296,12 +296,12 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     ]
 
     # ---------------------------------------------------------------------------
-    # Scenario 3: Smart Building HVAC
+    # Scenario 3: 智能楼宇暖通空调
     # ---------------------------------------------------------------------------
     hvac_devices = [
         {
             "id": "hvac-bacnet-ahu",
-            "name": "BACnet AHU (Main)",
+            "name": "BACnet 空调机组(主)",
             "protocol": "bacnet",
             "template_id": "bacnet_ahu",
             "points": [
@@ -315,7 +315,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "hvac-zone-1",
-            "name": "Zone 1 Thermostat",
+            "name": "1区温控器",
             "protocol": "modbus_tcp",
             "template_id": "modbus_thermostat",
             "points": [
@@ -326,7 +326,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "hvac-zone-2",
-            "name": "Zone 2 Thermostat",
+            "name": "2区温控器",
             "protocol": "modbus_tcp",
             "template_id": "modbus_thermostat",
             "points": [
@@ -337,7 +337,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "hvac-chiller",
-            "name": "Chiller Unit",
+            "name": "冷水机组",
             "protocol": "modbus_tcp",
             "template_id": "modbus_chiller",
             "points": [
@@ -348,7 +348,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "hvac-boiler",
-            "name": "Boiler Unit",
+            "name": "锅炉机组",
             "protocol": "modbus_tcp",
             "template_id": "modbus_boiler",
             "points": [
@@ -360,12 +360,12 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     ]
 
     # ---------------------------------------------------------------------------
-    # Scenario 4: CNC Machining Cell
+    # Scenario 4: 数控加工单元
     # ---------------------------------------------------------------------------
     cnc_devices = [
         {
             "id": "cnc-cell-s7",
-            "name": "CNC Cell S7-1500 Controller",
+            "name": "数控单元 S7-1500 控制器",
             "protocol": "s7",
             "template_id": "siemens_s7_1500",
             "points": [
@@ -378,7 +378,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "cnc-mc-fx5u",
-            "name": "CNC Mill FX5U PLC",
+            "name": "数控铣床 FX5U PLC",
             "protocol": "mc",
             "template_id": "mc_fx5u",
             "points": [
@@ -391,7 +391,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "cnc-fanuc-0i",
-            "name": "FANUC 0i-T CNC Lathe",
+            "name": "FANUC 0i-T 数控车床",
             "protocol": "fanuc",
             "template_id": "fanuc_0if_plus",
             "points": [
@@ -404,7 +404,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "cnc-servo-drive",
-            "name": "EtherCAT Servo Axis 1",
+            "name": "EtherCAT 伺服轴1",
             "protocol": "ethercat",
             "template_id": "ethercat_servo_drive",
             "points": [
@@ -417,7 +417,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "cnc-profinet-io",
-            "name": "PROFINET Remote IO",
+            "name": "PROFINET 远程IO",
             "protocol": "profinet",
             "template_id": "profinet_io_device",
             "points": [
@@ -428,7 +428,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
         },
         {
             "id": "cnc-toledo-measure",
-            "name": "Toledo Part Measurement",
+            "name": "托利多零件测量",
             "protocol": "toledo",
             "template_id": "toledo_scale",
             "points": [
@@ -443,66 +443,66 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     # Seed all scenario devices
     # ---------------------------------------------------------------------------
     all_scenario_configs = [
-        ("demo-smart-factory", "Smart Factory Demo", demo_devices, [
-            {"id": "rule-temp-alarm", "name": "High Temperature Alarm", "rule_type": "threshold",
+        ("demo-smart-factory", "智能工厂演示", demo_devices, [
+            {"id": "rule-temp-alarm", "name": "高温报警", "rule_type": "threshold",
              "source_device_id": "demo-temp-sensor", "source_point": "temperature",
              "target_device_id": "demo-temp-sensor", "target_point": "alarm_temp_high",
              "target_value": "true", "condition": {"operator": ">", "value": 30, "cooldown": 10}, "enabled": True},
-            {"id": "rule-flow-alarm", "name": "Flow Anomaly Alarm", "rule_type": "threshold",
+            {"id": "rule-flow-alarm", "name": "流量异常报警", "rule_type": "threshold",
              "source_device_id": "demo-flow-meter", "source_point": "flow_rate",
              "target_device_id": "demo-flow-meter", "target_point": "alarm",
              "target_value": "true", "condition": {"operator": ">", "value": 80, "cooldown": 15}, "enabled": True},
         ]),
-        ("demo-water-treatment", "Water Treatment Plant", water_devices, [
-            {"id": "wtp-ph-high-alarm", "name": "pH High Alarm", "rule_type": "threshold",
+        ("demo-water-treatment", "水处理厂", water_devices, [
+            {"id": "wtp-ph-high-alarm", "name": "pH值偏高报警", "rule_type": "threshold",
              "source_device_id": "wtp-ph-sensor", "source_point": "ph_value",
              "target_device_id": "wtp-ph-sensor", "target_point": "alarm_high",
              "target_value": "true", "condition": {"operator": ">", "value": 8.0, "cooldown": 30}, "enabled": True},
-            {"id": "wtp-turbidity-alarm", "name": "Turbidity High Alarm", "rule_type": "threshold",
+            {"id": "wtp-turbidity-alarm", "name": "浊度偏高报警", "rule_type": "threshold",
              "source_device_id": "wtp-turbidity", "source_point": "turbidity_ntu",
              "target_device_id": "wtp-turbidity", "target_point": "alarm_high",
              "target_value": "true", "condition": {"operator": ">", "value": 30, "cooldown": 60}, "enabled": True},
-            {"id": "wtp-chlorine-low", "name": "Chlorine Low Warning", "rule_type": "threshold",
+            {"id": "wtp-chlorine-low", "name": "余氯偏低预警", "rule_type": "threshold",
              "source_device_id": "wtp-chlorine", "source_point": "cl2_mgl",
              "target_device_id": "wtp-chlorine", "target_point": "dosing_pump_speed",
              "target_value": "80", "condition": {"operator": "<", "value": 0.5, "cooldown": 120}, "enabled": True},
-            {"id": "wtp-valve-modulate", "name": "Valve Modulation by Flow", "rule_type": "threshold",
+            {"id": "wtp-valve-modulate", "name": "流量调节阀门", "rule_type": "threshold",
              "source_device_id": "wtp-inlet-flow", "source_point": "flow_rate",
              "target_device_id": "wtp-s7-controller", "target_point": "valve_pos",
              "target_value": "60", "condition": {"operator": ">", "value": 150, "cooldown": 5}, "enabled": True},
         ]),
-        ("demo-smart-hvac", "Smart Building HVAC", hvac_devices, [
-            {"id": "hvac-co2-high", "name": "CO2 High → Open Damper", "rule_type": "threshold",
+        ("demo-smart-hvac", "智能楼宇暖通空调", hvac_devices, [
+            {"id": "hvac-co2-high", "name": "CO2偏高→开风门", "rule_type": "threshold",
              "source_device_id": "hvac-bacnet-ahu", "source_point": "co2_level",
              "target_device_id": "hvac-bacnet-ahu", "target_point": "damper_pos",
              "target_value": "80", "condition": {"operator": ">", "value": 1000, "cooldown": 30}, "enabled": True},
-            {"id": "hvac-zone1-cool", "name": "Zone 1 Cooling Demand", "rule_type": "threshold",
+            {"id": "hvac-zone1-cool", "name": "1区制冷需求", "rule_type": "threshold",
              "source_device_id": "hvac-zone-1", "source_point": "zone_temp",
              "target_device_id": "hvac-bacnet-ahu", "target_point": "fan_speed",
              "target_value": "75", "condition": {"operator": ">", "value": 25, "cooldown": 20}, "enabled": True},
-            {"id": "hvac-chiller-high-temp", "name": "Chiller High Condenser Temp", "rule_type": "threshold",
+            {"id": "hvac-chiller-high-temp", "name": "冷水机冷凝温度过高", "rule_type": "threshold",
              "source_device_id": "hvac-chiller", "source_point": "condenser_temp",
              "target_device_id": "hvac-chiller", "target_point": "compressor_status",
              "target_value": "false", "condition": {"operator": ">", "value": 38, "cooldown": 60}, "enabled": True},
-            {"id": "hvac-occupancy-night", "name": "Unoccupied Night Setback", "rule_type": "value_change",
+            {"id": "hvac-occupancy-night", "name": "无人夜间节能模式", "rule_type": "value_change",
              "source_device_id": "hvac-zone-2", "source_point": "occupancy",
              "target_device_id": "hvac-zone-2", "target_point": "setpoint",
              "target_value": "18", "condition": {"logic": "and", "delta": None}, "enabled": False},
         ]),
-        ("demo-cnc-cell", "CNC Machining Cell", cnc_devices, [
-            {"id": "cnc-servo-temp-high", "name": "Servo Drive Overtemp", "rule_type": "threshold",
+        ("demo-cnc-cell", "数控加工单元", cnc_devices, [
+            {"id": "cnc-servo-temp-high", "name": "伺服驱动器过温", "rule_type": "threshold",
              "source_device_id": "cnc-servo-drive", "source_point": "drive_temp",
              "target_device_id": "cnc-cell-s7", "target_point": "cell_mode",
              "target_value": "3", "condition": {"operator": ">", "value": 70, "cooldown": 30}, "enabled": True},
-            {"id": "cnc-coolant-low", "name": "Coolant Pressure Low", "rule_type": "threshold",
+            {"id": "cnc-coolant-low", "name": "冷却液压力偏低", "rule_type": "threshold",
              "source_device_id": "cnc-mc-fx5u", "source_point": "coolant_pressure",
              "target_device_id": "cnc-cell-s7", "target_point": "cell_mode",
              "target_value": "2", "condition": {"operator": "<", "value": 1.0, "cooldown": 10}, "enabled": True},
-            {"id": "cnc-quality-alarm", "name": "Quality Pass Rate Low", "rule_type": "threshold",
+            {"id": "cnc-quality-alarm", "name": "合格率偏低报警", "rule_type": "threshold",
              "source_device_id": "cnc-cell-s7", "source_point": "quality_pass_rate",
              "target_device_id": "cnc-cell-s7", "target_point": "workorder_count",
              "target_value": "0", "condition": {"operator": "<", "value": 95, "cooldown": 300}, "enabled": True},
-            {"id": "cnc-cycle-time-slow", "name": "Cycle Time Exceeded", "rule_type": "threshold",
+            {"id": "cnc-cycle-time-slow", "name": "加工周期超时", "rule_type": "threshold",
              "source_device_id": "cnc-cell-s7", "source_point": "cycle_time_sec",
              "target_device_id": "cnc-cell-s7", "target_point": "cell_mode",
              "target_value": "4", "condition": {"operator": ">", "value": 100, "cooldown": 120}, "enabled": True},
@@ -547,7 +547,7 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
                 ))
             scenario_config = ScenarioConfig(
                 id=scenario_id, name=scenario_name,
-                description=f"Demo scenario: {scenario_name}",
+                description=f"演示场景：{scenario_name}",
                 devices=sc_devices, rules=rules,
             )
             await engine.create_scenario(scenario_config)

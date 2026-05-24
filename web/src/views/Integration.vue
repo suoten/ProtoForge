@@ -1077,7 +1077,8 @@ async function batchPushAndVerify() {
             if (statusRes.ok && statusRes.status === 'online') verified++
           } catch (e) { console.warn('Status check failed for device %s:', dev.id, e.message) }  // FIXED: log instead of silently ignoring
         }
-        if (verified > 0 || pollCount >= maxPolls) {
+        const allHaveStatus = elDevices.value.every(d => d._el_status !== null)
+        if ((verified > 0 && allHaveStatus) || pollCount >= maxPolls) {
           clearInterval(_batchPollTimer)
           _batchPollTimer = null
           message.success(t('integration.batchPushResult', { pushed, verified, failed }))

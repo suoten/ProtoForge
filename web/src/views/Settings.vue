@@ -317,13 +317,29 @@ async function testEdgeLiteConnection() {
   try {
     const testPayload = {
       url: form.value.edgelite_url,
-      username: form.value.edgelite_username || '',  // FIXED: removed hardcoded 'admin' fallback
+      username: form.value.edgelite_username || '',
     }
     if (form.value.edgelite_password && form.value.edgelite_password !== PASSWORD_MASK) {
       testPayload.password = form.value.edgelite_password
     }
     const res = await api.testEdgeliteConnection(testPayload)
     testEdgeLiteResult.value = res
+    // 测试成功后自动保存配置
+    if (res.ok) {
+      try {
+        const syncPayload = {
+          edgelite_url: form.value.edgelite_url,
+          edgelite_username: form.value.edgelite_username || '',
+        }
+        if (form.value.edgelite_password && form.value.edgelite_password !== PASSWORD_MASK) {
+          syncPayload.edgelite_password = form.value.edgelite_password
+        }
+        await api.updateSettings(syncPayload)
+        message.success(t('settings.settingsSaved'))
+      } catch (e) {
+        message.warning(t('integration.configSyncFailed'))
+      }
+    }
   } catch (e) {
     testEdgeLiteResult.value = { ok: false, error: e.response?.data?.detail || e.message }
   } finally {

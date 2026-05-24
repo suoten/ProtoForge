@@ -57,8 +57,9 @@ def _sanitize_config(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+def _is_port_in_use(port: int, host: str = "0.0.0.0", protocol: str = "tcp") -> bool:
+    sock_type = socket.SOCK_DGRAM if protocol == "udp" else socket.SOCK_STREAM
+    with socket.socket(socket.AF_INET, sock_type) as s:
         try:
             s.bind((host, port))
         except OSError:
@@ -72,10 +73,10 @@ def _is_serial_path(host: str) -> bool:
             host.upper().startswith("COM"))
 
 
-def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100) -> int:
+def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100, protocol: str = "tcp") -> int:
     for offset in range(max_tries):
         port = start_port + offset
-        if not _is_port_in_use(port, host):
+        if not _is_port_in_use(port, host, protocol):
             return port
     raise RuntimeError(f"No free port found in range {start_port}-{start_port + max_tries - 1}")
 
@@ -159,9 +160,11 @@ class SimulationEngine:
             if config["port"] < 1 or config["port"] > 65535:
                 raise ValueError(f"Invalid port {config['port']}, must be between 1 and 65535")
             host = config.get("host", "0.0.0.0")
-            if host and not _is_serial_path(host) and _is_port_in_use(config["port"], host):
+            # FIXED-P0: GB28181/BACnet 使用 UDP，需要用 SOCK_DGRAM 检测端口
+            port_protocol = "udp" if protocol_name in ("gb28181", "bacnet") else "tcp"
+            if host and not _is_serial_path(host) and _is_port_in_use(config["port"], host, port_protocol):
                 original_port = config["port"]
-                new_port = _find_free_port(original_port + 1, host)
+                new_port = _find_free_port(original_port + 1, host, protocol=port_protocol)
                 logger.warning(
                     "Port %d is in use for %s, auto-switching to %d",
                     original_port, protocol_name, new_port,
@@ -284,36 +287,11 @@ class SimulationEngine:
                 protocol_config=config.protocol_config or {},
             ))
 
-        proto_config = config.protocol_config or {}
-        edgelite_url = proto_config.get("edgelite_url", "")
-        edgelite_enabled = proto_config.get("edgelite_enabled", False)
-        skip_auto_push = proto_config.get("_skip_auto_push", False)
-
-        should_push = False
-        if edgelite_url and not skip_auto_push:
-            should_push = True
-        elif edgelite_enabled and not skip_auto_push:
-            from protoforge.core.edgelite import get_global_edgelite_config
-            global_el = get_global_edgelite_config()
-            if global_el["url"]:
-                should_push = True
-
-        edgelite_result = None
-        if should_push:
-            try:
-                from protoforge.core.edgelite import push_device_to_edgelite
-                edgelite_result = await push_device_to_edgelite(config)
-                if edgelite_result.get("ok"):
-                    logger.info("Device %s auto-pushed to EdgeLite", config.id)
-                else:
-                    logger.warning("Device %s EdgeLite push failed: %s", config.id, edgelite_result.get("error") or edgelite_result.get("reason", "unknown"))
-            except Exception as e:
-                logger.warning("Device %s EdgeLite push error: %s", config.id, e)
+        # EdgeLite 推送已由 IntegrationManager 通过 EventBus 事件自动处理
+        # 不再在此处直接调用 edgelite.py，消除双路径冲突
 
         logger.info("Device created: %s (%s)", config.id, config.name)
         info = self._get_device_info(instance)
-        if edgelite_result:
-            info.edgelite_status = edgelite_result
         server = self._protocol_servers.get(config.protocol)
         if not server or server.status != ProtocolStatus.RUNNING:
             info.protocol_active = False
@@ -339,29 +317,8 @@ class SimulationEngine:
         except Exception as e:
             logger.warning("Failed to stop device %s during removal: %s", device_id, e)
 
-        proto_config = instance.config.protocol_config or {}
-        edgelite_url = proto_config.get("edgelite_url", "")
-        edgelite_enabled = proto_config.get("edgelite_enabled", False)
-
-        should_remove = False
-        if edgelite_url:
-            should_remove = True
-        elif edgelite_enabled:
-            from protoforge.core.edgelite import get_global_edgelite_config
-            global_el = get_global_edgelite_config()
-            if global_el["url"]:
-                should_remove = True
-
-        if should_remove:
-            try:
-                from protoforge.core.edgelite import remove_device_from_edgelite
-                result = await remove_device_from_edgelite(instance.config)
-                if result.get("ok"):
-                    logger.info("Device %s auto-removed from EdgeLite", device_id)
-                else:
-                    logger.warning("Device %s EdgeLite remove failed: %s", device_id, result.get("error") or result.get("reason", "unknown"))
-            except Exception as e:
-                logger.warning("Device %s EdgeLite remove error: %s", device_id, e)
+        # EdgeLite 删除已由 IntegrationManager 通过 EventBus 事件自动处理
+        # 不再在此处直接调用 edgelite.py，消除双路径冲突
 
         # FIXED: 删除设备时同时删除数据库记录，保持一致性
         if persist:

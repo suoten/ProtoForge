@@ -202,7 +202,7 @@ async def lifespan(app: FastAPI):
         saved_scenarios = await _database.load_all_scenarios()
         for sc in saved_scenarios:
             try:
-                _engine.create_scenario(sc)
+                await _engine.create_scenario(sc)
             except Exception as e:
                 logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)
         logger.info("Restored %d scenarios from database", len(saved_scenarios))

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import socket
 import struct
 import sys
 import time
@@ -112,11 +113,14 @@ class ModbusRtuServer(ProtocolServer):
         if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
             logger.info("Non-standard serial port path %s, attempting direct connection", self._port)
         elif not os.path.exists(self._port):
-            logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port 5021", self._port)
+            # 从配置中获取 TCP bridge 端口，默认 5021，但会自动检测可用端口
+            tcp_bridge_port = config.get("tcp_bridge_port", 5021)
+            tcp_bridge_port = self._find_available_port(tcp_bridge_port)
+            logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port %d", self._port, tcp_bridge_port)
             self._status = ProtocolStatus.RUNNING
-            self._server_task = asyncio.create_task(self._serve_datastore_only())
+            self._server_task = asyncio.create_task(self._serve_datastore_only(tcp_bridge_port))
             self._log_debug("system", "server_start",
-                            f"Modbus RTU serial port {self._port} not found, falling back to TCP bridge mode on port 5021")
+                            f"Modbus RTU serial port {self._port} not found, falling back to TCP bridge mode on port {tcp_bridge_port}")
             return
 
         try:
@@ -165,8 +169,9 @@ class ModbusRtuServer(ProtocolServer):
                 )
             else:
                 logger.warning("Neither SimData nor old API available, Modbus RTU server starting in data-store-only mode")
+                fallback_port = self._find_available_port(config.get("tcp_bridge_port", 5021))
                 self._server_task = asyncio.create_task(
-                    self._serve_datastore_only()
+                    self._serve_datastore_only(fallback_port)
                 )
 
             if self._server_task:
@@ -182,8 +187,21 @@ class ModbusRtuServer(ProtocolServer):
             logger.error("Failed to start Modbus RTU server: %s", e)
             raise
 
-    async def _serve_datastore_only(self) -> None:
-        tcp_port = 5021
+    @staticmethod
+    def _find_available_port(start_port: int, max_tries: int = 10) -> int:
+        """从 start_port 开始寻找一个可用端口。"""
+        for port in range(start_port, start_port + max_tries):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.5)
+                    result = s.connect_ex(("127.0.0.1", port))
+                    if result != 0:
+                        return port  # 端口未被占用
+            except Exception:
+                return port  # 无法检测，假设可用
+        return start_port  # 全部被占用，返回原始端口让后续报错
+
+    async def _serve_datastore_only(self, tcp_port: int = 5021) -> None:
         logger.info("Modbus RTU running in TCP bridge mode on port %d (pymodbus serial unavailable)", tcp_port)
         try:
             server = await asyncio.start_server(

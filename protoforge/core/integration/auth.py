@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
@@ -24,6 +25,7 @@ class IntegrationAuth:
         self._refresh_token: str = ""
         self._token_expires: float = 0.0
         self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        self._lock = asyncio.Lock()  # 防止并发刷新 Token
 
     @property
     def token(self) -> str:
@@ -36,26 +38,30 @@ class IntegrationAuth:
     async def ensure_token(self) -> str:
         if self.is_authenticated:
             return self._token
-        if self._refresh_token:
-            try:
-                await self._refresh_access_token()
+        async with self._lock:
+            # 双重检查：获取锁后再次检查，避免重复刷新
+            if self.is_authenticated:
                 return self._token
-            except Exception as e:
-                logger.warning("Token refresh failed, falling back to login: %s", e)
-        await self._login()
-        return self._token
+            if self._refresh_token:
+                try:
+                    await self._refresh_access_token()
+                    return self._token
+                except Exception as e:
+                    logger.warning("Token refresh failed, falling back to login: %s", e)
+            await self._login()
+            return self._token
 
     async def _login(self) -> None:
         try:
-            async with self._client.stream(
-                "POST",
+            # FIXED-P0: 使用 post() 替代 stream()，避免 "streaming response content" 错误
+            resp = await self._client.post(
                 f"{self._base_url}/api/v1/auth/login",
                 json={"username": self._username, "password": self._password},
-            ) as resp:
-                if resp.status_code != 200:
-                    from protoforge.core.integration.retry import AuthError
-                    raise AuthError(f"Login failed: HTTP {resp.status_code}")
-                data = await resp.json()
+            )
+            if resp.status_code != 200:
+                from protoforge.core.integration.retry import AuthError
+                raise AuthError(f"Login failed: HTTP {resp.status_code}")
+            data = resp.json()
         except httpx.ConnectError as e:
             from protoforge.core.integration.retry import NetworkError
             raise NetworkError(f"Connection failed: {e}") from e

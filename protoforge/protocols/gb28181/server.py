@@ -282,6 +282,10 @@ class GB28181Server(ProtocolServer):
             self._log_debug("system", "server_stop", msg("gb28181", "service_stopped"))
             logger.info("GB28181 server stopped")
 
+    @property
+    def actual_port(self) -> int:
+        return self._port
+
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = GB28181DeviceBehavior(device_config.points)
         async with self._behaviors_lock:

@@ -279,7 +279,7 @@ export default {
   pushToEdgelite: (deviceId) => d(api.post(`/edgelite/push/${deviceId}`)),
   removeDeviceFromEdgelite: (deviceId) => d(api.delete(`/edgelite/push/${deviceId}`)),
   getEdgeliteDeviceStatus: (deviceId) => d(api.get(`/edgelite/status/${deviceId}`)),
-  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/edgelite/points/${deviceId}`)).then(r => normalizeList(r, 'points')),
+  readEdgeliteDevicePoints: (deviceId) => d(api.get(`/edgelite/points/${deviceId}`)),
   verifyEdgelitePipeline: (deviceId) => d(api.get(`/edgelite/pipeline/${deviceId}`)),
   testEdgeliteConnection: (config) => d(api.post('/edgelite/test', config)),
 

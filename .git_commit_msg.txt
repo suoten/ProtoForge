@@ -1,0 +1,42 @@
+fix(ProtoForge): 统一 EdgeLite 推送路径 + 修复 S7/MC 联调 [阶段2]
+
+【统一推送路径】
+- engine.py: 移除 create_device/remove_device 中的直接 edgelite.py 调用，
+  消除双路径冲突，统一由 IntegrationManager EventBus 事件处理
+- edgelite.py: 优化 _get_protocol_actual_port() 优先级，
+  新增 OPC-UA server_url 端口自动替换逻辑，S7 driver_config 补全 port 字段
+
+【协议服务器】
+- s7/server.py: (P0) 修复 COTP CC 协议头(LI=0x19/type=0x0D)、TSAP 参数回显；
+  (P0) COTP CR 阶段提前注册 device 到 behaviors
+- engine.py: (P0) GB28181/BACnet 使用 UDP 检测端口占用(SOCK_DGRAM)
+- gb28181/server.py: 端口冲突自动切换支持
+- modbus/rtu_server.py: 串口参数校验增强
+- mqtt/server.py: 移除冗余回调逻辑
+
+【API 层】
+- edgelite_routes.py: 所有操作统一通过 IntegrationManager；
+  新增 /push 批量推送端点
+- integration.py: 重定向到 IntegrationManager
+- system_routes.py: 集成状态展示优化
+
+修改文件:
+  protoforge/api/v1/edgelite_routes.py
+  protoforge/api/v1/integration.py
+  protoforge/api/v1/system_routes.py
+  protoforge/core/auth.py
+  protoforge/core/demo.py
+  protoforge/core/edgelite.py
+  protoforge/core/engine.py
+  protoforge/core/integration/auth.py
+  protoforge/core/integration/channel.py
+  protoforge/core/messages.py
+  protoforge/main.py
+  protoforge/protocols/gb28181/server.py
+  protoforge/protocols/modbus/rtu_server.py
+  protoforge/protocols/mqtt/server.py
+  protoforge/protocols/s7/server.py
+  web/src/api.js
+  web/src/i18n.js
+  web/src/views/Integration.vue
+  web/src/views/Settings.vue
