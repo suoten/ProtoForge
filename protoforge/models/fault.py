@@ -8,7 +8,6 @@ class FaultMode(str, Enum):
     """故障注入模式"""
     INSTANT = "instant"       # 瞬间跳变到异常值，持续 duration 后恢复
     GRADUAL = "gradual"       # 渐进式劣化，随时间线性恶化，到 duration 时达到峰值后恢复
-    STEP = "step"             # 阶跃切换到新工况基线，整个 duration 内保持新基线（工况切换专用）
 
 
 class FaultStatus(str, Enum):
@@ -37,7 +36,6 @@ class FaultTypeDefinition(BaseModel):
     name: str
     description: str
     category: str                          # 故障分类：mechanical / electrical / thermal / process
-    scenario_type: str = "trend_drift"     # 异常场景类型：trend_drift / sudden_spike / high_noise / mode_switch / relation_constraint
     default_duration: float = 120.0        # 默认持续时间（秒）
     point_faults: list[PointFaultConfig] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)

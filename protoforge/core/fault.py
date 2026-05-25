@@ -41,7 +41,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="刀具磨损",
         description="刀具切削刃磨损，切削阻力增大，主轴电流升高，振动增大，进给速率下降",
         category="mechanical",
-        scenario_type="trend_drift",
         default_duration=300.0,
         tags=["刀具", "磨损", "渐进"],
         point_faults=[
@@ -68,7 +67,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="刀具崩刃",
         description="刀具突发性崩刃，振动剧烈突增，主轴电流峰值，进给停止",
         category="mechanical",
-        scenario_type="sudden_spike",
         default_duration=15.0,
         tags=["刀具", "崩刃", "突发"],
         point_faults=[
@@ -95,7 +93,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="主轴过热",
         description="主轴长时间高负荷运转或冷却不足，电流持续偏高，转速因热保护下降",
         category="thermal",
-        scenario_type="trend_drift",
         default_duration=240.0,
         tags=["主轴", "过热", "渐进"],
         point_faults=[
@@ -120,7 +117,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="主轴轴承故障",
         description="主轴轴承磨损或润滑不足，振动幅度持续升高，伴随电流轻微上升",
         category="mechanical",
-        scenario_type="trend_drift",
         default_duration=360.0,
         tags=["主轴", "轴承", "渐进"],
         point_faults=[
@@ -145,7 +141,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="进给堵转",
         description="进给轴卡死，进给速率降为零，主轴电流急剧升高",
         category="process",
-        scenario_type="sudden_spike",
         default_duration=20.0,
         tags=["进给", "堵转", "突发"],
         point_faults=[
@@ -168,7 +163,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="振动异常",
         description="工件装夹松动或切削共振，三轴振动突然大幅增加",
         category="mechanical",
-        scenario_type="sudden_spike",
         default_duration=60.0,
         tags=["振动", "装夹", "突发"],
         point_faults=[
@@ -191,7 +185,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="切削液不足",
         description="切削液供给不足，冷却润滑失效，热量积累导致振动和电流缓慢升高",
         category="process",
-        scenario_type="trend_drift",
         default_duration=480.0,
         tags=["切削液", "冷却", "渐进"],
         point_faults=[
@@ -218,7 +211,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         name="电源波动",
         description="供电电压不稳定，主轴转速和进给速率出现随机波动",
         category="electrical",
-        scenario_type="high_noise",
         default_duration=90.0,
         tags=["电源", "波动", "突发"],
         point_faults=[
@@ -228,176 +220,6 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
                              multiplier=1.0, noise_scale=5.0),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=150.0),
-        ],
-    ),
-
-    # ==================================================================
-    # 以下为新增故障类型
-    # ==================================================================
-
-    # ------------------------------------------------------------------
-    # 传感器强干扰 — 高噪声波动型
-    # 场景：电磁干扰、接地不良、信号线屏蔽失效等导致传感器读数剧烈抖动
-    # 特征：均值基本不变，但噪声幅度突然增大数倍，信号看起来"毛刺"严重
-    # 区别于真实故障：设备本身没有坏，只是采集信号质量变差
-    # 模式：瞬间注入，持续期间每次采样都叠加大幅随机噪声
-    # ------------------------------------------------------------------
-    FaultTypeDefinition(
-        id="sensor_noise",
-        name="传感器强干扰",
-        description=(
-            "【高噪声波动型】电磁干扰或接地不良导致传感器信号质量恶化。"
-            "均值基本不变，但每次采样叠加大幅随机噪声，曲线呈现密集毛刺。"
-            "典型场景：变频器附近的传感器、信号线屏蔽层破损、接地回路故障。"
-        ),
-        category="electrical",
-        scenario_type="high_noise",
-        default_duration=120.0,
-        tags=["传感器", "干扰", "噪声", "高噪声波动型"],
-        point_faults=[
-            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=8.0),
-            PointFaultConfig(point="vibration_x", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=2.5),
-            PointFaultConfig(point="vibration_y", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=2.5),
-            PointFaultConfig(point="vibration_z", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=3.0),
-            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=80.0),
-        ],
-    ),
-
-    # ------------------------------------------------------------------
-    # 换工件/换程序段 — 工况切换型（高速加工 → 低速精加工）
-    # 场景：CNC 机床切换加工程序，从粗加工切换到精加工
-    # 特征：转速降低、进给降低、电流降低，所有指标跳到新的正常范围并稳定
-    # 关键：这不是故障！数据本身没有坏，只是工况变了，正常范围完全不同
-    # 模式：STEP 阶跃，立即跳到新基线并在整个 duration 内保持
-    # ------------------------------------------------------------------
-    FaultTypeDefinition(
-        id="mode_switch_fine_machining",
-        name="切换精加工工况",
-        description=(
-            "【工况切换型】从粗加工切换到精加工程序段。"
-            "主轴转速升高、进给速率降低、切削电流降低，各指标立即跳到新的正常范围并保持稳定。"
-            "数据本身没有异常，但与粗加工基线相比会触发阈值告警。"
-            "典型场景：换刀后进入精加工、加工不同特征面、程序跳段。"
-        ),
-        category="process",
-        scenario_type="mode_switch",
-        default_duration=300.0,
-        tags=["工况切换", "精加工", "程序段", "工况切换型"],
-        point_faults=[
-            PointFaultConfig(point="spindle_speed", mode=FaultMode.STEP,
-                             multiplier=1.4, noise_scale=30.0),
-            PointFaultConfig(point="feed_rate", mode=FaultMode.STEP,
-                             multiplier=0.3, noise_scale=10.0),
-            PointFaultConfig(point="spindle_current", mode=FaultMode.STEP,
-                             multiplier=0.55, noise_scale=0.5),
-            PointFaultConfig(point="vibration_x", mode=FaultMode.STEP,
-                             multiplier=0.6, noise_scale=0.1),
-            PointFaultConfig(point="vibration_y", mode=FaultMode.STEP,
-                             multiplier=0.6, noise_scale=0.1),
-            PointFaultConfig(point="vibration_z", mode=FaultMode.STEP,
-                             multiplier=0.6, noise_scale=0.1),
-        ],
-    ),
-
-    # ------------------------------------------------------------------
-    # 进入空载工况 — 工况切换型（加工中 → 空载运行）
-    # 场景：加工完成、等待上料、程序暂停，主轴空转
-    # 特征：进给降为 0，电流大幅下降到空载水平，转速维持，振动降低
-    # 模式：STEP 阶跃，立即切换到空载基线
-    # ------------------------------------------------------------------
-    FaultTypeDefinition(
-        id="mode_switch_idle",
-        name="切换空载工况",
-        description=(
-            "【工况切换型】机床进入空载运行状态（加工完成等待上料、程序暂停）。"
-            "进给速率降为零，主轴电流降至空载水平（约为加工时的 20-30%），"
-            "主轴转速维持，振动明显降低。"
-            "典型场景：换料等待、程序暂停、加工间隙、换刀等待。"
-        ),
-        category="process",
-        scenario_type="mode_switch",
-        default_duration=180.0,
-        tags=["工况切换", "空载", "等待", "工况切换型"],
-        point_faults=[
-            PointFaultConfig(point="feed_rate", mode=FaultMode.STEP,
-                             target_value=0.0, noise_scale=2.0),
-            PointFaultConfig(point="spindle_current", mode=FaultMode.STEP,
-                             multiplier=0.22, noise_scale=0.3),
-            PointFaultConfig(point="vibration_x", mode=FaultMode.STEP,
-                             multiplier=0.25, noise_scale=0.05),
-            PointFaultConfig(point="vibration_y", mode=FaultMode.STEP,
-                             multiplier=0.25, noise_scale=0.05),
-            PointFaultConfig(point="vibration_z", mode=FaultMode.STEP,
-                             multiplier=0.25, noise_scale=0.05),
-        ],
-    ),
-
-    # ------------------------------------------------------------------
-    # 突发电流尖峰 — 突发脉冲型
-    # 场景：切削过程中遇到硬质夹杂物、刀具切入角突变、工件材质不均
-    # 特征：主轴电流瞬间冲高（持续 2-5 秒），然后恢复正常，其他指标基本不变
-    # 区别于刀具崩刃：电流尖峰后能自动恢复，不会导致停机
-    # 模式：瞬间注入，持续时间极短
-    # ------------------------------------------------------------------
-    FaultTypeDefinition(
-        id="current_spike",
-        name="突发电流尖峰",
-        description=(
-            "【突发脉冲型】切削过程中遇到硬质夹杂物或材质不均，主轴电流瞬间冲高后自动恢复。"
-            "电流短暂升至正常值的 3-4 倍，持续仅数秒，振动轻微抖动，进给基本不受影响。"
-            "典型场景：铸件内部硬质点、焊缝区域、材料硬度不均匀。"
-            "与刀具崩刃的区别：能自动恢复，不触发停机报警。"
-        ),
-        category="mechanical",
-        scenario_type="sudden_spike",
-        default_duration=5.0,
-        tags=["电流", "尖峰", "脉冲", "突发脉冲型"],
-        point_faults=[
-            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             multiplier=3.5, noise_scale=1.5),
-            PointFaultConfig(point="vibration_x", mode=FaultMode.INSTANT,
-                             multiplier=2.0, noise_scale=0.5),
-            PointFaultConfig(point="vibration_y", mode=FaultMode.INSTANT,
-                             multiplier=2.0, noise_scale=0.5),
-            PointFaultConfig(point="vibration_z", mode=FaultMode.INSTANT,
-                             multiplier=2.5, noise_scale=0.8),
-        ],
-    ),
-
-    # ------------------------------------------------------------------
-    # 主轴负载异常 — 关系约束型
-    # 场景：刀具钝化但未完全磨损、切削参数不匹配、工件材料变硬
-    # 特征：主轴转速正常、进给速率正常，但主轴电流异常升高
-    # 关键：单看任何一个指标都"正常"，只有多指标关系才能发现异常
-    # 模式：渐进式，电流缓慢爬升，转速和进给保持不变
-    # ------------------------------------------------------------------
-    FaultTypeDefinition(
-        id="spindle_load_anomaly",
-        name="主轴负载异常",
-        description=(
-            "【关系约束型】主轴转速正常、进给速率正常，但主轴电流异常升高。"
-            "单看任何一个指标都在正常范围内，只有分析多指标关系才能发现异常。"
-            "物理含义：切削阻力增大（刀具钝化初期、材料变硬），"
-            "系统尚未触发保护降速，但电流已超出正常切削功率范围。"
-            "典型场景：刀具轻度钝化、切削液浓度不足、工件材料批次差异。"
-        ),
-        category="mechanical",
-        scenario_type="relation_constraint",
-        default_duration=240.0,
-        tags=["主轴", "负载", "关系约束", "关系约束型"],
-        point_faults=[
-            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
-                             multiplier=2.8, noise_scale=1.0),
-            # 转速和进给保持不变（multiplier=1.0），只叠加极小噪声维持真实感
-            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=15.0),
-            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=5.0),
         ],
     ),
 ]
@@ -550,15 +372,6 @@ class FaultInjector:
                 target = pf.target_value
             elif pf.multiplier is not None:
                 target = baseline * (1.0 + (pf.multiplier - 1.0) * intensity)
-            else:
-                target = baseline
-        elif pf.mode == FaultMode.STEP:
-            # 阶跃模式：立即跳到新基线并在整个 duration 内保持（工况切换专用）
-            # 与 INSTANT 的区别：STEP 的 multiplier 表示新工况的正常倍数，不受 intensity 缩放
-            if pf.target_value is not None:
-                target = pf.target_value
-            elif pf.multiplier is not None:
-                target = baseline * pf.multiplier
             else:
                 target = baseline
         else:

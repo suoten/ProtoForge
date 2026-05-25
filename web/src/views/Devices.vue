@@ -92,55 +92,24 @@
       </n-modal>
 
       <!-- 故障注入 Modal -->
-      <n-modal v-model:show="showFaultModal" preset="card" title="故障注入" style="width:560px">
+      <n-modal v-model:show="showFaultModal" preset="card" title="故障注入" style="width:480px">
         <n-space vertical size="medium">
-          <n-text depth="3" style="font-size:13px">目标设备：<n-text strong>{{ faultTargetDevice?.name }}</n-text></n-text>
-
+          <n-text depth="3" style="font-size:13px">设备：{{ faultTargetDevice?.name }}</n-text>
           <n-form-item label="故障类型" label-placement="left" label-width="80">
             <n-select
               v-model:value="faultTypeId"
-              :options="faultTypeGroupedOptions"
+              :options="faultTypeOptions"
               placeholder="选择故障类型"
               @update:value="onFaultTypeChange"
             />
           </n-form-item>
-
-          <!-- 场景说明卡片 -->
-          <div v-if="selectedFaultType" style="background:#1a1a2e;border:1px solid #2d2d4e;border-radius:8px;padding:14px 16px;">
-            <!-- 标题行：故障名 + 场景类型标签 + 分类标签 -->
-            <n-space align="center" style="margin-bottom:10px;flex-wrap:wrap;gap:6px">
-              <n-text strong style="font-size:14px">{{ selectedFaultType.name }}</n-text>
-              <n-tag :type="scenarioTagType(selectedFaultType.scenario_type)" size="small" round>
-                {{ scenarioTypeLabel(selectedFaultType.scenario_type) }}
-              </n-tag>
-              <n-tag size="small" :bordered="false" style="background:#2d2d4e;color:#94a3b8">
-                {{ faultCategoryLabel(selectedFaultType.category) }}
-              </n-tag>
-            </n-space>
-
-            <!-- 描述文本 -->
-            <n-text depth="3" style="font-size:12px;line-height:1.7;display:block;white-space:pre-wrap">{{ selectedFaultType.description }}</n-text>
-
-            <!-- 影响测点 -->
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2d2d4e">
-              <n-text depth="3" style="font-size:11px">影响测点：</n-text>
-              <n-space size="small" style="margin-top:4px;flex-wrap:wrap">
-                <n-tag
-                  v-for="pf in selectedFaultType.point_faults"
-                  :key="pf.point"
-                  size="tiny"
-                  :bordered="false"
-                  style="background:#2d2d4e;color:#e2e8f0;font-family:monospace"
-                >
-                  {{ pf.point }}
-                  <span style="color:#94a3b8;margin-left:4px">
-                    {{ pointFaultModeLabel(pf) }}
-                  </span>
-                </n-tag>
-              </n-space>
+          <n-alert v-if="selectedFaultType" type="warning" :bordered="false" style="font-size:12px">
+            <div style="font-weight:500;margin-bottom:4px">{{ selectedFaultType.name }} · {{ faultCategoryLabel(selectedFaultType.category) }}</div>
+            <div style="color:#94a3b8">{{ selectedFaultType.description }}</div>
+            <div style="margin-top:6px;color:#94a3b8">
+              影响测点：{{ selectedFaultType.point_faults.map(p => p.point).join('、') }}
             </div>
-          </div>
-
+          </n-alert>
           <n-form-item label="持续时间" label-placement="left" label-width="80">
             <n-input-number
               v-model:value="faultDuration"
@@ -151,15 +120,11 @@
               <template #suffix>秒</template>
             </n-input-number>
           </n-form-item>
-
           <n-form-item label="故障强度" label-placement="left" label-width="80">
             <n-space vertical style="width:100%">
               <n-slider v-model:value="faultIntensity" :min="0.1" :max="1.0" :step="0.1" />
               <n-text depth="3" style="font-size:12px">
                 {{ faultIntensityLabel }}（{{ faultIntensity }}）
-                <span v-if="selectedFaultType?.scenario_type === 'mode_switch'" style="color:#f59e0b">
-                  · 工况切换型强度不影响切换幅度
-                </span>
               </n-text>
             </n-space>
           </n-form-item>
@@ -278,17 +243,12 @@ const columns = [
   },
   { title: '测点', key: 'points', width: 70, render: (row) => (row.points || []).length },
   {
-    title: '故障', key: 'fault', width: 130,
+    title: '故障', key: 'fault', width: 90,
     render: (row) => {
       const fault = activeFaults.value[row.id]
       if (!fault || fault.status === 'none') return h(NTag, { size: 'tiny', bordered: false }, () => '正常')
       const pct = Math.round((fault.progress || 0) * 100)
-      const ft = faultTypes.value.find(t => t.id === fault.fault_type_id)
-      const scenarioLabel = ft ? scenarioTypeLabel(ft.scenario_type) : ''
-      return h(NSpace, { size: 2, vertical: false, align: 'center' }, () => [
-        h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => `${fault.fault_type_name} ${pct}%`),
-        scenarioLabel ? h(NTag, { size: 'tiny', bordered: false, style: 'font-size:10px;background:#2d1b1b;color:#f87171' }, () => scenarioLabel) : null,
-      ])
+      return h(NTag, { size: 'tiny', type: 'error', bordered: false }, () => `${fault.fault_type_name} ${pct}%`)
     }
   },
   {
@@ -391,25 +351,6 @@ const faultTypeOptions = computed(() =>
   faultTypes.value.map(t => ({ label: `${t.name}（${faultCategoryLabel(t.category)}）`, value: t.id }))
 )
 
-// 按场景类型分组的故障选项
-const SCENARIO_ORDER = ['trend_drift', 'sudden_spike', 'high_noise', 'mode_switch', 'relation_constraint']
-const faultTypeGroupedOptions = computed(() => {
-  const groups = {}
-  for (const t of faultTypes.value) {
-    const st = t.scenario_type || 'trend_drift'
-    if (!groups[st]) groups[st] = []
-    groups[st].push({ label: t.name, value: t.id })
-  }
-  return SCENARIO_ORDER
-    .filter(st => groups[st])
-    .map(st => ({
-      type: 'group',
-      label: scenarioTypeLabel(st),
-      key: st,
-      children: groups[st],
-    }))
-})
-
 const selectedFaultType = computed(() =>
   faultTypes.value.find(t => t.id === faultTypeId.value) || null
 )
@@ -425,42 +366,6 @@ const faultIntensityLabel = computed(() => {
 function faultCategoryLabel(category) {
   const map = { mechanical: '机械', thermal: '热', electrical: '电气', process: '工艺' }
   return map[category] || category
-}
-
-function scenarioTypeLabel(scenarioType) {
-  const map = {
-    trend_drift: '趋势漂移型',
-    sudden_spike: '突发脉冲型',
-    high_noise: '高噪声波动型',
-    mode_switch: '工况切换型',
-    relation_constraint: '关系约束型',
-  }
-  return map[scenarioType] || scenarioType
-}
-
-function scenarioTagType(scenarioType) {
-  const map = {
-    trend_drift: 'warning',
-    sudden_spike: 'error',
-    high_noise: 'info',
-    mode_switch: 'success',
-    relation_constraint: 'default',
-  }
-  return map[scenarioType] || 'default'
-}
-
-function pointFaultModeLabel(pf) {
-  if (pf.mode === 'step') return '→ 阶跃'
-  if (pf.mode === 'gradual') {
-    if (pf.multiplier != null) return `→ ×${pf.multiplier}`
-    if (pf.target_value != null) return `→ ${pf.target_value}`
-  }
-  if (pf.mode === 'instant') {
-    if (pf.target_value != null) return `→ ${pf.target_value}`
-    if (pf.multiplier != null && pf.multiplier !== 1.0) return `→ ×${pf.multiplier}`
-    return '± 噪声'
-  }
-  return ''
 }
 
 function onFaultTypeChange(val) {
