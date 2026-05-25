@@ -75,24 +75,24 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             point = self._points.get(point_name)
             dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
             if dt in ("float32",) or (not dt and isinstance(value, float)):
-                data = struct.pack(">f", float(value))
+                data = struct.pack("<f", float(value))  # FIXED-P0: S7 uses little-endian (Intel format)
             elif dt in ("float64",):
-                data = struct.pack(">d", float(value))
+                data = struct.pack("<d", float(value))
             elif dt in ("int16",):
-                data = struct.pack(">h", int(value))
+                data = struct.pack("<h", int(value))
             elif dt in ("uint16",):
-                data = struct.pack(">H", int(value) & 0xFFFF)
+                data = struct.pack("<H", int(value) & 0xFFFF)
             elif dt in ("int32", "dint"):
-                data = struct.pack(">i", int(value))
+                data = struct.pack("<i", int(value))
             elif dt in ("uint32",):
-                data = struct.pack(">I", int(value) & 0xFFFFFFFF)
+                data = struct.pack("<I", int(value) & 0xFFFFFFFF)
             elif dt in ("string",) or isinstance(value, str):
                 encoded = str(value).encode("utf-8")
                 data = bytes([254, min(len(encoded), 254)]) + encoded[:254]
             elif isinstance(value, bool):
-                data = struct.pack(">?", value)
+                data = struct.pack("<?", value)
             else:
-                data = struct.pack(">i", int(value))
+                data = struct.pack("<i", int(value))
             self.write_db_area(db_number, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("S7 on_write value conversion error for %s: %s", point_name, e)
@@ -177,9 +177,11 @@ class S7Server(ProtocolServer):
         self._behaviors_sync_lock = threading.Lock()
         self._host = "0.0.0.0"
         self._port = 102
-        self._requested_port = 102  # 用户请求的端口
+        self._requested_port = 102
         self._rack = 0
         self._slot = 1
+        self._server_task: asyncio.Task | None = None
+        self._server_running = False
 
     @property
     def actual_port(self) -> int:
@@ -190,8 +192,6 @@ class S7Server(ProtocolServer):
     def requested_port(self) -> int:
         """返回用户配置的端口"""
         return self._requested_port
-        self._server_task: asyncio.Task | None = None
-        self._server_running = False
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -594,21 +594,21 @@ class S7Server(ProtocolServer):
                             pt = behavior._points.get(name)
                             dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
                             if dt in ("float32",):
-                                behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
+                                behavior._values[name] = struct.unpack("<f", write_data[:4])[0]  # FIXED-P0: little-endian
                             elif dt in ("float64",):
-                                behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
+                                behavior._values[name] = struct.unpack("<d", write_data[:8])[0]
                             elif dt in ("int16",):
-                                behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
+                                behavior._values[name] = struct.unpack("<h", write_data[:2])[0]
                             elif dt in ("uint16",):
-                                behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
+                                behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
                             elif dt in ("int32", "dint"):
-                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
+                                behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
                             elif dt in ("uint32",):
-                                behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
+                                behavior._values[name] = struct.unpack("<I", write_data[:4])[0]
                             elif dt in ("bool",):
                                 behavior._values[name] = bool(write_data[0]) if write_data else False
                             else:
-                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
+                                behavior._values[name] = struct.unpack("<i", write_data[:4])[0] if len(write_data) >= 4 else 0
                         except (struct.error, IndexError) as e:
                             logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")

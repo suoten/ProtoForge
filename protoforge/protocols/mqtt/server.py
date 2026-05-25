@@ -276,6 +276,17 @@ class MqttBroker(ProtocolServer):
                     "default": "",
                     "description": desc("mqtt_tls_key_path", "TLS private key file path (PEM format)"),
                 },
+                "qos": {
+                    "type": "integer",
+                    "default": 0,
+                    "enum": [0, 1, 2],
+                    "description": desc("mqtt_qos", "MQTT QoS level (0=At most once, 1=At least once, 2=Exactly once)"),
+                },
+                "retain": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": desc("mqtt_retain", "Enable MQTT retain messages"),
+                },
             },
         }
 
@@ -290,6 +301,8 @@ class MqttBroker(ProtocolServer):
                     continue
                 proto_config = config.protocol_config or {}
                 topic_prefix = proto_config.get("topic_prefix", "protoforge")
+                qos = proto_config.get("qos", 0)  # FIXED-P0: QoS参数移到外层
+                retain = proto_config.get("retain", False)  # FIXED-P0: Retain参数移到外层
                 for point in config.points:
                     value = behavior.get_value(point.name)
                     topic = f"{topic_prefix}/{device_id}/{point.name}"
@@ -302,9 +315,12 @@ class MqttBroker(ProtocolServer):
                     })
                     try:
                         if self._broker and hasattr(self._broker, 'internal_publish'):
+                            # FIXED-P0: 添加qos和retain参数，支持MQTT QoS 0/1/2 和 Retain 消息
                             await self._broker.internal_publish(
                                 topic=topic,
                                 data=payload.encode("utf-8"),
+                                qos=qos,
+                                retain=retain,
                             )
                     except Exception as e:
                         logger.debug("MQTT publish failed for %s: %s", topic, e)
@@ -319,6 +335,8 @@ class MqttBroker(ProtocolServer):
             return
         proto_config = config.protocol_config or {}
         topic_prefix = proto_config.get("topic_prefix", "protoforge")
+        qos = proto_config.get("qos", 0)  # FIXED-P0: 添加QoS支持
+        retain = proto_config.get("retain", False)  # FIXED-P0: 添加Retain支持
         for point in config.points:
             value = behavior.get_value(point.name)
             topic = f"{topic_prefix}/{device_id}/{point.name}"
@@ -334,6 +352,8 @@ class MqttBroker(ProtocolServer):
                     await self._broker.internal_publish(
                         topic=topic,
                         data=payload.encode("utf-8"),
+                        qos=qos,
+                        retain=retain,
                     )
             except Exception as e:
                 logger.debug("MQTT publish failed for %s: %s", topic, e)

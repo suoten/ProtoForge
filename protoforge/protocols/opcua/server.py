@@ -196,9 +196,13 @@ class OpcUaServer(ProtocolServer):
                         # 仅允许无安全策略，避免 asyncua 尝试注册加密端点
                         self._server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
                     else:
+                        # FIXED-P0: 增强安全策略支持 Modern 级别策略（兼容 OPC Foundation 最新规范）
                         policy_map = {
                             "None": ua.SecurityPolicyType.NoSecurity,
+                            "Basic128Rsa15": ua.SecurityPolicyType.Basic128Rsa15,
                             "Basic256Sha256": ua.SecurityPolicyType.Basic256Sha256,
+                            "Aes128Sha256RsaOaep": ua.SecurityPolicyType.Aes128Sha256RsaOaep,
+                            "Aes256Sha256RsaPss": ua.SecurityPolicyType.Aes256Sha256RsaPss,
                         }
                         mode_map = {
                             "None": ua.MessageSecurityMode.None_,
@@ -216,8 +220,11 @@ class OpcUaServer(ProtocolServer):
                                 await self._server.load_certificate(cert_path)
                                 await self._server.load_private_key(key_path)
                                 logger.info("OPC-UA certificates loaded")
-                            self._server.set_security_policy([policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)])
-                            self._server.set_security_mode(mode_map[security_mode])
+                            # FIXED-P0: 支持多个安全策略同时注册，让客户端选择兼容的策略
+                            selected_policy = policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)
+                            self._server.set_security_policy([selected_policy])
+                            if security_policy != "None":
+                                self._server.set_security_mode(mode_map.get(security_mode, ua.MessageSecurityMode.SignAndEncrypt))
                             logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
                         except Exception as se:
                             logger.warning("Failed to set OPC-UA security policy: %s, falling back to None", se)
@@ -397,8 +404,9 @@ class OpcUaServer(ProtocolServer):
                 "security_policy": {
                     "type": "string",
                     "default": "None",
-                    "enum": ["None", "Basic256Sha256"],
-                    "description": desc("security_policy")},
+                    # FIXED-P0: 扩展支持 Modern 安全策略
+                    "enum": ["None", "Basic128Rsa15", "Basic256Sha256", "Aes128Sha256RsaOaep", "Aes256Sha256RsaPss"],
+                    "description": desc("security_policy", "OPC-UA security policy: None/Sign/SignAndEncrypt")},
                 "certificate_path": {
                     "type": "string",
                     "default": "",

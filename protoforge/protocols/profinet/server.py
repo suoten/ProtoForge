@@ -182,7 +182,7 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
 
 class ProfinetServer(ProtocolServer):
     protocol_name = "profinet"
-    protocol_display_name = "PROFINET IO"
+    protocol_display_name = "PROFINET (TCP-Sim)"
 
     def __init__(self):
         super().__init__()

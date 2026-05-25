@@ -413,6 +413,8 @@ class IntegrationManager:
             get_edgelite_config_from_device,
             _normalize_device_id,
             _get_protocol_status,
+            _is_edgelite_local,
+            get_protoforge_host,
             EDGELITE_PIP_PACKAGES,
         )
 
@@ -466,6 +468,28 @@ class IntegrationManager:
                 "suggestion": desc("edgelite.suggestion.protocol_not_running"),
                 "driver_config": payload.get("config", {}),
             }
+
+        # 检测私有 IP 问题：EdgeLite 远程部署时，ProtoForge 的局域网 IP 无法被 EdgeLite 访问
+        driver_config = payload.get("config", {})
+        driver_host = driver_config.get("host") or driver_config.get("ip") or ""
+        is_private_ip = driver_host and (
+            driver_host.startswith(("10.", "172.16.", "172.17.", "172.18.", "172.19.",
+                                   "172.20.", "172.21.", "172.22.", "172.23.", "172.24.",
+                                   "172.25.", "172.26.", "172.27.", "172.28.", "172.29.",
+                                   "172.30.", "172.31.", "192.168.")) or
+            driver_host in ("127.0.0.1", "localhost")
+        )
+        is_edgelite_remote = el_config.get("url") and not _is_edgelite_local(el_config)
+        if is_private_ip and is_edgelite_remote:
+            actual_host = get_protoforge_host()
+            logger.warning(
+                "Device %s push: driver host %s is a private IP, EdgeLite (%s) may not be able to reach it. "
+                "Current protoforge_public_host setting: %s. Please configure a public/reachable IP in System Settings.",
+                payload["device_id"], driver_host, el_config.get("url"), actual_host
+            )
+            # 将检测结果写入日志，但不阻止推送（让 EdgeLite 决定是否失败）
+            payload["_private_ip_warning"] = True
+            payload["_suggested_host"] = actual_host
 
         # 通过 REST API 推送
         start_time = time.time()
@@ -531,10 +555,29 @@ class IntegrationManager:
         except Exception:
             pass
 
+        driver_config = payload.get("config", {})
         is_driver_failure = any(
             kw in conflict_detail.lower()
             for kw in ("driver", "start failed", "connection")
         )
+
+        # 私有 IP 超时检测：如果错误包含 timeout 且驱动 IP 为私有地址，给出更明确提示
+        is_private_ip_timeout = (
+            is_driver_failure and
+            any(kw in conflict_detail.lower() for kw in ("timeout", "receive timeout", "connect", "unreachable", "refused")) and
+            driver_config.get("host") and (
+                driver_config["host"].startswith(("10.", "172.", "192.168.")) or
+                driver_config["host"] in ("127.0.0.1", "localhost")
+            )
+        )
+        if is_private_ip_timeout:
+            from protoforge.core.edgelite import get_protoforge_host
+            actual_host = get_protoforge_host()
+            suggestion = (
+                f"EdgeLite 驱动连接超时。驱动配置的 IP 地址 ({driver_config.get('host')}) 是私有地址，"
+                f"EdgeLite 无法从外网访问。请在【系统设置 > 公网地址】中配置 ProtoForge 的公网可达地址，"
+                f"例如通过反向代理或内网穿透映射。当前配置: {actual_host}"
+            )
 
         # 提取缺失的 pip 包提示
         pip_hint = ""
@@ -552,13 +595,16 @@ class IntegrationManager:
         if missing_packages:
             pip_hint = "pip install " + " ".join(missing_packages)
 
+        suggestion = ""
         if is_driver_failure:
             from protoforge.core.edgelite import _format_driver_config_for_display
             logger.warning("EdgeLite device %s driver start failed: %s", payload["device_id"], conflict_detail)
-            conn_info = _format_driver_config_for_display(payload.get("config", {}))
-            suggestion = desc("edgelite.suggestion.check_driver_config")
-            if pip_hint:
-                suggestion = f"{suggestion}\n\n安装缺失依赖: {pip_hint}"
+            conn_info = _format_driver_config_for_display(driver_config)
+            # 私有 IP 超时已经在上面设置了正确的 suggestion，这里不再覆盖
+            if not is_private_ip_timeout:
+                suggestion = desc("edgelite.suggestion.check_driver_config")
+                if pip_hint:
+                    suggestion = f"{suggestion}\n\n安装缺失依赖: {pip_hint}"
 
             # 不可恢复的错误（依赖包缺失）→ 清理 EdgeLite 上的失败设备记录，避免下次推送继续 409
             is_unrecoverable = any(
@@ -579,9 +625,11 @@ class IntegrationManager:
                 "error": f"EdgeLite driver start failed: {conflict_detail}",
                 "error_type": "driver_failed",
                 "suggestion": suggestion,
-                "driver_config": payload.get("config", {}),
+                "driver_config": driver_config,
                 "connection_info": conn_info,
                 "pip_hint": pip_hint or None,
+                "private_ip_warning": is_private_ip_timeout,
+                "suggested_host": get_protoforge_host() if is_private_ip_timeout else None,
             }
 
         # 设备已存在，尝试 GET 确认 + PUT 更新
@@ -1107,12 +1155,27 @@ class IntegrationManager:
                 try:
                     # 从设备实例获取当前模拟数据
                     points_data = {}
-                    if hasattr(instance, "read_all_points"):
-                        for pv in instance.read_all_points():
+
+                    # 尝试从 HttpSimulatorServer 获取数据
+                    if hasattr(instance, "get_all_point_values"):
+                        all_values = instance.get_all_point_values()
+                        # get_all_point_values 可能返回 {"device_id": {"point_name": value}}
+                        # 或直接 {"point_name": value}（单个设备）
+                        if device_id in all_values:
+                            # 嵌套格式
+                            points_data = all_values[device_id]
+                        elif any(isinstance(v, dict) for v in all_values.values()):
+                            # 嵌套格式，但device_id作为键
+                            points_data = all_values.get(device_id, {})
+                        else:
+                            # 扁平格式
+                            points_data = all_values
+                    elif hasattr(instance, "read_points"):
+                        # read_points 返回 list[PointValue]
+                        pts = instance.read_points(device_id)
+                        for pv in pts:
                             if pv.name and pv.value is not None:
                                 points_data[pv.name] = pv.value
-                    elif hasattr(instance, "get_all_point_values"):
-                        points_data = instance.get_all_point_values()
                     elif hasattr(instance, "points"):
                         for pt in instance.points:
                             pt_name = getattr(pt, "name", "")
@@ -1155,12 +1218,18 @@ class IntegrationManager:
                         timeout=HTTP_TIMEOUT_SHORT,
                     )
                     if resp.status_code not in (200, 201, 204):
-                        logger.debug("HTTP push to EdgeLite for %s returned %d", device_id, resp.status_code)
+                        # 记录错误详情以便诊断 400 问题
+                        logger.warning(
+                            "HTTP push to EdgeLite for %s returned %d: %s",
+                            device_id, resp.status_code, resp.text[:500]
+                        )
+                    else:
+                        logger.debug("HTTP push to EdgeLite for %s succeeded", device_id)
 
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
-                    logger.debug("HTTP push loop error for %s: %s", device_id, e)
+                    logger.warning("HTTP push loop error for %s: %s", device_id, e)
 
                 await asyncio.sleep(self._http_push_interval)
         except asyncio.CancelledError:

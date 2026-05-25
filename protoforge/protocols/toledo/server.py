@@ -223,19 +223,22 @@ class ToledoServer(ProtocolServer):
         return self._handle_print_weight()
 
     def _handle_stable_weight(self) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
         if not behavior:
             return b"   0.000kg \r\n"
         return behavior.get_weight_string().encode("ascii")
 
     def _handle_tare(self) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
         if behavior:
             behavior._tare = behavior._weight
         return self._handle_stable_weight()
 
     def _handle_zero(self) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
         if behavior:
             behavior._weight = 0.0
             behavior._tare = 0.0
@@ -269,7 +272,8 @@ class ToledoServer(ProtocolServer):
     async def _continuous_send(self) -> None:
         try:
             while self._server_running and self._continuous_writers:
-                behavior = self._behaviors.get(self._default_device_id)
+                async with self._behaviors_lock:
+                    behavior = self._behaviors.get(self._default_device_id)
                 if behavior:
                     weight_str = behavior.get_weight_string().encode("ascii")
                     dead_writers = []
@@ -323,15 +327,17 @@ class ToledoServer(ProtocolServer):
                         device_id=device_id)
 
     async def read_points(self, device_id: str) -> list[PointValue]:
-        behavior = self._behaviors.get(device_id)
-        config = self._device_configs.get(device_id)
+        async with self._behaviors_lock:
+            behavior = self._behaviors.get(device_id)
+            config = self._device_configs.get(device_id)
         if not behavior or not config:
             return []
         now = time.time()
         return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
 
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
-        behavior = self._behaviors.get(device_id)
+        async with self._behaviors_lock:
+            behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
         return behavior.on_write(point_name, value)

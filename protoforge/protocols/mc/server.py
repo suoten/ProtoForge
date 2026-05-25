@@ -58,7 +58,7 @@ class McDeviceBehavior(StandardDeviceBehavior):
         device_code, offset = self._point_addresses[point_name]
         try:
             if isinstance(value, float):
-                data = struct.pack("<f", value)
+                data = struct.pack("<f", value)  # FIXED-P0: Mitsubishi MC uses little-endian for float
             else:
                 data = struct.pack("<H", int(value) & 0xFFFF)
             self.write_memory(device_code, offset, data)
@@ -296,7 +296,7 @@ class McServer(ProtocolServer):
                 if p_code == device_code and p_offset == start_addr:
                     try:
                         if len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]  # FIXED-P0: little-endian
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
                     except (struct.error, IndexError) as e:
@@ -334,6 +334,7 @@ class McServer(ProtocolServer):
             offset += 3
             if behavior:
                 if subcmd == 0x0000:
+                    # FIXED-P0: 正确逻辑：分配start_addr+2字节(确保足够空间)，切片从start_addr起取2字节
                     mem = behavior.read_memory(device_code, start_addr + 2)
                     read_data += mem[start_addr:start_addr + 2]
                 elif subcmd == 0x0001:

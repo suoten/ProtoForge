@@ -27,6 +27,7 @@ class ProtocolServer(ABC):
         self._default_device_lock = asyncio.Lock()  # FIXED: 添加锁保护_default_device_id的并发访问
         self._default_device_sync_lock = threading.Lock()  # FIXED-P1: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         self._behaviors_lock = asyncio.Lock()  # FIXED: 添加锁保护_behaviors字典的并发访问
+        self._behaviors_sync_lock = threading.Lock()  # FIXED: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback

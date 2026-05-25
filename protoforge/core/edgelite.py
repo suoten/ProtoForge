@@ -30,9 +30,11 @@ EDGELITE_DEVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}[a-z0-9]$")
 # EdgeLite 驱动缺失依赖包的 pip 安装命令映射
 EDGELITE_PIP_PACKAGES: dict[str, list[str]] = {
     "pymcprotocol": ["pymcprotocol"],
-    "pylogix": ["pylogix"],
+    "pylogix": ["pylogix"],  # Allen-Bradley Logix PLC driver
     "pyfanuc": ["pyfanuc"],
-    "pyfins": ["pyfins"],
+    # pyfins 不存在于 PyPI，Omron FINS 协议正确包名为 fins
+    "pyfins": ["fins"],
+    "fins": ["fins"],  # Omron FINS protocol library
     "OpenOPC": ["OpenOPC-Python3"],
     "pymodbus": ["pymodbus"],
     "snap7": ["python-snap7"],

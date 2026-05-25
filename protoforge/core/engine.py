@@ -613,12 +613,11 @@ class SimulationEngine:
                 instance = self._devices.get(device_config.id)
                 if instance:
                     scenario.add_device(instance)
-
-            try:
-                await self.start_device(device_config.id)
-            except Exception as e:
-                logger.warning("Failed to start device %s in scenario: %s", device_config.id, e)
-                failed_devices.append(device_config.id)
+                    try:
+                        await self.start_device(device_config.id)
+                    except Exception as e:
+                        logger.warning("Failed to start device %s in scenario: %s", device_config.id, e)
+                        failed_devices.append(device_config.id)
 
             if failed_devices and len(failed_devices) == len(config.devices):
                 self._scenario_status[scenario_id] = ScenarioStatus.ERROR

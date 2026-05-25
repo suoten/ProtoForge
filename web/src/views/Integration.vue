@@ -600,11 +600,12 @@ const deviceColumns = computed(() => [
   },
   { title: t('integration.collectInterval'), key: 'collect_interval', width: 80, render: (row) => `${row.collect_interval || 5}s` },
   {
-    title: t('integration.actions'), key: 'actions', width: 400,
+    title: t('integration.actions'), key: 'actions', width: 380,
     render: (row) => h(NSpace, { size: 4 }, () => [
       h(NButton, { size: 'tiny', type: 'primary', onClick: () => pushDevice(row.id) }, () => t('integration.pushRegister')),
-      h(NButton, { size: 'tiny', type: 'primary', onClick: () => startCollect(row.id) }, () => t('integration.startCollect')),
-      h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => t('integration.stopCollect')),
+      row._collecting
+        ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, onClick: () => stopCollect(row.id) }, () => t('integration.stopCollect'))
+        : h(NButton, { size: 'tiny', type: 'primary', secondary: true, onClick: () => startCollect(row.id) }, () => t('integration.startCollect')),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => readEdgelitePoints(row.id) }, () => t('integration.readPoints')),
       h(NButton, { size: 'tiny', type: 'info', secondary: true, onClick: () => openPipeline(row.id) }, () => t('integration.verifyLink')),
       h(NButton, { size: 'tiny', type: 'error', secondary: true, onClick: () => removeFromEdgelite(row.id) }, () => t('integration.remove')),
@@ -859,7 +860,13 @@ async function loadDevices() {
   loadingDevices.value = true
   try {
     const devs = await api.getDevices()
-    allDevices.value = (devs || []).map(d => ({ ...d, _el_status: null }))
+    const prevStatusMap = new Map(allDevices.value.map(d => [d.id, d._el_status]))
+    const prevCollectingMap = new Map(allDevices.value.map(d => [d.id, d._collecting]))
+    allDevices.value = (devs || []).map(d => ({
+      ...d,
+      _el_status: prevStatusMap.get(d.id) ?? null,
+      _collecting: prevCollectingMap.get(d.id) ?? false,
+    }))
   } catch (e) { message.error(t('integration.loadDeviceFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { loadingDevices.value = false }
 }
@@ -924,6 +931,8 @@ async function startCollect(deviceId) {
     onPositiveClick: async () => {
       try {
         await api.startIntegrationDevice(deviceId)
+        const dev = allDevices.value.find(d => d.id === deviceId)
+        if (dev) dev._collecting = true
         message.success(t('integration.collectStarted'))
       } catch (e) {
         message.error(t('integration.startCollectFailed') + ': ' + (e.response?.data?.detail || e.message))
@@ -941,6 +950,8 @@ async function stopCollect(deviceId) {
     onPositiveClick: async () => {
       try {
         await api.stopIntegrationDevice(deviceId)
+        const dev = allDevices.value.find(d => d.id === deviceId)
+        if (dev) dev._collecting = false
         message.success(t('integration.collectStopped'))
       } catch (e) {
         message.error(t('integration.stopCollectFailed') + ': ' + (e.response?.data?.detail || e.message))
@@ -1073,7 +1084,10 @@ async function batchPushAndVerify() {
         for (const dev of elDevices.value) {
           try {
             const statusRes = await api.getEdgeliteDeviceStatus(dev.id)
-            dev._el_status = statusRes.ok ? statusRes.status : 'error'
+            const newStatus = statusRes.ok ? statusRes.status : 'error'
+            dev._el_status = newStatus
+            const target = allDevices.value.find(d => d.id === dev.id)
+            if (target) target._el_status = newStatus
             if (statusRes.ok && statusRes.status === 'online') verified++
           } catch (e) { console.warn('Status check failed for device %s:', dev.id, e.message) }  // FIXED: log instead of silently ignoring
         }

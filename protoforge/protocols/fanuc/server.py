@@ -99,7 +99,7 @@ class FanucDeviceBehavior(StandardDeviceBehavior):
 
 class FanucServer(ProtocolServer):
     protocol_name = "fanuc"
-    protocol_display_name = "FANUC FOCAS"
+    protocol_display_name = "FANUC FOCAS (Sim)"
 
     FOCAS_HEADER_SIZE = 10
 

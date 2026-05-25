@@ -163,12 +163,12 @@ class ModbusTcpServer(ProtocolServer):
             if fc == 0x01:
                 if len(data) < 4:  # FIXED-P1: 前置长度校验，数据不足返回Illegal Data Value(0x03)而非被外层捕获返回0x02
                     return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
                     return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -178,12 +178,12 @@ class ModbusTcpServer(ProtocolServer):
             elif fc == 0x02:
                 if len(data) < 4:  # FIXED-P1: 前置长度校验
                     return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED: 魔法数字→类常量
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
                     return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -191,12 +191,14 @@ class ModbusTcpServer(ProtocolServer):
                         bits[i // 8] |= (1 << (i % 8))
                 return bytes([fc, byte_count]) + bytes(bits)
             elif fc == 0x03:
-                start = struct.unpack(">H", data[0:2])[0] + 1
-                count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
+                if len(data) < 4:  # FIXED-P0: 前置长度校验，数据不足时返回Illegal Data Value(0x03)
                     return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec定义地址从0开始
+                count = struct.unpack(">H", data[2:4])[0]
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: FC0x03应检查_MAX_READ_REGISTERS(2000)而非_MAX_READ_COILS(125)
+                    return bytes([fc | 0x80, 0x03])
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -204,14 +206,14 @@ class ModbusTcpServer(ProtocolServer):
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
                 return bytes([fc, byte_count]) + bytes(regs)
             elif fc == 0x04:
-                if len(data) < 4:  # FIXED-P1: 前置长度校验
+                if len(data) < 4:  # FIXED-P0: 前置长度校验
                     return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: FC0x04应检查_MAX_READ_REGISTERS(2000)而非_MAX_READ_COILS(125)
                     return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -219,23 +221,23 @@ class ModbusTcpServer(ProtocolServer):
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
                 return bytes([fc, byte_count]) + bytes(regs)
             elif fc == 0x05:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} val={val}",
-                                detail={"fc": fc, "start": start-1, "value": val, "unit": slave_id})
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
+                                detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_point(6, start, val)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} val={val}",
-                                detail={"fc": fc, "start": start-1, "value": val, "unit": slave_id})
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
+                                detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
-                if len(data) < 5:  # FIXED-P1: 前置长度校验(需start+count+byte_count=5字节)
+                if len(data) < 5:  # FIXED-P0: 前置长度校验(需start+count+byte_count=5字节)
                     return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = data[4]
                 for i in range(count):
@@ -243,13 +245,13 @@ class ModbusTcpServer(ProtocolServer):
                     bit_idx = i % 8
                     if byte_idx < len(data):
                         store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x10:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_COILS:  # FIXED: 魔法数字→类常量
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
                     return bytes([fc | 0x80, 0x03])
                 byte_count = data[4]
                 for i in range(count):
@@ -257,30 +259,30 @@ class ModbusTcpServer(ProtocolServer):
                     if offset + 2 <= len(data):
                         val = struct.unpack(">H", data[offset:offset + 2])[0]
                         store.set_point(16, start + i, val)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start-1} count={count}",
-                                detail={"fc": fc, "start": start-1, "count": count, "unit": slave_id})
+                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
+                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
                 return bytes([fc]) + data[0:4]
             elif fc == 0x16:
-                if len(data) < 6:  # FIXED-P1: 前置长度校验(需addr+and_mask+or_mask=6字节)
+                if len(data) < 6:  # FIXED-P0: 前置长度校验(需addr+and_mask+or_mask=6字节)
                     return bytes([fc | 0x80, 0x03])
-                addr = struct.unpack(">H", data[0:2])[0] + 1
+                addr = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 and_mask = struct.unpack(">H", data[2:4])[0]
                 or_mask = struct.unpack(">H", data[4:6])[0]
                 current = store.get_point(3, addr)
                 new_val = (current & and_mask) | (or_mask & ~and_mask)
                 new_val &= 0xFFFF
                 store.set_point(6, addr, new_val)
-                self._log_debug("inbound", "modbus_write", f"MaskWrite: addr={addr-1} and={and_mask:#06x} or={or_mask:#06x}",
-                                detail={"fc": fc, "addr": addr-1, "unit": slave_id})
+                self._log_debug("inbound", "modbus_write", f"MaskWrite: addr={addr} and={and_mask:#06x} or={or_mask:#06x}",
+                                detail={"fc": fc, "addr": addr, "unit": slave_id})
                 return bytes([fc]) + data[0:6]
             elif fc == 0x17:
-                if len(data) < 9:  # FIXED-P1: 前置长度校验(需r_start+r_count+w_start+w_count+w_byte_count=9字节)
+                if len(data) < 9:  # FIXED-P0: 前置长度校验(需r_start+r_count+w_start+w_count+w_byte_count=9字节)
                     return bytes([fc | 0x80, 0x03])
-                r_start = struct.unpack(">H", data[0:2])[0] + 1
+                r_start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 r_count = struct.unpack(">H", data[2:4])[0]
-                w_start = struct.unpack(">H", data[4:6])[0] + 1
+                w_start = struct.unpack(">H", data[4:6])[0]  # FIXED-P0: 移除+1偏移
                 w_count = struct.unpack(">H", data[6:8])[0]
-                if r_count > self._MAX_READ_COILS or w_count > 121:  # FIXED: 魔法数字→类常量
+                if r_count > self._MAX_READ_REGISTERS or w_count > 121:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
                     return bytes([fc | 0x80, 0x03])
                 w_byte_count = data[8]
                 for i in range(w_count):
@@ -293,8 +295,8 @@ class ModbusTcpServer(ProtocolServer):
                 for i in range(r_count):
                     val = store.get_point(3, r_start + i)
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
-                self._log_debug("inbound", "modbus_rw", f"ReadWriteMultiple: r={r_start-1}/{r_count} w={w_start-1}/{w_count}",
-                                detail={"fc": fc, "r_start": r_start-1, "w_start": w_start-1, "unit": slave_id})
+                self._log_debug("inbound", "modbus_rw", f"ReadWriteMultiple: r={r_start}/{r_count} w={w_start}/{w_count}",
+                                detail={"fc": fc, "r_start": r_start, "w_start": w_start, "unit": slave_id})
                 return bytes([fc, r_byte_count]) + bytes(regs)
             else:
                 return bytes([fc | 0x80, 0x01])
@@ -464,8 +466,8 @@ class ModbusTcpServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            try:  # FIXED-P1: int(point.address)移入try内，非数字地址时跳过该点而非崩溃
-                address = int(point.address) + 1
+            try:  # FIXED-P0: int(point.address)移入try内，非数字地址时跳过该点而非崩溃；移除+1偏移
+                address = int(point.address)
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
                 elif point.data_type.value in ("float32",):
@@ -526,7 +528,7 @@ class ModbusTcpServer(ProtocolServer):
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
-            address = int(point.address) + 1
+            address = int(point.address)  # FIXED-P0: 移除+1偏移
             dt = point.data_type.value
             if dt in ("bool",):
                 return bool(store.coils.get(address, 0))

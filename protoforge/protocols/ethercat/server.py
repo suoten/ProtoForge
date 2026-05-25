@@ -185,7 +185,7 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
 
 class EtherCATServer(ProtocolServer):
     protocol_name = "ethercat"
-    protocol_display_name = "EtherCAT"
+    protocol_display_name = "EtherCAT (TCP-Sim)"
 
     def __init__(self):
         super().__init__()

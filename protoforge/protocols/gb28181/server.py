@@ -59,7 +59,9 @@ class GB28181Device:
             f"Content-Length: 0\r\n\r\n"
         )
 
-    def make_catalog_response(self, sn: str) -> str:
+    def make_catalog_response(self, sn: str, device_name: str = "ProtoForge-Camera",
+                               manufacturer: str = "ProtoForge", model: str = "PF-CAM-100",
+                               civil_code: str = "340200") -> str:
         xml_body = (
             f'<?xml version="1.0" encoding="GB2312"?>\r\n'
             f'<Response>\r\n'
@@ -70,11 +72,11 @@ class GB28181Device:
             f'<DeviceList Num="1">\r\n'
             f'<Item>\r\n'
             f'<DeviceID>{self.device_id}</DeviceID>\r\n'
-            f'<Name>ProtoForge-Camera</Name>\r\n'
-            f'<Manufacturer>ProtoForge</Manufacturer>\r\n'
-            f'<Model>PF-CAM-100</Model>\r\n'
+            f'<Name>{device_name}</Name>\r\n'
+            f'<Manufacturer>{manufacturer}</Manufacturer>\r\n'
+            f'<Model>{model}</Model>\r\n'
             f'<Owner>Owner</Owner>\r\n'
-            f'<CivilCode>340200</CivilCode>\r\n'
+            f'<CivilCode>{civil_code}</CivilCode>\r\n'
             f'<Block>Block</Block>\r\n'
             f'<Address>Address</Address>\r\n'
             f'<Parental>0</Parental>\r\n'
@@ -129,14 +131,65 @@ class GB28181Device:
         )
         return sdp
 
-    def make_control_response(self, sn: str) -> str:
+    def make_control_response(self, sn: str, parsed_ptz: dict | None = None) -> str:
+        # FIXED-P0: 解析PTZ命令并返回实际执行结果
+        result = "OK"
+        if parsed_ptz:
+            ptz_cmd = parsed_ptz.get("cmd", "")
+            speed = parsed_ptz.get("speed", 0)
+            preset = parsed_ptz.get("preset", 0)
+            if ptz_cmd:
+                result = f"PTZ:{ptz_cmd}(speed={speed})"
+                if preset:
+                    result += f",preset={preset}"
         xml_body = (
             f'<?xml version="1.0" encoding="GB2312"?>\r\n'
             f'<Response>\r\n'
             f'<CmdType>DeviceControl</CmdType>\r\n'
             f'<SN>{sn}</SN>\r\n'
             f'<DeviceID>{self.device_id}</DeviceID>\r\n'
-            f'<Result>OK</Result>\r\n'
+            f'<Result>{result}</Result>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def parse_ptz_command(self, body: str) -> dict | None:
+        """解析PTZ云台控制命令"""
+        try:
+            root = ET.fromstring(body)
+            ptz_cmd = root.findtext("PTZCmd", "")
+            if ptz_cmd and len(ptz_cmd) >= 8:
+                # PTZCmd格式: 0x68+命令码+速度+预置位 (每2位hex)
+                return {
+                    "raw": ptz_cmd,
+                    "cmd": ptz_cmd[2:4] if len(ptz_cmd) >= 4 else "",
+                    "speed": int(ptz_cmd[4:6], 16) if len(ptz_cmd) >= 6 else 0,
+                    "preset": int(ptz_cmd[6:8], 16) if len(ptz_cmd) >= 8 else 0,
+                }
+            preset_cmd = root.findtext("PresetCmd", "")
+            if preset_cmd:
+                return {"cmd": "preset", "raw": preset_cmd, "preset": int(preset_cmd) if preset_cmd.isdigit() else 0}
+            guard_cmd = root.findtext("GuardCmd", "")
+            if guard_cmd:
+                return {"cmd": "guard", "raw": guard_cmd}
+        except (ET.ParseError, ValueError, IndexError):
+            pass
+        return None
+
+    def make_device_info_response(self, sn: str) -> str:
+        """生成DeviceInfo响应"""
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>DeviceInfo</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<DeviceName>ProtoForge-Camera</DeviceName>\r\n'
+            f'<Manufacturer>ProtoForge</Manufacturer>\r\n'
+            f'<Model>PF-CAM-100</Model>\r\n'
+            f'<Firmware>V1.0.0</Firmware>\r\n'
+            f'<Channel>1</Channel>\r\n'
+            f'<Status>ON</Status>\r\n'
             f'</Response>'
         )
         return xml_body
@@ -523,7 +576,7 @@ class GB28181Server(ProtocolServer):
                             detail={"cmd": cmd_type, "sn": sn, "gb_id": device_id})
 
             if cmd_type == "Catalog":
-                response_body = gb_device.make_catalog_response(sn)
+                response_body = gb_device.make_catalog_response(sn)  # 使用默认参数
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_catalog_response",
                                 msg("gb28181", "catalog_response_sent"),
@@ -535,10 +588,18 @@ class GB28181Server(ProtocolServer):
                                 msg("gb28181", "keepalive_response_sent"),  # FIXED: 中文硬编码→i18n常量
                                 device_id=pf_id)
             elif cmd_type == "DeviceControl":
-                response_body = gb_device.make_control_response(sn)
+                parsed_ptz = gb_device.parse_ptz_command(body)
+                response_body = gb_device.make_control_response(sn, parsed_ptz)
                 self._send_response(message, response_body, addr)
                 self._log_debug("out", "sip_control_response",
                                 msg("gb28181", "device_control_response_sent"),  # FIXED: 中文硬编码→i18n常量
+                                device_id=pf_id,
+                                detail={"ptz": parsed_ptz.get("cmd") if parsed_ptz else "N/A"})
+            elif cmd_type == "DeviceInfo":
+                response_body = gb_device.make_device_info_response(sn)
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_deviceinfo_response",
+                                msg("gb28181", "device_info_response_sent"),
                                 device_id=pf_id)
             elif cmd_type == "DeviceConfig":
                 response_body = gb_device.make_config_response(sn)

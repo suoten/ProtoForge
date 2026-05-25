@@ -295,6 +295,24 @@ class HttpSimulatorServer(ProtocolServer):
             return False
         return behavior.on_write(point_name, value)
 
+    def get_all_point_values(self, device_id: str | None = None) -> dict[str, Any]:
+        """获取所有设备的测点值，或指定设备的测点值。
+
+        Returns:
+            如果 device_id 为 None，返回 {"device_id": {"point_name": value, ...}, ...}
+            如果指定了 device_id，返回 {"point_name": value, ...}
+        """
+        if device_id:
+            behavior = self._behaviors.get(device_id)
+            if behavior:
+                return behavior.get_all_values()
+            return {}
+        # 返回所有设备的测点值
+        result = {}
+        for did, behavior in self._behaviors.items():
+            result[did] = behavior.get_all_values()
+        return result
+
     def get_config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",

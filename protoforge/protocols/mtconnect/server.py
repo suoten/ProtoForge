@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 
 class MtConnectDeviceBehavior(StandardDeviceBehavior):
     def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            logger.debug("MTConnect write: %s = %s", point_name, value)
+            return True
+        logger.warning("MTConnect write failed: point %s not found", point_name)
         return False
 
     def get_all_values(self) -> dict[str, Any]:

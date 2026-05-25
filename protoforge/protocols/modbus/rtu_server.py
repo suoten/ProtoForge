@@ -217,15 +217,19 @@ class ModbusRtuServer(ProtocolServer):
 
     async def _handle_native_modbus_rtu(self, reader: asyncio.StreamReader,
                                           writer: asyncio.StreamWriter) -> None:
+        _RTU_CONN_TIMEOUT = 30  # FIXED-P0: TCP桥接模式添加读取超时，防止恶意客户端挂起连接
         try:
             while True:
-                header = await reader.readexactly(7)
+                try:
+                    header = await asyncio.wait_for(reader.readexactly(7), timeout=_RTU_CONN_TIMEOUT)
+                except asyncio.TimeoutError:
+                    break
                 tx_id = struct.unpack(">H", header[0:2])[0]
                 proto_id = struct.unpack(">H", header[2:4])[0]
                 length = struct.unpack(">H", header[4:6])[0]
                 unit_id = header[6]
-                if length > 0:
-                    payload = await reader.readexactly(length - 1)
+                if length > 1:
+                    payload = await asyncio.wait_for(reader.readexactly(length - 1), timeout=_RTU_CONN_TIMEOUT)
                 else:
                     payload = b""
                 fc = payload[0] if payload else 0
@@ -234,7 +238,6 @@ class ModbusRtuServer(ProtocolServer):
                 writer.write(mbap + resp)
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, BrokenPipeError, ConnectionAbortedError) as e:
-            # FIXED-P1: 添加日志记录，与其他协议保持一致，便于排查连接中断
             logger.debug("Modbus RTU connection handler error: %s", e)
         finally:
             writer.close()
@@ -253,7 +256,7 @@ class ModbusRtuServer(ProtocolServer):
             return bytes([fc | 0x80, 0x02])  # Illegal Data Address
         try:
             if fc == 0x01:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
@@ -262,7 +265,7 @@ class ModbusRtuServer(ProtocolServer):
                         bits[i // 8] |= (1 << (i % 8))
                 return bytes([fc, byte_count]) + bytes(bits)
             elif fc == 0x02:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
@@ -271,7 +274,7 @@ class ModbusRtuServer(ProtocolServer):
                         bits[i // 8] |= (1 << (i % 8))
                 return bytes([fc, byte_count]) + bytes(bits)
             elif fc == 0x03:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = count * 2
                 regs = bytearray(byte_count)
@@ -280,7 +283,7 @@ class ModbusRtuServer(ProtocolServer):
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
                 return bytes([fc, byte_count]) + bytes(regs)
             elif fc == 0x04:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 byte_count = count * 2
                 regs = bytearray(byte_count)
@@ -289,12 +292,12 @@ class ModbusRtuServer(ProtocolServer):
                     regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
                 return bytes([fc, byte_count]) + bytes(regs)
             elif fc == 0x05:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_point(6, start, val)
                 return bytes([fc]) + data[0:4]
@@ -302,7 +305,7 @@ class ModbusRtuServer(ProtocolServer):
                 # FIXED-P0: 校验最小长度
                 if len(data) < 5:
                     return bytes([fc | 0x80, 0x02])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 for i in range(count):
                     byte_idx = 5 + i // 8
@@ -314,7 +317,7 @@ class ModbusRtuServer(ProtocolServer):
                 # FIXED-P0: 校验最小长度
                 if len(data) < 5:
                     return bytes([fc | 0x80, 0x02])
-                start = struct.unpack(">H", data[0:2])[0] + 1
+                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
                 for i in range(count):
                     offset = 5 + i * 2
@@ -325,7 +328,7 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x16:
                 if len(data) < 10:
                     return bytes([fc | 0x80, 0x02])
-                ref_addr = struct.unpack(">H", data[0:2])[0] + 1
+                ref_addr = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 and_mask = struct.unpack(">H", data[2:4])[0]
                 or_mask = struct.unpack(">H", data[4:6])[0]
                 current = store.get_point(3, ref_addr)
@@ -336,9 +339,9 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x17:
                 if len(data) < 10:
                     return bytes([fc | 0x80, 0x02])
-                read_start = struct.unpack(">H", data[0:2])[0] + 1
+                read_start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 read_count = struct.unpack(">H", data[2:4])[0]
-                write_start = struct.unpack(">H", data[4:6])[0] + 1
+                write_start = struct.unpack(">H", data[4:6])[0]  # FIXED-P0: 移除+1偏移
                 write_count = struct.unpack(">H", data[6:8])[0]
                 write_byte_count = data[8] if len(data) > 8 else 0
                 for i in range(write_count):
@@ -465,8 +468,8 @@ class ModbusRtuServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            try:  # FIXED-P1: int(point.address)移入try内，非数字地址时跳过该点而非崩溃
-                address = int(point.address) + 1
+            try:  # FIXED-P0: 移除+1偏移，与TCP保持一致
+                address = int(point.address)
                 if point.data_type.value in ("bool",):
                     store.coils[address] = int(bool(value))
                 elif point.data_type.value in ("float32",):
@@ -520,7 +523,7 @@ class ModbusRtuServer(ProtocolServer):
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
-            address = int(point.address) + 1
+            address = int(point.address)  # FIXED-P0: 移除+1偏移，与TCP保持一致
             if point.data_type.value in ("bool",):
                 return bool(store.coils.get(address, 0))
             else:
