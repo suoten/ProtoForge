@@ -364,7 +364,7 @@ const faultIntensityLabel = computed(() => {
 })
 
 function faultCategoryLabel(category) {
-  const map = { mechanical: '机械', thermal: '热', electrical: '电气', process: '工艺' }
+  const map = { mechanical: '机械', thermal: '热', electrical: '电气', process: '工艺', tool: '刀具' }
   return map[category] || category
 }
 

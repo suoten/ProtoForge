@@ -22,8 +22,11 @@ class FanucDeviceBehavior(DeviceBehavior):
             "program": "O0001",
             "speed_override": 100,
             "feed_override": 100,
-            "spindle_speed": 3000,
-            "feed_rate": 500,
+            "spindle_speed": 0.0,
+            "feed_rate": 0.0,
+            "spindle_current": 0.0,
+            "spindle_load": 0.0,
+            "tool_number": 1,
             "absolute_pos": [0.0] * 5,
             "machine_pos": [0.0] * 5,
             "relative_pos": [0.0] * 5,
@@ -31,6 +34,32 @@ class FanucDeviceBehavior(DeviceBehavior):
         }
         for p in points:
             self._values[p["name"]] = p.get("fixed_value", 0)
+
+    def sync_from_point_values(self, point_values: dict[str, Any]) -> None:
+        """将 DeviceInstance._point_values 同步到 _cnc_status，保持协议层数据与生成器一致"""
+        mapping = {
+            "spindle_speed": "spindle_speed",
+            "feed_rate": "feed_rate",
+            "spindle_current": "spindle_current",
+            "spindle_load": "spindle_load",
+            "tool_number": "tool_number",
+            "alarm_status": "alarm",
+            "run_mode": "mode",
+            "execution_status": "execution",
+            "program_name": "program",
+            "x_absolute": ("absolute_pos", 0),
+            "y_absolute": ("absolute_pos", 1),
+            "z_absolute": ("absolute_pos", 2),
+        }
+        for point_name, status_key in mapping.items():
+            if point_name not in point_values:
+                continue
+            val = point_values[point_name]
+            if isinstance(status_key, tuple):
+                key, idx = status_key
+                self._cnc_status[key][idx] = float(val)
+            else:
+                self._cnc_status[status_key] = val
 
     async def generate_value(self, point_config: dict[str, Any]) -> Any:
         name = point_config.get("name", "")
@@ -144,6 +173,12 @@ class FanucServer(ProtocolServer):
             return self._handle_cnc_rdspindlespd(req_id)
         elif func_id == 0x0111:
             return self._handle_cnc_rdfeed(req_id)
+        elif func_id == 0x0112:
+            return self._handle_cnc_rdspload(req_id)
+        elif func_id == 0x0113:
+            return self._handle_cnc_rdspmeter(req_id)
+        elif func_id == 0x0114:
+            return self._handle_cnc_toolnum(req_id)
         elif func_id == 0x0120:
             return self._handle_cnc_alarm(req_id)
         elif func_id == 0x0130:
@@ -247,13 +282,49 @@ class FanucServer(ProtocolServer):
 
     def _handle_cnc_rdfeed(self, req_id: int) -> bytes:
         behavior = next(iter(self._behaviors.values()), None)
-        feed = behavior._cnc_status.get("feed_rate", 500) if behavior else 500
+        feed = behavior._cnc_status.get("feed_rate", 0.0) if behavior else 0.0
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0111)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
         resp += struct.pack("<d", float(feed))
+        return bytes(resp)
+
+    def _handle_cnc_rdspload(self, req_id: int) -> bytes:
+        """cnc_rdspload — 主轴负载率(%)，FANUC FOCAS2 原生接口"""
+        behavior = next(iter(self._behaviors.values()), None)
+        load = behavior._cnc_status.get("spindle_load", 0.0) if behavior else 0.0
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0112)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<d", float(load))
+        return bytes(resp)
+
+    def _handle_cnc_rdspmeter(self, req_id: int) -> bytes:
+        """cnc_rdspmeter — 主轴电流(A)"""
+        behavior = next(iter(self._behaviors.values()), None)
+        current = behavior._cnc_status.get("spindle_current", 0.0) if behavior else 0.0
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0113)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<d", float(current))
+        return bytes(resp)
+
+    def _handle_cnc_toolnum(self, req_id: int) -> bytes:
+        """cnc_toolnum — 当前刀号"""
+        behavior = next(iter(self._behaviors.values()), None)
+        tool = behavior._cnc_status.get("tool_number", 1) if behavior else 1
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0114)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", int(tool))
         return bytes(resp)
 
     def _handle_cnc_alarm(self, req_id: int) -> bytes:
@@ -311,6 +382,8 @@ class FanucServer(ProtocolServer):
         config = self._device_configs.get(device_id)
         if not behavior or not config:
             return []
+        # 将 _point_values 同步到 _cnc_status，保证 FOCAS 协议响应与生成器数据一致
+        behavior.sync_from_point_values(behavior._values)
         now = time.time()
         return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
 

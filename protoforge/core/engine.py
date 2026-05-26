@@ -293,6 +293,14 @@ class SimulationEngine:
         while self._running:
             for instance in self._devices.values():
                 instance.tick()
+                # 将 DeviceInstance._point_values 同步到协议服务器，保证协议层读到最新值
+                server = self._protocol_servers.get(instance.protocol)
+                if server and hasattr(server, '_behaviors'):
+                    behavior = server._behaviors.get(instance.id)
+                    if behavior is not None:
+                        behavior._values.update(instance._point_values)
+                        if hasattr(behavior, 'sync_from_point_values'):
+                            behavior.sync_from_point_values(instance._point_values)
             for scenario in self._scenario_instances.values():
                 scenario.tick()
             await asyncio.sleep(1.0)
