@@ -56,6 +56,7 @@ require_admin = RoleChecker(["admin"])
 require_operator = RoleChecker(["admin", "operator"])
 require_user = RoleChecker(["admin", "operator", "user"])
 require_viewer = RoleChecker(["admin", "operator", "user", "viewer"])
+require_guest = RoleChecker(["admin", "operator", "user", "viewer", "guest"])  # FIXED-P1: 添加guest角色
 
 _PUBLIC_PATHS = {
     "/api/v1/auth/login",

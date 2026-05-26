@@ -176,19 +176,53 @@ class MtConnectServer(ProtocolServer):
             dev_uuid = params.get("device_uuid", self._device_uuid)
             manufacturer = params.get("manufacturer", "ProtoForge")
             data_items = []
+            axes_items = []
+            controller_items = []
+            spindle_items = []
             for point in config.points:
-                data_items.append(
-                    f'      <DataItem id="{escape(point.name)}" name="{escape(point.name)}" '
-                    f'type="{escape(point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type))}" '
-                    f'category="SAMPLE"/>'
+                dt_val = point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type)
+                # FIXED-P1: 根据数据类型自动推断category
+                if dt_val == "bool":
+                    category = "EVENT"
+                elif any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
+                    category = "EVENT"
+                else:
+                    category = "SAMPLE"
+                point_proto = getattr(point, 'protocol_config', None) or {}
+                category = point_proto.get("mtconnect_category", category)  # FIXED-P1: 支持自定义category
+                item_xml = (
+                    f'        <DataItem id="{escape(point.name)}" name="{escape(point.name)}" '
+                    f'type="{escape(dt_val)}" '
+                    f'category="{category}"/>'
                 )
+                name_lower = point.name.lower()
+                if any(kw in name_lower for kw in ("axis", "position", "x_pos", "y_pos", "z_pos", "feedrate")):
+                    axes_items.append(item_xml)
+                elif any(kw in name_lower for kw in ("spindle", "speed", "rpm")):
+                    spindle_items.append(item_xml)
+                elif any(kw in name_lower for kw in ("controller", "execution", "mode", "program", "line", "status")):
+                    controller_items.append(item_xml)
+                else:
+                    data_items.append(item_xml)
+            components_xml = ""
+            if axes_items:
+                components_xml += '    <Components>\n      <Axes name="axes">\n        <DataItems>\n' + "\n".join(axes_items) + '\n        </DataItems>\n      </Axes>\n'
+            if spindle_items:
+                if not components_xml.startswith("    <Components>"):
+                    components_xml += '    <Components>\n'
+                components_xml += '      <Spindle name="spindle">\n        <DataItems>\n' + "\n".join(spindle_items) + '\n        </DataItems>\n      </Spindle>\n'
+            if controller_items:
+                if not components_xml.startswith("    <Components>"):
+                    components_xml += '    <Components>\n'
+                components_xml += '      <Controller name="controller">\n        <DataItems>\n' + "\n".join(controller_items) + '\n        </DataItems>\n      </Controller>\n'
+            if components_xml:
+                components_xml += '    </Components>\n'
             devices_xml.append(
                 f'  <Device id="{escape(dev_id)}" name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <Description manufacturer="{escape(manufacturer)}">Simulated Device</Description>\n'
-                f'    <DataItems>\n'
-                + "\n".join(data_items) + "\n"
-                f'    </DataItems>\n'
-                f'  </Device>'
+                + components_xml
+                + (f'    <DataItems>\n' + "\n".join(data_items) + '\n    </DataItems>\n' if data_items else "")
+                + f'  </Device>'
             )
 
         return (
@@ -214,9 +248,21 @@ class MtConnectServer(ProtocolServer):
                 continue
             params = self._device_params.get(dev_id, {})
             dev_uuid = params.get("device_uuid", self._device_uuid)
-            events = []
+            samples_xml = []
+            events_xml = []
+            conditions_xml = []
             for point in config.points:
                 val = behavior.get_value(point.name)
+                dt_val = point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type)
+                # FIXED-P1: 与probe保持一致的category推断逻辑
+                if dt_val == "bool":
+                    category = "EVENT"
+                elif any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
+                    category = "EVENT"
+                else:
+                    category = "SAMPLE"
+                point_proto = getattr(point, 'protocol_config', None) or {}
+                category = point_proto.get("mtconnect_category", category)
                 value_key = f"{dev_id}.{point.name}"
                 if val != self._last_values.get(value_key):
                     self._sequence += 1
@@ -229,21 +275,25 @@ class MtConnectServer(ProtocolServer):
                         "device_uuid": dev_uuid,
                         "device_name": config.name,
                         "value": val,
+                        "category": category,  # FIXED-P1
                     })
                     if len(self._sample_buffer) > self._sample_buffer_max:
                         self._sample_buffer = self._sample_buffer[-self._sample_buffer_max:]
                         self._first_sequence = self._sample_buffer[0]["sequence"]
-                events.append(
-                    f'      <{escape(point.name)} dataItemId="{escape(point.name)}" '
-                    f'sequence="{self._sequence}" timestamp="{time.strftime("%Y-%m-%dT%H:%M:%SZ")}">'
-                    f'{escape(str(val))}</{escape(point.name)}>'
-                )
+                ts = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                if category == "EVENT":
+                    events_xml.append(f'      <Event dataItemId="{escape(point.name)}" name="{escape(point.name)}" timestamp="{ts}">{escape(str(val))}</Event>')
+                elif category == "CONDITION":
+                    cond_val = "normal" if not val else "fault"
+                    conditions_xml.append(f'      <Condition dataItemId="{escape(point.name)}" name="{escape(point.name)}" timestamp="{ts}"><{cond_val}/></Condition>')
+                else:
+                    samples_xml.append(f'      <Sample dataItemId="{escape(point.name)}" name="{escape(point.name)}" timestamp="{ts}" sequence="{self._sequence}">{escape(str(val))}</Sample>')
             streams_xml.append(
                 f'  <DeviceStream name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <ComponentStream component="Device" name="{escape(config.name)}">\n'
-                f'      <Samples>\n'
-                + "\n".join(events) + "\n"
-                f'      </Samples>\n'
+                + (f'      <Samples>\n' + "\n".join(samples_xml) + "\n      </Samples>\n" if samples_xml else "")
+                + (f'      <Events>\n' + "\n".join(events_xml) + "\n      </Events>\n" if events_xml else "")
+                + (f'      <Condition>\n' + "\n".join(conditions_xml) + "\n      </Condition>\n" if conditions_xml else "")
                 f'    </ComponentStream>\n'
                 f'  </DeviceStream>'
             )

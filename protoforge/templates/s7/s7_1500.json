@@ -17,7 +17,7 @@
         },
         {
             "name": "cycle_time",
-            "address": "DB1.DBW2",
+            "address": "DB1.DBD2",
             "data_type": "float32",
             "unit": "ms",
             "description": "循环时间",
@@ -28,7 +28,7 @@
         },
         {
             "name": "memory_used",
-            "address": "DB1.DBW4",
+            "address": "DB1.DBD6",
             "data_type": "float32",
             "unit": "%",
             "description": "内存使用率",
@@ -39,7 +39,7 @@
         },
         {
             "name": "axis1_pos",
-            "address": "DB2.DBW0",
+            "address": "DB2.DBD0",
             "data_type": "float32",
             "unit": "mm",
             "description": "轴1位置",
@@ -50,7 +50,7 @@
         },
         {
             "name": "axis2_pos",
-            "address": "DB2.DBW4",
+            "address": "DB2.DBD4",
             "data_type": "float32",
             "unit": "mm",
             "description": "轴2位置",
@@ -61,7 +61,7 @@
         },
         {
             "name": "axis1_torque",
-            "address": "DB2.DBW8",
+            "address": "DB2.DBD8",
             "data_type": "float32",
             "unit": "Nm",
             "description": "轴1扭矩",

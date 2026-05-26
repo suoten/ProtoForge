@@ -35,7 +35,7 @@
         },
         {
             "name": "ai_channel_0",
-            "address": "DB1.DBW4",
+            "address": "DB1.DBD4",
             "data_type": "float32",
             "unit": "mA",
             "description": "模拟输入0",
@@ -46,7 +46,7 @@
         },
         {
             "name": "ao_channel_0",
-            "address": "DB1.DBW8",
+            "address": "DB1.DBD8",
             "data_type": "float32",
             "unit": "mA",
             "description": "模拟输出0",

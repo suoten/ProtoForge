@@ -62,6 +62,7 @@ class MqttBroker(ProtocolServer):
         self._auth_required = False
         self._auth_username = ""
         self._auth_password = ""
+        self._clean_session = True  # FIXED-P0: Clean Session标志
 
     @property
     def actual_port(self) -> int:
@@ -85,17 +86,31 @@ class MqttBroker(ProtocolServer):
         self._auth_required = config.get("auth_required", False)
         self._auth_username = config.get("auth_username", "")
         self._auth_password = config.get("auth_password", "")
+        self._clean_session = config.get("clean_session", True)  # FIXED-P0: 读取Clean Session配置
+        self._auth_users: dict[str, str] = {}  # FIXED-P1: 多用户认证字典
+        auth_users_str = config.get("auth_users", "")
+        if auth_users_str:
+            try:
+                import json as _json
+                parsed = _json.loads(auth_users_str)
+                if isinstance(parsed, dict):
+                    self._auth_users = {str(k): str(v) for k, v in parsed.items()}
+            except (json.JSONDecodeError, TypeError, ValueError):
+                logger.warning("MQTT auth_users config parse error, ignoring")
 
         try:
             auth_plugins = {}
-            if self._auth_required and self._auth_username:
+            if self._auth_required and (self._auth_username or self._auth_users):
                 auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
                     "allow_anonymous": False,
                 }
-                auth_plugins["protoforge.mqtt_auth.MqttAuthPlugin"] = {
+                auth_plugin_config = {
                     "username": self._auth_username,
                     "password": self._auth_password,
                 }
+                if self._auth_users:  # FIXED-P1: 传递多用户配置到认证插件
+                    auth_plugin_config["users"] = self._auth_users
+                auth_plugins["protoforge.mqtt_auth.MqttAuthPlugin"] = auth_plugin_config
             else:
                 auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
                     "allow_anonymous": True,
@@ -164,6 +179,8 @@ class MqttBroker(ProtocolServer):
             raise
 
     async def stop(self) -> None:
+        for device_id in list(self._behaviors.keys()):  # FIXED-P0: 停止前发布所有设备的遗嘱消息
+            await self._publish_will(device_id)
         try:
             if self._publish_task:
                 self._publish_task.cancel()
@@ -195,6 +212,7 @@ class MqttBroker(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
+        await self._publish_will(device_id)  # FIXED-P0: 设备移除前发布遗嘱消息
         async with self._behaviors_lock:
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
@@ -261,6 +279,11 @@ class MqttBroker(ProtocolServer):
                     "default": "",
                     "description": desc("mqtt_auth_password", "Authentication password"),
                 },
+                "auth_users": {
+                    "type": "string",
+                    "default": "",
+                    "description": desc("mqtt_auth_users", 'Multi-user auth JSON, e.g. {"user1":"pass1","user2":"pass2"}'),
+                },
                 "tls_enabled": {
                     "type": "boolean",
                     "default": False,
@@ -287,6 +310,32 @@ class MqttBroker(ProtocolServer):
                     "default": False,
                     "description": desc("mqtt_retain", "Enable MQTT retain messages"),
                 },
+                "will_topic": {
+                    "type": "string",
+                    "default": "",
+                    "description": desc("mqtt_will_topic", "Will message topic (supports {device_id} placeholder)"),
+                },
+                "will_message": {
+                    "type": "string",
+                    "default": "",
+                    "description": desc("mqtt_will_message", "Will message payload (supports {device_id} placeholder)"),
+                },
+                "will_qos": {
+                    "type": "integer",
+                    "default": 0,
+                    "enum": [0, 1, 2],
+                    "description": desc("mqtt_will_qos", "Will message QoS level"),
+                },
+                "will_retain": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": desc("mqtt_will_retain", "Will message retain flag"),
+                },
+                "clean_session": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": desc("mqtt_clean_session", "Clean session flag (True=no persistent state, False=persistent session)"),
+                },
             },
         }
 
@@ -305,7 +354,13 @@ class MqttBroker(ProtocolServer):
                 retain = proto_config.get("retain", False)  # FIXED-P0: Retain参数移到外层
                 for point in config.points:
                     value = behavior.get_value(point.name)
-                    topic = f"{topic_prefix}/{device_id}/{point.name}"
+                    # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式
+                    if point.address and '{device_id}' in point.address:
+                        topic = point.address.replace('{device_id}', device_id)
+                    elif point.address:
+                        topic = point.address
+                    else:
+                        topic = f"{topic_prefix}/{device_id}/{point.name}"
                     payload = json_lib.dumps({
                         "device_id": device_id,
                         "point": point.name,
@@ -323,7 +378,7 @@ class MqttBroker(ProtocolServer):
                                 retain=retain,
                             )
                     except Exception as e:
-                        logger.debug("MQTT publish failed for %s: %s", topic, e)
+                        logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
             await asyncio.sleep(interval)
 
     async def _publish_device(self, device_id: str) -> None:
@@ -339,7 +394,13 @@ class MqttBroker(ProtocolServer):
         retain = proto_config.get("retain", False)  # FIXED-P0: 添加Retain支持
         for point in config.points:
             value = behavior.get_value(point.name)
-            topic = f"{topic_prefix}/{device_id}/{point.name}"
+            # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式
+            if point.address and '{device_id}' in point.address:
+                topic = point.address.replace('{device_id}', device_id)
+            elif point.address:
+                topic = point.address
+            else:
+                topic = f"{topic_prefix}/{device_id}/{point.name}"
             payload = json_lib.dumps({
                 "device_id": device_id,
                 "point": point.name,
@@ -356,7 +417,32 @@ class MqttBroker(ProtocolServer):
                         retain=retain,
                     )
             except Exception as e:
-                logger.debug("MQTT publish failed for %s: %s", topic, e)
+                logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
+
+    async def _publish_will(self, device_id: str) -> None:  # FIXED-P0: 发布遗嘱消息，通知订阅者设备离线
+        config = self._device_configs.get(device_id)
+        if not config:
+            return
+        proto_config = config.protocol_config or {}
+        will_topic = proto_config.get("will_topic", "")
+        if not will_topic:
+            return
+        will_message = proto_config.get("will_message", "")
+        will_qos = proto_config.get("will_qos", 0)
+        will_retain = proto_config.get("will_retain", True)
+        will_topic = will_topic.replace("{device_id}", device_id)
+        will_message = will_message.replace("{device_id}", device_id)
+        try:
+            if self._broker and hasattr(self._broker, 'internal_publish'):
+                await self._broker.internal_publish(
+                    topic=will_topic,
+                    data=will_message.encode("utf-8"),
+                    qos=will_qos,
+                    retain=will_retain,
+                )
+                logger.info("MQTT will message published for device %s to %s", device_id, will_topic)
+        except Exception as e:
+            logger.warning("MQTT will message publish failed for %s: %s", device_id, e)
 
     def _get_actual_port(self) -> int | None:
         """检测 MQTT Broker 实际监听的端口（可能与配置不同，如果端口被占用会自动更换）"""

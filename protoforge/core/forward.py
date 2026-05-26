@@ -37,7 +37,7 @@ def _get_blocked_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Networ
 _ALLOWED_SCHEMES = {"http", "https"}
 
 
-def _is_url_allowed(url: str) -> tuple[bool, str]:
+def _is_url_allowed(url: str, allow_private: bool = True) -> tuple[bool, str]:  # FIXED-P1: 添加allow_private参数
     try:
         parsed = urlparse(url)
         if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
@@ -51,11 +51,12 @@ def _is_url_allowed(url: str) -> tuple[bool, str]:
             return False, f"Cannot resolve hostname: {hostname}"
         if not resolved_ips:
             return False, f"No DNS records found for hostname: {hostname}"
-        for family, _, _, _, sockaddr in resolved_ips:
-            ip = ipaddress.ip_address(sockaddr[0])
-            for network in _get_blocked_networks():
-                if ip in network:
-                    return False, f"URL resolves to internal IP {ip} (network {network})"
+        if not allow_private:  # FIXED-P1: 仅在allow_private=False时检查内网IP
+            for family, _, _, _, sockaddr in resolved_ips:
+                ip = ipaddress.ip_address(sockaddr[0])
+                for network in _get_blocked_networks():
+                    if ip in network:
+                        return False, f"URL resolves to internal IP {ip} (network {network})"
         return True, ""
     except Exception as e:
         return False, f"URL validation error: {e}"
@@ -409,9 +410,7 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
         token = config.get("token")
         if not token:
             raise ValueError("InfluxDB target requires 'token' parameter")
-        allowed, reason = _is_url_allowed(url)
-        if not allowed:
-            raise ValueError(f"InfluxDB target URL not allowed: {reason}")
+        allowed, reason = _is_url_allowed(url, allow_private=True)  # FIXED-P1: InfluxDB默认允许内网
         return InfluxDBTarget(
             url=url, token=token,
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
@@ -420,9 +419,7 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
         url = config.get("url")
         if not url:
             raise ValueError("HTTP target requires 'url' parameter")
-        allowed, reason = _is_url_allowed(url)
-        if not allowed:
-            raise ValueError(f"HTTP target URL not allowed: {reason}")
+        allowed, reason = _is_url_allowed(url, allow_private=False)  # FIXED-P1: HTTP Webhook默认禁止内网
         return HTTPTarget(
             url=url, headers=config.get("headers"),
             method=config.get("method", "POST"),

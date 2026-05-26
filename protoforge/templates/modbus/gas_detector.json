@@ -1,7 +1,7 @@
 {
     "id": "modbus_gas_detector",
     "name": "可燃气体探测器",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "工业可燃气体探测器，支持浓度监测和告警",
     "manufacturer": "Generic",
     "model": "GD-500",

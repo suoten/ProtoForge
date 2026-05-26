@@ -28,7 +28,7 @@
         },
         {
             "name": "temperature",
-            "address": "DB1.DBW4",
+            "address": "DB1.DBD4",
             "data_type": "float32",
             "unit": "°C",
             "description": "模块温度",
@@ -39,7 +39,7 @@
         },
         {
             "name": "speed_setpoint",
-            "address": "DB1.DBW8",
+            "address": "DB1.DBD8",
             "data_type": "float32",
             "unit": "RPM",
             "description": "速度设定",
@@ -49,7 +49,7 @@
         },
         {
             "name": "actual_speed",
-            "address": "DB1.DBW12",
+            "address": "DB1.DBD12",
             "data_type": "float32",
             "unit": "RPM",
             "description": "实际速度",
@@ -60,7 +60,7 @@
         },
         {
             "name": "pressure",
-            "address": "DB1.DBW16",
+            "address": "DB1.DBD16",
             "data_type": "float32",
             "unit": "bar",
             "description": "系统压力",

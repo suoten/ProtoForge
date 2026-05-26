@@ -203,6 +203,9 @@ class ProfinetServer(ProtocolServer):
         self._gateway = ""
         self._ar_counter = 0
         self._active_ars: dict[int, ApplicationRelation] = {}
+        self._ar_device_map: dict[int, str] = {}  # FIXED-P0: AR→device_id映射，支持多IO设备
+        self._lldp_task: asyncio.Task | None = None  # FIXED-P1: LLDP邻居发现定时任务
+        self._gsd_content: dict[str, str] = {}  # FIXED-P1: 每设备的GSD文件内容
         self._alarm_seq = 0
 
     async def start(self, config: dict[str, Any]) -> None:
@@ -222,6 +225,7 @@ class ProfinetServer(ProtocolServer):
             self._ar_counter = 0
 
             self._server_task = asyncio.create_task(self._serve())
+            self._lldp_task = asyncio.create_task(self._lldp_loop())  # FIXED-P1: 启动LLDP邻居发现
             self._status = ProtocolStatus.RUNNING
             logger.info("PROFINET IO server starting on %s:%d", self._host, self._port)
             self._log_debug("system", "server_start",
@@ -236,6 +240,12 @@ class ProfinetServer(ProtocolServer):
     async def stop(self) -> None:
         try:
             self._server_running = False
+            if self._lldp_task:  # FIXED-P1: 取消LLDP任务
+                self._lldp_task.cancel()
+                try:
+                    await self._lldp_task
+                except asyncio.CancelledError:
+                    logger.debug("PROFINET LLDP task cancelled")
             if self._server_task:
                 self._server_task.cancel()
                 try:
@@ -249,6 +259,35 @@ class ProfinetServer(ProtocolServer):
             self._active_ars.clear()
             logger.info("PROFINET IO server stopped")
             self._log_debug("system", "server_stop", msg("profinet", "service_stopped"))
+
+    async def _lldp_loop(self) -> None:  # FIXED-P1: LLDP邻居发现定时发送
+        import struct as _struct
+        while self._server_running:
+            try:
+                for device_id, config in dict(self._device_configs).items():
+                    proto_config = config.protocol_config or {}
+                    device_name = proto_config.get("device_name", f"profinet-{device_id}")
+                    chassis_id = device_name.encode("utf-8")
+                    port_id = f"port-001".encode("utf-8")
+                    ttl = _struct.pack("!H", 120)
+                    lldp_frame = bytearray()
+                    lldp_frame += _struct.pack("!HB", 1, 4) + chassis_id[:255]
+                    lldp_frame += _struct.pack("!HB", 3, 2) + port_id[:255]
+                    lldp_frame += _struct.pack("!HB", 2, len(ttl)) + ttl
+                    end_marker = _struct.pack("!HB", 0, 0)
+                    lldp_frame += end_marker
+                    dest_mac = b"\x01\x80\xc2\x00\x0c\x0e"
+                    src_mac = b"\x00\x00\x00\x00\x00\x01"
+                    ethertype = b"\x88\xcc"
+                    frame = dest_mac + src_mac + ethertype + bytes(lldp_frame)
+                    self._log_debug("outbound", "lldp",
+                                    f"LLDP frame sent for {device_name}",
+                                    device_id=device_id)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("PROFINET LLDP loop error: %s", e)
+            await asyncio.sleep(30)
 
     def _recalc_data_sizes(self) -> None:
         self._input_size = 0
@@ -447,6 +486,11 @@ class ProfinetServer(ProtocolServer):
 
         ar.state = ARState.W_DATA
         self._active_ars[ar_id] = ar
+        device_ids = list(self._behaviors.keys())  # FIXED-P0: 轮询分配设备给AR
+        if device_ids:
+            self._ar_device_map[ar_id] = device_ids[(ar_id - 1) % len(device_ids)]
+        elif self._default_device_id:
+            self._ar_device_map[ar_id] = self._default_device_id
 
         resp = bytearray()
         resp += struct.pack(">H", ar_id)
@@ -478,6 +522,7 @@ class ProfinetServer(ProtocolServer):
             return bytes([MSG_TYPE_CM, 0x02, cm_seq]) + struct.pack(">H", 0x8001)
         ar_id = struct.unpack(">H", data[3:5])[0]
         ar = self._active_ars.pop(ar_id, None)
+        self._ar_device_map.pop(ar_id, None)  # FIXED-P0: 清理AR设备映射
 
         if ar:
             ar.state = ARState.W_ABORT
@@ -508,7 +553,9 @@ class ProfinetServer(ProtocolServer):
         return bytes([MSG_TYPE_CM, 0x04, cm_seq]) + resp
 
     def _handle_cm_control(self, data: bytes, cm_seq: int) -> bytes:
-        ar_id = struct.unpack(">H", data[3:5])[0] if len(data) >= 5 else 0
+        if len(data) < 6:  # FIXED-P1: 长度校验，防止struct.unpack越界
+            return self._make_cm_control_response(0, 0, cm_seq)
+        ar_id = struct.unpack(">H", data[3:5])[0]
         control_cmd = data[5] if len(data) > 5 else 0
 
         ar = self._active_ars.get(ar_id)
@@ -529,6 +576,13 @@ class ProfinetServer(ProtocolServer):
         resp += struct.pack(">B", control_cmd)
         resp += struct.pack(">H", 0x0000)
 
+        return bytes([MSG_TYPE_CM, 0x05, cm_seq]) + resp
+
+    def _make_cm_control_response(self, ar_id: int, control_cmd: int, cm_seq: int) -> bytes:  # FIXED-P1
+        resp = bytearray()
+        resp += struct.pack(">H", ar_id)
+        resp += struct.pack(">B", control_cmd)
+        resp += struct.pack(">H", 0x0000)
         return bytes([MSG_TYPE_CM, 0x05, cm_seq]) + resp
 
     def _handle_alarm_tunnel(self, data: bytes) -> bytes | None:
@@ -583,16 +637,15 @@ class ProfinetServer(ProtocolServer):
                     logger.debug("PROFINET frame write failed: %s", exc)
 
     def _handle_rt_tunnel(self, data: bytes) -> bytes | None:
-        behavior = self._behaviors.get(self._default_device_id)
-        config = self._device_configs.get(self._default_device_id)
-        if not behavior or not config:
-            return None
-
         active_ar = None
-        for ar in list(self._active_ars.values()):  # FIXED-P0: 快照迭代，防止与cm_release的pop()并发导致RuntimeError
+        ar_device_id = self._default_device_id  # FIXED-P0: 默认设备
+        for ar in list(self._active_ars.values()):  # FIXED-P0: 快照迭代
             if ar.state == ARState.W_DATA:
                 active_ar = ar
+                ar_device_id = self._ar_device_map.get(ar.ar_id, self._default_device_id)  # FIXED-P0
                 break
+        behavior = self._behaviors.get(ar_device_id)  # FIXED-P0: 使用AR映射的设备
+        config = self._device_configs.get(ar_device_id)
 
         payload = data[1:]
         cycle_counter = 0
@@ -611,7 +664,7 @@ class ProfinetServer(ProtocolServer):
             behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
                             f"PROFINET IO cyclic write {len(output_data)} bytes cycle={cycle_counter}",
-                            device_id=self._default_device_id or "",
+                            device_id=ar_device_id or "",
                             detail={"size": len(output_data), "cycle": cycle_counter})
 
         input_data = behavior.get_input_data(config)
@@ -625,7 +678,7 @@ class ProfinetServer(ProtocolServer):
 
         self._log_debug("outbound", "cyclic_read",
                         f"PROFINET IO cyclic response {len(input_data)} bytes cycle={resp_cycle}",
-                        device_id=self._default_device_id or "",
+                        device_id=ar_device_id or "",
                         detail={"size": len(input_data), "cycle": resp_cycle})
 
         return bytes([MSG_TYPE_RT]) + bytes(resp)
@@ -639,6 +692,9 @@ class ProfinetServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         self._device_name = proto_config.get("device_name", "profinet-device")
+        gsd = proto_config.get("gsd_content", "")  # FIXED-P1: 存储GSD文件内容
+        if gsd:
+            self._gsd_content[device_config.id] = gsd
         try:  # FIXED-P1: int()对用户配置做异常保护，非数字时回退默认值
             self._vendor_id = int(proto_config.get("vendor_id", 0))
         except (ValueError, TypeError):
@@ -709,6 +765,7 @@ class ProfinetServer(ProtocolServer):
                 "ip_address": {"type": "string", "default": "192.168.1.1", "description": desc("dcp_ip_address")},
                 "subnet_mask": {"type": "string", "default": "255.255.255.0", "description": desc("subnet_mask")},
                 "gateway": {"type": "string", "default": "192.168.1.254", "description": desc("default_gateway")},
+                "gsd_content": {"type": "string", "default": "", "description": desc("gsd_content", "GSD XML content for device description")},  # FIXED-P1
             },
             "description": desc("tcp_tunnel_mode_desc"),
         }

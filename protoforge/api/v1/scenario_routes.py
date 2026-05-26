@@ -27,7 +27,7 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
     db = _get_database()
 
     try:
-        result = engine.create_scenario(config)
+        result = await engine.create_scenario(config)  # FIXED-P1: create_scenario是async，需await
         db_ok = True
         db_err_msg = ""
         if db is not None:  # FIXED: 添加db空值检查，避免AttributeError
@@ -105,7 +105,7 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
             devices=update.devices if update.devices is not None else existing.devices,
             rules=update.rules if update.rules is not None else existing.rules,
         )
-        result = engine.update_scenario(scenario_id, merged)
+        result = await engine.update_scenario(scenario_id, merged)  # FIXED-P1: update_scenario是async，需await
         db_ok = True
         db_err_msg = ""
         if db:
@@ -129,7 +129,7 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
     db = _get_database()
 
     try:
-        engine.remove_scenario(scenario_id)
+        await engine.remove_scenario(scenario_id)  # FIXED-P1: remove_scenario是async，需await
         db_ok = True
         db_err_msg = ""
         if db:
@@ -181,7 +181,7 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
     db = _get_database()
 
     try:
-        result = engine.create_scenario(config)
+        result = await engine.create_scenario(config)  # FIXED-P1: create_scenario是async，需await
         db_ok = True
         db_err_msg = ""
         if db:

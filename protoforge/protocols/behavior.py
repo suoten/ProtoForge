@@ -47,6 +47,8 @@ class DynamicValueGenerator:
             return self._generate_square()
         elif gt == GeneratorType.INCREMENT:
             return self._generate_increment()
+        elif gt == GeneratorType.RANDOM_WALK:
+            return self._generate_random_walk()  # FIXED-P1: 添加RANDOM_WALK支持
         elif gt == GeneratorType.SCRIPT:
             return self._generate_script()
         return self._generate_fixed()
@@ -132,6 +134,18 @@ class DynamicValueGenerator:
             value = self._min + (value - self._min) % (self._max - self._min)
         if self._noise > 0:
             value += random.gauss(0, self._noise)
+        self._last_value = value  # FIXED-P1: 更新_last_value供SCRIPT引用
+        return self._clamp(value)
+
+    def _generate_random_walk(self) -> Any:  # FIXED-P1: 实现RANDOM_WALK生成器
+        step_size = self._config.get("step_size", 1.0)
+        delta = random.gauss(0, step_size)
+        value = self._last_value + delta
+        if self._max > self._min:
+            value = max(self._min, min(self._max, value))
+        if self._noise > 0:
+            value += random.gauss(0, self._noise)
+        self._last_value = value
         return self._clamp(value)
 
     def _generate_script(self) -> Any:

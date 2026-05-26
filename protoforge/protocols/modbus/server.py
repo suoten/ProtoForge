@@ -36,8 +36,8 @@ class ModbusTcpServer(ProtocolServer):
     protocol_name = "modbus_tcp"
     protocol_display_name = "Modbus TCP"
 
-    _MAX_READ_REGISTERS = 2000  # FIXED: 魔法数字→类常量
-    _MAX_READ_COILS = 125  # FIXED: 魔法数字→类常量
+    _MAX_READ_COILS = 2000  # FIXED-P0: Modbus规范FC01/02最多读2000个位(原值125与_MAX_READ_REGISTERS互反)
+    _MAX_READ_REGISTERS = 125  # FIXED-P0: Modbus规范FC03/04最多读125个寄存器(原值2000与_MAX_READ_COILS互反)
 
     def __init__(self):
         super().__init__()
@@ -52,6 +52,7 @@ class ModbusTcpServer(ProtocolServer):
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
         self._use_simdata = SIMDATA_AVAILABLE
+        self._server_running = False  # FIXED-P0: _handle_native_modbus引用此属性但未初始化
 
     @property
     def actual_port(self) -> int:
@@ -165,7 +166,7 @@ class ModbusTcpServer(ProtocolServer):
                     return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
+                if count > self._MAX_READ_COILS:  # FIXED-P0: FC01读线圈应检查_MAX_READ_COILS(2000)
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
                                 detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
@@ -180,7 +181,7 @@ class ModbusTcpServer(ProtocolServer):
                     return bytes([fc | 0x80, 0x03])
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
+                if count > self._MAX_READ_COILS:  # FIXED-P0: FC02读离散输入应检查_MAX_READ_COILS(2000)
                     return bytes([fc | 0x80, 0x03])
                 self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
                                 detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
@@ -313,6 +314,7 @@ class ModbusTcpServer(ProtocolServer):
             raise RuntimeError("pymodbus is not installed. Install with: pip install pymodbus")
 
         try:
+            self._server_running = True  # FIXED-P0: native模式需要此标志
             if self._use_simdata:
                 devices = self._build_sim_devices()
                 self._server_task = asyncio.create_task(
@@ -362,6 +364,7 @@ class ModbusTcpServer(ProtocolServer):
             raise
 
     async def stop(self) -> None:
+        self._server_running = False  # FIXED-P0: 停止native模式循环
         try:
             if self._server_task:
                 self._server_task.cancel()

@@ -36,7 +36,7 @@
         },
         {
             "name": "analog_input",
-            "address": "DB1.DBW6",
+            "address": "DB1.DBD6",
             "data_type": "float32",
             "unit": "V",
             "description": "模拟量输入",

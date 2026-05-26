@@ -8,7 +8,7 @@ from protoforge.core.device import DeviceInstance
 from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent, ProtocolStatusEvent
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
-from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
+from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, GeneratorType, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioDetail, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
@@ -515,7 +515,8 @@ class SimulationEngine:
                             try:
                                 await instance.write_point(point_name, old_value)
                             except Exception as rollback_err:
-                                logger.error("Rollback failed for %s/%s: %s", device_id, point_name, rollback_err)
+                                # FIXED-P1: 回滚失败时记录不一致状态，便于排查
+                                logger.warning("Rollback failed for %s/%s: %s (inconsistent state: memory=%s, protocol=old)", device_id, point_name, rollback_err, value)
                         logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
                         return False
                 except Exception as e:
@@ -523,7 +524,8 @@ class SimulationEngine:
                         try:
                             await instance.write_point(point_name, old_value)
                         except Exception as rollback_err:
-                            logger.error("Rollback failed for %s/%s: %s", device_id, point_name, rollback_err)
+                            # FIXED-P1: 回滚失败时记录不一致状态，便于排查
+                            logger.warning("Rollback failed for %s/%s: %s (inconsistent state: memory=%s, protocol=old)", device_id, point_name, rollback_err, value)
                     logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
                     return False
             else:
@@ -743,6 +745,16 @@ class SimulationEngine:
             for instance in devices_snapshot:
                 try:
                     await instance.tick()
+                    # FIXED-P0: tick后将动态值同步到协议服务器，否则上位机读到的是创建时的静态值
+                    server = self._protocol_servers.get(instance.protocol)
+                    if server and server.status == ProtocolStatus.RUNNING:
+                        for pv in instance.read_all_points():
+                            point_cfg = instance._point_configs.get(pv.name)
+                            if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
+                                try:
+                                    await server.write_point(instance.id, pv.name, pv.value)
+                                except Exception:
+                                    pass  # 同步失败不阻断tick循环
                 except Exception as e:
                     logger.warning("Tick error for device %s: %s", instance.id, e)
             for scenario in list(self._scenario_instances.values()):

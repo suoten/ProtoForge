@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import struct
 import time
 from typing import Any
@@ -24,6 +25,14 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                 self._point_addresses[name] = (area, offset)
                 self._sync_value_to_area(name, self._values.get(name, 0))
 
+    # FIXED-P0: FINS标准符号地址到区域代码映射
+    _FINS_AREA_MAP = {
+        'CIO': 0xB0, 'WR': 0xB1, 'W': 0xB1, 'HR': 0xB2, 'H': 0xB2,
+        'AR': 0xB3, 'A': 0xB3, 'DM': 0x82, 'D': 0x82,
+        'EM': 0x90, 'E': 0x90, 'TIM': 0x09, 'T': 0x09,
+        'CNT': 0x08, 'C': 0x08,
+    }
+
     @staticmethod
     def _parse_fins_address(address: str) -> tuple[int, int]:
         try:
@@ -32,6 +41,15 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                 area = int(parts[0])
                 offset = int(parts[1]) if len(parts) > 1 else 0
                 return (area, offset)
+            # FIXED-P0: 支持FINS标准符号地址格式(CIO0.00/DM0/D100等)
+            m = re.match(r'^([A-Za-z]+)(\d+)(?:\.(\d+))?$', address)
+            if m:
+                prefix = m.group(1).upper()
+                word_offset = int(m.group(2))
+                bit_offset = int(m.group(3)) if m.group(3) else 0
+                area = FinsDeviceBehavior._FINS_AREA_MAP.get(prefix, 0x82)
+                byte_offset = word_offset * 2 + (bit_offset // 8 if bit_offset else 0)
+                return (area, byte_offset)
             return (0x82, int(address))
         except (ValueError, IndexError):
             return (0x82, 0)
@@ -73,6 +91,17 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         self._sync_value_to_area(point_name, value)
+
+    def get_value(self, point_name: str) -> Any:  # FIXED-P0: 动态值生成后同步到内存区
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                self._sync_value_to_area(point_name, value)
+                return value
+        return self._values.get(point_name, 0)
 
     def read_area(self, area: int, offset: int, size: int) -> bytearray:
         if area not in self._memory_areas or len(self._memory_areas[area]) < offset + size:
@@ -226,11 +255,13 @@ class FinsServer(ProtocolServer):
         mrc = fins_frame[10]
         src = fins_frame[11]
 
-        if mrc == 0x01:
+        if mrc == 0x01 and src == 0x01:  # FIXED-P1: 同时检查MRC和SRC，0x0101=内存区读取
             return self._handle_memory_read(data, fins_frame)
-        elif mrc == 0x02:
+        elif mrc == 0x01 and src == 0x02:  # FIXED-P1: 0x0102=内存区写入
             return self._handle_memory_write(data, fins_frame)
-        elif mrc == 0x05:
+        elif mrc == 0x02 and src == 0x01:  # 0x0201=内存区写入(旧格式)
+            return self._handle_memory_write(data, fins_frame)
+        elif mrc == 0x05 and src == 0x01:  # 0x0501=控制器读取
             return self._handle_controller_read(data, fins_frame)
 
         return self._make_fins_error(0x0204)
@@ -358,7 +389,8 @@ class FinsServer(ProtocolServer):
             self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
             self._device_params[device_config.id] = {  # FIXED-P1: 移入_behaviors_lock内保护
                 "source_node": proto_config.get("source_node", 0),
-                "dest_node": proto_config.get("dest_node", 1),
+                "dest_node": proto_config.get("dest_node") or proto_config.get("fins_node", 1),  # FIXED-P0: 兼容fins_node参数名
+                "dest_unit": proto_config.get("dest_unit") or proto_config.get("fins_unit", 0),  # FIXED-P0: 兼容fins_unit参数名
             }
         await self._update_default_device_async(device_config.id)
 

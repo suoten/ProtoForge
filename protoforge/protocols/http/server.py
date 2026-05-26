@@ -30,6 +30,7 @@ class HttpSimulatorServer(ProtocolServer):
         self._behaviors: dict[str, HttpDeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._device_prefixes: dict[str, str] = {}
+        self._response_templates: dict[str, str] = {}  # FIXED-P1: 每设备的自定义响应模板
         self._host = "0.0.0.0"
         self._port = 8080
         self._server_task: asyncio.Task | None = None
@@ -103,6 +104,14 @@ class HttpSimulatorServer(ProtocolServer):
                     break
                 method = parts[0].upper()
                 path = parts[1]
+                # FIXED-P1: 分离path和query string，提取查询参数
+                query_params: dict[str, str] = {}
+                if "?" in path:
+                    path, query_string = path.split("?", 1)
+                    for pair in query_string.split("&"):
+                        if "=" in pair:
+                            k, v = pair.split("=", 1)
+                            query_params[k] = v
 
                 headers = {}
                 content_length = 0
@@ -126,7 +135,7 @@ class HttpSimulatorServer(ProtocolServer):
                 if content_length > 0:
                     body = await reader.readexactly(content_length)
 
-                response = self._route(method, path, body)
+                response = self._route(method, path, body, query_params)  # FIXED-P1: 传递查询参数
                 writer.write(response)
                 await writer.drain()
 
@@ -141,7 +150,7 @@ class HttpSimulatorServer(ProtocolServer):
             except Exception as e:
                 logger.debug("HTTP writer close error: %s", e)
 
-    def _route(self, method: str, path: str, body: bytes) -> bytes:
+    def _route(self, method: str, path: str, body: bytes, query_params: dict[str, str] | None = None) -> bytes:  # FIXED-P1: 接受查询参数
         if method == "OPTIONS":
             return self._cors_preflight_response()
         # FIXED-P1: 使用快照迭代，避免与 create_device/remove_device 并发修改时 RuntimeError
@@ -151,7 +160,7 @@ class HttpSimulatorServer(ProtocolServer):
                 behavior = self._behaviors.get(device_id)
                 config = self._device_configs.get(device_id)
                 if behavior and config:
-                    return self._handle_device(method, rel_path, body, device_id, behavior, config)
+                    return self._handle_device(method, rel_path, body, device_id, behavior, config, query_params)  # FIXED-P1
 
         if path == "/" or path == "/health":
             return self._json_response(200, {"status": "ok", "protocol": "http", "devices": len(self._behaviors)})
@@ -167,7 +176,7 @@ class HttpSimulatorServer(ProtocolServer):
 
     def _handle_device(self, method: str, path: str, body: bytes,
                         device_id: str, behavior: HttpDeviceBehavior,
-                        config: DeviceConfig) -> bytes:
+                        config: DeviceConfig, query_params: dict[str, str] | None = None) -> bytes:  # FIXED-P1: 接受查询参数
         if path == "/" or path == "/points":
             if method == "GET":
                 values = behavior.get_all_values()
@@ -196,8 +205,24 @@ class HttpSimulatorServer(ProtocolServer):
         for p in config.points:
             if p.name == point_name:
                 if method == "GET":
+                    value = behavior.get_value(p.name)
+                    # FIXED-P1: 支持?format=simple查询参数，直接返回值
+                    if query_params and query_params.get("format") == "simple":
+                        return self._raw_response(200, str(value), "text/plain")
+                    tpl = self._response_templates.get(device_id)  # FIXED-P1: 支持自定义响应模板
+                    if tpl:
+                        try:
+                            rendered = tpl.format_map({
+                                "name": p.name, "value": value,
+                                "unit": p.unit, "data_type": p.data_type.value,
+                                "access": p.access, "timestamp": time.time(),
+                                "device_id": device_id,
+                            })
+                            return self._raw_response(200, rendered, "application/json")
+                        except (KeyError, ValueError, IndexError) as e:
+                            logger.warning("HTTP response_template render error for %s.%s: %s", device_id, p.name, e)
                     return self._json_response(200, {
-                        "name": p.name, "value": behavior.get_value(p.name),
+                        "name": p.name, "value": value,
                         "unit": p.unit, "data_type": p.data_type.value,
                         "access": p.access, "timestamp": time.time(),
                     })
@@ -250,14 +275,31 @@ class HttpSimulatorServer(ProtocolServer):
         )
         return header.encode("utf-8") + body_bytes
 
+    def _raw_response(self, status: int, body: str, content_type: str = "application/json") -> bytes:  # FIXED-P1: 支持自定义响应模板的原始响应
+        status_text = {200: "OK", 400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status, "OK")
+        body_bytes = body.encode("utf-8")
+        origin = self._cors_origin
+        header = (
+            f"HTTP/1.1 {status} {status_text}\r\n"
+            f"Content-Type: {content_type}; charset=utf-8\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n"
+            f"Connection: keep-alive\r\n"
+            f"Access-Control-Allow-Origin: {origin}\r\n"
+            f"\r\n"
+        )
+        return header.encode("utf-8") + body_bytes
+
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = HttpDeviceBehavior(device_config.points)
         proto_config = device_config.protocol_config or {}
         api_prefix = proto_config.get("api_prefix", f"/api/{device_config.id}")
+        response_template = proto_config.get("response_template", "")  # FIXED-P1: 读取自定义响应模板
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
             self._device_prefixes[device_config.id] = api_prefix  # FIXED-P1: 移入_behaviors_lock内保护
+            if response_template:  # FIXED-P1: 存储自定义响应模板
+                self._response_templates[device_config.id] = response_template
         await self._update_default_device_async(device_config.id)
 
         logger.info("HTTP device created: %s (api_prefix=%s)", device_config.id, api_prefix)
@@ -271,6 +313,7 @@ class HttpSimulatorServer(ProtocolServer):
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
             self._device_prefixes.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
+            self._response_templates.pop(device_id, None)  # FIXED-P1: 清理响应模板
         await self._clear_default_device_async(device_id)
         logger.info("HTTP device removed: %s", device_id)
         self._log_debug("system", "device_remove",
@@ -321,5 +364,6 @@ class HttpSimulatorServer(ProtocolServer):
                 "port": {"type": "integer", "default": 8080, "description": desc("listen_port")},
                 "api_prefix": {"type": "string", "default": "/api", "description": desc("http_api_prefix")},
                 "cors_origin": {"type": "string", "default": "*", "description": "CORS Access-Control-Allow-Origin (use * for dev only)"},  # FIXED: P4 - W23
+                "response_template": {"type": "string", "default": "", "description": desc("http_response_template", "Custom response template (supports {name},{value},{unit},{timestamp},{device_id})")},  # FIXED-P1
             },
         }

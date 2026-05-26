@@ -8,7 +8,7 @@
     "points": [
         {
             "name": "speed_actual",
-            "address": "DB1.DBW0",
+            "address": "DB1.DBD0",
             "data_type": "float32",
             "unit": "RPM",
             "description": "实际转速",
@@ -19,7 +19,7 @@
         },
         {
             "name": "torque_actual",
-            "address": "DB1.DBW4",
+            "address": "DB1.DBD4",
             "data_type": "float32",
             "unit": "Nm",
             "description": "实际扭矩",
@@ -30,7 +30,7 @@
         },
         {
             "name": "position_actual",
-            "address": "DB1.DBW8",
+            "address": "DB1.DBD8",
             "data_type": "float32",
             "unit": "°",
             "description": "实际位置",
@@ -41,7 +41,7 @@
         },
         {
             "name": "current",
-            "address": "DB1.DBW12",
+            "address": "DB1.DBD12",
             "data_type": "float32",
             "unit": "A",
             "description": "电机电流",
@@ -52,7 +52,7 @@
         },
         {
             "name": "temperature",
-            "address": "DB1.DBW16",
+            "address": "DB1.DBD16",
             "data_type": "float32",
             "unit": "°C",
             "description": "电机温度",

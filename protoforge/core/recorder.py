@@ -215,8 +215,11 @@ class Recorder:
                     "Recording encryption requires the 'cryptography' library. "
                     "Install with: pip install cryptography"
                 )
-            self._encryption_key = key.encode("utf-8")
-            logger.info("Recording encryption enabled")
+            # FIXED-P1: 对密钥进行SHA256哈希后再存储，防止明文泄露
+            import hashlib as _hashlib
+            hashed = _hashlib.sha256(key.encode("utf-8")).hexdigest()
+            self._encryption_key = hashed.encode("utf-8")
+            logger.info("Recording encryption enabled (key hashed)")
         else:
             self._encryption_key = None
 

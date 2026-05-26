@@ -74,7 +74,10 @@
         <n-form-item :label="t('scenarioEditor.targetPoint')">
           <n-input v-model:value="newRule.targetPoint" :placeholder="t('scenarioEditor.targetPointPlaceholder')" />
         </n-form-item>
-        <n-form-item :label="t('scenarioEditor.targetValue')">
+        <n-form-item :label="t('scenarioEditor.actionType')">  <!-- FIXED-P1: 动作类型选择器 -->
+          <n-select v-model:value="newRule.actionType" :options="actionTypeOptions" :placeholder="t('common.selectPlaceholder')" style="width: 160px" />
+        </n-form-item>
+        <n-form-item :label="t('scenarioEditor.targetValue')" v-if="newRule.actionType === 'set'">
           <n-input v-model:value="newRule.targetValue" :placeholder="t('scenarioEditor.targetValuePlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('scenarioEditor.cooldown')">
@@ -181,7 +184,7 @@ const editingPoints = ref([])
 
 const addingNode = ref(false)  // FIXED: loading state to prevent double-click on confirmAddNode
 const newNode = ref({ deviceId: '', deviceName: '', protocol: 'modbus_tcp', templateId: null })
-const newRule = ref({ name: '', ruleType: 'threshold', sourcePoint: 'value', operator: '>', threshold: 0, targetPoint: 'alarm', targetValue: 'true', cooldown: 0 })
+const newRule = ref({ name: '', ruleType: 'threshold', sourcePoint: 'value', operator: '>', threshold: 0, targetPoint: 'alarm', targetValue: 'true', actionType: 'set', cooldown: 0 })  // FIXED-P1: 添加actionType
 const pendingConnection = ref(null)
 
 const scenarioOptions = computed(() => scenarios.value.map(s => ({ label: s.name, value: s.id })))
@@ -205,6 +208,13 @@ const ruleTypeOptions = computed(() => [
   { label: t('scenarioEditor.valueChangeTrigger'), value: 'value_change' },
   { label: t('scenarioEditor.timerTrigger'), value: 'timer' },
   { label: t('scenarioEditor.scriptTrigger'), value: 'script' },
+])
+
+const actionTypeOptions = computed(() => [  // FIXED-P1: 动作类型选项
+  { label: 'Set', value: 'set' },
+  { label: 'Toggle', value: 'toggle' },
+  { label: 'Increment', value: 'increment' },
+  { label: 'Decrement', value: 'decrement' },
 ])
 
 const pointEditColumns = computed(() => [
@@ -403,6 +413,7 @@ async function saveScenarioLayout() {
         operator: e.data?.rule?.operator || '>',
         value: e.data?.rule?.threshold || 0,
         cooldown: e.data?.rule?.cooldown || 0,
+        action: e.data?.rule?.actionType || 'set',  // FIXED-P1: 传递动作类型到后端
       },
       enabled: true,
     })).filter(r => r.source_device_id && r.target_device_id)

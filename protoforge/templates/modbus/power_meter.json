@@ -1,7 +1,7 @@
 {
     "id": "modbus_power_meter",
     "name": "智能电力仪表",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "三相智能电力仪表，支持电压/电流/功率/电能等参数监测",
     "manufacturer": "Generic",
     "model": "PM-3100",

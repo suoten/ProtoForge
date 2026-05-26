@@ -27,6 +27,8 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._marker_data: bytearray = bytearray(256)
         self._input_data: bytearray = bytearray(256)
         self._output_data: bytearray = bytearray(256)
+        self._timer_data: bytearray = bytearray(512)  # FIXED-P1: Timer区域内存
+        self._counter_data: bytearray = bytearray(512)  # FIXED-P1: Counter区域内存
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
@@ -135,6 +137,16 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         elif area == self.S7_AREA_OUTPUTS:
             end = min(offset + size, len(self._output_data))
             return bytes(self._output_data[offset:end])
+        elif area == self.S7_AREA_TIMERS:  # FIXED-P1: Timer区域读取
+            buf = self._timer_data
+            if offset + size > len(buf):
+                buf.extend(bytearray(offset + size - len(buf)))
+            return bytes(buf[offset:offset + size])
+        elif area == self.S7_AREA_COUNTERS:  # FIXED-P1: Counter区域读取
+            buf = self._counter_data
+            if offset + size > len(buf):
+                buf.extend(bytearray(offset + size - len(buf)))
+            return bytes(buf[offset:offset + size])
         return b"\x00" * size
 
     def write_area(self, area: int, db_number: int, offset: int, data: bytes) -> None:
@@ -155,6 +167,16 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             if end > len(self._output_data):
                 self._output_data.extend(bytearray(end - len(self._output_data)))
             self._output_data[offset:offset + len(data)] = data
+        elif area == self.S7_AREA_TIMERS:  # FIXED-P1: Timer区域写入
+            end = offset + len(data)
+            if end > len(self._timer_data):
+                self._timer_data.extend(bytearray(end - len(self._timer_data)))
+            self._timer_data[offset:offset + len(data)] = data
+        elif area == self.S7_AREA_COUNTERS:  # FIXED-P1: Counter区域写入
+            end = offset + len(data)
+            if end > len(self._counter_data):
+                self._counter_data.extend(bytearray(end - len(self._counter_data)))
+            self._counter_data[offset:offset + len(data)] = data
 
 
 class S7Server(ProtocolServer):
@@ -291,9 +313,9 @@ class S7Server(ProtocolServer):
         if len(data) < 10:
             return None, None
 
-        pdu_type = data[4]
-        if pdu_type == 0xF0:
-            cotp_len = data[5]
+        pdu_type = data[5]  # FIXED-P0: data[4]是COTP LI字段，data[5]才是PDU Type
+        if pdu_type == 0xE0:  # FIXED-P0: COTP CR(Connection Request)类型码为0xE0，非0xF0(DT)
+            cotp_len = data[4]  # FIXED-P0: COTP LI(长度指示)在data[4]，非data[5]
             if len(data) < 7 + cotp_len:
                 return None, None
             resolved_id = self._resolve_device_from_cotp(data)
@@ -319,6 +341,10 @@ class S7Server(ProtocolServer):
             return self._make_s7_write_response(data, device_id), None
         elif msg_type == 0x04:
             return self._make_s7_szl_response(data, device_id), None
+        elif msg_type == 0x0C:  # FIXED-P1: Start PLC
+            return self._make_s7_plc_control_response(data, device_id, start=True), None
+        elif msg_type == 0x0D:  # FIXED-P1: Stop PLC
+            return self._make_s7_plc_control_response(data, device_id, start=False), None
 
         return None, None
 
@@ -356,12 +382,14 @@ class S7Server(ProtocolServer):
         tpkt_len = 4 + 1 + cotp_len + len(tsap_payload)
         # 重新计算：TPKT(4) + COTP header(1+2+2) + payload
         # COTP CC header: LI(1) + 0xD0(1) + dst-ref(2) + src-ref(2) + class(1) = 7
+        cotp_header_len = 1 + 1 + 2 + 2 + 1  # LI + PDU Type + dst-ref + src-ref + class = 7
+        cotp_len = cotp_header_len - 1 + len(tsap_payload)  # LI值 = 从PDU Type到COTP末尾的长度
         cotp_header = bytes([
-            0x19,   # LI = 25 (length from here to end: 7+2+2+3+11 = 25)
-            0x0D,   # COTP CR Connection Confirm type
+            cotp_len & 0xFF,  # FIXED-P0: LI动态计算，COTP CC header(6) + tsap_payload
+            0xD0,   # FIXED-P0: COTP CC(Connection Confirm)类型码为0xD0，非0x0D
             0x00, 0x01,  # Destination reference (echoed from request)
             0x00, 0x01,  # Source reference
-            0x00,        # Class 0 (no class byte for type 0x0D)
+            0x00,        # Class 0
         ])
         payload = cotp_header + tsap_payload
         tpkt_len = 4 + len(payload)
@@ -466,9 +494,9 @@ class S7Server(ProtocolServer):
             length = struct.unpack(">H", item_spec[2:4])[0]
             area = item_spec[6]
             db_number = struct.unpack(">H", item_spec[7:9])[0]
-            byte_addr = struct.unpack(">H", item_spec[9:11])[0]
-            bit_addr = item_spec[11]
-            offset = (byte_addr << 3) | (bit_addr & 0x07)
+            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]  # FIXED-P0: 3字节地址组合为24位
+            offset = full_addr >> 3  # FIXED-P0: 右移3位取字节偏移
+            bit_number = full_addr & 0x07  # FIXED-P0: 低3位为位号
 
             if transport_size_code == 0x09:
                 read_size = (length + 7) // 8
@@ -564,9 +592,9 @@ class S7Server(ProtocolServer):
 
             area = item_spec[6]
             db_number = struct.unpack(">H", item_spec[7:9])[0]
-            byte_addr = struct.unpack(">H", item_spec[9:11])[0]
-            bit_addr = item_spec[11]
-            offset = (byte_addr << 3) | (bit_addr & 0x07)
+            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]  # FIXED-P0: 3字节地址组合为24位
+            offset = full_addr >> 3  # FIXED-P0: 右移3位取字节偏移
+            bit_number = full_addr & 0x07  # FIXED-P0: 低3位为位号
 
             write_data = b"\x00\x00\x00\x00"
             data_section_start = param_start + 3 + item_count * 12
@@ -666,6 +694,8 @@ class S7Server(ProtocolServer):
             szl_data = self._build_szl_component_identification(szl_index)
         elif szl_id == 0x001C:
             szl_data = self._build_szl_cpu_features()
+        elif szl_id == 0x0032:  # FIXED-P1: PLC Status查询
+            szl_data = self._build_szl_plc_status(device_id)
         else:
             szl_data = self._build_szl_module_identification(0x0000)
 
@@ -837,3 +867,27 @@ class S7Server(ProtocolServer):
                 },
             },
         }
+
+    def _build_szl_plc_status(self, device_id: str | None = None) -> bytes:  # FIXED-P1: SZL 0x0032 PLC状态
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        run_status = 0x08  # 默认RUN状态
+        if behavior:
+            val = behavior._values.get("run_status")
+            if val is not None:
+                run_status = 0x08 if val else 0x04  # 0x08=RUN, 0x04=STOP
+        return struct.pack(">HBH", 0x0004, 0x01, run_status)
+
+    def _make_s7_plc_control_response(self, data: bytes, device_id: str | None = None, start: bool = True) -> bytes:  # FIXED-P1: Start/Stop PLC
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        if behavior and "run_status" in behavior._values:
+            behavior._values["run_status"] = start
+            behavior.write_area(S7_AREA_DB, 1, 0, struct.pack(">B", 1 if start else 0))
+        resp = bytearray([
+            0x03, 0x00, 0x00, 0x00,
+            0x02, 0xF0, 0x80,
+            0x32, 0x03,
+        ])
+        resp += data[10:12] if len(data) > 11 else b"\x00\x00"
+        resp += bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00])
+        resp[2:4] = struct.pack(">H", len(resp))
+        return bytes(resp)

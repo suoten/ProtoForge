@@ -534,7 +534,9 @@ def create_app() -> FastAPI:
             except Exception:
                 db_health = "degraded"
 
-        status = "ok" if (db_ok and engine_ok and running_protocols == total_protocols) else "degraded"
+        # FIXED-P1: 协议未启动不算degraded，仅当有协议处于error状态时才判定degraded
+        has_error = any(d.get("status") == "error" for d in protocol_details.values())
+        status = "ok" if (db_ok and engine_ok and not has_error) else "degraded"
 
         return {
             "status": status,

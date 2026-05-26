@@ -186,6 +186,8 @@ class ToledoServer(ProtocolServer):
         if cmd == self.STX:
             return self._handle_stx_command(data, writer)
         elif cmd == ord("S") or cmd == ord("s"):
+            if len(data) >= 2 and data[1] in (ord("U"), ord("u")):  # FIXED-P1: SU命令-不稳定重量
+                return self._handle_unstable_weight()
             return self._handle_stable_weight()
         elif cmd == ord("T") or cmd == ord("t"):
             return self._handle_tare()
@@ -228,6 +230,15 @@ class ToledoServer(ProtocolServer):
         if not behavior:
             return b"   0.000kg \r\n"
         return behavior.get_weight_string().encode("ascii")
+
+    def _handle_unstable_weight(self) -> bytes:  # FIXED-P1: 不稳定重量响应
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
+        if not behavior:
+            return b"   0.000kg D\r\n"
+        result = behavior.get_weight_string()
+        result = result.replace(" S ", " D ")  # FIXED-P1: S=稳定→D=不稳定(动态)
+        return result.encode("ascii")
 
     def _handle_tare(self) -> bytes:
         with self._behaviors_sync_lock:

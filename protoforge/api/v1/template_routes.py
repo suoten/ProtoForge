@@ -2,6 +2,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_template_manager, _get_database
@@ -152,3 +153,36 @@ async def instantiate_template(
         return tm.create_device_from_template(template_id, device_id, device_name, protocol_config)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/templates/{template_id}/export")  # FIXED-P1: 独立模板导出端点
+async def export_template(template_id: str, _user: dict = Depends(require_viewer)):
+    tm = _get_template_manager()
+    try:
+        template = tm.get_template(template_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    data = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    data["schema_version"] = "1.0"
+    return JSONResponse(content=data, headers={"Content-Disposition": f'attachment; filename="template_{template_id}.json"'})
+
+
+@router.post("/templates/import")  # FIXED-P1: 独立模板导入端点
+async def import_template(data: dict[str, Any], _user: dict = Depends(require_operator)):
+    if not isinstance(data, dict) or not data.get("id") or not data.get("name"):
+        raise HTTPException(status_code=400, detail="Template must have 'id' and 'name' fields")
+    data.pop("schema_version", None)
+    tm = _get_template_manager()
+    db = _get_database()
+    try:
+        template = TemplateDetail(**data)
+        tm.add_template(template)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if db:
+        try:
+            await db.save_template(template)
+        except Exception as db_err:
+            logger.error("Failed to persist imported template %s: %s", template.id, db_err)
+    resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    return resp

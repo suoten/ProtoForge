@@ -289,7 +289,7 @@ class TestReport:
                 step_rows += f"""
                 <tr>
                     <td>{html.escape(s.name)}</td>
-                    <td><span style="color:{s_color};font-weight:600">{_status_i18n.get(s.status.value, s.status.value)}</span></td>
+                    <td><span style="color:{s_color};font-weight:600" data-status="{s.status.value.upper()}">{_status_i18n.get(s.status.value, s.status.value)}</span></td>
                     <td>{round(s.duration, 3)}s</td>
                     <td>{html.escape(s.error or '-')}</td>
                 </tr>"""
@@ -307,7 +307,7 @@ class TestReport:
             <div class="case-card">
                 <div class="case-header" style="border-left:4px solid {tc_status_color}">
                     <span class="case-name">{html.escape(tc.name)}</span>
-                    <span class="case-status" style="color:{tc_status_color}">{_status_i18n.get(tc.status.value, tc.status.value)}</span>
+                    <span class="case-status" style="color:{tc_status_color}" data-status="{tc.status.value.upper()}">{_status_i18n.get(tc.status.value, tc.status.value)}</span>
                     <span class="case-duration">{tc_duration}s</span>
                 </div>
                 {f'<div class="case-error">{html.escape(tc.error)}</div>' if tc.error else ''}

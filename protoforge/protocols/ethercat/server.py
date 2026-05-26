@@ -196,6 +196,7 @@ class EtherCATServer(ProtocolServer):
         self._server_task: asyncio.Task | None = None
         self._server_running = False
         self._slave_addr = 0x1001
+        self._slave_device_map: dict[int, str] = {}  # FIXED-P0: slave_addr→device_id映射，支持多从站
         self._al_state = ECAT_STATE_INIT
         self._input_size = 0
         self._output_size = 0
@@ -321,6 +322,22 @@ class EtherCATServer(ProtocolServer):
         self._esc_regs[0x0108] = struct.pack("<I", 0x00000000)
         self._esc_regs[0x010C] = struct.pack("<I", 0x00000000)
         self._esc_regs[ECAT_DL_STATUS] = struct.pack("<H", 0x0004)
+        # FIXED-P1: 分布式时钟(DC)寄存器模拟
+        self._esc_regs[0x0900] = struct.pack("<H", 0x0000)  # DC接收时间端口0
+        self._esc_regs[0x0902] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0904] = struct.pack("<H", 0x0000)  # DC接收时间端口1
+        self._esc_regs[0x0906] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0910] = struct.pack("<I", 0x00000000)  # DC系统时间
+        self._esc_regs[0x0914] = struct.pack("<I", 0x00000000)
+        self._esc_regs[0x0918] = struct.pack("<I", 0x00000000)  # DC系统时间偏移
+        self._esc_regs[0x091C] = struct.pack("<I", 0x00000000)
+        self._esc_regs[0x0920] = struct.pack("<I", 0x00000000)  # DC系统时间延迟
+        self._esc_regs[0x0928] = struct.pack("<H", 0x0000)  # DC系统时间差值
+        self._esc_regs[0x092A] = struct.pack("<H", 0x0000)
+        self._esc_regs[0x0980] = struct.pack("<H", 0x0000)  # DC同步激活
+        self._esc_regs[0x0982] = struct.pack("<H", 0x0000)  # DC同步脉冲长度
+        self._esc_regs[0x0984] = struct.pack("<I", 0x00000000)  # DC同步0周期
+        self._esc_regs[0x0988] = struct.pack("<I", 0x00000000)  # DC同步1周期
         self._esc_regs[0x0112] = struct.pack("<H", 0x0000)
         self._esc_regs[0x0114] = struct.pack("<H", 0x0000)
         self._esc_regs[0x0118] = struct.pack("<H", 0x0000)
@@ -384,6 +401,21 @@ class EtherCATServer(ProtocolServer):
         self._configure_sm_for_pd()
 
     def _configure_sm_for_pd(self) -> None:
+        # FIXED-P1: SM0/SM1邮箱通道初始化
+        sm0 = self._sm_channels[0]
+        sm0[0:2] = struct.pack("<H", 0x1800)  # 邮箱输出(主站→从站)
+        sm0[2:4] = struct.pack("<H", 256)  # 邮箱大小
+        sm0[4] = SM_CTRL_MAILBOX_WRITE
+        sm0[5] = 0x00
+        sm0[6] = SM_ACT_ENABLE
+        sm0[7] = 0x01
+        sm1 = self._sm_channels[1]
+        sm1[0:2] = struct.pack("<H", 0x1900)  # 邮箱输入(从站→主站)
+        sm1[2:4] = struct.pack("<H", 256)  # 邮箱大小
+        sm1[4] = SM_CTRL_MAILBOX_READ
+        sm1[5] = 0x00
+        sm1[6] = SM_ACT_ENABLE
+        sm1[7] = 0x01
         if self._output_size > 0:
             sm2 = self._sm_channels[2]
             sm2[0:2] = struct.pack("<H", 0x1000)
@@ -504,6 +536,14 @@ class EtherCATServer(ProtocolServer):
                 await writer.wait_closed()
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
+
+    def _resolve_device_by_addr(self, address: int) -> str:  # FIXED-P0: 根据地址路由到对应从站设备
+        if address >= 0x10000000:
+            return self._default_device_id
+        slave_addr = self._slave_addr
+        if address >= 0x1000 and address < 0x2000:
+            return self._slave_device_map.get(slave_addr, self._default_device_id)
+        return self._default_device_id
 
     def _process_frame(self, data: bytes) -> bytes | None:
         if len(data) < 12:
@@ -788,6 +828,7 @@ class EtherCATServer(ProtocolServer):
                 self._slave_addr = int(proto_config["slave_address"])
             except (ValueError, TypeError):
                 pass
+        self._slave_device_map[self._slave_addr] = device_config.id  # FIXED-P0: 注册从站地址映射
 
         self._recalc_data_sizes()
 

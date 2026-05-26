@@ -35,6 +35,9 @@ class BACnetServer(ProtocolServer):
         self._bbmd_fwd_table: dict[tuple[str, int], float] = {}
         self._task: asyncio.Task | None = None
         self._sock: socket.socket | None = None
+        self._cov_subscriptions: dict[int, dict] = {}  # FIXED-P0: COV订阅表 {sub_id: {addr, device_id, obj_inst, cov_increment, last_values}}
+        self._cov_next_id: int = 1
+        self._cov_task: asyncio.Task | None = None
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -64,6 +67,7 @@ class BACnetServer(ProtocolServer):
             self._sock.setblocking(False)
             self._sock.bind((self._host, self._port))
             self._task = asyncio.create_task(self._serve_udp())
+            self._cov_task = asyncio.create_task(self._cov_notification_loop())  # FIXED-P0: 启动COV通知推送循环
             self._status = ProtocolStatus.RUNNING
             logger.info("BACnet server started on %s:%d (BBMD: %s)",
                          self._host, self._port, self._bbmd_enabled)
@@ -77,6 +81,12 @@ class BACnetServer(ProtocolServer):
 
     async def stop(self) -> None:
         try:
+            if self._cov_task:  # FIXED-P0: 取消COV通知任务
+                self._cov_task.cancel()
+                try:
+                    await self._cov_task
+                except asyncio.CancelledError:
+                    logger.debug("BACnet COV task cancelled")
             if self._task:
                 self._task.cancel()
                 try:
@@ -132,6 +142,8 @@ class BACnetServer(ProtocolServer):
                         return self._handle_read_property_multiple(data, addr, invoke_id)
                     elif service_choice == 0x05:
                         return self._handle_register_foreign_device(data, addr, invoke_id)
+                    elif service_choice == 0x0D:  # FIXED-P0: SubscribeCOV服务
+                        return self._handle_subscribe_cov(data, addr, invoke_id)
                     else:
                         return self._make_error_response(invoke_id, 0x0C, 2, 3)
             elif msg_type == 0x01:
@@ -421,6 +433,138 @@ class BACnetServer(ProtocolServer):
                 except Exception as e:
                     logger.debug("BBMD forward to FD %s failed: %s", fd_addr, e)
 
+    def _handle_subscribe_cov(self, data: bytes, addr: tuple, invoke_id: int) -> bytes:  # FIXED-P0: COV订阅处理
+        if len(data) < 10:
+            return self._make_reject_response(invoke_id, 4)
+        obj_id_bytes = data[5:9] if len(data) >= 9 else data[5:]
+        obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes[:4] if len(obj_id_bytes) >= 4 else obj_id_bytes)
+        cov_increment = 0.1
+        issue_confirmed = True
+        lifetime = 0
+        offset = 9
+        if offset < len(data):
+            issue_confirmed = bool(data[offset] & 0x01)
+            offset += 1
+        if offset + 4 <= len(data) and data[offset] == 0x44:
+            cov_increment = struct.unpack(">f", data[offset + 1:offset + 5])[0]
+            offset += 5
+        if offset + 4 <= len(data) and data[offset] == 0x22:
+            lifetime = struct.unpack(">H", data[offset + 1:offset + 3])[0]
+        sub_id = self._cov_next_id
+        self._cov_next_id += 1
+        device_id = None
+        for did, device_obj in self._device_objects.items():
+            for i, obj in enumerate(device_obj.get("objects", [])):
+                if obj_inst == 0 or obj_inst == i + 1:
+                    device_id = did
+                    break
+            if device_id:
+                break
+        self._cov_subscriptions[sub_id] = {
+            "addr": addr, "device_id": device_id, "obj_type": obj_type,
+            "obj_inst": obj_inst, "cov_increment": cov_increment,
+            "lifetime": lifetime, "issue_confirmed": issue_confirmed,
+            "last_values": {},
+        }
+        resp = bytearray()
+        resp.append(0x81)
+        resp.append(0x0A)
+        resp.append(0x00)
+        resp.append(0x00)
+        resp.append(0x01)
+        resp.append(0x04)
+        resp.append(0x00)
+        resp.append(invoke_id & 0xFF)
+        resp.append(0x0D | 0x80)
+        resp[3] = len(resp) - 4
+        return bytes(resp)
+
+    async def _cov_notification_loop(self) -> None:  # FIXED-P0: COV通知推送循环
+        loop = asyncio.get_running_loop()
+        while self._status == ProtocolStatus.RUNNING:
+            try:
+                dead_subs = []
+                for sub_id, sub_info in list(self._cov_subscriptions.items()):
+                    addr = sub_info.get("addr")
+                    device_id = sub_info.get("device_id")
+                    if not device_id or not addr:
+                        continue
+                    behavior = self._behaviors.get(device_id)
+                    device_obj = self._device_objects.get(device_id)
+                    if not behavior or not device_obj:
+                        continue
+                    objects = device_obj.get("objects", [])
+                    obj_inst = sub_info.get("obj_inst", 0)
+                    cov_inc = sub_info.get("cov_increment", 0.1)
+                    last_vals = sub_info.get("last_values", {})
+                    has_change = False
+                    notifications = []
+                    for i, obj in enumerate(objects):
+                        idx = i + 1
+                        if obj_inst != 0 and obj_inst != idx:
+                            continue
+                        point_name = obj.get("object_name", "")
+                        value = behavior.get_value(point_name)
+                        prev = last_vals.get(idx)
+                        if prev is None or abs(float(value) - float(prev)) >= cov_inc:
+                            has_change = True
+                            notifications.append((idx, obj, value))
+                            last_vals[idx] = value
+                    if not has_change:
+                        continue
+                    for idx, obj, value in notifications:
+                        resp = bytearray()
+                        resp.append(0x81)
+                        resp.append(0x01)
+                        resp.append(0x00)
+                        resp.append(0x00)
+                        resp.append(0x01)
+                        resp.append(0x04)
+                        resp.append(0x00)
+                        resp.append(sub_id & 0xFF)
+                        resp.append(0x01)
+                        obj_type_enc = 0
+                        ot = obj.get("object_type", "analogInput")
+                        type_map = {"analogInput": 0, "analogOutput": 1, "analogValue": 2,
+                                    "binaryInput": 3, "binaryOutput": 4, "binaryValue": 5}
+                        obj_type_enc = type_map.get(ot, 0)
+                        resp += self._encode_object_identifier(obj_type_enc, idx)
+                        resp.append(85)
+                        if isinstance(value, float):
+                            resp.append(0x44)
+                            resp += struct.pack(">f", value)
+                        elif isinstance(value, int):
+                            resp.append(0x22)
+                            resp += struct.pack(">H", value & 0xFFFF)
+                        elif isinstance(value, bool):
+                            resp.append(0x19)
+                            resp.append(0x01 if value else 0x00)
+                        else:
+                            resp.append(0x44)
+                            try:
+                                resp += struct.pack(">f", float(value))
+                            except (ValueError, TypeError):
+                                resp += struct.pack(">f", 0.0)
+                        resp.append(96)
+                        units = obj.get("units", "")
+                        encoded = units.encode("utf-8")
+                        resp.append(0x75)
+                        resp += struct.pack(">H", len(encoded))
+                        resp += encoded
+                        resp[3:5] = struct.pack(">H", len(resp) - 4)
+                        if self._sock:
+                            try:
+                                await loop.sock_sendto(self._sock, bytes(resp), addr)
+                            except Exception:
+                                dead_subs.append(sub_id)
+                for sid in dead_subs:
+                    self._cov_subscriptions.pop(sid, None)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug("BACnet COV notification error: %s", e)
+            await asyncio.sleep(1.0)
+
     def _make_who_is_response(self, data: bytes, addr: tuple) -> bytes:
         responses = b""
         for device_id, device_obj in self._device_objects.items():
@@ -445,8 +589,9 @@ class BACnetServer(ProtocolServer):
         device_id = device_config.id
         behavior = BACnetDeviceBehavior(device_config.points)
         proto_config = device_config.protocol_config or {}
-        bacnet_device_id = proto_config.get("device_id", self._device_id_base + len(self._device_configs))
+        bacnet_device_id = proto_config.get("device_id") or proto_config.get("device_id_base") or proto_config.get("device_instance") or (self._device_id_base + len(self._device_configs))  # FIXED-P1: 兼容device_id/device_id_base/device_instance三种字段名
         bacnet_device_name = proto_config.get("device_name", device_config.name)
+        network_number = proto_config.get("network_number", 0)  # FIXED-P1: BACnet网络号配置
 
         objects = []
         for i, point in enumerate(device_config.points):
@@ -470,6 +615,7 @@ class BACnetServer(ProtocolServer):
             self._device_objects[device_id] = {  # FIXED-P1: 移入_behaviors_lock内保护
                 "device_id": bacnet_device_id,
                 "device_name": bacnet_device_name,
+                "network_number": network_number,  # FIXED-P1: 存储网络号
                 "vendor_name": "ProtoForge",
                 "vendor_id": 999,
                 "model_name": "PF-BAC-100",
@@ -549,6 +695,11 @@ class BACnetServer(ProtocolServer):
                     "type": "integer",
                     "default": 100,
                     "description": desc("bacnet_device_id_base", "BACnet device ID base value"),
+                },
+                "network_number": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": desc("bacnet_network_number", "BACnet network number (0=local)"),  # FIXED-P1
                 },
                 "bbmd_enabled": {
                     "type": "boolean",

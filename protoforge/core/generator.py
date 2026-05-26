@@ -249,9 +249,7 @@ class DataGenerator:
 
         elapsed = time.time() - self._start_time[key]
 
-        if point.generator_type == GeneratorType.FIXED:
-            return self._generate_fixed(point)
-        elif point.generator_type == GeneratorType.CONSTANT:
+        if point.generator_type in (GeneratorType.FIXED, GeneratorType.CONSTANT):  # FIXED-P1: constant合并到fixed分支
             return self._generate_fixed(point)
         elif point.generator_type == GeneratorType.RANDOM:
             return self._generate_random(point)

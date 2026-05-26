@@ -1,7 +1,7 @@
 {
     "id": "modbus_temp_sensor",
     "name": "温湿度传感器",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "工业级温湿度传感器，支持温湿度采集和告警",
     "manufacturer": "Generic",
     "model": "TH-200",

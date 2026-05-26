@@ -463,7 +463,7 @@ class UserManager:
         user = self._users.get(username)
         if not user:
             return False
-        if new_role not in ("admin", "operator", "viewer", "user"):
+        if new_role not in ("admin", "operator", "viewer", "user", "guest"):  # FIXED-P1: 添加guest角色
             return False
         old_role = user.role
         user.role = new_role

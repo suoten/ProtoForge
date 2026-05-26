@@ -30,7 +30,7 @@ class McDeviceBehavior(StandardDeviceBehavior):
         'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
         'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
         'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
-        'V': 0x56, 'Z': 0x5A, 'U': 0x55, 'SM': 0x53,
+        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'SM': 0x53,  # FIXED-P1: Z变址寄存器代码从0x5A改为0x5C，与ZR(0x5A)冲突
     }
 
     @staticmethod
@@ -179,12 +179,16 @@ class McServer(ProtocolServer):
                 if len(header) < 9:
                     break
                 if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
-                    try:  # FIXED-P1: int(header,16)对网络数据做异常保护，非法16进制字符导致ValueError崩溃
-                        data_len_field = int(header[7:9], 16)
+                    # FIXED-P0: ASCII SLMP 3E帧头需22字节(子头4+网络2+PC2+目标IO4+目标站2+数据长度4+定时器4)
+                    # 已读9字节，还需读13字节完成帧头
+                    ascii_header_rest = await asyncio.wait_for(reader.readexactly(13), timeout=_READ_TIMEOUT)
+                    ascii_header = header + ascii_header_rest
+                    try:
+                        data_len_field = int(ascii_header[14:18], 16)  # FIXED-P0: ASCII数据长度在偏移14-17(4字节16进制)
                     except (ValueError, IndexError):
                         break
-                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field + 6), timeout=_READ_TIMEOUT)
-                    data = header + remaining
+                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field), timeout=_READ_TIMEOUT)
+                    data = ascii_header + remaining
                 else:
                     data_len = struct.unpack("<H", header[7:9])[0]
                     total_len = 9 + data_len
@@ -222,6 +226,9 @@ class McServer(ProtocolServer):
         req_data_len = struct.unpack("<H", data[7:9])[0]
         cpu_monitor_timer = struct.unpack("<H", data[9:11])[0]
 
+        # FIXED-P1: 根据network/station/pc路由到匹配设备
+        routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
+
         if len(data) < 15:
             return self._make_error_response(data, 0xC059)
 
@@ -229,19 +236,19 @@ class McServer(ProtocolServer):
         subcmd = struct.unpack("<H", data[13:15])[0]
 
         if cmd == 0x0401:
-            return self._handle_read(data, subcmd)
+            return self._handle_read(data, subcmd, routed_device_id)
         elif cmd == 0x0402:
-            return self._handle_random_read(data, subcmd)
+            return self._handle_random_read(data, subcmd, routed_device_id)
         elif cmd == 0x1401:
-            return self._handle_write(data, subcmd)
+            return self._handle_write(data, subcmd, routed_device_id)
         elif cmd == 0x1402:
-            return self._handle_random_write(data, subcmd)
+            return self._handle_random_write(data, subcmd, routed_device_id)
         elif cmd == 0x0001:
             return self._handle_self_test(data)
 
         return self._make_error_response(data, 0xC059)
 
-    def _handle_read(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_read(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 21:
             return self._make_error_response(data, 0xC059)
 
@@ -257,7 +264,7 @@ class McServer(ProtocolServer):
             return self._make_error_response(data, 0xC059)
 
         read_data = bytearray(read_len)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
         if behavior:
             mem = behavior.read_memory(device_code, start_addr + read_len)
             read_data = mem[start_addr:start_addr + read_len]
@@ -273,7 +280,7 @@ class McServer(ProtocolServer):
 
         return bytes(resp)
 
-    def _handle_write(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 21:
             return self._make_error_response(data, 0xC059)
 
@@ -289,7 +296,7 @@ class McServer(ProtocolServer):
             return self._make_error_response(data, 0xC059)
 
         write_data = data[20:20 + write_len]
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
         if behavior:
             behavior.write_memory(device_code, start_addr, write_data)
             for name, (p_code, p_offset) in behavior._point_addresses.items():
@@ -316,7 +323,7 @@ class McServer(ProtocolServer):
 
         return bytes(resp)
 
-    def _handle_random_read(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_random_read(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 17:
             return self._make_error_response(data, 0xC059)
         try:
@@ -324,7 +331,7 @@ class McServer(ProtocolServer):
         except (IndexError, struct.error):
             return self._make_error_response(data, 0xC059)
         read_data = bytearray()
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
         offset = 17
         for _ in range(min(point_count, 64)):
             if offset + 3 > len(data):
@@ -350,10 +357,10 @@ class McServer(ProtocolServer):
         resp += read_data
         return bytes(resp)
 
-    def _handle_random_write(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_random_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 17:
             return self._make_error_response(data, 0xC059)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
         try:
             point_count = struct.unpack("<H", data[15:17])[0]
         except (IndexError, struct.error):
@@ -468,6 +475,14 @@ class McServer(ProtocolServer):
                 "pc": {"type": "integer", "default": 255, "description": desc("mc_pc", "PC number (0xFF=self)")},
             },
         }
+
+    def _find_device_by_params(self, network: int, station: int, pc: int) -> str | None:  # FIXED-P1: 根据network/station/pc路由到匹配设备
+        for dev_id, params in self._device_params.items():
+            if (params.get("network") == network and
+                params.get("station") == station and
+                params.get("pc") == pc):
+                return dev_id
+        return None
 
     @staticmethod
     def _ascii_to_hex(ascii_str: bytes) -> int:

@@ -1,7 +1,7 @@
 {
     "id": "modbus_generic_plc",
     "name": "通用Modbus PLC",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "通用Modbus TCP PLC仿真设备，支持线圈和寄存器读写",
     "manufacturer": "Generic",
     "model": "Modbus-PLC-01",

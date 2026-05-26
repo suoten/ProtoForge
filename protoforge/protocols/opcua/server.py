@@ -139,6 +139,8 @@ class OpcUaServer(ProtocolServer):
         self._port = 4840
         self._requested_port = 4840
         self._server_task: asyncio.Task | None = None
+        self._sync_task: asyncio.Task | None = None  # FIXED-P0: 动态值同步到OPC-UA节点的后台任务
+        self._sync_interval: float = 1.0
 
     @property
     def actual_port(self) -> int:
@@ -220,9 +222,12 @@ class OpcUaServer(ProtocolServer):
                                 await self._server.load_certificate(cert_path)
                                 await self._server.load_private_key(key_path)
                                 logger.info("OPC-UA certificates loaded")
-                            # FIXED-P0: 支持多个安全策略同时注册，让客户端选择兼容的策略
+                            # FIXED-P1: 同时注册NoSecurity和用户选择的策略，让客户端选择兼容的策略连接
                             selected_policy = policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)
-                            self._server.set_security_policy([selected_policy])
+                            policies = [ua.SecurityPolicyType.NoSecurity]
+                            if selected_policy != ua.SecurityPolicyType.NoSecurity:
+                                policies.append(selected_policy)
+                            self._server.set_security_policy(policies)
                             if security_policy != "None":
                                 self._server.set_security_mode(mode_map.get(security_mode, ua.MessageSecurityMode.SignAndEncrypt))
                             logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
@@ -247,6 +252,7 @@ class OpcUaServer(ProtocolServer):
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._server.start())
             self._server_task.add_done_callback(self._on_server_task_done)
+            self._sync_task = asyncio.create_task(self._sync_values_loop())  # FIXED-P0: 启动动态值同步任务
             logger.info("OPC-UA server starting at %s", self._endpoint)
             self._log_debug("system", "server_start",
                             msg("opcua", "service_started", host=self._host, port=self._port))
@@ -258,6 +264,14 @@ class OpcUaServer(ProtocolServer):
     async def stop(self) -> None:
         # FIXED: W10 - 先cancel task再stop server，避免先stop再cancel导致的冲突
         try:
+            if self._sync_task:  # FIXED-P0: 取消动态值同步任务
+                self._sync_task.cancel()
+                try:
+                    await self._sync_task
+                except asyncio.CancelledError:
+                    logger.debug("OPC-UA sync task cancelled")
+                except Exception as e:
+                    logger.warning("OPC-UA sync task error: %s", e)
             if self._server_task:
                 self._server_task.cancel()
                 try:
@@ -341,13 +355,6 @@ class OpcUaServer(ProtocolServer):
         result = []
         for point in config.points:
             value = behavior.get_value(point.name)
-            point_node_key = f"{device_id}.{point.name}"
-            node = self._point_nodes.get(point_node_key)
-            if node:
-                try:
-                    value = await node.get_value()
-                except Exception as e:
-                    logger.warning("OPC-UA read node value error: %s", e)
             result.append(PointValue(name=point.name, value=value, timestamp=now))
         return result
 
@@ -383,6 +390,42 @@ class OpcUaServer(ProtocolServer):
         else:
             logger.warning("OPC-UA write_point: behavior.on_write returned False for %s.%s (value=%s)", device_id, point_name, value)
         return success
+
+    async def _sync_values_loop(self) -> None:  # FIXED-P0: 动态值同步到OPC-UA节点，使订阅客户端能收到数据变更通知
+        from asyncua import ua as asyncua_ua
+        type_map = {
+            "bool": asyncua_ua.VariantType.Boolean,
+            "int16": asyncua_ua.VariantType.Int16,
+            "uint16": asyncua_ua.VariantType.UInt16,
+            "int32": asyncua_ua.VariantType.Int32,
+            "uint32": asyncua_ua.VariantType.UInt32,
+            "float32": asyncua_ua.VariantType.Float,
+            "float64": asyncua_ua.VariantType.Double,
+            "string": asyncua_ua.VariantType.String,
+        }
+        while self._status == ProtocolStatus.RUNNING:
+            try:
+                for device_id, behavior in dict(self._behaviors).items():
+                    config = self._device_configs.get(device_id)
+                    if not config:
+                        continue
+                    for point in config.points:
+                        if hasattr(point, 'generator_type') and point.generator_type.value == "fixed":
+                            continue
+                        point_node_key = f"{device_id}.{point.name}"
+                        node = self._point_nodes.get(point_node_key)
+                        if not node:
+                            continue
+                        try:
+                            value = behavior.get_value(point.name)
+                            data_type = self._point_types.get(point_node_key, "float64")
+                            variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
+                            await node.set_value(asyncua_ua.Variant(value, variant_type))
+                        except Exception as e:
+                            logger.debug("OPC-UA sync value error for %s.%s: %s", device_id, point.name, e)
+            except Exception as e:
+                logger.warning("OPC-UA sync loop error: %s", e)
+            await asyncio.sleep(self._sync_interval)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -453,15 +496,32 @@ class OpcUaServer(ProtocolServer):
                 value = behavior.get_value(point.name) if behavior else 0
                 variant_type = type_map.get(point.data_type.value, None)
                 if variant_type:
-                    node = await device_folder.add_variable(
-                        self._idx, point.name, ua.Variant(value, variant_type)
-                    )
+                    # FIXED-P1: 优先使用point.address作为NodeId，客户端可按模板定义的NodeId寻址
+                    node_id_str = point.address if point.address else point.name
+                    try:
+                        node = await device_folder.add_variable(
+                            self._idx, node_id_str, ua.Variant(value, variant_type)
+                        )
+                    except Exception:
+                        node = await device_folder.add_variable(
+                            self._idx, point.name, ua.Variant(value, variant_type)
+                        )
                 else:
-                    node = await device_folder.add_variable(
-                        self._idx, point.name, value
-                    )
+                    node_id_str = point.address if point.address else point.name
+                    try:
+                        node = await device_folder.add_variable(
+                            self._idx, node_id_str, value
+                        )
+                    except Exception:
+                        node = await device_folder.add_variable(
+                            self._idx, point.name, value
+                        )
                 if point.access and "w" in point.access:
                     await node.set_writable()
+                try:
+                    await node.set_historized(True)  # FIXED-P1: 启用历史数据存储，客户端可通过HistoryRead读取
+                except Exception:
+                    pass
                 point_nodes[point.name] = node
                 self._point_nodes[f"{config.id}.{point.name}"] = node
                 self._point_types[f"{config.id}.{point.name}"] = point.data_type.value  # FIXED: 保存点位数据类型

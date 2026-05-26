@@ -1,7 +1,7 @@
 {
     "id": "modbus_vfd",
     "name": "变频器",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "通用变频器，支持频率设定、运行状态监控",
     "manufacturer": "Generic",
     "model": "VFD-200",

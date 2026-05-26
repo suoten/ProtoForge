@@ -17,7 +17,7 @@
         },
         {
             "name": "cpu_load",
-            "address": "DB1.DBW2",
+            "address": "DB1.DBD2",
             "data_type": "float32",
             "unit": "%",
             "description": "CPU负载",
@@ -28,7 +28,7 @@
         },
         {
             "name": "memory_used",
-            "address": "DB1.DBD4",
+            "address": "DB1.DBD6",
             "data_type": "float32",
             "unit": "KB",
             "description": "已用内存",
@@ -39,7 +39,7 @@
         },
         {
             "name": "cycle_time",
-            "address": "DB1.DBD8",
+            "address": "DB1.DBD10",
             "data_type": "float32",
             "unit": "ms",
             "description": "循环扫描时间",
@@ -50,7 +50,7 @@
         },
         {
             "name": "di_module0",
-            "address": "DB1.DBW12",
+            "address": "DB1.DBW14",
             "data_type": "uint16",
             "description": "DI模块0输入(位图)",
             "access": "r",
@@ -60,7 +60,7 @@
         },
         {
             "name": "do_module0",
-            "address": "DB1.DBW14",
+            "address": "DB1.DBW16",
             "data_type": "uint16",
             "description": "DO模块0输出(位图)",
             "access": "rw",
@@ -69,7 +69,7 @@
         },
         {
             "name": "ai_temp",
-            "address": "DB1.DBD16",
+            "address": "DB1.DBD18",
             "data_type": "float32",
             "unit": "°C",
             "description": "AI通道温度",
@@ -80,7 +80,7 @@
         },
         {
             "name": "ao_output",
-            "address": "DB1.DBD20",
+            "address": "DB1.DBD22",
             "data_type": "float32",
             "unit": "V",
             "description": "AO通道输出",
@@ -90,7 +90,7 @@
         },
         {
             "name": "pressure_set",
-            "address": "DB1.DBD24",
+            "address": "DB1.DBD26",
             "data_type": "float32",
             "unit": "MPa",
             "description": "压力设定值",
@@ -100,7 +100,7 @@
         },
         {
             "name": "pressure_actual",
-            "address": "DB1.DBD28",
+            "address": "DB1.DBD30",
             "data_type": "float32",
             "unit": "MPa",
             "description": "压力实际值",
@@ -111,7 +111,7 @@
         },
         {
             "name": "error_code",
-            "address": "DB1.DBW32",
+            "address": "DB1.DBW34",
             "data_type": "uint16",
             "description": "错误代码",
             "access": "r",

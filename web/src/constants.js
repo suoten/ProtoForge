@@ -191,6 +191,7 @@ export const dataTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
 export const generatorTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
   { label: 'points.generatorTypes.fixed', value: 'fixed' },
   { label: 'points.generatorTypes.random', value: 'random' },
+  { label: 'points.generatorTypes.random_walk', value: 'random_walk' },  // FIXED-P1: 补充random_walk
   { label: 'points.generatorTypes.sine', value: 'sine' },
   { label: 'points.generatorTypes.triangle', value: 'triangle' },
   { label: 'points.generatorTypes.sawtooth', value: 'sawtooth' },

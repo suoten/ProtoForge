@@ -1,7 +1,7 @@
 {
     "id": "modbus_water_meter",
     "name": "智能水表",
-    "protocol": "modbus",
+    "protocol": "modbus_tcp",
     "description": "远传智能水表，支持累计流量和瞬时流量监测",
     "manufacturer": "Generic",
     "model": "WM-100",

@@ -194,11 +194,24 @@ class OpcDaServer(ProtocolServer):
 
         return self._make_error(0x8000)
 
+    def _resolve_device_and_tag(self, tag_or_path: str) -> tuple:  # FIXED-P1: 支持"device_id/tag"格式路由到指定设备
+        if "/" in tag_or_path:
+            parts = tag_or_path.split("/", 1)
+            device_id = parts[0]
+            tag_name = parts[1]
+            if device_id in self._behaviors:
+                return device_id, tag_name
+        return self._default_device_id, tag_or_path
+
     def _handle_browse(self, data: bytes) -> bytes:
         tags = []
-        behavior = self._behaviors.get(self._default_device_id)
-        if behavior:
-            tags.extend(behavior.get_all_tags().keys())
+        # FIXED-P1: 浏览所有设备的Tag，用"device_id/tag"格式区分
+        for device_id, behavior in self._behaviors.items():
+            for tag in behavior.get_all_tags().keys():
+                if device_id == self._default_device_id:
+                    tags.append(tag)
+                else:
+                    tags.append(f"{device_id}/{tag}")
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
@@ -241,14 +254,15 @@ class OpcDaServer(ProtocolServer):
             return self._make_error(0x8001)
 
         tag_name = data[6:6 + tag_len].decode("utf-8", errors="replace")
+        device_id, resolved_tag = self._resolve_device_and_tag(tag_name)  # FIXED-P1: 支持多设备路由
         value = 0
         quality = 0
         data_type = "float64"
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id)
         if behavior:
-            value = behavior.get_value(tag_name)
-            quality = behavior.get_quality(tag_name)
-            data_type = behavior.get_data_type(tag_name)
+            value = behavior.get_value(resolved_tag)
+            quality = behavior.get_quality(resolved_tag)
+            data_type = behavior.get_data_type(resolved_tag)
 
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
@@ -266,13 +280,14 @@ class OpcDaServer(ProtocolServer):
             return self._make_error(0x8002)
 
         tag_name = data[6:6 + tag_len].decode("utf-8", errors="replace")
-        behavior = self._behaviors.get(self._default_device_id)
+        device_id, resolved_tag = self._resolve_device_and_tag(tag_name)  # FIXED-P1: 支持多设备路由
+        behavior = self._behaviors.get(device_id)
         if not behavior:
             return self._make_error(0x8001)
-        data_type = behavior.get_data_type(tag_name)
+        data_type = behavior.get_data_type(resolved_tag)
         value_data = data[6 + tag_len:]
         value = self._unpack_typed_value(data_type, value_data)
-        behavior.set_value(tag_name, value)
+        behavior.set_value(resolved_tag, value)
         self._log_debug("recv", "opcda_write",
                         f"Write tag {tag_name}={value}",
                         detail={"tag": tag_name, "value": value})
@@ -322,7 +337,10 @@ class OpcDaServer(ProtocolServer):
             tag_name = data[offset:offset + tag_len].decode("utf-8", errors="replace").rstrip("\x00")
             tags.append(tag_name)
             offset += tag_len
-        self._subscriptions[sub_id] = {"rate": actual_rate, "tags": tags}  # FIXED-P0: 写操作在_subs_lock外但同步调用中原子，push_loop用快照迭代
+        deadband = 0.0  # FIXED-P0: 读取deadband参数
+        if offset + 8 <= len(data):
+            deadband = struct.unpack("<d", data[offset:offset + 8])[0]
+        self._subscriptions[sub_id] = {"rate": actual_rate, "tags": tags, "deadband": deadband}
         resp = bytearray()
         resp += struct.pack("<I", 0x00000000)
         resp += struct.pack("<I", sub_id)
@@ -353,6 +371,7 @@ class OpcDaServer(ProtocolServer):
                     if (now - last_push) * 1000 < rate:
                         continue
                     tags = sub_info.get("tags", [])
+                    deadband = sub_info.get("deadband", 0.0)  # FIXED-P0: 读取deadband
                     behavior = self._behaviors.get(self._default_device_id)
                     if not behavior:
                         continue
@@ -364,7 +383,20 @@ class OpcDaServer(ProtocolServer):
                         quality = behavior.get_quality(tag)
                         data_type = behavior.get_data_type(tag)
                         prev_state = prev.get(tag)
-                        if prev_state is None or prev_state["value"] != value or prev_state["quality"] != quality:
+                        value_changed = False
+                        if prev_state is None:
+                            value_changed = True
+                        elif prev_state["quality"] != quality:
+                            value_changed = True
+                        elif deadband > 0:  # FIXED-P0: deadband过滤，值变化幅度小于deadband时不推送
+                            try:
+                                if abs(float(value) - float(prev_state["value"])) >= deadband:
+                                    value_changed = True
+                            except (ValueError, TypeError):
+                                value_changed = value != prev_state["value"]
+                        elif prev_state["value"] != value:
+                            value_changed = True
+                        if value_changed:
                             has_change = True
                         data_changes.append({
                             "tag": tag, "value": value,
@@ -471,5 +503,7 @@ class OpcDaServer(ProtocolServer):
             "properties": {
                 "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "OPC-DA bridge server listen address")},
                 "port": {"type": "integer", "default": 51340, "description": desc("opcda_port", "OPC-DA bridge port (default 51340)")},
+                "prog_id": {"type": "string", "default": "ProtoForge.OPCDA.Simulation", "description": desc("opcda_prog_id", "OPC-DA ProgID")},  # FIXED-P1
+                "clsid": {"type": "string", "default": "", "description": desc("opcda_clsid", "OPC-DA CLSID (e.g. {xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx})")},  # FIXED-P1
             },
         }

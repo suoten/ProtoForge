@@ -39,6 +39,9 @@ class GB28181Device:
         self._invite_media_ip = ""
         self._invite_media_port = 0
         self._local_media_port = 0  # FIXED-P0: 记录本地分配的媒体端口，BYE时释放
+        self._video_width = 352  # FIXED-P0: 视频流参数，可从模板配置覆盖
+        self._video_height = 288
+        self._video_fps = 25
 
     def make_register_request(self) -> str:
         self.call_id = uuid.uuid4().hex[:16]
@@ -364,6 +367,9 @@ class GB28181Server(ProtocolServer):
         )
         gb_device._protoforge_device_id = device_config.id
         gb_device._register_interval = register_interval
+        gb_device._video_width = proto_config.get("video_width", 352)  # FIXED-P0: 从模板配置读取视频流参数
+        gb_device._video_height = proto_config.get("video_height", 288)
+        gb_device._video_fps = proto_config.get("video_fps", 25)
         async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发写入
             self._gb_devices[device_config.id] = gb_device
 
@@ -425,12 +431,17 @@ class GB28181Server(ProtocolServer):
                 "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
                 "port": {"type": "integer", "default": 5060, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
                 "server_id": {"type": "string", "default": "34020000002000000001", "description": desc("sip_server_id")},  # FIXED: 中文硬编码→i18n常量
+                "sip_server_addr": {"type": "string", "default": "", "description": desc("sip_server_addr", "SIP server address for REGISTER")},  # FIXED-P1
+                "sip_server_port": {"type": "integer", "default": 5060, "description": desc("sip_server_port", "SIP server port")},  # FIXED-P1
                 "srtp_enabled": {"type": "boolean", "default": False, "description": desc("srtp_enabled")},  # FIXED: 中文硬编码→i18n常量
                 "srtp_crypto_suite": {
                     "type": "string",
                     "default": "AES_CM_128_HMAC_SHA1_80",
                     "enum": ["AES_CM_128_HMAC_SHA1_80", "AES_CM_128_HMAC_SHA1_32"],
                     "description": desc("srtp_crypto_suite")},
+                "video_width": {"type": "integer", "default": 352, "description": desc("video_width", "Video width (pixels)")},  # FIXED-P0
+                "video_height": {"type": "integer", "default": 288, "description": desc("video_height", "Video height (pixels)")},  # FIXED-P0
+                "video_fps": {"type": "integer", "default": 25, "description": desc("video_fps", "Video frame rate (fps)")},  # FIXED-P0
             },
         }
 
@@ -821,10 +832,11 @@ class GB28181Server(ProtocolServer):
                             dest_ip=dest_ip,
                             dest_port=dest_port,
                             ssrc=ssrc,
-                            width=352,
-                            height=288,
-                            fps=25,
+                            width=gb_device._video_width,
+                            height=gb_device._video_height,
+                            fps=gb_device._video_fps,
                             srtp_context=getattr(gb_device, '_srtp_context', None),
+                            gop_size=gb_device._video_fps,  # FIXED-P1: GOP间隔=1秒帧数
                         )
                         streamer.set_debug_callback(
                             lambda direction, msg_type, summary, detail=None, did=pf_id:

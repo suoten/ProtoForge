@@ -38,6 +38,9 @@ class ModbusRtuServer(ProtocolServer):
     protocol_name = "modbus_rtu"
     protocol_display_name = "Modbus RTU"
 
+    _MAX_READ_COILS = 2000  # FIXED-P1: Modbus规范FC01/02最多读2000个位
+    _MAX_READ_REGISTERS = 125  # FIXED-P1: Modbus规范FC03/04最多读125个寄存器
+
     def __init__(self):
         super().__init__()
         self._server_task: asyncio.Task | None = None
@@ -249,8 +252,8 @@ class ModbusRtuServer(ProtocolServer):
     def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:
         slave_id = unit_id if unit_id else 1
         store = self._data_stores.get(slave_id)
-        if not store:
-            store = self._get_data_store(slave_id)
+        if not store:  # FIXED-P1: 未注册的slave_id返回异常码02，而非自动创建存储
+            return bytes([fc | 0x80, 0x02])
         # FIXED-P0: 校验 data 最小长度，避免畸形报文导致 struct.unpack 崩溃
         if len(data) < 4 and fc in (0x01, 0x02, 0x03, 0x04, 0x05, 0x06):
             return bytes([fc | 0x80, 0x02])  # Illegal Data Address
@@ -258,6 +261,8 @@ class ModbusRtuServer(ProtocolServer):
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > self._MAX_READ_COILS:  # FIXED-P1: RTU添加读取数量上限校验
+                    return bytes([fc | 0x80, 0x03])
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -267,6 +272,8 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x02:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > self._MAX_READ_COILS:  # FIXED-P1: RTU添加读取数量上限校验
+                    return bytes([fc | 0x80, 0x03])
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
                 for i in range(count):
@@ -276,6 +283,8 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x03:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P1: RTU添加读取数量上限校验
+                    return bytes([fc | 0x80, 0x03])
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -285,6 +294,8 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x04:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                if count > self._MAX_READ_REGISTERS:  # FIXED-P1: RTU添加读取数量上限校验
+                    return bytes([fc | 0x80, 0x03])
                 byte_count = count * 2
                 regs = bytearray(byte_count)
                 for i in range(count):
@@ -326,7 +337,7 @@ class ModbusRtuServer(ProtocolServer):
                         store.set_point(16, start + i, val)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x16:
-                if len(data) < 10:
+                if len(data) < 6:  # FIXED-P1: FC0x16需addr(2)+and_mask(2)+or_mask(2)=6字节，原值10错误
                     return bytes([fc | 0x80, 0x02])
                 ref_addr = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 and_mask = struct.unpack(">H", data[2:4])[0]
@@ -337,7 +348,7 @@ class ModbusRtuServer(ProtocolServer):
                 store.set_point(16, ref_addr, new_val)
                 return bytes([fc]) + data[0:6]
             elif fc == 0x17:
-                if len(data) < 10:
+                if len(data) < 9:  # FIXED-P1: FC0x17需r_start(2)+r_count(2)+w_start(2)+w_count(2)+w_byte_count(1)=9字节，原值10错误
                     return bytes([fc | 0x80, 0x02])
                 read_start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 read_count = struct.unpack(">H", data[2:4])[0]
@@ -488,6 +499,10 @@ class ModbusRtuServer(ProtocolServer):
                     data = struct.pack(">I", int(value))
                     store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
                     store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("string",):  # FIXED-P0: 添加string类型处理，与TCP对齐
+                    encoded = str(value).encode("utf-8")
+                    for j in range(0, min(len(encoded), 62), 2):
+                        store.holding_regs[address + j // 2] = struct.unpack(">H", encoded[j:j+2].ljust(2, b'\x00'))[0]
                 else:
                     store.holding_regs[address] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
@@ -523,11 +538,35 @@ class ModbusRtuServer(ProtocolServer):
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
-            address = int(point.address)  # FIXED-P0: 移除+1偏移，与TCP保持一致
-            if point.data_type.value in ("bool",):
+            address = int(point.address)
+            dt = point.data_type.value
+            if dt in ("bool",):
                 return bool(store.coils.get(address, 0))
+            elif dt in ("float32",):  # FIXED-P1: 添加float32/int32/uint32/string支持，与TCP对齐
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">f", struct.pack(">HH", *regs))[0]
+            elif dt in ("float64",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(4)]
+                return struct.unpack(">d", struct.pack(">HHHH", *regs))[0]
+            elif dt in ("int32",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">i", struct.pack(">HH", *regs))[0]
+            elif dt in ("uint32",):
+                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                return struct.unpack(">I", struct.pack(">HH", *regs))[0]
+            elif dt in ("int16",):
+                raw = store.holding_regs.get(address, 0)
+                return struct.unpack(">h", struct.pack(">H", raw & 0xFFFF))[0]
+            elif dt in ("string",):
+                result = bytearray()
+                for i in range(32):
+                    w = store.holding_regs.get(address + i, 0)
+                    result += struct.pack(">H", w)
+                    if w & 0xFF == 0:
+                        break
+                return result.rstrip(b'\x00').decode("utf-8", errors="replace")
             else:
                 return store.holding_regs.get(address, 0)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, struct.error) as e:
             logger.warning("Failed to read register %s: %s", point.address, e)
             return None

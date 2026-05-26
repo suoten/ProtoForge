@@ -1,5 +1,5 @@
 {
-    "id": "mc_q03udv",
+    "id": "mc_q03udv_plc",
     "name": "三菱Q03UDV PLC",
     "protocol": "mc",
     "description": "三菱Q系列PLC，MC协议(SLMP)二进制通信，支持大容量D/R寄存器",

@@ -112,6 +112,8 @@ class FanucServer(ProtocolServer):
         self._port = 8193
         self._server_task: asyncio.Task | None = None
         self._server_running = False
+        self._session_device_map: dict[int, str] = {}  # FIXED-P0: session_id→device_id映射，支持多CNC设备
+        self._next_session_id = 1
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
@@ -203,7 +205,7 @@ class FanucServer(ProtocolServer):
             return None
         func_id = struct.unpack("<H", payload[0:2])[0]
         req_id = struct.unpack("<I", payload[2:6])[0] if len(payload) >= 6 else 0
-        result = self._dispatch_focas_function(func_id, req_id, payload[6:] if len(payload) > 6 else b"")
+        result = self._dispatch_focas_function(func_id, req_id, payload[6:] if len(payload) > 6 else b"", session_id)  # FIXED-P0: 传入session_id
         resp_payload = bytearray()
         resp_payload += struct.pack("<H", func_id)
         resp_payload += struct.pack("<I", req_id)
@@ -218,7 +220,7 @@ class FanucServer(ProtocolServer):
         func_id = struct.unpack("<H", data[0:2])[0]
         req_id = struct.unpack("<I", data[2:6])[0]
         payload = data[10:] if len(data) > 10 else b""
-        result = self._dispatch_focas_function(func_id, req_id, payload)
+        result = self._dispatch_focas_function(func_id, req_id, payload)  # FIXED-P0: legacy无session_id
         resp = bytearray()
         resp += struct.pack("<H", func_id)
         resp += struct.pack("<I", req_id)
@@ -226,7 +228,7 @@ class FanucServer(ProtocolServer):
         resp += result
         return bytes(resp)
 
-    def _dispatch_focas_function(self, func_id: int, req_id: int, payload: bytes) -> bytes:
+    def _dispatch_focas_function(self, func_id: int, req_id: int, payload: bytes, session_id: int = 0) -> bytes:  # FIXED-P0: 传入session_id
         handlers = {
             0x0001: self._handle_cnc_connect,
             0x0002: self._handle_cnc_disconnect,
@@ -239,13 +241,26 @@ class FanucServer(ProtocolServer):
             0x0111: self._handle_cnc_rdfeed,
             0x0120: self._handle_cnc_alarm,
             0x0130: self._handle_cnc_program,
+            0x0131: self._handle_cnc_sysinfo,  # FIXED-P1: CNC系列信息查询
         }
         handler = handlers.get(func_id)
         if handler:
-            return handler(req_id)
+            return handler(req_id, session_id)  # FIXED-P0: 传入session_id
         return self._make_focas_error(req_id, 0x00000001)
 
-    def _handle_cnc_connect(self, req_id: int) -> bytes:
+    def _resolve_device(self, session_id: int) -> str:  # FIXED-P0: 根据session_id路由到对应CNC设备
+        device_id = self._session_device_map.get(session_id)
+        if device_id and device_id in self._behaviors:
+            return device_id
+        return self._default_device_id
+
+    def _handle_cnc_connect(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        assigned_session = self._next_session_id
+        self._next_session_id += 1
+        device_ids = list(self._behaviors.keys())
+        if device_ids:
+            target_idx = (assigned_session - 1) % len(device_ids)
+            self._session_device_map[assigned_session] = device_ids[target_idx]
         resp = bytearray()
         resp += struct.pack("<H", 0x0001)
         resp += struct.pack("<I", req_id)
@@ -253,15 +268,17 @@ class FanucServer(ProtocolServer):
         resp += struct.pack("<I", 0x00000001)
         return bytes(resp)
 
-    def _handle_cnc_disconnect(self, req_id: int) -> bytes:
+    def _handle_cnc_disconnect(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        self._session_device_map.pop(session_id, None)
         resp = bytearray()
         resp += struct.pack("<H", 0x0002)
         resp += struct.pack("<I", req_id)
         resp += struct.pack("<I", 0x00000000)
         return bytes(resp)
 
-    def _handle_cnc_statinfo(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+    def _handle_cnc_statinfo(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
         status = behavior._cnc_status if behavior else {
             "alarm": 0, "mode": 3, "execution": 1, "motion": 0
         }
@@ -276,9 +293,10 @@ class FanucServer(ProtocolServer):
         resp += struct.pack("<H", status.get("motion", 0))
         return bytes(resp)
 
-    def _handle_cnc_absolute(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
-        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+    def _handle_cnc_absolute(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
         positions = behavior._cnc_status.get("absolute_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
@@ -290,9 +308,10 @@ class FanucServer(ProtocolServer):
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
-    def _handle_cnc_machine(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
-        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+    def _handle_cnc_machine(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
         positions = behavior._cnc_status.get("machine_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
@@ -304,9 +323,10 @@ class FanucServer(ProtocolServer):
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
-    def _handle_cnc_relative(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
-        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+    def _handle_cnc_relative(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
         positions = behavior._cnc_status.get("relative_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
@@ -318,9 +338,10 @@ class FanucServer(ProtocolServer):
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
-    def _handle_cnc_distance(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
-        axis_count = self._device_params.get(self._default_device_id, {}).get("axis_count", 3)
+    def _handle_cnc_distance(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
         positions = behavior._cnc_status.get("distance_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
 
         resp = bytearray()
@@ -332,8 +353,9 @@ class FanucServer(ProtocolServer):
             resp += struct.pack("<d", pos)
         return bytes(resp)
 
-    def _handle_cnc_rdspindlespd(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+    def _handle_cnc_rdspindlespd(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
         speed = behavior._cnc_status.get("spindle_speed", self._DEFAULT_SPINDLE_SPEED) if behavior else self._DEFAULT_SPINDLE_SPEED
 
         resp = bytearray()
@@ -343,8 +365,9 @@ class FanucServer(ProtocolServer):
         resp += struct.pack("<d", float(speed))
         return bytes(resp)
 
-    def _handle_cnc_rdfeed(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+    def _handle_cnc_rdfeed(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
         feed = behavior._cnc_status.get("feed_rate", self._DEFAULT_FEED_RATE) if behavior else self._DEFAULT_FEED_RATE
 
         resp = bytearray()
@@ -354,8 +377,9 @@ class FanucServer(ProtocolServer):
         resp += struct.pack("<d", float(feed))
         return bytes(resp)
 
-    def _handle_cnc_alarm(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+    def _handle_cnc_alarm(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
         alarm = behavior._cnc_status.get("alarm", 0) if behavior else 0
 
         resp = bytearray()
@@ -372,8 +396,9 @@ class FanucServer(ProtocolServer):
             resp += struct.pack("<H", 0)
         return bytes(resp)
 
-    def _handle_cnc_program(self, req_id: int) -> bytes:
-        behavior = self._behaviors.get(self._default_device_id)
+    def _handle_cnc_program(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
         prog = behavior._cnc_status.get("program", "O0001") if behavior else "O0001"
 
         resp = bytearray()
@@ -383,6 +408,25 @@ class FanucServer(ProtocolServer):
         prog_bytes = prog.encode("ascii", errors="replace")
         resp += struct.pack("<H", len(prog_bytes))
         resp += prog_bytes
+        return bytes(resp)
+
+    def _handle_cnc_sysinfo(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P1: CNC系列信息
+        device_id = self._resolve_device(session_id)
+        cnc_type = self._device_params.get(device_id, {}).get("cnc_type", "0i-F")
+        type_map = {  # FIXED-P1: 不同CNC系列返回不同系列代码
+            "16i": (0x16, 0x00), "18i": (0x18, 0x00), "21i": (0x21, 0x00),
+            "30i": (0x30, 0x00), "31i": (0x31, 0x00), "32i": (0x32, 0x00),
+            "0i-F": (0x00, 0x0F), "0i-TD": (0x00, 0x0D), "0i-MD": (0x00, 0x0E),
+        }
+        series_code, sub_code = type_map.get(cnc_type, (0x00, 0x0F))
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0131)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", series_code)
+        resp += struct.pack("<H", sub_code)
+        resp += struct.pack("<H", 0x0002)  # version
+        resp += struct.pack("<H", 0x0001)  # axes
         return bytes(resp)
 
     def _make_focas_error(self, req_id: int, error_code: int) -> bytes:
@@ -450,5 +494,7 @@ class FanucServer(ProtocolServer):
             "properties": {
                 "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "FOCAS server listen address")},
                 "port": {"type": "integer", "default": 8193, "description": desc("fanuc_port", "FOCAS port (default 8193)")},
+                "cnc_type": {"type": "string", "default": "0i-F", "enum": ["0i-F", "0i-TD", "0i-MD", "16i", "18i", "21i", "30i", "31i", "32i"], "description": desc("cnc_type", "CNC series type")},  # FIXED-P1
+                "axis_count": {"type": "integer", "default": 3, "minimum": 1, "maximum": 8, "description": desc("axis_count", "Number of CNC axes")},  # FIXED-P1
             },
         }

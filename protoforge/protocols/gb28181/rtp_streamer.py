@@ -234,6 +234,26 @@ def generate_h264_iframe(width: int = 352, height: int = 288) -> bytes:
     return sps + pps + idr
 
 
+def generate_h264_pframe(width: int = 352, height: int = 288) -> bytes:  # FIXED-P1: 生成P帧，大幅降低码率
+    mb_w = (width + 15) // 16
+    mb_h = (height + 15) // 16
+    total_mbs = mb_w * mb_h
+    bw = _BitstreamWriter()
+    bw.write_bits(1, 1)  # first_mb_in_slice
+    bw.write_ue(total_mbs - 1)
+    bw.write_ue(0)  # slice_type P
+    bw.write_ue(0)  # pic_parameter_set_id
+    bw.write_bits(0, 1)  # frame_num
+    bw.write_bits(0, 1)  # field_pic_flag
+    bw.write_bits(0, 1)  # bottom_field_flag
+    bw.write_bits(0, 1)  # idr_pic_id
+    bw.write_bits(0, 1)  # pic_order_cnt_lsb
+    for _ in range(total_mbs):
+        bw.write_ue(0)  # mb_skip_run = 1 macroblock skipped
+    bw.write_rbsp_trailing()
+    return b'\x00\x00\x00\x01\x61' + _add_emulation_prevention(bw.to_bytes())
+
+
 def _build_ps_header(scr: float = 0.0) -> bytes:
     pack_start_code = b'\x00\x00\x01\xBA'
     scr_base = int(scr * 90000) % (2**33)
@@ -314,7 +334,8 @@ def build_rtp_packet(payload: bytes, seq: int, timestamp: int, ssrc: int,
 class RtpStreamer:
     def __init__(self, dest_ip: str, dest_port: int, ssrc: int,
                  width: int = 352, height: int = 288, fps: int = 25,
-                 srtp_context: SrtpContext | None = None):
+                 srtp_context: SrtpContext | None = None,
+                 gop_size: int = 25):  # FIXED-P1: GOP间隔，默认25帧(1秒@25fps)
         self._dest_ip = dest_ip
         self._dest_port = dest_port
         self._ssrc = ssrc
@@ -327,6 +348,8 @@ class RtpStreamer:
         self._running = False
         self._task = None
         self._h264_iframe = generate_h264_iframe(width, height)
+        self._h264_pframe = generate_h264_pframe(width, height)  # FIXED-P1: 预生成P帧
+        self._gop_size = max(1, gop_size)  # FIXED-P1: GOP间隔
         self._frame_count = 0
         self._on_debug_log = None
         self._srtp_context = srtp_context
@@ -391,16 +414,16 @@ class RtpStreamer:
     async def _stream_loop(self) -> None:
         frame_interval = 1.0 / self._fps
         timestamp_increment = 90000 // self._fps
-        include_sys_header = True
         try:
             while self._running:
                 pts = self._frame_count / self._fps
+                is_key_frame = (self._frame_count % self._gop_size == 0)  # FIXED-P1: 按GOP间隔发送I帧
+                h264_data = self._h264_iframe if is_key_frame else self._h264_pframe
                 ps_frame = build_ps_frame(
-                    self._h264_iframe,
+                    h264_data,
                     pts=pts,
-                    include_system_header=include_sys_header,
+                    include_system_header=is_key_frame,  # FIXED-P1: 仅I帧带system header
                 )
-                include_sys_header = False
                 mtu = 1400
                 if len(ps_frame) <= mtu:
                     packet = build_rtp_packet(
