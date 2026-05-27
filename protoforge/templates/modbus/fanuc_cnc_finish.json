@@ -1,8 +1,8 @@
 {
-    "id": "modbus_fanuc_cnc",
-    "name": "Fanuc CNC 数控系统",
+    "id": "modbus_fanuc_cnc_finish",
+    "name": "Fanuc CNC 精铣工位",
     "protocol": "modbus_tcp",
-    "description": "FANUC Series 0i-MF数控系统，支持Modbus TCP数据采集，适用于车床、铣床、加工中心",
+    "description": "FANUC Series 0i-MF数控系统，精铣工位：主轴约6000RPM，进给约300mm/min，切深小，表面粗糙度Ra0.8~1.6，要求主轴稳定性高",
     "manufacturer": "FANUC",
     "model": "0i-MF",
     "points": [
@@ -11,13 +11,13 @@
             "address": "0",
             "data_type": "uint16",
             "unit": "RPM",
-            "description": "主轴实际转速，粗加工工位：空闲为0，启动后稳定在约2000RPM",
+            "description": "主轴实际转速，精铣工位：空闲为0，启动后稳定在约6000RPM，精铣对转速稳定性要求高，波动小",
             "access": "r",
             "generator_type": "script",
             "min_value": 0,
             "max_value": 8000,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    target = 0\nelif t < 30:\n    target = 2000 * ((t - 20) / 10.0)\nelif t < 155:\n    target = 2000\nelif t < 165:\n    target = 2000 * (1 - ((t - 155) / 10.0))\nelse:\n    target = 0\nnoise = random.gauss(0, 15) if target > 100 else 0\nresult = int(round(max(0, min(8000, target + noise))))"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif t < 12:\n    target = 0\nelif t < 28:\n    target = 6000 * ((t - 12) / 16.0)\nelif t < 95:\n    target = 6000\nelif t < 110:\n    target = 6000 * (1 - ((t - 95) / 15.0))\nelse:\n    target = 0\nnoise = random.gauss(0, 8) if target > 100 else 0\nresult = int(round(max(0, min(8000, target + noise))))"
             }
         },
         {
@@ -25,13 +25,13 @@
             "address": "1",
             "data_type": "float32",
             "unit": "mm/min",
-            "description": "粗加工实际进给速度：切入阶段中低速，稳定粗加工约800mm/min，空闲和主轴启动阶段为0",
+            "description": "精铣实际进给速度：切入阶段低速，稳定精铣约300mm/min，精铣进给慢且稳定，波动小",
             "access": "r",
             "generator_type": "script",
             "min_value": 0,
             "max_value": 5000,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 30:\n    target = 0\nelif t < 40:\n    target = 500 + 300 * ((t - 30) / 10.0)\nelif t < 140:\n    target = 800\nelif t < 155:\n    target = 400\nelse:\n    target = 0\nnoise = random.gauss(0, 25) if target > 0 else 0\nresult = round(max(0, min(5000, target + noise)), 1)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif t < 28:\n    target = 0\nelif t < 36:\n    target = 150 + 150 * ((t - 28) / 8.0)\nelif t < 90:\n    target = 300\nelif t < 100:\n    target = 150\nelse:\n    target = 0\nnoise = random.gauss(0, 6) if target > 0 else 0\nresult = round(max(0, min(5000, target + noise)), 1)"
             }
         },
         {
@@ -39,13 +39,13 @@
             "address": "2",
             "data_type": "float32",
             "unit": "A",
-            "description": "粗加工主轴电流：空闲低电流，启动阶段中等电流，切入瞬间升高，稳定粗加工约19~24A",
+            "description": "精铣主轴电流：空闲约2A，启动约4A，切入峰值约11A，稳定精铣约7~10A，精铣切深小电流低且稳定",
             "access": "r",
             "generator_type": "script",
             "min_value": 0.0,
             "max_value": 40.0,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    base, noise_std = 2.2, 0.25\nelif t < 30:\n    base, noise_std = 6.0, 0.8\nelif t < 40:\n    base, noise_std = 23.5, 1.5\nelif t < 140:\n    base, noise_std = 21.5, 1.3\nelif t < 155:\n    base, noise_std = 6.0, 0.8\nelif t < 165:\n    base, noise_std = 4.0, 0.5\nelse:\n    base, noise_std = 2.2, 0.25\nresult = round(max(0, min(40.0, base + random.gauss(0, noise_std))), 2)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif t < 12:\n    base, noise_std = 2.2, 0.2\nelif t < 28:\n    base, noise_std = 4.0, 0.4\nelif t < 36:\n    base, noise_std = 11.0, 0.8\nelif t < 90:\n    base, noise_std = 8.5, 0.5\nelif t < 100:\n    base, noise_std = 4.0, 0.4\nelif t < 110:\n    base, noise_std = 3.0, 0.3\nelse:\n    base, noise_std = 2.2, 0.2\nresult = round(max(0, min(40.0, base + random.gauss(0, noise_std))), 2)"
             }
         },
         {
@@ -53,13 +53,13 @@
             "address": "23",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "X轴振动加速度",
+            "description": "X轴振动加速度，精铣切深小但转速高，振动幅值小、频率高",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
-            "max_value": 2.5,
+            "min_value": 0.02,
+            "max_value": 1.5,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 85 + 0.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif 28 <= t < 100:\n    base = 0.18 + 0.1 * math.sin(2 * math.pi * elapsed / 28 + 0.8)\nelse:\n    base = 0.05\nnoise = random.uniform(-0.04, 0.04)\nresult = round(max(0.02, base + noise), 3)"
             }
         },
         {
@@ -67,13 +67,13 @@
             "address": "25",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "Y轴振动加速度",
+            "description": "Y轴振动加速度，精铣切深小但转速高，振动幅值小、频率高",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
-            "max_value": 2.5,
+            "min_value": 0.02,
+            "max_value": 1.5,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 70 + 1.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif 28 <= t < 100:\n    base = 0.18 + 0.1 * math.sin(2 * math.pi * elapsed / 22 + 1.8)\nelse:\n    base = 0.05\nnoise = random.uniform(-0.04, 0.04)\nresult = round(max(0.02, base + noise), 3)"
             }
         },
         {
@@ -81,13 +81,13 @@
             "address": "27",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "Z轴振动加速度",
+            "description": "Z轴振动加速度，精铣切深小但转速高，振动幅值小、频率高",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
-            "max_value": 3.0,
+            "min_value": 0.02,
+            "max_value": 1.5,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.7 + 0.4 * math.sin(2 * math.pi * elapsed / 58 + 2.8); noise = random.uniform(-0.2, 0.2); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif 28 <= t < 100:\n    base = 0.2 + 0.12 * math.sin(2 * math.pi * elapsed / 18 + 2.8)\nelse:\n    base = 0.06\nnoise = random.uniform(-0.05, 0.05)\nresult = round(max(0.02, base + noise), 3)"
             }
         },
         {
@@ -95,13 +95,13 @@
             "address": "29",
             "data_type": "float32",
             "unit": "%",
-            "description": "粗加工主轴负载率，常态0~100%，短时允许到120%；粗加工稳定阶段约45~65%，切入瞬间可能更高",
+            "description": "精铣主轴负载率，稳定阶段约15~28%，切入瞬间约32%，精铣切深小负载低且稳定，短时允许到120%",
             "access": "r",
             "generator_type": "script",
             "min_value": 0.0,
             "max_value": 120.0,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    base, noise_std = 0.0, 0.0\nelif t < 30:\n    base, noise_std = 8.0, 2.0\nelif t < 40:\n    base, noise_std = 65.0, 4.0\nelif t < 140:\n    base, noise_std = 55.0, 4.0\nelif t < 155:\n    base, noise_std = 8.0, 2.0\nelif t < 165:\n    base, noise_std = 3.0, 1.0\nelse:\n    base, noise_std = 0.0, 0.0\nnoise = random.gauss(0, noise_std) if noise_std > 0 else 0\nresult = round(max(0, min(120.0, base + noise)), 2)"
+                "script": "elapsed = context['elapsed']; t = elapsed % 120\nif t < 12:\n    base, noise_std = 0.0, 0.0\nelif t < 28:\n    base, noise_std = 4.0, 1.0\nelif t < 36:\n    base, noise_std = 32.0, 2.0\nelif t < 90:\n    base, noise_std = 22.0, 1.5\nelif t < 100:\n    base, noise_std = 4.0, 1.0\nelif t < 110:\n    base, noise_std = 1.5, 0.5\nelse:\n    base, noise_std = 0.0, 0.0\nnoise = random.gauss(0, noise_std) if noise_std > 0 else 0\nresult = round(max(0, min(120.0, base + noise)), 2)"
             }
         },
         {
@@ -146,12 +146,12 @@
             "name": "tool_no",
             "address": "7",
             "data_type": "uint16",
-            "description": "当前刀具号，粗加工工位固定使用T1",
+            "description": "当前刀具号，精铣工位固定使用T3",
             "access": "r",
             "generator_type": "fixed",
             "min_value": 1,
             "max_value": 12,
-            "fixed_value": 1
+            "fixed_value": 3
         },
         {
             "name": "abs_x",
@@ -229,7 +229,7 @@
             "min_value": 0,
             "max_value": 99999,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; result = min(int(elapsed / 45), 99999)"
+                "script": "elapsed = context['elapsed']; result = min(int(elapsed / 120), 99999)"
             }
         },
         {
@@ -237,11 +237,10 @@
             "address": "21",
             "data_type": "uint16",
             "unit": "s",
-            "description": "循环时间",
+            "description": "循环时间，精铣单件约120s",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 10,
-            "max_value": 3600
+            "generator_type": "fixed",
+            "fixed_value": 120
         },
         {
             "name": "alarm_no",
@@ -254,7 +253,7 @@
         }
     ],
     "protocol_config": {
-        "slave_id": 6
+        "slave_id": 8
     },
-    "tags": ["CNC", "FANUC", "数控", "机床", "发那科"]
+    "tags": ["CNC", "FANUC", "数控", "机床", "发那科", "精铣"]
 }
