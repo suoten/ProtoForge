@@ -11,13 +11,13 @@
             "address": "0",
             "data_type": "uint16",
             "unit": "RPM",
-            "description": "主轴实际转速，粗加工工位：空闲为0，启动后稳定在约2000RPM",
+            "description": "主轴实际转速，粗加工工位：空闲为0，启动后稳定在约2000RPM，每件节拍有随机差异",
             "access": "r",
             "generator_type": "script",
             "min_value": 0,
             "max_value": 8000,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    target = 0\nelif t < 30:\n    target = 2000 * ((t - 20) / 10.0)\nelif t < 155:\n    target = 2000\nelif t < 165:\n    target = 2000 * (1 - ((t - 155) / 10.0))\nelse:\n    target = 0\nnoise = random.gauss(0, 15) if target > 100 else 0\nresult = int(round(max(0, min(8000, target + noise))))"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'spd_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 1)\n    cache[ck] = {'dur': rng.randint(-8, 10), 'spd': rng.uniform(-40, 40)}\noff = cache[ck]\nperiod = 180 + off['dur']; t = elapsed % period\nramp = 8; cut_end = period - 25 - ramp\nif t < 20:\n    target = 0\nelif t < 20 + ramp:\n    target = (2000 + off['spd']) * ((t - 20) / ramp)\nelif t < cut_end:\n    target = 2000 + off['spd']\nelif t < cut_end + ramp:\n    target = (2000 + off['spd']) * (1 - (t - cut_end) / ramp)\nelse:\n    target = 0\nnoise = random.gauss(0, 12) if target > 100 else 0\nresult = int(round(max(0, min(8000, target + noise))))"
             }
         },
         {
@@ -25,13 +25,13 @@
             "address": "1",
             "data_type": "float32",
             "unit": "mm/min",
-            "description": "粗加工实际进给速度：切入阶段中低速，稳定粗加工约800mm/min，空闲和主轴启动阶段为0",
+            "description": "粗加工实际进给速度：切入爬升，稳定粗铣约800mm/min含拐角减速扰动，退出降速，空闲为0",
             "access": "r",
             "generator_type": "script",
             "min_value": 0,
             "max_value": 5000,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 30:\n    target = 0\nelif t < 40:\n    target = 500 + 300 * ((t - 30) / 10.0)\nelif t < 140:\n    target = 800\nelif t < 155:\n    target = 400\nelse:\n    target = 0\nnoise = random.gauss(0, 25) if target > 0 else 0\nresult = round(max(0, min(5000, target + noise)), 1)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'feed_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 2)\n    cache[ck] = {'dur': rng.randint(-8, 10), 'feed': rng.uniform(-30, 50)}\noff = cache[ck]\nperiod = 180 + off['dur']; t = elapsed % period\ncut_end = period - 25 - 8\nif t < 30:\n    target = 0\nelif t < 40:\n    target = 400 + 400 * ((t - 30) / 10.0)\nelif t < cut_end:\n    base_feed = 800 + off['feed']\n    corner = 80 * math.sin(2 * math.pi * elapsed / 23.7) * max(0, math.sin(2 * math.pi * elapsed / 41.3))\n    target = base_feed + corner\nelif t < cut_end + 12:\n    target = 350\nelse:\n    target = 0\nnoise = random.gauss(0, 18) if target > 0 else 0\nresult = round(max(0, min(5000, target + noise)), 1)"
             }
         },
         {
@@ -39,13 +39,13 @@
             "address": "2",
             "data_type": "float32",
             "unit": "A",
-            "description": "粗加工主轴电流：空闲低电流，启动阶段中等电流，切入瞬间升高，稳定粗加工约19~24A",
+            "description": "粗加工主轴电流：空闲约2A，启动约6A，切入峰值约23A，稳定粗铣约19~24A含细碎波动，退刀降低",
             "access": "r",
             "generator_type": "script",
             "min_value": 0.0,
             "max_value": 40.0,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    base, noise_std = 2.2, 0.25\nelif t < 30:\n    base, noise_std = 6.0, 0.8\nelif t < 40:\n    base, noise_std = 23.5, 1.5\nelif t < 140:\n    base, noise_std = 21.5, 1.3\nelif t < 155:\n    base, noise_std = 6.0, 0.8\nelif t < 165:\n    base, noise_std = 4.0, 0.5\nelse:\n    base, noise_std = 2.2, 0.25\nresult = round(max(0, min(40.0, base + random.gauss(0, noise_std))), 2)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'cur_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 3)\n    cache[ck] = {'dur': rng.randint(-8, 10), 'cur': rng.uniform(-1.5, 2.0)}\noff = cache[ck]\nperiod = 180 + off['dur']; t = elapsed % period\ncut_end = period - 25 - 8\nif t < 20:\n    base, noise_std = 2.2, 0.2\nelif t < 20 + 8:\n    base, noise_std = 6.0, 0.7\nelif t < 40:\n    base, noise_std = 23.5 + off['cur'], 1.8\nelif t < cut_end:\n    drift = 0.8 * math.sin(2 * math.pi * elapsed / 37.4) + 0.5 * math.sin(2 * math.pi * elapsed / 19.1)\n    base, noise_std = 21.5 + off['cur'] + drift, 1.0\nelif t < cut_end + 12:\n    base, noise_std = 6.0, 0.7\nelif t < cut_end + 20:\n    base, noise_std = 3.5, 0.4\nelse:\n    base, noise_std = 2.2, 0.2\nresult = round(max(0, min(40.0, base + random.gauss(0, noise_std))), 2)"
             }
         },
         {
@@ -53,13 +53,13 @@
             "address": "23",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "X轴振动加速度",
+            "description": "X轴振动加速度，粗铣切削时约0.4~0.9m/s²，空闲时接近0",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
+            "min_value": 0.0,
             "max_value": 2.5,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 85 + 0.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'vx_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 4)\n    cache[ck] = {'dur': rng.randint(-8, 10)}\nperiod = 180 + cache[ck]['dur']; t = elapsed % period\ncut_end = period - 25 - 8\ncutting = 40 <= t < cut_end\nif cutting:\n    base = 0.55 + 0.22 * math.sin(2 * math.pi * elapsed / 85 + 0.8) + 0.1 * math.sin(2 * math.pi * elapsed / 17.3)\n    noise = random.uniform(-0.12, 0.12)\nelse:\n    base = 0.04\n    noise = random.uniform(-0.02, 0.02)\nresult = round(max(0.0, base + noise), 3)"
             }
         },
         {
@@ -67,13 +67,13 @@
             "address": "25",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "Y轴振动加速度",
+            "description": "Y轴振动加速度，粗铣切削时约0.4~0.9m/s²，空闲时接近0",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
+            "min_value": 0.0,
             "max_value": 2.5,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.5 + 0.3 * math.sin(2 * math.pi * elapsed / 70 + 1.8); noise = random.uniform(-0.15, 0.15); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'vy_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 5)\n    cache[ck] = {'dur': rng.randint(-8, 10)}\nperiod = 180 + cache[ck]['dur']; t = elapsed % period\ncut_end = period - 25 - 8\ncutting = 40 <= t < cut_end\nif cutting:\n    base = 0.5 + 0.2 * math.sin(2 * math.pi * elapsed / 70 + 1.8) + 0.08 * math.sin(2 * math.pi * elapsed / 13.7)\n    noise = random.uniform(-0.1, 0.1)\nelse:\n    base = 0.04\n    noise = random.uniform(-0.02, 0.02)\nresult = round(max(0.0, base + noise), 3)"
             }
         },
         {
@@ -81,13 +81,13 @@
             "address": "27",
             "data_type": "float32",
             "unit": "m/s²",
-            "description": "Z轴振动加速度",
+            "description": "Z轴振动加速度，粗铣切削时约0.5~1.1m/s²（Z向切深方向幅值略大），空闲时接近0",
             "access": "r",
             "generator_type": "script",
-            "min_value": 0.1,
+            "min_value": 0.0,
             "max_value": 3.0,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; base = 0.7 + 0.4 * math.sin(2 * math.pi * elapsed / 58 + 2.8); noise = random.uniform(-0.2, 0.2); result = round(max(0.1, base + noise), 3)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'vz_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 6)\n    cache[ck] = {'dur': rng.randint(-8, 10)}\nperiod = 180 + cache[ck]['dur']; t = elapsed % period\ncut_end = period - 25 - 8\ncutting = 40 <= t < cut_end\nif cutting:\n    base = 0.65 + 0.28 * math.sin(2 * math.pi * elapsed / 58 + 2.8) + 0.12 * math.sin(2 * math.pi * elapsed / 11.2)\n    noise = random.uniform(-0.15, 0.15)\nelse:\n    base = 0.05\n    noise = random.uniform(-0.02, 0.02)\nresult = round(max(0.0, base + noise), 3)"
             }
         },
         {
@@ -95,13 +95,13 @@
             "address": "29",
             "data_type": "float32",
             "unit": "%",
-            "description": "粗加工主轴负载率，常态0~100%，短时允许到120%；粗加工稳定阶段约45~65%，切入瞬间可能更高",
+            "description": "粗加工主轴负载率，稳定粗铣约48~68%含刀路扰动，切入瞬间约65~75%，空闲接近0，短时允许到120%",
             "access": "r",
             "generator_type": "script",
             "min_value": 0.0,
             "max_value": 120.0,
             "generator_config": {
-                "script": "elapsed = context['elapsed']; t = elapsed % 180\nif t < 20:\n    base, noise_std = 0.0, 0.0\nelif t < 30:\n    base, noise_std = 8.0, 2.0\nelif t < 40:\n    base, noise_std = 65.0, 4.0\nelif t < 140:\n    base, noise_std = 55.0, 4.0\nelif t < 155:\n    base, noise_std = 8.0, 2.0\nelif t < 165:\n    base, noise_std = 3.0, 1.0\nelse:\n    base, noise_std = 0.0, 0.0\nnoise = random.gauss(0, noise_std) if noise_std > 0 else 0\nresult = round(max(0, min(120.0, base + noise)), 2)"
+                "script": "elapsed = context['elapsed']\ncycle_idx = int(elapsed // 180)\nck = f'load_{cycle_idx}'\nif ck not in cache:\n    rng = random.Random(cycle_idx * 7 + 7)\n    cache[ck] = {'dur': rng.randint(-8, 10), 'load': rng.uniform(-4.0, 6.0)}\noff = cache[ck]\nperiod = 180 + off['dur']; t = elapsed % period\ncut_end = period - 25 - 8\nif t < 20:\n    base, noise_std = 0.0, 0.0\nelif t < 20 + 8:\n    base, noise_std = 6.0, 1.5\nelif t < 40:\n    base, noise_std = 68.0 + off['load'], 3.5\nelif t < cut_end:\n    drift = 4.5 * math.sin(2 * math.pi * elapsed / 37.4) + 2.5 * math.sin(2 * math.pi * elapsed / 19.1) + 1.5 * math.sin(2 * math.pi * elapsed / 7.3)\n    base, noise_std = 56.0 + off['load'] + drift, 2.5\nelif t < cut_end + 12:\n    base, noise_std = 6.0, 1.5\nelif t < cut_end + 20:\n    base, noise_std = 2.0, 0.8\nelse:\n    base, noise_std = 0.0, 0.0\nnoise = random.gauss(0, noise_std) if noise_std > 0 else 0\nresult = round(max(0, min(120.0, base + noise)), 2)"
             }
         },
         {
