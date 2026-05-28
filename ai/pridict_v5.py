@@ -1,27 +1,31 @@
 # -*- coding: utf-8 -*-
 """
-ProtoForge Predictor v12
+ProtoForge Predictor v13
 
 核心能力：
-1. feed_rate / spindle_speed / spindle_current 使用 phase-lock 点预测。
-2. vibration_x / vibration_y / vibration_z 使用 phase-band 预测带。
-3. vibration 类指标：
-   - predicted 使用平滑后的中位数模板，用于趋势参考。
-   - upper/lower 使用原始波动分位数模板 + padding，用于正常波动容忍带。
-   - 偶发越界不直接报警，只有持续越界 / 高比例越界 / 严重越界才报警。
-4. 预测起点锚定最后一个真实点 last_real_ts，避免时间错位。
-5. 异常期间冻结健康模板，不学习故障数据。
-6. 故障恢复后等待稳定，再恢复模板学习。
-7. 写入：
-   - xxx_predicted
-   - xxx_predicted_upper
-   - xxx_predicted_lower
-   - xxx_anomaly
-   - xxx_anomaly_outside_ratio
-   - xxx_anomaly_mean_abs_error
-   - xxx_anomaly_mean_rel_error
-   - xxx_anomaly_max_consecutive_outside
-   - xxx_anomaly_max_exceed_ratio
+1. 支持三个独立 CNC 工位：粗铣(fanuc-cnc)、半精铣(fanuc-cnc-semi-finish)、精铣(fanuc-cnc-finish)
+2. 覆盖指标：feed_rate / spindle_speed / spindle_current / spindle_load
+3. feed_rate / spindle_speed / spindle_current 使用 phase-lock 点预测。
+4. spindle_load 使用 phase_band 预测带（多频漂移容忍）。
+5. vibration_x / vibration_y / vibration_z 使用 phase-band 预测带。
+6. 各工位独立阈值配置，匹配实际量程差异：
+   - 粗铣：spindle_speed~2000RPM, feed_rate~800mm/min, spindle_current~21A, spindle_load~56%
+   - 半精铣：spindle_speed~4000RPM, feed_rate~500mm/min, spindle_current~14.5A, spindle_load~38%
+   - 精铣：spindle_speed~6000RPM, feed_rate~300mm/min, spindle_current~8.5A, spindle_load~22%
+7. 粗铣周期含随机抖动(±10s)，phase-lock 搜索范围扩大至 ±18%。
+8. 预测起点锚定最后一个真实点 last_real_ts，避免时间错位。
+9. 异常期间冻结健康模板，不学习故障数据。
+10. 故障恢复后等待稳定，再恢复模板学习。
+11. 写入：
+    - xxx_predicted
+    - xxx_predicted_upper
+    - xxx_predicted_lower
+    - xxx_anomaly
+    - xxx_anomaly_outside_ratio
+    - xxx_anomaly_mean_abs_error
+    - xxx_anomaly_mean_rel_error
+    - xxx_anomaly_max_consecutive_outside
+    - xxx_anomaly_max_exceed_ratio
 """
 
 import json
@@ -55,7 +59,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 VM_URL = "http://localhost:8428"
-STATE_FILE = "/tmp/protoforge_predictor_state_v12.json"
+STATE_FILE = "/tmp/protoforge_predictor_state_v14.json"
 
 HISTORY_MINUTES = 30
 HORIZON_SECONDS = 120
@@ -86,6 +90,7 @@ VALLEY_QUANTILE = 45
 
 MAX_DATA_LAG_SECONDS = 180
 
+# 默认 phase-lock 搜索参数（精铣/半精铣：固定周期，搜索范围窄）
 PHASE_LOCK_MIN_WINDOW_SECONDS = 45
 PHASE_LOCK_MAX_WINDOW_SECONDS = 180
 PHASE_LOCK_PERIOD_SEARCH_RATIO = 0.12
@@ -95,105 +100,260 @@ PHASE_LOCK_ORIGIN_STEP = 1
 
 
 # =============================================================================
-# 指标配置
+# 监控指标白名单（可通过环境变量 PROTOFORGE_MONITORED_METRICS 覆盖）
 # =============================================================================
 
-PREDICT_TARGETS = [
-    {
-        "query": 'feed_rate{device_id="fanuc-cnc"}',
-        "pred_metric": "feed_rate_predicted",
-        "anomaly_metric": "feed_rate_anomaly",
-        "strategy": "phase_point",
-        "abs_threshold": 400.0,
-        "rel_threshold": 0.25,
-        "smooth_window": 1,
-        "outside_ratio_threshold": 0.60,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 1.8,
-    },
-    {
-        "query": 'spindle_speed{device_id="fanuc-cnc"}',
-        "pred_metric": "spindle_speed_predicted",
-        "anomaly_metric": "spindle_speed_anomaly",
-        "strategy": "phase_point",
-        "abs_threshold": 500.0,
-        "rel_threshold": 0.25,
-        "smooth_window": 1,
-        "outside_ratio_threshold": 0.60,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 1.8,
-    },
-    {
-        "query": 'spindle_current{device_id="fanuc-cnc"}',
-        "pred_metric": "spindle_current_predicted",
-        "anomaly_metric": "spindle_current_anomaly",
-        "strategy": "phase_point",
-        "abs_threshold": 5.0,
-        "rel_threshold": 0.25,
-        "smooth_window": 1,
-        "outside_ratio_threshold": 0.60,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 1.8,
-    },
-    {
-        "query": 'vibration_x{device_id="fanuc-cnc"}',
-        "pred_metric": "vibration_x_predicted",
-        "anomaly_metric": "vibration_x_anomaly",
-        "strategy": "phase_band",
-
-        # vibration 类指标噪声、尖峰较多，不建议用很窄的阈值。
-        "abs_threshold": 0.18,
-        "rel_threshold": 0.55,
-
-        # 平滑只用于相位锁定和 predicted 中位趋势。
-        "smooth_window": 5,
-
-        # upper/lower 用原始值分位数，范围放宽，覆盖正常尖峰。
-        "band_low_q": 1,
-        "band_high_q": 99,
-        "band_pad_abs": 0.15,
-
-        # 偶发越界容忍。
-        "outside_ratio_threshold": 0.70,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 2.0,
-    },
-    {
-        "query": 'vibration_y{device_id="fanuc-cnc"}',
-        "pred_metric": "vibration_y_predicted",
-        "anomaly_metric": "vibration_y_anomaly",
-        "strategy": "phase_band",
-        "abs_threshold": 0.18,
-        "rel_threshold": 0.55,
-        "smooth_window": 5,
-        "band_low_q": 1,
-        "band_high_q": 99,
-        "band_pad_abs": 0.15,
-        "outside_ratio_threshold": 0.70,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 2.0,
-    },
-    {
-        "query": 'vibration_z{device_id="fanuc-cnc"}',
-        "pred_metric": "vibration_z_predicted",
-        "anomaly_metric": "vibration_z_anomaly",
-        "strategy": "phase_band",
-        "abs_threshold": 0.18,
-        "rel_threshold": 0.55,
-        "smooth_window": 5,
-        "band_low_q": 1,
-        "band_high_q": 99,
-        "band_pad_abs": 0.15,
-        "outside_ratio_threshold": 0.70,
-        "min_consecutive_outside": 5,
-        "severe_exceed_ratio": 2.0,
-    },
+_DEFAULT_MONITORED_METRICS = [
+    "feed_rate",
+    "spindle_speed",
+    "spindle_current",
+    "spindle_load",
+    "vibration_x",
+    "vibration_y",
+    "vibration_z",
 ]
 
-EXTRA_PREDICT_LABELS = {
-    "forecast": "phase_band_health_v12",
-    "source": "protoforge",
-}
+MONITORED_METRICS: List[str] = [
+    m.strip()
+    for m in os.environ.get(
+        "PROTOFORGE_MONITORED_METRICS",
+        ",".join(_DEFAULT_MONITORED_METRICS),
+    ).split(",")
+    if m.strip()
+]
+
+# 人工上下限覆盖文件（可选，不存在则忽略）
+# 格式：{"device-id": {"metric_name": {"hard_max": 35.0, "hard_min": 0.0}}}
+OVERRIDE_FILE = os.environ.get(
+    "PROTOFORGE_PREDICTOR_OVERRIDE",
+    "/etc/protoforge/predictor_override.json",
+)
+
+# 目标列表刷新间隔（秒）
+TARGETS_REFRESH_INTERVAL = int(os.environ.get("PROTOFORGE_TARGETS_REFRESH", "60"))
+
+# 运行时目标缓存
+_TARGETS_CACHE: List[Dict] = []
+_TARGETS_LAST_REFRESH: float = 0.0
+
+
+# =============================================================================
+# Layer 1: 设备与指标发现
+# =============================================================================
+
+def discover_device_ids() -> List[str]:
+    """查询 VM 中所有 device_id 标签值。"""
+    try:
+        resp = requests.get(
+            f"{VM_URL}/api/v1/label/device_id/values",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return [v for v in resp.json().get("data", []) if v]
+    except requests.RequestException as e:
+        logger.error("发现 device_id 失败: %s", e)
+        return []
+
+
+def discover_metrics_for_device(device_id: str) -> List[str]:
+    """查询该设备在 VM 中实际存在且有近期数据的指标名。"""
+    found = []
+    for metric in MONITORED_METRICS:
+        try:
+            resp = requests.get(
+                f"{VM_URL}/api/v1/query",
+                params={"query": f'{metric}{{device_id="{device_id}"}}'},
+                timeout=5,
+            )
+            resp.raise_for_status()
+            if resp.json().get("data", {}).get("result"):
+                found.append(metric)
+        except requests.RequestException:
+            pass
+    return found
+
+
+# =============================================================================
+# Layer 2: 自适应配置推断
+# =============================================================================
+
+@dataclass
+class MetricProfile:
+    """从历史数据统计出的指标特征，驱动策略和阈值的自动推断。"""
+    device_id: str
+    metric: str
+    p5: float           # 活跃段 5th percentile
+    p95: float          # 活跃段 95th percentile
+    iqr: float          # p95 - p5
+    cv: float           # 变异系数 std/mean（衡量稳定性）
+    strategy: str       # "phase_point" 或 "phase_band"
+    abs_threshold: float
+    rel_threshold: float
+    band_low_q: float
+    band_high_q: float
+    band_pad_abs: float
+    phase_lock_period_search_ratio: float
+
+
+def infer_metric_profile(device_id: str, metric: str) -> Optional["MetricProfile"]:
+    """
+    拉取历史数据，统计活跃段特征，自动推断预测策略和阈值。
+
+    空闲段过滤：排除 p10 以下的点，避免机床空闲时的零值拉低阈值。
+    strategy 判断：cv < 0.15 → phase_point（稳定信号），否则 phase_band（波动信号）。
+    phase_lock 搜索范围：由周期长度的变异系数动态决定，周期抖动大则搜索范围宽。
+    """
+    ts_raw, ys_raw = fetch_history(f'{metric}{{device_id="{device_id}"}}')
+    if len(ys_raw) < MIN_POINTS:
+        return None
+
+    arr = np.array(ys_raw, dtype=float)
+
+    # 过滤空闲段：只保留活跃值（高于 p10）
+    p10_val = float(np.percentile(arr, 10))
+    active = arr[arr > p10_val]
+    if len(active) < 30:
+        active = arr  # 数据全是活跃段，不过滤
+
+    mean_val = float(np.mean(active))
+    std_val = float(np.std(active))
+    cv = std_val / max(abs(mean_val), 1e-6)
+    p5 = float(np.percentile(active, 5))
+    p95 = float(np.percentile(active, 95))
+    iqr = p95 - p5
+
+    # 策略自动判断
+    strategy = "phase_point" if cv < 0.15 else "phase_band"
+
+    # 阈值自动计算：取 IQR 的 80%、量程的 5%、2倍标准差 三者最大值
+    abs_threshold = max(iqr * 0.8, (p95 - p5) * 0.05, std_val * 2.0)
+    rel_threshold = min(0.30, cv * 1.5)
+
+    # phase_band 容忍带宽度：IQR 的 30% 或 1 倍标准差，取较大值
+    band_pad_abs = max(iqr * 0.3, std_val)
+
+    # phase-lock 搜索范围：从历史数据估算周期抖动率
+    # 用 FFT 粗估周期，再用自相关精化，最后计算多周期长度的变异系数
+    ts_grid, ys_grid = normalize_history(ts_raw, ys_raw)
+    period_search_ratio = PHASE_LOCK_PERIOD_SEARCH_RATIO  # 默认值
+    if len(ys_grid) >= MIN_POINTS:
+        rough_period = estimate_period_rough(ys_grid)
+        if rough_period > MIN_PERIOD_SECONDS:
+            # 用谷底间距估算周期抖动
+            valleys = find_valley_indices(ts_grid, ys_grid, rough_period)
+            if len(valleys) >= 3:
+                diffs = np.diff(ts_grid[valleys].astype(float))
+                valid = diffs[(diffs > rough_period * 0.5) & (diffs < rough_period * 2.0)]
+                if len(valid) >= 2:
+                    period_cv = float(np.std(valid) / max(np.mean(valid), 1e-6))
+                    period_search_ratio = float(np.clip(period_cv * 2.0, 0.12, 0.25))
+
+    logger.info(
+        "推断指标特征 device=%s metric=%s cv=%.3f strategy=%s abs_thr=%.3f rel_thr=%.3f period_search=%.2f",
+        device_id, metric, cv, strategy, abs_threshold, rel_threshold, period_search_ratio,
+    )
+
+    return MetricProfile(
+        device_id=device_id,
+        metric=metric,
+        p5=p5,
+        p95=p95,
+        iqr=iqr,
+        cv=cv,
+        strategy=strategy,
+        abs_threshold=abs_threshold,
+        rel_threshold=rel_threshold,
+        band_low_q=5.0,
+        band_high_q=95.0,
+        band_pad_abs=band_pad_abs,
+        phase_lock_period_search_ratio=period_search_ratio,
+    )
+
+
+def load_overrides() -> Dict:
+    """加载人工上下限覆盖文件，文件不存在时返回空字典。"""
+    if not os.path.exists(OVERRIDE_FILE):
+        return {}
+    try:
+        with open(OVERRIDE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning("加载 override 文件失败 %s: %s", OVERRIDE_FILE, e)
+        return {}
+
+
+def build_target(profile: MetricProfile, overrides: Dict) -> Dict:
+    """将 MetricProfile 转换为预测执行层可用的 target dict。"""
+    device_overrides = overrides.get(profile.device_id, {}).get(profile.metric, {})
+
+    target: Dict = {
+        "query": f'{profile.metric}{{device_id="{profile.device_id}"}}',
+        "pred_metric": f"{profile.metric}_predicted",
+        "anomaly_metric": f"{profile.metric}_anomaly",
+        "strategy": profile.strategy,
+        "abs_threshold": profile.abs_threshold,
+        "rel_threshold": profile.rel_threshold,
+        "smooth_window": 5 if profile.strategy == "phase_band" else 2,
+        "outside_ratio_threshold": 0.60,
+        "min_consecutive_outside": 5,
+        "severe_exceed_ratio": 1.8,
+        "phase_lock_period_search_ratio": profile.phase_lock_period_search_ratio,
+        "phase_lock_origin_search_ratio": min(
+            0.45, profile.phase_lock_period_search_ratio * 2.5
+        ),
+        # 物理上下限（可选，来自 override 文件）
+        "hard_max": device_overrides.get("hard_max"),
+        "hard_min": device_overrides.get("hard_min"),
+    }
+
+    if profile.strategy == "phase_band":
+        target.update({
+            "band_low_q": profile.band_low_q,
+            "band_high_q": profile.band_high_q,
+            "band_pad_abs": profile.band_pad_abs,
+        })
+
+    return target
+
+
+def refresh_targets_if_needed() -> None:
+    """
+    按 TARGETS_REFRESH_INTERVAL 间隔重新发现设备和指标，动态更新目标列表。
+    首次调用时立即执行发现。
+    """
+    global _TARGETS_CACHE, _TARGETS_LAST_REFRESH
+
+    now = time.time()
+    if now - _TARGETS_LAST_REFRESH < TARGETS_REFRESH_INTERVAL and _TARGETS_CACHE:
+        return
+
+    logger.info("开始发现设备和指标...")
+    overrides = load_overrides()
+    targets: List[Dict] = []
+
+    device_ids = discover_device_ids()
+    if not device_ids:
+        logger.warning("未发现任何 device_id，保持现有目标列表")
+        return
+
+    for device_id in device_ids:
+        metrics = discover_metrics_for_device(device_id)
+        for metric in metrics:
+            profile = infer_metric_profile(device_id, metric)
+            if profile is not None:
+                targets.append(build_target(profile, overrides))
+
+    if targets:
+        _TARGETS_CACHE = targets
+        _TARGETS_LAST_REFRESH = now
+        logger.info(
+            "目标列表已更新：%d 台设备，%d 个指标目标",
+            len(device_ids),
+            len(targets),
+        )
+    else:
+        logger.warning("发现流程未产生任何有效目标，保持现有目标列表")
+
 
 BASELINE_STATUS_HEALTHY = "healthy"
 BASELINE_STATUS_ANOMALY = "anomaly"
@@ -612,8 +772,6 @@ def build_templates_from_valleys(
 
     if strategy == "phase_band":
         mid_template = np.percentile(mid_arr, 50, axis=0)
-
-        # upper/lower 使用原始值分布，而不是平滑值分布。
         lower_template = np.percentile(band_arr, low_q, axis=0)
         upper_template = np.percentile(band_arr, high_q, axis=0)
     else:
@@ -794,16 +952,27 @@ def merge_template(
 
 # =============================================================================
 # Phase Lock
+# 支持 target 级别的 phase_lock_period_search_ratio / phase_lock_origin_search_ratio
+# 粗铣工位周期含随机抖动(±10s)，需要更宽的搜索范围
 # =============================================================================
 
 def phase_lock_recent(
     state: BaselineState,
     ts_grid: np.ndarray,
     ys_model: np.ndarray,
+    target: Optional[Dict] = None,
 ) -> Tuple[int, int, np.ndarray, float]:
     base_period = int(state.period)
     base_origin = int(state.phase_origin_ts)
     base_template = np.array(state.template, dtype=float)
+
+    # 从 target 读取搜索范围，允许粗铣工位使用更宽的范围
+    period_search_ratio = float(
+        (target or {}).get("phase_lock_period_search_ratio", PHASE_LOCK_PERIOD_SEARCH_RATIO)
+    )
+    origin_search_ratio = float(
+        (target or {}).get("phase_lock_origin_search_ratio", PHASE_LOCK_ORIGIN_SEARCH_RATIO)
+    )
 
     if base_period <= 1 or len(base_template) <= 1:
         ts_recent = ts_grid[-DETECT_WINDOW_SECONDS:].astype(int).tolist()
@@ -832,11 +1001,11 @@ def phase_lock_recent(
 
     p_min = max(
         int(MIN_PERIOD_SECONDS),
-        int(round(base_period * (1.0 - PHASE_LOCK_PERIOD_SEARCH_RATIO))),
+        int(round(base_period * (1.0 - period_search_ratio))),
     )
     p_max = min(
         int(MAX_PERIOD_SECONDS),
-        int(round(base_period * (1.0 + PHASE_LOCK_PERIOD_SEARCH_RATIO))),
+        int(round(base_period * (1.0 + period_search_ratio))),
     )
 
     best_period = base_period
@@ -855,7 +1024,7 @@ def phase_lock_recent(
     for period in range(p_min, p_max + 1, PHASE_LOCK_PERIOD_STEP):
         template = resample_template(base_template, period)
         center_origin = normalize_origin_near(base_origin, period, last_ts)
-        origin_shift = max(2, int(round(period * PHASE_LOCK_ORIGIN_SEARCH_RATIO)))
+        origin_shift = max(2, int(round(period * origin_search_ratio)))
 
         for shift in range(-origin_shift, origin_shift + 1, PHASE_LOCK_ORIGIN_STEP):
             origin = center_origin + shift
@@ -925,7 +1094,6 @@ def calc_final_bounds(
     if strategy == "phase_band":
         pad_abs = float(target.get("band_pad_abs", abs_threshold))
 
-        # 对 vibration 类指标：边界更像正常波动容忍带，不是硬边界。
         dynamic_pad = np.maximum(
             pad_abs,
             np.abs(pred) * rel_threshold * 0.25,
@@ -933,10 +1101,18 @@ def calc_final_bounds(
 
         lower = lower_raw - dynamic_pad
         upper = upper_raw + dynamic_pad
+    else:
+        lower, upper = calc_point_bounds(pred, abs_threshold, rel_threshold)
 
-        return lower, upper
+    # 物理上下限兜底（来自 override 文件，可选）
+    hard_max = target.get("hard_max")
+    hard_min = target.get("hard_min")
+    if hard_max is not None:
+        upper = np.minimum(upper, float(hard_max))
+    if hard_min is not None:
+        lower = np.maximum(lower, float(hard_min))
 
-    return calc_point_bounds(pred, abs_threshold, rel_threshold)
+    return lower, upper
 
 
 def detect_anomaly(
@@ -950,6 +1126,7 @@ def detect_anomaly(
         state=state,
         ts_grid=ts_grid,
         ys_model=ys_model,
+        target=target,
     )
 
     recent_len = len(pred_recent)
@@ -1018,11 +1195,6 @@ def detect_anomaly(
         target.get("severe_exceed_ratio", SEVERE_EXCEED_RATIO)
     )
 
-    # 核心优化：
-    # 1. 偶发 1~3 个点越界不报警。
-    # 2. 持续越界才报警。
-    # 3. 高比例越界才报警。
-    # 4. 严重越界才立即报警。
     is_anomaly = (
         outside_ratio >= outside_ratio_threshold
         or max_outside_seconds >= min_consecutive_outside
@@ -1653,7 +1825,13 @@ def build_prediction_timestamps(
 def run_once() -> None:
     now_str = datetime.now().strftime("%H:%M:%S")
 
-    for target in PREDICT_TARGETS:
+    refresh_targets_if_needed()
+
+    if not _TARGETS_CACHE:
+        logger.warning("[%s] 目标列表为空，等待设备发现完成", now_str)
+        return
+
+    for target in _TARGETS_CACHE:
         query = target["query"]
         pred_metric = target["pred_metric"]
         anomaly_metric = target["anomaly_metric"]
@@ -1749,7 +1927,7 @@ def run_once() -> None:
         origin_str = datetime.fromtimestamp(state.phase_origin_ts).strftime("%H:%M:%S")
 
         logger.info(
-            "[%s] %-40s → %-35s strategy=%s status=%s anomaly=%s outside=%.2f max_outside=%ss max_exceed=%.2f period=%ss origin=%s last_real=%s lag=%ss 写入 %d 点，预测区间 %s ~ %s",
+            "[%s] %-50s → %-35s strategy=%s status=%s anomaly=%s outside=%.2f max_outside=%ss max_exceed=%.2f period=%ss origin=%s last_real=%s lag=%ss 写入 %d 点，预测区间 %s ~ %s",
             now_str,
             query,
             pred_metric,
@@ -1775,7 +1953,7 @@ def main() -> None:
     load_state()
 
     logger.info(
-        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s forecast=%s",
+        "预测服务启动 VM=%s 历史窗口=%dmin 理论预测窗口=%ds 实际写入窗口=%ds 轮询间隔=%ds state=%s forecast=%s override=%s refresh=%ds",
         VM_URL,
         HISTORY_MINUTES,
         HORIZON_SECONDS,
@@ -1783,6 +1961,8 @@ def main() -> None:
         POLL_INTERVAL,
         STATE_FILE,
         EXTRA_PREDICT_LABELS["forecast"],
+        OVERRIDE_FILE,
+        TARGETS_REFRESH_INTERVAL,
     )
 
     while True:

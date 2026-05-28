@@ -32,24 +32,77 @@ logger = logging.getLogger(__name__)
 BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
 
     # ------------------------------------------------------------------
-    # 进给堵转 — 工件夹紧松动或切削量过大导致进给卡死
-    # 特征：进给速率瞬间降为0，主轴负载和电流急剧升高，主轴仍在转（区别于崩刃）
-    # 模式：瞬间注入
+    # 进给堵转（粗铣）— fanuc-cnc
+    # 量程：spindle_speed~2000RPM, feed_rate~800mm/min,
+    #        spindle_current~21A, spindle_load~56%
+    # 堵转目标：load→92%, current→38A，转速维持+轻微抖动
     # ------------------------------------------------------------------
     FaultTypeDefinition(
-        id="feed_stall",
-        name="进给堵转",
-        description="进给轴卡死，进给速率降为零，主轴负载和电流急剧升高，主轴转速维持（区别于崩刃停主轴）",
+        id="feed_stall_rough",
+        name="进给堵转（粗铣）",
+        description="粗铣进给轴卡死，进给速率降为零，主轴负载升至~92%，电流升至~38A，主轴转速维持（区别于崩刃停主轴）",
         category="process",
         default_duration=20.0,
-        tags=["进给", "堵转", "突发"],
+        tags=["进给", "堵转", "突发", "粗铣"],
         point_faults=[
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
                              target_value=0.0, noise_scale=0.0),
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             multiplier=2.8, noise_scale=5.0),
+                             target_value=92.0, noise_scale=4.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             multiplier=3.8, noise_scale=1.5),
+                             target_value=38.0, noise_scale=1.5),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=30.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 进给堵转（半精铣）— fanuc-cnc-semi-finish
+    # 量程：spindle_speed~4000RPM, feed_rate~500mm/min,
+    #        spindle_current~14.5A, spindle_load~38%
+    # 堵转目标：load→68%, current→26A，转速维持+轻微抖动
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="feed_stall_semi",
+        name="进给堵转（半精铣）",
+        description="半精铣进给轴卡死，进给速率降为零，主轴负载升至~68%，电流升至~26A，主轴转速维持（区别于崩刃停主轴）",
+        category="process",
+        default_duration=20.0,
+        tags=["进给", "堵转", "突发", "半精铣"],
+        point_faults=[
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_value=68.0, noise_scale=3.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_value=26.0, noise_scale=1.2),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=50.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 进给堵转（精铣）— fanuc-cnc-finish
+    # 量程：spindle_speed~6000RPM, feed_rate~300mm/min,
+    #        spindle_current~8.5A, spindle_load~22%
+    # 堵转目标：load→40%, current→15A，转速维持+轻微抖动
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="feed_stall_finish",
+        name="进给堵转（精铣）",
+        description="精铣进给轴卡死，进给速率降为零，主轴负载升至~40%，电流升至~15A，主轴转速维持（区别于崩刃停主轴）",
+        category="process",
+        default_duration=20.0,
+        tags=["进给", "堵转", "突发", "精铣"],
+        point_faults=[
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_value=40.0, noise_scale=2.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_value=15.0, noise_scale=0.8),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=80.0),
         ],
     ),
 
