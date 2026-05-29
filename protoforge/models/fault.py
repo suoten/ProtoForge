@@ -25,6 +25,11 @@ class PointFaultConfig(BaseModel):
     target_value: Optional[float] = None
     multiplier: Optional[float] = None     # 异常值 = 当前正常值 × multiplier
 
+    # 目标值范围：注入时在 [target_min, target_max] 内随机采样一个实际目标值
+    # 设置后会覆盖 target_value，使每次注入的故障严重程度有所不同
+    target_min: Optional[float] = None
+    target_max: Optional[float] = None
+
     # GRADUAL 模式：从当前值线性劣化到 target_value 或 multiplier 倍
     # 劣化程度 = progress(0~1) × (target - baseline)
     noise_scale: float = 0.0               # 叠加随机噪声幅度，模拟真实抖动
@@ -59,7 +64,8 @@ class ActiveFault(BaseModel):
     duration: float = 120.0
     started_at: float = 0.0
     cleared_at: Optional[float] = None
-    baseline_values: dict[str, float] = Field(default_factory=dict)  # 注入时的正常基线值
+    baseline_values: dict[str, float] = Field(default_factory=dict)   # 注入时的正常基线值
+    resolved_targets: dict[str, float] = Field(default_factory=dict)  # 注入时随机采样的实际目标值
 
 
 class FaultInfo(BaseModel):

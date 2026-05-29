@@ -35,12 +35,12 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     # 进给堵转（粗铣）— fanuc-cnc
     # 量程：spindle_speed~2000RPM, feed_rate~800mm/min,
     #        spindle_current~21A, spindle_load~56%
-    # 堵转目标：load→92%, current→38A，转速维持+轻微抖动
+    # 堵转目标：load→85~100%, current→34~42A，转速维持+轻微抖动
     # ------------------------------------------------------------------
     FaultTypeDefinition(
         id="feed_stall_rough",
         name="进给堵转（粗铣）",
-        description="粗铣进给轴卡死，进给速率降为零，主轴负载升至~92%，电流升至~38A，主轴转速维持（区别于崩刃停主轴）",
+        description="粗铣进给轴卡死，进给速率降为零，主轴负载升至85~100%，电流升至34~42A，主轴转速维持（区别于崩刃停主轴）",
         category="process",
         default_duration=20.0,
         tags=["进给", "堵转", "突发", "粗铣"],
@@ -48,9 +48,9 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
                              target_value=0.0, noise_scale=0.0),
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             target_value=92.0, noise_scale=4.0),
+                             target_min=85.0, target_max=100.0, noise_scale=4.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             target_value=38.0, noise_scale=1.5),
+                             target_min=34.0, target_max=42.0, noise_scale=1.5),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=30.0),
         ],
@@ -60,12 +60,12 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     # 进给堵转（半精铣）— fanuc-cnc-semi-finish
     # 量程：spindle_speed~4000RPM, feed_rate~500mm/min,
     #        spindle_current~14.5A, spindle_load~38%
-    # 堵转目标：load→68%, current→26A，转速维持+轻微抖动
+    # 堵转目标：load→62~75%, current→23~29A，转速维持+轻微抖动
     # ------------------------------------------------------------------
     FaultTypeDefinition(
         id="feed_stall_semi",
         name="进给堵转（半精铣）",
-        description="半精铣进给轴卡死，进给速率降为零，主轴负载升至~68%，电流升至~26A，主轴转速维持（区别于崩刃停主轴）",
+        description="半精铣进给轴卡死，进给速率降为零，主轴负载升至62~75%，电流升至23~29A，主轴转速维持（区别于崩刃停主轴）",
         category="process",
         default_duration=20.0,
         tags=["进给", "堵转", "突发", "半精铣"],
@@ -73,9 +73,9 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
                              target_value=0.0, noise_scale=0.0),
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             target_value=68.0, noise_scale=3.0),
+                             target_min=62.0, target_max=75.0, noise_scale=3.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             target_value=26.0, noise_scale=1.2),
+                             target_min=23.0, target_max=29.0, noise_scale=1.2),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=50.0),
         ],
@@ -85,12 +85,12 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     # 进给堵转（精铣）— fanuc-cnc-finish
     # 量程：spindle_speed~6000RPM, feed_rate~300mm/min,
     #        spindle_current~8.5A, spindle_load~22%
-    # 堵转目标：load→40%, current→15A，转速维持+轻微抖动
+    # 堵转目标：load→36~45%, current→13~17A，转速维持+轻微抖动
     # ------------------------------------------------------------------
     FaultTypeDefinition(
         id="feed_stall_finish",
         name="进给堵转（精铣）",
-        description="精铣进给轴卡死，进给速率降为零，主轴负载升至~40%，电流升至~15A，主轴转速维持（区别于崩刃停主轴）",
+        description="精铣进给轴卡死，进给速率降为零，主轴负载升至36~45%，电流升至13~17A，主轴转速维持（区别于崩刃停主轴）",
         category="process",
         default_duration=20.0,
         tags=["进给", "堵转", "突发", "精铣"],
@@ -98,33 +98,79 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
                              target_value=0.0, noise_scale=0.0),
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             target_value=40.0, noise_scale=2.0),
+                             target_min=36.0, target_max=45.0, noise_scale=2.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             target_value=15.0, noise_scale=0.8),
+                             target_min=13.0, target_max=17.0, noise_scale=0.8),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=80.0),
         ],
     ),
 
     # ------------------------------------------------------------------
-    # 主轴过热 — 长时间高负荷或冷却系统故障
-    # 特征：主轴负载和电流持续偏高，转速因热保护逐渐降低
-    # 模式：渐进式，持续时间较长
+    # 主轴过热（粗铣）— fanuc-cnc
+    # 基线：spindle_speed~2000RPM, spindle_current~21A, spindle_load~56%
+    # 过热目标范围：load 78~92%，current 30~38A，转速降至 1200~1600RPM
+    # 范围模拟不同冷却状态、负荷历史、环境温度下的个体差异
+    # 模式：渐进式；全部用 target_min/max，避免 multiplier 在空载基线=0 时失效
     # ------------------------------------------------------------------
     FaultTypeDefinition(
-        id="spindle_overheat",
-        name="主轴过热",
-        description="主轴长时间高负荷运转或冷却不足，spindle_load和spindle_current持续偏高，转速因热保护渐进下降",
+        id="spindle_overheat_rough",
+        name="主轴过热（粗铣）",
+        description="粗铣主轴长时间高负荷或冷却不足，spindle_load渐进升至78~92%，spindle_current升至30~38A，转速因热保护渐进降至1200~1600RPM",
         category="thermal",
         default_duration=240.0,
-        tags=["主轴", "过热", "渐进"],
+        tags=["主轴", "过热", "渐进", "粗铣"],
         point_faults=[
             PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
-                             multiplier=1.6, noise_scale=3.0),
+                             target_min=78.0, target_max=92.0, noise_scale=3.5),
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
-                             multiplier=1.8, noise_scale=1.2),
+                             target_min=30.0, target_max=38.0, noise_scale=1.5),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
-                             multiplier=0.6, noise_scale=50.0),
+                             target_min=1200, target_max=1600, noise_scale=40.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 主轴过热（半精铣）— fanuc-cnc-semi-finish
+    # 基线：spindle_speed~4000RPM, spindle_current~14.5A, spindle_load~38%
+    # 过热目标范围：load 65~78%，current 21~27A，转速降至 2400~2900RPM
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="spindle_overheat_semi",
+        name="主轴过热（半精铣）",
+        description="半精铣主轴长时间高负荷或冷却不足，spindle_load渐进升至65~78%，spindle_current升至21~27A，转速因热保护渐进降至2400~2900RPM",
+        category="thermal",
+        default_duration=240.0,
+        tags=["主轴", "过热", "渐进", "半精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             target_min=65.0, target_max=78.0, noise_scale=3.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             target_min=21.0, target_max=27.0, noise_scale=1.2),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
+                             target_min=2400, target_max=2900, noise_scale=50.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 主轴过热（精铣）— fanuc-cnc-finish
+    # 基线：spindle_speed~6000RPM, spindle_current~8.5A, spindle_load~22%
+    # 过热目标范围：load 42~55%，current 13~17A，转速降至 3600~4200RPM
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="spindle_overheat_finish",
+        name="主轴过热（精铣）",
+        description="精铣主轴长时间高负荷或冷却不足，spindle_load渐进升至42~55%，spindle_current升至13~17A，转速因热保护渐进降至3600~4200RPM",
+        category="thermal",
+        default_duration=240.0,
+        tags=["主轴", "过热", "渐进", "精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             target_min=42.0, target_max=55.0, noise_scale=2.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             target_min=13.0, target_max=17.0, noise_scale=0.8),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
+                             target_min=3600, target_max=4200, noise_scale=60.0),
         ],
     ),
 
@@ -230,15 +276,15 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     FaultTypeDefinition(
         id="air_cutting",
         name="空切检测",
-        description="刀具未接触工件，spindle_load跌至空载区间(5-15%)，spindle_current降至空转水平，转速进给保持正常",
+        description="刀具未接触工件，spindle_load跌至空载区间(4-12%)，spindle_current降至空转水平，转速进给保持正常",
         category="tool",
         default_duration=180.0,
         tags=["刀具", "空切", "工况切换", "负载"],
         point_faults=[
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             target_value=8.0, noise_scale=2.0),
+                             target_min=4.0, target_max=12.0, noise_scale=2.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             target_value=2.5, noise_scale=0.3),
+                             target_min=2.0, target_max=3.5, noise_scale=0.3),
         ],
     ),
 
@@ -356,6 +402,13 @@ class FaultInjector:
                 except (TypeError, ValueError):
                     baseline[pf.point] = 0.0
 
+        # 对有范围定义的测点，注入时随机采样一个实际目标值
+        # 使每次注入的故障严重程度有所不同，模拟真实场景的个体差异
+        resolved_targets: dict[str, float] = {}
+        for pf in fault_type.point_faults:
+            if pf.target_min is not None and pf.target_max is not None:
+                resolved_targets[pf.point] = random.uniform(pf.target_min, pf.target_max)
+
         fault = ActiveFault(
             fault_id=uuid.uuid4().hex[:12],
             device_id=device.id,
@@ -365,10 +418,11 @@ class FaultInjector:
             duration=duration,
             started_at=time.time(),
             baseline_values=baseline,
+            resolved_targets=resolved_targets,
         )
         self._active[device.id] = fault
-        logger.info("Fault injected: device=%s type=%s duration=%.0fs",
-                    device.id, fault_type.id, duration)
+        logger.info("Fault injected: device=%s type=%s duration=%.0fs resolved_targets=%s",
+                    device.id, fault_type.id, duration, resolved_targets)
         return self._to_info(fault, fault_type)
 
     def apply(self, device: Any) -> None:
@@ -400,13 +454,14 @@ class FaultInjector:
             baseline = fault.baseline_values.get(pf.point, 0.0)
             if baseline == 0.0:
                 # 基线为0说明注入时设备处于换刀/停机状态
-                # target_value 模式可以直接执行（如崩刃归零、空切归空载）
+                # target_value / resolved_targets 模式可以直接执行
                 # multiplier 模式跳过，避免在零基线上产生无意义的值
-                if pf.target_value is None:
+                if pf.target_value is None and pf.point not in fault.resolved_targets:
                     continue
 
+            resolved_target = fault.resolved_targets.get(pf.point)
             device._point_values[pf.point] = self._compute_value(
-                pf, baseline, progress, fault.intensity
+                pf, baseline, progress, fault.intensity, resolved_target
             )
 
     def clear(self, device_id: str) -> bool:
@@ -451,20 +506,26 @@ class FaultInjector:
         baseline: float,
         progress: float,
         intensity: float,
+        resolved_target: Optional[float] = None,
     ) -> float:
-        """根据故障配置和当前进度计算覆盖值"""
+        """根据故障配置和当前进度计算覆盖值。
+
+        目标值优先级：resolved_target（注入时随机采样）> target_value（固定值）> multiplier
+        """
+        # 确定本次注入的实际目标值
+        effective_target: Optional[float] = resolved_target if resolved_target is not None else pf.target_value
+
         if pf.mode == FaultMode.INSTANT:
-            # 瞬间模式：直接用目标值，不随时间变化
-            if pf.target_value is not None:
-                target = pf.target_value
+            if effective_target is not None:
+                target = effective_target
             elif pf.multiplier is not None:
                 target = baseline * (1.0 + (pf.multiplier - 1.0) * intensity)
             else:
                 target = baseline
         else:
             # 渐进模式：随 progress 线性劣化
-            if pf.target_value is not None:
-                target = baseline + (pf.target_value - baseline) * progress * intensity
+            if effective_target is not None:
+                target = baseline + (effective_target - baseline) * progress * intensity
             elif pf.multiplier is not None:
                 target = baseline * (1.0 + (pf.multiplier - 1.0) * progress * intensity)
             else:
