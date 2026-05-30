@@ -181,8 +181,8 @@ async def batch_create_devices(
                             if db:
                                 try:
                                     await db.delete_device(dev_id)
-                                except Exception:
-                                    pass
+                                except Exception as e:
+                                    logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
                             logger.info("Rolled back device: %s", dev_id)
                         except Exception as rollback_err:
                             logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
@@ -210,8 +210,8 @@ async def batch_create_devices(
                     if db:
                         try:
                             await db.delete_device(dev_id)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
                 except Exception as rollback_err:
                     logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
 
@@ -347,6 +347,15 @@ async def delete_device(device_id: str, _user: dict = Depends(require_operator))
 
     try:
         info = engine.get_device(device_id)
+        referencing_scenarios = []
+        for sid, sconfig in engine.get_all_scenario_configs().items():
+            if any(d.id == device_id for d in sconfig.devices):
+                referencing_scenarios.append(sid)
+        if referencing_scenarios:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Device '{device_id}' is referenced by scenario(s): {', '.join(referencing_scenarios)}. Remove the device from the scenario first, or delete the scenario.",
+            )
         await engine.remove_device(device_id)
         db_ok = True
         db_err_msg = ""

@@ -66,9 +66,17 @@ class OpcUaClientProtocol(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._endpoint = config.get("endpoint", "opc.tcp://localhost:4840")
         self._read_interval = config.get("read_interval", 1.0)
+        if self._read_interval < 0.1 or self._read_interval > 300:
+            raise ValueError(f"OPC-UA read_interval must be between 0.1 and 300s (got {self._read_interval})")
         self._request_timeout = config.get("request_timeout", 10.0)
+        if self._request_timeout <= 0 or self._request_timeout > 300:
+            raise ValueError(f"OPC-UA request_timeout must be between 0.1 and 300s (got {self._request_timeout})")
         self._session_timeout = config.get("session_timeout", 3600000)
+        if not isinstance(self._session_timeout, (int, float)) or self._session_timeout <= 0 or self._session_timeout > 86400000:
+            raise ValueError(f"OPC-UA session_timeout must be between 1 and 86400000ms (got {self._session_timeout})")
         self._reconnect_interval = config.get("reconnect_interval", 5.0)
+        if self._reconnect_interval <= 0 or self._reconnect_interval > 300:
+            raise ValueError(f"OPC-UA reconnect_interval must be between 0.1 and 300s (got {self._reconnect_interval})")
         self._max_reconnect_attempts = config.get("max_reconnect_attempts", 0)
         self._stopping = False
 
@@ -175,10 +183,17 @@ class OpcUaClientProtocol(ProtocolServer):
             self._log_debug("system", "client_disconnect", "OPC-UA client disconnected")
 
     async def create_device(self, device_config: DeviceConfig) -> str:
-        async with self._lock:  # FIXED: 添加锁保护，避免并发create/remove/read竞态
+        async with self._lock:
             self._device_configs[device_config.id] = device_config
             for point in device_config.points:
                 node_id = parse_node_id(point.address)
+                if node_id and hasattr(node_id, 'namespace_index'):
+                    ns_idx = node_id.namespace_index
+                    if ns_idx < 0:
+                        raise ValueError(
+                            f"OPC-UA namespace index must be >= 0 (got {ns_idx} for point '{point.name}'). "
+                            "Verify the namespace index is supported by the OPC-UA server."
+                        )
                 if node_id:
                     self._point_nodes[f"{device_config.id}.{point.name}"] = node_id
 

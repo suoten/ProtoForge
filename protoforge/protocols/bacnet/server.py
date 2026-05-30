@@ -7,7 +7,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.core.messages import desc
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ class BACnetServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 47808)
+        self._validate_port(self._port)
         self._device_id_base = config.get("device_id_base", 100)
         self._bbmd_enabled = config.get("bbmd_enabled", False)
         bbmd_peers = config.get("bbmd_peers", [])

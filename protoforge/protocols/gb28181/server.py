@@ -9,8 +9,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
@@ -283,6 +282,7 @@ class GB28181Server(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 5060)
+        self._validate_port(self._port)
         self._server_id = config.get("server_id", "34020000002000000001")
         self._srtp_enabled = config.get("srtp_enabled", False)
         self._srtp_crypto_suite = config.get("srtp_crypto_suite", "AES_CM_128_HMAC_SHA1_80")

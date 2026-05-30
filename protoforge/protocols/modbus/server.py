@@ -139,6 +139,8 @@ class ModbusTcpServer(ProtocolServer):
                     payload = b""
                 fc = payload[0] if payload else 0
                 resp = self._process_modbus_frame(unit_id, fc, payload[1:])
+                if resp is None:
+                    continue
                 mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
                 writer.write(mbap + resp)
                 await writer.drain()
@@ -151,7 +153,8 @@ class ModbusTcpServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Modbus TCP writer close error: %s", e)
 
-    def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:
+    def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes | None:
+        is_broadcast = (unit_id == 0)
         slave_id = unit_id if unit_id else 1
         store = self._data_stores.get(slave_id)
         if not store:
@@ -160,6 +163,8 @@ class ModbusTcpServer(ProtocolServer):
                     0x04: "Read Input Registers", 0x05: "Write Single Coil", 0x06: "Write Single Register",
                     0x0F: "Write Multiple Coils", 0x10: "Write Multiple Registers"}
         fc_name = fc_names.get(fc, f"FC{fc:02X}")
+        if is_broadcast and fc in (0x01, 0x02, 0x03, 0x04):
+            return None
         try:
             if fc == 0x01:
                 if len(data) < 4:  # FIXED-P1: 前置长度校验，数据不足返回Illegal Data Value(0x03)而非被外层捕获返回0x02
@@ -227,14 +232,14 @@ class ModbusTcpServer(ProtocolServer):
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
                 self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
                                 detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
-                return bytes([fc]) + data[0:4]
+                return None if is_broadcast else (bytes([fc]) + data[0:4])
             elif fc == 0x06:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
                 store.set_point(6, start, val)
                 self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
                                 detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
-                return bytes([fc]) + data[0:4]
+                return None if is_broadcast else (bytes([fc]) + data[0:4])
             elif fc == 0x0F:
                 if len(data) < 5:  # FIXED-P0: 前置长度校验(需start+count+byte_count=5字节)
                     return bytes([fc | 0x80, 0x03])
@@ -248,7 +253,7 @@ class ModbusTcpServer(ProtocolServer):
                         store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
                 self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
                                 detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                return bytes([fc]) + data[0:4]
+                return None if is_broadcast else (bytes([fc]) + data[0:4])
             elif fc == 0x10:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
@@ -262,7 +267,7 @@ class ModbusTcpServer(ProtocolServer):
                         store.set_point(16, start + i, val)
                 self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
                                 detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                return bytes([fc]) + data[0:4]
+                return None if is_broadcast else (bytes([fc]) + data[0:4])
             elif fc == 0x16:
                 if len(data) < 6:  # FIXED-P0: 前置长度校验(需addr+and_mask+or_mask=6字节)
                     return bytes([fc | 0x80, 0x03])
@@ -275,7 +280,7 @@ class ModbusTcpServer(ProtocolServer):
                 store.set_point(6, addr, new_val)
                 self._log_debug("inbound", "modbus_write", f"MaskWrite: addr={addr} and={and_mask:#06x} or={or_mask:#06x}",
                                 detail={"fc": fc, "addr": addr, "unit": slave_id})
-                return bytes([fc]) + data[0:6]
+                return None if is_broadcast else (bytes([fc]) + data[0:6])
             elif fc == 0x17:
                 if len(data) < 9:  # FIXED-P0: 前置长度校验(需r_start+r_count+w_start+w_count+w_byte_count=9字节)
                     return bytes([fc | 0x80, 0x03])
@@ -308,6 +313,7 @@ class ModbusTcpServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._requested_port = config.get("port", 5020)
+        self._validate_port(self._requested_port)
         self._port = self._requested_port
 
         if not StartAsyncTcpServer:
@@ -383,14 +389,19 @@ class ModbusTcpServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:  # FIXED: 添加锁保护
+        async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config
-        await self._update_default_device_async(device_config.id)  # FIXED: 使用异步锁版本
+        await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
-        async with self._behaviors_lock:  # FIXED-P1: _slave_map写入移入锁保护，防止与remove_device并发
+        if not isinstance(slave_id, int) or slave_id < 1 or slave_id > 247:
+            raise ValueError(
+                f"Modbus slave_id must be between 1 and 247 (got {slave_id}). "
+                "0 is broadcast, 248-255 are reserved per Modbus specification."
+            )
+        async with self._behaviors_lock:
             self._slave_map[device_config.id] = slave_id
             self._next_slave_id = max(self._next_slave_id, slave_id + 1)
 

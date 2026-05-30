@@ -4,8 +4,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
@@ -57,12 +56,13 @@ class MqttBroker(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._host = "0.0.0.0"
         self._port = 1883
-        self._requested_port = 1883  # 用户请求的端口
+        self._requested_port = 1883
         self._publish_task: asyncio.Task | None = None
         self._auth_required = False
         self._auth_username = ""
         self._auth_password = ""
-        self._clean_session = True  # FIXED-P0: Clean Session标志
+        self._clean_session = True
+        self._registered_client_ids: set[str] = set()
 
     @property
     def actual_port(self) -> int:
@@ -81,6 +81,7 @@ class MqttBroker(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._requested_port = config.get("port", 1883)
+        self._validate_port(self._requested_port)
         self._port = self._requested_port
         publish_interval = config.get("publish_interval", 5)
         self._auth_required = config.get("auth_required", False)
@@ -201,9 +202,18 @@ class MqttBroker(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = MqttDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        client_id = proto_config.get("client_id", "")
+        if client_id:
+            if client_id in self._registered_client_ids:
+                raise ValueError(
+                    f"MQTT ClientID '{client_id}' is already in use by another device. "
+                    "ClientID must be unique within the same broker."
+                )
+            self._registered_client_ids.add(client_id)
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
-            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_configs[device_config.id] = device_config
         await self._update_default_device_async(device_config.id)
         logger.info("MQTT device created: %s", device_config.id)
         self._log_debug("system", "device_create",
@@ -212,10 +222,15 @@ class MqttBroker(ProtocolServer):
         return device_config.id
 
     async def remove_device(self, device_id: str) -> None:
-        await self._publish_will(device_id)  # FIXED-P0: 设备移除前发布遗嘱消息
+        await self._publish_will(device_id)
         async with self._behaviors_lock:
+            config = self._device_configs.pop(device_id, None)
             self._behaviors.pop(device_id, None)
-            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            if config:
+                proto_config = config.protocol_config or {}
+                client_id = proto_config.get("client_id", "")
+                if client_id:
+                    self._registered_client_ids.discard(client_id)
         await self._clear_default_device_async(device_id)
         logger.info("MQTT device removed: %s", device_id)
         self._log_debug("system", "device_remove",
@@ -458,8 +473,8 @@ class MqttBroker(ProtocolServer):
                             addr = sock.getsockname()
                             if addr:
                                 return addr[1]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to get actual port from broker listener: %s", e)
 
         # Fallback: 尝试连接检测 — 先检查配置端口是否在监听
         for port in [self._port, self._requested_port, self._requested_port + 1, self._requested_port - 1]:
@@ -471,7 +486,7 @@ class MqttBroker(ProtocolServer):
                     result = s.connect_ex((self._host if self._host != "0.0.0.0" else "127.0.0.1", port))
                     if result == 0:
                         return port
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Port probe failed for %d: %s", port, e)
 
         return self._port  # 返回配置的端口作为默认值

@@ -20,6 +20,11 @@ class ProtocolServer(ABC):
     protocol_description: str = ""
     protocol_version: str = "1.0.0"
 
+    @staticmethod
+    def _validate_port(port: int, name: str = "port") -> None:
+        if not isinstance(port, int) or port < 1 or port > 65535:
+            raise ValueError(f"{name} must be between 1 and 65535 (got {port})")
+
     def __init__(self):
         self._status: ProtocolStatus = ProtocolStatus.STOPPED
         self._debug_callback: Optional[Callable] = None

@@ -386,6 +386,8 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         if instance.status == DeviceStatus.ONLINE:
             return
+        if instance.status == DeviceStatus.ERROR:
+            instance.stop()
         try:
             instance.start()
         except Exception as e:
@@ -407,7 +409,7 @@ class SimulationEngine:
         instance = self._devices.get(device_id)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
-        if instance.status != DeviceStatus.ONLINE:
+        if instance.status == DeviceStatus.OFFLINE:
             return
         try:
             instance.stop()
@@ -565,6 +567,9 @@ class SimulationEngine:
         async with self._scenarios_lock:
             if scenario_id not in self._scenarios:
                 raise ValueError(f"Scenario not found: {scenario_id}")
+            current_status = self._scenario_status.get(scenario_id, ScenarioStatus.STOPPED)
+            if current_status in (ScenarioStatus.RUNNING, ScenarioStatus.STARTING):
+                raise ValueError("Cannot update a running or starting scenario, stop it first")
             config.id = scenario_id
             self._scenarios[scenario_id] = config
             instance = self._scenario_instances.get(scenario_id)

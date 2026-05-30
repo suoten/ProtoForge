@@ -38,8 +38,9 @@ class ModbusRtuServer(ProtocolServer):
     protocol_name = "modbus_rtu"
     protocol_display_name = "Modbus RTU"
 
-    _MAX_READ_COILS = 2000  # FIXED-P1: Modbus规范FC01/02最多读2000个位
-    _MAX_READ_REGISTERS = 125  # FIXED-P1: Modbus规范FC03/04最多读125个寄存器
+    _MAX_READ_COILS = 2000
+    _MAX_READ_REGISTERS = 125
+    _VALID_BAUDRATES = {2400, 4800, 9600, 19200, 38400, 57600, 115200}
 
     def __init__(self):
         super().__init__()
@@ -106,9 +107,19 @@ class ModbusRtuServer(ProtocolServer):
         default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
         self._port = config.get("port", default_port)
         self._baudrate = config.get("baudrate", 9600)
+        if self._baudrate not in self._VALID_BAUDRATES:
+            raise ValueError(
+                f"Invalid baudrate {self._baudrate}. Must be one of: {sorted(self._VALID_BAUDRATES)}"
+            )
         self._parity = config.get("parity", "N")
+        if self._parity not in ("N", "E", "O"):
+            raise ValueError(f"Parity must be N (None), E (Even), or O (Odd) (got '{self._parity}')")
         self._stopbits = config.get("stopbits", 1)
+        if self._stopbits not in (1, 1.5, 2):
+            raise ValueError(f"Stop bits must be 1, 1.5, or 2 (got {self._stopbits})")
         self._bytesize = config.get("bytesize", 8)
+        if self._bytesize not in (5, 6, 7, 8):
+            raise ValueError(f"Data bits (bytesize) must be 5, 6, 7, or 8 (got {self._bytesize})")
 
         if not StartAsyncSerialServer:
             raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
@@ -118,6 +129,7 @@ class ModbusRtuServer(ProtocolServer):
         elif not os.path.exists(self._port):
             # 从配置中获取 TCP bridge 端口，默认 5021，但会自动检测可用端口
             tcp_bridge_port = config.get("tcp_bridge_port", 5021)
+            self._validate_port(tcp_bridge_port)
             tcp_bridge_port = self._find_available_port(tcp_bridge_port)
             logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port %d", self._port, tcp_bridge_port)
             self._status = ProtocolStatus.RUNNING
@@ -390,14 +402,19 @@ class ModbusRtuServer(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ModbusDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
+        async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config
         await self._update_default_device_async(device_config.id)
 
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
-        async with self._behaviors_lock:  # FIXED-P1: _slave_map写入移入锁保护，防止与remove_device并发
+        if not isinstance(slave_id, int) or slave_id < 1 or slave_id > 247:
+            raise ValueError(
+                f"Modbus slave_id must be between 1 and 247 (got {slave_id}). "
+                "0 is broadcast, 248-255 are reserved per Modbus specification."
+            )
+        async with self._behaviors_lock:
             self._slave_map[device_config.id] = slave_id
             self._next_slave_id = max(self._next_slave_id, slave_id + 1)
 

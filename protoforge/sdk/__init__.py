@@ -2,11 +2,14 @@
 
 import asyncio
 import json
+import logging
 import os
 import time
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 class ProtoForgeClient:
@@ -28,8 +31,8 @@ class ProtoForgeClient:
     def __del__(self):
         try:
             self._client.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to close SDK client: %s", e)
 
     def __enter__(self):
         return self
@@ -523,8 +526,8 @@ class AsyncProtoForgeClient:
                 loop.create_task(self._client.aclose())
             else:
                 loop.run_until_complete(self._client.aclose())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to close async SDK client: %s", e)
 
     async def __aenter__(self):
         return self

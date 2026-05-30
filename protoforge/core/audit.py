@@ -128,8 +128,8 @@ class AuditLogger:
             try:
                 _, db_total = await self._database.query_audit_entries(limit=1, offset=0)
                 total_entries = db_total
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to get audit total from database: %s", e)
         return {
             "total_entries": total_entries,
             "today_count": today_count,
@@ -403,8 +403,8 @@ async def audit_middleware(request, call_next):
             username = user.get("username", "")
         elif user and hasattr(user, "username"):
             username = user.username
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to get username from request state: %s", e)
 
     if not username:
         username = "anonymous"

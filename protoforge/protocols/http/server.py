@@ -41,6 +41,7 @@ class HttpSimulatorServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 8080)
+        self._validate_port(self._port)
         # FIXED: P4 - W23 CORS origin 从配置获取，未配置时默认 * 仅用于开发环境
         self._cors_origin = config.get("cors_origin", "*")
         try:

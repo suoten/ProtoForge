@@ -51,6 +51,7 @@ class MtConnectServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 7878)
+        self._validate_port(self._port)
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())

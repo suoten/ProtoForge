@@ -9,8 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
-from protoforge.protocols.behavior import StandardDeviceBehavior  # FIXED: 改继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +167,7 @@ class OpcUaServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         host = config.get("host", "0.0.0.0")
         self._requested_port = config.get("port", 4840)
+        self._validate_port(self._requested_port)
         port = self._requested_port
         self._host = host
         self._port = port

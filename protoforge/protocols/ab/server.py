@@ -85,6 +85,7 @@ class AbServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 44818)
+        self._validate_port(self._port)
         self._start_config = config
         try:
             self._server_running = True

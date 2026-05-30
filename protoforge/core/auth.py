@@ -80,7 +80,7 @@ def get_secret_key() -> str:
     return _SECRET_KEY
 
 
-def create_token(user_id: str, username: str, role: str = "user", expires_in: int = None) -> str:
+def create_token(user_id: str, username: str, role: str = "user", expires_in: int = None, token_version: int = 0) -> str:
     if expires_in is None:
         from protoforge.config import get_settings
         expires_in = get_settings().access_token_expires
@@ -89,6 +89,7 @@ def create_token(user_id: str, username: str, role: str = "user", expires_in: in
         "sub": user_id,
         "username": username,
         "role": role,
+        "ver": token_version,
         "iat": int(now),
         "exp": int(now + expires_in),
         "jti": uuid.uuid4().hex,
@@ -243,6 +244,7 @@ class UserManager:
     def __init__(self):
         self._users: dict[str, User] = {}
         self._users_by_id: dict[str, User] = {}
+        self._token_versions: dict[str, int] = {}
         self._db = None
         # FIXED-P1: 添加异步锁保护 _users/_users_by_id 并发访问，防止 TOCTOU 竞态
         self._users_lock = asyncio.Lock()
@@ -377,6 +379,13 @@ class UserManager:
     async def delete_user(self, username: str) -> bool:
         if username == "admin":
             return False
+        user = self._users.get(username)
+        if not user:
+            return False
+        if user.role == "admin":
+            admin_count = sum(1 for u in self._users.values() if u.role == "admin")
+            if admin_count <= 1:
+                return False
         # FIXED-P1: 加锁保护删除操作的原子性
         async with self._users_lock:
             if username in self._users:
@@ -399,6 +408,7 @@ class UserManager:
                 "username": u.username,
                 "role": u.role,
                 "created_at": u.created_at,
+                "login_attempts": u.login_attempts,
                 "locked": bool(u.locked_until and u.locked_until > time.time()),
             }
             for u in self._users.values()
@@ -463,18 +473,27 @@ class UserManager:
         user = self._users.get(username)
         if not user:
             return False
-        if new_role not in ("admin", "operator", "viewer", "user", "guest"):  # FIXED-P1: 添加guest角色
+        if new_role not in ("admin", "operator", "viewer", "user", "guest"):
             return False
+        if user.role == "admin" and new_role != "admin":
+            admin_count = sum(1 for u in self._users.values() if u.role == "admin")
+            if admin_count <= 1:
+                return False
         old_role = user.role
         user.role = new_role
+        self._token_versions[user.id] = self._token_versions.get(user.id, 0) + 1
         if self._db:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
                 logger.error("Failed to update user role for %s: %s", username, e)
                 user.role = old_role
+                self._token_versions[user.id] = self._token_versions.get(user.id, 0) - 1
                 return False
         return True
+
+    def get_token_version(self, user_id: str) -> int:
+        return self._token_versions.get(user_id, 0)
 
 
 user_manager = UserManager()

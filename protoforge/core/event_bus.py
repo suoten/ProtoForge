@@ -105,12 +105,12 @@ class EventBus:
                     dropped_count = self._dropped_count
                 try:
                     queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    pass
+                except asyncio.QueueEmpty as e:
+                    logger.debug("Event queue already empty when discarding oldest entry: %s", e)
                 try:
                     queue.put_nowait(event)
-                except asyncio.QueueFull:
-                    pass
+                except asyncio.QueueFull as e:
+                    logger.debug("Event queue still full after discarding oldest entry: %s", e)
                 now = time.time()
                 if now - self._last_drop_warning > 60:
                     self._last_drop_warning = now

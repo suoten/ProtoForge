@@ -5,8 +5,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
@@ -217,7 +216,10 @@ class EtherCATServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 34980)
+        self._validate_port(self._port)
         self._slave_addr = config.get("slave_address", 0x1001)
+        if not isinstance(self._slave_addr, int) or self._slave_addr < 1 or self._slave_addr > 0xFFFF:
+            raise ValueError(f"EtherCAT slave_address must be between 1 and 65535 (got {self._slave_addr})")
         self._vendor_id = config.get("vendor_id", 0x0000)
         self._product_code = config.get("product_code", 0x0000)
         self._revision_number = config.get("revision_number", 0x0001)
@@ -824,10 +826,13 @@ class EtherCATServer(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         if proto_config.get("slave_address"):
-            try:  # FIXED-P1: int()对用户配置做异常保护，非数字时保持默认值
-                self._slave_addr = int(proto_config["slave_address"])
-            except (ValueError, TypeError):
-                pass
+            try:
+                slave_addr_val = int(proto_config["slave_address"])
+                if slave_addr_val < 1 or slave_addr_val > 0xFFFF:
+                    raise ValueError(f"EtherCAT slave_address must be between 1 and 65535 (got {slave_addr_val})")
+                self._slave_addr = slave_addr_val
+            except (ValueError, TypeError) as e:
+                raise ValueError(f"Invalid EtherCAT slave_address: {e}") from e
         self._slave_device_map[self._slave_addr] = device_config.id  # FIXED-P0: 注册从站地址映射
 
         self._recalc_data_sizes()

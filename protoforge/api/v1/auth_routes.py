@@ -1,10 +1,11 @@
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from protoforge.api.v1.auth import require_admin, require_user
+from protoforge.api.v1.auth import require_admin, require_user, require_guest
 from protoforge.core.messages import desc
 
 router = APIRouter()
@@ -61,7 +62,10 @@ async def login(credentials: LoginRequest):
                 remaining = error_code.split(":")[1] if ":" in error_code else ""
                 raise HTTPException(status_code=423, detail=f"Account locked, retry after {remaining}s")
             raise HTTPException(status_code=401, detail="Invalid username or password")
-        access_token = create_token(user.id, user.username, user.role)
+        access_token = create_token(
+            user.id, user.username, user.role,
+            token_version=user_manager.get_token_version(user.id),
+        )
         refresh_token = create_refresh_token(user.id)
         return {
             "access_token": access_token,
@@ -91,7 +95,10 @@ async def refresh_token(data: RefreshRequest):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
-        access_token = create_token(user.id, user.username, user.role)
+        access_token = create_token(
+            user.id, user.username, user.role,
+            token_version=user_manager.get_token_version(user.id),
+        )
         new_refresh_token = create_refresh_token(user.id)
         return {
             "access_token": access_token,
@@ -125,6 +132,22 @@ async def register(user_data: RegisterRequest):
     return {"id": user.id, "username": user.username, "role": user.role}
 
 
+@router.get("/auth/me")
+async def get_current_user(_user: dict = Depends(require_guest)):
+    from protoforge.core.auth import user_manager
+    username = _user.get("username", "")
+    user = user_manager.get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "created_at": user.created_at,
+        "locked": bool(user.locked_until and user.locked_until > time.time()),
+    }
+
+
 @router.get("/auth/users")
 async def list_users(_user: dict = Depends(require_admin)):
     try:
@@ -136,12 +159,16 @@ async def list_users(_user: dict = Depends(require_admin)):
 
 
 @router.post("/auth/change-password")
-async def change_password(data: ChangePasswordRequest, _user: dict = Depends(require_user)):
+async def change_password(data: ChangePasswordRequest, _user: dict = Depends(require_guest)):
     try:
         from protoforge.core.auth import user_manager
 
-        is_admin = _user.get("role") == "admin"
-        is_self = data.username == _user.get("username", "")
+        current_user_id = _user.get("sub", "")
+        current_user = user_manager.get_user_by_id(current_user_id) if current_user_id else None
+        current_username = current_user.username if current_user else _user.get("username", "")
+
+        is_admin = (current_user.role if current_user else _user.get("role")) == "admin"
+        is_self = data.username == current_username
 
         if not is_admin and not is_self:
             raise HTTPException(status_code=403, detail=desc("auth.change_own_password_only"))
@@ -184,11 +211,11 @@ async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict = De
 async def update_user_role(username: str, data: UpdateRoleRequest, _user: dict = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
-        valid_roles = {"admin", "operator", "user", "viewer"}
+        valid_roles = {"admin", "operator", "user", "viewer", "guest"}
         if data.role not in valid_roles:
             raise HTTPException(status_code=400, detail=f"Invalid role: {data.role}. Valid roles: {', '.join(sorted(valid_roles))}")
         if not await user_manager.update_user_role(username, data.role):
-            raise HTTPException(status_code=400, detail="Failed to update role")
+            raise HTTPException(status_code=400, detail="Failed to update role. Cannot demote the last admin.")
         return {"status": "ok"}
     except HTTPException:
         raise
@@ -216,7 +243,7 @@ async def delete_user(username: str, _user: dict = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         if not await user_manager.delete_user(username):
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(status_code=400, detail="Cannot delete this user. Admin account or last admin cannot be deleted.")
         return {"status": "ok"}
     except HTTPException:
         raise
