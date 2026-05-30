@@ -110,8 +110,8 @@ class Database:
                         return
                 finally:
                     await check_conn.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Database integrity check failed after recovery attempts: %s", e)
 
             # ---- Strategy 5: Backup corrupted and recreate ----
             backup_path = db_path + ".corrupted"
@@ -148,14 +148,14 @@ class Database:
                         logger.warning("WAL file is %dx larger than database, removing corrupted WAL", wal_size_ratio)
                         try:
                             Path(wal_path).unlink()
-                        except OSError:
-                            pass
+                        except OSError as e:
+                            logger.debug("Failed to remove WAL file: %s", e)
                         try:
                             Path(shm_path).unlink()
-                        except OSError:
-                            pass
-            except Exception:
-                pass
+                        except OSError as e:
+                            logger.debug("Failed to remove SHM file: %s", e)
+            except Exception as e:
+                logger.debug("WAL size check failed: %s", e)
 
         try:
             recover_conn = await aiosqlite.connect(db_path)
@@ -170,8 +170,8 @@ class Database:
             finally:
                 try:
                     await recover_conn.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to close recovery connection: %s", e)
         except Exception as e:
             logger.debug("WAL checkpoint recovery attempt failed: %s", e)
         return False
@@ -209,19 +209,19 @@ class Database:
                             shutil.move(temp_path, db_path)
                             logger.info("Database recovered using sqlite3 .recover")
                             return
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to verify recovered database: %s", e)
                     try:
                         os.unlink(temp_path)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to clean up temp database file: %s", e)
             except Exception as e:
                 logger.debug("sqlite3 .recover failed: %s", e)
                 if temp_db and Path(temp_path).exists():
                     try:
                         os.unlink(temp_path)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to clean up temp database file: %s", e)
         except Exception as e:
             logger.debug("SQLite recover strategy failed: %s", e)
 

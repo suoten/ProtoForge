@@ -124,6 +124,7 @@ class McServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 5000)
+        self._validate_port(self._port)
         self._network = config.get("network", 0)
         self._station = config.get("station", 0)
         self._pc = config.get("pc", 0xFF)

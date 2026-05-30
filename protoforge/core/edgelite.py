@@ -633,8 +633,8 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     if isinstance(inner, dict):
         try:
             expires_in = int(inner.get("expires_in", inner.get("exp", 86400)))
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as e:
+            logger.debug("Invalid expires_in value, using default 86400: %s", e)
     refresh_token = (inner.get("refresh_token", "") if isinstance(inner, dict) else "") or data.get("refresh_token", "")
     _cache_token(url, token, expires_in, refresh_token)
 
@@ -771,8 +771,8 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                 conflict_data = create_resp.json()
                 if isinstance(conflict_data, dict):
                     conflict_detail = str(conflict_data.get("detail", ""))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to parse conflict response JSON: %s", e)
 
             is_driver_failure = "driver" in conflict_detail.lower() or "start failed" in conflict_detail.lower() or "connection" in conflict_detail.lower()
 
@@ -799,8 +799,8 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                             correct_pkg = EDGELITE_PIP_PACKAGES.get(pkg.lower(), [pkg])[0]
                             if correct_pkg not in missing_packages:
                                 missing_packages.append(correct_pkg)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to extract missing pip packages from conflict detail: %s", e)
 
             if missing_packages:
                 pip_hint = "pip install " + " ".join(missing_packages)
@@ -859,13 +859,13 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                         dev_data = dev_resp.json()
                         dev_data_inner = dev_data.get("data", dev_data)
                         remote_device_id = dev_data_inner.get("device_id", remote_device_id)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to parse device response JSON for device_id: %s", e)
                 # 其他状态码不处理，继续走PUT流程
-            except httpx.ConnectError:
-                pass  # 网络错误时跳过此检查，继续尝试PUT
-            except httpx.TimeoutException:
-                pass
+            except httpx.ConnectError as e:
+                logger.debug("Network error during device existence check, proceeding with PUT: %s", e)
+            except httpx.TimeoutException as e:
+                logger.debug("Timeout during device existence check, proceeding with PUT: %s", e)
 
             update_payload = {k: v for k, v in payload.items() if k != "device_id"}
             try:
@@ -968,8 +968,8 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         from protoforge.main import get_integration_manager
         mgr = get_integration_manager()
         return await mgr.get_device_status(device)
-    except RuntimeError:
-        pass  # IntegrationManager not initialized, fallback to direct call
+    except RuntimeError as e:
+        logger.debug("IntegrationManager not initialized, falling back to direct call: %s", e)
 
     el_config = get_edgelite_config_from_device(device)
     if not el_config.get("url"):

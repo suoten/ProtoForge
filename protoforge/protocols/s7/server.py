@@ -6,8 +6,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改为继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
@@ -219,9 +218,14 @@ class S7Server(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._requested_port = config.get("port", 102)
+        self._validate_port(self._requested_port)
         self._port = self._requested_port
         self._rack = config.get("rack", 0)
+        if not isinstance(self._rack, int) or self._rack < 0 or self._rack > 7:
+            raise ValueError(f"S7 rack must be between 0 and 7 (got {self._rack})")
         self._slot = config.get("slot", 1)
+        if not isinstance(self._slot, int) or self._slot < 0 or self._slot > 31:
+            raise ValueError(f"S7 slot must be between 0 and 31 (got {self._slot})")
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
@@ -780,7 +784,11 @@ class S7Server(ProtocolServer):
 
         proto_config = device_config.protocol_config or {}
         rack = proto_config.get("rack", self._rack)
+        if not isinstance(rack, int) or rack < 0 or rack > 7:
+            raise ValueError(f"S7 rack must be between 0 and 7 (got {rack})")
         slot = proto_config.get("slot", self._slot)
+        if not isinstance(slot, int) or slot < 0 or slot > 31:
+            raise ValueError(f"S7 slot must be between 0 and 31 (got {slot})")
 
         self._device_info[device_id] = {
             "module_name": device_config.name,

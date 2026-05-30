@@ -40,8 +40,8 @@ class _TokenRedactingFilter(logging.Filter):
                         self._TOKEN_PATTERN.sub('token=***', a) if isinstance(a, str) else a
                         for a in record.args
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Token redaction failed for log args: %s", e)
         return True
 
 
@@ -127,8 +127,8 @@ async def lifespan(app: FastAPI):
                 if _line.strip().startswith("PROTOFORGE_JWT_SECRET="):
                     _EXAMPLE_SECRET = _line.strip().split("=", 1)[1].strip()
                     break
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("Failed to read .env.example for JWT secret check: %s", e)
     if not settings.jwt_secret or (_EXAMPLE_SECRET and settings.jwt_secret == _EXAMPLE_SECRET):
         logger.warning(
             "SECURITY: JWT secret is empty or using example default. "

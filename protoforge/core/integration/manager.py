@@ -239,8 +239,10 @@ class IntegrationManager:
                 task.cancel()
                 try:
                     await task
-                except (asyncio.CancelledError, Exception):
+                except asyncio.CancelledError:
                     pass
+                except Exception as e:
+                    logger.debug("Error cancelling background task: %s", e)
 
         # 清理事件订阅
         self._event_bus.off("DeviceCreatedEvent", self._on_device_created)
@@ -257,22 +259,22 @@ class IntegrationManager:
         if self._ws_channel:
             try:
                 await self._ws_channel.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to close WebSocket channel: %s", e)
             self._ws_channel = None
 
         if self._http_client:
             try:
                 await self._http_client.aclose()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to close HTTP client: %s", e)
             self._http_client = None
 
         if self._auth:
             try:
                 await self._auth.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to close auth session: %s", e)
             self._auth = None
 
         logger.info("IntegrationManager stopped")
@@ -332,8 +334,8 @@ class IntegrationManager:
                 await self._auth.refresh_token()
                 req_headers["Authorization"] = f"Bearer {self._auth.token}"
                 resp = await getattr(self._http_client, method)(path, headers=req_headers, **kwargs)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Token refresh retry failed: %s", e)
 
         return resp
 
@@ -552,8 +554,8 @@ class IntegrationManager:
             conflict_data = create_resp.json()
             if isinstance(conflict_data, dict):
                 conflict_detail = str(conflict_data.get("detail", ""))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to parse conflict detail: %s", e)
 
         driver_config = payload.get("config", {})
         is_driver_failure = any(
@@ -616,8 +618,8 @@ class IntegrationManager:
                     device_id = payload["device_id"]
                     await self._request_with_auth("delete", f"/api/v1/devices/{quote(str(device_id), safe='')}")
                     logger.info("Cleaned up failed device %s on EdgeLite (unrecoverable driver error)", device_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to clean up failed device on EdgeLite: %s", e)
 
             self._metrics.record_push_failure()
             return {
@@ -652,8 +654,8 @@ class IntegrationManager:
                     err_detail = str(create_resp2.text[:200])
                 self._metrics.record_push_failure()
                 return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
-        except (httpx.ConnectError, httpx.TimeoutException):
-            pass
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            logger.debug("Network error checking device existence: %s", e)
 
         # PUT 更新
         update_payload = {k: v for k, v in payload.items() if k != "device_id"}
@@ -759,8 +761,8 @@ class IntegrationManager:
                     raw = status_resp.json()
                     data = raw.get("data", raw)
                     return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to get system status after login: %s", e)
             return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}
 
         if login_resp.status_code == 401:
@@ -899,8 +901,8 @@ class IntegrationManager:
                         dev_resp = await self._request_with_auth(
                             "get", f"/api/v1/devices/{quote(str(device_id), safe='')}"
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("Failed to re-query device after auto-push: %s", e)
                 else:
                     result["steps"]["register"] = {"ok": False, "auto_fix_failed": True, "error": fix_result.get("error", "Auto-push failed")}
                     result["auto_fixes"].append({"step": "register", "action": "auto_push", "result": "failed", "error": fix_result.get("error", "")})
@@ -1472,8 +1474,8 @@ class IntegrationManager:
                     if self._ws_channel:
                         try:
                             await self._ws_channel.close()
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Failed to close old WebSocket channel: %s", e)
                         self._ws_channel = None
 
                     await self._connect_websocket()

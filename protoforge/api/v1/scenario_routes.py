@@ -89,7 +89,7 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/scenarios/{scenario_id}")  # FIXED: 移除response_model=ScenarioInfo，避免过滤_persistence_warning
+@router.put("/scenarios/{scenario_id}")
 async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
@@ -98,6 +98,12 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
         existing = engine.get_scenario_config(scenario_id)
         if not existing:
             raise ValueError(f"Scenario not found: {scenario_id}")
+        status_info = engine.get_scenario_status(scenario_id)
+        if status_info and status_info.value in ("running", "starting"):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot update a running or starting scenario (current status: {status_info.value}). Stop it first.",
+            )
         merged = ScenarioConfig(
             id=scenario_id,
             name=update.name if update.name is not None else existing.name,
@@ -129,7 +135,14 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
     db = _get_database()
 
     try:
-        await engine.remove_scenario(scenario_id)  # FIXED-P1: remove_scenario是async，需await
+        config = engine.get_scenario_config(scenario_id)
+        if config and config.devices:
+            for device_cfg in config.devices:
+                try:
+                    await engine.remove_device(device_cfg.id)
+                except Exception as dev_err:
+                    logger.warning("Failed to remove device %s during scenario %s cleanup: %s", device_cfg.id, scenario_id, dev_err)
+        await engine.remove_scenario(scenario_id)
         db_ok = True
         db_err_msg = ""
         if db:

@@ -409,8 +409,8 @@ class Recorder:
             if msg_size > max_size:
                 logger.debug("Dropping oversized recording message (%d bytes > %d limit)", msg_size, max_size)
                 return
-        except (TypeError, ValueError):
-            pass
+        except (TypeError, ValueError) as e:
+            logger.debug("Failed to serialize recording message for size check: %s", e)
         recorded = RecordedMessage(
             timestamp=msg.timestamp,
             protocol=msg.protocol,

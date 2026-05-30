@@ -167,17 +167,7 @@ async def get_audit_stats(_user: dict = Depends(require_admin)):
 
 @router.delete("/audit/{entry_id}")
 async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)):
-    try:
-        from protoforge.core.audit import audit_logger
-        deleted = await audit_logger.delete_entry(entry_id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="Audit entry not found")
-        return {"status": "ok"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Failed to delete audit entry: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to delete audit entry: {e}") from e
+    raise HTTPException(status_code=403, detail="Audit log entries cannot be deleted. Audit logs are append-only for compliance.")
 
 
 @router.delete("/audit")
@@ -185,13 +175,7 @@ async def clear_audit_log(
     before: Optional[float] = None,
     _user: dict = Depends(require_admin),
 ):
-    try:
-        from protoforge.core.audit import audit_logger
-        count = await audit_logger.clear_entries(before_timestamp=before)
-        return {"status": "ok", "deleted": count}
-    except Exception as e:
-        logger.error("Failed to clear audit log: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to clear audit log: {e}") from e
+    raise HTTPException(status_code=403, detail="Audit log cannot be cleared. Audit logs are append-only for compliance.")
 
 
 @router.get("/backup")

@@ -7,8 +7,7 @@ from enum import IntEnum
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: 改继承StandardDeviceBehavior
-from protoforge.protocols.behavior import DynamicValueGenerator
+from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
 
 logger = logging.getLogger(__name__)
@@ -212,6 +211,7 @@ class ProfinetServer(ProtocolServer):
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 34964)
+        self._validate_port(self._port)
         self._device_name = config.get("device_name", "protoforge-device")
         self._vendor_id = config.get("vendor_id", 0x010A)
         self._device_id = config.get("device_id", 0x0100)
