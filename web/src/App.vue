@@ -97,40 +97,7 @@
         </n-layout>
       </n-layout>
 
-      <n-modal
-    v-model:show="showChangePassword"
-    :title="t('password.title')"
-    preset="card"
-    style="width: 420px"
-    :mask-closable="false"
-  >
-    <n-space vertical>
-      <n-input
-        v-model:value="oldPassword"
-        type="password"
-        :placeholder="t('password.oldPassword')"
-        show-password-on="click"
-      />
-      <n-input
-        v-model:value="newPassword"
-        type="password"
-        :placeholder="t('password.newPassword')"
-        show-password-on="click"
-      />
-      <n-input
-        v-model:value="confirmPassword"
-        type="password"
-        :placeholder="t('password.confirmPassword')"
-        show-password-on="click"
-      />
-    </n-space>
-    <template #footer>
-      <n-space justify="end">
-        <n-button @click="showChangePassword = false">{{ t('common.cancel') }}</n-button>
-        <n-button type="primary" :loading="changePasswordLoading" @click="handleChangePassword">{{ t('password.submit') }}</n-button>
-      </n-space>
-    </template>
-  </n-modal>
+      <ChangePasswordModal v-model:show="showChangePassword" @success="onChangePasswordSuccess" />
     </n-dialog-provider>
   </n-message-provider>
   </n-config-provider>
@@ -139,12 +106,12 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NModal, NInput, NConfigProvider, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NConfigProvider, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api, { setNotifyFunction } from './api.js'
-import { validatePassword } from './utils.js'
 import Login from './views/Login.vue'
+import ChangePasswordModal from './components/ChangePasswordModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -218,10 +185,11 @@ function onLogin() {
 }
 
 const showChangePassword = ref(false)
-const oldPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const changePasswordLoading = ref(false)
+
+function onChangePasswordSuccess() {
+  if (ws) { ws.close(); ws = null }
+  loggedIn.value = false
+}
 
 function onUserMenuSelect(key) {
   if (key === 'logout') {
@@ -242,9 +210,6 @@ function onUserMenuSelect(key) {
     })
   } else if (key === 'change-password') {
     showChangePassword.value = true
-    oldPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
   }
 }
 
@@ -271,54 +236,6 @@ onUnmounted(() => {
   if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
   if (ws) { ws.close(); ws = null }
 })
-
-async function handleChangePassword() {
-  if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
-    message.error(t('password.allRequired'))
-    return
-  }
-  if (newPassword.value !== confirmPassword.value) {
-    message.error(t('password.mismatch'))
-    return
-  }
-  if (newPassword.value.length < 8) {
-    message.error(t('password.tooShort'))
-    return
-  }
-  const pwCheck = validatePassword(newPassword.value)
-  if (!pwCheck.valid) {
-    message.error(t(`password.${pwCheck.reason}`))
-    return
-  }
-  changePasswordLoading.value = true
-  try {
-    const currentUser = localStorage.getItem('username')
-    if (!currentUser) {
-      message.error(t('password.noUser'))
-      return
-    }
-    await api.changePassword(currentUser, oldPassword.value, newPassword.value)
-    message.success(t('password.success'))
-    showChangePassword.value = false
-    discreteDialog.info({
-      title: t('password.success'),
-      content: t('password.reloginRequired'),
-      positiveText: t('header.logout'),
-      onPositiveClick: () => {
-        if (ws) { ws.close(); ws = null }
-        localStorage.removeItem('token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('username')
-        localStorage.removeItem('role')
-        loggedIn.value = false
-      }
-    })
-  } catch (e) {
-    message.error(e.response?.data?.detail || t('password.failed'))
-  } finally {
-    changePasswordLoading.value = false
-  }
-}
 
 function onSearchInput(query) {
   if (!query) { searchResults.value = []; return }

@@ -155,19 +155,7 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showChangePassword" :title="t('settings.changePasswordTitle')" preset="card" style="width: 420px" :mask-closable="false">
-      <n-space vertical>
-        <n-input v-model:value="changePwdForm.username" :placeholder="t('common.username')" disabled />
-        <n-input v-model:value="changePwdForm.old_password" type="password" :placeholder="t('common.currentPassword')" show-password-on="click" />
-        <n-input v-model:value="changePwdForm.new_password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
-      </n-space>
-      <template #footer>
-        <n-space justify="end">
-          <n-button @click="showChangePassword = false">{{ t('common.cancel') }}</n-button>
-          <n-button type="primary" :loading="changePwdLoading" @click="handleChangePassword">{{ t('common.confirm') }}</n-button>
-        </n-space>
-      </template>
-    </n-modal>
+    <ChangePasswordModal v-model:show="showChangePassword" />
   </div>
 </template>
 
@@ -178,6 +166,7 @@ import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { getProtocolLabel, PASSWORD_MASK } from '../constants.js'
 import { validatePassword } from '../utils.js'
+import ChangePasswordModal from '../components/ChangePasswordModal.vue'
 
 const message = useMessage()
 const { t } = useI18n()
@@ -230,8 +219,6 @@ const showResetPassword = ref(false)
 const showChangePassword = ref(false)
 const newUser = ref({ username: '', password: '', role: 'user' })
 const resetTarget = ref({ username: '', new_password: '' })
-const changePwdForm = ref({ username: '', old_password: '', new_password: '' })
-const changePwdLoading = ref(false)
 
 const userColumns = computed(() => [
   { title: t('common.username'), key: 'username', width: 150 },
@@ -286,7 +273,7 @@ async function loadSettings() {
       protocol_ports: data.protocol_ports || {},
     }
   } catch (e) {
-    message.error(t('settings.loadSettingsFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.loadSettingsFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   } finally {
     settingsLoading.value = false
   }
@@ -301,7 +288,7 @@ async function saveSettings() {
     await api.updateSettings(updates)
     message.success(t('settings.settingsSaved'))
   } catch (e) {
-    message.error(t('common.saveFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.saveFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   } finally {
     saveLoading.value = false
   }
@@ -341,7 +328,7 @@ async function testEdgeLiteConnection() {
       }
     }
   } catch (e) {
-    testEdgeLiteResult.value = { ok: false, error: e.response?.data?.detail || e.message }
+    testEdgeLiteResult.value = { ok: false, error: e.response?.data?.message || e.response?.data?.detail || e.message }
   } finally {
     testEdgeLiteLoading.value = false
   }
@@ -352,7 +339,7 @@ async function loadUsers() {
     const data = await api.listUsers()
     users.value = Array.isArray(data) ? data : []
   } catch (e) {
-    message.error(t('settings.loadUsersFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('settings.loadUsersFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   }
 }
 
@@ -391,7 +378,7 @@ async function handleAddUser() {
         await api.adminUpdateRole(newUser.value.username, newUser.value.role)
       } catch (roleErr) {
         try { await api.deleteUser(newUser.value.username) } catch { /* best effort cleanup */ }
-        message.error(t('settings.updateRoleFailed') + ': ' + (roleErr.response?.data?.detail || roleErr.message))
+        message.error(t('settings.updateRoleFailed') + ': ' + (roleErr.response?.data?.message || roleErr.response?.data?.detail || roleErr.message))
         await loadUsers()
         return
       }
@@ -400,7 +387,7 @@ async function handleAddUser() {
     showAddUser.value = false
     await loadUsers()
   } catch (e) {
-    message.error(t('common.createFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.createFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   } finally {
     addUserLoading.value = false
   }
@@ -424,7 +411,7 @@ async function handleResetPassword() {
     message.success(t('settings.passwordReset'))
     showResetPassword.value = false
   } catch (e) {
-    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.operationFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   } finally {
     resetLoading.value = false
   }
@@ -442,7 +429,7 @@ async function unlockUser(row) {
         message.success(t('settings.userUnlocked'))
         await loadUsers()
       } catch (e) {
-        message.error(t('common.operationFailed') + ': ' + (e.response?.data?.detail || e.message))
+        message.error(t('common.operationFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
       }
     }
   })
@@ -460,7 +447,7 @@ async function changeRole(row, newRole) {
         message.success(t('settings.roleUpdated'))
         await loadUsers()
       } catch (e) {
-        message.error(t('settings.updateRoleFailed') + ': ' + (e.response?.data?.detail || e.message))
+        message.error(t('settings.updateRoleFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
         await loadUsers()
       }
     },
@@ -474,37 +461,12 @@ async function deleteUser(row) {
     message.success(t('settings.userDeleted'))
     await loadUsers()
   } catch (e) {
-    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.detail || e.message))
+    message.error(t('common.deleteFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   }
 }
 
 function openChangePassword() {
-  const currentUser = localStorage.getItem('username') || ''
-  changePwdForm.value = { username: currentUser, old_password: '', new_password: '' }
   showChangePassword.value = true
-}
-
-async function handleChangePassword() {
-  if (!changePwdForm.value.old_password || !changePwdForm.value.new_password) {
-    message.warning(t('settings.fillOldAndNewPassword'))
-    return
-  }
-  const pwd = changePwdForm.value.new_password
-  const pwCheck = validatePassword(pwd)
-  if (!pwCheck.valid) {
-    message.warning(t('settings.passwordPolicy'))
-    return
-  }
-  changePwdLoading.value = true
-  try {
-    await api.changePassword(changePwdForm.value.username, changePwdForm.value.old_password, changePwdForm.value.new_password)
-    message.success(t('settings.passwordChanged'))
-    showChangePassword.value = false
-  } catch (e) {
-    message.error(t('settings.changePasswordFailed') + ': ' + (e.response?.data?.detail || e.message))
-  } finally {
-    changePwdLoading.value = false
-  }
 }
 
 async function setupDemo() {
@@ -520,7 +482,7 @@ async function setupDemo() {
         message.success(t('settings.demoCreateSuccess', { devices: res.device_count || 0, scenarios: res.scenario_count || 0 }))
         await loadSetupStatus()
       } catch (e) {
-        message.error(t('settings.demoCreateFailed') + ': ' + (e.response?.data?.detail || e.message))
+        message.error(t('settings.demoCreateFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
       } finally {
         demoLoading.value = false
       }

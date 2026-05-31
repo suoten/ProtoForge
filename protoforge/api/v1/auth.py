@@ -33,9 +33,11 @@ class RoleChecker:
         self._allowed_roles = allowed_roles
 
     async def __call__(self, request: Request) -> dict:
-        if is_no_auth():
-            return {"sub": "no-auth", "username": "anonymous", "role": "viewer"}
         payload = getattr(request.state, "user", None)
+        if is_no_auth():
+            if payload is None:
+                return {"sub": "admin", "username": "admin", "role": "admin"}
+            return payload
         if payload is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -97,7 +99,7 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
 
     if is_no_auth():
-        request.state.user = {"username": "admin", "role": "admin"}
+        request.state.user = {"sub": "admin", "username": "admin", "role": "admin"}
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "")

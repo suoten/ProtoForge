@@ -174,7 +174,7 @@ export default {
   refreshToken: (refresh_token) => d(api.post('/auth/refresh', { refresh_token })),
   register: (username, password) => d(api.post('/auth/register', { username, password })),
   listUsers: () => d(api.get('/auth/users')).then(r => normalizeList(r, 'users')),
-  changePassword: (username, old_password, new_password) => d(api.post('/auth/change-password', { username, old_password, new_password })),
+  changePassword: (old_password, new_password) => d(api.post('/auth/change-password', { old_password, new_password })),
   adminResetPassword: (username, new_password) => d(api.post(`/auth/admin/reset-password`, { username, new_password })),
   adminUnlockUser: (username) => d(api.post(`/auth/admin/unlock/${username}`)),
   adminUpdateRole: (username, role) => d(api.put(`/auth/users/${username}/role`, { role })),

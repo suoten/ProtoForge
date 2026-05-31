@@ -37,9 +37,13 @@ class RegisterRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    username: str = Field(..., min_length=1, description="Username")
     old_password: str = Field(..., min_length=1, description="Current password")
     new_password: str = Field(..., min_length=1, description="New password")
+
+    @field_validator("old_password", "new_password", mode="after")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
 
 
 class AdminResetPasswordRequest(BaseModel):
@@ -167,16 +171,15 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
         current_user = user_manager.get_user_by_id(current_user_id) if current_user_id else None
         current_username = current_user.username if current_user else _user.get("username", "")
 
-        is_admin = (current_user.role if current_user else _user.get("role")) == "admin"
-        is_self = data.username == current_username
+        logger.debug(
+            "change_password: sub=%s user_found=%s username=%s",
+            current_user_id, current_user is not None, current_username,
+        )
 
-        if not is_admin and not is_self:
-            raise HTTPException(status_code=403, detail=desc("auth.change_own_password_only"))
+        if not current_username:
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
-        if is_admin and not is_self:
-            ok, msg = await user_manager.admin_reset_password(data.username, data.new_password)
-        else:
-            ok, msg = await user_manager.change_password(data.username, data.old_password, data.new_password)
+        ok, msg = await user_manager.change_password(current_username, data.old_password, data.new_password)
 
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
