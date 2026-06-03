@@ -178,24 +178,69 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     ),
 
     # ------------------------------------------------------------------
-    # 电源波动 — 供电不稳定
-    # 特征：主轴转速和进给速率出现随机波动，电流不稳定
-    # 模式：瞬间注入（持续期间持续抖动）
+    # 电源波动（粗铣）— fanuc-cnc
+    # 主轴~2000RPM，进给~800mm/min
+    # 转速噪声 ±200 RPM（±10%），进给噪声 ±80 mm/min（±10%），电流噪声 ±3A
     # ------------------------------------------------------------------
     FaultTypeDefinition(
-        id="power_fluctuation",
-        name="电源波动",
-        description="供电电压不稳定，主轴转速和进给速率出现随机波动",
+        id="power_fluctuation_rough",
+        name="电源波动（粗铣）",
+        description="粗铣工位供电电压不稳定，主轴转速出现随机波动（±200RPM），进给速率抖动（±80mm/min），电流不稳定",
         category="electrical",
         default_duration=90.0,
-        tags=["电源", "波动", "突发"],
+        tags=["电源", "波动", "突发", "粗铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=200.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=3.0),
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=80.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 电源波动（半精铣）— fanuc-cnc-semi-finish
+    # 主轴~4000RPM，进给~300mm/min
+    # 转速噪声 ±300 RPM（±7.5%），进给噪声 ±25 mm/min（±8%），电流噪声 ±2A
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="power_fluctuation_semi",
+        name="电源波动（半精铣）",
+        description="半精铣工位供电电压不稳定，主轴转速出现随机波动（±300RPM），进给速率抖动（±25mm/min），电流不稳定",
+        category="electrical",
+        default_duration=90.0,
+        tags=["电源", "波动", "突发", "半精铣"],
         point_faults=[
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=300.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=5.0),
+                             multiplier=1.0, noise_scale=2.0),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=150.0),
+                             multiplier=1.0, noise_scale=25.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 电源波动（精铣）— fanuc-cnc-finish
+    # 主轴~6000RPM，进给~300mm/min
+    # 转速噪声 ±450 RPM（±7.5%），进给噪声 ±25 mm/min（±8%），电流噪声 ±1.2A
+    # 精铣对稳定性要求高，波动对加工质量影响更敏感
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="power_fluctuation_finish",
+        name="电源波动（精铣）",
+        description="精铣工位供电电压不稳定，主轴转速出现随机波动（±450RPM），进给速率抖动（±25mm/min），电流不稳定；精铣对稳定性要求高，波动易导致表面质量下降",
+        category="electrical",
+        default_duration=90.0,
+        tags=["电源", "波动", "突发", "精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=450.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=1.2),
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=25.0),
         ],
     ),
 
