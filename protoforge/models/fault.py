@@ -32,7 +32,9 @@ class PointFaultConfig(BaseModel):
 
     # GRADUAL 模式：从当前值线性劣化到 target_value 或 multiplier 倍
     # 劣化程度 = progress(0~1) × (target - baseline)
-    noise_scale: float = 0.0               # 叠加随机噪声幅度，模拟真实抖动
+    noise_scale: float = 0.0               # 叠加随机噪声幅度（绝对值），模拟真实抖动
+    noise_ratio: float = 0.0               # 叠加随机噪声幅度（相对 effective_baseline 的比例）
+                                           # 与 noise_scale 互斥，noise_ratio > 0 时优先使用
     nominal_baseline: Optional[float] = None  # 稳态额定基线，设置后替代注入时采样的瞬时值
                                               # 用于周期性信号（如主轴转速）避免在升/降速段注入时基线失真
 

@@ -259,9 +259,9 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         tags=["刀具", "磨损", "负载", "趋势漂移"],
         point_faults=[
             PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
-                             multiplier=1.8, noise_scale=3.0),
+                             multiplier=1.8, noise_ratio=0.05),
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
-                             multiplier=1.7, noise_scale=1.5),
+                             multiplier=1.7, noise_ratio=0.05),
         ],
     ),
 
@@ -585,7 +585,10 @@ class FaultInjector:
                 target = effective_baseline
 
         # 叠加随机噪声，模拟真实信号抖动
-        if pf.noise_scale > 0:
+        # noise_ratio > 0 时按 effective_baseline 比例计算噪声幅度，否则使用绝对值 noise_scale
+        if pf.noise_ratio > 0:
+            target += random.gauss(0, pf.noise_ratio * effective_baseline * intensity)
+        elif pf.noise_scale > 0:
             target += random.gauss(0, pf.noise_scale * intensity)
 
         return round(max(0.0, target), 4)
