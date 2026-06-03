@@ -126,7 +126,8 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
                              target_min=30.0, target_max=38.0, noise_scale=1.5),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
-                             target_min=1200, target_max=1600, noise_scale=40.0),
+                             target_min=1200, target_max=1600, noise_scale=40.0,
+                             nominal_baseline=2000.0),
         ],
     ),
 
@@ -148,7 +149,8 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
                              target_min=21.0, target_max=27.0, noise_scale=1.2),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
-                             target_min=2400, target_max=2900, noise_scale=50.0),
+                             target_min=2400, target_max=2900, noise_scale=50.0,
+                             nominal_baseline=4000.0),
         ],
     ),
 
@@ -170,7 +172,8 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
                              target_min=13.0, target_max=17.0, noise_scale=0.8),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
-                             target_min=3600, target_max=4200, noise_scale=60.0),
+                             target_min=3600, target_max=4200, noise_scale=60.0,
+                             nominal_baseline=6000.0),
         ],
     ),
 
@@ -515,21 +518,25 @@ class FaultInjector:
         # 确定本次注入的实际目标值
         effective_target: Optional[float] = resolved_target if resolved_target is not None else pf.target_value
 
+        # 如果配置了额定基线，使用它替代注入时采样的瞬时值
+        # 避免在升/降速等非稳态阶段注入时，基线偏低导致渐进目标反而高于基线（转速"上升"bug）
+        effective_baseline = pf.nominal_baseline if pf.nominal_baseline is not None else baseline
+
         if pf.mode == FaultMode.INSTANT:
             if effective_target is not None:
                 target = effective_target
             elif pf.multiplier is not None:
-                target = baseline * (1.0 + (pf.multiplier - 1.0) * intensity)
+                target = effective_baseline * (1.0 + (pf.multiplier - 1.0) * intensity)
             else:
-                target = baseline
+                target = effective_baseline
         else:
             # 渐进模式：随 progress 线性劣化
             if effective_target is not None:
-                target = baseline + (effective_target - baseline) * progress * intensity
+                target = effective_baseline + (effective_target - effective_baseline) * progress * intensity
             elif pf.multiplier is not None:
-                target = baseline * (1.0 + (pf.multiplier - 1.0) * progress * intensity)
+                target = effective_baseline * (1.0 + (pf.multiplier - 1.0) * progress * intensity)
             else:
-                target = baseline
+                target = effective_baseline
 
         # 叠加随机噪声，模拟真实信号抖动
         if pf.noise_scale > 0:
