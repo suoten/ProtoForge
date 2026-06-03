@@ -191,11 +191,11 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         tags=["电源", "波动", "突发", "粗铣"],
         point_faults=[
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=200.0),
+                             multiplier=1.0, noise_scale=200.0, nominal_baseline=2000.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=3.0),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=80.0),
+                             multiplier=1.0, noise_scale=80.0, nominal_baseline=800.0),
         ],
     ),
 
@@ -213,11 +213,11 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         tags=["电源", "波动", "突发", "半精铣"],
         point_faults=[
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=300.0),
+                             multiplier=1.0, noise_scale=300.0, nominal_baseline=4000.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=2.0),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=25.0),
+                             multiplier=1.0, noise_scale=25.0, nominal_baseline=300.0),
         ],
     ),
 
@@ -236,11 +236,11 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
         tags=["电源", "波动", "突发", "精铣"],
         point_faults=[
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=450.0),
+                             multiplier=1.0, noise_scale=450.0, nominal_baseline=6000.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
                              multiplier=1.0, noise_scale=1.2),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
-                             multiplier=1.0, noise_scale=25.0),
+                             multiplier=1.0, noise_scale=25.0, nominal_baseline=300.0),
         ],
     ),
 
@@ -500,10 +500,11 @@ class FaultInjector:
             if pf.point not in device._point_values:
                 continue
             baseline = fault.baseline_values.get(pf.point, 0.0)
-            if baseline == 0.0:
+            if baseline == 0.0 and pf.nominal_baseline is None:
                 # 基线为0说明注入时设备处于换刀/停机状态
                 # target_value / resolved_targets 模式可以直接执行
                 # multiplier 模式跳过，避免在零基线上产生无意义的值
+                # 例外：配置了 nominal_baseline 时使用额定值，不跳过
                 if pf.target_value is None and pf.point not in fault.resolved_targets:
                     continue
 
