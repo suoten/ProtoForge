@@ -311,23 +311,77 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     ),
 
     # ------------------------------------------------------------------
-    # 刀具崩刃 — 主轴负载突发脉冲
-    # 特征：spindle_load 瞬间冲高（可超120%，FANUC最大输出200%），进给停止，CNC停主轴
-    # 场景：刀具突发性失效，机床触发过载报警并停机
-    # 模式：瞬间注入，持续时间极短
+    # 刀具崩刃（粗铣）— fanuc-cnc
+    # 正常切削基线：spindle_load~56%, spindle_current~21A
+    # 崩刃特征：load 瞬间冲高至 160~185%（FANUC 最大输出200%），
+    #            current 冲至 75~90A，转速/进给归零，触发过载报警
+    # 使用绝对目标值（target_min/max），避免注入时恰好处于低电流阶段
+    # 导致 multiplier × 低基线 < 正常切削峰值的问题
     # ------------------------------------------------------------------
     FaultTypeDefinition(
-        id="tool_breakage_sudden",
-        name="刀具崩刃",
-        description="刀具突发性崩刃，spindle_load瞬间冲高至正常值3.2倍（可超120%，FANUC最大输出200%），进给停止，CNC触发过载报警并停主轴",
+        id="tool_breakage_rough",
+        name="刀具崩刃（粗铣）",
+        description="粗铣刀具突发性崩刃，spindle_load瞬间冲高至160~185%，spindle_current冲至75~90A，进给停止，CNC触发过载报警并停主轴",
         category="tool",
         default_duration=10.0,
-        tags=["刀具", "崩刃", "突发", "过载"],
+        tags=["刀具", "崩刃", "突发", "过载", "粗铣"],
         point_faults=[
             PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
-                             multiplier=3.2, noise_scale=8.0),
+                             target_min=160.0, target_max=185.0, noise_scale=8.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
-                             multiplier=4.0, noise_scale=3.0),
+                             target_min=75.0, target_max=90.0, noise_scale=3.0),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="alarm_status", mode=FaultMode.INSTANT,
+                             target_value=1.0, noise_scale=0.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 刀具崩刃（半精铣）— fanuc-cnc-semi-finish
+    # 正常切削基线：spindle_load~38%, spindle_current~14.5A
+    # 崩刃特征：load 瞬间冲高至 120~145%，current 冲至 52~64A
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_breakage_semi",
+        name="刀具崩刃（半精铣）",
+        description="半精铣刀具突发性崩刃，spindle_load瞬间冲高至120~145%，spindle_current冲至52~64A，进给停止，CNC触发过载报警并停主轴",
+        category="tool",
+        default_duration=10.0,
+        tags=["刀具", "崩刃", "突发", "过载", "半精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_min=120.0, target_max=145.0, noise_scale=6.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_min=52.0, target_max=64.0, noise_scale=2.5),
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+            PointFaultConfig(point="alarm_status", mode=FaultMode.INSTANT,
+                             target_value=1.0, noise_scale=0.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 刀具崩刃（精铣）— fanuc-cnc-finish
+    # 正常切削基线：spindle_load~22%, spindle_current~8.5A
+    # 崩刃特征：load 瞬间冲高至 70~90%，current 冲至 30~40A
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_breakage_finish",
+        name="刀具崩刃（精铣）",
+        description="精铣刀具突发性崩刃，spindle_load瞬间冲高至70~90%，spindle_current冲至30~40A，进给停止，CNC触发过载报警并停主轴",
+        category="tool",
+        default_duration=10.0,
+        tags=["刀具", "崩刃", "突发", "过载", "精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_min=70.0, target_max=90.0, noise_scale=4.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_min=30.0, target_max=40.0, noise_scale=1.5),
             PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
                              target_value=0.0, noise_scale=0.0),
             PointFaultConfig(point="feed_rate", mode=FaultMode.INSTANT,
@@ -544,6 +598,21 @@ class FaultInjector:
         for pf in fault_type.point_faults:
             if pf.point not in device._point_values:
                 continue
+            # INSTANT + multiplier 模式：每 tick 取设备当前值作为动态基线。
+            # 这样程序运行中电流/负载自然变化时，故障倍数始终基于实时水位，
+            # 避免注入时恰好在低峰导致 multiplier × 旧低基线 < 正常高峰的问题。
+            # resolved_targets（绝对值）和 target_value 模式不受影响，保持原逻辑。
+            if (pf.mode == FaultMode.INSTANT
+                    and pf.multiplier is not None
+                    and pf.target_value is None
+                    and pf.point not in fault.resolved_targets
+                    and pf.nominal_baseline is None):
+                live_val = device._point_values.get(pf.point)
+                if live_val is not None:
+                    try:
+                        fault.baseline_values[pf.point] = float(live_val)
+                    except (TypeError, ValueError):
+                        pass
             baseline = fault.baseline_values.get(pf.point, 0.0)
             if baseline == 0.0 and pf.nominal_baseline is None:
                 # 基线为0说明注入时设备处于换刀/停机状态
