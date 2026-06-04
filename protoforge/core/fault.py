@@ -250,18 +250,63 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
     # 场景：刀具从轻度磨损到需要换刀的完整过程
     # 模式：渐进式，持续时间长
     # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # 刀具磨损加剧（粗铣）
+    # 切削段基线：spindle_load~54%, spindle_current~20A
+    # 目标：load×1.8→97%, current×1.7→34A
+    # ------------------------------------------------------------------
     FaultTypeDefinition(
-        id="tool_wear_progressive",
-        name="刀具磨损加剧",
-        description="刀具磨损导致切削阻力持续增大，spindle_load基线缓慢爬升至1.8倍，spindle_current同步升高；进给速度由G代码控制不受影响",
+        id="tool_wear_progressive_rough",
+        name="刀具磨损加剧（粗铣）",
+        description="粗铣刀具磨损导致切削阻力持续增大，spindle_load渐进爬升至1.8倍（~97%），spindle_current升至1.7倍（~34A）",
         category="tool",
         default_duration=600.0,
-        tags=["刀具", "磨损", "负载", "趋势漂移"],
+        tags=["刀具", "磨损", "负载", "趋势漂移", "粗铣"],
         point_faults=[
             PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
-                             multiplier=1.8, noise_ratio=0.05),
+                             multiplier=1.8, noise_ratio=0.05, nominal_baseline=54.0),
             PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
-                             multiplier=1.7, noise_ratio=0.05),
+                             multiplier=1.7, noise_ratio=0.05, nominal_baseline=20.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 刀具磨损加剧（半精铣）
+    # 切削段基线：spindle_load~33%, spindle_current~13.5A
+    # 目标：load×1.8→59%, current×1.7→23A
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_wear_progressive_semi",
+        name="刀具磨损加剧（半精铣）",
+        description="半精铣刀具磨损导致切削阻力持续增大，spindle_load渐进爬升至1.8倍（~59%），spindle_current升至1.7倍（~23A）",
+        category="tool",
+        default_duration=600.0,
+        tags=["刀具", "磨损", "负载", "趋势漂移", "半精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             multiplier=1.8, noise_ratio=0.05, nominal_baseline=33.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             multiplier=1.7, noise_ratio=0.05, nominal_baseline=13.5),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 刀具磨损加剧（精铣）
+    # 切削段基线：spindle_load~22%, spindle_current~8.8A
+    # 目标：load×1.8→40%, current×1.7→15A
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_wear_progressive_finish",
+        name="刀具磨损加剧（精铣）",
+        description="精铣刀具磨损导致切削阻力持续增大，spindle_load渐进爬升至1.8倍（~40%），spindle_current升至1.7倍（~15A）；精铣对负载变化敏感，易影响表面质量",
+        category="tool",
+        default_duration=600.0,
+        tags=["刀具", "磨损", "负载", "趋势漂移", "精铣"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             multiplier=1.8, noise_ratio=0.05, nominal_baseline=22.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             multiplier=1.7, noise_ratio=0.05, nominal_baseline=8.8),
         ],
     ),
 
