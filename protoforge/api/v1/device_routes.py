@@ -311,6 +311,21 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     # Replace 0.0.0.0 (server listen address) with actual reachable host
     if config.get("host") in ("0.0.0.0", ""):
         config["host"] = get_protoforge_host()
+
+    # Filter connection_info to only show relevant connection parameters
+    _irrelevant_keys = {"display_name", "description", "icon", "config"}
+    connection_info = {k: v for k, v in config.items() if k not in _irrelevant_keys and not isinstance(v, (dict, list))}
+
+    # Check if protocol service is running
+    protocol_status = None
+    try:
+        from protoforge.core.engine import SimulationEngine
+        server = engine.get_protocol_server(device.protocol)
+        if server:
+            protocol_status = server.status.value if hasattr(server.status, 'value') else str(server.status)
+    except Exception:
+        pass
+
     code_examples = {}
 
     if usage.get("code_examples"):
@@ -340,7 +355,8 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
         "connect_hint": desc(f"protocol.{protocol}.usage.connect_hint", lang, usage.get("connect_hint", "")),
         "code_example": code_example,
         "code_examples": code_examples,
-        "connection_info": config,
+        "connection_info": connection_info,
+        "protocol_status": protocol_status,
     }
 
 
