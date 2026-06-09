@@ -302,10 +302,15 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
 
     from protoforge.core.defaults import PROTOCOL_USAGE, get_protocol_defaults
     from protoforge.core.messages import get_lang_from_request, desc
+    from protoforge.core.edgelite import get_protoforge_host
     lang = get_lang_from_request(request)
     usage = PROTOCOL_USAGE.get(device.protocol, {})
     defaults = get_protocol_defaults(device.protocol, lang=lang)
     config = {**defaults, **(device.protocol_config or {})}
+
+    # Replace 0.0.0.0 (server listen address) with actual reachable host
+    if config.get("host") in ("0.0.0.0", ""):
+        config["host"] = get_protoforge_host()
     code_examples = {}
 
     if usage.get("code_examples"):
