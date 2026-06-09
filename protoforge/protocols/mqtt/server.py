@@ -63,6 +63,8 @@ class MqttBroker(ProtocolServer):
         self._auth_password = ""
         self._clean_session = True
         self._registered_client_ids: set[str] = set()
+        self._default_qos: int = 0
+        self._default_retain: bool = False
 
     @property
     def actual_port(self) -> int:
@@ -83,11 +85,13 @@ class MqttBroker(ProtocolServer):
         self._requested_port = config.get("port", 1883)
         self._validate_port(self._requested_port)
         self._port = self._requested_port
-        publish_interval = config.get("publish_interval", 5)
+        publish_interval = max(1, config.get("publish_interval", 5))
         self._auth_required = config.get("auth_required", False)
         self._auth_username = config.get("auth_username", "")
         self._auth_password = config.get("auth_password", "")
         self._clean_session = config.get("clean_session", True)  # FIXED-P0: 读取Clean Session配置
+        self._default_qos = config.get("qos", 0)
+        self._default_retain = config.get("retain", False)
         self._auth_users: dict[str, str] = {}  # FIXED-P1: 多用户认证字典
         auth_users_str = config.get("auth_users", "")
         if auth_users_str:
@@ -96,7 +100,7 @@ class MqttBroker(ProtocolServer):
                 parsed = _json.loads(auth_users_str)
                 if isinstance(parsed, dict):
                     self._auth_users = {str(k): str(v) for k, v in parsed.items()}
-            except (json.JSONDecodeError, TypeError, ValueError):
+            except (_json.JSONDecodeError, TypeError, ValueError):
                 logger.warning("MQTT auth_users config parse error, ignoring")
 
         try:
@@ -204,14 +208,14 @@ class MqttBroker(ProtocolServer):
         behavior = MqttDeviceBehavior(device_config.points)
         proto_config = device_config.protocol_config or {}
         client_id = proto_config.get("client_id", "")
-        if client_id:
-            if client_id in self._registered_client_ids:
-                raise ValueError(
-                    f"MQTT ClientID '{client_id}' is already in use by another device. "
-                    "ClientID must be unique within the same broker."
-                )
-            self._registered_client_ids.add(client_id)
         async with self._behaviors_lock:
+            if client_id:
+                if client_id in self._registered_client_ids:
+                    raise ValueError(
+                        f"MQTT ClientID '{client_id}' is already in use by another device. "
+                        "ClientID must be unique within the same broker."
+                    )
+                self._registered_client_ids.add(client_id)
             self._behaviors[device_config.id] = behavior
             self._device_configs[device_config.id] = device_config
         await self._update_default_device_async(device_config.id)
@@ -365,8 +369,8 @@ class MqttBroker(ProtocolServer):
                     continue
                 proto_config = config.protocol_config or {}
                 topic_prefix = proto_config.get("topic_prefix", "protoforge")
-                qos = proto_config.get("qos", 0)  # FIXED-P0: QoS参数移到外层
-                retain = proto_config.get("retain", False)  # FIXED-P0: Retain参数移到外层
+                qos = proto_config.get("qos", self._default_qos)
+                retain = proto_config.get("retain", self._default_retain)
                 for point in config.points:
                     value = behavior.get_value(point.name)
                     # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式
@@ -405,8 +409,8 @@ class MqttBroker(ProtocolServer):
             return
         proto_config = config.protocol_config or {}
         topic_prefix = proto_config.get("topic_prefix", "protoforge")
-        qos = proto_config.get("qos", 0)  # FIXED-P0: 添加QoS支持
-        retain = proto_config.get("retain", False)  # FIXED-P0: 添加Retain支持
+        qos = proto_config.get("qos", self._default_qos)
+        retain = proto_config.get("retain", self._default_retain)
         for point in config.points:
             value = behavior.get_value(point.name)
             # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式

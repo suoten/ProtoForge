@@ -2,6 +2,7 @@ import asyncio
 import ipaddress
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,20 @@ try:
 except ImportError:
     ASYNCUA_AVAILABLE = False
     logger.warning("asyncua not installed, OPC-UA protocol will not be available")
+
+
+def _parse_node_id(address: str, default_ns: int) -> tuple[int, str]:
+    """Bug2-FIX: 解析point.address中的ns=X;s=Y格式，返回(namespace_index, identifier)。
+
+    支持的格式:
+      - "ns=2;s=Node1"  -> (2, "Node1")
+      - "ns=3;i=100"    -> (3, "100")
+      - "Node1"          -> (default_ns, "Node1")
+    """
+    m = re.match(r'^ns=(\d+);[si]=(.+)$', address)
+    if m:
+        return int(m.group(1)), m.group(2)
+    return default_ns, address
 
 
 def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tuple[str, str]:
@@ -171,7 +186,9 @@ class OpcUaServer(ProtocolServer):
         port = self._requested_port
         self._host = host
         self._port = port
-        self._endpoint = f"opc.tcp://{host}:{port}/protoforge"
+        # Bug3-FIX: 当host为0.0.0.0时，endpoint使用127.0.0.1替代，避免部分客户端拒绝连接
+        endpoint_host = "127.0.0.1" if host == "0.0.0.0" else host
+        self._endpoint = f"opc.tcp://{endpoint_host}:{port}/protoforge"
 
         try:
             self._server = Server()
@@ -246,8 +263,13 @@ class OpcUaServer(ProtocolServer):
                 except AttributeError:
                     self._idx = await self._server.get_namespace_index(uri)
 
-            # 通过create_device()重新注册所有设备，提前创建会导致add_node
-            # 父节点不存在错误（server.start()尚未执行，地址空间未就绪）
+            # Bug5-FIX: 服务启动后，为所有已注册设备补建OPC-UA节点
+            for dev_id, dev_config in list(self._device_configs.items()):
+                if dev_id not in self._device_nodes:
+                    try:
+                        await self._create_opcua_device(dev_config)
+                    except Exception as e:
+                        logger.warning("Failed to create OPC-UA device nodes for %s on start: %s", dev_id, e)
 
             self._status = ProtocolStatus.RUNNING
             self._server_task = asyncio.create_task(self._server.start())
@@ -371,7 +393,7 @@ class OpcUaServer(ProtocolServer):
                 try:
                     # FIXED: 使用 asyncua Variant 明确指定类型，避免 BadTypeMismatch 错误
                     from asyncua import ua as asyncua_ua
-                    data_type = self._point_types.get(point_node_key, "float64")
+                    data_type = self._point_types.get(point_node_key, "float32")
                     type_map = {
                         "bool": asyncua_ua.VariantType.Boolean,
                         "int16": asyncua_ua.VariantType.Int16,
@@ -418,7 +440,7 @@ class OpcUaServer(ProtocolServer):
                             continue
                         try:
                             value = behavior.get_value(point.name)
-                            data_type = self._point_types.get(point_node_key, "float64")
+                            data_type = self._point_types.get(point_node_key, "float32")
                             variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
                             await node.set_value(asyncua_ua.Variant(value, variant_type))
                         except Exception as e:
@@ -469,9 +491,20 @@ class OpcUaServer(ProtocolServer):
         if not self._server:
             return
         behavior = self._behaviors.get(config.id)
+
+        # Bug1-FIX: 根据设备配置的namespace注册独立命名空间索引，而非使用全局self._idx
+        ns_uri = self._device_namespaces.get(config.id, "protoforge")
+        try:
+            device_idx = await self._server.register_namespace(ns_uri)
+        except AttributeError:
+            try:
+                device_idx = await self._server.nodes.namespace.add(ns_uri)
+            except AttributeError:
+                device_idx = await self._server.get_namespace_index(ns_uri)
+
         try:
             device_folder = await self._server.nodes.objects.add_object(
-                self._idx, config.name
+                device_idx, config.name
             )
         except Exception as e:
             logger.error("Failed to create OPC-UA device folder for %s: %s", config.id, e)
@@ -498,24 +531,38 @@ class OpcUaServer(ProtocolServer):
                 if variant_type:
                     # FIXED-P1: 优先使用point.address作为NodeId，客户端可按模板定义的NodeId寻址
                     node_id_str = point.address if point.address else point.name
+                    # Bug2-FIX: 解析point.address中的ns=X;s=Y格式
+                    parsed_ns, parsed_id = _parse_node_id(node_id_str, device_idx)
                     try:
                         node = await device_folder.add_variable(
-                            self._idx, node_id_str, ua.Variant(value, variant_type)
+                            parsed_ns, parsed_id, ua.Variant(value, variant_type)
                         )
                     except Exception:
-                        node = await device_folder.add_variable(
-                            self._idx, point.name, ua.Variant(value, variant_type)
-                        )
+                        try:
+                            node = await device_folder.add_variable(
+                                parsed_ns, point.name, ua.Variant(value, variant_type)
+                            )
+                        except Exception:
+                            node = await device_folder.add_variable(
+                                device_idx, point.name, ua.Variant(value, variant_type)
+                            )
                 else:
                     node_id_str = point.address if point.address else point.name
+                    # Bug2-FIX: 解析point.address中的ns=X;s=Y格式
+                    parsed_ns, parsed_id = _parse_node_id(node_id_str, device_idx)
                     try:
                         node = await device_folder.add_variable(
-                            self._idx, node_id_str, value
+                            parsed_ns, parsed_id, value
                         )
                     except Exception:
-                        node = await device_folder.add_variable(
-                            self._idx, point.name, value
-                        )
+                        try:
+                            node = await device_folder.add_variable(
+                                parsed_ns, point.name, value
+                            )
+                        except Exception:
+                            node = await device_folder.add_variable(
+                                device_idx, point.name, value
+                            )
                 if point.access and "w" in point.access:
                     await node.set_writable()
                 try:

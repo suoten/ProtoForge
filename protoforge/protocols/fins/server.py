@@ -104,15 +104,19 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         return self._values.get(point_name, 0)
 
     def read_area(self, area: int, offset: int, size: int) -> bytearray:
-        if area not in self._memory_areas or len(self._memory_areas[area]) < offset + size:
+        if area not in self._memory_areas:
             self._memory_areas[area] = bytearray(max(offset + size, 1024))
+        elif len(self._memory_areas[area]) < offset + size:
+            self._memory_areas[area].extend(bytearray(max(offset + size, 1024) - len(self._memory_areas[area])))
         return self._memory_areas[area][offset:offset + size]
 
     def write_area(self, area: int, offset: int, data: bytes) -> None:
-        size = offset + len(data)
-        if area not in self._memory_areas or len(self._memory_areas[area]) < size:
-            self._memory_areas[area] = bytearray(max(size, 1024))
+        if area not in self._memory_areas:
+            self._memory_areas[area] = bytearray(1024)
         buf = self._memory_areas[area]
+        end = offset + len(data)
+        if end > len(buf):
+            buf.extend(bytearray(end - len(buf)))
         buf[offset:offset + len(data)] = data
 
 
@@ -249,7 +253,9 @@ class FinsServer(ProtocolServer):
         if len(data) < 12:
             return self._make_fins_error(0x0204)
 
-        fins_frame = data[8:]
+        # FINS TCP命令帧body: Command(2)+Reserved(2)+Error(4)+DestAddr(2)=10字节前缀
+        # FINS帧从data[10]开始，帧头10字节: ICF+RSV+GW+DNA+DA1+DA2+SNA+SA1+SA2+SID
+        fins_frame = data[10:]
         if len(fins_frame) < 12:
             return self._make_fins_error(0x0204)
 
@@ -266,6 +272,15 @@ class FinsServer(ProtocolServer):
             return self._handle_controller_read(data, fins_frame)
 
         return self._make_fins_error(0x0204)
+
+    def _swap_fins_header(self, fins_header: bytes) -> bytearray:
+        """交换FINS帧头中的源/目标地址，用于构造响应帧"""
+        resp_header = bytearray(fins_header)
+        # DNA(3) <-> SNA(6), DA1(4) <-> SA1(7), DA2(5) <-> SA2(8)
+        resp_header[3], resp_header[6] = resp_header[6], resp_header[3]  # DNA <-> SNA
+        resp_header[4], resp_header[7] = resp_header[7], resp_header[4]  # DA1 <-> SA1
+        resp_header[5], resp_header[8] = resp_header[8], resp_header[5]  # DA2 <-> SA2
+        return resp_header
 
     def _handle_memory_read(self, data: bytes, fins_frame: bytes) -> bytes:
         if len(fins_frame) < 16:
@@ -286,7 +301,7 @@ class FinsServer(ProtocolServer):
         resp += struct.pack(">H", 0x0002)
         resp += struct.pack(">H", 0x0000)
         resp += struct.pack(">I", 0x00000000)
-        resp += fins_frame[0:10]
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
         resp += struct.pack(">H", 0x0000)
         resp += read_data
 
@@ -339,37 +354,39 @@ class FinsServer(ProtocolServer):
         resp += struct.pack(">H", 0x0002)
         resp += struct.pack(">H", 0x0000)
         resp += struct.pack(">I", 0x00000000)
-        resp += fins_frame[0:10]
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
         resp += struct.pack(">H", 0x0000)
 
         return bytes(resp)
 
     def _handle_controller_read(self, data: bytes, fins_frame: bytes) -> bytes:
         device_config = self._device_configs.get(self._default_device_id)
-        device_name = b"ProtoForge-FINS\x00"
-        model = b"PF-FINS\x00"
-        version = b"V1.0.0\x00"
+        # FINS控制器读取响应数据布局(End Code之后):
+        # Controller Model(1) + Controller Version(1) + System Version(2) + Controller Name(20) + Status(2) = 26 bytes
+        controller_data = bytearray(26)
+        controller_data[0] = 0x01  # Controller Model
+        controller_data[1] = 0x01  # Controller Version
+        controller_data[2:4] = struct.pack(">H", 0x0100)  # System Version V1.00
         if device_config:
-            name_bytes = device_config.name.encode("ascii", errors="replace")[:14]
-            device_name = name_bytes.ljust(14, b"\x00") + b"\x00"
+            name_bytes = device_config.name.encode("ascii", errors="replace")[:20]
+            controller_data[4:24] = name_bytes.ljust(20, b"\x00")
             proto_config = device_config.protocol_config or {}
             if "model" in proto_config:
-                model = proto_config["model"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
+                model_val = proto_config["model"]
+                controller_data[0] = int(model_val) if isinstance(model_val, int) else 0x01
             if "firmware" in proto_config:
-                version = proto_config["firmware"].encode("ascii", errors="replace")[:7].ljust(7, b"\x00") + b"\x00"
-
-        controller_data = bytearray(28)
-        controller_data[0:2] = struct.pack(">H", 0x0000)
-        controller_data[2:4] = struct.pack(">H", 0x0000)
-        controller_data[4:6] = b"PF"
-        controller_data[6:20] = device_name[:14]
-        controller_data[20:22] = struct.pack(">H", 0x0100)
+                fw = proto_config["firmware"]
+                if isinstance(fw, (int, float)):
+                    controller_data[2:4] = struct.pack(">H", int(fw * 100) & 0xFFFF)
+        else:
+            controller_data[4:24] = b"ProtoForge-FINS\x00\x00\x00\x00"[:20]
+        controller_data[24:26] = struct.pack(">H", 0x0000)  # Controller Status: Normal
 
         resp = bytearray()
         resp += struct.pack(">H", 0x0002)
         resp += struct.pack(">H", 0x0000)
         resp += struct.pack(">I", 0x00000000)
-        resp += fins_frame[0:10]
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
         resp += struct.pack(">H", 0x0000)
         resp += controller_data
 
@@ -448,18 +465,14 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         self._transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple):
-        if len(data) < 10:
+        # FINS UDP帧: 帧头10字节(ICF+RSV+GW+DNA+DA1+DA2+SNA+SA1+SA2+SID) + MRC+SRC+数据
+        if len(data) < 12:
             return
-        icf = data[0]
-        rsv = data[1]
-        gateway = data[2]
-        dest_node = data[3]
-        src_node = data[4]
-        sid = data[5]
-        mrc = data[6]
-        src = data[7]
-        fins_data = data[8:]
-        response = self._process_fins_udp(mrc, src, fins_data, data[:8])
+        fins_header = data[:10]
+        mrc = data[10]
+        src = data[11]
+        fins_data = data[12:]
+        response = self._process_fins_udp(mrc, src, fins_data, fins_header)
         if response and self._transport:
             self._transport.sendto(response, addr)
 
@@ -473,30 +486,33 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             return self._handle_controller_read_udp(data, header)
         return None
 
+    def _swap_fins_header(self, fins_header: bytes) -> bytearray:
+        """交换FINS帧头中的源/目标地址，用于构造响应帧"""
+        resp_header = bytearray(fins_header)
+        # DNA(3) <-> SNA(6), DA1(4) <-> SA1(7), DA2(5) <-> SA2(8)
+        resp_header[3], resp_header[6] = resp_header[6], resp_header[3]  # DNA <-> SNA
+        resp_header[4], resp_header[7] = resp_header[7], resp_header[4]  # DA1 <-> SA1
+        resp_header[5], resp_header[8] = resp_header[8], resp_header[5]  # DA2 <-> SA2
+        return resp_header
+
     def _handle_memory_read_udp(self, data: bytes, header: bytes) -> bytes:
         server = self._server
         if len(data) < 6:
-            return header + bytes([0x01, 0x01]) + b"\x00\x00"
+            return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + b"\x00\x00"
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
         bit_addr = data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         behavior = server._behaviors.get(server._default_device_id)
-        resp_data = bytearray()
-        for i in range(word_count):
-            if area in (0x82, 0x83):
-                val = behavior.read_area(area, (word_addr + i) * 2, 2) if behavior else b"\x00\x00"
-                resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
-            elif area == 0x84:
-                val = behavior.read_area(area, (word_addr + i) * 2, 2) if behavior else b"\x00\x00"
-                resp_data += val[:2] if len(val) >= 2 else b"\x00\x00"
-            else:
-                resp_data += b"\x00\x00"
-        return header + bytes([0x01, 0x01]) + struct.pack(">H", 0) + bytes(resp_data)
+        read_size = word_count * 2
+        resp_data = bytearray(read_size)
+        if behavior:
+            resp_data = behavior.read_area(area, word_addr * 2, read_size)
+        return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0) + bytes(resp_data)
 
     def _handle_memory_write_udp(self, data: bytes, header: bytes) -> bytes:
         if len(data) < 6:
-            return header + bytes([0x02, 0x01]) + b"\x00\x00"
+            return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + b"\x00\x00"
         server = self._server
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
@@ -506,22 +522,24 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         behavior = server._behaviors.get(server._default_device_id)
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
-        return header + bytes([0x02, 0x01]) + struct.pack(">H", 0)
+        return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:
         server = self._server
         device_config = server._device_configs.get(server._default_device_id)
-        controller_data = bytearray(28)
-        controller_data[0:2] = struct.pack(">H", 0x0000)
-        controller_data[2:4] = struct.pack(">H", 0x0000)
-        controller_data[4:6] = b"PF"
+        # FINS控制器读取响应数据布局(End Code之后):
+        # Controller Model(1) + Controller Version(1) + System Version(2) + Controller Name(20) + Status(2) = 26 bytes
+        controller_data = bytearray(26)
+        controller_data[0] = 0x01  # Controller Model
+        controller_data[1] = 0x01  # Controller Version
+        controller_data[2:4] = struct.pack(">H", 0x0100)  # System Version V1.00
         if device_config:
-            name_bytes = device_config.name.encode("ascii", errors="replace")[:14]
-            controller_data[6:20] = name_bytes.ljust(14, b"\x00")
+            name_bytes = device_config.name.encode("ascii", errors="replace")[:20]
+            controller_data[4:24] = name_bytes.ljust(20, b"\x00")
         else:
-            controller_data[6:20] = b"ProtoForge-FINS\x00"[:14]
-        controller_data[20:22] = struct.pack(">H", 0x0100)
-        return header + bytes([0x05, 0x01]) + struct.pack(">H", 0) + bytes(controller_data)
+            controller_data[4:24] = b"ProtoForge-FINS\x00\x00\x00\x00"[:20]
+        controller_data[24:26] = struct.pack(">H", 0x0000)  # Controller Status: Normal
+        return bytes(self._swap_fins_header(header)) + bytes([0x05, 0x01]) + struct.pack(">H", 0) + bytes(controller_data)
 
     def error_received(self, exc):
         logger.warning("FINS UDP error received: %s", exc)
