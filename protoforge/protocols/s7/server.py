@@ -411,7 +411,10 @@ class S7Server(ProtocolServer):
                 param_len = data[offset + 1]
                 if offset + 2 + param_len > len(data):
                     break
-                if param_code == 0xC1 and param_len >= 2:
+                # 0xC2 = Called TSAP: contains the target rack/slot (server side)
+                # 0xC1 = Calling TSAP: contains the client's source TSAP
+                # snap7 and other S7 clients encode rack/slot in Called TSAP (0xC2)
+                if param_code == 0xC2 and param_len >= 2:
                     tsap = struct.unpack(">H", data[offset + 2:offset + 4])[0]
                     tsap_low = tsap & 0xFF
                     rack = (tsap_low >> 5) & 0x07
