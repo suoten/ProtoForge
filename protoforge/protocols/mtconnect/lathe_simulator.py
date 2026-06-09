@@ -3,10 +3,19 @@
 
 仿真 CNC 车床通过 MTConnect 协议能真实输出的信号。
 
-工作周期：
-  IDLE → SPINUP → CUTTING → DECEL → TOOL_CHANGE → IDLE
-                     ↓ (偶发，两种故障路径)
-             TOOL_BREAK / CHIP_WRAP → TOOL_CHANGE → IDLE
+工作周期（任务级）：
+  IDLE → SPINUP → [切削大循环] → SPINDOWN → TOOL_CHANGE → IDLE
+
+切削大循环（周期级，主轴保持转速）：
+  AIR_CUT → CUTTING → DECEL_CYCLE → AIR_CUT → ...（循环 N 次后退出）
+                ↓ (偶发，两种故障路径)
+        TOOL_BREAK / CHIP_WRAP → TOOL_CHANGE → IDLE
+
+关键设计：
+  - AIR_CUT 状态：主轴已启动，快速定位中，主轴转速保持目标值
+  - CUTTING 和 AIR_CUT 都属于 task_state="process_running"，主轴不停
+  - 只有 IDLE / TOOL_CHANGE / 故障恢复 时 task_state="idle"，主轴才降到 0
+  - 每完成 cycles_per_task 个切削周期后才真正回到 IDLE（换刀或停机）
 
 每个 tick 的处理流程：
   1. 状态机推进（确定当前 stage）
@@ -41,8 +50,10 @@ from protoforge.core.cnc_metric_generator import BaseMetricGenerator
 class _State(Enum):
     IDLE = "idle"
     SPINUP = "spinup"
+    AIR_CUT = "air_cut"        # 主轴运转，快速定位，不切削
     CUTTING = "cutting"
-    DECEL = "decel"
+    DECEL_CYCLE = "decel_cycle"  # 周期级减速（主轴保持转速，只减进给）
+    DECEL = "decel"              # 任务级降速（主轴降到 0）
     TOOL_CHANGE = "tool_change"
     TOOL_BREAK = "tool_break"
     CHIP_WRAP = "chip_wrap"
@@ -52,11 +63,26 @@ class _State(Enum):
 _STATE_TO_STAGE: dict[_State, str] = {
     _State.IDLE:        "idle",
     _State.SPINUP:      "idle",
+    _State.AIR_CUT:     "idle",        # air_cut 阶段负载模型用 idle，但主轴不停
     _State.CUTTING:     "roughing",    # 默认粗加工，子阶段由 _cutting_stage 动态切换
-    _State.DECEL:       "idle",
+    _State.DECEL_CYCLE: "idle",        # 周期间减速，主轴不停
+    _State.DECEL:       "idle",        # 任务级降速
     _State.TOOL_CHANGE: "tool_change",
     _State.TOOL_BREAK:  "idle",
     _State.CHIP_WRAP:   "roughing",
+}
+
+# task_state 映射：process_running = 主轴保持，idle = 主轴可以停
+_STATE_TO_TASK: dict[_State, str] = {
+    _State.IDLE:        "idle",
+    _State.SPINUP:      "process_running",
+    _State.AIR_CUT:     "process_running",
+    _State.CUTTING:     "process_running",
+    _State.DECEL_CYCLE: "process_running",
+    _State.DECEL:       "idle",
+    _State.TOOL_CHANGE: "idle",
+    _State.TOOL_BREAK:  "idle",
+    _State.CHIP_WRAP:   "process_running",
 }
 
 # 刀塔配置（刀位号, 刀具ID）
@@ -129,6 +155,11 @@ class LatheSimulator:
         # 当前切削子阶段（roughing/semi_finishing/finishing）
         self._cutting_stage = "roughing"
 
+        # 当前任务内已完成的切削周期数（达到上限后才真正停机）
+        self._cycles_in_task = 0
+        # 每个任务包含多少个切削周期（随机 3~6），到达后进入真正 IDLE
+        self._cycles_per_task = random.randint(3, 6)
+
         # tick 计数，用于传入 BaseMetricGenerator 的 t
         self._tick_count = 0
 
@@ -155,17 +186,24 @@ class LatheSimulator:
         # 3. 把状态机信息同步给 MetricGenerator
         if self._state == _State.CUTTING:
             self._metric_gen.state.cutting_total = self._state_duration
+
         # spindle_state 用于转速 EMA alpha 控制
         _sm_to_spindle = {
             _State.IDLE:        "idle",
             _State.SPINUP:      "spinup",
+            _State.AIR_CUT:     "cutting",   # air_cut 保持转速（cutting alpha）
             _State.CUTTING:     "cutting",
+            _State.DECEL_CYCLE: "cutting",   # 周期间不降速
             _State.DECEL:       "decel",
             _State.TOOL_CHANGE: "tool_change",
             _State.TOOL_BREAK:  "idle",
             _State.CHIP_WRAP:   "cutting",
         }
         self._metric_gen.state.spindle_state = _sm_to_spindle.get(self._state, "idle")
+
+        # task_state：process_running = 主轴保持目标转速；idle = 主轴可以停
+        task_state = _STATE_TO_TASK.get(self._state, "idle")
+        self._metric_gen.state.task_state = task_state
 
         # 4. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
         frame = self._metric_gen.generate(t=t, dt=1.0, stage=stage)
@@ -189,7 +227,9 @@ class LatheSimulator:
         dispatch = {
             _State.IDLE:        self._on_idle,
             _State.SPINUP:      self._on_spinup,
+            _State.AIR_CUT:     self._on_air_cut,
             _State.CUTTING:     self._on_cutting,
+            _State.DECEL_CYCLE: self._on_decel_cycle,
             _State.DECEL:       self._on_decel,
             _State.TOOL_CHANGE: self._on_tool_change,
             _State.TOOL_BREAK:  self._on_tool_break,
@@ -227,17 +267,33 @@ class LatheSimulator:
         self._condition_native_code = ""
         self._wrap_load_increment = 0.0
         if self._state_elapsed >= self._state_duration:
-            # 目标转速按即将开始的切削工艺设定（粗加工 2000 RPM）
+            # 开始新任务：主轴升速目标转速（粗加工 2000 RPM）
             self._spindle_target = 2000.0
             self._program_line = 1
             self._block_idx = 0
             self._cutting_stage = "roughing"
+            self._cycles_in_task = 0
+            self._cycles_per_task = random.randint(3, 6)
             self._transition(_State.SPINUP, random.uniform(4, 8))
 
     def _on_spinup(self) -> None:
         self._spindle_actual = self._smooth(
             self._spindle_actual, self._spindle_target, 0.25
         )
+        if self._state_elapsed >= self._state_duration:
+            self._transition(_State.AIR_CUT, random.uniform(3, 6))
+
+    def _on_air_cut(self) -> None:
+        """主轴运转，快速定位，不切削。主轴转速保持目标值。"""
+        noise = random.gauss(0, self._spindle_target * 0.01)
+        self._spindle_actual = max(
+            self._spindle_target * 0.95,
+            min(self._spindle_target * 1.05, self._spindle_actual + noise),
+        )
+        self._feed_actual = 0.0
+        # 快速移动回到起刀点
+        self._x_pos = self._smooth(self._x_pos, 50.0, 0.30)
+        self._z_pos = self._smooth(self._z_pos, 2.0, 0.30)
         if self._state_elapsed >= self._state_duration:
             self._transition(_State.CUTTING, random.uniform(35, 65))
 
@@ -272,20 +328,41 @@ class LatheSimulator:
                 return
 
         if self._state_elapsed >= self._state_duration:
-            self._transition(_State.DECEL, random.uniform(3, 5))
+            # 周期结束：进入 DECEL_CYCLE（主轴保持转速，只停进给）
+            self._transition(_State.DECEL_CYCLE, random.uniform(2, 4))
+
+    def _on_decel_cycle(self) -> None:
+        """
+        周期级减速：只停进给，主轴转速保持。
+        结束后：若任务周期未满，回到 AIR_CUT；若满了，进入任务级 DECEL。
+        """
+        self._feed_actual = self._smooth(self._feed_actual, 0.0, 0.40)
+        # 主轴保持转速（微小噪声）
+        noise = random.gauss(0, self._spindle_target * 0.01)
+        self._spindle_actual = max(
+            self._spindle_target * 0.95,
+            min(self._spindle_target * 1.05, self._spindle_actual + noise),
+        )
+        if self._state_elapsed >= self._state_duration:
+            self._cycles_in_task += 1
+            self._part_count += 1
+            if self._cycles_in_task >= self._cycles_per_task:
+                # 任务周期完成：进行真正的降速停机
+                if self._part_count % 5 == 0:
+                    self._metric_gen.reset_wear()
+                self._transition(_State.DECEL, random.uniform(3, 5))
+            else:
+                # 继续下一个切削周期：回到 AIR_CUT
+                self._transition(_State.AIR_CUT, random.uniform(3, 6))
 
     def _on_decel(self) -> None:
+        """任务级降速：主轴降到 0，准备换刀或停机。"""
         self._spindle_actual = self._smooth(self._spindle_actual, 0.0, 0.20)
         self._feed_actual = self._smooth(self._feed_actual, 0.0, 0.30)
         self._x_pos = self._smooth(self._x_pos, 150.0, 0.20)
         self._z_pos = self._smooth(self._z_pos, 50.0, 0.20)
         if self._state_elapsed >= self._state_duration:
-            self._part_count += 1
-            if self._part_count % 5 == 0:
-                self._metric_gen.reset_wear()
-                self._transition(_State.TOOL_CHANGE, random.uniform(4, 8))
-            else:
-                self._transition(_State.IDLE, random.uniform(3, 6))
+            self._transition(_State.TOOL_CHANGE, random.uniform(4, 8))
 
     def _on_tool_change(self) -> None:
         self._spindle_actual = 0.0
@@ -333,10 +410,12 @@ class LatheSimulator:
         """
         state = self._state
         is_cutting = state == _State.CUTTING
+        is_air_cut = state == _State.AIR_CUT
         is_tool_break = state == _State.TOOL_BREAK
         is_chip_wrap = state == _State.CHIP_WRAP
         is_fault = is_tool_break or is_chip_wrap
         is_tool_change = state == _State.TOOL_CHANGE
+        is_decel_cycle = state == _State.DECEL_CYCLE
 
         cur_tool_no, cur_tool_id = _TOOL_TABLE[self._tool_idx]
 
@@ -354,6 +433,9 @@ class LatheSimulator:
             vals["controller_mode"] = "AUTOMATIC"
         elif state == _State.IDLE:
             vals["execution"] = "READY"
+            vals["controller_mode"] = "AUTOMATIC"
+        elif is_air_cut or is_decel_cycle:
+            vals["execution"] = "ACTIVE"
             vals["controller_mode"] = "AUTOMATIC"
         else:
             vals["execution"] = "ACTIVE"

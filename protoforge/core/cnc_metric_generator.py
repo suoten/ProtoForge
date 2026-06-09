@@ -119,6 +119,9 @@ class GeneratorState:
     cutting_total: float = 30.0
     # 状态机内部状态（idle/spinup/cutting/decel/tool_change），用于转速平滑
     spindle_state: str = "idle"
+    # 任务级状态：process_running = 主轴保持目标转速；idle = 主轴可以停
+    # 由 LatheSimulator 的 _STATE_TO_TASK 映射传入
+    task_state: str = "idle"
 
 
 # ---------------------------------------------------------------------------
@@ -392,6 +395,8 @@ class CncSpindleGenerator:
 
         self.prev_speed: float = 0.0
         self.prev_current: float = 0.0
+        # 最近一次切削工艺目标转速（air_cut 间隙保持用）
+        self._last_process_speed: float = 2000.0
 
     def generate(
         self,
@@ -400,6 +405,7 @@ class CncSpindleGenerator:
         spindle_state: str = "cutting",
         cutting_elapsed: float = 0.0,
         cutting_total: float = 30.0,
+        task_state: str = "idle",
     ) -> tuple[float, float, float]:
         """
         生成 (spindle_speed, spindle_load, spindle_current)。
@@ -410,11 +416,13 @@ class CncSpindleGenerator:
             spindle_state:   LatheSimulator 内部状态（idle/spinup/cutting/decel/tool_change）。
             cutting_elapsed: 切削阶段已过秒数（传给负载生成器）。
             cutting_total:   切削阶段总时长（传给负载生成器）。
+            task_state:      任务级状态（process_running/idle）。
+                             process_running 时主轴保持目标转速，即使 stage=idle（air_cut 间隙）。
         """
         process = _STAGE_TO_PROCESS.get(stage)   # None = 非切削
 
         # ── 1. 主轴转速 ────────────────────────────────────────────────────
-        speed = self._calc_speed(stage, spindle_state, process)
+        speed = self._calc_speed(stage, spindle_state, process, task_state)
 
         # ── 2. 主轴负载（委托 SpindleLoadGenerator）────────────────────────
         load = self._load_gen.generate(
@@ -425,31 +433,59 @@ class CncSpindleGenerator:
         )
 
         # ── 3. 主轴电流（由转速 + 负载推导）───────────────────────────────
-        current = self._calc_current(stage, spindle_state, process, speed, load)
+        current = self._calc_current(stage, spindle_state, process, speed, load, task_state)
 
         return speed, load, current
 
     # ------------------------------------------------------------------
 
-    def _calc_speed(self, stage: str, spindle_state: str, process: Optional[str]) -> float:
-        """转速：按工艺目标 + EMA 平滑，非切削时降到 0。"""
+    def _calc_speed(
+        self,
+        stage: str,
+        spindle_state: str,
+        process: Optional[str],
+        task_state: str = "idle",
+    ) -> float:
+        """
+        转速：按工艺目标 + EMA 平滑，非切削时降到 0。
+
+        task_state="process_running" 时，即使 stage=idle（air_cut 间隙），
+        主轴也保持最近的切削工艺目标转速，不降到 0。
+        只有 task_state="idle" 时才允许主轴停转。
+        """
         if process is not None:
+            # 切削阶段：按工艺目标转速
             scfg = _PROCESS_SPEED_CFG[process]
             noise = self._rng.gauss(0, scfg["noise"])
             target = scfg["target"] + noise
             # 首次从停止状态进入切削：直接跳到目标转速附近，避免长收敛期
             if self.prev_speed < scfg["lo"] * 0.5:
                 self.prev_speed = scfg["target"]
+                # 记录本轮使用的工艺目标（供 air_cut 保持用）
+                self._last_process_speed = scfg["target"]
+            else:
+                self._last_process_speed = scfg["target"]
             alpha = _SPEED_ALPHA.get("cutting", 0.06)
             lo, hi = scfg["lo"] * 0.92, scfg["hi"] * 1.05
         elif spindle_state == "spinup":
+            # 升速阶段：向目标转速爬升
             if self.prev_speed > 500:
                 target = min(self.prev_speed * 1.12, 2200.0)
             else:
                 target = 2000.0
             alpha = _SPEED_ALPHA.get("spinup", 0.14)
             lo, hi = 0.0, 2500.0
+        elif task_state == "process_running":
+            # 任务运行中的非切削间隙（air_cut / decel_cycle）：主轴保持转速
+            # 目标是最近一次切削工艺的目标转速，略加噪声
+            base_target = getattr(self, "_last_process_speed", 2000.0)
+            noise = self._rng.gauss(0, base_target * 0.008)
+            target = base_target + noise
+            alpha = _SPEED_ALPHA.get("cutting", 0.06)   # 保持稳定
+            lo = base_target * 0.90
+            hi = base_target * 1.10
         else:
+            # 任务级停机（idle / tool_change / 故障）：主轴降到 0
             target = _STATE_SPEED_TARGET.get(stage, 0.0)
             alpha = _SPEED_ALPHA.get(spindle_state, 0.20)
             lo, hi = 0.0, 200.0
@@ -466,6 +502,7 @@ class CncSpindleGenerator:
         process: Optional[str],
         speed: float,
         load: float,
+        task_state: str = "idle",
     ) -> float:
         """电流：空载基础 + 负载映射，有轻微 EMA 滞后。"""
         if process is not None:
@@ -474,20 +511,18 @@ class CncSpindleGenerator:
             speed_ratio = _clamp(speed / _PROCESS_SPEED_CFG[process]["target"], 0.5, 1.1)
             noise = self._rng.gauss(0, ccfg["noise"])
             target = (ccfg["base"] + ccfg["load_factor"] * load + noise) * speed_ratio
-
-            # 判断切削子状态（entry/cutting/exit）决定 alpha
-            if self._load_gen._last_stage in _STAGE_TO_PROCESS:
-                pcfg = _PROCESS_CFG[process]
-                time_to_end = (self._load_gen.prev_load > 0 and
-                               hasattr(self._load_gen, '_last_stage'))
-                # 简化：直接用较小 alpha 保持平滑
-                alpha = 0.10
-            else:
-                alpha = 0.10
-
+            alpha = 0.10
+            lo, hi = ccfg["lo"], ccfg["hi"]
+        elif task_state == "process_running":
+            # air_cut / decel_cycle：主轴空转，电流略低于切削
+            ccfg = _STATE_CURRENT_CFG["air_cut"]
+            noise = self._rng.gauss(0, ccfg["noise"])
+            speed_factor = _clamp(speed / 2000.0, 0.5, 1.2)
+            target = (ccfg["base"] + noise) * speed_factor
+            alpha = ccfg["alpha"]
             lo, hi = ccfg["lo"], ccfg["hi"]
         else:
-            # 非切削状态
+            # 非切削状态（idle / tool_change）
             state_key = stage if stage in _STATE_CURRENT_CFG else "idle"
             ccfg = _STATE_CURRENT_CFG[state_key]
             noise = self._rng.gauss(0, ccfg["noise"])
@@ -671,6 +706,7 @@ class BaseMetricGenerator:
             spindle_state=state.spindle_state,
             cutting_elapsed=state.cutting_elapsed,
             cutting_total=state.cutting_total,
+            task_state=getattr(state, "task_state", "idle"),
         )
 
         # ── 6. vibration（三轴，各有小幅随机偏差）────────────────────────────
