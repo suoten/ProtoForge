@@ -125,6 +125,129 @@ class GeneratorState:
 
 
 # ---------------------------------------------------------------------------
+# SpindleLoadGenerator —— 状态驱动、EMA 平滑的主轴负载生成器
+# ---------------------------------------------------------------------------
+
+# 各工艺阶段的负载基线及允许范围
+_PROCESS_LOAD_CONFIG: dict[str, dict] = {
+    "rough": {
+        "base": 55.0,
+        "slow_amp": 6.0,    # 慢周期波动幅度（%）
+        "cut_amp": 4.0,     # 切削周期扰动幅度（%）
+        "noise_sigma": 2.5, # 高斯噪声标准差（%）
+        "clamp_min": 35.0,
+        "clamp_max": 85.0,
+        "ema_alpha": 0.18,  # 较快响应，粗加工负载变化快
+    },
+    "semi_finish": {
+        "base": 38.0,
+        "slow_amp": 4.0,
+        "cut_amp": 2.5,
+        "noise_sigma": 1.5,
+        "clamp_min": 22.0,
+        "clamp_max": 65.0,
+        "ema_alpha": 0.15,
+    },
+    "finish": {
+        "base": 22.0,
+        "slow_amp": 2.5,
+        "cut_amp": 1.5,
+        "noise_sigma": 0.8,
+        "clamp_min": 12.0,
+        "clamp_max": 42.0,
+        "ema_alpha": 0.12,  # 较慢响应，精加工负载更平稳
+    },
+}
+
+# 各驱动状态的负载基线及 EMA 系数
+_STATE_LOAD_CONFIG: dict[str, dict] = {
+    "idle":        {"base": 1.5,  "noise_sigma": 0.3, "clamp_min": 0.0,  "clamp_max": 5.0,  "ema_alpha": 0.10},
+    "tool_change": {"base": 4.0,  "noise_sigma": 0.8, "clamp_min": 0.0,  "clamp_max": 10.0, "ema_alpha": 0.12},
+    "spindle_on":  {"base": 8.0,  "noise_sigma": 1.2, "clamp_min": 3.0,  "clamp_max": 18.0, "ema_alpha": 0.15},
+    "air_cut":     {"base": 15.0, "noise_sigma": 2.0, "clamp_min": 8.0,  "clamp_max": 28.0, "ema_alpha": 0.16},
+    # "cutting" state delegates to _PROCESS_LOAD_CONFIG
+}
+
+# stage 名称 → 内部 process 名称映射
+_STAGE_TO_PROCESS: dict[str, str] = {
+    "roughing":       "rough",
+    "semi_finishing":  "semi_finish",
+    "finishing":       "finish",
+}
+
+# stage 名称 → 驱动状态映射（非切削阶段）
+_STAGE_TO_STATE: dict[str, str] = {
+    "idle":        "idle",
+    "tool_change": "tool_change",
+}
+
+
+class SpindleLoadGenerator:
+    """
+    状态驱动、EMA 平滑的主轴负载生成器。
+
+    内部维护 prev_load 跨 tick 状态，使负载曲线连续平滑，
+    避免随机脉冲。各切削工艺有独立基线和 clamp 范围，
+    idle/tool_change 等非切削状态接近 0。
+
+    stage 参数取值：idle / tool_change / roughing / semi_finishing / finishing
+    """
+
+    def __init__(self, rng: random.Random):
+        self._rng = rng
+        self.prev_load: float = 0.0
+
+    def generate(
+        self,
+        t: float,
+        stage: str,
+        material_variation: float = 1.0,
+        slow_phase: float = 0.0,
+        cut_phase: float = 0.0,
+    ) -> float:
+        """
+        生成本 tick 的主轴负载（%）。
+
+        Args:
+            t:                当前时间（秒），保留供未来扩展。
+            stage:            加工阶段（idle/tool_change/roughing/semi_finishing/finishing）。
+            material_variation: 材料扰动系数（≈1.0，±5%）。
+            slow_phase:       慢周期相位（弧度），由外部统一维护。
+            cut_phase:        切削周期相位（弧度），由外部统一维护。
+
+        Returns:
+            clamp 后的主轴负载（%）。
+        """
+        process = _STAGE_TO_PROCESS.get(stage)
+
+        if process is not None:
+            # 切削阶段：使用工艺基线
+            cfg = _PROCESS_LOAD_CONFIG[process]
+            slow_wave = cfg["slow_amp"] * math.sin(slow_phase)
+            cut_wave  = cfg["cut_amp"]  * math.sin(cut_phase)
+            noise     = self._rng.gauss(0, cfg["noise_sigma"])
+            mat_delta = (material_variation - 1.0) * cfg["base"] * 0.5  # 材料变化影响基线的 50%
+            target    = cfg["base"] + slow_wave + cut_wave + noise + mat_delta
+            alpha     = cfg["ema_alpha"]
+            lo, hi    = cfg["clamp_min"], cfg["clamp_max"]
+        else:
+            # 非切削阶段：使用状态基线
+            state_key = _STAGE_TO_STATE.get(stage, "idle")
+            cfg = _STATE_LOAD_CONFIG[state_key]
+            noise  = self._rng.gauss(0, cfg["noise_sigma"])
+            target = cfg["base"] + noise
+            alpha  = cfg["ema_alpha"]
+            lo, hi = cfg["clamp_min"], cfg["clamp_max"]
+
+        # EMA 平滑
+        new_load = self.prev_load + alpha * (target - self.prev_load)
+        # clamp
+        new_load = max(lo, min(hi, new_load))
+        self.prev_load = new_load
+        return new_load
+
+
+# ---------------------------------------------------------------------------
 # 阶段配置
 # ---------------------------------------------------------------------------
 
@@ -236,6 +359,8 @@ class BaseMetricGenerator:
             thermal_state=ambient_temperature,
             last_surface_roughness=1.0,
         )
+        # 主轴负载生成器（状态驱动 + EMA 平滑）
+        self._spindle_load_gen = SpindleLoadGenerator(self._rng)
 
     # ------------------------------------------------------------------
     # 公开 API
@@ -274,9 +399,11 @@ class BaseMetricGenerator:
             feed_rate, stage, material_variation, profile
         )
 
-        # ── 6. spindle_load ───────────────────────────────────────────────────
+        # ── 6. spindle_load（状态驱动 + EMA 平滑）────────────────────────────
+        # 慢波相位（约 90 s 周期）和切削相位复用 cycle_phase
+        slow_phase = 2 * math.pi * t / 90.0
         spindle_load = self._calc_spindle_load(
-            profile, cutting_intensity, cutting_cycle_wave
+            profile, stage, material_variation, slow_phase, state.cycle_phase
         )
 
         # ── 7. spindle_current（对 load 有 1~2 tick 滞后）────────────────────
@@ -450,17 +577,22 @@ class BaseMetricGenerator:
     def _calc_spindle_load(
         self,
         profile: StageProfile,
-        cutting_intensity: float,
-        cutting_cycle_wave: float,
+        stage: str,
+        material_variation: float,
+        slow_phase: float,
+        cut_phase: float,
     ) -> float:
         """
-        主轴负载（%）= 阶段基线 + cutting_intensity 加权 + 切削波动 + 噪声。
+        主轴负载（%）—— 委托给 SpindleLoadGenerator。
+        使用状态驱动基线 + EMA 平滑，避免随机脉冲行为。
         """
-        load_range = profile.spindle_load_max - profile.spindle_load_min
-        load_base = profile.spindle_load_min + load_range * cutting_intensity
-        load = load_base * cutting_cycle_wave
-        noise = self._rng.gauss(0, load_range * (1.0 - profile.stability_factor) * 0.04)
-        return max(profile.spindle_load_min, min(profile.spindle_load_max, load + noise))
+        return self._spindle_load_gen.generate(
+            t=0.0,  # t 保留，当前未使用
+            stage=stage,
+            material_variation=material_variation,
+            slow_phase=slow_phase,
+            cut_phase=cut_phase,
+        )
 
     def _calc_spindle_current(
         self,
