@@ -18,19 +18,23 @@ class McDeviceBehavior(StandardDeviceBehavior):
         super().__init__(points)
         self._device_memory: dict[int, bytearray] = {}
         self._point_addresses: dict[str, tuple[int, int]] = {}
+        self._point_data_types: dict[str, str] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 address = getattr(p, 'address', '0') or '0'
                 device_code, offset = self._parse_mc_address(str(address))
                 self._point_addresses[name] = (device_code, offset)
+                data_type = getattr(p, 'data_type', None)
+                if data_type is not None:
+                    self._point_data_types[name] = data_type.value if hasattr(data_type, 'value') else str(data_type)
                 self._sync_value_to_memory(name, self._values.get(name, 0))
 
     DEVICE_CODE_MAP: dict[str, int] = {
         'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
         'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
         'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
-        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'SM': 0x53,  # FIXED-P1: Z变址寄存器代码从0x5A改为0x5C，与ZR(0x5A)冲突
+        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'S': 0x53, 'SM': 0x93, 'SD': 0x9C,  # FIXED-P1: SM代码0x53→0x93，0x53是S(步进继电器)，补充S和SD
     }
 
     @staticmethod
@@ -45,7 +49,11 @@ class McDeviceBehavior(StandardDeviceBehavior):
             match = re.match(r'^([A-Za-z]+)(\d+)$', address)
             if match:
                 name = match.group(1).upper()
-                offset = int(match.group(2))
+                # FIXED-P2: X/Y设备地址使用十六进制解析
+                if name in ('X', 'Y'):
+                    offset = int(match.group(2), 16)
+                else:
+                    offset = int(match.group(2))
                 code = McDeviceBehavior.DEVICE_CODE_MAP.get(name, 0x44)
                 return (code, offset)
             return (0x44, int(address))
@@ -56,9 +64,22 @@ class McDeviceBehavior(StandardDeviceBehavior):
         if point_name not in self._point_addresses:
             return
         device_code, offset = self._point_addresses[point_name]
+        data_type = self._point_data_types.get(point_name, "")
         try:
-            if isinstance(value, float):
-                data = struct.pack("<f", value)  # FIXED-P0: Mitsubishi MC uses little-endian for float
+            if data_type == "int32":
+                data = struct.pack("<i", int(value))
+            elif data_type == "uint32":
+                data = struct.pack("<I", int(value))
+            elif data_type == "float64":
+                data = struct.pack("<d", float(value))
+            elif data_type == "float32" or isinstance(value, float):
+                data = struct.pack("<f", float(value))
+            elif data_type == "int16":
+                data = struct.pack("<h", int(value))
+            elif data_type == "uint16":
+                data = struct.pack("<H", int(value))
+            elif data_type == "bool":
+                data = struct.pack("<?", bool(value))
             else:
                 data = struct.pack("<H", int(value) & 0xFFFF)
             self.write_memory(device_code, offset, data)
@@ -303,8 +324,23 @@ class McServer(ProtocolServer):
             for name, (p_code, p_offset) in behavior._point_addresses.items():
                 if p_code == device_code and p_offset == start_addr:
                     try:
-                        if len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]  # FIXED-P0: little-endian
+                        dt = behavior._point_data_types.get(name, "")
+                        if dt == "int32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
+                        elif dt == "uint32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<I", write_data[:4])[0]
+                        elif dt == "float64" and len(write_data) >= 8:
+                            behavior._values[name] = struct.unpack("<d", write_data[:8])[0]
+                        elif dt == "float32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
+                        elif dt == "int16" and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<h", write_data[:2])[0]
+                        elif dt == "uint16" and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                        elif dt == "bool" and len(write_data) >= 1:
+                            behavior._values[name] = bool(write_data[0])
+                        elif len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
                     except (struct.error, IndexError) as e:
@@ -508,20 +544,22 @@ class McServer(ProtocolServer):
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)
 
+        routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
+
         if cmd == 0x0401:
-            return self._handle_read_ascii(data, subcmd)
+            return self._handle_read_ascii(data, subcmd, routed_device_id)
         elif cmd == 0x0402:
-            return self._handle_random_read_ascii(data, subcmd)
+            return self._handle_random_read_ascii(data, subcmd, routed_device_id)
         elif cmd == 0x1401:
-            return self._handle_write_ascii(data, subcmd)
+            return self._handle_write_ascii(data, subcmd, routed_device_id)
         elif cmd == 0x1402:
-            return self._handle_random_write_ascii(data, subcmd)
+            return self._handle_random_write_ascii(data, subcmd, routed_device_id)
         elif cmd == 0x0001:
             return self._make_ascii_error_response(data, 0x0000)
 
         return self._make_ascii_error_response(data, 0xC059)
 
-    def _handle_read_ascii(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_read_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 40:
             return self._make_ascii_error_response(data, 0xC059)
         try:
@@ -539,20 +577,20 @@ class McServer(ProtocolServer):
             return self._make_ascii_error_response(data, 0xC059)
 
         read_data = bytearray(read_len)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
         if behavior:
             mem = behavior.read_memory(device_code, start_addr + read_len)
             read_data = mem[start_addr:start_addr + read_len]
 
         resp = bytearray(b"5000")
         resp += data[4:14]
-        resp += self._hex_to_ascii(2 + len(read_data) * 2)
+        resp += self._hex_to_ascii(4 + len(read_data) * 2)
         resp += b"0000"
         for b in read_data:
             resp += self._hex_to_ascii(b, 2)
         return bytes(resp)
 
-    def _handle_write_ascii(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_write_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 40:
             return self._make_ascii_error_response(data, 0xC059)
         try:
@@ -570,17 +608,17 @@ class McServer(ProtocolServer):
             except ValueError:
                 break
 
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
         if behavior:
             behavior.write_memory(device_code, start_addr, bytes(write_data))
 
         resp = bytearray(b"5000")
         resp += data[4:14]
-        resp += self._hex_to_ascii(2)
+        resp += self._hex_to_ascii(4)
         resp += b"0000"
         return bytes(resp)
 
-    def _handle_random_read_ascii(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_random_read_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 40:
             return self._make_ascii_error_response(data, 0xC059)
         try:
@@ -588,7 +626,7 @@ class McServer(ProtocolServer):
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)
         read_data = bytearray()
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
         offset = 40
         for _ in range(min(point_count, 64)):
             if offset + 6 > len(data):
@@ -608,16 +646,16 @@ class McServer(ProtocolServer):
                     read_data += mem[start_addr:start_addr + 1]
         resp = bytearray(b"5000")
         resp += data[4:14]
-        resp += self._hex_to_ascii(2 + len(read_data) * 2)
+        resp += self._hex_to_ascii(4 + len(read_data) * 2)
         resp += b"0000"
         for b in read_data:
             resp += self._hex_to_ascii(b, 2)
         return bytes(resp)
 
-    def _handle_random_write_ascii(self, data: bytes, subcmd: int) -> bytes:
+    def _handle_random_write_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 40:
             return self._make_ascii_error_response(data, 0xC059)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
         try:
             point_count = self._ascii_to_hex(data[36:40])
         except (ValueError, IndexError):
@@ -656,7 +694,7 @@ class McServer(ProtocolServer):
                 offset += 8
         resp = bytearray(b"5000")
         resp += data[4:14]
-        resp += self._hex_to_ascii(2)
+        resp += self._hex_to_ascii(4)
         resp += b"0000"
         return bytes(resp)
 
@@ -664,6 +702,6 @@ class McServer(ProtocolServer):
         resp = bytearray(b"5000")
         if len(data) >= 14:
             resp += data[4:14]
-        resp += self._hex_to_ascii(2)
+        resp += self._hex_to_ascii(4)
         resp += self._hex_to_ascii(error_code)
         return bytes(resp)

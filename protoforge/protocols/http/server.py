@@ -105,6 +105,7 @@ class HttpSimulatorServer(ProtocolServer):
                     break
                 method = parts[0].upper()
                 path = parts[1]
+                http_version = parts[2] if len(parts) >= 3 else "HTTP/1.0"
                 # FIXED-P1: 分离path和query string，提取查询参数
                 query_params: dict[str, str] = {}
                 if "?" in path:
@@ -117,7 +118,10 @@ class HttpSimulatorServer(ProtocolServer):
                 headers = {}
                 content_length = 0
                 while True:
-                    line = await reader.readline()
+                    try:
+                        line = await asyncio.wait_for(reader.readline(), timeout=_READ_TIMEOUT)
+                    except asyncio.TimeoutError:
+                        break
                     line_str = line.decode("utf-8", errors="replace").strip()
                     if not line_str:
                         break
@@ -134,13 +138,20 @@ class HttpSimulatorServer(ProtocolServer):
                     break
                 body = b""
                 if content_length > 0:
-                    body = await reader.readexactly(content_length)
+                    try:
+                        body = await asyncio.wait_for(reader.readexactly(content_length), timeout=_READ_TIMEOUT)
+                    except asyncio.TimeoutError:
+                        break
 
-                response = self._route(method, path, body, query_params)  # FIXED-P1: 传递查询参数
+                response = self._route(method, path, body, query_params, http_version)  # FIXED-P1: 传递查询参数和HTTP版本
                 writer.write(response)
                 await writer.drain()
 
-                if headers.get("connection", "").lower() == "close":
+                # HTTP/1.1默认keep-alive，HTTP/1.0默认close；Connection头可覆盖默认行为
+                connection_header = headers.get("connection", "").lower()
+                keep_alive = (http_version == "HTTP/1.1" and connection_header != "close") or \
+                             (http_version != "HTTP/1.1" and connection_header == "keep-alive")
+                if not keep_alive:
                     break
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
@@ -151,33 +162,36 @@ class HttpSimulatorServer(ProtocolServer):
             except Exception as e:
                 logger.debug("HTTP writer close error: %s", e)
 
-    def _route(self, method: str, path: str, body: bytes, query_params: dict[str, str] | None = None) -> bytes:  # FIXED-P1: 接受查询参数
+    def _route(self, method: str, path: str, body: bytes, query_params: dict[str, str] | None = None, http_version: str = "HTTP/1.1") -> bytes:  # FIXED-P1: 接受查询参数和HTTP版本
+        # HTTP/1.1默认keep-alive，HTTP/1.0默认close
+        keep_alive = http_version == "HTTP/1.1"
         if method == "OPTIONS":
-            return self._cors_preflight_response()
+            return self._cors_preflight_response(keep_alive)
         # FIXED-P1: 使用快照迭代，避免与 create_device/remove_device 并发修改时 RuntimeError
         for device_id, prefix in dict(self._device_prefixes).items():
-            if path.startswith(prefix):
+            if path == prefix or path.startswith(prefix + "/"):
                 rel_path = path[len(prefix):] or "/"
                 behavior = self._behaviors.get(device_id)
                 config = self._device_configs.get(device_id)
                 if behavior and config:
-                    return self._handle_device(method, rel_path, body, device_id, behavior, config, query_params)  # FIXED-P1
+                    return self._handle_device(method, rel_path, body, device_id, behavior, config, query_params, keep_alive)  # FIXED-P1
 
         if path == "/" or path == "/health":
-            return self._json_response(200, {"status": "ok", "protocol": "http", "devices": len(self._behaviors)})
+            return self._json_response(200, {"status": "ok", "protocol": "http", "devices": len(self._behaviors)}, keep_alive)
 
         if path == "/devices":
             devices = []
             # FIXED-P1: 使用快照迭代
             for did, config in dict(self._device_configs).items():
                 devices.append({"id": did, "name": config.name, "prefix": self._device_prefixes.get(did, "/api")})
-            return self._json_response(200, {"devices": devices})
+            return self._json_response(200, {"devices": devices}, keep_alive)
 
-        return self._json_response(404, {"error": "Not Found"})
+        return self._json_response(404, {"error": "Not Found"}, keep_alive)
 
     def _handle_device(self, method: str, path: str, body: bytes,
                         device_id: str, behavior: HttpDeviceBehavior,
-                        config: DeviceConfig, query_params: dict[str, str] | None = None) -> bytes:  # FIXED-P1: 接受查询参数
+                        config: DeviceConfig, query_params: dict[str, str] | None = None,
+                        keep_alive: bool = True) -> bytes:  # FIXED-P1: 接受查询参数和keep_alive
         if path == "/" or path == "/points":
             if method == "GET":
                 values = behavior.get_all_values()
@@ -188,19 +202,19 @@ class HttpSimulatorServer(ProtocolServer):
                         "unit": p.unit, "data_type": p.data_type.value,
                         "access": p.access, "timestamp": time.time(),
                     })
-                return self._json_response(200, {"device_id": device_id, "points": points})
+                return self._json_response(200, {"device_id": device_id, "points": points}, keep_alive)
             elif method == "POST" and body:
                 try:
                     data = json.loads(body)
                 except (json.JSONDecodeError, TypeError):
-                    return self._json_response(400, {"error": "Invalid JSON body"})
+                    return self._json_response(400, {"error": "Invalid JSON body"}, keep_alive)
                 for name, value in data.items():
                     behavior.set_value(name, value)
                 self._log_debug("recv", "http_write",
                                 msg("http", "device_written", detail=device_id),
                                 device_id=device_id,
                                 detail={"data": data})
-                return self._json_response(200, {"ok": True})
+                return self._json_response(200, {"ok": True}, keep_alive)
 
         point_name = path.lstrip("/")
         for p in config.points:
@@ -209,7 +223,7 @@ class HttpSimulatorServer(ProtocolServer):
                     value = behavior.get_value(p.name)
                     # FIXED-P1: 支持?format=simple查询参数，直接返回值
                     if query_params and query_params.get("format") == "simple":
-                        return self._raw_response(200, str(value), "text/plain")
+                        return self._raw_response(200, str(value), "text/plain", keep_alive)
                     tpl = self._response_templates.get(device_id)  # FIXED-P1: 支持自定义响应模板
                     if tpl:
                         try:
@@ -219,35 +233,36 @@ class HttpSimulatorServer(ProtocolServer):
                                 "access": p.access, "timestamp": time.time(),
                                 "device_id": device_id,
                             })
-                            return self._raw_response(200, rendered, "application/json")
+                            return self._raw_response(200, rendered, "application/json", keep_alive)
                         except (KeyError, ValueError, IndexError) as e:
                             logger.warning("HTTP response_template render error for %s.%s: %s", device_id, p.name, e)
                     return self._json_response(200, {
                         "name": p.name, "value": value,
                         "unit": p.unit, "data_type": p.data_type.value,
                         "access": p.access, "timestamp": time.time(),
-                    })
+                    }, keep_alive)
                 elif method in ("PUT", "POST") and body:
                     try:
                         data = json.loads(body)
                     except (json.JSONDecodeError, TypeError):
-                        return self._json_response(400, {"error": "Invalid JSON body"})
+                        return self._json_response(400, {"error": "Invalid JSON body"}, keep_alive)
                     value = data.get("value", data.get(p.name))
                     if value is not None:
                         behavior.set_value(p.name, value)
                         self._log_debug("recv", "http_write",
                                         msg("http", "point_written", detail=f"{p.name}={value}"),
                                         device_id=device_id)
-                    return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)})
+                    return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)}, keep_alive)
                 elif method == "DELETE":
                     behavior.set_value(p.name, 0)
-                    return self._json_response(200, {"ok": True})
+                    return self._json_response(200, {"ok": True}, keep_alive)
 
-        return self._json_response(404, {"error": f"Point not found: {point_name}"})
+        return self._json_response(404, {"error": f"Point not found: {point_name}"}, keep_alive)
 
-    def _cors_preflight_response(self) -> bytes:
+    def _cors_preflight_response(self, keep_alive: bool = True) -> bytes:
         # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *
         origin = self._cors_origin
+        connection = "keep-alive" if keep_alive else "close"
         header = (
             "HTTP/1.1 204 No Content\r\n"
             f"Access-Control-Allow-Origin: {origin}\r\n"
@@ -255,20 +270,22 @@ class HttpSimulatorServer(ProtocolServer):
             "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
             "Access-Control-Max-Age: 86400\r\n"
             "Content-Length: 0\r\n"
+            f"Connection: {connection}\r\n"
             "\r\n"
         )
         return header.encode("utf-8")
 
-    def _json_response(self, status: int, body: dict) -> bytes:
+    def _json_response(self, status: int, body: dict, keep_alive: bool = True) -> bytes:
         status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
         # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *
         origin = self._cors_origin
+        connection = "keep-alive" if keep_alive else "close"
         header = (
             f"HTTP/1.1 {status} {status_text}\r\n"
             f"Content-Type: application/json; charset=utf-8\r\n"
             f"Content-Length: {len(body_bytes)}\r\n"
-            f"Connection: keep-alive\r\n"
+            f"Connection: {connection}\r\n"
             f"Access-Control-Allow-Origin: {origin}\r\n"
             f"Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH\r\n"
             f"Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n"
@@ -276,15 +293,16 @@ class HttpSimulatorServer(ProtocolServer):
         )
         return header.encode("utf-8") + body_bytes
 
-    def _raw_response(self, status: int, body: str, content_type: str = "application/json") -> bytes:  # FIXED-P1: 支持自定义响应模板的原始响应
+    def _raw_response(self, status: int, body: str, content_type: str = "application/json", keep_alive: bool = True) -> bytes:  # FIXED-P1: 支持自定义响应模板的原始响应
         status_text = {200: "OK", 400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = body.encode("utf-8")
         origin = self._cors_origin
+        connection = "keep-alive" if keep_alive else "close"
         header = (
             f"HTTP/1.1 {status} {status_text}\r\n"
             f"Content-Type: {content_type}; charset=utf-8\r\n"
             f"Content-Length: {len(body_bytes)}\r\n"
-            f"Connection: keep-alive\r\n"
+            f"Connection: {connection}\r\n"
             f"Access-Control-Allow-Origin: {origin}\r\n"
             f"\r\n"
         )
