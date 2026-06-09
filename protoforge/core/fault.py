@@ -502,6 +502,116 @@ BUILTIN_FAULT_TYPES: list[FaultTypeDefinition] = [
                              multiplier=1.0, noise_scale=5.0),
         ],
     ),
+
+    # ==================================================================
+    # 车床 CNC Rough 粗车故障类型
+    # 基线：spindle_speed~2000RPM, spindle_load cutting~55%, spindle_current cutting~13A
+    # 仅影响 spindle_speed / spindle_load / spindle_current 三个测点
+    # ==================================================================
+
+    # ------------------------------------------------------------------
+    # 缠屑（车床粗车）— chip_entanglement_rough
+    # 物理含义：切屑缠绕刀具/工件，切削阻力逐步增大
+    # 特征：spindle_load/current 渐进爬升，spindle_speed 基本维持（严重时轻微下降）
+    # 模式：GRADUAL（渐进式），区别于崩刃的瞬间冲击
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="chip_entanglement_rough",
+        name="缠屑（车床粗车）",
+        description="车床粗车切屑缠绕刀具/工件，切削阻力逐步增大。spindle_load渐进从~55%爬升到70~90%，spindle_current从~13A升至16~20A，spindle_speed基本维持2000RPM（严重时轻微下降到1900RPM）。区别于缠屑：不瞬间冲击；区别于磨损：爬升更快且波动更大",
+        category="process",
+        default_duration=180.0,
+        tags=["缠屑", "渐进", "车床", "粗车"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             target_min=70.0, target_max=90.0, noise_scale=4.5),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             target_min=16.0, target_max=20.0, noise_scale=1.2),
+            # 转速只在严重时（progress > 0.6）才轻微下降，nominal_baseline 保持 2000
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
+                             target_min=1880.0, target_max=1950.0, noise_scale=25.0,
+                             nominal_baseline=2000.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 刀具磨损（车床粗车）— tool_wear_rough
+    # 物理含义：刀具逐步变钝，切削阻力慢性增加
+    # 特征：load/current 长时间缓慢趋势性上升，转速基本稳定
+    # 模式：GRADUAL，持续时间长（600s），不应瞬间恢复
+    # 使用 nominal_baseline 避免注入时恰好在空切段导致基线失真
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_wear_rough",
+        name="刀具磨损（车床粗车）",
+        description="车床粗车刀具逐步变钝，切削阻力慢性增加。spindle_load从~55%缓慢抬升到60~75%，spindle_current从~13A抬升到13~16A，spindle_speed基本稳定在2000RPM。区别于缠屑：爬升极慢；区别于崩刃：无冲击峰值，不停主轴",
+        category="tool",
+        default_duration=600.0,
+        tags=["刀具", "磨损", "渐进", "车床", "粗车", "趋势漂移"],
+        point_faults=[
+            PointFaultConfig(point="spindle_load", mode=FaultMode.GRADUAL,
+                             target_min=60.0, target_max=75.0, noise_ratio=0.04,
+                             nominal_baseline=55.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.GRADUAL,
+                             target_min=13.0, target_max=16.0, noise_ratio=0.04,
+                             nominal_baseline=13.0),
+            # 磨损对转速影响极小，仅在严重时轻微下降，nominal_baseline 保持 2000
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.GRADUAL,
+                             target_min=1930.0, target_max=1990.0, noise_scale=20.0,
+                             nominal_baseline=2000.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 断刀/崩刀 emergency_stop（车床粗车）— tool_break_emergency_stop_rough
+    # 物理含义：刀具突然断裂，CNC 触发紧急停机
+    # 特征：瞬间冲击后 load/current 归零，spindle_speed 急降到 0
+    # 模式：INSTANT，持续时间短（仅代表报警持续窗口），之后停机
+    # 断刀冲击只触发一次（注入时随机采样 resolved_target），不每 tick 重新冲击
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_break_emergency_stop_rough",
+        name="断刀急停（车床粗车）",
+        description="车床粗车刀具突然断裂，CNC触发紧急停机。spindle_load瞬间冲高到85~100%，spindle_current冲高到18~25A，随后（下一tick）主轴急停到0。断刀冲击只触发一次，之后进入停机等待状态，不自动恢复正常切削",
+        category="tool",
+        default_duration=8.0,
+        tags=["断刀", "崩刀", "急停", "突发", "车床", "粗车"],
+        point_faults=[
+            # 瞬间冲高，noise_scale 小（冲击值已由 target_min/max 精确控制）
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_min=85.0, target_max=100.0, noise_scale=3.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_min=18.0, target_max=25.0, noise_scale=1.5),
+            # 主轴急停到 0
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             target_value=0.0, noise_scale=0.0),
+        ],
+    ),
+
+    # ------------------------------------------------------------------
+    # 断刀/崩刀 broken_cutting（车床粗车）— tool_break_broken_cutting_rough
+    # 物理含义：刀具断裂但主轴未停，在破损刀具状态下继续异常切削
+    # 特征：瞬间冲击后 load/current 降到低位（破损刀具切不动），转速维持
+    # 模式：INSTANT，持续时间短（8s 冲击窗口）+ 后续低负载异常阶段
+    # ------------------------------------------------------------------
+    FaultTypeDefinition(
+        id="tool_break_broken_cutting_rough",
+        name="断刀异常切削（车床粗车）",
+        description="车床粗车刀具断裂但主轴未停，破损刀具继续异常切削。spindle_load瞬间冲高到85~100%后降至5~15%，spindle_current冲高到18~25A后降至3~6A，spindle_speed维持1800~2200RPM不停机。区别于急停：主轴不归零",
+        category="tool",
+        default_duration=8.0,
+        tags=["断刀", "崩刀", "异常切削", "突发", "车床", "粗车"],
+        point_faults=[
+            # 冲击后维持低负载（破损刀具切不动）
+            PointFaultConfig(point="spindle_load", mode=FaultMode.INSTANT,
+                             target_min=5.0, target_max=15.0, noise_scale=2.0),
+            PointFaultConfig(point="spindle_current", mode=FaultMode.INSTANT,
+                             target_min=3.0, target_max=6.0, noise_scale=0.8),
+            # 转速维持，nominal_baseline 避免注入时基线失真
+            PointFaultConfig(point="spindle_speed", mode=FaultMode.INSTANT,
+                             multiplier=1.0, noise_scale=30.0, nominal_baseline=2000.0),
+        ],
+    ),
 ]
 
 # 按 id 索引

@@ -45,6 +45,7 @@ from enum import Enum
 from typing import Any
 
 from protoforge.core.cnc_metric_generator import BaseMetricGenerator
+from protoforge.core.fault import fault_injector
 
 
 class _State(Enum):
@@ -210,8 +211,32 @@ class LatheSimulator:
         vals = device_instance._point_values
         self._update_cnc_points(vals, frame)
 
-        # 6. 上报 Prometheus
-        self._emit_prometheus(device_instance, frame)
+        # 6. 复用铣床故障注入机制：在 baseline 写入后覆盖故障测点值
+        #    fault_injector.apply() 只覆盖 _point_values，不修改状态机
+        #    只有 process_running 切削阶段的故障才有意义；
+        #    但 apply() 本身会检查 fault.duration，状态机不需要感知
+        fault_injector.apply(device_instance)
+
+        # ── 断刀二阶段后处理（不修改 FaultInjector 框架，符合铣床风格）───────
+        _active_fault = fault_injector.get_fault(device_instance.id)
+        if _active_fault is not None:
+            _fault_id = _active_fault.fault_type_id
+            _elapsed  = _active_fault.elapsed
+
+            # 断刀急停：冲击窗口前 2s → 之后 load/current/speed 降到停机水平
+            if _fault_id == "tool_break_emergency_stop_rough" and _elapsed > 2.0:
+                vals["spindle_load"]    = round(random.uniform(0.0, 2.0), 1)
+                vals["spindle_current"] = round(random.uniform(0.0, 1.0), 2)
+                vals["spindle_speed"]   = 0.0
+
+            # 断刀异常切削：冲击窗口前 2s 输出冲击峰值，之后由 FaultInjector 维持低负载
+            elif _fault_id == "tool_break_broken_cutting_rough" and _elapsed <= 2.0:
+                vals["spindle_load"]    = round(random.uniform(85.0, 100.0) + random.gauss(0, 3.0), 1)
+                vals["spindle_current"] = round(random.uniform(18.0, 25.0) + random.gauss(0, 1.5), 2)
+                # 转速在冲击瞬间保持（FaultInjector 已设置 nominal_baseline=2000，此处不覆盖）
+
+        # 7. 上报 Prometheus（使用 fault-applied 后的 _point_values，而非注入前的 frame）
+        self._emit_prometheus(device_instance, vals)
 
     # ------------------------------------------------------------------
     # 状态机
@@ -460,6 +485,8 @@ class LatheSimulator:
         vals["tool_temperature"]   = round(frame.tool_temperature, 2)
         vals["surface_roughness"]  = round(frame.surface_roughness, 3)
         vals["tool_wear_value"]    = round(frame.tool_wear_value, 4)
+        # 存入 stage 供 _emit_prometheus 使用（不作为 MTConnect 测点上报）
+        vals["_stage"]             = frame.stage
 
         # 故障覆盖：崩刀时 spindle_load 突增并覆盖 MetricFrame 的值
         if is_tool_break:
@@ -473,9 +500,10 @@ class LatheSimulator:
             wrap_load = min(100.0, 30.0 + self._wrap_load_increment + random.gauss(0, 2))
             vals["spindle_load"] = round(wrap_load, 1)
 
-    def _emit_prometheus(self, device_instance: Any, frame) -> None:
+    def _emit_prometheus(self, device_instance: Any, vals: dict) -> None:
         """
         通过 MetricsCollector 上报 Prometheus 指标。
+        使用 fault-applied 后的 device._point_values，确保故障覆盖值能正确上报。
         复用项目已有的 set_gauge 接口，不重复注册。
         """
         try:
@@ -485,24 +513,26 @@ class LatheSimulator:
 
         device_id = getattr(device_instance.config, "id", "unknown")
         device_name = getattr(device_instance.config, "name", "unknown")
+        # stage 仍从 frame 获取（故障不改变 stage 标签）
+        stage = vals.get("_stage", "roughing")
         labels = {
             "device_id":   device_id,
             "device_name": device_name,
             "protocol":    "mtconnect",
-            "stage":       frame.stage,
+            "stage":       stage,
         }
 
-        metrics.set_gauge("cnc_feed_rate",          frame.feed_rate,          {**labels, "unit": "mm/min"})
-        metrics.set_gauge("cnc_spindle_speed",       frame.spindle_speed,      {**labels, "unit": "RPM"})
-        metrics.set_gauge("cnc_spindle_current",     frame.spindle_current,    {**labels, "unit": "A"})
-        metrics.set_gauge("cnc_spindle_load",        frame.spindle_load,       {**labels, "unit": "%"})
-        metrics.set_gauge("cnc_vibration_x",         frame.vibration_x,        {**labels, "unit": "mm/s"})
-        metrics.set_gauge("cnc_vibration_y",         frame.vibration_y,        {**labels, "unit": "mm/s"})
-        metrics.set_gauge("cnc_vibration_z",         frame.vibration_z,        {**labels, "unit": "mm/s"})
-        metrics.set_gauge("cnc_acoustic_emission",   frame.acoustic_emission,  {**labels, "unit": "V"})
-        metrics.set_gauge("cnc_tool_temperature",    frame.tool_temperature,   {**labels, "unit": "C"})
-        metrics.set_gauge("cnc_surface_roughness",   frame.surface_roughness,  {**labels, "unit": "um"})
-        metrics.set_gauge("cnc_tool_wear_value",     frame.tool_wear_value,    {**labels, "unit": "um"})
+        metrics.set_gauge("cnc_feed_rate",          vals.get("feed_rate", 0.0),         {**labels, "unit": "mm/min"})
+        metrics.set_gauge("cnc_spindle_speed",       vals.get("spindle_speed", 0.0),     {**labels, "unit": "RPM"})
+        metrics.set_gauge("cnc_spindle_current",     vals.get("spindle_current", 0.0),   {**labels, "unit": "A"})
+        metrics.set_gauge("cnc_spindle_load",        vals.get("spindle_load", 0.0),      {**labels, "unit": "%"})
+        metrics.set_gauge("cnc_vibration_x",         vals.get("vibration_x", 0.0),       {**labels, "unit": "mm/s"})
+        metrics.set_gauge("cnc_vibration_y",         vals.get("vibration_y", 0.0),       {**labels, "unit": "mm/s"})
+        metrics.set_gauge("cnc_vibration_z",         vals.get("vibration_z", 0.0),       {**labels, "unit": "mm/s"})
+        metrics.set_gauge("cnc_acoustic_emission",   vals.get("acoustic_emission", 0.0), {**labels, "unit": "V"})
+        metrics.set_gauge("cnc_tool_temperature",    vals.get("tool_temperature", 0.0),  {**labels, "unit": "C"})
+        metrics.set_gauge("cnc_surface_roughness",   vals.get("surface_roughness", 0.0), {**labels, "unit": "um"})
+        metrics.set_gauge("cnc_tool_wear_value",     vals.get("tool_wear_value", 0.0),   {**labels, "unit": "um"})
 
     # ------------------------------------------------------------------
 
