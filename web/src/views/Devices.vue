@@ -188,6 +188,10 @@
       <n-modal v-model:show="showGuideModal" preset="card" :title="t('devices.connectionGuide')" style="width:680px">
         <div v-if="guideData">
           <n-space vertical size="large">
+            <n-alert v-if="guideData.protocol_status !== 'running'" type="warning" :bordered="false">
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.protocolNotRunning') }}</div>
+              <div>{{ t('devices.protocolNotRunningDesc') }}</div>
+            </n-alert>
             <n-alert :type="guideData.mode === 'client' ? 'warning' : 'info'" :bordered="false">
               <template #icon>
                 <svg v-if="guideData.mode === 'server'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/></svg>
@@ -198,7 +202,7 @@
             </n-alert>
 
             <div v-if="guideData.mode === 'server'">
-              <div style="font-weight:600;margin-bottom:8px">📋 {{ guideData.connect_hint }}</div>
+              <div style="font-weight:600;margin-bottom:8px">{{ guideData.connect_hint }}</div>
               <n-card size="small" embedded>
                 <div v-for="(val, key) in (guideData.connection_info || {})" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
                   <n-text depth="3">{{ key }}</n-text>
@@ -208,7 +212,7 @@
             </div>
 
             <div v-if="guideData.mode === 'client'">
-              <div style="font-weight:600;margin-bottom:8px">📋 {{ guideData.connect_hint }}</div>
+              <div style="font-weight:600;margin-bottom:8px">{{ guideData.connect_hint }}</div>
               <n-card size="small" embedded>
                 <div v-for="(val, key) in (guideData.connection_info || {})" :key="key" style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
                   <n-text depth="3">{{ key }}</n-text>
@@ -219,7 +223,7 @@
 
             <div v-if="guideData.code_examples && Object.keys(guideData.code_examples).length > 0">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                <div style="font-weight:600">💻 {{ t('devices.codeExamples') }}</div>
+                <div style="font-weight:600">{{ t('devices.codeExamples') }}</div>
                 <n-button-group size="tiny">
                   <n-button v-for="(_, lang) in (guideData.code_examples || {})" :key="lang"
                     :type="guideLang === lang ? 'primary' : 'default'"
@@ -233,7 +237,7 @@
               </n-card>
             </div>
             <div v-else-if="guideData.code_example">
-              <div style="font-weight:600;margin-bottom:8px">💻 {{ t('devices.codeExamples') }}</div>
+              <div style="font-weight:600;margin-bottom:8px">{{ t('devices.codeExamples') }}</div>
               <n-card size="small" embedded>
                 <pre style="margin:0;white-space:pre-wrap;font-size:13px;line-height:1.6;font-family:Consolas,Monaco,monospace">{{ guideData.code_example }}</pre>
               </n-card>
