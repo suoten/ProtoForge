@@ -3,11 +3,10 @@ CNC 车床正常加工状态时序数据生成算法
 =====================================
 
 设计原则：
-  - 所有指标由切削强度 cutting_intensity 统一驱动，禁止各自独立随机。
+  - spindle_speed / spindle_load / spindle_current 由 CncSpindleGenerator 统一驱动。
+  - 生成链路：工艺阶段 → 目标转速 → 实际转速(EMA) → 负载 → 电流。
   - 热惯性模型：tool_temperature 使用一阶 RC 滤波，alpha ≈ 0.04/tick。
-  - 电流滞后：spindle_current 对 spindle_load 有 1~3 tick 的一阶滞后。
   - 磨损单调：tool_wear_value 在切削阶段只增不减。
-  - 噪声比例：roughing > semi_finishing > finishing，稳定性反向。
   - 纯 Python 标准库实现，无第三方依赖。
 
 用法：
@@ -118,6 +117,8 @@ class GeneratorState:
     cutting_elapsed: float = 0.0
     # 当前切削阶段预估总时长（由状态机传入）
     cutting_total: float = 30.0
+    # 状态机内部状态（idle/spinup/cutting/decel/tool_change），用于转速平滑
+    spindle_state: str = "idle"
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +317,193 @@ class SpindleLoadGenerator:
 
 
 # ---------------------------------------------------------------------------
+# CncSpindleGenerator —— spindle_speed / spindle_load / spindle_current 统一联动
+# ---------------------------------------------------------------------------
+
+# 工艺阶段 → 主轴目标转速配置
+_PROCESS_SPEED_CFG: dict[str, dict] = {
+    "rough":        {"target": 2000.0, "noise": 30.0,  "lo": 1800.0, "hi": 2200.0},
+    "semi_finish":  {"target": 3000.0, "noise": 40.0,  "lo": 2800.0, "hi": 3200.0},
+    "finish":       {"target": 4000.0, "noise": 50.0,  "lo": 3800.0, "hi": 4200.0},
+}
+
+# 非切削状态下转速目标（0 = 停止）
+_STATE_SPEED_TARGET: dict[str, float] = {
+    "idle":        0.0,
+    "tool_change": 0.0,
+}
+
+# 各状态的转速 EMA alpha（值越小过渡越慢）
+_SPEED_ALPHA: dict[str, float] = {
+    "idle":        0.20,   # 快速停止
+    "tool_change": 0.22,
+    "spinup":      0.14,   # 平滑升速
+    "cutting":     0.06,   # 稳定运转，微调
+    "decel":       0.18,   # 降速
+}
+
+# 电流模型配置：各工艺的空载基础电流和负载系数
+_PROCESS_CURRENT_CFG: dict[str, dict] = {
+    "rough":       {"base": 3.0, "load_factor": 0.20, "noise": 0.4, "lo": 8.0,  "hi": 20.0},
+    "semi_finish": {"base": 2.5, "load_factor": 0.16, "noise": 0.3, "lo": 5.0,  "hi": 15.0},
+    "finish":      {"base": 2.0, "load_factor": 0.12, "noise": 0.2, "lo": 3.0,  "hi": 10.0},
+}
+
+# 非切削状态的电流配置
+_STATE_CURRENT_CFG: dict[str, dict] = {
+    "idle":        {"base": 0.3,  "noise": 0.15, "lo": 0.0, "hi": 1.0,  "alpha": 0.35},
+    "tool_change": {"base": 0.5,  "noise": 0.2,  "lo": 0.0, "hi": 1.5,  "alpha": 0.30},
+    "spindle_on":  {"base": 3.2,  "noise": 0.4,  "lo": 2.0, "hi": 5.0,  "alpha": 0.20},
+    "air_cut":     {"base": 4.0,  "noise": 0.5,  "lo": 2.5, "hi": 6.0,  "alpha": 0.18},
+}
+
+# 电流 EMA alpha（切削阶段，略慢于负载，体现电气滞后）
+_CURRENT_ALPHA_CUTTING: dict[str, float] = {
+    "entry_cut": 0.10,
+    "cutting":   0.10,
+    "exit_cut":  0.12,
+}
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def _ema(prev: float, target: float, alpha: float) -> float:
+    return prev + alpha * (target - prev)
+
+
+class CncSpindleGenerator:
+    """
+    统一驱动 spindle_speed / spindle_load / spindle_current 的联动生成器。
+
+    生成链路：
+        工艺阶段(process) → 目标转速 → 实际转速(EMA) → 负载(SpindleLoadGenerator)
+        → 电流(负载+转速映射)
+
+    stage 参数取值：idle / tool_change / roughing / semi_finishing / finishing
+    spindle_state 参数取值：idle / tool_change / spinup / cutting / decel
+      （由 LatheSimulator 状态机传入，用于控制转速 EMA alpha）
+    """
+
+    def __init__(self, rng: random.Random, load_gen: SpindleLoadGenerator):
+        self._rng = rng
+        self._load_gen = load_gen  # 复用已有的负载生成器
+
+        self.prev_speed: float = 0.0
+        self.prev_current: float = 0.0
+
+    def generate(
+        self,
+        t: float,
+        stage: str,
+        spindle_state: str = "cutting",
+        cutting_elapsed: float = 0.0,
+        cutting_total: float = 30.0,
+    ) -> tuple[float, float, float]:
+        """
+        生成 (spindle_speed, spindle_load, spindle_current)。
+
+        Args:
+            t:               当前时间（秒）。
+            stage:           MetricGenerator 加工阶段。
+            spindle_state:   LatheSimulator 内部状态（idle/spinup/cutting/decel/tool_change）。
+            cutting_elapsed: 切削阶段已过秒数（传给负载生成器）。
+            cutting_total:   切削阶段总时长（传给负载生成器）。
+        """
+        process = _STAGE_TO_PROCESS.get(stage)   # None = 非切削
+
+        # ── 1. 主轴转速 ────────────────────────────────────────────────────
+        speed = self._calc_speed(stage, spindle_state, process)
+
+        # ── 2. 主轴负载（委托 SpindleLoadGenerator）────────────────────────
+        load = self._load_gen.generate(
+            t=t,
+            stage=stage,
+            cutting_elapsed=cutting_elapsed,
+            cutting_total=cutting_total,
+        )
+
+        # ── 3. 主轴电流（由转速 + 负载推导）───────────────────────────────
+        current = self._calc_current(stage, spindle_state, process, speed, load)
+
+        return speed, load, current
+
+    # ------------------------------------------------------------------
+
+    def _calc_speed(self, stage: str, spindle_state: str, process: Optional[str]) -> float:
+        """转速：按工艺目标 + EMA 平滑，非切削时降到 0。"""
+        if process is not None:
+            scfg = _PROCESS_SPEED_CFG[process]
+            noise = self._rng.gauss(0, scfg["noise"])
+            target = scfg["target"] + noise
+            # 首次从停止状态进入切削：直接跳到目标转速附近，避免长收敛期
+            if self.prev_speed < scfg["lo"] * 0.5:
+                self.prev_speed = scfg["target"]
+            alpha = _SPEED_ALPHA.get("cutting", 0.06)
+            lo, hi = scfg["lo"] * 0.92, scfg["hi"] * 1.05
+        elif spindle_state == "spinup":
+            if self.prev_speed > 500:
+                target = min(self.prev_speed * 1.12, 2200.0)
+            else:
+                target = 2000.0
+            alpha = _SPEED_ALPHA.get("spinup", 0.14)
+            lo, hi = 0.0, 2500.0
+        else:
+            target = _STATE_SPEED_TARGET.get(stage, 0.0)
+            alpha = _SPEED_ALPHA.get(spindle_state, 0.20)
+            lo, hi = 0.0, 200.0
+
+        new_speed = _ema(self.prev_speed, target, alpha)
+        new_speed = _clamp(new_speed, lo, hi)
+        self.prev_speed = new_speed
+        return new_speed
+
+    def _calc_current(
+        self,
+        stage: str,
+        spindle_state: str,
+        process: Optional[str],
+        speed: float,
+        load: float,
+    ) -> float:
+        """电流：空载基础 + 负载映射，有轻微 EMA 滞后。"""
+        if process is not None:
+            ccfg = _PROCESS_CURRENT_CFG[process]
+            # 转速修正：实际转速偏低时电流也偏低（恒功率特性简化）
+            speed_ratio = _clamp(speed / _PROCESS_SPEED_CFG[process]["target"], 0.5, 1.1)
+            noise = self._rng.gauss(0, ccfg["noise"])
+            target = (ccfg["base"] + ccfg["load_factor"] * load + noise) * speed_ratio
+
+            # 判断切削子状态（entry/cutting/exit）决定 alpha
+            if self._load_gen._last_stage in _STAGE_TO_PROCESS:
+                pcfg = _PROCESS_CFG[process]
+                time_to_end = (self._load_gen.prev_load > 0 and
+                               hasattr(self._load_gen, '_last_stage'))
+                # 简化：直接用较小 alpha 保持平滑
+                alpha = 0.10
+            else:
+                alpha = 0.10
+
+            lo, hi = ccfg["lo"], ccfg["hi"]
+        else:
+            # 非切削状态
+            state_key = stage if stage in _STATE_CURRENT_CFG else "idle"
+            ccfg = _STATE_CURRENT_CFG[state_key]
+            noise = self._rng.gauss(0, ccfg["noise"])
+            # 转速联动：主轴停止时电流趋近 0
+            speed_factor = _clamp(speed / 100.0, 0.0, 1.0) if speed < 100 else 1.0
+            target = (ccfg["base"] + noise) * speed_factor
+            alpha = ccfg["alpha"]
+            lo, hi = ccfg["lo"], ccfg["hi"]
+
+        new_current = _ema(self.prev_current, target, alpha)
+        new_current = _clamp(new_current, lo, hi)
+        self.prev_current = new_current
+        return new_current
+
+
+# ---------------------------------------------------------------------------
 # 阶段配置
 # ---------------------------------------------------------------------------
 
@@ -421,14 +609,15 @@ class BaseMetricGenerator:
     ):
         self._ambient = ambient_temperature
         self._rng = random.Random(seed)
-        # 热惯性系数（每 tick 向目标温度靠近的比例）
         self._thermal_alpha = thermal_alpha
         self._state = GeneratorState(
             thermal_state=ambient_temperature,
             last_surface_roughness=1.0,
         )
-        # 主轴负载生成器（状态驱动 + EMA 平滑）
+        # 负载生成器（状态驱动 + ramp + EMA）
         self._spindle_load_gen = SpindleLoadGenerator(self._rng)
+        # 主轴联动生成器（speed / load / current 统一驱动）
+        self._spindle_gen = CncSpindleGenerator(self._rng, self._spindle_load_gen)
 
     # ------------------------------------------------------------------
     # 公开 API
@@ -464,57 +653,55 @@ class BaseMetricGenerator:
         # ── 1. 材料扰动（慢变量，低频正弦 + 随机游走）──────────────────────
         material_variation = self._calc_material_variation(t, dt, state)
 
-        # ── 2. 切削周期波动 ──────────────────────────────────────────────────
+        # ── 2. 切削周期波动（feed_rate 使用）────────────────────────────────
         cutting_cycle_wave = self._calc_cutting_cycle_wave(t, dt, stage, state, profile)
 
         # ── 3. feed_rate ──────────────────────────────────────────────────────
         feed_rate = self._calc_feed_rate(profile, cutting_cycle_wave, stage)
 
-        # ── 4. spindle_speed ──────────────────────────────────────────────────
-        spindle_speed = self._calc_spindle_speed(profile, stage)
-
-        # ── 5. cutting_intensity（归一化切削强度）────────────────────────────
+        # ── 4. cutting_intensity（供其他指标参考，不再驱动 load）────────────
         cutting_intensity = self._calc_cutting_intensity(
             feed_rate, stage, material_variation, profile
         )
 
-        # ── 6. spindle_load（状态驱动 + ramp + EMA 平滑）────────────────────
-        spindle_load = self._calc_spindle_load(
-            stage, t, dt, state
+        # ── 5. spindle_speed / spindle_load / spindle_current（联动生成）────
+        spindle_speed, spindle_load, spindle_current = self._spindle_gen.generate(
+            t=t,
+            stage=stage,
+            spindle_state=state.spindle_state,
+            cutting_elapsed=state.cutting_elapsed,
+            cutting_total=state.cutting_total,
         )
 
-        # ── 7. spindle_current（对 load 有 1~2 tick 滞后）────────────────────
-        spindle_current = self._calc_spindle_current(profile, spindle_load, state)
-
-        # ── 8. vibration（三轴，各有小幅随机偏差）────────────────────────────
+        # ── 6. vibration（三轴，各有小幅随机偏差）────────────────────────────
         vib_x, vib_y, vib_z = self._calc_vibration(
             profile, spindle_load, feed_rate, stage
         )
 
-        # ── 9. acoustic_emission ─────────────────────────────────────────────
+        # ── 7. acoustic_emission ─────────────────────────────────────────────
         vibration_rms = (vib_x + vib_y + vib_z) / 3.0
         acoustic_emission = self._calc_acoustic(profile, vibration_rms, spindle_load)
 
-        # ── 10. tool_temperature（热惯性模型）────────────────────────────────
+        # ── 8. tool_temperature（热惯性模型）────────────────────────────────
         tool_temperature = self._calc_temperature(
             profile, spindle_load, spindle_current, dt, state
         )
 
-        # ── 11. tool_wear_value（单调递增）────────────────────────────────────
+        # ── 9. tool_wear_value（单调递增）────────────────────────────────────
         tool_wear_value = self._calc_tool_wear(profile, spindle_load, dt, state)
 
-        # ── 12. surface_roughness ─────────────────────────────────────────────
+        # ── 10. surface_roughness ─────────────────────────────────────────────
         surface_roughness = self._calc_surface_roughness(
             profile, vibration_rms, tool_wear_value, stage, state
         )
 
-        # ── 13. 更新滞后缓冲区 ────────────────────────────────────────────────
+        # ── 11. 更新滞后缓冲区 ────────────────────────────────────────────────
         state.load_lag_buffer.pop(0)
         state.load_lag_buffer.append(spindle_load)
         state.last_spindle_load = spindle_load
         state.last_surface_roughness = surface_roughness
 
-        # ── 14. 构造帧 + clamp ────────────────────────────────────────────────
+        # ── 12. 构造帧 + clamp ────────────────────────────────────────────────
         frame = MetricFrame(
             timestamp=t,
             stage=stage,
@@ -614,22 +801,6 @@ class BaseMetricGenerator:
         noise = self._rng.gauss(0, base * noise_ratio)
         return max(profile.feed_rate_min, min(profile.feed_rate_max, base + noise))
 
-    def _calc_spindle_speed(self, profile: StageProfile, stage: str) -> float:
-        """
-        主轴转速正常状态下稳定。
-        roughing 允许 2% 波动，finishing 允许 0.8% 波动。
-        """
-        if stage in ("idle", "tool_change"):
-            return self._rng.uniform(profile.spindle_speed_min, profile.spindle_speed_max)
-        noise_pct = {
-            "roughing": 0.020,
-            "semi_finishing": 0.015,
-            "finishing": 0.008,
-        }.get(stage, 0.015)
-        base = profile.spindle_speed_mid
-        noise = self._rng.gauss(0, base * noise_pct)
-        return max(profile.spindle_speed_min, min(profile.spindle_speed_max, base + noise))
-
     def _calc_cutting_intensity(
         self,
         feed_rate: float,
@@ -650,53 +821,6 @@ class BaseMetricGenerator:
             )
             norm_feed = max(0.0, min(1.0, norm_feed))
         return max(0.0, min(1.0, norm_feed * stage_factor * material_variation))
-
-    def _calc_spindle_load(
-        self,
-        stage: str,
-        t: float,
-        dt: float,
-        state: GeneratorState,
-    ) -> float:
-        """
-        主轴负载（%）—— 委托给 SpindleLoadGenerator。
-        传入切削计时信息，实现切入/切出 ramp。
-        """
-        return self._spindle_load_gen.generate(
-            t=t,
-            stage=stage,
-            cutting_elapsed=state.cutting_elapsed,
-            cutting_total=state.cutting_total,
-        )
-
-    def _calc_spindle_current(
-        self,
-        profile: StageProfile,
-        spindle_load: float,
-        state: GeneratorState,
-    ) -> float:
-        """
-        主轴电流（A），对负载有 1~2 tick 滞后（一阶低通）。
-        current = idle_current + k × lag_load + noise
-        k 由阶段电流范围和负载范围反推。
-        """
-        # 滞后混合：60% 当前负载 + 25% 上一 tick + 15% 两 tick 前
-        lag_load = spindle_load * 0.60 + state.load_lag_buffer[1] * 0.25 + state.load_lag_buffer[0] * 0.15
-        # 线性映射：load_min → current_min，load_max → current_max
-        load_range = profile.spindle_load_max - profile.spindle_load_min
-        current_range = profile.spindle_current_max - profile.spindle_current_min
-        if load_range > 0:
-            k = current_range / load_range
-        else:
-            k = 0.0
-        current_base = profile.spindle_current_min + k * (lag_load - profile.spindle_load_min)
-        noise = self._rng.gauss(
-            0,
-            (profile.spindle_current_max - profile.spindle_current_min)
-            * (1.0 - profile.stability_factor)
-            * 0.03,
-        )
-        return max(profile.spindle_current_min, min(profile.spindle_current_max, current_base + noise))
 
     def _calc_vibration(
         self,

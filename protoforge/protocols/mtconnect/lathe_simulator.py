@@ -152,9 +152,20 @@ class LatheSimulator:
         # 2. 确定当前 MetricGenerator 阶段
         stage = self._get_metric_stage()
 
-        # 3. 把 CUTTING 状态总时长同步给 MetricGenerator（用于 exit_ramp 计算）
+        # 3. 把状态机信息同步给 MetricGenerator
         if self._state == _State.CUTTING:
             self._metric_gen.state.cutting_total = self._state_duration
+        # spindle_state 用于转速 EMA alpha 控制
+        _sm_to_spindle = {
+            _State.IDLE:        "idle",
+            _State.SPINUP:      "spinup",
+            _State.CUTTING:     "cutting",
+            _State.DECEL:       "decel",
+            _State.TOOL_CHANGE: "tool_change",
+            _State.TOOL_BREAK:  "idle",
+            _State.CHIP_WRAP:   "cutting",
+        }
+        self._metric_gen.state.spindle_state = _sm_to_spindle.get(self._state, "idle")
 
         # 4. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
         frame = self._metric_gen.generate(t=t, dt=1.0, stage=stage)
@@ -216,11 +227,12 @@ class LatheSimulator:
         self._condition_native_code = ""
         self._wrap_load_increment = 0.0
         if self._state_elapsed >= self._state_duration:
-            self._spindle_target = random.uniform(800, 2500)
+            # 目标转速按即将开始的切削工艺设定（粗加工 2000 RPM）
+            self._spindle_target = 2000.0
             self._program_line = 1
             self._block_idx = 0
             self._cutting_stage = "roughing"
-            self._transition(_State.SPINUP, random.uniform(3, 6))
+            self._transition(_State.SPINUP, random.uniform(4, 8))
 
     def _on_spinup(self) -> None:
         self._spindle_actual = self._smooth(
