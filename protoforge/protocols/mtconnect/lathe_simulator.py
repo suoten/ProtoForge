@@ -108,12 +108,10 @@ _NC_BLOCKS = [
     "N0120 M30",
 ]
 
-# 每个零件的加工子阶段序列（按进度切分）
+# 每个零件的加工子阶段序列（本轮正常工况固定为 rough）
 # (阶段名, 开始进度, 结束进度)
 _CUT_SUBSTAGES = [
-    ("roughing",       0.00, 0.45),
-    ("semi_finishing", 0.45, 0.75),
-    ("finishing",      0.75, 1.00),
+    ("roughing", 0.00, 1.00),
 ]
 
 
@@ -245,20 +243,14 @@ class LatheSimulator:
     def _get_metric_stage(self) -> str:
         """将状态机状态映射到 MetricGenerator 阶段。"""
         if self._state == _State.CUTTING:
-            return self._cutting_stage
+            return "roughing"
         if self._state == _State.CHIP_WRAP:
             return "roughing"
         return _STATE_TO_STAGE.get(self._state, "idle")
 
     def _update_cutting_substage(self, progress: float) -> None:
-        """根据切削进度动态切换粗/半精/精加工子阶段。"""
-        for stage_name, start, end in _CUT_SUBSTAGES:
-            if start <= progress < end:
-                if self._cutting_stage != stage_name:
-                    self._cutting_stage = stage_name
-                    # 换阶段时不重置磨损，但可记录换刀（此处仅切换参数集）
-                return
-        self._cutting_stage = "finishing"
+        """本轮正常工况只模拟 rough，不在小周期内切换 semi/finish。"""
+        self._cutting_stage = "roughing"
 
     def _on_idle(self) -> None:
         self._spindle_target = 0.0
@@ -281,7 +273,7 @@ class LatheSimulator:
             self._spindle_actual, self._spindle_target, 0.25
         )
         if self._state_elapsed >= self._state_duration:
-            self._transition(_State.AIR_CUT, random.uniform(3, 6))
+            self._transition(_State.AIR_CUT, random.uniform(6, 12))
 
     def _on_air_cut(self) -> None:
         """主轴运转，快速定位，不切削。主轴转速保持目标值。"""
@@ -295,7 +287,7 @@ class LatheSimulator:
         self._x_pos = self._smooth(self._x_pos, 50.0, 0.30)
         self._z_pos = self._smooth(self._z_pos, 2.0, 0.30)
         if self._state_elapsed >= self._state_duration:
-            self._transition(_State.CUTTING, random.uniform(35, 65))
+            self._transition(_State.CUTTING, random.uniform(45, 90))
 
     def _on_cutting(self) -> None:
         noise = random.gauss(0, self._spindle_target * 0.02)
@@ -329,7 +321,7 @@ class LatheSimulator:
 
         if self._state_elapsed >= self._state_duration:
             # 周期结束：进入 DECEL_CYCLE（主轴保持转速，只停进给）
-            self._transition(_State.DECEL_CYCLE, random.uniform(2, 4))
+            self._transition(_State.DECEL_CYCLE, random.uniform(3, 6))
 
     def _on_decel_cycle(self) -> None:
         """
@@ -353,7 +345,7 @@ class LatheSimulator:
                 self._transition(_State.DECEL, random.uniform(3, 5))
             else:
                 # 继续下一个切削周期：回到 AIR_CUT
-                self._transition(_State.AIR_CUT, random.uniform(3, 6))
+                self._transition(_State.AIR_CUT, random.uniform(6, 12))
 
     def _on_decel(self) -> None:
         """任务级降速：主轴降到 0，准备换刀或停机。"""
