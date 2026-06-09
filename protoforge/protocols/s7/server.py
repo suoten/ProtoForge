@@ -76,24 +76,24 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             point = self._points.get(point_name)
             dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
             if dt in ("float32",) or (not dt and isinstance(value, float)):
-                data = struct.pack("<f", float(value))  # FIXED-P0: S7 uses little-endian (Intel format)
+                data = struct.pack(">f", float(value))  # S7 uses big-endian (Motorola)
             elif dt in ("float64",):
-                data = struct.pack("<d", float(value))
+                data = struct.pack(">d", float(value))
             elif dt in ("int16",):
-                data = struct.pack("<h", int(value))
+                data = struct.pack(">h", int(value))
             elif dt in ("uint16",):
-                data = struct.pack("<H", int(value) & 0xFFFF)
+                data = struct.pack(">H", int(value) & 0xFFFF)
             elif dt in ("int32", "dint"):
-                data = struct.pack("<i", int(value))
+                data = struct.pack(">i", int(value))
             elif dt in ("uint32",):
-                data = struct.pack("<I", int(value) & 0xFFFFFFFF)
+                data = struct.pack(">I", int(value) & 0xFFFFFFFF)
             elif dt in ("string",) or isinstance(value, str):
                 encoded = str(value).encode("utf-8")
                 data = bytes([254, min(len(encoded), 254)]) + encoded[:254]
             elif isinstance(value, bool):
                 data = struct.pack("<?", value)
             else:
-                data = struct.pack("<i", int(value))
+                data = struct.pack(">i", int(value))
             self.write_db_area(db_number, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("S7 on_write value conversion error for %s: %s", point_name, e)
@@ -110,8 +110,10 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._sync_value_to_db(point_name, value)
 
     def get_db_area(self, db_number: int, size: int) -> bytearray:
-        if db_number not in self._db_data or len(self._db_data[db_number]) < size:
+        if db_number not in self._db_data:
             self._db_data[db_number] = bytearray(max(size, 1024))
+        elif len(self._db_data[db_number]) < size:
+            self._db_data[db_number].extend(bytearray(max(size, 1024) - len(self._db_data[db_number])))
         return self._db_data[db_number]
 
     def write_db_area(self, db_number: int, offset: int, data: bytes) -> None:
@@ -373,12 +375,13 @@ class S7Server(ProtocolServer):
             pass
 
         # COTP CC: TPKT header + COTP DT + TSAP parameters
-        # 交换 TSAP：响应中的本地 TSAP = 请求中的远程 TSAP，反之亦然
+        # ISO 8073: CC Called TSAP(0xC1) = CR Called TSAP(0xC2) = server TSAP
+        #           CC Calling TSAP(0xC2) = CR Calling TSAP(0xC1) = client TSAP
         tsap_payload = bytes([
-            0xC1, len(remote_tsap),  # Called TSAP = 请求中的 Calling TSAP
-        ]) + remote_tsap + bytes([
-            0xC2, len(local_tsap),   # Calling TSAP = 请求中的 Called TSAP
+            0xC1, len(local_tsap),   # Called TSAP = server TSAP (from CR's 0xC2)
         ]) + local_tsap + bytes([
+            0xC2, len(remote_tsap),  # Calling TSAP = client TSAP (from CR's 0xC1)
+        ]) + remote_tsap + bytes([
             0xC0, 0x01, 0x07,       # TPDU size = 0x07 (2048)
         ])
 
@@ -440,8 +443,8 @@ class S7Server(ProtocolServer):
                 if data[i] == 0x32 and data[i + 1] in (0x01, 0x03):
                     s7_offset = i
                     break
-            if s7_offset > 0 and len(data) > s7_offset + 18:
-                param_start = s7_offset + 14
+            if s7_offset > 0 and len(data) > s7_offset + 14:
+                param_start = s7_offset + 10  # S7 header = 10 bytes
                 if data[param_start] == 0xF0 and len(data) > param_start + 5:
                     pdu_size_req = struct.unpack(">H", data[param_start + 3:param_start + 5])[0]
                     if len(data) > param_start + 7:
@@ -454,15 +457,20 @@ class S7Server(ProtocolServer):
         max_amq_caller = min(max(max_amq_caller, 1), self._MAX_AMQ)
         max_amq_callee = min(max(max_amq_callee, 1), self._MAX_AMQ)
         resp = bytearray([
-            0x03, 0x00, 0x00, 0x1D,
-            0x02, 0xF0, 0x80,
-            0x32, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
-            0x00, 0x00,
-            0x00, 0x01,
+            0x03, 0x00, 0x00, 0x00,  # TPKT (length updated below)
+            0x02, 0xF0, 0x80,        # COTP DT
+            0x32, 0x03,               # S7 Protocol ID, Msg Type = Ack Data
+            0x00, 0x00,               # Reserved
         ])
+        resp += data[10:12]  # PDU Reference (echo from request)
+        resp += struct.pack(">H", 0x0008)  # Parameter Length = 8
+        resp += struct.pack(">H", 0x0000)  # Data Length = 0
+        resp += bytes([0x00, 0x00])  # Error Class = 0, Error Code = 0
+        resp += bytes([0xF0, 0x00])  # Function = Setup Communication, Reserved
         resp += struct.pack(">H", pdu_size)
-        resp += struct.pack(">H", max_amq_callee)
-        resp += struct.pack(">H", max_amq_caller)
+        resp += struct.pack(">H", max_amq_caller)  # Max AMQ Calling first
+        resp += struct.pack(">H", max_amq_callee)  # Max AMQ Called second
+        resp[2:4] = struct.pack(">H", len(resp))   # Dynamic TPKT length
         return bytes(resp)
 
     def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:
@@ -520,17 +528,17 @@ class S7Server(ProtocolServer):
             value_bytes = b"\x00" * read_size
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
-                value_bytes = behavior.read_area(area, db_number, offset // 8 if is_bit else offset, read_size)
+                value_bytes = behavior.read_area(area, db_number, offset, read_size)
                 for name, (p_db, p_offset) in behavior._point_addresses.items():
                     if area == behavior.S7_AREA_DB and db_number == p_db:
                         pt = behavior._points.get(name)
                         if pt and hasattr(pt, "data_type"):
                             dt = str(pt.data_type)
                             p_size = 4 if dt in ("float32", "int32", "uint32") else 8 if dt == "float64" else 2
-                            if offset // 8 if is_bit else offset == p_offset:
+                            if offset == p_offset:
                                 val = behavior.get_value(name)
                                 behavior._sync_value_to_db(name, val)
-                                value_bytes = behavior.read_area(area, db_number, offset // 8 if is_bit else offset, read_size)
+                                value_bytes = behavior.read_area(area, db_number, offset, read_size)
 
             item_results.append((0xFF, value_bytes))
 
@@ -629,21 +637,21 @@ class S7Server(ProtocolServer):
                             pt = behavior._points.get(name)
                             dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
                             if dt in ("float32",):
-                                behavior._values[name] = struct.unpack("<f", write_data[:4])[0]  # FIXED-P0: little-endian
+                                behavior._values[name] = struct.unpack(">f", write_data[:4])[0]  # S7 big-endian
                             elif dt in ("float64",):
-                                behavior._values[name] = struct.unpack("<d", write_data[:8])[0]
+                                behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
                             elif dt in ("int16",):
-                                behavior._values[name] = struct.unpack("<h", write_data[:2])[0]
+                                behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
                             elif dt in ("uint16",):
-                                behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                                behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
                             elif dt in ("int32", "dint"):
-                                behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
+                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
                             elif dt in ("uint32",):
-                                behavior._values[name] = struct.unpack("<I", write_data[:4])[0]
+                                behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
                             elif dt in ("bool",):
                                 behavior._values[name] = bool(write_data[0]) if write_data else False
                             else:
-                                behavior._values[name] = struct.unpack("<i", write_data[:4])[0] if len(write_data) >= 4 else 0
+                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
                         except (struct.error, IndexError) as e:
                             logger.warning("S7 write value sync error for %s: %s", name, e)
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
@@ -677,7 +685,7 @@ class S7Server(ProtocolServer):
 
     def _make_s7_error_response(self, data: bytes, error_code: int = 0x85) -> bytes:
         resp = bytearray([
-            0x03, 0x00, 0x00, 0x15,
+            0x03, 0x00, 0x00, 0x00,  # TPKT (length updated below)
             0x02, 0xF0, 0x80,
             0x32, 0x03,
         ])
@@ -686,9 +694,11 @@ class S7Server(ProtocolServer):
             0x00, 0x00, 0x00, 0x00,
             0x00, 0x02,
             0x00, 0x00,
+            0x00, 0x00,
             0x01, 0x00,
             error_code,
         ])
+        resp[2:4] = struct.pack(">H", len(resp))  # Dynamic TPKT length
         return bytes(resp)
 
     def _make_s7_szl_response(self, data: bytes, device_id: str | None = None) -> bytes:
@@ -892,7 +902,7 @@ class S7Server(ProtocolServer):
         behavior = self._behaviors.get(device_id or self._default_device_id)
         if behavior and "run_status" in behavior._values:
             behavior._values["run_status"] = start
-            behavior.write_area(S7_AREA_DB, 1, 0, struct.pack(">B", 1 if start else 0))
+            behavior.write_area(S7DeviceBehavior.S7_AREA_DB, 1, 0, struct.pack(">B", 1 if start else 0))
         resp = bytearray([
             0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
