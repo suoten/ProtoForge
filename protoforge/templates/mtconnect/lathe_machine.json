@@ -7,20 +7,75 @@
     "model": "MC-Lathe-2Axis",
     "points": [
         {
+            "name": "availability",
+            "address": "Availability",
+            "data_type": "string",
+            "description": "设备可用性（MTConnect必需字段）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "AVAILABLE"
+        },
+        {
             "name": "execution",
             "address": "Execution",
             "data_type": "string",
-            "description": "执行状态",
+            "description": "执行状态（ACTIVE/READY/STOPPED/WAIT）",
             "access": "r",
             "generator_type": "fixed",
             "fixed_value": "ACTIVE"
+        },
+        {
+            "name": "controller_mode",
+            "address": "ControllerMode",
+            "data_type": "string",
+            "description": "控制器模式（AUTOMATIC/MANUAL/MDI）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "AUTOMATIC"
+        },
+        {
+            "name": "e_stop",
+            "address": "EmergencyStop",
+            "data_type": "string",
+            "description": "急停状态（ARMED/TRIGGERED）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "ARMED"
+        },
+        {
+            "name": "program",
+            "address": "Program",
+            "data_type": "string",
+            "description": "当前运行NC程序名",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "O0001"
+        },
+        {
+            "name": "block",
+            "address": "Block",
+            "data_type": "string",
+            "description": "当前执行程序段",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "N0010 G01 X50.0 Z-100.0 F0.2"
+        },
+        {
+            "name": "line",
+            "address": "Line",
+            "data_type": "int32",
+            "description": "当前程序行号",
+            "access": "r",
+            "generator_type": "counter",
+            "min_value": 1,
+            "max_value": 500
         },
         {
             "name": "x_position",
             "address": "Xposition",
             "data_type": "float32",
             "unit": "mm",
-            "description": "X轴位置(径向)",
+            "description": "X轴位置（径向）",
             "access": "r",
             "generator_type": "sine",
             "min_value": 0,
@@ -31,22 +86,90 @@
             "address": "Zposition",
             "data_type": "float32",
             "unit": "mm",
-            "description": "Z轴位置(纵向)",
+            "description": "Z轴位置（纵向）",
             "access": "r",
             "generator_type": "sine",
             "min_value": -300,
             "max_value": 50
         },
         {
+            "name": "feed_rate",
+            "address": "PathFeedrate",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "实际进给速度",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "feed_override",
+            "address": "FeedrateOverride",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "进给倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100.0
+        },
+        {
+            "name": "rapid_override",
+            "address": "RapidOverride",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "快速移动倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100.0
+        },
+        {
             "name": "spindle_speed",
             "address": "SpindleSpeed",
             "data_type": "float32",
             "unit": "RPM",
-            "description": "主轴转速",
+            "description": "主轴实际转速",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 500,
-            "max_value": 4000
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "spindle_override",
+            "address": "SpindleOverride",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "主轴倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100.0
+        },
+        {
+            "name": "spindle_load",
+            "address": "SpindleLoad",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "主轴负载（伺服驱动器输出，0~100%）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "spindle_current",
+            "address": "SpindleCurrent",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "主轴电流，与负载正相关，有1~2 tick滞后",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "spindle_direction",
+            "address": "RotaryVelocity",
+            "data_type": "string",
+            "description": "主轴旋转方向（CW/CCW/STOPPED）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "CW"
         },
         {
             "name": "tool_id",
@@ -56,6 +179,114 @@
             "access": "r",
             "generator_type": "fixed",
             "fixed_value": "T01"
+        },
+        {
+            "name": "tool_number",
+            "address": "ToolNumber",
+            "data_type": "int32",
+            "description": "刀塔当前刀位号",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "part_count",
+            "address": "PartCount",
+            "data_type": "int32",
+            "unit": "pcs",
+            "description": "累计零件计数（CNC内部M代码触发）",
+            "access": "r",
+            "generator_type": "counter",
+            "min_value": 0,
+            "max_value": 99999
+        },
+        {
+            "name": "system_condition",
+            "address": "SystemCondition",
+            "data_type": "string",
+            "description": "系统报警状态（NORMAL/WARNING/FAULT）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": "NORMAL"
+        },
+        {
+            "name": "condition_native_code",
+            "address": "ConditionNativeCode",
+            "data_type": "string",
+            "description": "CNC厂商报警号（如ALM-401），无报警时为空",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": ""
+        },
+        {
+            "name": "vibration_x",
+            "address": "VibrationX",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "X轴振动速度RMS（外部加速度传感器，随主轴负载和进给联动）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "vibration_y",
+            "address": "VibrationY",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "Y轴振动速度RMS",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "vibration_z",
+            "address": "VibrationZ",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "Z轴振动速度RMS（轴向）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "acoustic_emission",
+            "address": "AcousticEmission",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "声发射传感器输出电压，受振动和主轴负载驱动",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "tool_temperature",
+            "address": "ToolTemperature",
+            "data_type": "float32",
+            "unit": "C",
+            "description": "刀具/切削区温度（热惯性模型，缓慢变化）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 28.0
+        },
+        {
+            "name": "surface_roughness",
+            "address": "SurfaceRoughness",
+            "data_type": "float32",
+            "unit": "um",
+            "description": "工件表面粗糙度Ra，受加工阶段、振动、磨损驱动",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1.0
+        },
+        {
+            "name": "tool_wear_value",
+            "address": "ToolWearValue",
+            "data_type": "float32",
+            "unit": "um",
+            "description": "刀具累积磨损量（切削阶段单调递增，换刀后归零）",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
         }
     ],
     "protocol_config": {

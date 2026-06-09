@@ -355,6 +355,140 @@ def refresh_targets_if_needed() -> None:
         logger.warning("发现流程未产生任何有效目标，保持现有目标列表")
 
 
+EXTRA_PREDICT_LABELS = {
+    "forecast": "phase_band_health_v13",
+    "source": "protoforge",
+}
+
+# =============================================================================
+# 仿真感知策略覆盖
+# 基于模板仿真算法的特征，对特定指标强制覆盖自动推断的策略与参数。
+#
+# 粗铣(fanuc-cnc) 周期约 180s 含随机抖动 ±8~10s：
+#   - feed_rate    : 双频拐角扰动（含 sin 叠加），强制 phase_band
+#   - spindle_current : 双频漂移，强制 phase_band
+#   - spindle_load : 三频漂移，强制 phase_band
+#   - phase_lock   : 周期搜索范围扩至 ±18%（覆盖抖动 + 相位偏移）
+#
+# 半精铣(fanuc-cnc-semi-finish) / 精铣(fanuc-cnc-finish) 周期固定：
+#   - spindle_load : 噪声较大，强制 phase_band
+#   - 其余指标保持自动推断
+# =============================================================================
+
+# 按 device_id 片段 + metric 名称匹配的策略覆盖表
+# 格式: (device_id_substring, metric) -> {overrides}
+_SIMULATION_STRATEGY_OVERRIDES: List[Tuple[str, str, Dict]] = [
+    # ── 粗铣工位 ──────────────────────────────────────────────────────────────
+    # feed_rate: 双频拐角扰动幅值大（±80mm/min），phase_band + 宽搜索
+    ("fanuc-cnc", "feed_rate", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 40.0,
+        "phase_lock_period_search_ratio": 0.18,
+        "phase_lock_origin_search_ratio": 0.45,
+        "smooth_window": 5,
+    }),
+    # spindle_current: 双频漂移（约 ±1.5A），phase_band
+    ("fanuc-cnc", "spindle_current", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 2.5,
+        "phase_lock_period_search_ratio": 0.18,
+        "phase_lock_origin_search_ratio": 0.45,
+        "smooth_window": 5,
+    }),
+    # spindle_load: 三频漂移（约 ±8%），phase_band
+    ("fanuc-cnc", "spindle_load", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 6.0,
+        "phase_lock_period_search_ratio": 0.18,
+        "phase_lock_origin_search_ratio": 0.45,
+        "smooth_window": 5,
+    }),
+    # spindle_speed: 周期抖动大，扩大搜索范围（策略保持自动推断）
+    ("fanuc-cnc", "spindle_speed", {
+        "phase_lock_period_search_ratio": 0.18,
+        "phase_lock_origin_search_ratio": 0.45,
+    }),
+    # ── 半精铣工位 ────────────────────────────────────────────────────────────
+    # spindle_load: gauss(2.5) 噪声较大，phase_band
+    ("fanuc-cnc-semi-finish", "spindle_load", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 4.0,
+        "smooth_window": 5,
+    }),
+    # spindle_current: gauss(0.9)，偏稳定，但保留 phase_band 以容忍切入峰值
+    ("fanuc-cnc-semi-finish", "spindle_current", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 2.0,
+        "smooth_window": 3,
+    }),
+    # ── 精铣工位 ──────────────────────────────────────────────────────────────
+    # spindle_load: gauss(1.5)，切入有峰值，phase_band
+    ("fanuc-cnc-finish", "spindle_load", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 3.0,
+        "smooth_window": 5,
+    }),
+    # spindle_current: 切入峰值 11A vs 稳态 8.5A，phase_band
+    ("fanuc-cnc-finish", "spindle_current", {
+        "strategy": "phase_band",
+        "band_low_q": 5.0,
+        "band_high_q": 95.0,
+        "band_pad_abs": 1.5,
+        "smooth_window": 3,
+    }),
+]
+
+
+def _apply_simulation_overrides(target: Dict, device_id: str) -> Dict:
+    """
+    根据仿真感知覆盖表，对 target dict 应用策略和参数覆盖。
+    匹配规则：device_id 包含指定子串 且 metric 名称匹配。
+    粗铣工位的 device_id 通常含 'fanuc-cnc' 但不含 'semi-finish'/'finish'，
+    因此半精铣/精铣规则放在粗铣规则之后（更具体的子串先匹配）。
+    """
+    # 从 pred_metric 还原 metric 名（格式：xxx_predicted）
+    pred_metric = target.get("pred_metric", "")
+    metric = pred_metric.replace("_predicted", "") if pred_metric.endswith("_predicted") else ""
+
+    if not metric:
+        return target
+
+    # 按顺序匹配——更具体的子串（semi-finish/finish）应排在 fanuc-cnc 前面，
+    # 但在覆盖表中我们已经将半精铣/精铣规则放在粗铣规则之后，通过子串包含顺序
+    # 保证精确匹配：semi-finish 不会匹配纯 "fanuc-cnc" 的规则，因为设备 ID
+    # 是完整字符串，检查如下——对于 fanuc-cnc 规则，额外排除含 semi/finish 的设备。
+    applied = dict(target)
+    for device_substr, rule_metric, overrides in _SIMULATION_STRATEGY_OVERRIDES:
+        if rule_metric != metric:
+            continue
+        # 粗铣规则（substr == "fanuc-cnc"）不应命中半精铣/精铣设备
+        if device_substr == "fanuc-cnc" and (
+            "semi-finish" in device_id or "finish" in device_id
+        ):
+            continue
+        if device_substr in device_id:
+            applied.update(overrides)
+            logger.debug(
+                "仿真策略覆盖 device=%s metric=%s overrides=%s",
+                device_id, metric, list(overrides.keys()),
+            )
+            break
+
+    return applied
+
+
 BASELINE_STATUS_HEALTHY = "healthy"
 BASELINE_STATUS_ANOMALY = "anomaly"
 BASELINE_STATUS_RECOVERING = "recovering"
@@ -1848,9 +1982,15 @@ def run_once() -> None:
             logger.info("[%s] %s 清洗后数据不足（%d 点），跳过", now_str, query, len(ys_grid_raw))
             continue
 
-        ys_grid_model = preprocess_values(ys_grid_raw, target)
-
         base_labels = parse_labels_from_query(query)
+
+        # 根据仿真算法特征，对 feed_rate / spindle_current / spindle_load 等指标
+        # 应用感知覆盖（强制 phase_band、扩大粗铣搜索范围等）
+        device_id_from_labels = base_labels.get("device_id", "")
+        effective_target = _apply_simulation_overrides(target, device_id_from_labels)
+
+        ys_grid_model = preprocess_values(ys_grid_raw, effective_target)
+
         write_labels = merge_labels(base_labels, EXTRA_PREDICT_LABELS)
 
         key = series_key(pred_metric, write_labels)
@@ -1868,7 +2008,7 @@ def run_once() -> None:
             ts_grid=ts_grid,
             ys_model=ys_grid_model,
             ys_actual=ys_grid_raw,
-            target=target,
+            target=effective_target,
         )
 
         if state is None:
@@ -1895,7 +2035,7 @@ def run_once() -> None:
             pred=pred_values,
             lower_raw=lower_raw,
             upper_raw=upper_raw,
-            target=target,
+            target=effective_target,
         )
 
         ok = write_prediction_bundle(

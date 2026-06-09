@@ -7,6 +7,7 @@ from protoforge.core.device import DeviceInstance
 from protoforge.core.fault import fault_injector
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
+from protoforge.core.simulators import get_device_simulator
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
 from protoforge.models.fault import FaultInfo, FaultInjectRequest, FaultTypeDefinition
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo, ScenarioStatus
@@ -60,6 +61,10 @@ class SimulationEngine:
         self._devices[config.id] = instance
         # 注册故障注入钩子
         instance.register_post_tick_hook(fault_injector.apply)
+        # 注册设备专用仿真器（如车床状态机），根据 template_id 自动匹配
+        simulator = get_device_simulator(config.template_id)
+        if simulator is not None:
+            instance.register_post_tick_hook(simulator)
 
         server = self._protocol_servers.get(config.protocol)
         if server and server.status == ProtocolStatus.RUNNING:

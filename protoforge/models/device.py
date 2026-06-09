@@ -22,6 +22,7 @@ class GeneratorType(str, Enum):
     TRIANGLE = "triangle"
     SAWTOOTH = "sawtooth"
     SCRIPT = "script"
+    COUNTER = "counter"
 
 
 class PointConfig(BaseModel):
