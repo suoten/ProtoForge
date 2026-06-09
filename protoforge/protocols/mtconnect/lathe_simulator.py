@@ -152,14 +152,18 @@ class LatheSimulator:
         # 2. 确定当前 MetricGenerator 阶段
         stage = self._get_metric_stage()
 
-        # 3. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
+        # 3. 把 CUTTING 状态总时长同步给 MetricGenerator（用于 exit_ramp 计算）
+        if self._state == _State.CUTTING:
+            self._metric_gen.state.cutting_total = self._state_duration
+
+        # 4. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
         frame = self._metric_gen.generate(t=t, dt=1.0, stage=stage)
 
-        # 4. 把 MetricFrame 写入 device._point_values（MTConnect 标准测点）
+        # 5. 把 MetricFrame 写入 device._point_values（MTConnect 标准测点）
         vals = device_instance._point_values
         self._update_cnc_points(vals, frame)
 
-        # 5. 上报 Prometheus
+        # 6. 上报 Prometheus
         self._emit_prometheus(device_instance, frame)
 
     # ------------------------------------------------------------------
@@ -223,7 +227,7 @@ class LatheSimulator:
             self._spindle_actual, self._spindle_target, 0.25
         )
         if self._state_elapsed >= self._state_duration:
-            self._transition(_State.CUTTING, random.uniform(20, 40))
+            self._transition(_State.CUTTING, random.uniform(35, 65))
 
     def _on_cutting(self) -> None:
         noise = random.gauss(0, self._spindle_target * 0.02)

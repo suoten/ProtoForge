@@ -106,145 +106,213 @@ class MetricFrame:
 @dataclass
 class GeneratorState:
     """跨 tick 需要持久化的生成器内部状态。"""
-    # 材料扰动随机游走值（慢变量，[-0.05, +0.05]）
     material_random_walk: float = 0.0
-    # 热状态（tool_temperature 的平滑变量）
     thermal_state: float = 28.0
-    # 刀具累积磨损（μm，单调不减）
     tool_wear_accumulated: float = 0.0
-    # 上一 tick 的 spindle_load（用于电流滞后计算）
     last_spindle_load: float = 0.0
-    # 滞后缓冲区（最多保存 3 tick 历史）
     load_lag_buffer: list = field(default_factory=lambda: [0.0, 0.0, 0.0])
-    # 上一 tick 的 surface_roughness（idle 阶段保持上次值）
     last_surface_roughness: float = 1.0
-    # 切削周期相位（用于 cutting_cycle_wave）
     cycle_phase: float = 0.0
-    # 当前阶段
     current_stage: str = "idle"
+    # 切削阶段内已经过的秒数（用于 entry/exit ramp 计算）
+    cutting_elapsed: float = 0.0
+    # 当前切削阶段预估总时长（由状态机传入）
+    cutting_total: float = 30.0
 
 
 # ---------------------------------------------------------------------------
-# SpindleLoadGenerator —— 状态驱动、EMA 平滑的主轴负载生成器
+# SpindleLoadGenerator —— 状态驱动、切入/切出 ramp、周期扰动的主轴负载生成器
 # ---------------------------------------------------------------------------
 
-# 各工艺阶段的负载基线及允许范围
-_PROCESS_LOAD_CONFIG: dict[str, dict] = {
+# 切削工艺配置
+_PROCESS_CFG: dict[str, dict] = {
     "rough": {
-        "base": 55.0,
-        "slow_amp": 6.0,    # 慢周期波动幅度（%）
-        "cut_amp": 4.0,     # 切削周期扰动幅度（%）
-        "noise_sigma": 2.5, # 高斯噪声标准差（%）
-        "clamp_min": 35.0,
-        "clamp_max": 85.0,
-        "ema_alpha": 0.18,  # 较快响应，粗加工负载变化快
+        "base_load":       55.0,
+        "slow_freq":        0.10,   # rad/s，慢波频率
+        "slow_amp":         5.0,
+        "cut_freq":         0.75,   # rad/s，切削波频率
+        "cut_amp":          2.5,
+        "material_freq":    0.03,
+        "material_amp":     4.0,
+        "noise_range":      2.0,    # uniform ±noise_range
+        "clamp_min":       35.0,
+        "clamp_max":       85.0,
+        "ema_alpha":        0.10,
+        "entry_ramp_s":     6.0,    # 切入 ramp 时长（秒）
+        "exit_ramp_s":      5.0,    # 切出 ramp 时长（秒）
+        # 低负载基准（air_cut 阶段，用于 ramp 起止参考）
+        "air_cut_base":     8.0,
     },
     "semi_finish": {
-        "base": 38.0,
-        "slow_amp": 4.0,
-        "cut_amp": 2.5,
-        "noise_sigma": 1.5,
-        "clamp_min": 22.0,
-        "clamp_max": 65.0,
-        "ema_alpha": 0.15,
+        "base_load":       38.0,
+        "slow_freq":        0.08,
+        "slow_amp":         3.5,
+        "cut_freq":         0.65,
+        "cut_amp":          1.8,
+        "material_freq":    0.025,
+        "material_amp":     2.5,
+        "noise_range":      1.5,
+        "clamp_min":       20.0,
+        "clamp_max":       65.0,
+        "ema_alpha":        0.10,
+        "entry_ramp_s":     5.0,
+        "exit_ramp_s":      4.0,
+        "air_cut_base":     6.0,
     },
     "finish": {
-        "base": 22.0,
-        "slow_amp": 2.5,
-        "cut_amp": 1.5,
-        "noise_sigma": 0.8,
-        "clamp_min": 12.0,
-        "clamp_max": 42.0,
-        "ema_alpha": 0.12,  # 较慢响应，精加工负载更平稳
+        "base_load":       22.0,
+        "slow_freq":        0.06,
+        "slow_amp":         2.0,
+        "cut_freq":         0.55,
+        "cut_amp":          1.0,
+        "material_freq":    0.02,
+        "material_amp":     1.2,
+        "noise_range":      0.8,
+        "clamp_min":        8.0,
+        "clamp_max":       45.0,
+        "ema_alpha":        0.09,
+        "entry_ramp_s":     4.0,
+        "exit_ramp_s":      3.0,
+        "air_cut_base":     5.0,
     },
 }
 
-# 各驱动状态的负载基线及 EMA 系数
-_STATE_LOAD_CONFIG: dict[str, dict] = {
-    "idle":        {"base": 1.5,  "noise_sigma": 0.3, "clamp_min": 0.0,  "clamp_max": 5.0,  "ema_alpha": 0.10},
-    "tool_change": {"base": 4.0,  "noise_sigma": 0.8, "clamp_min": 0.0,  "clamp_max": 10.0, "ema_alpha": 0.12},
-    "spindle_on":  {"base": 8.0,  "noise_sigma": 1.2, "clamp_min": 3.0,  "clamp_max": 18.0, "ema_alpha": 0.15},
-    "air_cut":     {"base": 15.0, "noise_sigma": 2.0, "clamp_min": 8.0,  "clamp_max": 28.0, "ema_alpha": 0.16},
-    # "cutting" state delegates to _PROCESS_LOAD_CONFIG
+# 非切削状态配置（base / noise / clamp / ema_alpha）
+_STATE_CFG: dict[str, dict] = {
+    "idle":        {"base": 1.0,  "noise": 0.4,  "lo": 0.0,  "hi": 2.0,   "alpha": 0.35},
+    "tool_change": {"base": 3.5,  "noise": 0.6,  "lo": 0.0,  "hi": 8.0,   "alpha": 0.25},
+    "spindle_on":  {"base": 4.5,  "noise": 0.5,  "lo": 3.0,  "hi": 8.0,   "alpha": 0.22},
+    "air_cut":     {"base": 7.5,  "noise": 0.8,  "lo": 5.0,  "hi": 12.0,  "alpha": 0.20},
 }
 
-# stage 名称 → 内部 process 名称映射
+# stage → process 映射（切削阶段）
 _STAGE_TO_PROCESS: dict[str, str] = {
-    "roughing":       "rough",
-    "semi_finishing":  "semi_finish",
-    "finishing":       "finish",
-}
-
-# stage 名称 → 驱动状态映射（非切削阶段）
-_STAGE_TO_STATE: dict[str, str] = {
-    "idle":        "idle",
-    "tool_change": "tool_change",
+    "roughing":      "rough",
+    "semi_finishing": "semi_finish",
+    "finishing":      "finish",
 }
 
 
 class SpindleLoadGenerator:
     """
-    状态驱动、EMA 平滑的主轴负载生成器。
+    状态驱动、切入/切出 ramp、周期级扰动的主轴负载生成器。
 
-    内部维护 prev_load 跨 tick 状态，使负载曲线连续平滑，
-    避免随机脉冲。各切削工艺有独立基线和 clamp 范围，
-    idle/tool_change 等非切削状态接近 0。
+    支持的 stage 值（由 LatheSimulator 的 _get_metric_stage 传入）：
+      idle / tool_change / roughing / semi_finishing / finishing
 
-    stage 参数取值：idle / tool_change / roughing / semi_finishing / finishing
+    内部将切削阶段按 cutting_elapsed / cutting_total 推导出
+    entry_cut → cutting → exit_cut 子状态，实现平滑切入切出。
+    每个加工周期开始时随机化 cycle_factor / phase 保证周期间差异。
     """
 
     def __init__(self, rng: random.Random):
         self._rng = rng
         self.prev_load: float = 0.0
 
+        # 周期级随机状态（每次进入切削阶段时刷新）
+        self._cycle_id: Optional[str] = None
+        self._cycle_factor: float = 1.0   # 0.92~1.08，整体缩放基线
+        self._phase1: float = 0.0          # 慢波初相位
+        self._phase2: float = 0.0          # 切削波初相位
+        self._material_phase: float = 0.0  # 材料漂移初相位
+
+        # 上一个 stage，用于检测切削周期切换
+        self._last_stage: str = "idle"
+
+    # ------------------------------------------------------------------
+
+    def _refresh_cycle(self, stage: str) -> None:
+        """检测到新的切削周期时刷新周期级随机参数。"""
+        cycle_id = stage  # 简单以 stage 变化作为新周期标志
+        was_cutting = self._last_stage in _STAGE_TO_PROCESS
+        now_cutting = stage in _STAGE_TO_PROCESS
+        # 从非切削 → 切削，或切削工艺跳转（粗 → 精），认为是新周期
+        if now_cutting and (not was_cutting or stage != self._last_stage):
+            self._cycle_factor = self._rng.uniform(0.92, 1.08)
+            self._phase1 = self._rng.uniform(0, 2 * math.pi)
+            self._phase2 = self._rng.uniform(0, 2 * math.pi)
+            self._material_phase = self._rng.uniform(0, 2 * math.pi)
+        self._last_stage = stage
+
     def generate(
         self,
         t: float,
         stage: str,
-        material_variation: float = 1.0,
-        slow_phase: float = 0.0,
-        cut_phase: float = 0.0,
+        cutting_elapsed: float = 0.0,
+        cutting_total: float = 30.0,
     ) -> float:
         """
         生成本 tick 的主轴负载（%）。
 
         Args:
-            t:                当前时间（秒），保留供未来扩展。
-            stage:            加工阶段（idle/tool_change/roughing/semi_finishing/finishing）。
-            material_variation: 材料扰动系数（≈1.0，±5%）。
-            slow_phase:       慢周期相位（弧度），由外部统一维护。
-            cut_phase:        切削周期相位（弧度），由外部统一维护。
+            t:               当前时间（秒），用于波形计算。
+            stage:           加工阶段（idle/tool_change/roughing/semi_finishing/finishing）。
+            cutting_elapsed: 当前切削阶段已经过的秒数（用于 ramp 计算）。
+            cutting_total:   当前切削阶段总时长预估（用于 exit_cut 判断）。
 
         Returns:
             clamp 后的主轴负载（%）。
         """
+        self._refresh_cycle(stage)
+
         process = _STAGE_TO_PROCESS.get(stage)
 
-        if process is not None:
-            # 切削阶段：使用工艺基线
-            cfg = _PROCESS_LOAD_CONFIG[process]
-            slow_wave = cfg["slow_amp"] * math.sin(slow_phase)
-            cut_wave  = cfg["cut_amp"]  * math.sin(cut_phase)
-            noise     = self._rng.gauss(0, cfg["noise_sigma"])
-            mat_delta = (material_variation - 1.0) * cfg["base"] * 0.5  # 材料变化影响基线的 50%
-            target    = cfg["base"] + slow_wave + cut_wave + noise + mat_delta
-            alpha     = cfg["ema_alpha"]
-            lo, hi    = cfg["clamp_min"], cfg["clamp_max"]
+        if process is None:
+            # 非切削阶段
+            cfg = _STATE_CFG.get(stage, _STATE_CFG["idle"])
+            slow_wave = math.sin(t * 0.20) * 0.8
+            noise = self._rng.uniform(-cfg["noise"], cfg["noise"])
+            target = cfg["base"] + slow_wave + noise
+            alpha = cfg["alpha"]
+            lo, hi = cfg["lo"], cfg["hi"]
         else:
-            # 非切削阶段：使用状态基线
-            state_key = _STAGE_TO_STATE.get(stage, "idle")
-            cfg = _STATE_LOAD_CONFIG[state_key]
-            noise  = self._rng.gauss(0, cfg["noise_sigma"])
-            target = cfg["base"] + noise
-            alpha  = cfg["ema_alpha"]
-            lo, hi = cfg["clamp_min"], cfg["clamp_max"]
+            # 切削阶段：entry_cut → cutting → exit_cut
+            pcfg = _PROCESS_CFG[process]
+            entry_s = pcfg["entry_ramp_s"]
+            exit_s  = pcfg["exit_ramp_s"]
+            air_base = pcfg["air_cut_base"]
+            eff_base = pcfg["base_load"] * self._cycle_factor
+
+            # 切出判断：距切削结束不足 exit_s 秒
+            time_to_end = cutting_total - cutting_elapsed
+            in_exit = (time_to_end <= exit_s) and (cutting_elapsed > entry_s)
+
+            if cutting_elapsed <= entry_s:
+                # ── entry_cut：从 air_base 平滑爬升到 eff_base ──
+                ramp = cutting_elapsed / entry_s           # 0→1
+                smooth_ramp = ramp * ramp * (3 - 2 * ramp)  # smoothstep
+                target_cutting = self._cutting_target(t, pcfg, eff_base)
+                target = air_base + (target_cutting - air_base) * smooth_ramp
+                alpha = 0.12
+                lo, hi = air_base * 0.5, pcfg["clamp_max"]
+            elif in_exit:
+                # ── exit_cut：从 eff_base 平滑下降到 air_base ──
+                exit_elapsed = exit_s - time_to_end
+                ramp = max(0.0, min(1.0, exit_elapsed / exit_s))
+                smooth_ramp = ramp * ramp * (3 - 2 * ramp)
+                target_cutting = self._cutting_target(t, pcfg, eff_base)
+                target = target_cutting * (1.0 - smooth_ramp) + air_base * smooth_ramp
+                alpha = 0.13
+                lo, hi = air_base * 0.4, pcfg["clamp_max"]
+            else:
+                # ── cutting：稳定切削平台 ──
+                target = self._cutting_target(t, pcfg, eff_base)
+                alpha = pcfg["ema_alpha"]
+                lo, hi = pcfg["clamp_min"], pcfg["clamp_max"]
 
         # EMA 平滑
         new_load = self.prev_load + alpha * (target - self.prev_load)
-        # clamp
         new_load = max(lo, min(hi, new_load))
         self.prev_load = new_load
         return new_load
+
+    def _cutting_target(self, t: float, pcfg: dict, eff_base: float) -> float:
+        """计算切削平台目标负载（含慢波 + 切削波 + 材料漂移 + 小噪声）。"""
+        slow_wave      = math.sin(t * pcfg["slow_freq"]     + self._phase1) * pcfg["slow_amp"]
+        cut_wave       = math.sin(t * pcfg["cut_freq"]      + self._phase2) * pcfg["cut_amp"]
+        material_drift = math.sin(t * pcfg["material_freq"] + self._material_phase) * pcfg["material_amp"]
+        noise          = self._rng.uniform(-pcfg["noise_range"], pcfg["noise_range"])
+        return eff_base + slow_wave + cut_wave + material_drift + noise
 
 
 # ---------------------------------------------------------------------------
@@ -380,6 +448,17 @@ class BaseMetricGenerator:
         """
         profile = self.get_stage_profile(stage)
         state = self._state
+
+        # ── 切削阶段计时维护 ─────────────────────────────────────────────────
+        is_cutting = stage in _STAGE_TO_PROCESS
+        if is_cutting:
+            if state.current_stage not in _STAGE_TO_PROCESS:
+                # 刚进入切削阶段，重置计时
+                state.cutting_elapsed = 0.0
+            else:
+                state.cutting_elapsed += dt
+        else:
+            state.cutting_elapsed = 0.0
         state.current_stage = stage
 
         # ── 1. 材料扰动（慢变量，低频正弦 + 随机游走）──────────────────────
@@ -399,11 +478,9 @@ class BaseMetricGenerator:
             feed_rate, stage, material_variation, profile
         )
 
-        # ── 6. spindle_load（状态驱动 + EMA 平滑）────────────────────────────
-        # 慢波相位（约 90 s 周期）和切削相位复用 cycle_phase
-        slow_phase = 2 * math.pi * t / 90.0
+        # ── 6. spindle_load（状态驱动 + ramp + EMA 平滑）────────────────────
         spindle_load = self._calc_spindle_load(
-            profile, stage, material_variation, slow_phase, state.cycle_phase
+            stage, t, dt, state
         )
 
         # ── 7. spindle_current（对 load 有 1~2 tick 滞后）────────────────────
@@ -576,22 +653,20 @@ class BaseMetricGenerator:
 
     def _calc_spindle_load(
         self,
-        profile: StageProfile,
         stage: str,
-        material_variation: float,
-        slow_phase: float,
-        cut_phase: float,
+        t: float,
+        dt: float,
+        state: GeneratorState,
     ) -> float:
         """
         主轴负载（%）—— 委托给 SpindleLoadGenerator。
-        使用状态驱动基线 + EMA 平滑，避免随机脉冲行为。
+        传入切削计时信息，实现切入/切出 ramp。
         """
         return self._spindle_load_gen.generate(
-            t=0.0,  # t 保留，当前未使用
+            t=t,
             stage=stage,
-            material_variation=material_variation,
-            slow_phase=slow_phase,
-            cut_phase=cut_phase,
+            cutting_elapsed=state.cutting_elapsed,
+            cutting_total=state.cutting_total,
         )
 
     def _calc_spindle_current(
