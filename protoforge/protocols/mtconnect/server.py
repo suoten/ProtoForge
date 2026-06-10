@@ -295,7 +295,7 @@ class MtConnectServer(ProtocolServer):
                 + (f'      <Samples>\n' + "\n".join(samples_xml) + "\n      </Samples>\n" if samples_xml else "")
                 + (f'      <Events>\n' + "\n".join(events_xml) + "\n      </Events>\n" if events_xml else "")
                 + (f'      <Condition>\n' + "\n".join(conditions_xml) + "\n      </Condition>\n" if conditions_xml else "")
-                f'    </ComponentStream>\n'
+                + f'    </ComponentStream>\n'
                 f'  </DeviceStream>'
             )
 

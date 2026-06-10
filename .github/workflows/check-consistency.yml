@@ -7,6 +7,7 @@ on:
     branches: [master]
 
 jobs:
+  # Layer 2: Frontend API <-> Backend OpenAPI cross-check
   check-api-consistency:
     runs-on: ubuntu-latest
     steps:
@@ -36,9 +37,58 @@ jobs:
       - name: Copy OpenAPI spec to web directory
         run: cp openapi.json web/openapi.json || true
 
-      - name: Validate API consistency
+      - name: Validate API consistency (existing check)
         working-directory: web
         run: npm run validate-api || true
+
+      - name: Layer 2 - API type consistency audit
+        run: python scripts/audit_api_types.py --openapi-file openapi.json --web-dir web
+
+  # Layer 3: Exception handling pattern scan
+  check-exception-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Layer 3 - Exception lint scan
+        run: python -m protoforge.audit.exception_lint protoforge --severity warning --max-violations 50
+
+  # Layer 1: Schema audit (model <-> DB column check, requires running DB)
+  check-schema-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Layer 1 - Schema audit (static check)
+        run: |
+          python -c "
+          from protoforge.audit.schema_audit import audit_schema_sync, scan_all_response_models
+          result = audit_schema_sync()
+          print(result.summary())
+          unregistered = scan_all_response_models()
+          if unregistered:
+              print(f'\nUnregistered Response models (not in _MODEL_TABLE_MAP or _VIRTUAL_MODELS):')
+              for name, module, fields in unregistered:
+                  print(f'  {name} ({module}): {sorted(fields)}')
+          "
 
   check-not-implemented:
     runs-on: ubuntu-latest

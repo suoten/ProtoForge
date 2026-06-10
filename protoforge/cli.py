@@ -73,6 +73,14 @@ def main():
 
     stop_parser = subparsers.add_parser("stop", help="Stop background daemon")
 
+    audit_parser = subparsers.add_parser("audit", help="Run automated audit checks (3-layer consistency)")
+    audit_parser.add_argument("--layer", choices=["1", "2", "3", "all"], default="all",
+                              help="Which layer to run: 1=schema, 2=api-types, 3=exception-lint (default: all)")
+    audit_parser.add_argument("--severity", choices=["error", "warning", "info"], default="warning",
+                              help="Minimum severity for Layer 3 (default: warning)")
+    audit_parser.add_argument("--web-dir", default="web", help="Path to web/ directory for Layer 2")
+    audit_parser.add_argument("--openapi-file", default="", help="Path to openapi.json for Layer 2")
+
     args = parser.parse_args()
 
     if args.command == "version":
@@ -90,6 +98,10 @@ def main():
 
     if args.command == "stop":
         _stop_command()
+        return
+
+    if args.command == "audit":
+        _audit_command(args)
         return
 
     if args.command == "demo":
@@ -211,6 +223,115 @@ def _migrate_command(revision: str = "head"):
             sys.exit(1)
     except FileNotFoundError:
         print("! alembic not found. Install it: pip install alembic")
+        sys.exit(1)
+
+
+def _audit_command(args):
+    """Run the 3-layer automated audit."""
+    import asyncio
+    from pathlib import Path
+
+    layer = getattr(args, "layer", "all")
+    severity = getattr(args, "severity", "warning")
+    web_dir = getattr(args, "web_dir", "web")
+    openapi_file = getattr(args, "openapi_file", "")
+    project_root = Path.cwd()
+    has_errors = False
+
+    print("\n" + "=" * 60)
+    print("  ProtoForge Automated Audit - 3-Layer Consistency Check")
+    print("=" * 60 + "\n")
+
+    # Layer 1: Schema audit (Pydantic model <-> DB column)
+    if layer in ("1", "all"):
+        print("--- Layer 1: Pydantic Model <-> DB Column Cross-Check ---\n")
+        try:
+            from protoforge.audit.schema_audit import audit_schema_sync, scan_all_response_models
+
+            # Static check (no DB required)
+            result = audit_schema_sync()
+            print(result.summary())
+
+            # Check for unregistered models
+            unregistered = scan_all_response_models()
+            if unregistered:
+                print(f"\nUnregistered Response models (not in _MODEL_TABLE_MAP or _VIRTUAL_MODELS):")
+                for name, module, fields in unregistered:
+                    print(f"  {name} ({module}): {sorted(fields)}")
+
+            # Try runtime check with DB if available
+            try:
+                from protoforge.config import get_settings
+                settings = get_settings()
+                from protoforge.db.session import Database
+                db = Database(db_path=settings.db_path)
+                asyncio.run(db.connect())
+                try:
+                    from protoforge.audit.schema_audit import audit_schema
+                    runtime_result = asyncio.run(audit_schema(db))
+                    if runtime_result.mismatches:
+                        print("\nRuntime schema check (with DB):")
+                        print(runtime_result.summary())
+                        has_errors = True
+                    else:
+                        print("\nRuntime schema check: PASSED")
+                finally:
+                    asyncio.run(db.close())
+            except Exception as e:
+                print(f"\n(Runtime DB check skipped: {e})")
+
+        except Exception as e:
+            print(f"! Layer 1 failed: {e}")
+            has_errors = True
+        print()
+
+    # Layer 2: Frontend API <-> Backend OpenAPI cross-check
+    if layer in ("2", "all"):
+        print("--- Layer 2: Frontend API <-> Backend OpenAPI Cross-Check ---\n")
+        try:
+            import subprocess
+            cmd = [sys.executable, str(project_root / "scripts" / "audit_api_types.py")]
+            if openapi_file:
+                cmd.extend(["--openapi-file", openapi_file])
+            cmd.extend(["--web-dir", web_dir])
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+            if result.returncode != 0:
+                has_errors = True
+        except Exception as e:
+            print(f"! Layer 2 failed: {e}")
+            has_errors = True
+        print()
+
+    # Layer 3: Exception handling pattern scan
+    if layer in ("3", "all"):
+        print("--- Layer 3: Exception Handling Pattern Scan ---\n")
+        try:
+            import subprocess
+            cmd = [sys.executable, "-m", "protoforge.audit.exception_lint", "protoforge",
+                   "--severity", severity, "--max-violations", "50"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+            if result.returncode != 0:
+                has_errors = True
+        except Exception as e:
+            print(f"! Layer 3 failed: {e}")
+            has_errors = True
+        print()
+
+    # Summary
+    print("=" * 60)
+    if has_errors:
+        print("  Audit completed with ERRORS - please fix the issues above")
+    else:
+        print("  Audit completed - all checks passed")
+    print("=" * 60 + "\n")
+
+    if has_errors:
         sys.exit(1)
 
 

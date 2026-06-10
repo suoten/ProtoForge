@@ -311,6 +311,17 @@ async def lifespan(app: FastAPI):
     # Suppress noisy transitions library state machine logs
     logging.getLogger("transitions.core").setLevel(logging.WARNING)
 
+    # Layer 1: Schema audit - Pydantic Response models <-> DB column cross-check
+    try:
+        from protoforge.audit.schema_audit import audit_schema
+        schema_result = await audit_schema(_database)
+        if schema_result.ok:
+            logger.info("Schema audit passed")
+        else:
+            logger.warning("Schema audit found issues:\n%s", schema_result.summary())
+    except Exception as e:
+        logger.warning("Schema audit failed (non-fatal): %s", e)
+
     if restore_errors:
         logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
     else:
