@@ -12,7 +12,7 @@ def _build_registry() -> dict[str, Callable[[], Any]]:
     registry: dict[str, Callable[[], Any]] = {}
     try:
         from protoforge.protocols.mtconnect.lathe_simulator import LatheSimulator
-        registry["mtconnect_lathe"] = LatheSimulator
+        registry["mtconnect_lathe"] = lambda: LatheSimulator(process_mode="process_flow")
     except ImportError:
         pass
     return registry
