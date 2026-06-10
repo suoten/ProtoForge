@@ -52,6 +52,9 @@ class MetricsCollector:
                 "device_name": device.config.name,
                 "protocol": device.config.protocol,
             }
+            stage = device._point_values.get("_stage")
+            if stage:
+                labels_base["stage"] = stage
             for point in device.read_all_points():
                 point_config = next(
                     (p for p in device.config.points if p.name == point.name), None

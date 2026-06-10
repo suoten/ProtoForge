@@ -83,6 +83,8 @@ class DeviceInstance:
         result = []
         now = time.time()
         for name in self._point_values:
+            if name.startswith("_"):
+                continue
             result.append(
                 PointValue(
                     name=name,
