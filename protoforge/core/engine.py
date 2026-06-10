@@ -62,7 +62,7 @@ class SimulationEngine:
         # 注册故障注入钩子
         instance.register_post_tick_hook(fault_injector.apply)
         # 注册设备专用仿真器（如车床状态机），根据 template_id 自动匹配
-        simulator = get_device_simulator(config.template_id)
+        simulator = get_device_simulator(config.template_id, config.simulator_params or {})
         if simulator is not None:
             instance.register_post_tick_hook(simulator)
 

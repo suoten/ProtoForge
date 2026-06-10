@@ -48,6 +48,7 @@ class DeviceConfig(BaseModel):
     template_id: Optional[str] = None
     points: list[PointConfig] = Field(default_factory=list)
     protocol_config: dict[str, Any] = Field(default_factory=dict)
+    simulator_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class PointValue(BaseModel):
