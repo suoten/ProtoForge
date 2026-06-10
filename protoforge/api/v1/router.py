@@ -431,6 +431,7 @@ async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Opt
         q_lower = q.lower()
         templates = [t for t in templates if
                      q_lower in t.name.lower() or
+                     q_lower in t.id.lower() or
                      q_lower in (t.description or "").lower() or
                      any(q_lower in tag_item.lower() for tag_item in (t.tags or []))]
     if tag:
