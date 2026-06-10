@@ -205,14 +205,25 @@ class ExceptionLintVisitor(ast.NodeVisitor):
 
         # Report violations
         if has_return_default and not has_reraise:
-            self.violations.append(ExceptionLintViolation(
-                file_path=self.file_path,
-                line_number=node.lineno,
-                violation_type="swallow_return",
-                detail=f"'except Exception' followed by '{return_value_detail}' swallows the error. "
-                       f"Either re-raise, log+raise, or return a Result type.",
-                severity="error",
-            ))
+            if has_logging:
+                # Logged but swallowed - less severe, downgrade to warning
+                self.violations.append(ExceptionLintViolation(
+                    file_path=self.file_path,
+                    line_number=node.lineno,
+                    violation_type="swallow_return_logged",
+                    detail=f"'except Exception' followed by '{return_value_detail}' swallows the error (logged). "
+                           f"Consider re-raising or returning a Result type for better error propagation.",
+                    severity="warning",
+                ))
+            else:
+                self.violations.append(ExceptionLintViolation(
+                    file_path=self.file_path,
+                    line_number=node.lineno,
+                    violation_type="swallow_return",
+                    detail=f"'except Exception' followed by '{return_value_detail}' swallows the error. "
+                           f"Either re-raise, log+raise, or return a Result type.",
+                    severity="error",
+                ))
         elif not has_reraise and not has_logging:
             self.violations.append(ExceptionLintViolation(
                 file_path=self.file_path,
