@@ -17,12 +17,18 @@
   - 只有 IDLE / TOOL_CHANGE / 故障恢复 时 task_state="idle"，主轴才降到 0
   - 每完成 cycles_per_task 个切削周期后才真正回到 IDLE（换刀或停机）
 
+process_mode 支持：
+  - "single_process"：固定一种工艺（rough / semi_finish / finish），适合单独观察
+  - "process_flow"：模拟完整流程 rough → semi_finish → finish，各阶段持续时间可配置
+
 每个 tick 的处理流程：
   1. 状态机推进（确定当前 stage）
-  2. BaseMetricGenerator.generate() 生成健康 MetricFrame
+  2. 工艺阶段更新（process_flow 模式下检查是否需要切换 process）
+  3. BaseMetricGenerator.generate() 生成健康 MetricFrame
      （联动建模 + 噪声 + clamp，正常加工算法与故障逻辑解耦）
-  3. 把 MetricFrame 写入 device._point_values
-  4. 通过 MetricsCollector 上报 Prometheus
+  4. 把 MetricFrame 写入 device._point_values
+  5. 故障注入（复用铣床 FaultInjector 机制）
+  6. 通过 MetricsCollector 上报 Prometheus
 
 崩刀（TOOL_BREAK）的 CNC 可观测特征：
   - spindle_load 突增（驱动器过载保护触发）
@@ -60,19 +66,6 @@ class _State(Enum):
     CHIP_WRAP = "chip_wrap"
 
 
-# 状态机阶段 → MetricGenerator 加工阶段的映射
-_STATE_TO_STAGE: dict[_State, str] = {
-    _State.IDLE:        "idle",
-    _State.SPINUP:      "idle",
-    _State.AIR_CUT:     "idle",        # air_cut 阶段负载模型用 idle，但主轴不停
-    _State.CUTTING:     "roughing",    # 默认粗加工，子阶段由 _cutting_stage 动态切换
-    _State.DECEL_CYCLE: "idle",        # 周期间减速，主轴不停
-    _State.DECEL:       "idle",        # 任务级降速
-    _State.TOOL_CHANGE: "tool_change",
-    _State.TOOL_BREAK:  "idle",
-    _State.CHIP_WRAP:   "roughing",
-}
-
 # task_state 映射：process_running = 主轴保持，idle = 主轴可以停
 _STATE_TO_TASK: dict[_State, str] = {
     _State.IDLE:        "idle",
@@ -85,6 +78,21 @@ _STATE_TO_TASK: dict[_State, str] = {
     _State.TOOL_BREAK:  "idle",
     _State.CHIP_WRAP:   "process_running",
 }
+
+# 工艺阶段 → MetricGenerator stage 名称的映射
+_PROCESS_TO_STAGE: dict[str, str] = {
+    "rough":       "roughing",
+    "semi_finish": "semi_finishing",
+    "finish":      "finishing",
+}
+
+# process_flow 模式：各工艺阶段的持续时间区间（秒）
+_PROCESS_FLOW_DURATION: dict[str, tuple[float, float]] = {
+    "rough":       (120.0, 300.0),   # 2~5 分钟
+    "semi_finish": (60.0,  180.0),   # 1~3 分钟
+    "finish":      (60.0,  180.0),   # 1~3 分钟
+}
+_PROCESS_FLOW_ORDER = ["rough", "semi_finish", "finish"]
 
 # 刀塔配置（刀位号, 刀具ID）
 _TOOL_TABLE = [
@@ -109,17 +117,31 @@ _NC_BLOCKS = [
     "N0120 M30",
 ]
 
-# 每个零件的加工子阶段序列（本轮正常工况固定为 rough）
-# (阶段名, 开始进度, 结束进度)
-_CUT_SUBSTAGES = [
-    ("roughing", 0.00, 1.00),
-]
-
 
 class LatheSimulator:
-    """注册为 DeviceInstance 的 post_tick_hook，每次 tick 更新所有测点。"""
+    """
+    注册为 DeviceInstance 的 post_tick_hook，每次 tick 更新所有测点。
 
-    def __init__(self):
+    Args:
+        process_mode: "single_process"（默认，固定工艺）或 "process_flow"（完整流程）
+        process:      single_process 模式下使用的工艺（"rough"/"semi_finish"/"finish"）
+    """
+
+    def __init__(
+        self,
+        process_mode: str = "single_process",
+        process: str = "rough",
+    ):
+        # ── 工艺模式配置 ────────────────────────────────────────────────────
+        self._process_mode = process_mode   # "single_process" | "process_flow"
+        self._process = process             # 当前工艺：rough / semi_finish / finish
+
+        # process_flow 模式下的阶段跟踪
+        self._flow_idx = 0                  # 当前在 _PROCESS_FLOW_ORDER 中的索引
+        self._flow_elapsed = 0.0            # 当前 process 已运行秒数
+        self._flow_duration = self._sample_flow_duration(process)  # 当前 process 目标持续时长
+
+        # ── 状态机 ──────────────────────────────────────────────────────────
         self._state = _State.IDLE
         self._state_elapsed = 0.0
         self._state_duration = 0.0
@@ -151,7 +173,7 @@ class LatheSimulator:
         self._wrap_load_increment = 0.0
         self._fault_cooldown = 0
 
-        # 当前切削子阶段（roughing/semi_finishing/finishing）
+        # 当前切削子阶段（由 process 决定）
         self._cutting_stage = "roughing"
 
         # 当前任务内已完成的切削周期数（达到上限后才真正停机）
@@ -169,8 +191,47 @@ class LatheSimulator:
         )
 
     # ------------------------------------------------------------------
-    # post_tick_hook 入口
+    # 工艺阶段管理
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _sample_flow_duration(process: str) -> float:
+        lo, hi = _PROCESS_FLOW_DURATION.get(process, (120.0, 300.0))
+        return random.uniform(lo, hi)
+
+    def _update_process(self) -> None:
+        """
+        process_flow 模式：每 tick 累加流逝时间，到期后切换到下一工艺。
+        single_process 模式：不做任何操作。
+        """
+        if self._process_mode != "process_flow":
+            return
+
+        task_state = _STATE_TO_TASK.get(self._state, "idle")
+        if task_state == "process_running":
+            self._flow_elapsed += 1.0
+
+        if self._flow_elapsed >= self._flow_duration:
+            next_idx = (self._flow_idx + 1) % len(_PROCESS_FLOW_ORDER)
+            next_process = _PROCESS_FLOW_ORDER[next_idx]
+            self._flow_idx = next_idx
+            self._process = next_process
+            self._flow_elapsed = 0.0
+            self._flow_duration = self._sample_flow_duration(next_process)
+            # 更新状态机内的切削阶段标识（用于 NC 程序行号等信号）
+            self._cutting_stage = _PROCESS_TO_STAGE.get(next_process, "roughing")
+
+    def _get_metric_stage(self) -> str:
+        """
+        将状态机状态映射到 MetricGenerator 加工阶段名。
+        CUTTING / CHIP_WRAP 时使用当前 process 对应的 stage；
+        其余状态使用 idle / tool_change。
+        """
+        if self._state in (_State.CUTTING, _State.CHIP_WRAP):
+            return _PROCESS_TO_STAGE.get(self._process, "roughing")
+        if self._state == _State.TOOL_CHANGE:
+            return "tool_change"
+        return "idle"
 
     def __call__(self, device_instance: Any) -> None:
         self._tick_count += 1
@@ -179,10 +240,13 @@ class LatheSimulator:
         # 1. 状态机推进
         self._step_state_machine()
 
-        # 2. 确定当前 MetricGenerator 阶段
+        # 2. 工艺阶段更新（process_flow 模式下检查是否需要切换 process）
+        self._update_process()
+
+        # 3. 确定当前 MetricGenerator 阶段（由当前 process 决定）
         stage = self._get_metric_stage()
 
-        # 3. 把状态机信息同步给 MetricGenerator
+        # 4. 把状态机信息同步给 MetricGenerator
         if self._state == _State.CUTTING:
             self._metric_gen.state.cutting_total = self._state_duration
 
@@ -204,17 +268,18 @@ class LatheSimulator:
         task_state = _STATE_TO_TASK.get(self._state, "idle")
         self._metric_gen.state.task_state = task_state
 
-        # 4. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
+        # 当前工艺阶段（传给 CncSpindleGenerator，控制转速目标和负载/电流基线）
+        self._metric_gen.state.current_process = self._process
+
+        # 5. 生成正常加工 MetricFrame（含联动 + 噪声 + clamp）
         frame = self._metric_gen.generate(t=t, dt=1.0, stage=stage)
 
-        # 5. 把 MetricFrame 写入 device._point_values（MTConnect 标准测点）
+        # 6. 把 MetricFrame 写入 device._point_values（MTConnect 标准测点）
         vals = device_instance._point_values
         self._update_cnc_points(vals, frame)
 
-        # 6. 复用铣床故障注入机制：在 baseline 写入后覆盖故障测点值
+        # 7. 复用铣床故障注入机制：在 baseline 写入后覆盖故障测点值
         #    fault_injector.apply() 只覆盖 _point_values，不修改状态机
-        #    只有 process_running 切削阶段的故障才有意义；
-        #    但 apply() 本身会检查 fault.duration，状态机不需要感知
         fault_injector.apply(device_instance)
 
         # ── 断刀二阶段后处理（不修改 FaultInjector 框架，符合铣床风格）───────
@@ -235,7 +300,7 @@ class LatheSimulator:
                 vals["spindle_current"] = round(random.uniform(18.0, 25.0) + random.gauss(0, 1.5), 2)
                 # 转速在冲击瞬间保持（FaultInjector 已设置 nominal_baseline=2000，此处不覆盖）
 
-        # 7. 上报 Prometheus（使用 fault-applied 后的 _point_values，而非注入前的 frame）
+        # 8. 上报 Prometheus（使用 fault-applied 后的 _point_values，而非注入前的 frame）
         self._emit_prometheus(device_instance, vals)
 
     # ------------------------------------------------------------------
@@ -266,16 +331,19 @@ class LatheSimulator:
         self._state_duration = duration
 
     def _get_metric_stage(self) -> str:
-        """将状态机状态映射到 MetricGenerator 阶段。"""
-        if self._state == _State.CUTTING:
-            return "roughing"
-        if self._state == _State.CHIP_WRAP:
-            return "roughing"
-        return _STATE_TO_STAGE.get(self._state, "idle")
+        """
+        将状态机状态映射到 MetricGenerator 加工阶段名（已移至工艺管理区）。
+        此方法保留作为重载点，实现在类上方的工艺管理方法中。
+        """
+        if self._state in (_State.CUTTING, _State.CHIP_WRAP):
+            return _PROCESS_TO_STAGE.get(self._process, "roughing")
+        if self._state == _State.TOOL_CHANGE:
+            return "tool_change"
+        return "idle"
 
     def _update_cutting_substage(self, progress: float) -> None:
-        """本轮正常工况只模拟 rough，不在小周期内切换 semi/finish。"""
-        self._cutting_stage = "roughing"
+        """切削子阶段由当前 process 决定，不随 progress 在周期内切换工艺。"""
+        self._cutting_stage = _PROCESS_TO_STAGE.get(self._process, "roughing")
 
     def _on_idle(self) -> None:
         self._spindle_target = 0.0
@@ -284,11 +352,12 @@ class LatheSimulator:
         self._condition_native_code = ""
         self._wrap_load_increment = 0.0
         if self._state_elapsed >= self._state_duration:
-            # 开始新任务：主轴升速目标转速（粗加工 2000 RPM）
-            self._spindle_target = 2000.0
+            # 开始新任务：主轴升速到当前 process 的目标转速
+            from protoforge.core.cnc_metric_generator import _PROCESS_SPEED_CFG
+            self._spindle_target = _PROCESS_SPEED_CFG.get(self._process, {}).get("target", 2000.0)
             self._program_line = 1
             self._block_idx = 0
-            self._cutting_stage = "roughing"
+            self._cutting_stage = _PROCESS_TO_STAGE.get(self._process, "roughing")
             self._cycles_in_task = 0
             self._cycles_per_task = random.randint(3, 6)
             self._transition(_State.SPINUP, random.uniform(4, 8))
