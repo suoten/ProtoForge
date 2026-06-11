@@ -1,8 +1,12 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from protoforge.api.v1.router import router
 from protoforge.core.engine import SimulationEngine
@@ -139,7 +143,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to start webhook manager: %s", e)
 
-    import os
     if os.environ.get("PROTOFORGE_DEMO_MODE"):
         try:
             from protoforge.core.demo import seed_demo_data
@@ -182,13 +185,27 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
 
+    # 按优先级查找静态文件目录：环境变量 > 容器路径 > 本地构建产物
+    _repo_root = Path(__file__).parent.parent
+    _static_candidates = [
+        Path(os.environ["STATIC_DIR"]) if "STATIC_DIR" in os.environ else None,
+        Path("/app/static"),
+        _repo_root / "web" / "dist",
+    ]
+    static_dir = next((p for p in _static_candidates if p and p.is_dir()), None)
+
     @app.get("/")
     async def root():
+        if static_dir and (static_dir / "index.html").exists():
+            return FileResponse(static_dir / "index.html")
         return {
             "name": "ProtoForge",
             "version": "0.1.0",
             "description": "物联网协议仿真与测试平台",
         }
+
+    if static_dir and (static_dir / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
 
     @app.get("/health")
     async def health():

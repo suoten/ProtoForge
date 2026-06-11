@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from fastapi.responses import PlainTextResponse
 
 from protoforge.models.device import DeviceConfig, DeviceInfo, PointValue
+from protoforge.models.fault import FaultInjectRequest
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo
 from protoforge.models.template import TemplateDetail, TemplateInfo
 
@@ -200,6 +201,38 @@ async def batch_stop_devices(device_ids: list[str]):
         except Exception as e:
             errors.append({"id": device_id, "error": str(e)})
     return {"status": "ok", "stopped": stopped, "errors": errors}
+
+
+@router.post("/devices/{device_id}/sync-from-template")
+async def sync_device_from_template(device_id: str):
+    engine = _get_engine()
+    db = _get_database()
+    tm = _get_template_manager()
+    try:
+        instance = engine._devices.get(device_id)
+        if not instance:
+            raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+        template_id = instance.config.template_id
+        if not template_id:
+            raise HTTPException(status_code=400, detail="Device has no associated template")
+        template = tm.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")
+        new_config = DeviceConfig(
+            id=device_id,
+            name=instance.config.name,
+            protocol=instance.config.protocol,
+            template_id=template_id,
+            points=template.points,
+            protocol_config=instance.config.protocol_config,
+        )
+        result = await engine.update_device(device_id, new_config)
+        await db.save_device(new_config)
+        return {"status": "ok", "point_count": len(template.points), "device": result}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.get("/devices/{device_id}", response_model=DeviceInfo)
@@ -398,6 +431,7 @@ async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Opt
         q_lower = q.lower()
         templates = [t for t in templates if
                      q_lower in t.name.lower() or
+                     q_lower in t.id.lower() or
                      q_lower in (t.description or "").lower() or
                      any(q_lower in tag_item.lower() for tag_item in (t.tags or []))]
     if tag:
@@ -1173,6 +1207,62 @@ async def setup_demo():
     except Exception as e:
         from protoforge.core.defaults import get_friendly_error
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
+
+
+@router.get("/faults/types")
+async def list_fault_types():
+    engine = _get_engine()
+    types = engine.list_fault_types()
+    return [t.model_dump() for t in types]
+
+
+@router.get("/faults/types/{fault_type_id}")
+async def get_fault_type(fault_type_id: str):
+    from protoforge.core.fault import fault_injector
+    ft = fault_injector.get_fault_type(fault_type_id)
+    if not ft:
+        raise HTTPException(status_code=404, detail=f"Fault type not found: {fault_type_id}")
+    return ft.model_dump()
+
+
+@router.get("/faults/active")
+async def list_active_faults():
+    engine = _get_engine()
+    return [f.model_dump() for f in engine.list_active_faults()]
+
+
+@router.post("/devices/{device_id}/fault")
+async def inject_fault(device_id: str, request: FaultInjectRequest):
+    engine = _get_engine()
+    log_bus = _get_log_bus()
+    try:
+        info = engine.inject_fault(device_id, request)
+        log_bus.emit("", "system", device_id, "fault_injected",
+                     f"Fault {request.fault_type_id} injected into {device_id}",
+                     {"fault_type": request.fault_type_id, "duration": info.duration})
+        return info.model_dump()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/devices/{device_id}/fault")
+async def get_device_fault(device_id: str):
+    engine = _get_engine()
+    info = engine.get_fault(device_id)
+    if not info:
+        return {"status": "none"}
+    return info.model_dump()
+
+
+@router.delete("/devices/{device_id}/fault")
+async def clear_device_fault(device_id: str):
+    engine = _get_engine()
+    log_bus = _get_log_bus()
+    cleared = engine.clear_fault(device_id)
+    if cleared:
+        log_bus.emit("", "system", device_id, "fault_cleared",
+                     f"Fault cleared on {device_id}")
+    return {"status": "ok", "cleared": cleared}
 
 
 @router.get("/setup/status")

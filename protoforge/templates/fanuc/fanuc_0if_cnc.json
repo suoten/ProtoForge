@@ -62,22 +62,69 @@
             "address": "spindle_speed",
             "data_type": "float32",
             "unit": "RPM",
-            "description": "主轴转速",
+            "description": "主轴转速，按加工程序阶梯切换：换刀归零，粗铣2000，半精铣4000，精铣6000",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 1000,
-            "max_value": 8000
+            "generator_type": "script",
+            "min_value": 0,
+            "max_value": 8000,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 360\nif t < 30: target = 0\nelif t < 120: target = 2000\nelif t < 150: target = 0\nelif t < 240: target = 4000\nelif t < 270: target = 0\nelse: target = 6000\nnoise = random.gauss(0, 8) if target > 0 else 0; result = round(max(0, target + noise), 1)"
+            }
         },
         {
             "name": "feed_rate",
             "address": "feed_rate",
             "data_type": "float32",
             "unit": "mm/min",
-            "description": "进给速度",
+            "description": "进给速度，与加工工步联动：换刀时为0，粗铣800，半精铣500，精铣300",
             "access": "r",
-            "generator_type": "random",
-            "min_value": 100,
-            "max_value": 5000
+            "generator_type": "script",
+            "min_value": 0,
+            "max_value": 5000,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 360\nif t < 30: target = 0\nelif t < 120: target = 800\nelif t < 150: target = 0\nelif t < 240: target = 500\nelif t < 270: target = 0\nelse: target = 300\nnoise = random.gauss(0, 5) if target > 0 else 0; result = round(max(0, target + noise), 1)"
+            }
+        },
+        {
+            "name": "spindle_current",
+            "address": "spindle_current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "主轴电流，与工步联动：换刀时伺服保持电流约2.5A，粗铣18-24A，半精铣12-18A，精铣8-13A",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.0,
+            "max_value": 40.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 360\nif t < 30: base, noise_std = 2.5, 0.3\nelif t < 120: base, noise_std = 21.0, 1.2\nelif t < 150: base, noise_std = 2.5, 0.3\nelif t < 240: base, noise_std = 15.0, 1.2\nelif t < 270: base, noise_std = 2.5, 0.3\nelse: base, noise_std = 10.0, 1.2\nresult = round(max(0, base + random.gauss(0, noise_std)), 2)"
+            }
+        },
+        {
+            "name": "spindle_load",
+            "address": "spindle_load",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "主轴负载率(0-100%)，与工步联动：换刀时0%，粗铣45-60%，半精铣35-50%，精铣25-40%",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.0,
+            "max_value": 120.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 360\nif t < 30: base = 0\nelif t < 120: base = 52.0\nelif t < 150: base = 0\nelif t < 240: base = 42.0\nelif t < 270: base = 0\nelse: base = 32.0\nnoise = random.gauss(0, 2.5) if base > 0 else 0; result = round(max(0, min(120.0, base + noise)), 2)"
+            }
+        },
+        {
+            "name": "tool_number",
+            "address": "tool_number",
+            "data_type": "uint16",
+            "description": "当前刀号，与工步联动：换刀阶段切换，粗铣T01，半精铣T02，精铣T03",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 1,
+            "max_value": 12,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 360\nif t < 120: result = 1\nelif t < 240: result = 2\nelse: result = 3"
+            }
         },
         {
             "name": "alarm_status",

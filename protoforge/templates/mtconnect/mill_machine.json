@@ -55,9 +55,10 @@
             "unit": "RPM",
             "description": "主轴转速",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "sawtooth",
             "min_value": 3000,
-            "max_value": 12000
+            "max_value": 12000,
+            "generator_config": {"period": 135}
         },
         {
             "name": "feed_rate",
@@ -66,9 +67,64 @@
             "unit": "mm/min",
             "description": "进给速度",
             "access": "r",
-            "generator_type": "random",
+            "generator_type": "sine",
             "min_value": 200,
-            "max_value": 3000
+            "max_value": 3000,
+            "generator_config": {"period": 75, "phase": 2.1}
+        },
+        {
+            "name": "spindle_current",
+            "address": "SpindleCurrent",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "主轴电流",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 6.0,
+            "max_value": 28.0,
+            "generator_config": {"period": 120, "phase": 3.1}
+        },
+        {
+            "name": "vibration_x",
+            "address": "VibrationX",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "X轴振动加速度",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.1,
+            "max_value": 2.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.4 + 0.25 * math.sin(2 * math.pi * elapsed / 95 + 0.3); noise = random.uniform(-0.12, 0.12); result = round(max(0.1, base + noise), 3)"
+            }
+        },
+        {
+            "name": "vibration_y",
+            "address": "VibrationY",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Y轴振动加速度",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.1,
+            "max_value": 2.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.4 + 0.25 * math.sin(2 * math.pi * elapsed / 78 + 1.3); noise = random.uniform(-0.12, 0.12); result = round(max(0.1, base + noise), 3)"
+            }
+        },
+        {
+            "name": "vibration_z",
+            "address": "VibrationZ",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Z轴振动加速度",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.1,
+            "max_value": 2.5,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; base = 0.6 + 0.35 * math.sin(2 * math.pi * elapsed / 62 + 2.3); noise = random.uniform(-0.18, 0.18); result = round(max(0.1, base + noise), 3)"
+            }
         },
         {
             "name": "part_count",
@@ -77,9 +133,12 @@
             "unit": "件",
             "description": "加工件数",
             "access": "r",
-            "generator_type": "sawtooth",
+            "generator_type": "script",
             "min_value": 0,
-            "max_value": 999
+            "max_value": 999,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; result = min(int(elapsed / 60), 999)"
+            }
         }
     ],
     "protocol_config": {

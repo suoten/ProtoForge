@@ -22,6 +22,7 @@ class GeneratorType(str, Enum):
     TRIANGLE = "triangle"
     SAWTOOTH = "sawtooth"
     SCRIPT = "script"
+    COUNTER = "counter"
 
 
 class PointConfig(BaseModel):
@@ -47,6 +48,7 @@ class DeviceConfig(BaseModel):
     template_id: Optional[str] = None
     points: list[PointConfig] = Field(default_factory=list)
     protocol_config: dict[str, Any] = Field(default_factory=dict)
+    simulator_params: dict[str, Any] = Field(default_factory=dict)
 
 
 class PointValue(BaseModel):

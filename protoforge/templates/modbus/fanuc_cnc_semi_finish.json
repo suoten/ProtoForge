@@ -1,0 +1,259 @@
+{
+    "id": "modbus_fanuc_cnc_semi_finish",
+    "name": "Fanuc CNC 半精铣工位",
+    "protocol": "modbus_tcp",
+    "description": "FANUC Series 0i-MF数控系统，半精铣工位：主轴约4000RPM，进给约500mm/min，切深中等，表面粗糙度Ra3.2~6.3",
+    "manufacturer": "FANUC",
+    "model": "0i-MF",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "0",
+            "data_type": "uint16",
+            "unit": "RPM",
+            "description": "主轴实际转速，半精铣工位：空闲为0，启动后稳定在约4000RPM",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0,
+            "max_value": 8000,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif t < 15:\n    target = 0\nelif t < 28:\n    target = 4000 * ((t - 15) / 13.0)\nelif t < 120:\n    target = 4000\nelif t < 133:\n    target = 4000 * (1 - ((t - 120) / 13.0))\nelse:\n    target = 0\nnoise = random.gauss(0, 20) if target > 100 else 0\nresult = int(round(max(0, min(8000, target + noise))))"
+            }
+        },
+        {
+            "name": "feed_rate",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "半精铣实际进给速度：切入阶段低速，稳定半精铣约500mm/min，退刀阶段降速",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0,
+            "max_value": 5000,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif t < 28:\n    target = 0\nelif t < 38:\n    target = 250 + 250 * ((t - 28) / 10.0)\nelif t < 115:\n    target = 500\nelif t < 128:\n    target = 250\nelse:\n    target = 0\nnoise = random.gauss(0, 15) if target > 0 else 0\nresult = round(max(0, min(5000, target + noise)), 1)"
+            }
+        },
+        {
+            "name": "spindle_current",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "半精铣主轴电流：空闲约2A，启动约5A，切入峰值约17A，稳定半精铣约13~16A",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.0,
+            "max_value": 40.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif t < 15:\n    base, noise_std = 2.2, 0.25\nelif t < 28:\n    base, noise_std = 5.0, 0.6\nelif t < 38:\n    base, noise_std = 17.0, 1.2\nelif t < 115:\n    base, noise_std = 14.5, 0.9\nelif t < 128:\n    base, noise_std = 5.0, 0.6\nelif t < 138:\n    base, noise_std = 3.5, 0.4\nelse:\n    base, noise_std = 2.2, 0.25\nresult = round(max(0, min(40.0, base + random.gauss(0, noise_std))), 2)"
+            }
+        },
+        {
+            "name": "vibration_x",
+            "address": "23",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "X轴振动加速度，半精铣切深中等，振动幅值中等",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.05,
+            "max_value": 2.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif 28 <= t < 128:\n    base = 0.35 + 0.2 * math.sin(2 * math.pi * elapsed / 55 + 0.8)\nelse:\n    base = 0.08\nnoise = random.uniform(-0.08, 0.08)\nresult = round(max(0.05, base + noise), 3)"
+            }
+        },
+        {
+            "name": "vibration_y",
+            "address": "25",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Y轴振动加速度，半精铣切深中等，振动幅值中等",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.05,
+            "max_value": 2.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif 28 <= t < 128:\n    base = 0.35 + 0.2 * math.sin(2 * math.pi * elapsed / 45 + 1.8)\nelse:\n    base = 0.08\nnoise = random.uniform(-0.08, 0.08)\nresult = round(max(0.05, base + noise), 3)"
+            }
+        },
+        {
+            "name": "vibration_z",
+            "address": "27",
+            "data_type": "float32",
+            "unit": "m/s²",
+            "description": "Z轴振动加速度，半精铣切深中等，振动幅值中等",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.05,
+            "max_value": 2.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif 28 <= t < 128:\n    base = 0.4 + 0.22 * math.sin(2 * math.pi * elapsed / 38 + 2.8)\nelse:\n    base = 0.1\nnoise = random.uniform(-0.1, 0.1)\nresult = round(max(0.05, base + noise), 3)"
+            }
+        },
+        {
+            "name": "spindle_load",
+            "address": "29",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "半精铣主轴负载率，稳定阶段约30~45%，切入瞬间约48%，短时允许到120%",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0.0,
+            "max_value": 120.0,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; t = elapsed % 150\nif t < 15:\n    base, noise_std = 0.0, 0.0\nelif t < 28:\n    base, noise_std = 6.0, 1.5\nelif t < 38:\n    base, noise_std = 48.0, 3.0\nelif t < 115:\n    base, noise_std = 38.0, 2.5\nelif t < 128:\n    base, noise_std = 6.0, 1.5\nelif t < 138:\n    base, noise_std = 2.5, 0.8\nelse:\n    base, noise_std = 0.0, 0.0\nnoise = random.gauss(0, noise_std) if noise_std > 0 else 0\nresult = round(max(0, min(120.0, base + noise)), 2)"
+            }
+        },
+        {
+            "name": "spindle_override",
+            "address": "3",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "主轴倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "feed_override",
+            "address": "4",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "进给倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "running_mode",
+            "address": "5",
+            "data_type": "uint16",
+            "description": "运行模式(1=MDI 2=AUTO 3=JOG 4=EDIT 5=HANDLE)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 2
+        },
+        {
+            "name": "exec_status",
+            "address": "6",
+            "data_type": "uint16",
+            "description": "执行状态(0=空闲 1=运行 2=暂停 3=M00停 4=M01停)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "tool_no",
+            "address": "7",
+            "data_type": "uint16",
+            "description": "当前刀具号，半精铣工位固定使用T2",
+            "access": "r",
+            "generator_type": "fixed",
+            "min_value": 1,
+            "max_value": 12,
+            "fixed_value": 2
+        },
+        {
+            "name": "abs_x",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -800.0,
+            "max_value": 800.0
+        },
+        {
+            "name": "abs_y",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "abs_z",
+            "address": "12",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -600.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "mach_x",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -800.0,
+            "max_value": 800.0
+        },
+        {
+            "name": "mach_y",
+            "address": "16",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "mach_z",
+            "address": "18",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -600.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "part_count",
+            "address": "20",
+            "data_type": "uint16",
+            "description": "加工计数",
+            "access": "r",
+            "generator_type": "script",
+            "min_value": 0,
+            "max_value": 99999,
+            "generator_config": {
+                "script": "elapsed = context['elapsed']; result = min(int(elapsed / 150), 99999)"
+            }
+        },
+        {
+            "name": "cycle_time",
+            "address": "21",
+            "data_type": "uint16",
+            "unit": "s",
+            "description": "循环时间，半精铣单件约150s",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 150
+        },
+        {
+            "name": "alarm_no",
+            "address": "22",
+            "data_type": "uint16",
+            "description": "报警号(0=无报警)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 7
+    },
+    "tags": ["CNC", "FANUC", "数控", "机床", "发那科", "半精铣"]
+}

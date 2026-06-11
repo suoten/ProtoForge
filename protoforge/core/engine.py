@@ -4,9 +4,12 @@ import time
 from typing import Any, Optional
 
 from protoforge.core.device import DeviceInstance
+from protoforge.core.fault import fault_injector
 from protoforge.core.generator import DataGenerator
 from protoforge.core.scenario import Scenario
+from protoforge.core.simulators import get_device_simulator
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, PointValue
+from protoforge.models.fault import FaultInfo, FaultInjectRequest, FaultTypeDefinition
 from protoforge.models.scenario import ScenarioConfig, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 
@@ -56,6 +59,12 @@ class SimulationEngine:
     async def create_device(self, config: DeviceConfig) -> DeviceInfo:
         instance = DeviceInstance(config, self._generator)
         self._devices[config.id] = instance
+        # 注册故障注入钩子
+        instance.register_post_tick_hook(fault_injector.apply)
+        # 注册设备专用仿真器（如车床状态机），根据 template_id 自动匹配
+        simulator = get_device_simulator(config.template_id, config.simulator_params or {})
+        if simulator is not None:
+            instance.register_post_tick_hook(simulator)
 
         server = self._protocol_servers.get(config.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
@@ -69,6 +78,9 @@ class SimulationEngine:
         instance = self._devices.pop(device_id, None)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
+
+        # 清除该设备的故障
+        fault_injector.clear(device_id)
 
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
@@ -286,6 +298,14 @@ class SimulationEngine:
         while self._running:
             for instance in self._devices.values():
                 instance.tick()
+                # 将 DeviceInstance._point_values 同步到协议服务器，保证协议层读到最新值
+                server = self._protocol_servers.get(instance.protocol)
+                if server and hasattr(server, '_behaviors'):
+                    behavior = server._behaviors.get(instance.id)
+                    if behavior is not None:
+                        behavior._values.update(instance._point_values)
+                        if hasattr(behavior, 'sync_from_point_values'):
+                            behavior.sync_from_point_values(instance._point_values)
             for scenario in self._scenario_instances.values():
                 scenario.tick()
             await asyncio.sleep(1.0)
@@ -299,3 +319,28 @@ class SimulationEngine:
             status=instance.status,
             points=instance.read_all_points(),
         )
+
+    # ------------------------------------------------------------------
+    # 故障管理
+    # ------------------------------------------------------------------
+
+    def inject_fault(self, device_id: str, request: FaultInjectRequest) -> FaultInfo:
+        instance = self._devices.get(device_id)
+        if not instance:
+            raise ValueError(f"Device not found: {device_id}")
+        if instance.status != DeviceStatus.ONLINE:
+            raise ValueError(f"Device {device_id} is not online")
+        return fault_injector.inject(instance, request)
+
+    def clear_fault(self, device_id: str) -> bool:
+        return fault_injector.clear(device_id)
+
+    def get_fault(self, device_id: str) -> Optional[FaultInfo]:
+        return fault_injector.get_fault(device_id)
+
+    def list_active_faults(self) -> list[FaultInfo]:
+        return fault_injector.list_active()
+
+    @staticmethod
+    def list_fault_types() -> list[FaultTypeDefinition]:
+        return fault_injector.list_fault_types()

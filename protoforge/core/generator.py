@@ -34,6 +34,7 @@ class DataGenerator:
     def __init__(self):
         self._start_time: dict[str, float] = {}
         self._script_engine = ScriptEngine()
+        self._counters: dict[str, float] = {}
 
     def generate(self, point: PointConfig) -> Any:
         key = f"{point.name}_{point.address}"
@@ -52,6 +53,8 @@ class DataGenerator:
             return self._generate_triangle(point, elapsed)
         elif point.generator_type == GeneratorType.SAWTOOTH:
             return self._generate_sawtooth(point, elapsed)
+        elif point.generator_type == GeneratorType.COUNTER:
+            return self._generate_counter(point, key)
         elif point.generator_type == GeneratorType.SCRIPT:
             return self._generate_script(point, elapsed)
         else:
@@ -98,6 +101,18 @@ class DataGenerator:
         t = (elapsed % period) / period
         value = lo + (hi - lo) * t
         return self._cast_value(value, point.data_type)
+
+    def _generate_counter(self, point: PointConfig, key: str) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 2**31 - 1
+        step = point.generator_config.get("step", 1)
+        if key not in self._counters:
+            self._counters[key] = lo
+        else:
+            self._counters[key] += step
+            if self._counters[key] > hi:
+                self._counters[key] = lo
+        return self._cast_value(self._counters[key], point.data_type)
 
     def _generate_script(self, point: PointConfig, elapsed: float) -> Any:
         script = point.generator_config.get("script", "result = 0")

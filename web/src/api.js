@@ -128,4 +128,10 @@ export default {
 
   getSettings: () => d(api.get('/settings')),
   updateSettings: (updates) => d(api.put('/settings', updates)),
+
+  getFaultTypes: () => d(api.get('/faults/types')),
+  getActiveFaults: () => d(api.get('/faults/active')),
+  injectFault: (deviceId, faultTypeId, duration, intensity) => d(api.post(`/devices/${deviceId}/fault`, { fault_type_id: faultTypeId, duration, intensity })),
+  getDeviceFault: (deviceId) => d(api.get(`/devices/${deviceId}/fault`)),
+  clearDeviceFault: (deviceId) => d(api.delete(`/devices/${deviceId}/fault`)),
 }
