@@ -13,6 +13,18 @@ def _build_registry() -> dict[str, Callable[..., Any]]:
     try:
         from protoforge.protocols.mtconnect.lathe_simulator import LatheSimulator
         registry["mtconnect_lathe"] = LatheSimulator
+        registry["mtconnect_lathe_rough"] = lambda **_: LatheSimulator(
+            process_mode="single_process",
+            process="rough",
+        )
+        registry["mtconnect_lathe_semi_finish"] = lambda **_: LatheSimulator(
+            process_mode="single_process",
+            process="semi_finish",
+        )
+        registry["mtconnect_lathe_finish"] = lambda **_: LatheSimulator(
+            process_mode="single_process",
+            process="finish",
+        )
     except ImportError:
         pass
     return registry
@@ -27,7 +39,7 @@ def get_device_simulator(
 ) -> Optional[Any]:
     """
     根据 template_id 返回一个新的仿真器实例，未匹配则返回 None。
-    simulator_params 会作为关键字参数透传给仿真器构造函数。
+    simulator_params 默认作为关键字参数透传；固定工位模板可在注册表中选择忽略参数。
     """
     if template_id is None:
         return None
