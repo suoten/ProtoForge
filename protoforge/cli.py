@@ -146,8 +146,34 @@ def _stop_command():
         print(f"+ Sent SIGTERM to daemon (PID {pid})")
     except ProcessLookupError:
         print(f"! Process {pid} not found (may have already stopped)")
+        pid_file.unlink(missing_ok=True)
+        return
     except PermissionError:
         print(f"! Permission denied to stop process {pid}")
+        pid_file.unlink(missing_ok=True)
+        return
+
+    # 等待进程退出，超时后强制 SIGKILL
+    import time
+    for i in range(30):
+        try:
+            os.kill(pid, 0)  # 检查进程是否还存在
+        except ProcessLookupError:
+            print(f"+ Daemon (PID {pid}) stopped gracefully")
+            pid_file.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            break
+        time.sleep(0.5)
+
+    # 超时，强制杀死
+    try:
+        os.kill(pid, 9)  # SIGKILL
+        print(f"! Daemon (PID {pid}) did not stop gracefully, sent SIGKILL")
+    except ProcessLookupError:
+        print(f"+ Daemon (PID {pid}) stopped")
+    except PermissionError:
+        print(f"! Permission denied to kill process {pid}")
     finally:
         pid_file.unlink(missing_ok=True)
 

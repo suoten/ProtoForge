@@ -50,3 +50,23 @@ htmlcov/
 
 *.whl
 .cursorignore
+
+# Chrome debug profile
+chrome-debug/
+
+# Temporary test/output files
+*_out.txt
+*_result.txt
+_test_*.py
+.git_commit_msg.txt
+test_output.txt
+test_proto.txt
+test_*.py
+test_screenshots/
+
+# OpenAPI spec (generated)
+openapi.json
+
+# Agent/browser config
+ab-config.json
+agent-browser.json

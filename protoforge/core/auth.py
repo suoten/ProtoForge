@@ -298,7 +298,22 @@ class UserManager:
             users = await self._db.load_all_users()
             for u in users:
                 user = User.from_dict(u)
-                if user.username != "admin":
+                if user.username == "admin":
+                    # PROTOFORGE_RESET_ADMIN_PASSWORD=true 时，用环境变量密码覆盖数据库中的 admin 密码
+                    try:
+                        from protoforge.config import get_settings
+                        settings = get_settings()
+                        if settings.reset_admin_password and settings.admin_password:
+                            user.password_hash = hash_password(settings.admin_password)
+                            user.login_attempts = 0
+                            user.locked_until = 0.0
+                            await self._persist_user(user)
+                            logger.info("Admin password has been reset from PROTOFORGE_ADMIN_PASSWORD (PROTOFORGE_RESET_ADMIN_PASSWORD=true)")
+                    except Exception as e:
+                        logger.warning("Failed to reset admin password: %s", e)
+                    self._users["admin"] = user
+                    self._users_by_id["admin"] = user
+                else:
                     self._users[user.username] = user
                     self._users_by_id[user.id] = user
             logger.info("Restored %d users from database", len(users))

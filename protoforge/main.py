@@ -144,6 +144,11 @@ async def lifespan(app: FastAPI):
             "SECURITY: Admin password is weak or default. "
             "Set PROTOFORGE_ADMIN_PASSWORD to a strong password for production."
         )
+    if settings.reset_admin_password:
+        logger.info(
+            "CONFIG: PROTOFORGE_RESET_ADMIN_PASSWORD=true, admin password will be reset on startup. "
+            "Remember to set it back to false after the password is changed."
+        )
     if settings.cors_origins == "*":
         logger.warning(
             "SECURITY: CORS allows all origins (*). "
@@ -329,41 +334,39 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    if grpc_server:
-        try:
-            await grpc_server.stop(grace=5)
-            logger.info("gRPC server stopped")
-        except Exception as e:
-            logger.warning("Error stopping gRPC server: %s", e)
+    import asyncio
 
-    try:
-        await _integration_manager.stop()
-    except Exception as e:
-        logger.warning("Error stopping integration manager: %s", e)
+    async def _stop_with_timeout(coro, name, timeout=10):
+        """执行停止协程，超时则跳过，避免 shutdown 阻塞导致进程僵死。"""
+        try:
+            await asyncio.wait_for(coro, timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning("Timeout stopping %s (%ds), skipping", name, timeout)
+        except Exception as e:
+            logger.warning("Error stopping %s: %s", name, e)
+
+    if grpc_server:
+        await _stop_with_timeout(grpc_server.stop(grace=5), "gRPC server")
+
+    await _stop_with_timeout(_integration_manager.stop(), "integration manager")
     try:
         from protoforge.core.webhook import webhook_manager
-        await webhook_manager.stop()
+        await _stop_with_timeout(webhook_manager.stop(), "webhook manager")
     except Exception as e:
-        logger.warning("Error stopping webhook manager: %s", e)
-    try:
-        await _engine.stop()
-    except Exception as e:
-        logger.error("Error stopping engine: %s", e)
-    try:
-        await _database.close()
-    except Exception as e:
-        logger.error("Error closing database: %s", e)
+        logger.warning("Error loading webhook manager: %s", e)
+    await _stop_with_timeout(_engine.stop(), "engine")
+    await _stop_with_timeout(_database.close(), "database")
     try:
         from protoforge.api.v1.test_routes import _close_internal_client
-        await _close_internal_client()
+        await _stop_with_timeout(_close_internal_client(), "internal client", timeout=5)
     except Exception as e:
-        logger.debug("Error closing internal client: %s", e)
+        logger.debug("Error loading internal client: %s", e)
     try:
         from protoforge.core.edgelite import _close_http_client
-        await _close_http_client()
+        await _stop_with_timeout(_close_http_client(), "HTTP client", timeout=5)
         logger.info("HTTP client closed")
     except Exception as e:
-        logger.debug("Error closing HTTP client: %s", e)
+        logger.debug("Error loading HTTP client: %s", e)
     logger.info("ProtoForge stopped")
 
 

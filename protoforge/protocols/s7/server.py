@@ -322,7 +322,9 @@ class S7Server(ProtocolServer):
         pdu_type = data[5]  # FIXED-P0: data[4]是COTP LI字段，data[5]才是PDU Type
         if pdu_type == 0xE0:  # FIXED-P0: COTP CR(Connection Request)类型码为0xE0，非0xF0(DT)
             cotp_len = data[4]  # FIXED-P0: COTP LI(长度指示)在data[4]，非data[5]
-            if len(data) < 7 + cotp_len:
+            # FIXED-P0: LI值表示从PDU Type到COTP末尾的长度，总包长=TPKT(4)+LI字节(1)+LI值
+            # 原代码 7+cotp_len 对22字节的COTP CR报文(22<24)误判为长度不足，导致所有连接被丢弃
+            if len(data) < 5 + cotp_len:
                 return None, None
             resolved_id = self._resolve_device_from_cotp(data)
             # Ensure device is registered before COTP CR response, so it's ready for S7 Setup
@@ -338,19 +340,47 @@ class S7Server(ProtocolServer):
         if len(data) < 17:
             return None, None
 
+        # S7 Job 请求分发：基于功能码(data[17])而非消息类型(data[8])
+        # S7 协议中所有 Job 请求的 msg_type 都是 0x01，功能码在参数区首字节
+        # TPKT(4) + COTP DT(3) + S7 Header(10) = 17，所以 data[17] 是功能码
         msg_type = data[8]
-        if msg_type == 0x01:
-            return self._make_s7_connect_response(data), None
-        elif msg_type == 0x07:
-            return self._make_s7_read_response(data, device_id), None
-        elif msg_type == 0x05:
-            return self._make_s7_write_response(data, device_id), None
-        elif msg_type == 0x04:
-            return self._make_s7_szl_response(data, device_id), None
-        elif msg_type == 0x0C:  # FIXED-P1: Start PLC
-            return self._make_s7_plc_control_response(data, device_id, start=True), None
-        elif msg_type == 0x0D:  # FIXED-P1: Stop PLC
-            return self._make_s7_plc_control_response(data, device_id, start=False), None
+        if msg_type == 0x01:  # Job 请求
+            func_code = data[17] if len(data) > 17 else 0
+            if func_code == 0xF0:      # Setup Communication
+                return self._make_s7_connect_response(data), None
+            elif func_code == 0x04:    # Read Var
+                return self._make_s7_read_response(data, device_id), None
+            elif func_code == 0x05:    # Write Var
+                return self._make_s7_write_response(data, device_id), None
+            elif func_code == 0x28:    # Start PLC (Hot Start)
+                return self._make_s7_plc_control_response(data, device_id, start=True), None
+            elif func_code == 0x29:    # Stop PLC
+                return self._make_s7_plc_control_response(data, device_id, start=False), None
+            else:
+                return self._make_s7_error_response(data), None
+        elif msg_type == 0x07:  # User Data (SZL/编程/调试功能)
+            # FIXED-P0: snap7 的 read_szl/get_cpu_info 使用 USER_DATA(0x07) 而非 Read Var(0x04)
+            # USER_DATA 参数结构: Reserved(1) + ParamCount(1) + TypeLenHeader(2) + Method(1) + TypeGroup(1) + SubFunc(1) + DataRef(1)
+            # data[17] = Reserved, data[18] = ParamCount, data[19] = 0x12, data[20] = length
+            # data[21] = Method, data[22] = Type|Group, data[23] = SubFunction, data[24] = DataRef
+            if len(data) > 23:
+                method = data[21]
+                type_group = data[22]
+                sub_func = data[23]
+                group = type_group & 0x0F
+                # Group 4 = SZL, SubFunction 1 = READ_SZL
+                if group == 0x04 and sub_func == 0x01:
+                    return self._make_s7_szl_response(data, device_id), None
+                elif group == 0x04:
+                    return self._make_s7_szl_response(data, device_id), None
+            # PLC Control via User Data
+            if len(data) > 17:
+                func_code = data[17]
+                if func_code == 0x28:
+                    return self._make_s7_plc_control_response(data, device_id, start=True), None
+                elif func_code == 0x29:
+                    return self._make_s7_plc_control_response(data, device_id, start=False), None
+            return self._make_s7_error_response(data), None
 
         return None, None
 
@@ -444,13 +474,12 @@ class S7Server(ProtocolServer):
                     s7_offset = i
                     break
             if s7_offset > 0 and len(data) > s7_offset + 14:
-                param_start = s7_offset + 10  # S7 header = 10 bytes
+                param_start = s7_offset + 10  # S7 header = 10 bytes (Job类型无Error Class/Code)
                 if data[param_start] == 0xF0 and len(data) > param_start + 5:
-                    pdu_size_req = struct.unpack(">H", data[param_start + 3:param_start + 5])[0]
-                    if len(data) > param_start + 7:
-                        max_amq_caller = struct.unpack(">H", data[param_start + 5:param_start + 7])[0] or self._DEFAULT_AMQ
-                    if len(data) > param_start + 9:
-                        max_amq_callee = struct.unpack(">H", data[param_start + 7:param_start + 9])[0] or self._DEFAULT_AMQ
+                    # Setup Communication参数: Function(1) + Reserved(1) + AMQ Calling(2) + AMQ Called(2) + PDU Size(2)
+                    max_amq_caller = struct.unpack(">H", data[param_start + 2:param_start + 4])[0] or self._DEFAULT_AMQ
+                    max_amq_callee = struct.unpack(">H", data[param_start + 4:param_start + 6])[0] or self._DEFAULT_AMQ
+                    pdu_size_req = struct.unpack(">H", data[param_start + 6:param_start + 8])[0]
         except Exception as e:
             logger.debug("S7 connect param parse error: %s", e)
         pdu_size = min(max(pdu_size_req, self._MIN_PDU_SIZE), self._MAX_PDU_SIZE)
@@ -462,34 +491,39 @@ class S7Server(ProtocolServer):
             0x32, 0x03,               # S7 Protocol ID, Msg Type = Ack Data
             0x00, 0x00,               # Reserved
         ])
-        resp += data[10:12]  # PDU Reference (echo from request)
+        resp += data[11:13]  # PDU Reference (echo from request) - FIXED: 偏移11非10
         resp += struct.pack(">H", 0x0008)  # Parameter Length = 8
         resp += struct.pack(">H", 0x0000)  # Data Length = 0
         resp += bytes([0x00, 0x00])  # Error Class = 0, Error Code = 0
         resp += bytes([0xF0, 0x00])  # Function = Setup Communication, Reserved
-        resp += struct.pack(">H", pdu_size)
-        resp += struct.pack(">H", max_amq_caller)  # Max AMQ Calling first
-        resp += struct.pack(">H", max_amq_callee)  # Max AMQ Called second
+        resp += struct.pack(">H", max_amq_caller)  # FIXED: AMQ Calling在PDU Size之前
+        resp += struct.pack(">H", max_amq_callee)  # FIXED: AMQ Called在PDU Size之前
+        resp += struct.pack(">H", pdu_size)         # FIXED: PDU Size在最后
         resp[2:4] = struct.pack(">H", len(resp))   # Dynamic TPKT length
         return bytes(resp)
 
     def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:
-        if len(data) < 14:
+        if len(data) < 20:
             return self._make_s7_error_response(data)
 
-        param_start = 14
+        # FIXED: param_start=17 (TPKT(4)+COTP DT(3)+S7 Header(10))
+        # S7 Job 请求结构: TPKT(4) + COTP DT(3) + S7 Header(10) + Parameters
+        # Parameters: Function(1) + Reserved(1) + Item Count(1) + Items(N*12)
+        param_start = 17
         if len(data) <= param_start + 2:
             return self._make_s7_error_response(data)
 
-        func_code = data[param_start]
+        func_code = data[param_start]  # 0x04 = Read Var
         if func_code != 0x04:
             return self._make_s7_error_response(data)
 
-        item_count = data[param_start + 2] if len(data) > param_start + 2 else 1
+        # FIXED-P0: Read Var 参数格式 = Function(1) + ItemCount(1) + Items(N*12)
+        # 没有 reserved 字节！data[param_start+1] 就是 ItemCount
+        item_count = data[param_start + 1] if len(data) > param_start + 1 else 1
         if item_count == 0:
             item_count = 1
 
-        item_offset = param_start + 3
+        item_offset = param_start + 2  # FIXED-P0: Items 从 param_start+2 开始
         item_results = []
 
         for i in range(item_count):
@@ -500,18 +534,27 @@ class S7Server(ProtocolServer):
             item_spec = data[item_offset:item_offset + 12]
             item_offset += 12
 
+            # FIXED-P0: S7 Read Var Item 结构 (12 bytes):
+            # [0]  Spec type (0x12)
+            # [1]  Length of following (0x0A)
+            # [2]  Syntax ID (0x10)
+            # [3]  Transport size (0x02=byte, 0x04=byte/word, 0x09=bool)
+            # [4:6] Number of elements
+            # [6:8] DB Number (big-endian uint16, 0 for non-DB areas)
+            # [8]  Area code (0x84=DB, 0x81=I, 0x82=Q, 0x83=M)
+            # [9:12] Address (3 bytes, bit address = byte_offset * 8 + bit_number)
             spec_type = item_spec[0]
             if spec_type != 0x12:
                 item_results.append((0x0A, b"\x00"))
                 continue
 
-            transport_size_code = item_spec[1]
-            length = struct.unpack(">H", item_spec[2:4])[0]
-            area = item_spec[6]
-            db_number = struct.unpack(">H", item_spec[7:9])[0]
-            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]  # FIXED-P0: 3字节地址组合为24位
-            offset = full_addr >> 3  # FIXED-P0: 右移3位取字节偏移
-            bit_number = full_addr & 0x07  # FIXED-P0: 低3位为位号
+            transport_size_code = item_spec[3]
+            length = struct.unpack(">H", item_spec[4:6])[0]
+            db_number = struct.unpack(">H", item_spec[6:8])[0]  # FIXED-P0: DB Number 在偏移6:8
+            area = item_spec[8]  # FIXED-P0: Area 在偏移8，DB Number 之后
+            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
+            offset = full_addr >> 3
+            bit_number = full_addr & 0x07
 
             if transport_size_code == 0x09:
                 read_size = (length + 7) // 8
@@ -529,16 +572,6 @@ class S7Server(ProtocolServer):
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
                 value_bytes = behavior.read_area(area, db_number, offset, read_size)
-                for name, (p_db, p_offset) in behavior._point_addresses.items():
-                    if area == behavior.S7_AREA_DB and db_number == p_db:
-                        pt = behavior._points.get(name)
-                        if pt and hasattr(pt, "data_type"):
-                            dt = str(pt.data_type)
-                            p_size = 4 if dt in ("float32", "int32", "uint32") else 8 if dt == "float64" else 2
-                            if offset == p_offset:
-                                val = behavior.get_value(name)
-                                behavior._sync_value_to_db(name, val)
-                                value_bytes = behavior.read_area(area, db_number, offset, read_size)
 
             item_results.append((0xFF, value_bytes))
 
@@ -548,30 +581,39 @@ class S7Server(ProtocolServer):
             if len(val_bytes) % 2 != 0:
                 data_len += 1
 
-        param_len = 2 + item_count
+        # FIXED-P0: Read Response 参数区 = Function(1) + ItemCount(1) = 2 字节
+        # 返回码在 data section 中，不在 parameter section 中
+        param_len = 2
         resp = bytearray([
             0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
+            0x00, 0x00,               # Reserved字段
         ])
-        resp += data[10:12]
-        resp += struct.pack(">H", 0x0000)
+        resp += data[11:13]            # PDU Reference偏移11
         resp += struct.pack(">H", param_len)
         resp += struct.pack(">H", data_len)
+        resp += bytes([0x00, 0x00])    # Error Class=0, Error Code=0
 
+        # Parameter section: Function(1) + ItemCount(1)
         resp += bytes([0x04])
-        resp += bytes([0x00])
         resp += bytes([item_count])
 
+        # Data section: each item = ReturnCode(1) + TransportSize(1) + Length(2) + Data(N) + Padding
         for result_code, val_bytes in item_results:
             resp += bytes([result_code])
             if result_code != 0xFF:
                 resp += bytes([0x00])
                 resp += struct.pack(">H", 0)
             else:
+                # FIXED-P0: transport_size=0x04 时 Length 是位数(bit count)，snap7 用 length//8 计算字节数
                 transport_size = 0x09 if len(val_bytes) <= 1 else 0x04
-                resp += bytes([transport_size])
-                resp += struct.pack(">H", len(val_bytes))
+                if transport_size == 0x04:
+                    resp += bytes([transport_size])
+                    resp += struct.pack(">H", len(val_bytes) * 8)  # 位数
+                else:
+                    resp += bytes([transport_size])
+                    resp += struct.pack(">H", len(val_bytes))  # 字节数
                 resp += val_bytes
                 if len(val_bytes) % 2 != 0:
                     resp += bytes([0x00])
@@ -580,16 +622,18 @@ class S7Server(ProtocolServer):
         return bytes(resp)
 
     def _make_s7_write_response(self, data: bytes, device_id: str | None = None) -> bytes:
-        if len(data) < 14:
+        if len(data) < 20:
             return self._make_s7_error_response(data)
 
-        param_start = 14
+        # FIXED: param_start=17 (TPKT(4)+COTP DT(3)+S7 Header(10))
+        param_start = 17
         func_code = data[param_start] if len(data) > param_start else 0x05
-        item_count = data[param_start + 2] if len(data) > param_start + 2 else 1
+        # FIXED-P0: Write Var 参数格式 = Function(1) + ItemCount(1) + Items(N*12)
+        item_count = data[param_start + 1] if len(data) > param_start + 1 else 1
         if item_count == 0:
             item_count = 1
 
-        item_offset = param_start + 3
+        item_offset = param_start + 2  # FIXED-P0: Items 从 param_start+2 开始
         result_codes = []
 
         for i in range(item_count):
@@ -605,28 +649,30 @@ class S7Server(ProtocolServer):
                 result_codes.append(0x0A)
                 continue
 
-            area = item_spec[6]
-            db_number = struct.unpack(">H", item_spec[7:9])[0]
-            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]  # FIXED-P0: 3字节地址组合为24位
-            offset = full_addr >> 3  # FIXED-P0: 右移3位取字节偏移
-            bit_number = full_addr & 0x07  # FIXED-P0: 低3位为位号
+            db_number = struct.unpack(">H", item_spec[6:8])[0]  # FIXED-P0: DB Number 在偏移6:8
+            area = item_spec[8]  # FIXED-P0: Area 在偏移8
+            full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
+            offset = full_addr >> 3
+            bit_number = full_addr & 0x07
 
             write_data = b"\x00\x00\x00\x00"
-            data_section_start = param_start + 3 + item_count * 12
-            if data_section_start + 4 <= len(data):
-                data_item_count = data[data_section_start] if len(data) > data_section_start else 0
-                ptr = data_section_start + 1
-                for j in range(i + 1):
-                    if ptr + 4 > len(data):
-                        break
-                    rc = data[ptr]
-                    ts = data[ptr + 1]
-                    dlen = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
-                    if j == i and ptr + 4 + dlen <= len(data):
-                        write_data = data[ptr + 4:ptr + 4 + dlen]
-                    ptr += 4 + dlen
-                    if dlen % 2 != 0:
-                        ptr += 1
+            data_section_start = param_start + 2 + item_count * 12  # FIXED-P0: 参数区=Function(1)+ItemCount(1)+Items
+            # FIXED-P0: Write Data section 格式 = 每个item: ReturnCode(1) + TransportSize(1) + Length(2) + Data(N) + Padding
+            # 没有 item count 字段，直接遍历 items
+            # 注意: TransportSize=0x04 时 Length 是位数，需要 //8 得到字节数
+            ptr = data_section_start
+            for j in range(i + 1):
+                if ptr + 4 > len(data):
+                    break
+                rc = data[ptr]
+                ts = data[ptr + 1]
+                raw_len = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
+                dlen = raw_len // 8 if ts == 0x04 else raw_len  # FIXED-P0: 位数转字节数
+                if j == i and ptr + 4 + dlen <= len(data):
+                    write_data = data[ptr + 4:ptr + 4 + dlen]
+                ptr += 4 + dlen
+                if dlen % 2 != 0:
+                    ptr += 1
 
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
@@ -660,23 +706,27 @@ class S7Server(ProtocolServer):
                                 detail={"area": area_name, "db": db_number, "offset": offset, "len": len(write_data)})
             result_codes.append(0xFF)
 
-        param_len = 2 + item_count
+        # FIXED-P0: Write Response 参数区 = Function(1) + ItemCount(1) = 2 字节
+        # 返回码在 data section 中，不在 parameter section 中
+        param_len = 2
         data_len = item_count
 
         resp = bytearray([
             0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
+            0x00, 0x00,               # FIXED: Reserved字段
         ])
-        resp += data[10:12]
-        resp += struct.pack(">H", 0x0000)
+        resp += data[11:13]            # FIXED: PDU Reference偏移11非10
         resp += struct.pack(">H", param_len)
         resp += struct.pack(">H", data_len)
+        resp += bytes([0x00, 0x00])    # FIXED: Error Class=0, Error Code=0
 
+        # Parameter section: Function(1) + ItemCount(1)
         resp += bytes([0x05])
-        resp += bytes([0x00])
         resp += bytes([item_count])
 
+        # Data section: ReturnCode(1) per item
         for rc in result_codes:
             resp += bytes([rc])
 
@@ -688,22 +738,37 @@ class S7Server(ProtocolServer):
             0x03, 0x00, 0x00, 0x00,  # TPKT (length updated below)
             0x02, 0xF0, 0x80,
             0x32, 0x03,
+            0x00, 0x00,               # FIXED: Reserved字段
         ])
-        resp += data[10:12] if len(data) > 11 else b"\x00\x00"
-        resp += bytes([
-            0x00, 0x00, 0x00, 0x00,
-            0x00, 0x02,
-            0x00, 0x00,
-            0x00, 0x00,
-            0x01, 0x00,
-            error_code,
-        ])
+        resp += data[11:13] if len(data) > 12 else b"\x00\x00"  # FIXED: PDU Reference偏移11非10
+        resp += struct.pack(">H", 0x0008)  # Parameter Length = 8
+        resp += struct.pack(">H", 0x0000)  # Data Length = 0
+        resp += bytes([0x81, error_code])   # Error Class=0x81, Error Code
+        resp += bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])  # 8 bytes padding
         resp[2:4] = struct.pack(">H", len(resp))  # Dynamic TPKT length
         return bytes(resp)
 
     def _make_s7_szl_response(self, data: bytes, device_id: str | None = None) -> bytes:
-        szl_id = struct.unpack(">H", data[26:28])[0] if len(data) >= 28 else 0x0011
-        szl_index = struct.unpack(">H", data[28:30])[0] if len(data) >= 30 else 0x0000
+        # FIXED-P0: SZL 使用 USER_DATA(0x07) 协议，响应也必须是 USER_DATA 格式
+        # 请求结构: TPKT(4) + COTP DT(3) + S7 Header(10) + Parameters(8) + Data(8)
+        # Parameters: Reserved(1) + ParamCount(1) + 0x12(1) + Len(1) + Method(1) + TypeGroup(1) + SubFunc(1) + DataRef(1)
+        # Data: ReturnCode(1) + TransportSize(1) + Length(2) + SZL_ID(2) + SZL_Index(2)
+
+        # 从 Data section 提取 SZL ID 和 Index
+        # S7 Header: data[7:17], Parameters: data[17:25], Data: data[25:]
+        param_len = struct.unpack(">H", data[13:15])[0] if len(data) >= 15 else 8
+        data_offset = 17 + param_len
+        szl_id = 0x0011
+        szl_index = 0x0000
+        if data_offset + 8 <= len(data):
+            szl_id = struct.unpack(">H", data[data_offset + 4:data_offset + 6])[0]
+            szl_index = struct.unpack(">H", data[data_offset + 6:data_offset + 8])[0]
+
+        # 提取请求中的参数用于回显
+        req_method = data[21] if len(data) > 21 else 0x11
+        req_type_group = data[22] if len(data) > 22 else 0x44
+        req_sub_func = data[23] if len(data) > 23 else 0x01
+        req_data_ref = data[24] if len(data) > 24 else 0x00
 
         if szl_id == 0x0011:
             szl_data = self._build_szl_module_identification(szl_index)
@@ -711,81 +776,106 @@ class S7Server(ProtocolServer):
             szl_data = self._build_szl_component_identification(szl_index)
         elif szl_id == 0x001C:
             szl_data = self._build_szl_cpu_features()
-        elif szl_id == 0x0032:  # FIXED-P1: PLC Status查询
+        elif szl_id == 0x0032:
             szl_data = self._build_szl_plc_status(device_id)
         else:
             szl_data = self._build_szl_module_identification(0x0000)
 
+        # USER_DATA 响应格式: S7 Header(10) + Parameters(8) + Data(4 + 2 + 2 + szl_data)
+        # 注意: USER_DATA 响应没有 Error Class/Code 字段（与 Ack Data 不同）
+        param_data = bytes([
+            0x00,           # Reserved
+            0x01,           # Parameter count
+            0x12,           # Type/length header
+            0x04,           # Length of following
+            0x12,           # Method = 0x12 (response, 对应请求的 0x11)
+            req_type_group, # Type|Group (回显请求值)
+            req_sub_func,   # SubFunction (回显请求值)
+            req_data_ref,   # DataRef (回显请求值)
+        ])
+
+        # Data section: ReturnCode(1) + TransportSize(1) + Length(2) + SZL_ID(2) + SZL_Index(2) + SZL_Data
+        data_section = bytes([
+            0xFF,           # Return code = success
+            0x09,           # Transport size = octet string
+        ]) + struct.pack(">H", 4 + len(szl_data))  # Length of following data
+        data_section += struct.pack(">H", szl_id)
+        data_section += struct.pack(">H", szl_index)
+        data_section += szl_data
+
         resp = bytearray([
-            0x03, 0x00, 0x00, 0x00,
-            0x02, 0xF0, 0x80,
-            0x32, 0x03,
+            0x03, 0x00, 0x00, 0x00,  # TPKT (length updated below)
+            0x02, 0xF0, 0x80,        # COTP DT
+            0x32, 0x07,               # S7 Protocol ID, Msg Type = USER_DATA (0x07)
+            0x00, 0x00,               # Reserved
         ])
-        resp += data[10:12] if len(data) > 11 else b"\x00\x00"
-        resp += bytes([
-            0x00, 0x00, 0x00, 0x00,
-        ])
-        resp += struct.pack(">H", 2 + len(szl_data))
-        resp += bytes([
-            0x00, 0x00,
-            0xFF,
-            0x04,
-            0x01,
-        ])
-        resp += struct.pack(">H", szl_id)
-        resp += szl_data
+        resp += data[11:13]  # PDU Reference (echo)
+        resp += struct.pack(">H", len(param_data))  # Parameter Length
+        resp += struct.pack(">H", len(data_section))  # Data Length
+        # USER_DATA 响应没有 Error Class/Code 字段
+        resp += param_data
+        resp += data_section
         resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)
 
     def _build_szl_module_identification(self, index: int) -> bytes:
+        # FIXED-P0: SZL 0x0011 = Order Code (snap7 parse_order_code_szl)
+        # 数据记录格式: OrderCode(20) + V1(1) + V2(1) + V3(1) = 23 bytes
+        # 注意: 不包含 LengthDR + NDR 头，snap7 的 parse_read_szl_response 已跳过 SZL_ID+Index
         info = self._device_info.get(self._default_device_id, {})
-        module_name = info.get("module_name", "ProtoForge S7")
-        serial = info.get("serial_number", "PF-00000000")
-        # FIXED-P1: hardware_revision非数字时回退默认值，与firmware_revision的isdigit()保护一致
-        hw_rev = int(info.get("hardware_revision", "1")) if info.get("hardware_revision", "1").isdigit() else 1
+        order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
         fw_parts = fw_rev_str.replace("V", "").split(".")
         fw_major = int(fw_parts[0]) if fw_parts and fw_parts[0].isdigit() else 1
         fw_minor = int(fw_parts[1]) if len(fw_parts) > 1 and fw_parts[1].isdigit() else 0
-        name_bytes = module_name.encode("utf-8")[:24].ljust(24, b"\x00")
-        serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")
-        return struct.pack(">HHHHHII",
-            0x0001,
-            index or 0x0001,
-            0x3131,
-            hw_rev,
-            (fw_major << 8) | fw_minor,
-            0x00000000,
-            0x00000000,
-        ) + name_bytes + serial_bytes
+        fw_patch = int(fw_parts[2]) if len(fw_parts) > 2 and fw_parts[2].isdigit() else 0
+        order_bytes = order_num.encode("utf-8")[:20].ljust(20, b"\x00")
+        record = order_bytes + bytes([fw_major, fw_minor, fw_patch])
+        return record
 
     def _build_szl_component_identification(self, index: int) -> bytes:
+        # FIXED-P0: SZL 0x0012 = Component Identification
+        # 数据记录格式与 0x0011 类似，不包含 LengthDR + NDR 头
         info = self._device_info.get(self._default_device_id, {})
         order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
-        serial = info.get("serial_number", "PF-00000000")
-        # FIXED-P1: hardware_revision非数字时回退默认值
-        hw_rev = int(info.get("hardware_revision", "1")) if info.get("hardware_revision", "1").isdigit() else 1
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
+        fw_parts = fw_rev_str.replace("V", "").split(".")
+        fw_major = int(fw_parts[0]) if fw_parts and fw_parts[0].isdigit() else 1
+        fw_minor = int(fw_parts[1]) if len(fw_parts) > 1 and fw_parts[1].isdigit() else 0
+        fw_patch = int(fw_parts[2]) if len(fw_parts) > 2 and fw_parts[2].isdigit() else 0
         order_bytes = order_num.encode("utf-8")[:20].ljust(20, b"\x00")
-        serial_bytes = serial.encode("utf-8")[:24].ljust(24, b"\x00")
-        return struct.pack(">HHHH",
-            0x0001,
-            index or 0x0001,
-            hw_rev,
-            0x0000,
-        ) + order_bytes + serial_bytes
+        record = order_bytes + bytes([fw_major, fw_minor, fw_patch])
+        return record
 
     def _build_szl_cpu_features(self) -> bytes:
-        return struct.pack(">HHHHHHHH",
-            0x0001,
-            0x0001,
-            0x0001,
-            0x0001,
-            0x0000,
-            0x0000,
-            0x0000,
-            0x0000,
-        )
+        # FIXED-P0: SZL 0x001C = CPU Component Identification (snap7 get_cpu_info)
+        # snap7 新版 get_cpu_info 期望连续排列的数据记录（130 字节）：
+        #   ModuleTypeName[0:32]   (32 bytes)
+        #   SerialNumber[32:56]    (24 bytes)
+        #   ASName[56:80]          (24 bytes)
+        #   Copyright[80:106]      (26 bytes)
+        #   ModuleName[106:130]    (24 bytes)
+        # 不包含 LengthDR + NDR 头
+        info = self._device_info.get(self._default_device_id, {})
+        module_name = info.get("module_name", "ProtoForge S7")
+        serial = info.get("serial_number", "PF-00000000")
+        as_name = info.get("module_name", "ProtoForge")
+        copyright_str = "Original Siemens AG"
+        module_type = info.get("module_name", "ProtoForge S7-1200")
+
+        record = bytearray(130)
+        # [0:32] ModuleTypeName
+        record[0:32] = module_type.encode("utf-8")[:32].ljust(32, b"\x00")
+        # [32:56] SerialNumber
+        record[32:56] = serial.encode("utf-8")[:24].ljust(24, b"\x00")
+        # [56:80] ASName
+        record[56:80] = as_name.encode("utf-8")[:24].ljust(24, b"\x00")
+        # [80:106] Copyright
+        record[80:106] = copyright_str.encode("utf-8")[:26].ljust(26, b"\x00")
+        # [106:130] ModuleName
+        record[106:130] = module_name.encode("utf-8")[:24].ljust(24, b"\x00")
+
+        return bytes(record)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
@@ -896,7 +986,9 @@ class S7Server(ProtocolServer):
             val = behavior._values.get("run_status")
             if val is not None:
                 run_status = 0x08 if val else 0x04  # 0x08=RUN, 0x04=STOP
-        return struct.pack(">HBH", 0x0004, 0x01, run_status)
+        # SZL 数据 = 纯数据记录，不包含 LengthDR + NDR 头
+        record = struct.pack(">H", run_status)  # 2 bytes
+        return record
 
     def _make_s7_plc_control_response(self, data: bytes, device_id: str | None = None, start: bool = True) -> bytes:  # FIXED-P1: Start/Stop PLC
         behavior = self._behaviors.get(device_id or self._default_device_id)
@@ -907,8 +999,12 @@ class S7Server(ProtocolServer):
             0x03, 0x00, 0x00, 0x00,
             0x02, 0xF0, 0x80,
             0x32, 0x03,
+            0x00, 0x00,               # FIXED: Reserved字段
         ])
-        resp += data[10:12] if len(data) > 11 else b"\x00\x00"
-        resp += bytes([0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00])
+        resp += data[11:13] if len(data) > 12 else b"\x00\x00"  # FIXED: PDU Reference偏移11非10
+        resp += struct.pack(">H", 0x0001)  # Parameter Length = 1
+        resp += struct.pack(">H", 0x0000)  # Data Length = 0
+        resp += bytes([0x00, 0x00])    # FIXED: Error Class=0, Error Code=0
+        resp += bytes([0x28 if start else 0x29])  # Function: Start/Stop
         resp[2:4] = struct.pack(">H", len(resp))
         return bytes(resp)

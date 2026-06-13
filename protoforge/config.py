@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""  # FIXED: default empty for security; set PROTOFORGE_CORS_ORIGINS for production
     no_auth: bool = False
     admin_password: str = ""  # FIXED: default empty; auto-generates random password if unset
+    reset_admin_password: bool = False  # 设为 true 时，启动时用 PROTOFORGE_ADMIN_PASSWORD 重置 admin 密码
     grpc_port: int = 0  # FIXED: default to 0 (disabled); set PROTOFORGE_GRPC_PORT to enable (e.g. 50051)
     failover_role: str = ""
     failover_primary: str = ""
