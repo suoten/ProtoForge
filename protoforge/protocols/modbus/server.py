@@ -6,7 +6,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore
+from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore, parse_modbus_address
 from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
 
 logger = logging.getLogger(__name__)
@@ -99,11 +99,16 @@ class ModbusTcpServer(ProtocolServer):
 
         for slave_id in all_slave_ids:
             store = self._get_data_store(slave_id)
+            # FIXED-M09: 根据实际数据范围动态确定初始化大小，而非硬编码0-99
+            max_coil = max((k for k in store.coils), default=99) + 1
+            max_di = max((k for k in store.discrete_inputs), default=99) + 1
+            max_hr = max((k for k in store.holding_regs), default=99) + 1
+            max_ir = max((k for k in store.input_regs), default=99) + 1
             simdata = [
-                SimData(1, values=[store.coils.get(i, 0) for i in range(0, 100)], datatype=DataType.BITS),
-                SimData(10001, values=[store.discrete_inputs.get(i, 0) for i in range(0, 100)], datatype=DataType.BITS),
-                SimData(40001, values=[store.holding_regs.get(i, 0) for i in range(0, 100)], datatype=DataType.REGISTERS),
-                SimData(30001, values=[store.input_regs.get(i, 0) for i in range(0, 100)], datatype=DataType.REGISTERS),
+                SimData(1, values=[store.coils.get(i, 0) for i in range(0, max(100, max_coil))], datatype=DataType.BITS),
+                SimData(10001, values=[store.discrete_inputs.get(i, 0) for i in range(0, max(100, max_di))], datatype=DataType.BITS),
+                SimData(40001, values=[store.holding_regs.get(i, 0) for i in range(0, max(100, max_hr))], datatype=DataType.REGISTERS),
+                SimData(30001, values=[store.input_regs.get(i, 0) for i in range(0, max(100, max_ir))], datatype=DataType.REGISTERS),
             ]
             devices.append(SimDevice(slave_id, simdata=simdata))
         return devices
@@ -134,6 +139,8 @@ class ModbusTcpServer(ProtocolServer):
                 if proto_id != 0:  # FIXED-P2: MBAP Protocol ID必须为0(Modbus规范)
                     continue
                 length = struct.unpack(">H", header[4:6])[0]
+                if length < 1 or length > 253:  # FIXED-N01: MBAP length域范围1-253(Modbus规范)，防止恶意帧导致异常读取
+                    continue
                 unit_id = header[6]
                 if length > 0:
                     payload = await asyncio.wait_for(reader.readexactly(length - 1), timeout=self._CONN_TIMEOUT)  # FIXED: 添加读取超时
@@ -166,6 +173,8 @@ class ModbusTcpServer(ProtocolServer):
             return None
         # 广播写入时遍历所有从站
         target_stores = list(self._data_stores.values()) if is_broadcast else [self._get_data_store(slave_id)]
+        if not target_stores:  # FIXED-H02: 无从站时忽略广播请求，避免target_stores[0] IndexError
+            return None
         store = target_stores[0]  # 用于读取和日志
         try:
             if fc == 0x01:
@@ -310,7 +319,7 @@ class ModbusTcpServer(ProtocolServer):
                 r_count = struct.unpack(">H", data[2:4])[0]
                 w_start = struct.unpack(">H", data[4:6])[0]  # FIXED-P0: 移除+1偏移
                 w_count = struct.unpack(">H", data[6:8])[0]
-                if r_count > self._MAX_READ_REGISTERS or w_count > 121:  # FIXED-P0: 统一用_MAX_READ_REGISTERS
+                if r_count == 0 or r_count > self._MAX_READ_REGISTERS or w_count == 0 or w_count > 121:  # FIXED-N03: r_count/w_count==0校验
                     return bytes([fc | 0x80, 0x03])
                 w_byte_count = data[8]
                 for s in target_stores:
@@ -483,11 +492,31 @@ class ModbusTcpServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                logger.warning("Modbus write_point: point '%s' not found on device %s", point_name, device_id)
+                return False
+            if point.access not in ("w", "rw"):
+                logger.warning("Modbus write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+        # 更新协议层 behavior 内部状态
         success = behavior.on_write(point_name, value)
         if success:
+            # 将写入值同步到 Modbus 数据存储（holding registers / coils）
             self._apply_device_to_context(
                 self._device_configs.get(device_id, DeviceConfig(id=device_id, name="", protocol="modbus_tcp"))
             )
+            # 通过 on_write 回调传播到 DeviceInstance，确保内部状态一致
+            if self._on_write:
+                try:
+                    await self._on_write(device_id, point_name, value)
+                except Exception as e:
+                    logger.warning("Modbus write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
         return success
 
     def get_config_schema(self) -> dict[str, Any]:
@@ -505,35 +534,47 @@ class ModbusTcpServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            try:  # FIXED-P0: int(point.address)移入try内，非数字地址时跳过该点而非崩溃；移除+1偏移
-                address = int(point.address)
-                if point.data_type.value in ("bool",):
-                    store.coils[address] = int(bool(value))
-                elif point.data_type.value in ("float32",):
-                    data = struct.pack(">f", float(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("float64",):
-                    data = struct.pack(">d", float(value))
-                    for j in range(4):
-                        store.holding_regs[address + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
-                elif point.data_type.value in ("int32",):
-                    data = struct.pack(">i", int(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("uint32",):
-                    data = struct.pack(">I", int(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("string",):
-                    encoded = str(value).encode("utf-8")
-                    if len(encoded) % 2:
-                        encoded += b'\x00'
-                    for j in range(0, len(encoded), 2):
-                        word = encoded[j:j + 2]
-                        store.holding_regs[address + j // 2] = struct.unpack(">H", word)[0]
-                else:
-                    store.holding_regs[address] = int(value) & 0xFFFF
+            try:
+                addr, area = parse_modbus_address(point.address)
+                if area == "coil":
+                    store.coils[addr] = int(bool(value))
+                elif area == "discrete":
+                    store.discrete_inputs[addr] = int(bool(value))
+                elif area == "input":
+                    if point.data_type.value in ("float32",):
+                        data = struct.pack(">f", float(value))
+                        store.input_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.input_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    else:
+                        store.input_regs[addr] = int(value) & 0xFFFF
+                else:  # holding or auto
+                    if point.data_type.value in ("bool",):
+                        store.coils[addr] = int(bool(value))
+                    elif point.data_type.value in ("float32",):
+                        data = struct.pack(">f", float(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("float64",):
+                        data = struct.pack(">d", float(value))
+                        for j in range(4):
+                            store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+                    elif point.data_type.value in ("int32",):
+                        data = struct.pack(">i", int(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("uint32",):
+                        data = struct.pack(">I", int(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("string",):
+                        encoded = str(value).encode("utf-8")
+                        if len(encoded) % 2:
+                            encoded += b'\x00'
+                        for j in range(0, len(encoded), 2):
+                            word = encoded[j:j + 2]
+                            store.holding_regs[addr + j // 2] = struct.unpack(">H", word)[0]
+                    else:
+                        store.holding_regs[addr] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
                 logger.warning("Failed to write register %s: %s", point.address, e)
         self._sync_to_pymodbus_context(slave_id, store)
@@ -567,7 +608,7 @@ class ModbusTcpServer(ProtocolServer):
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
-            address = int(point.address)  # FIXED-P0: 移除+1偏移
+            address, area = parse_modbus_address(point.address)
             dt = point.data_type.value
             if dt in ("bool",):
                 return bool(store.coils.get(address, 0))

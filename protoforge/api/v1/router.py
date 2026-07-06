@@ -19,6 +19,7 @@ from protoforge.api.v1.forward_routes import router as _forward_router
 from protoforge.api.v1.recorder_routes import router as _recorder_router
 from protoforge.api.v1.webhook_routes import router as _webhook_router
 from protoforge.api.v1.system_routes import router as _system_router
+from protoforge.api.v1.fault_routes import router as _fault_router
 
 router.include_router(_protocol_router)
 router.include_router(_device_router)
@@ -33,3 +34,4 @@ router.include_router(_forward_router)
 router.include_router(_recorder_router)
 router.include_router(_webhook_router)
 router.include_router(_system_router)
+router.include_router(_fault_router)

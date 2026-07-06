@@ -161,7 +161,7 @@ watch(() => startForm.value.protocol, async (val) => {
   if (!val) { recorderDevices.value = []; return }
   try {
     const res = await api.getDevices(val)
-    recorderDevices.value = (res || []).map(d => ({ label: `${d.name} (${d.id})`, value: d.id }))
+    recorderDevices.value = (Array.isArray(res) ? res : []).map(d => ({ label: `${d.name} (${d.id})`, value: d.id }))
   } catch { recorderDevices.value = []; message.warning(t('common.loadFailed')) }  // FIXED: catch为空函数无错误提示
 })
 

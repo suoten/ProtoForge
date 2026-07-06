@@ -51,13 +51,20 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
 
 
 async def _ws_authenticate(websocket: WebSocket) -> tuple[bool, str]:
+    """WebSocket 认证。必须先 accept 再验证/关闭，否则 close() 无效且 Starlette 会返回 403。"""
     from protoforge.api.v1.auth import is_no_auth
+    from starlette.websockets import WebSocketState
 
     if is_no_auth():
+        await websocket.accept()
         return True, "admin"
+
+    # 始终先 accept，确保后续 close() 能正常工作
+    await websocket.accept()
 
     token = _extract_ws_token(websocket)
     if not token:
+        # 等待客户端通过首帧发送 token
         try:
             msg = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
             try:
@@ -91,7 +98,7 @@ async def ws_devices(websocket: WebSocket):
     ok, role = await _ws_authenticate(websocket)
     if not ok:
         return
-    await websocket.accept()
+    # _ws_authenticate 已经调用了 websocket.accept()
     from protoforge.api.v1._helpers import _get_engine
     engine = _get_engine()
 
@@ -150,7 +157,7 @@ async def ws_logs(websocket: WebSocket):
     ok, role = await _ws_authenticate(websocket)
     if not ok:
         return
-    await websocket.accept()
+    # _ws_authenticate 已经调用了 websocket.accept()
     log_bus = _get_log_bus()
     queue = log_bus.subscribe()
 

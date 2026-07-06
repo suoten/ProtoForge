@@ -1,8 +1,82 @@
+import re
 import struct
 from typing import Any
 
 from protoforge.models.device import PointConfig
 from protoforge.protocols.behavior import DefaultDeviceBehavior
+
+
+# ---------------------------------------------------------------------------
+#  Modbus 地址解析
+# ---------------------------------------------------------------------------
+
+_MODBUS_ADDR_PATTERN = re.compile(
+    r'^(HR|IR|C|COIL|DI|DISCRETE_INPUT|4X|3X|0X|1X)?\s*0*?(\d+)$',
+    re.IGNORECASE,
+)
+
+
+def parse_modbus_address(address: str) -> tuple[int, str]:
+    """解析 Modbus 地址字符串，返回 (address_int, area_type)。
+
+    支持的格式::
+
+        "100"        → (100, "auto")       纯数字，自动判断
+        "HR100"      → (100, "holding")    Holding Register
+        "IR100"      → (100, "input")      Input Register
+        "C100"       → (100, "coil")       Coil
+        "DI100"      → (100, "discrete")   Discrete Input
+        "4x100"      → (100, "holding")    Holding Register (4x notation)
+        "3x100"      → (100, "input")      Input Register (3x notation)
+        "0x100"      → (100, "coil")       Coil (0x notation)
+        "1x100"      → (100, "discrete")   Discrete Input (1x notation)
+        "400100"     → (100, "holding")    6-digit PLC notation (400001-499999)
+        "300100"     → (100, "input")      6-digit PLC notation (300001-399999)
+        "000100"     → (100, "coil")       6-digit PLC notation (000001-099999)
+        "100100"     → (100, "discrete")   6-digit PLC notation (100001-199999)
+
+    :param address: 地址字符串
+    :return: (偏移地址, 区域类型) 元组
+    :raises ValueError: 地址格式无效
+    """
+    if not address:
+        raise ValueError("Empty address")
+    addr_str = str(address).strip().upper().replace(' ', '')
+
+    # 6-digit PLC address notation: 4xxxxx, 3xxxxx, 0xxxxx, 1xxxxx
+    if len(addr_str) >= 6 and addr_str.isdigit():
+        prefix = addr_str[0]
+        num = int(addr_str[1:])
+        if prefix == '4':
+            return num - 1, "holding"  # 400001 → address 0
+        elif prefix == '3':
+            return num - 1, "input"
+        elif prefix == '0':
+            return num - 1, "coil"
+        elif prefix == '1':
+            return num - 1, "discrete"
+
+    # Prefix notation: HR100, IR100, C100, DI100, 4x100, etc.
+    m = _MODBUS_ADDR_PATTERN.match(addr_str)
+    if m:
+        prefix = (m.group(1) or '').upper()
+        num = int(m.group(2))
+        if prefix in ('HR', '4X'):
+            return num, "holding"
+        elif prefix in ('IR', '3X'):
+            return num, "input"
+        elif prefix in ('C', 'COIL', '0X'):
+            return num, "coil"
+        elif prefix in ('DI', 'DISCRETE_INPUT', '1X'):
+            return num, "discrete"
+        else:
+            return num, "auto"
+
+    # Pure number
+    try:
+        return int(addr_str), "auto"
+    except ValueError:
+        raise ValueError(f"Invalid Modbus address: {address}")
 
 
 class ModbusDeviceBehavior(DefaultDeviceBehavior):
@@ -51,7 +125,7 @@ class ModbusDataStore:
         elif fc == 2:
             self._discrete_inputs[address] = int(bool(value))
         elif fc in (3, 6, 16, 22, 23):
-            self._holding_regs[address] = int(value) & 0xFFFF
+            self._holding_regs[address] = int(value) & 0xFFFF  # FIXED-H01: FC=0x16(Mask Write)调用时传入的new_val已在server.py中完成掩码计算，此处&0xFFFF截断为16位寄存器是正确的
         elif fc == 4:
             self._input_regs[address] = int(value) & 0xFFFF
 
@@ -80,6 +154,7 @@ class ModbusDataStore:
             return self._holding_regs.get(address, 0)
         elif fc == 4:
             return self._input_regs.get(address, 0)
+        logger.warning("Modbus get_point called with unknown FC=%d, address=%d", fc, address)  # FIXED-L01: 未知FC记录警告
         return 0
 
     def set_values(self, fc: int, address: int, values: list) -> None:

@@ -9,7 +9,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore
+from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore, parse_modbus_address
 
 logger = logging.getLogger(__name__)
 
@@ -241,7 +241,11 @@ class ModbusRtuServer(ProtocolServer):
                     break
                 tx_id = struct.unpack(">H", header[0:2])[0]
                 proto_id = struct.unpack(">H", header[2:4])[0]
+                if proto_id != 0:  # FIXED-C01: MBAP Protocol ID必须为0(Modbus规范)，与TCP server保持一致
+                    continue
                 length = struct.unpack(">H", header[4:6])[0]
+                if length < 1 or length > 253:  # FIXED-N12: MBAP length域范围校验，与TCP server保持一致
+                    continue
                 unit_id = header[6]
                 if length > 1:
                     payload = await asyncio.wait_for(reader.readexactly(length - 1), timeout=_RTU_CONN_TIMEOUT)
@@ -249,6 +253,8 @@ class ModbusRtuServer(ProtocolServer):
                     payload = b""
                 fc = payload[0] if payload else 0
                 resp = self._process_modbus_frame(unit_id, fc, payload[1:])
+                if resp is None:  # FIXED-C02: 广播读请求等场景返回None，跳过而非len(None)崩溃
+                    continue
                 mbap = struct.pack(">HHHB", tx_id, proto_id, len(resp) + 1, unit_id)
                 writer.write(mbap + resp)
                 await writer.drain()
@@ -317,6 +323,8 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x05:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
+                if val not in (0xFF00, 0x0000):  # FIXED-M02: FC05写入值必须为0xFF00(ON)或0x0000(OFF)，与TCP server保持一致
+                    return bytes([fc | 0x80, 0x03])
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
@@ -330,6 +338,10 @@ class ModbusRtuServer(ProtocolServer):
                     return bytes([fc | 0x80, 0x02])
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                byte_count = data[4]  # FIXED-M03: 读取byte_count字段
+                expected_byte_count = (count + 7) // 8
+                if byte_count != expected_byte_count:  # FIXED-M03: 校验byte_count与count的一致性
+                    return bytes([fc | 0x80, 0x03])
                 for i in range(count):
                     byte_idx = 5 + i // 8
                     bit_idx = i % 8
@@ -342,6 +354,9 @@ class ModbusRtuServer(ProtocolServer):
                     return bytes([fc | 0x80, 0x02])
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
+                byte_count = data[4]  # FIXED-M03: 读取byte_count字段
+                if byte_count != count * 2:  # FIXED-M03: 校验byte_count与count的一致性
+                    return bytes([fc | 0x80, 0x03])
                 for i in range(count):
                     offset = 5 + i * 2
                     if offset + 2 <= len(data):
@@ -471,11 +486,26 @@ class ModbusRtuServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                return False
+            if point.access not in ("w", "rw"):
+                return False
+
         success = behavior.on_write(point_name, value)
         if success:
             self._apply_device_to_context(
                 self._device_configs.get(device_id, DeviceConfig(id=device_id, name="", protocol="modbus_rtu"))
             )
+            if self._on_write:
+                try:
+                    await self._on_write(device_id, point_name, value)
+                except Exception:
+                    pass
         return success
 
     def get_config_schema(self) -> dict[str, Any]:
@@ -496,32 +526,39 @@ class ModbusRtuServer(ProtocolServer):
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            try:  # FIXED-P0: 移除+1偏移，与TCP保持一致
-                address = int(point.address)
-                if point.data_type.value in ("bool",):
-                    store.coils[address] = int(bool(value))
-                elif point.data_type.value in ("float32",):
-                    data = struct.pack(">f", float(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("float64",):
-                    data = struct.pack(">d", float(value))
-                    for j in range(4):
-                        store.holding_regs[address + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
-                elif point.data_type.value in ("int32",):
-                    data = struct.pack(">i", int(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("uint32",):
-                    data = struct.pack(">I", int(value))
-                    store.holding_regs[address] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[address + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("string",):  # FIXED-P0: 添加string类型处理，与TCP对齐
-                    encoded = str(value).encode("utf-8")
-                    for j in range(0, min(len(encoded), 62), 2):
-                        store.holding_regs[address + j // 2] = struct.unpack(">H", encoded[j:j+2].ljust(2, b'\x00'))[0]
-                else:
-                    store.holding_regs[address] = int(value) & 0xFFFF
+            try:
+                addr, area = parse_modbus_address(point.address)
+                if area == "coil":
+                    store.coils[addr] = int(bool(value))
+                elif area == "discrete":
+                    store.discrete_inputs[addr] = int(bool(value))
+                elif area == "input":
+                    store.input_regs[addr] = int(value) & 0xFFFF
+                else:  # holding or auto
+                    if point.data_type.value in ("bool",):
+                        store.coils[addr] = int(bool(value))
+                    elif point.data_type.value in ("float32",):
+                        data = struct.pack(">f", float(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("float64",):
+                        data = struct.pack(">d", float(value))
+                        for j in range(4):
+                            store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+                    elif point.data_type.value in ("int32",):
+                        data = struct.pack(">i", int(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("uint32",):
+                        data = struct.pack(">I", int(value))
+                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                    elif point.data_type.value in ("string",):
+                        encoded = str(value).encode("utf-8")
+                        for j in range(0, min(len(encoded), 62), 2):
+                            store.holding_regs[addr + j // 2] = struct.unpack(">H", encoded[j:j+2].ljust(2, b'\x00'))[0]
+                    else:
+                        store.holding_regs[addr] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
                 logger.warning("Failed to write register %s: %s", point.address, e)
         self._sync_to_pymodbus_context(slave_id, store)
@@ -555,7 +592,7 @@ class ModbusRtuServer(ProtocolServer):
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
         try:
-            address = int(point.address)
+            address, area = parse_modbus_address(point.address)
             dt = point.data_type.value
             if dt in ("bool",):
                 return bool(store.coils.get(address, 0))

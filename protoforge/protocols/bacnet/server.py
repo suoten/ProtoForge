@@ -295,6 +295,8 @@ class BACnetServer(ProtocolServer):
 
         obj_id_bytes = data[svc_offset:svc_offset + 4]
         obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes)
+        if obj_type == 0 and obj_inst == 0:  # FIXED-R09: 解码失败时返回Reject
+            return self._make_reject_response(invoke_id, 4)
         prop_id = data[svc_offset + 4]
 
         for device_id, device_obj in self._device_objects.items():
@@ -436,6 +438,8 @@ class BACnetServer(ProtocolServer):
 
         obj_id_bytes = data[svc_offset:svc_offset + 4]
         obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes)
+        if obj_type == 0 and obj_inst == 0:  # FIXED-R10: 解码失败时返回Reject
+            return self._make_reject_response(invoke_id, 4)
 
         for device_id, device_obj in self._device_objects.items():
             behavior = self._behaviors.get(device_id)
@@ -558,7 +562,8 @@ class BACnetServer(ProtocolServer):
                     offset += 3
             # covIncrement (context tag 4)
             if offset + 4 < len(data) and (data[offset] & 0xF8) == 0xA0:
-                cov_increment = struct.unpack(">f", data[offset + 1:offset + 5])[0]
+                if offset + 5 <= len(data):  # FIXED-R05: 确保有足够字节读取float
+                    cov_increment = struct.unpack(">f", data[offset + 1:offset + 5])[0]
 
         sub_id = self._cov_next_id
         self._cov_next_id += 1
@@ -577,6 +582,8 @@ class BACnetServer(ProtocolServer):
             "lifetime": lifetime, "issue_confirmed": issue_confirmed,
             "last_values": {},
         }
+        if device_id is None:  # FIXED-R06: 未找到匹配设备时记录警告
+            logger.warning("BACnet SubscribeCOV: no device found for obj_inst=%d", obj_inst)
         resp = self._make_bvlc_npdu_header()
         resp.append(invoke_id & 0xFF)
         resp.append(0x05)  # APDU Simple ACK, service choice=SubscribeCOV
@@ -818,12 +825,33 @@ class BACnetServer(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                logger.warning("BACnet write_point: point '%s' not found on device %s", point_name, device_id)
+                return False
+            if point.access not in ("w", "rw"):
+                logger.warning("BACnet write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+        # 更新协议层 behavior 内部状态
         success = behavior.on_write(point_name, value)
         if success:
+            # 同步写入值到 BACnet 对象的 present_value
             device_obj = self._device_objects.get(device_id, {})
             for obj in device_obj.get("objects", []):
                 if obj.get("object_name") == point_name:
                     obj["present_value"] = value
+
+            # 通过 on_write 回调传播到 DeviceInstance，确保内部状态一致
+            if self._on_write:
+                try:
+                    await self._on_write(device_id, point_name, value)
+                except Exception as e:
+                    logger.warning("BACnet write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
         return success
 
     def get_config_schema(self) -> dict[str, Any]:

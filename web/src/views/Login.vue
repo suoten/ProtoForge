@@ -18,15 +18,15 @@
         <p style="color:rgba(255,255,255,0.7);font-size:13px;margin:4px 0 0">{{ t('login.subtitle') }}</p>
       </div>
       <div class="login-body">
-        <n-form :model="form" @keyup.enter="handleLogin">
-          <n-form-item :label="t('login.username')">
+        <n-form ref="loginFormRef" :model="form" :rules="loginRules" @keyup.enter="handleLogin">
+          <n-form-item :label="t('login.username')" path="username">
             <n-input v-model:value="form.username" :placeholder="t('login.usernameRequired')" size="large">
               <template #prefix>
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               </template>
             </n-input>
           </n-form-item>
-          <n-form-item :label="t('login.password')">
+          <n-form-item :label="t('login.password')" path="password">
             <n-input v-model:value="form.password" type="password" show-password-on="click" :placeholder="t('login.passwordRequired')" size="large">
               <template #prefix>
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94a3b8" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -45,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -55,14 +55,16 @@ const message = useMessage()
 const loading = ref(false)
 const form = ref({ username: '', password: '' })
 const isDev = ref(import.meta.env.DEV)
+const loginFormRef = ref(null)
+const loginRules = computed(() => ({
+  username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }],
+}))
 const emit = defineEmits(['login-success'])
 
 async function handleLogin() {
   if (loading.value) return
-  if (!form.value.username || !form.value.password) {
-    message.warning(t('login.usernameRequired'))
-    return
-  }
+  try { await loginFormRef.value?.validate() } catch { return }
   loading.value = true
   try {
     const res = await api.login(form.value.username, form.value.password)
@@ -99,7 +101,7 @@ async function handleLogin() {
   padding: 20px;
 }
 .login-card {
-  width: 420px;
+  width: min(420px, 90vw);
   background: white;
   border-radius: 20px;
   overflow: hidden;

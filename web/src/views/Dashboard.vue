@@ -1,9 +1,26 @@
 <template>
   <div>
-    <n-spin :show="loading">
+    <template v-if="loading && devices.length === 0">
+      <n-space vertical size="large">
+        <n-grid :cols="responsiveCols" :x-gap="16" :y-gap="16">
+          <n-gi v-for="i in 4" :key="i">
+            <n-card size="small">
+              <n-skeleton text style="width:40%" />
+              <n-skeleton text style="width:60%; height:32px; margin-top:8px" />
+              <n-skeleton text style="width:50%; margin-top:8px" />
+            </n-card>
+          </n-gi>
+        </n-grid>
+        <n-grid :cols="responsiveCols2" :x-gap="16" :y-gap="16">
+          <n-gi><n-card size="small"><n-skeleton text :repeat="4" /></n-card></n-gi>
+          <n-gi><n-card size="small"><n-skeleton text :repeat="4" /></n-card></n-gi>
+        </n-grid>
+      </n-space>
+    </template>
+    <template v-else>
       <n-space vertical size="large">
 
-        <n-grid :cols="4" :x-gap="16" :y-gap="16">
+        <n-grid :cols="responsiveCols" :x-gap="16" :y-gap="16">
           <n-gi>
             <n-card class="pf-gradient-card" size="small">
               <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -54,7 +71,7 @@
           </n-gi>
         </n-grid>
 
-        <n-grid :cols="2" :x-gap="16" :y-gap="16">
+        <n-grid :cols="responsiveCols2" :x-gap="16" :y-gap="16">
           <n-gi>
             <n-card size="small">
               <template #header>
@@ -154,11 +171,11 @@
         </n-card>
 
       </n-space>
-    </n-spin>
+    </template>
 
     <!-- Start Progress Modal -->
     <n-modal v-model:show="showProgressModal" :mask-closable="false" :close-on-esc="false" preset="card"
-      :title="progressDone ? t('protocols.batchSuccessTitle') : t('protocols.batchStartingTitle')" style="width: 520px">
+      :title="progressDone ? t('protocols.batchSuccessTitle') : t('protocols.batchStartingTitle')" style="width:min(520px, 90vw)">
       <div style="min-height: 120px">
         <div style="margin-bottom:12px">
           <n-progress :percentage="batchPercentage" :show-indicator="true"
@@ -196,12 +213,13 @@
 </template>
 
 <script setup>
-import { ref, computed, h, onMounted, onUnmounted } from 'vue'
-import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, NModal, NProgress, useMessage, useDialog } from 'naive-ui'
+import { ref, computed, h, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { NGrid, NGi, NCard, NSpace, NButton, NDataTable, NTag, NText, NSpin, NAlert, NModal, NProgress, NSkeleton, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels, deviceStatusMap, directionColorMap, directionTagTypeMap } from '../constants.js'
 import { useI18n } from '../i18n.js'
-import { formatTime as _formatTime } from '../utils.js'  // FIXED: 重复定义的格式化函数提取到utils.js
+import { formatTime as _formatTime } from '../utils.js'
+import { useWebSocketPool } from '../composables/useWebSocketPool'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -215,6 +233,22 @@ const healthInfo = ref(null)
 const loading = ref(true)
 const loadError = ref('')
 const startingAll = ref(false)
+
+// Responsive grid
+const windowWidth = ref(window.innerWidth)
+function onResize() { windowWidth.value = window.innerWidth }
+onMounted(() => window.addEventListener('resize', onResize))
+onBeforeUnmount(() => window.removeEventListener('resize', onResize))
+
+const responsiveCols = computed(() => {
+  if (windowWidth.value < 768) return 1
+  if (windowWidth.value < 1200) return 2
+  return 4
+})
+const responsiveCols2 = computed(() => {
+  if (windowWidth.value < 768) return 1
+  return 2
+})
 
 // Progress modal state
 const showProgressModal = ref(false)
@@ -242,17 +276,18 @@ function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-let deviceWs = null
-let logWs = null
-let devWsReconnectTimer = null
-let logWsReconnectTimer = null
-let devWsReconnectDelay = 1000
-let devWsReconnectAttempts = 0
-let logWsReconnectDelay = 1000
-let logWsReconnectAttempts = 0
-let manualClose = false
-const WS_MAX_RECONNECT_DELAY = 30000
-const WS_MAX_RECONNECT_ATTEMPTS = 20
+const { getConnection, removeConnection } = useWebSocketPool()
+
+let deviceConn = null
+let logConn = null
+const deviceCallbacks = {
+  onOpen: () => { api.getDevices().then(data => { if (Array.isArray(data)) devices.value = data }).catch(() => {}) },
+  onMessage: (msg) => { if (msg.type === 'devices' && Array.isArray(msg.data)) devices.value = msg.data }
+}
+const logCallbacks = {
+  onOpen: () => { api.getLogs({ count: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {}) },
+  onMessage: (msg) => { if (msg.type === 'log' && msg.data && typeof msg.data === 'object') { recentLogs.value.unshift(msg.data); if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500) } }
+}
 
 const onlineDevices = computed(() => devices.value.filter(d => d.status === 'online' || d.status === 'running').length)
 const runningProtocols = computed(() => protocols.value.filter(p => p.status === 'running').length)
@@ -361,102 +396,24 @@ async function loadData() {
   }
 }
 
-function connectDeviceWs() {
-  if (manualClose) return
-  try {
-    deviceWs = api.createDeviceWs()
-    if (!deviceWs) return
-  } catch (e) {
-    console.error('Failed to create device WebSocket:', e.message)
-    devWsReconnectAttempts++
-    if (devWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectDeviceWs, 5000)
-    }
-    return
-  }
-  // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整数据
-  deviceWs.onopen = () => {
-    devWsReconnectDelay = 1000; devWsReconnectAttempts = 0
-    api.getDevices().then(data => { if (Array.isArray(data)) devices.value = data }).catch(() => {})
-  }
-  deviceWs.onerror = () => { devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
-  deviceWs.onclose = () => {
-    if (manualClose) return
-    devWsReconnectAttempts++
-    if (devWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      devWsReconnectTimer = setTimeout(connectDeviceWs, devWsReconnectDelay)
-      devWsReconnectDelay = Math.min(devWsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
-    }
-  }
-  deviceWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'devices' && Array.isArray(msg.data)) {
-        devices.value = msg.data
-      }
-    } catch (e) {
-      if (event.data !== 'ping') console.debug('Device WS non-JSON message:', event.data)
-    }
-  }
-}
-
-function connectLogWs() {
-  if (manualClose) return
-  try {
-    logWs = api.createLogWs()
-    if (!logWs) return
-  } catch (e) {
-    console.error('Failed to create log WebSocket:', e.message)
-    logWsReconnectAttempts++
-    if (logWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      setTimeout(connectLogWs, 5000)
-    }
-    return
-  }
-  // FIXED: WebSocket重连后不补充断线期间状态快照 — onopen时主动请求一次完整日志
-  logWs.onopen = () => {
-    logWsReconnectDelay = 1000; logWsReconnectAttempts = 0
-    api.getLogs({ count: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {})
-  }
-  logWs.onerror = () => {
-    console.debug('Log WebSocket error, will auto-reconnect')
-  }
-  logWs.onclose = () => {
-    if (manualClose || !logWs) return
-    logWsReconnectAttempts++
-    if (logWsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      logWsReconnectTimer = setTimeout(connectLogWs, Math.min(5000 * Math.pow(1.5, Math.min(logWsReconnectAttempts, 5)), 60000))
-    }
-  }
-  logWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'log' && msg.data && typeof msg.data === 'object') {
-        recentLogs.value.unshift(msg.data)
-        if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500)
-      }
-    } catch {
-      if (event.data !== 'ping') console.debug('Log WS: non-JSON message ignored')
-    }
-  }
-}
-
 function openMetrics() {
   window.open('/api/v1/metrics', '_blank')
 }
 
 onMounted(() => {
   loadData()
-  connectDeviceWs()
-  connectLogWs()
+  deviceConn = getConnection('devices', () => api.createDeviceWs())
+  deviceConn.subscribe(deviceCallbacks)
+  deviceConn.connect()
+
+  logConn = getConnection('logs', () => api.createLogWs())
+  logConn.subscribe(logCallbacks)
+  logConn.connect()
 })
 
 onUnmounted(() => {
-  manualClose = true
-  if (devWsReconnectTimer) { clearTimeout(devWsReconnectTimer); devWsReconnectTimer = null }
-  if (logWsReconnectTimer) { clearTimeout(logWsReconnectTimer); logWsReconnectTimer = null }
-  if (deviceWs) { deviceWs.close(); deviceWs = null }
-  if (logWs) { logWs.close(); logWs = null }
+  if (deviceConn) deviceConn.unsubscribe(deviceCallbacks)
+  if (logConn) logConn.unsubscribe(logCallbacks)
 })
 </script>
 

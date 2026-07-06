@@ -26,6 +26,7 @@ class GeneratorType(str, Enum):
     SQUARE = "square"
     INCREMENT = "increment"
     SCRIPT = "script"
+    PHYSICAL = "physical"
 
 
 class PointConfig(BaseModel):
@@ -65,6 +66,7 @@ class PointValue(BaseModel):
     value: Any
     timestamp: float = 0.0
     quality: str = "good"
+    quality_code: Optional[int] = None  # OPC UA StatusCode (32-bit)，None 表示未计算
     simulated: bool = False
 
 

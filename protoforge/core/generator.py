@@ -7,6 +7,8 @@ import operator
 from typing import Any
 
 from protoforge.models.device import DataType, GeneratorType, PointConfig
+from protoforge.core.behavior_models import BaseBehavior, create_behavior, get_behavior_input
+from protoforge.core.fault import FaultInjector
 
 logger = logging.getLogger(__name__)
 
@@ -237,10 +239,21 @@ class ScriptEngine:
 
 
 class DataGenerator:
-    def __init__(self):
+    def __init__(self, fault_injector: FaultInjector | None = None):
         self._start_time: dict[str, float] = {}
         self._random_walk_state: dict[str, float] = {}
         self._script_engine = ScriptEngine()
+        self._behaviors: dict[str, BaseBehavior] = {}  # PHYSICAL 生成器行为模型缓存
+        self._fault_injector = fault_injector  # 故障注入器（可选）
+
+    def set_fault_injector(self, injector: FaultInjector | None) -> None:
+        """设置故障注入器。
+
+        设置后，每次 ``generate()`` 生成的值都会经过 ``FaultInjector.apply()`` 处理。
+
+        :param injector: 故障注入器实例，None 表示禁用故障注入
+        """
+        self._fault_injector = injector
 
     def generate(self, point: PointConfig) -> Any:
         key = f"{point.name}_{point.address}"
@@ -250,25 +263,37 @@ class DataGenerator:
         elapsed = time.time() - self._start_time[key]
 
         if point.generator_type in (GeneratorType.FIXED, GeneratorType.CONSTANT):  # FIXED-P1: constant合并到fixed分支
-            return self._generate_fixed(point)
+            value = self._generate_fixed(point)
         elif point.generator_type == GeneratorType.RANDOM:
-            return self._generate_random(point)
+            value = self._generate_random(point)
         elif point.generator_type == GeneratorType.SINE:
-            return self._generate_sine(point, elapsed)
+            value = self._generate_sine(point, elapsed)
         elif point.generator_type == GeneratorType.TRIANGLE:
-            return self._generate_triangle(point, elapsed)
+            value = self._generate_triangle(point, elapsed)
         elif point.generator_type == GeneratorType.SAWTOOTH:
-            return self._generate_sawtooth(point, elapsed)
+            value = self._generate_sawtooth(point, elapsed)
         elif point.generator_type == GeneratorType.SQUARE:
-            return self._generate_square(point, elapsed)
+            value = self._generate_square(point, elapsed)
         elif point.generator_type == GeneratorType.INCREMENT:
-            return self._generate_increment(point, elapsed)
+            value = self._generate_increment(point, elapsed)
         elif point.generator_type == GeneratorType.SCRIPT:
-            return self._generate_script(point, elapsed)
+            value = self._generate_script(point, elapsed)
         elif point.generator_type == GeneratorType.RANDOM_WALK:
-            return self._generate_random_walk(point)
+            value = self._generate_random_walk(point)
+        elif point.generator_type == GeneratorType.PHYSICAL:
+            value = self._generate_physical(point, elapsed)
         else:
-            return self._generate_fixed(point)
+            value = self._generate_fixed(point)
+
+        # 故障注入：对生成的值应用故障效果
+        if self._fault_injector is not None:
+            try:
+                value, _quality = self._fault_injector.apply(point.name, value)
+            except Exception:
+                # DEVICE_FAILURE 等异常向上传播，由 device.py 处理
+                raise
+
+        return value
 
     def _generate_fixed(self, point: PointConfig) -> Any:
         if point.fixed_value is not None:
@@ -374,6 +399,66 @@ class DataGenerator:
         new_value = max(lo, min(hi, new_value))
         self._random_walk_state[key] = new_value
         return self._cast_value(new_value, point.data_type)
+
+    def _generate_physical(self, point: PointConfig, elapsed: float) -> Any:
+        """使用物理行为模型生成值。
+
+        generator_config 支持两种格式:
+
+        1. 字典格式::
+
+            {
+                "behavior": "thermal",
+                "params": {"mass": 10, "specific_heat": 900, ...},
+                "input": 500,       # 行为模型的输入参数（如功率、扭矩等）
+                "dt": 0.1,          # 仿真时间步长 (s)
+                "config_string": "thermal:mass=10,specific_heat=900"  # 可选，字符串配置
+            }
+
+        2. 字符串格式（通过 config_string 字段或 behavior 字段）::
+
+            {"config_string": "thermal:mass=10,specific_heat=900"}
+
+        """
+        key = f"{point.name}_{point.address}"
+        config = point.generator_config or {}
+
+        # 获取或创建行为模型实例
+        behavior = self._behaviors.get(key)
+        if behavior is None:
+            # 优先使用 config_string 字符串配置
+            config_str = config.get("config_string")
+            if config_str:
+                behavior = create_behavior(config_str)
+            else:
+                behavior = create_behavior(config)
+
+            if behavior is None:
+                logger.warning(
+                    "Failed to create behavior model for point %s, falling back to fixed",
+                    point.name,
+                )
+                return self._generate_fixed(point)
+            self._behaviors[key] = behavior
+
+        # 提取输入参数和时间步长
+        input_value, dt = get_behavior_input(config)
+
+        # 如果 input 未指定，尝试从 min/max 推断合理输入
+        if input_value == 0.0 and "input" not in config:
+            if point.min_value is not None and point.max_value is not None:
+                input_value = (point.min_value + point.max_value) / 2
+            elif point.fixed_value is not None:
+                input_value = point.fixed_value
+
+        try:
+            # 调用行为模型 update 方法
+            result = behavior.update(input_value, dt=dt)
+        except Exception as e:
+            logger.warning("Behavior model update error for point %s: %s", point.name, e)
+            return self._generate_fixed(point)
+
+        return self._cast_value(result, point.data_type)
 
     def _cast_value(self, value: Any, data_type: DataType) -> Any:
         try:

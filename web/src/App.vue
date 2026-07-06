@@ -13,8 +13,8 @@
           collapse-mode="width"
           :collapsed="collapsed"
           show-trigger
-          @collapse="collapsed = true"
-          @expand="collapsed = false"
+          @collapse="collapsed = true; localStorage.setItem('sider_collapsed', 'true')"
+          @expand="collapsed = false; localStorage.setItem('sider_collapsed', 'false')"
           :native-scrollbar="false"
           class="app-sider"
         >
@@ -68,13 +68,18 @@
                 </template>
               </n-auto-complete>
             </n-space>
+            <n-breadcrumb class="app-breadcrumb">
+              <n-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx" @click="item.path && $router.push(item.path)">
+                {{ item.label }}
+              </n-breadcrumb-item>
+            </n-breadcrumb>
             <n-space align="center" size="medium">
-              <n-tag v-if="wsConnected" size="small" :bordered="false" type="success">
+              <n-tag v-if="wsConnected" size="small" :bordered="false" type="success" role="status" aria-live="polite">
                 <template #icon><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></template>
                 {{ t('common.online') }}
               </n-tag>
               <n-dropdown :options="langMenuOptions" @select="onLangMenuSelect">
-                <n-button quaternary size="small" round>
+                <n-button quaternary size="small" round aria-label="Switch language">
                   <template #icon>
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
                   </template>
@@ -82,7 +87,7 @@
                 </n-button>
               </n-dropdown>
               <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
-                <n-button quaternary size="small" round>
+                <n-button quaternary size="small" round aria-label="User menu">
                   <template #icon>
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   </template>
@@ -92,7 +97,11 @@
             </n-space>
           </n-layout-header>
           <n-layout-content class="app-content">
-            <router-view />
+            <router-view v-slot="{ Component }">
+              <transition name="pf-fade" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
           </n-layout-content>
         </n-layout>
       </n-layout>
@@ -104,9 +113,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NConfigProvider, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NConfigProvider, NBreadcrumb, NBreadcrumbItem, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api, { setNotifyFunction } from './api.js'
@@ -124,15 +133,66 @@ const naiveDateLocale = computed(() => locale.value === 'zh' ? dateZhCN : dateEn
 
 setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }), t)
 const loggedIn = ref(false)
-const collapsed = ref(false)
+const collapsed = ref(localStorage.getItem('sider_collapsed') === 'true')
 const username = ref(localStorage.getItem('username') || '')
 const searchQuery = ref('')
 const searchResults = ref([])
-const searchData = ref({ devices: [], templates: [], scenarios: [] })
+const searchData = ref({ devices: [], templates: [], scenarios: [], protocols: [] })
 const wsConnected = ref(false)
 let ws = null
 
 const currentRoute = computed(() => route.path)
+
+const breadcrumbs = computed(() => {
+  const path = route.path
+  const crumbs = [{ label: t('nav.dashboard'), path: '/' }]
+  const routeMap = {
+    '/devices': [{ label: t('nav.devices'), path: '/devices' }],
+    '/protocols': [{ label: t('nav.protocols'), path: '/protocols' }],
+    '/scenarios': [{ label: t('nav.scenarios'), path: '/scenarios' }],
+    '/scenario-editor': [{ label: t('nav.scenarios'), path: '/scenarios' }, { label: t('nav.scenarioEditor'), path: '/scenario-editor' }],
+    '/templates': [{ label: t('nav.templates'), path: '/templates' }],
+    '/marketplace': [{ label: t('nav.marketplace'), path: '/marketplace' }],
+    '/testing': [{ label: t('nav.testing'), path: '/testing' }],
+    '/logs': [{ label: t('nav.logs'), path: '/logs' }],
+    '/integration': [{ label: t('nav.integration'), path: '/integration' }],
+    '/forward': [{ label: t('nav.forward'), path: '/forward' }],
+    '/recorder': [{ label: t('nav.recorder'), path: '/recorder' }],
+    '/webhook': [{ label: t('nav.webhook'), path: '/webhook' }],
+    '/settings': [{ label: t('nav.settings'), path: '/settings' }],
+    '/audit': [{ label: t('nav.audit'), path: '/audit' }],
+    '/backup': [{ label: t('nav.backup'), path: '/backup' }],
+  }
+  if (path.startsWith('/scenario/')) {
+    crumbs.push({ label: t('nav.scenarios'), path: '/scenarios' })
+    crumbs.push({ label: t('nav.scenarioEditor') })
+    return crumbs
+  }
+  const extra = routeMap[path] || []
+  return [...crumbs, ...extra]
+})
+
+watch(() => route.path, (path) => {
+  const titles = {
+    '/': 'ProtoForge',
+    '/devices': 'Devices - ProtoForge',
+    '/protocols': 'Protocols - ProtoForge',
+    '/scenarios': 'Scenarios - ProtoForge',
+    '/scenario-editor': 'Scenario Editor - ProtoForge',
+    '/templates': 'Templates - ProtoForge',
+    '/marketplace': 'Marketplace - ProtoForge',
+    '/testing': 'Testing - ProtoForge',
+    '/logs': 'Logs - ProtoForge',
+    '/integration': 'Integration - ProtoForge',
+    '/forward': 'Forward - ProtoForge',
+    '/recorder': 'Recorder - ProtoForge',
+    '/webhook': 'Webhook - ProtoForge',
+    '/settings': 'Settings - ProtoForge',
+    '/audit': 'Audit - ProtoForge',
+    '/backup': 'Backup - ProtoForge',
+  }
+  document.title = titles[path] || 'ProtoForge'
+}, { immediate: true })
 
 function svgIcon(pathD, color = 'currentColor') {
   return () => h('svg', { viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: color, 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
@@ -141,22 +201,57 @@ function svgIcon(pathD, color = 'currentColor') {
 }
 
 const menuOptions = computed(() => [
-  { label: t('nav.dashboard'), key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
-  { label: t('nav.devices'), key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
-  { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
-  { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
-  { label: t('nav.scenarioEditor'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
-  { label: t('nav.templates'), key: '/templates', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6') },
-  { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
-  { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
-  { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
-  { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
-  { label: t('nav.settings'), key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
-  { label: t('nav.forward'), key: '/forward', icon: svgIcon('M22 12h-4l-3 9L9 3l-3 9H2') },
-  { label: t('nav.recorder'), key: '/recorder', icon: svgIcon('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 6v6l4 2') },
-  { label: t('nav.webhook'), key: '/webhook', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
-  { label: t('nav.audit'), key: '/audit', icon: svgIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z') },
-  { label: t('nav.backup'), key: '/backup', icon: svgIcon('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3') },
+  {
+    type: 'group',
+    label: '核心',
+    key: 'group-core',
+    children: [
+      { label: t('nav.dashboard'), key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
+      { label: t('nav.devices'), key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
+      { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '仿真',
+    key: 'group-simulation',
+    children: [
+      { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
+      { label: t('nav.scenarioEditor'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
+      { label: t('nav.templates'), key: '/templates', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6') },
+      { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '测试',
+    key: 'group-testing',
+    children: [
+      { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
+      { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '集成',
+    key: 'group-integration',
+    children: [
+      { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
+      { label: t('nav.forward'), key: '/forward', icon: svgIcon('M22 12h-4l-3 9L9 3l-3 9H2') },
+      { label: t('nav.recorder'), key: '/recorder', icon: svgIcon('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 6v6l4 2') },
+      { label: t('nav.webhook'), key: '/webhook', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
+    ]
+  },
+  {
+    type: 'group',
+    label: t('nav.groupSystem'),
+    key: 'group-system',
+    children: [
+      { label: t('nav.settings'), key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
+      { label: t('nav.audit'), key: '/audit', icon: svgIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z') },
+      { label: t('nav.backup'), key: '/backup', icon: svgIcon('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3') },
+    ]
+  },
 ])
 
 const userMenuOptions = computed(() => [
@@ -213,7 +308,16 @@ function onUserMenuSelect(key) {
   }
 }
 
+function onGlobalKeydown(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    const searchInput = document.querySelector('.app-header .n-auto-complete input')
+    if (searchInput) searchInput.focus()
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKeydown)
   const token = localStorage.getItem('token')
   if (token) {
     const valid = await api.ensureValidToken()
@@ -252,6 +356,11 @@ function onSearchInput(query) {
   for (const s of searchData.value.scenarios) {
     if ((s.name || '').toLowerCase().includes(q))
       results.push({ label: `[${t('nav.scenarios')}] ${s.name}`, value: `/scenario/${encodeURIComponent(s.id)}` })
+  }
+  for (const p of searchData.value.protocols) {
+    const name = p.display_name || p.name || ''
+    if (name.toLowerCase().includes(q))
+      results.push({ label: `[${t('nav.protocols')}] ${name}`, value: '/protocols' })
   }
   searchResults.value = results.slice(0, 10)
 }
@@ -317,12 +426,13 @@ function connectWebSocket() {
 
 async function loadSearchData() {
   const results = await Promise.allSettled([
-    api.getDevices(), api.getTemplates(), api.getScenarios(),
+    api.getDevices(), api.getTemplates(), api.getScenarios(), api.getProtocols(),
   ])
   searchData.value = {
     devices: results[0].status === 'fulfilled' ? (results[0].value || []) : [],
     templates: results[1].status === 'fulfilled' ? (results[1].value || []) : [],
     scenarios: results[2].status === 'fulfilled' ? (results[2].value || []) : [],
+    protocols: results[3].status === 'fulfilled' ? (results[3].value || []) : [],
   }
   if (!searchRefreshTimer) {
     searchRefreshTimer = setInterval(loadSearchData, 60000)
@@ -389,6 +499,19 @@ body {
   padding: 0 24px;
   background: var(--pf-header-bg) !important;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.app-breadcrumb {
+  margin-left: 8px;
+  font-size: 13px;
+}
+.app-breadcrumb .n-breadcrumb-item {
+  cursor: pointer;
+}
+.app-breadcrumb .n-breadcrumb-item:last-child {
+  cursor: default;
+  color: #1e293b;
+  font-weight: 500;
 }
 
 .app-content {
@@ -538,5 +661,25 @@ body {
   font-size: 13px;
   color: #94a3b8;
   margin-top: 2px;
+}
+
+.pf-fade-enter-active,
+.pf-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.pf-fade-enter-from,
+.pf-fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 1024px) {
+  .app-header { padding: 0 12px !important; }
+  .app-content { padding: 16px !important; }
+  .n-modal .n-card { width: 90vw !important; max-width: 560px; }
+}
+@media (max-width: 768px) {
+  .app-header .n-auto-complete { width: 180px !important; }
+  .app-content { padding: 12px !important; }
+  .n-data-table { overflow-x: auto; }
 }
 </style>

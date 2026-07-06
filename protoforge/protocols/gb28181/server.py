@@ -530,6 +530,8 @@ class GB28181Server(ProtocolServer):
                     result["media_type"] = "audio"
         if conn_addr:
             result["media_ip"] = conn_addr
+        if result["media_port"] == 0:
+            logger.warning("GB28181 SDP解析未找到有效媒体描述(m=video/m=audio)，可能无法建立RTP流")
         return result
 
     def handle_message(self, data: bytes, addr: tuple) -> None:

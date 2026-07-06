@@ -98,16 +98,20 @@ class OpcUaClientProtocol(ProtocolServer):
         self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def _connect(self) -> None:
-        if ASYNCUA_SYNC:
-            self._client = Client(self._endpoint)
-            self._client.connect()
-            self._connected = True
-        else:
-            self._client = Client(url=self._endpoint, timeout=self._request_timeout)
-            await self._client.connect()
-            if hasattr(self._client, 'session_timeout'):
-                self._client.session_timeout = self._session_timeout
-            self._connected = True
+        try:  # FIXED-N09: 包裹整个连接逻辑，确保异常时_client被清理
+            if ASYNCUA_SYNC:
+                self._client = Client(self._endpoint)
+                self._client.connect()
+                self._connected = True
+            else:
+                self._client = Client(url=self._endpoint, timeout=self._request_timeout)
+                await self._client.connect()
+                if hasattr(self._client, 'session_timeout'):
+                    self._client.session_timeout = self._session_timeout
+                self._connected = True
+        except Exception:
+            self._client = None  # FIXED-N09: 连接失败时清理_client引用
+            raise
 
     async def _reconnect_loop(self) -> None:
         attempts = 0

@@ -175,10 +175,10 @@ class FinsServer(ProtocolServer):
     async def _serve(self) -> None:
         loop = asyncio.get_running_loop()
         tcp_server = await asyncio.start_server(
-            self._handle_connection, self._host, self._port
+            self._handle_connection, self._host, self._port, reuse_address=True  # FIXED-M10: 启用地址复用
         )
         transport, _ = await loop.create_datagram_endpoint(
-            lambda: FinsUdpProtocol(self), local_addr=(self._host, self._port)
+            lambda: FinsUdpProtocol(self), local_addr=(self._host, self._port), reuse_address=True  # FIXED-M10: UDP也启用地址复用，避免TCP/UDP同端口绑定失败
         )
         self._udp_transport = transport
         try:
@@ -290,6 +290,8 @@ class FinsServer(ProtocolServer):
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
         bit_addr = fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
+        if word_count == 0 or word_count > 1000:  # FIXED-N13: word_count上限校验，防止恶意请求导致大量内存分配
+            return self._make_fins_error(0x0204)
 
         read_size = word_count * 2
         read_data = bytearray(read_size)
@@ -315,6 +317,8 @@ class FinsServer(ProtocolServer):
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
         bit_addr = fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
+        if word_count == 0 or word_count > 1000:  # FIXED-N14: word_count上限校验
+            return self._make_fins_error(0x0204)
 
         write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
         behavior = self._behaviors.get(self._default_device_id)
@@ -345,7 +349,7 @@ class FinsServer(ProtocolServer):
                             behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
                     except (struct.error, IndexError) as e:
                         logger.warning("FINS write value sync error for %s: %s", name, e)
-                    break
+                    # FIXED-C05: 移除break，遍历所有匹配点而非只更新第一个
             self._log_debug("recv", "fins_write",
                             f"Write area {area} offset {word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
@@ -478,6 +482,8 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
 
     def _process_fins_udp(self, mrc: int, src: int, data: bytes, header: bytes) -> bytes | None:
         server = self._server
+        if server is None:  # FIXED-N05: 服务器未初始化时忽略UDP报文
+            return None
         if mrc == 0x01 and src == 0x01:
             return self._handle_memory_read_udp(data, header)
         elif mrc == 0x02 and src == 0x01:
@@ -503,6 +509,8 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         word_addr = struct.unpack(">H", data[1:3])[0]
         bit_addr = data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
+        if word_count == 0 or word_count > 1000:  # FIXED-N17: UDP读取word_count上限校验
+            return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0x0204)
         behavior = server._behaviors.get(server._default_device_id)
         read_size = word_count * 2
         resp_data = bytearray(read_size)
@@ -518,10 +526,39 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         word_addr = struct.unpack(">H", data[1:3])[0]
         bit_addr = data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
+        if word_count == 0 or word_count > 1000:  # FIXED-N18: UDP写入word_count上限校验
+            return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0x0204)
         write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
         behavior = server._behaviors.get(server._default_device_id)
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
+            # FIXED-H10: UDP写入后同步更新点值，与TCP写入保持一致
+            for name, (p_area, p_offset) in behavior._point_addresses.items():
+                if area == p_area:
+                    try:
+                        pt = behavior._points.get(name)
+                        dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
+                        byte_offset = p_offset - word_addr * 2
+                        if 0 <= byte_offset < len(write_data):
+                            chunk = write_data[byte_offset:]
+                            if dt in ("float32",) and len(chunk) >= 4:
+                                behavior._values[name] = struct.unpack(">f", chunk[:4])[0]
+                            elif dt in ("float64",) and len(chunk) >= 8:
+                                behavior._values[name] = struct.unpack(">d", chunk[:8])[0]
+                            elif dt in ("int16",) and len(chunk) >= 2:
+                                behavior._values[name] = struct.unpack(">h", chunk[:2])[0]
+                            elif dt in ("uint16",) and len(chunk) >= 2:
+                                behavior._values[name] = struct.unpack(">H", chunk[:2])[0]
+                            elif dt in ("int32", "dint") and len(chunk) >= 4:
+                                behavior._values[name] = struct.unpack(">i", chunk[:4])[0]
+                            elif dt in ("uint32",) and len(chunk) >= 4:
+                                behavior._values[name] = struct.unpack(">I", chunk[:4])[0]
+                            elif dt in ("bool",):
+                                behavior._values[name] = bool(chunk[0]) if chunk else False
+                            elif len(chunk) >= 4:
+                                behavior._values[name] = struct.unpack(">i", chunk[:4])[0]
+                    except (struct.error, IndexError) as e:
+                        logger.warning("FINS UDP write value sync error for %s: %s", name, e)
         return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:

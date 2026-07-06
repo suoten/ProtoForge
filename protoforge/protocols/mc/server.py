@@ -34,7 +34,7 @@ class McDeviceBehavior(StandardDeviceBehavior):
         'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
         'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
         'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
-        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'S': 0x53, 'SM': 0x93, 'SD': 0x9C,  # FIXED-P1: SM代码0x53→0x93，0x53是S(步进继电器)，补充S和SD
+        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'S': 0x53, 'SM': 0x93, 'SD': 0x9C,  # FIXED-P1: SM代码0x53→0x93，0x53是S(步进继电器)，补充S和SD；FIXED-M05: Z=0x5C为文件寄存器扩展索引，ZR=0x5A为文件寄存器
     }
 
     @staticmethod
@@ -110,6 +110,16 @@ class McDeviceBehavior(StandardDeviceBehavior):
         if len(buf) < size:
             buf.extend(bytearray(size - len(buf)))
         return buf[:size]
+
+    def read_memory_offset(self, area_code: int, offset: int, size: int) -> bytearray:
+        """FIXED-H04: 带偏移量的内存读取，含越界保护"""
+        if area_code not in self._device_memory:
+            self._device_memory[area_code] = bytearray(1024)
+        buf = self._device_memory[area_code]
+        end = offset + size
+        if end > len(buf):
+            buf.extend(bytearray(end - len(buf)))
+        return buf[offset:offset + size]
 
     def write_memory(self, area_code: int, offset: int, data: bytes) -> None:
         if area_code not in self._device_memory:
@@ -288,8 +298,7 @@ class McServer(ProtocolServer):
         read_data = bytearray(read_len)
         behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
         if behavior:
-            mem = behavior.read_memory(device_code, start_addr + read_len)
-            read_data = mem[start_addr:start_addr + read_len]
+            read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
 
         resp = bytearray()
         resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
@@ -345,7 +354,7 @@ class McServer(ProtocolServer):
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
                     except (struct.error, IndexError) as e:
                         logger.warning("MC write value sync error: %s", e)
-                    break
+                    # FIXED-H05: 移除break，遍历所有匹配点而非只更新第一个
             self._log_debug("recv", "mc_write",
                             f"Write device {device_code} offset {start_addr}",
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
@@ -378,12 +387,9 @@ class McServer(ProtocolServer):
             offset += 3
             if behavior:
                 if subcmd == 0x0000:
-                    # FIXED-P0: 正确逻辑：分配start_addr+2字节(确保足够空间)，切片从start_addr起取2字节
-                    mem = behavior.read_memory(device_code, start_addr + 2)
-                    read_data += mem[start_addr:start_addr + 2]
+                    read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 使用read_memory_offset避免越界
                 elif subcmd == 0x0001:
-                    mem = behavior.read_memory(device_code, start_addr + 1)
-                    read_data += mem[start_addr:start_addr + 1]
+                    read_data += behavior.read_memory_offset(device_code, start_addr, 1)  # FIXED-N06: 使用read_memory_offset避免越界
         resp = bytearray()
         resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
         resp += bytes([data[2], data[3]])

@@ -135,9 +135,13 @@ class AbServer(ProtocolServer):
         logger.debug("AB connection from %s", addr)
         try:
             while self._server_running:
-                data = await asyncio.wait_for(reader.read(4096), timeout=_READ_TIMEOUT)
-                if not data:
-                    break
+                # FIXED-C04: 先读EIP头24字节获取length，再读剩余数据，避免大报文截断
+                header = await asyncio.wait_for(reader.readexactly(24), timeout=_READ_TIMEOUT)
+                eip_length = struct.unpack("<H", header[2:4])[0]
+                payload = b""
+                if eip_length > 0:
+                    payload = await asyncio.wait_for(reader.readexactly(eip_length), timeout=_READ_TIMEOUT)
+                data = header + payload
                 response = self._process_eip(data)
                 if response:
                     writer.write(response)
@@ -227,7 +231,7 @@ class AbServer(ProtocolServer):
         resp += struct.pack("<H", 0x0065)
         resp += struct.pack("<H", 0x0004)
         new_session = self._session_handle
-        self._session_handle += 1
+        self._session_handle = (self._session_handle + 1) & 0xFFFFFFFF  # FIXED-M06: 防止溢出为负数
         resp += struct.pack("<I", new_session)
         resp += struct.pack("<I", 0x00000000)
         resp += sender_context
@@ -450,6 +454,11 @@ class AbServer(ProtocolServer):
         behavior = self._behaviors.get(self._default_device_id)
         if tag_name and behavior:
             path_end = self._get_path_end_offset(cip_data)
+            if path_end < 0 or path_end + 3 > len(cip_data):  # FIXED-N07: 路径偏移校验，至少需要3字节(type+size)
+                cip_resp = bytearray()
+                cip_resp += bytes([0xCD])
+                cip_resp += bytes([0x04, 0x00])  # Path destination unknown
+                return self._wrap_cip_response(session, cip_resp, sender_context)
             if path_end < len(cip_data):
                 type_code = cip_data[path_end]
                 # 根据type_code确定跳过字节数：bool=4(type+0x00+0x01+0x00), string/其他=3(type+size_word)
@@ -468,7 +477,10 @@ class AbServer(ProtocolServer):
 
         cip_resp = bytearray()
         cip_resp += bytes([0xCD])
-        cip_resp += bytes([0x00, 0x00])
+        if not (tag_name and behavior):  # FIXED-L03: tag不存在或behavior为None时返回CIP错误码0x04(Path destination unknown)
+            cip_resp += bytes([0x04, 0x00])
+        else:
+            cip_resp += bytes([0x00, 0x00])
         return self._wrap_cip_response(session, cip_resp, sender_context)
 
     @staticmethod

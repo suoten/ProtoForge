@@ -259,9 +259,30 @@ class MqttBroker(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                logger.warning("MQTT write_point: point '%s' not found on device %s", point_name, device_id)
+                return False
+            if point.access not in ("w", "rw"):
+                logger.warning("MQTT write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+        # 更新协议层 behavior 内部状态
         success = behavior.on_write(point_name, value)
         if success:
+            # 发布更新后的设备数据到 MQTT topic
             await self._publish_device(device_id)
+
+            # 通过 on_write 回调传播到 DeviceInstance，确保内部状态一致
+            if self._on_write:
+                try:
+                    await self._on_write(device_id, point_name, value)
+                except Exception as e:
+                    logger.warning("MQTT write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
         return success
 
     def get_config_schema(self) -> dict[str, Any]:

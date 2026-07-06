@@ -78,15 +78,27 @@ class MappingValidator:
 
     def _validate_driver_config(self, config: dict[str, Any], protocol: str) -> dict[str, Any]:
         result: dict[str, Any] = {"valid": True, "fields_checked": 0, "issues": []}
-        # FIXED: 字段映射与edgelite.py实际字段名保持一致(modbus_tcp用slave_id, modbus_rtu用baudrate/slave_id)
+        # FIXED: 字段映射与edgelite.py _build_driver_config() 实际输出保持一致
+        # s7/mc/fins/ab/kuka/abb_robot 使用 "ip" 而非 "host"
+        # opcua 使用 "server_url" 而非 "endpoint"
+        # FIXED-P0: 同时支持别名和 plugin_name 两种协议格式
         required_fields_map = {
             "modbus_tcp": ["host", "port", "slave_id"],
             "modbus_rtu": ["port", "baudrate", "slave_id"],
-            "opcua": ["endpoint"],
+            "opcua": ["server_url"],
             "mqtt": ["broker", "port"],
+            "mqtt_client": ["broker", "port"],       # plugin_name 格式
             "bacnet": ["device_id"],
-            "s7": ["host", "rack", "slot"],
-            "mc": ["host", "port"],
+            "s7": ["ip", "rack", "slot"],
+            "siemens_s7": ["ip", "rack", "slot"],    # plugin_name 格式
+            "mc": ["ip", "port"],
+            "mitsubishi_mc": ["ip", "port"],         # plugin_name 格式
+            "fins": ["ip", "port"],
+            "omron_fins": ["ip", "port"],            # plugin_name 格式
+            "ab": ["ip", "port"],
+            "allen_bradley": ["ip", "port"],         # plugin_name 格式
+            "http": ["push_url", "timeout"],
+            "http_webhook": ["push_url", "timeout"], # plugin_name 格式
         }
         required = required_fields_map.get(protocol, [])
         for field_name in required:

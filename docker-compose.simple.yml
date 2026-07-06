@@ -5,10 +5,34 @@
 # 停止：docker compose -f docker-compose.simple.yml down
 # 地址：http://localhost:8000
 # 登录：admin / admin
+#
+# ⚠ 重要：协议端口映射说明
+# 默认只映射了 Web 管理界面端口 (8000)。
+# 如果需要从容器外部连接仿真协议（如 Modbus、OPC-UA、MQTT、GB28181 等），
+# 请取消下方对应端口的注释，或按需添加。
+# 端口说明：
+#   8000  - Web 管理界面 / REST API
+#   5020  - Modbus TCP
+#   4840  - OPC-UA
+#   1883  - MQTT
+#   5060  - GB28181 SIP (TCP + UDP)
+#   47808 - BACnet (UDP)
+#   102   - Siemens S7
+#   8080  - HTTP REST
+#   5000  - Mitsubishi MC
+#   9600  - Omron FINS (UDP)
+#   44818 - Rockwell AB
+#   51340 - OPC-DA
+#   8193  - FANUC FOCAS
+#   7878  - MTConnect
+#   1701  - Mettler-Toledo
+#   34964 - PROFINET
+#   34980 - EtherCAT
+# GB28181 RTP 媒体流端口范围 6000-6999（按需映射）
 
 services:
   protoforge:
-    image: suoten/protoforge:0.1.0  # FIXED: 版本号管理一致性—latest→0.1.0
+    image: suoten/protoforge:0.1.0
     container_name: protoforge
     command:
       - sh
@@ -16,6 +40,42 @@ services:
       - alembic upgrade head || :; python -m protoforge.cli demo
     ports:
       - "8000:8000"
+      # === 协议端口（按需取消注释） ===
+      # --- Modbus TCP ---
+      # - "5020:5020"
+      # --- OPC-UA ---
+      # - "4840:4840"
+      # --- MQTT ---
+      # - "1883:1883"
+      # --- GB28181 视频监控 (SIP 信令 TCP+UDP) ---
+      # - "5060:5060"
+      # - "5060:5060/udp"
+      # --- GB28181 RTP 媒体流端口范围（如需外部播放视频流则映射） ---
+      # - "6000-6999:6000-6999/udp"
+      # --- BACnet (UDP) ---
+      # - "47808:47808/udp"
+      # --- Siemens S7 ---
+      # - "102:102"
+      # --- HTTP REST ---
+      # - "8080:8080"
+      # --- Mitsubishi MC ---
+      # - "5000:5000"
+      # --- Omron FINS (UDP) ---
+      # - "9600:9600/udp"
+      # --- Rockwell AB ---
+      # - "44818:44818"
+      # --- OPC-DA ---
+      # - "51340:51340"
+      # --- FANUC FOCAS ---
+      # - "8193:8193"
+      # --- MTConnect ---
+      # - "7878:7878"
+      # --- Mettler-Toledo ---
+      # - "1701:1701"
+      # --- PROFINET ---
+      # - "34964:34964"
+      # --- EtherCAT ---
+      # - "34980:34980"
     environment:
       PROTOFORGE_DB_PATH: data/protoforge.db
       PROTOFORGE_LOG_LEVEL: info

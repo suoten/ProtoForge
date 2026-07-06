@@ -245,6 +245,9 @@ class ToledoServer(ProtocolServer):
             behavior = self._behaviors.get(self._default_device_id)
         if behavior:
             behavior._tare = behavior._weight
+            # FIXED-N10: 同步tare值到_values字典，确保API读取一致
+            if hasattr(behavior, '_values') and 'tare' in behavior._values:
+                behavior._values['tare'] = behavior._tare
         return self._handle_stable_weight()
 
     def _handle_zero(self) -> bytes:
@@ -254,6 +257,12 @@ class ToledoServer(ProtocolServer):
             behavior._weight = 0.0
             behavior._tare = 0.0
             behavior._zero = True
+            # FIXED-N11: 同步zero/weight/tare值到_values字典
+            if hasattr(behavior, '_values'):
+                behavior._values['weight'] = 0.0
+                behavior._values['tare'] = 0.0
+                if 'zero' in behavior._values:
+                    behavior._values['zero'] = True
         return self._handle_stable_weight()
 
     def _handle_print_weight(self) -> bytes:

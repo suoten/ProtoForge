@@ -53,6 +53,8 @@ services:
       - "1701:1701"
       - "34964:34964"
       - "34980:34980"
+      # GB28181 RTP 媒体流端口范围 (如需从外部播放视频流则映射)
+      - "6000-6999:6000-6999/udp"
     environment:
       PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge
       PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-}

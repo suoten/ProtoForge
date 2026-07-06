@@ -86,14 +86,25 @@ def _get_cached_token(url: str) -> str | None:
     return None
 
 
-def _cache_token(url: str, token: str, expires_in: int = 86400, refresh_token: str = "") -> None:
-    """缓存 access token"""
+def _get_cached_csrf_token(url: str) -> str | None:
+    """从缓存中获取 CSRF token"""
+    url_key = url.rstrip("/")
+    with _token_cache_lock:
+        entry = _token_cache.get(url_key)
+        if entry:
+            return entry.get("csrf_token", "")
+    return None
+
+
+def _cache_token(url: str, token: str, expires_in: int = 86400, refresh_token: str = "", csrf_token: str = "") -> None:
+    """缓存 access token 和 CSRF token"""
     url_key = url.rstrip("/")
     with _token_cache_lock:
         _token_cache[url_key] = {
             "token": token,
             "expires_at": time.time() + expires_in,
             "refresh_token": refresh_token,
+            "csrf_token": csrf_token,
         }
 
 
@@ -219,6 +230,12 @@ def get_protoforge_host() -> str:
 
 
 def _is_edgelite_local(el_config: dict[str, str]) -> bool:
+    """判断 EdgeLite 是否与本机同机部署。
+
+    检测逻辑：
+    1. URL hostname 为 localhost/127.0.0.1/::1 → 本机
+    2. URL hostname 解析后的 IP 与本机任一网卡 IP 匹配 → 本机
+    """
     url = (el_config.get("url") or "").strip().rstrip("/")
     if not url:
         return False
@@ -226,10 +243,48 @@ def _is_edgelite_local(el_config: dict[str, str]) -> bool:
     try:
         parsed = urllib.parse.urlparse(url)
         hostname = (parsed.hostname or "").lower()
-        return hostname in ("127.0.0.1", "localhost", "[::1]", "::1", "")
+        # 直接判断 localhost / 127.0.0.1 / ::1
+        if hostname in ("127.0.0.1", "localhost", "[::1]", "::1", ""):
+            return True
+        # 通过 DNS 解析 hostname，检查解析后的 IP 是否为本机 IP
+        import socket
+        try:
+            resolved_ips = set()
+            # getaddrinfo 会返回所有解析结果（包括 IPv4 和 IPv6）
+            for info in socket.getaddrinfo(hostname, None):
+                if len(info) >= 5:
+                    resolved_ips.add(info[4][0])
+            if not resolved_ips:
+                return False
+            # 获取本机所有网卡 IP
+            local_ips = _get_local_ips()
+            # 如果解析后的 IP 与本机任一 IP 匹配，则判定为同机
+            if resolved_ips & local_ips:
+                logger.debug("EdgeLite URL %s resolves to local IP(s) %s, treating as local deployment", url, resolved_ips & local_ips)
+                return True
+        except (socket.gaierror, OSError) as e:
+            logger.debug("DNS resolution failed for %s: %s, assuming remote", hostname, e)
+        return False
     except Exception as e:
         logger.debug("Failed to parse URL for local check: %s", e)
         return "127.0.0.1" in url or "localhost" in url
+
+
+def _get_local_ips() -> set[str]:
+    """获取本机所有网卡 IP 地址（含 127.0.0.1）。"""
+    import socket
+    ips = {"127.0.0.1", "::1"}
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None):
+            if len(info) >= 5:
+                ip = info[4][0]
+                # 过滤掉 IPv6 link-local 地址 (fe80::)
+                if not ip.startswith("fe80:"):
+                    ips.add(ip)
+    except Exception as e:
+        logger.debug("Failed to get local IPs via hostname: %s", e)
+    return ips
 
 
 def _get_protocol_status(protocol: str) -> str:
@@ -348,17 +403,31 @@ async def _get_edgelite_protocol_port_from_existing_device(
 
 
 def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "", el_config: dict[str, str] | None = None) -> dict[str, Any]:
+    # FIXED-P0: 将 EdgeLite plugin_name 规范化为别名，确保配置构建逻辑正确
+    # EdgeLite 旧版 API 返回 plugin_name（如 siemens_s7），新版返回别名（如 s7），
+    # 但 _build_driver_config 内部分支使用别名（s7/mqtt/mc/http/fins/ab），
+    # 所以需要将 plugin_name 转回别名
+    _PLUGIN_NAME_TO_ALIAS: dict[str, str] = {
+        "siemens_s7": "s7",
+        "mqtt_client": "mqtt",
+        "mitsubishi_mc": "mc",
+        "http_webhook": "http",
+        "omron_fins": "fins",
+        "allen_bradley": "ab",
+    }
+    normalized_protocol = _PLUGIN_NAME_TO_ALIAS.get(protocol, protocol)
+
     if not protoforge_host:
         protoforge_host = get_protoforge_host()
     if el_config and _is_edgelite_local(el_config):
         protoforge_host = "127.0.0.1"
     host = protoforge_host
-    port = _get_protocol_actual_port(protocol, protocol_config)
+    port = _get_protocol_actual_port(normalized_protocol, protocol_config)
     timeout = protocol_config.get("timeout", 5.0)
 
-    if protocol == "modbus_tcp":
+    if normalized_protocol == "modbus_tcp":
         base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": timeout}
-    elif protocol == "modbus_rtu":
+    elif normalized_protocol == "modbus_rtu":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
             "baudrate": protocol_config.get("baudrate", 9600),
@@ -367,7 +436,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "stopbits": protocol_config.get("stopbits", protocol_config.get("stop_bits", 1)),
             "timeout": timeout,
         }
-    elif protocol == "opcua":
+    elif normalized_protocol == "opcua":
         ua_port = port or 4840
         # 优先使用用户配置的 server_url/endpoint，但需要更新端口（可能因冲突自动切换）
         user_url = protocol_config.get("server_url") or protocol_config.get("endpoint") or ""
@@ -380,7 +449,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "password": protocol_config.get("password", ""),
                 "security_mode": protocol_config.get("security_mode", "None"),
                 "use_subscription": protocol_config.get("use_subscription", True)}
-    elif protocol == "mqtt":
+    elif normalized_protocol == "mqtt":
         mqtt_port = port or 1883
         base = {
             "broker": host,
@@ -395,53 +464,53 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         if protocol_config.get("tls_enabled"):
             base["tls_enabled"] = True
             base["tls_insecure"] = protocol_config.get("tls_insecure", False)
-    elif protocol == "http":
+    elif normalized_protocol == "http":
         http_port = port or 8080
         base = {"push_url": f"http://{host}:{http_port}/webhook/data",
                 "timeout": timeout}
-    elif protocol == "s7":
+    elif normalized_protocol == "s7":
         s7_port = port or 102
         base = {"ip": host,
                 "port": s7_port,
                 "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1)}
-    elif protocol == "mc":
+    elif normalized_protocol == "mc":
         base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": timeout}
-    elif protocol == "fins":
+    elif normalized_protocol == "fins":
         base = {"ip": host, "port": port or 9600, "timeout": timeout}
-    elif protocol == "ab":
+    elif normalized_protocol == "ab":
         ab_port = port or 44818
         base = {"ip": host, "port": ab_port, "slot": protocol_config.get("slot", 0),
                 "micrologix": protocol_config.get("micrologix", False), "timeout": timeout}
-    elif protocol == "fanuc":
+    elif normalized_protocol == "fanuc":
         base = {"ip": host, "port": port or 8193, "timeout": timeout}
-    elif protocol == "mtconnect":
+    elif normalized_protocol == "mtconnect":
         base = {"url": protocol_config.get("url", f"http://{host}:{port or 7878}"), "timeout": timeout}
-    elif protocol == "toledo":
+    elif normalized_protocol == "toledo":
         base = {"ip": host, "port": port or 1701, "timeout": timeout}
-    elif protocol == "opcda":
+    elif normalized_protocol == "opcda":
         base = {"server": protocol_config.get("server", protocol_config.get("prog_id", "")),
                 "host": protocol_config.get("host", host), "timeout": timeout}
-    elif protocol == "onvif":
+    elif normalized_protocol == "onvif":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "admin"),
                 "password": protocol_config.get("password", ""), "timeout": timeout}
-    elif protocol == "dlt645":
+    elif normalized_protocol == "dlt645":
         base = {"port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
                 "baud_rate": protocol_config.get("baud_rate", 2400),
                 "parity": protocol_config.get("parity", "E"), "timeout": timeout}
-    elif protocol == "iec104":
+    elif normalized_protocol == "iec104":
         base = {"host": host, "port": port or 2404,
                 "asdu_addr": protocol_config.get("asdu_addr", 1),
                 "heartbeat_interval": protocol_config.get("heartbeat_interval", 30.0), "timeout": timeout}
-    elif protocol == "kuka":
+    elif normalized_protocol == "kuka":
         base = {"ip": host, "port": port or 54600,
                 "reconnect": protocol_config.get("reconnect", True), "timeout": timeout}
-    elif protocol == "abb_robot":
+    elif normalized_protocol == "abb_robot":
         base = {"ip": host, "port": port or 80,
                 "username": protocol_config.get("username", "Default"),
                 "password": protocol_config.get("password", ""), "timeout": timeout}
-    elif protocol == "sparkplug_b":
+    elif normalized_protocol == "sparkplug_b":
         sparkplug_port = port or 1883
         base = {
             "broker": host,
@@ -453,7 +522,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         if protocol_config.get("username"):
             base["username"] = protocol_config.get("username")
             base["password"] = protocol_config.get("password", "")
-    elif protocol == "serial":
+    elif normalized_protocol == "serial":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
             "baudrate": protocol_config.get("baudrate", 9600),
@@ -463,7 +532,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "timeout": 5.0,
             "protocol": protocol_config.get("serial_protocol", "raw"),
         }
-    elif protocol == "database":
+    elif normalized_protocol == "database":
         base = {
             "db_type": protocol_config.get("db_type", "mysql"),
             "host": host, "port": port or 3306,
@@ -474,25 +543,25 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             "write_queries": protocol_config.get("write_queries", []),
             "pool_size": protocol_config.get("pool_size", 5),
         }
-    elif protocol == "barcode_scanner":
+    elif normalized_protocol == "barcode_scanner":
         base = {
             "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
             "baudrate": protocol_config.get("baudrate", 9600),
             "prefix": protocol_config.get("prefix", ""),
             "suffix": protocol_config.get("suffix", "\r"),
         }
-    elif protocol == "profinet":
+    elif normalized_protocol == "profinet":
         base = {"host": host, "port": port or 34964,
                 "device_name": protocol_config.get("device_name", "protoforge-device"),
                 "vendor_id": protocol_config.get("vendor_id", 266),
                 "device_id": protocol_config.get("device_id", 256), "timeout": 5.0}
-    elif protocol == "ethercat":
+    elif normalized_protocol == "ethercat":
         base = {"host": host, "port": port or 34980,
                 "slave_address": protocol_config.get("slave_address", 4097), "timeout": 5.0}
     else:
         base = {"host": host, "ip": host, "port": port, "timeout": 5.0}
 
-    known = _DRIVER_CONFIG_KNOWN_KEYS.get(protocol, set())
+    known = _DRIVER_CONFIG_KNOWN_KEYS.get(normalized_protocol, set())
     for k, v in protocol_config.items():
         if k not in known and k not in base and k not in (
             "edgelite_url", "edgelite_username", "edgelite_password", "collect_interval",
@@ -636,7 +705,8 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
         except (ValueError, TypeError) as e:
             logger.debug("Invalid expires_in value, using default 86400: %s", e)
     refresh_token = (inner.get("refresh_token", "") if isinstance(inner, dict) else "") or data.get("refresh_token", "")
-    _cache_token(url, token, expires_in, refresh_token)
+    csrf_token = (inner.get("csrf_token", "") if isinstance(inner, dict) else "") or data.get("csrf_token", "")
+    _cache_token(url, token, expires_in, refresh_token, csrf_token)
 
     return token
 
@@ -660,7 +730,11 @@ async def _get_auth_headers(
         return {}, e
     except Exception as e:
         return {}, EdgeLiteError("unknown", str(e), desc("edgelite.suggestion.check_network"))
-    return {"Authorization": f"Bearer {token}"}, None
+    headers = {"Authorization": f"Bearer {token}"}
+    csrf_token = _get_cached_csrf_token(url)
+    if csrf_token:
+        headers["X-CSRF-Token"] = csrf_token
+    return headers, None
 
 
 async def _relogin_on_401(
@@ -669,7 +743,11 @@ async def _relogin_on_401(
     """当缓存的 token 失效（API 返回 401）时，清除缓存并重新登录。返回新的 headers。"""
     _invalidate_token(url)
     token = await _login_edgelite(client, url, username, password)
-    return {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {token}"}
+    csrf_token = _get_cached_csrf_token(url)
+    if csrf_token:
+        headers["X-CSRF-Token"] = csrf_token
+    return headers
 
 
 async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
@@ -737,7 +815,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
 
     try:
         create_resp = await client.post(
-            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/integration/push-device",
             json=payload, headers=headers,
         )
     except httpx.ConnectError:  # FIXED-P0: except需与try体同级；原代码except缩进进if块导致外层try无except
@@ -752,7 +830,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
         headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         try:
             create_resp = await client.post(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+                f"{el_config.get('url', '').rstrip('/')}/api/v1/integration/push-device",
                 json=payload, headers=headers,
             )
         except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
@@ -838,7 +916,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                     logger.info("Device %s not found on EdgeLite (deleted server-side), re-creating...", remote_device_id)
                     try:
                         create_resp2 = await client.post(
-                            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices",
+                            f"{el_config.get('url', '').rstrip('/')}/api/v1/integration/push-device",
                             json=payload, headers=headers,
                         )
                     except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:

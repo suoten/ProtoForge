@@ -19,7 +19,7 @@
       </n-space>
 
       <n-spin :show="dataLoading">
-      <n-grid :cols="3" :x-gap="16" :y-gap="16">
+      <n-grid v-if="!dataLoading || protocols.length > 0" :cols="responsiveCols" :x-gap="16" :y-gap="16">
         <n-gi v-for="p in protocols" :key="p.name">
           <n-card size="small" hoverable>
             <template #header>
@@ -58,11 +58,35 @@
           </n-card>
         </n-gi>
       </n-grid>
+      <n-grid v-else :cols="responsiveCols" :x-gap="16" :y-gap="16">
+        <n-gi v-for="i in 6" :key="i">
+          <n-card size="small">
+            <n-skeleton text style="width:60%" />
+            <n-skeleton text style="width:40%" />
+            <n-skeleton text :repeat="2" style="margin-top:12px" />
+          </n-card>
+        </n-gi>
+      </n-grid>
+      <EmptyState v-if="protocols.length === 0 && !dataLoading"
+        :title="t('protocols.noProtocols')"
+        :description="t('protocols.noProtocolsDesc')"
+        iconPath="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+      />
       </n-spin>
 
       <!-- Advanced Config Modal -->
-      <n-modal v-model:show="showAdvanced" preset="card" :title="t('protocols.advancedConfigTitle', { name: advancedProtocol.display_name || advancedProtocol.name })" style="width: 500px">
+      <n-modal v-model:show="showAdvanced" preset="card" :title="t('protocols.advancedConfigTitle', { name: advancedProtocol.display_name || advancedProtocol.name })" style="width:min(560px, 90vw)">
         <n-alert type="info" :bordered="false" style="margin-bottom: 12px">{{ t('protocols.advancedConfigHint') }}</n-alert>
+        <!-- GB28181 专属配置引导 -->
+        <n-alert v-if="advancedProtocol.name === 'gb28181'" type="warning" :bordered="false" style="margin-bottom: 12px" title="GB28181 配置说明">
+          <div style="font-size: 13px; line-height: 1.8">
+            <div style="font-weight: 600; margin-bottom: 4px">GB28181 与其他协议不同，采用「客户端注册」模式：</div>
+            <div>1. 此处配置的是 <b>SIP 监听端口</b>（默认 5060），用于接收上游平台的响应消息</div>
+            <div>2. 要连接您的视频平台，需在 <b>设备管理</b> 页面创建 GB28181 设备，填写 <b>上游 SIP 服务器地址 (sip_server_addr)</b></div>
+            <div>3. 设备创建后会自动向您的平台发起 SIP REGISTER 注册</div>
+            <div style="margin-top: 4px; color: #d97706">⚠ 上游 SIP 服务器地址为空时，设备不会发起注册</div>
+          </div>
+        </n-alert>
         <n-form :model="advancedConfig" label-placement="left" label-width="120">
           <n-form-item v-for="(info, key) in advancedConfigSchema" :key="key" :label="key">
             <n-input-number v-if="info.type === 'number' || info.type === 'integer'" v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" style="width:100%" />
@@ -79,7 +103,7 @@
       </n-modal>
 
       <!-- Protocol Detail Modal -->
-      <n-modal v-model:show="showInfoModal" preset="card" :title="t('protocols.protocolDetailTitle', { name: protocolInfoName })" style="width: 600px">
+      <n-modal v-model:show="showInfoModal" preset="card" :title="t('protocols.protocolDetailTitle', { name: protocolInfoName })" style="width:min(600px, 90vw)">
         <n-spin :show="loadingInfo">
           <n-space vertical v-if="protocolInfoData">
             <n-descriptions label-placement="left" :column="1" bordered size="small">
@@ -106,7 +130,7 @@
 
       <!-- Start Progress Modal -->
       <n-modal v-model:show="showProgressModal" :mask-closable="false" :close-on-esc="false" preset="card"
-        :title="progressModalTitle" style="width: 520px">
+        :title="progressModalTitle" style="width:min(520px, 90vw)">
         <div style="min-height: 180px">
           <!-- Single protocol start progress -->
           <template v-if="progressMode === 'single-start' || progressMode === 'single-stop'">
@@ -177,10 +201,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NInputNumber, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, NProgress, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NInputNumber, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, NProgress, NSkeleton, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { protocolColors, protocolModes } from '../constants.js'
+import EmptyState from '../components/EmptyState.vue'
+import { useWebSocketPool } from '../composables/useWebSocketPool'
 
 const message = useMessage()
 const { t } = useI18n()
@@ -654,60 +680,40 @@ async function startWithConfig() {
   }
 }
 
+const windowWidth = ref(window.innerWidth)
+function onResize() { windowWidth.value = window.innerWidth }
+
+const responsiveCols = computed(() => {
+  if (windowWidth.value < 768) return 1
+  if (windowWidth.value < 1200) return 2
+  return 3
+})
+
+const { getConnection } = useWebSocketPool()
+
 onMounted(() => {
   loadData()
-  connectWs()
-})
-
-onUnmounted(() => {
-  wsManualClose = true
-  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
-  if (ws) { ws.close(); ws = null }
-})
-
-let ws = null
-let wsReconnectTimer = null
-let wsReconnectDelay = 1000
-let wsReconnectAttempts = 0
-let wsManualClose = false
-const WS_MAX_RECONNECT_DELAY = 30000
-const WS_MAX_RECONNECT_ATTEMPTS = 20
-function connectWs() {
-  if (wsManualClose) return
-  try {
-    ws = api.createDeviceWs()
-    if (!ws) return
-  } catch (e) {
-    console.error('Failed to create device WebSocket:', e.message)
-    message.warning(t('protocols.wsConnectFailed'))
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      wsReconnectTimer = setTimeout(connectWs, 5000)
-    }
-    return
-  }
-  ws.onopen = () => { wsReconnectDelay = 1000; wsReconnectAttempts = 0 }
-  ws.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'devices' && Array.isArray(msg.data)) {
+  wsConn = getConnection('protocols-devices', () => api.createDeviceWs())
+  wsConn.subscribe({
+    onMessage: (msg) => {
+      if (msg.type === 'devices') {
         if (wsLoadDataTimer) clearTimeout(wsLoadDataTimer)
         wsLoadDataTimer = setTimeout(() => { loadData() }, 300)
       }
-    } catch (e) {
-      console.debug('[WS] Non-JSON message ignored:', typeof event.data === 'string' ? event.data.substring(0, 100) : event.data)
     }
-  }
-  ws.onerror = () => { wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY) }
-  ws.onclose = () => {
-    if (wsManualClose) return
-    wsReconnectAttempts++
-    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
-      wsReconnectTimer = setTimeout(connectWs, wsReconnectDelay)
-      wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
-    }
-  }
-}
+  })
+  wsConn.connect()
+  window.addEventListener('resize', onResize)
+})
+
+onUnmounted(() => {
+  if (wsConn) { wsConn.disconnect(); wsConn = null }
+  if (wsLoadDataTimer) { clearTimeout(wsLoadDataTimer); wsLoadDataTimer = null }
+  window.removeEventListener('resize', onResize)
+})
+
+let wsConn = null
+let wsLoadDataTimer = null
 </script>
 
 <style scoped>

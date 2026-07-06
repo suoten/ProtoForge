@@ -45,12 +45,12 @@
       </div>
     </n-card>
 
-    <n-modal v-model:show="showCreateModal" preset="card" :title="t('scenarios.createScene')" style="width: 500px">
-      <n-form :model="newScenario" label-placement="left" label-width="80">
-        <n-form-item :label="t('scenarios.sceneId')">
+    <n-modal v-model:show="showCreateModal" preset="card" :title="t('scenarios.createScene')" style="width:min(500px, 90vw)">
+      <n-form ref="createFormRef" :model="newScenario" :rules="createRules" label-placement="left" label-width="80">
+        <n-form-item :label="t('scenarios.sceneId')" path="id">
           <n-input v-model:value="newScenario.id" :placeholder="t('scenarios.sceneIdPlaceholder')" />
         </n-form-item>
-        <n-form-item :label="t('scenarios.sceneName')">
+        <n-form-item :label="t('scenarios.sceneName')" path="name">
           <n-input v-model:value="newScenario.name" :placeholder="t('scenarios.sceneNamePlaceholder')" />
         </n-form-item>
         <n-form-item :label="t('common.description')">
@@ -65,7 +65,7 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showImportModal" preset="card" :title="t('scenarios.importScene')" style="width: 500px">
+    <n-modal v-model:show="showImportModal" preset="card" :title="t('scenarios.importScene')" style="width:min(500px, 90vw)">
       <n-space vertical>
         <n-alert type="info" :bordered="false">{{ t('scenarios.importHint') }}</n-alert>
         <n-input v-model:value="importJson" type="textarea" :rows="8" :placeholder="t('scenarios.importPlaceholder')" />
@@ -78,7 +78,7 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showSnapshotModal" preset="card" :title="t('scenarios.snapshot')" style="width: 700px">
+    <n-modal v-model:show="showSnapshotModal" preset="card" :title="t('scenarios.snapshot')" style="width:min(700px, 90vw)">
       <n-data-table :columns="snapshotColumns" :data="snapshotDevices" :bordered="false" size="small"
         :pagination="{ pageSize: 10 }" />
     </n-modal>
@@ -111,6 +111,11 @@ const snapshotDevices = ref([])
 const togglingIds = ref(new Set())
 const deletingIds = ref(new Set())
 const newScenario = ref({ id: '', name: '', description: '', devices: [], rules: [] })
+const createFormRef = ref(null)
+const createRules = computed(() => ({
+  id: [{ required: true, message: t('scenarios.idRequired'), trigger: 'blur' }],
+  name: [{ required: true, message: t('scenarios.nameRequired'), trigger: 'blur' }],
+}))
 
 const columns = computed(() => [
   { type: 'selection' },
@@ -278,10 +283,7 @@ function cancelCreateScenario() {
 }
 
 async function createScenario() {
-  if (!newScenario.value.id || !newScenario.value.name) {
-    message.warning(t('scenarios.idNameRequired'))
-    return
-  }
+  try { await createFormRef.value?.validate() } catch { return }
   creating.value = true
   try {
     await api.createScenario(newScenario.value)

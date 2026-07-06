@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 PROTOCOL_MESSAGES: dict[str, dict[str, str]] = {
     "s7": {
         "service_started": "S7 service started {host}:{port}",
@@ -138,7 +142,8 @@ def msg(protocol: str, key: str, **kwargs) -> str:
     if kwargs:
         try:
             return template.format(**kwargs)
-        except KeyError:
+        except KeyError as e:
+            _logger.debug("消息模板格式化失败: protocol=%s key=%s missing_key=%s", protocol, key, e)
             return template
     return template
 
@@ -840,7 +845,8 @@ def tmsg(key: str, lang: str = "", **kwargs) -> str:
     if kwargs:
         try:
             return template.format(**kwargs)
-        except KeyError:
+        except KeyError as e:
+            _logger.debug("消息模板格式化失败: key=%s missing_key=%s", key, e)
             return template
     return template
 

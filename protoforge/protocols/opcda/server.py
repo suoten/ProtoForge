@@ -146,6 +146,8 @@ class OpcDaServer(ProtocolServer):
                 if magic != self.OPCDA_MAGIC:
                     break
                 body_len = struct.unpack("<I", header[4:8])[0]
+                if body_len > 0x100000:  # FIXED-R03: OPC-DA body长度上限1MB，防止恶意超大帧
+                    break
                 body = await asyncio.wait_for(reader.readexactly(body_len), timeout=_READ_TIMEOUT) if body_len > 0 else b""
                 response, sub_id = self._process_opcda_with_sub(body, writer)
                 if response:

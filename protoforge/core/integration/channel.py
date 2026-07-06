@@ -80,13 +80,15 @@ class HttpChannel(ChannelBase):
         headers = {}
         if self._auth and self._auth.token:
             headers["Authorization"] = f"Bearer {self._auth.token}"
+        if self._auth and hasattr(self._auth, 'csrf_token') and self._auth.csrf_token:
+            headers["X-CSRF-Token"] = self._auth.csrf_token
 
         msg_type = message.get("type", "")
         payload = message.get("payload", message)
 
         try:
             if msg_type in ("push_device", "batch_push"):
-                resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
+                resp = await self._client.post("/api/v1/integration/push-device", json=payload, headers=headers)
                 if resp.status_code in (200, 201):
                     resp_data = self._safe_json(resp)
                     inner = resp_data.get("data", resp_data) if resp_data else {}
@@ -103,7 +105,9 @@ class HttpChannel(ChannelBase):
                     refreshed = await self._safe_refresh_token()
                     if refreshed:
                         headers["Authorization"] = f"Bearer {self._auth.token}"
-                        resp = await self._client.post("/api/v1/devices", json=payload, headers=headers)
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
+                        resp = await self._client.post("/api/v1/integration/push-device", json=payload, headers=headers)
                         if resp.status_code in (200, 201):
                             return {"ok": True, "data": self._safe_json(resp) or {}}
                 return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
@@ -115,6 +119,8 @@ class HttpChannel(ChannelBase):
                     refreshed = await self._safe_refresh_token()
                     if refreshed:
                         headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
                         resp = await self._client.delete(f"/api/v1/devices/{device_id}", headers=headers)
                 return {"ok": resp.status_code in (200, 204)}
 
@@ -139,6 +145,8 @@ class HttpChannel(ChannelBase):
                     refreshed = await self._safe_refresh_token()
                     if refreshed:
                         headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
                         resp = await self._client.post(
                             f"/api/v1/integration/message",
                             json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
@@ -156,6 +164,8 @@ class HttpChannel(ChannelBase):
                     refreshed = await self._safe_refresh_token()
                     if refreshed:
                         headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
                         resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
                 return {"ok": resp.status_code == 200, "data": self._safe_json(resp) if resp.status_code == 200 else None}
 
@@ -242,18 +252,14 @@ class WebSocketChannel(ChannelBase):
             logger.warning("websockets library not installed, WebSocket channel unavailable")
             raise
 
-        if self._auth:
-            await self._auth.ensure_token()
-            token = self._auth.token
-            separator = "&" if "?" in self._url else "?"
-            connect_url = f"{self._url}{separator}token={token}"
-        else:
-            connect_url = self._url
+        # FIX: 不再将 token 拼入 URL 参数（会泄露到日志），
+        # EdgeLite 要求通过首帧 {"type": "auth", "token": "xxx"} 认证
+        connect_url = self._url
 
         self._ws = await websockets.connect(
             connect_url,
-            ping_interval=None,  # 禁用 WebSocket 协议级 ping，使用应用层心跳
-            ping_timeout=None,
+            ping_interval=60,    # 每 60 秒发送协议级 ping，保持连接活跃（防止反向代理空闲超时断开）
+            ping_timeout=20,     # 等待 pong 响应超时 20 秒
             close_timeout=5.0,
             open_timeout=10.0,
         )

@@ -521,6 +521,8 @@ class EtherCATServer(ProtocolServer):
                 except asyncio.IncompleteReadError:
                     break
                 length = struct.unpack("<H", header)[0]
+                if length == 0 or length > 1500:  # FIXED-R01: EtherCAT帧长度校验，0=无效帧，>1500=超出标准以太网MTU
+                    break
                 if length > 0:
                     try:
                         payload = await asyncio.wait_for(reader.readexactly(length), timeout=_READ_TIMEOUT)

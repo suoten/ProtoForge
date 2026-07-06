@@ -862,7 +862,7 @@ async function loadDevices() {
     const devs = await api.getDevices()
     const prevStatusMap = new Map(allDevices.value.map(d => [d.id, d._el_status]))
     const prevCollectingMap = new Map(allDevices.value.map(d => [d.id, d._collecting]))
-    allDevices.value = (devs || []).map(d => ({
+    allDevices.value = (Array.isArray(devs) ? devs : []).map(d => ({
       ...d,
       _el_status: prevStatusMap.get(d.id) ?? null,
       _collecting: prevCollectingMap.get(d.id) ?? false,

@@ -160,7 +160,7 @@ function normalizeList(data, ...keys) {
       if (Array.isArray(data[k])) return data[k]
     }
     // FIXED: APIResponse死代码分支清理 — 后端成功响应不包装为APIResponse格式，移除data.code===0分支
-    const commonKeys = ['items', 'results', 'records', 'list', 'rows']  // FIXED: removed 'data' to avoid false match on APIResponse
+    const commonKeys = ['items', 'results', 'records', 'list', 'rows', 'data']  // FIXED: restored 'data' key for wrapped responses
     for (const k of commonKeys) {
       if (Array.isArray(data[k])) return data[k]
     }
@@ -218,6 +218,39 @@ export default {
   batchDeleteDevices: (ids) => d(api.post('/devices/batch/delete', { device_ids: ids })),  // FIXED: changed from DELETE to POST
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
   batchStopDevices: (ids) => d(api.post('/devices/batch/stop', { device_ids: ids })),
+
+  // 设备详情（含状态机、故障、控制回路）
+  getDeviceDetail: (id) => d(api.get(`/devices/${id}/detail`)),
+
+  // 故障注入
+  injectDeviceFault: (id, config) => d(api.post(`/devices/${id}/faults`, config)),
+  listDeviceFaults: (id, activeOnly = false) => d(api.get(`/devices/${id}/faults`, { params: { active_only: activeOnly } })),
+  removeDeviceFault: (id, faultId) => d(api.delete(`/devices/${id}/faults/${faultId}`)),
+  clearDeviceFaults: (id) => d(api.delete(`/devices/${id}/faults`)),
+
+  // 设备状态机
+  triggerStateTransition: (id, event, reason = '') => d(api.post(`/devices/${id}/state/transition`, { event, reason })),
+  getDeviceState: (id) => d(api.get(`/devices/${id}/state`)),
+  getDeviceStateHistory: (id, count = 50) => d(api.get(`/devices/${id}/state/history`, { params: { count } })),
+
+  // 控制回路
+  addControlLoop: (id, config) => d(api.post(`/devices/${id}/control-loops`, config)),
+  removeControlLoop: (id, loopId) => d(api.delete(`/devices/${id}/control-loops/${loopId}`)),
+  listControlLoops: (id) => d(api.get(`/devices/${id}/control-loops`)),
+
+  // 网络仿真
+  configureNetwork: (profile, enabled = true) => d(api.post('/network/configure', { profile, enabled })),
+  getNetworkStatus: () => d(api.get('/network/status')),
+
+  // 故障传播规则
+  addFaultPropagationRule: (config) => d(api.post('/faults/propagation/rules', config)),
+  listFaultPropagationRules: () => d(api.get('/faults/propagation/rules')),
+  removeFaultPropagationRule: (index) => d(api.delete(`/faults/propagation/rules/${index}`)),
+
+  // 时间序列模式
+  addTimeSeriesPattern: (config) => d(api.post('/timeseries/patterns', config)),
+  listTimeSeriesPatterns: () => d(api.get('/timeseries/patterns')),
+  removeTimeSeriesPattern: (pointName) => d(api.delete(`/timeseries/patterns/${pointName}`)),
 
   getTemplates: (protocol) => d(api.get('/templates', { params: { protocol } })).then(r => normalizeList(r, 'templates')),
   getTemplate: (id) => d(api.get(`/templates/${id}`)),

@@ -7,7 +7,10 @@ from typing import Any, Optional
 from protoforge.core.device import DeviceInstance
 from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent, ProtocolStatusEvent
 from protoforge.core.generator import DataGenerator
+from protoforge.core.network_sim import NetworkSimulator
 from protoforge.core.scenario import Scenario
+from protoforge.core.timeseries import TimeSeriesManager
+from protoforge.core.fault.propagation import FaultPropagation
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, GeneratorType, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioDetail, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
@@ -95,12 +98,39 @@ class SimulationEngine:
         self._running = False
         self._event_bus = event_bus
         self._tick_interval = tick_interval
+        self._fault_propagation = FaultPropagation()
+        self._timeseries_manager = TimeSeriesManager()
+        self._network_sim = NetworkSimulator(enabled=False)
 
     def register_protocol(self, server: ProtocolServer) -> None:
         if server.protocol_name in self._protocol_servers:
             logger.warning("Protocol %s already registered, overwriting", server.protocol_name)
+        # 设置写回调：当外部客户端通过协议写入时，传播到 DeviceInstance
+        server.set_write_callback(self._on_protocol_write)
         self._protocol_servers[server.protocol_name] = server
         logger.info("Registered protocol: %s", server.protocol_name)
+
+    async def _on_protocol_write(self, device_id: str, point_name: str, value: Any) -> bool:
+        """协议层写回调：将外部客户端的写入操作传播到 DeviceInstance。
+
+        当外部客户端（如 Modbus master、OPC-UA client、S7 client）通过协议
+        写入数据时，协议 server 通过此回调将写入操作传播到引擎的
+        DeviceInstance，确保内部状态与协议数据一致。
+
+        :param device_id: 设备 ID
+        :param point_name: 点位名称
+        :param value: 写入值
+        :return: 是否写入成功
+        """
+        instance = self._devices.get(device_id)
+        if not instance:
+            logger.warning("on_protocol_write: device %s not found", device_id)
+            return False
+        try:
+            return await instance.write_point(point_name, value)
+        except Exception as e:
+            logger.warning("on_protocol_write error for %s/%s: %s", device_id, point_name, e)
+            return False
 
     def setup_debug_callbacks(self, log_bus) -> None:
         for name, server in self._protocol_servers.items():
@@ -192,7 +222,7 @@ class SimulationEngine:
                             protocol_name, actual_port, original_port
                         )
 
-                for i in range(5):
+                for i in range(10):  # FIXED-H07: 增加等待次数从5到10，超时从1s增加到2s，适应慢启动场景
                     await asyncio.sleep(0.2)
                     if server.status == ProtocolStatus.ERROR:
                         break
@@ -353,8 +383,8 @@ class SimulationEngine:
         try:
             await self.remove_device(device_id)
         except Exception as e:
-            logger.error("Failed to remove old device %s during update: %s", device_id, e)
-            raise
+            logger.error("Failed to remove old device %s during update: %s, attempting to continue", device_id, e)
+            # FIXED-H06: remove失败不直接raise，继续尝试创建新设备，避免设备丢失
         config.id = device_id
         try:
             result = await self.create_device(config)
@@ -459,7 +489,7 @@ class SimulationEngine:
 
     def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
         result = []
-        for instance in self._devices.values():
+        for instance in list(self._devices.values()):  # FIXED-L05: 使用list()快照避免并发修改
             if protocol and instance.protocol != protocol:
                 continue
             result.append(self._get_device_info(instance))
@@ -498,44 +528,29 @@ class SimulationEngine:
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
 
-        old_value = None
-        found = False
-        for pv in instance.read_all_points():
-            if pv.name == point_name:
-                old_value = pv.value
-                found = True
-                break
-
-        success = await instance.write_point(point_name, value)
-        if success:
-            server = self._protocol_servers.get(instance.protocol)
-            if server and server.status == ProtocolStatus.RUNNING:
-                try:
-                    proto_success = await server.write_point(device_id, point_name, value)
-                    if not proto_success:
-                        if found:
-                            try:
-                                await instance.write_point(point_name, old_value)
-                            except Exception as rollback_err:
-                                # FIXED-P1: 回滚失败时记录不一致状态，便于排查
-                                logger.warning("Rollback failed for %s/%s: %s (inconsistent state: memory=%s, protocol=old)", device_id, point_name, rollback_err, value)
-                        logger.warning("Protocol write failed for %s/%s, rolled back", device_id, point_name)
-                        return False
-                except Exception as e:
-                    if found:
-                        try:
-                            await instance.write_point(point_name, old_value)
-                        except Exception as rollback_err:
-                            # FIXED-P1: 回滚失败时记录不一致状态，便于排查
-                            logger.warning("Rollback failed for %s/%s: %s (inconsistent state: memory=%s, protocol=old)", device_id, point_name, rollback_err, value)
-                    logger.warning("Protocol write error for %s/%s: %s, rolled back", device_id, point_name, e)
+        server = self._protocol_servers.get(instance.protocol)
+        if server and server.status == ProtocolStatus.RUNNING:
+            # 协议 server 运行中：通过 server.write_point() 统一写入，
+            # server.write_point() 内部会通过 on_write 回调传播到 DeviceInstance，
+            # 避免双重写入。
+            try:
+                proto_success = await server.write_point(device_id, point_name, value)
+                if not proto_success:
+                    logger.warning("Protocol write failed for %s/%s", device_id, point_name)
                     return False
-            else:
+            except Exception as e:
+                logger.warning("Protocol write error for %s/%s: %s", device_id, point_name, e)
+                return False
+        else:
+            # 协议 server 未运行：直接写入 DeviceInstance 内存
+            success = await instance.write_point(point_name, value)
+            if success:
                 logger.warning(
                     "Write to device %s/%s succeeded in memory, but protocol %s is not running - change not visible to external clients",
                     device_id, point_name, instance.protocol,
                 )
-        return success
+            return success
+        return True
 
     async def create_scenario(self, config: ScenarioConfig) -> ScenarioInfo:  # FIXED-P1: 改为async以支持锁
         _validate_entity_id(config.id, "Scenario")
@@ -730,7 +745,9 @@ class SimulationEngine:
         for server in self._protocol_servers.values():
             if server.status == ProtocolStatus.RUNNING:
                 try:
-                    await server.stop()
+                    await asyncio.wait_for(server.stop(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Timeout stopping protocol server %s (10s), skipping", server.protocol_name)
                 except Exception as e:
                     logger.warning("Error stopping protocol server %s: %s", server.protocol_name, e)
         for instance in self._devices.values():
@@ -754,7 +771,7 @@ class SimulationEngine:
                     server = self._protocol_servers.get(instance.protocol)
                     if server and server.status == ProtocolStatus.RUNNING:
                         for pv in instance.read_all_points():
-                            point_cfg = instance._point_configs.get(pv.name)
+                            point_cfg = instance.get_point_config(pv.name)  # FIXED-M07: 使用公开方法而非直接访问私有属性
                             if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
                                 try:
                                     await server.write_point(instance.id, pv.name, pv.value)
@@ -767,6 +784,32 @@ class SimulationEngine:
                     await scenario.tick()
                 except Exception as e:
                     logger.warning("Tick error for scenario %s: %s", getattr(scenario.config, 'id', 'unknown') if scenario.config else 'unknown', e)
+            # 处理故障传播
+            try:
+                for inst in devices_snapshot:
+                    dev_id = inst.id
+                    point_values = {name: val for name, val in inst._point_values.items()}
+                    triggers = self._fault_propagation.check_propagation(point_values)
+                    for trigger in triggers:
+                        from protoforge.core.fault_injection import FaultConfig, FaultType, TriggerMode
+                        ft = trigger.get("fault_type", FaultType.SENSOR_NOISE)
+                        if isinstance(ft, str):
+                            ft = FaultType(ft)
+                        config = FaultConfig(
+                            fault_type=ft,
+                            target_point=trigger.get("target", "*"),
+                            trigger_mode=TriggerMode.MANUAL,
+                            parameters=trigger.get("parameters", {}),
+                            target_device=dev_id,
+                            start_time=trigger.get("start_time"),
+                            probability=0.0,
+                            description=f'Propagated fault: {ft.value}',
+                        )
+                        fid = inst.inject_fault(config)
+                        inst.activate_fault(fid)
+            except Exception as e:
+                logger.debug("Fault propagation check error: %s", e)
+
             await asyncio.sleep(self._tick_interval)
 
     def _get_device_info(self, instance: DeviceInstance) -> DeviceInfo:
@@ -779,3 +822,72 @@ class SimulationEngine:
             points=instance.read_all_points(),
             protocol_config=instance.config.protocol_config,
         )
+
+    def get_device_detail(self, device_id: str) -> dict[str, Any]:
+        """返回设备的详细信息，包含状态机、故障和控制回路信息。
+
+        :param device_id: 设备 ID
+        :return: 包含完整设备详情的字典
+        """
+        instance = self._devices.get(device_id)
+        if not instance:
+            raise ValueError(f"Device not found: {device_id}")
+
+        info = self._get_device_info(instance)
+        sm_info = instance.get_state_info()
+        fault_info = instance.get_fault_info()
+        loop_info = instance.get_control_loop_info()
+        return {
+            "id": info.id,
+            "name": info.name,
+            "protocol": info.protocol,
+            "template_id": info.template_id,
+            "status": info.status.value,
+            "protocol_active": info.protocol_active,
+            "points": [
+                {"name": p.name, "value": p.value, "quality": p.quality,
+                 "quality_code": getattr(p, 'quality_code', 0),
+                 "timestamp": p.timestamp, "simulated": getattr(p, 'simulated', False)}
+                for p in info.points
+            ],
+            "state": {
+                "state": sm_info.get("state", "-"),
+                "uptime": f"{sm_info.get('state_duration', 0):.1f}s",
+                "quality": sm_info.get("quality", ""),
+                "available_transitions": sm_info.get("available_transitions", []),
+                "history": instance.get_state_history(20),
+            },
+            "faults": fault_info.get("faults", []),
+            "active_fault_count": fault_info.get("active_count", 0),
+            "control_loops": loop_info.get("loops", []),
+            "network_sim": self._network_sim.to_dict() if self._network_sim else None,
+        }
+
+    @property
+    def fault_propagation(self) -> FaultPropagation:
+        """返回故障传播链管理器。"""
+        return self._fault_propagation
+
+    @property
+    def timeseries_manager(self) -> TimeSeriesManager:
+        """返回时间序列模式管理器。"""
+        return self._timeseries_manager
+
+    @property
+    def network_simulator(self) -> NetworkSimulator:
+        """返回网络仿真器。"""
+        return self._network_sim
+
+    def configure_network(self, profile: str | dict[str, Any], enabled: bool = True) -> None:
+        """配置网络仿真参数。
+
+        :param profile: 预定义名称 ("ideal"/"lan"/"wan"/...) 或配置字典
+        :param enabled: 是否启用
+        """
+        from protoforge.core.network_sim import NetworkProfile, PRESET_PROFILES
+        if isinstance(profile, str):
+            self._network_sim.set_profile(profile)
+        elif isinstance(profile, dict):
+            self._network_sim.set_profile(NetworkProfile.from_dict(profile))
+        self._network_sim.enable() if enabled else self._network_sim.disable()
+        logger.info("Network simulation configured: profile=%s, enabled=%s", profile, enabled)

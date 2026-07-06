@@ -337,6 +337,8 @@ class ProfinetServer(ProtocolServer):
             while self._server_running:
                 header = await asyncio.wait_for(reader.readexactly(2), timeout=_READ_TIMEOUT)
                 body_len = struct.unpack(">H", header)[0]
+                if body_len > 1500:  # FIXED-R02: PROFINET帧长度上限校验，超出以太网MTU则断开
+                    break
                 data = await asyncio.wait_for(reader.readexactly(body_len), timeout=_READ_TIMEOUT) if body_len > 0 else b""
                 response = self._process_tunnel_message(data, addr, writer)
                 if response:

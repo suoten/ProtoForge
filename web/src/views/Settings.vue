@@ -128,12 +128,18 @@
       </n-tab-pane>
     </n-tabs>
 
-    <n-modal v-model:show="showAddUser" :title="t('settings.addUserTitle')" preset="card" style="width: 420px" :mask-closable="false">
-      <n-space vertical>
-        <n-input v-model:value="newUser.username" :placeholder="t('common.username')" />
-        <n-input v-model:value="newUser.password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
-        <n-select v-model:value="newUser.role" :options="roleOptions" :placeholder="t('common.role')" />
-      </n-space>
+    <n-modal v-model:show="showAddUser" :title="t('settings.addUserTitle')" preset="card" style="width:min(420px, 90vw)" :mask-closable="false">
+      <n-form ref="addUserFormRef" :model="newUser" :rules="addUserRules">
+        <n-form-item :label="t('common.username')" path="username">
+          <n-input v-model:value="newUser.username" :placeholder="t('common.username')" />
+        </n-form-item>
+        <n-form-item :label="t('common.passwordPolicy')" path="password">
+          <n-input v-model:value="newUser.password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
+        </n-form-item>
+        <n-form-item :label="t('common.role')" path="role">
+          <n-select v-model:value="newUser.role" :options="roleOptions" :placeholder="t('common.role')" />
+        </n-form-item>
+      </n-form>
       <template #footer>
         <n-space justify="end">
           <n-button @click="showAddUser = false">{{ t('common.cancel') }}</n-button>
@@ -142,11 +148,15 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showResetPassword" :title="t('settings.resetPasswordTitle')" preset="card" style="width: 420px" :mask-closable="false">
-      <n-space vertical>
-        <n-text>{{ t('settings.setPasswordFor', { username: resetTarget.username }) }}</n-text>
-        <n-input v-model:value="resetTarget.new_password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
-      </n-space>
+    <n-modal v-model:show="showResetPassword" :title="t('settings.resetPasswordTitle')" preset="card" style="width:min(420px, 90vw)" :mask-closable="false">
+      <n-form ref="resetFormRef" :model="resetTarget" :rules="resetRules">
+        <n-form-item>
+          <n-text>{{ t('settings.setPasswordFor', { username: resetTarget.username }) }}</n-text>
+        </n-form-item>
+        <n-form-item path="new_password">
+          <n-input v-model:value="resetTarget.new_password" type="password" :placeholder="t('common.passwordPolicy')" show-password-on="click" />
+        </n-form-item>
+      </n-form>
       <template #footer>
         <n-space justify="end">
           <n-button @click="showResetPassword = false">{{ t('common.cancel') }}</n-button>
@@ -161,7 +171,7 @@
 
 <script setup>
 import { ref, computed, h, onMounted } from 'vue'
-import { NButton, NSpace, NTag, NPopconfirm, NSelect, useMessage, useDialog } from 'naive-ui'
+import { NButton, NSpace, NTag, NPopconfirm, NSelect, NForm, NFormItem, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { getProtocolLabel, PASSWORD_MASK } from '../constants.js'
@@ -219,6 +229,16 @@ const showResetPassword = ref(false)
 const showChangePassword = ref(false)
 const newUser = ref({ username: '', password: '', role: 'user' })
 const resetTarget = ref({ username: '', new_password: '' })
+const addUserFormRef = ref(null)
+const resetFormRef = ref(null)
+const addUserRules = computed(() => ({
+  username: [{ required: true, message: t('settings.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('settings.passwordRequired'), trigger: 'blur' }],
+  role: [{ required: true, message: t('settings.roleRequired'), trigger: 'change' }],
+}))
+const resetRules = computed(() => ({
+  new_password: [{ required: true, message: t('settings.passwordRequired'), trigger: 'blur' }],
+}))
 
 const userColumns = computed(() => [
   { title: t('common.username'), key: 'username', width: 150 },
@@ -360,10 +380,7 @@ function openAddUser() {
 }
 
 async function handleAddUser() {
-  if (!newUser.value.username || !newUser.value.password) {
-    message.warning(t('settings.usernameRequired'))
-    return
-  }
+  try { await addUserFormRef.value?.validate() } catch { return }
   const pwd = newUser.value.password
   const pwCheck = validatePassword(pwd)
   if (!pwCheck.valid) {
@@ -399,6 +416,7 @@ function openResetPassword(row) {
 }
 
 async function handleResetPassword() {
+  try { await resetFormRef.value?.validate() } catch { return }
   const pwd = resetTarget.value.new_password
   const pwCheck = validatePassword(pwd)
   if (!pwCheck.valid) {

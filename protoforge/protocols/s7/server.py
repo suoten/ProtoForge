@@ -28,6 +28,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._output_data: bytearray = bytearray(256)
         self._timer_data: bytearray = bytearray(512)  # FIXED-P1: Timer区域内存
         self._counter_data: bytearray = bytearray(512)  # FIXED-P1: Counter区域内存
+        self._area_lock = threading.Lock()  # FIXED-C03: 保护Timer/Counter区域的并发读写
         self._point_addresses: dict[str, tuple[int, int]] = {}
         if points:
             for p in points:
@@ -66,6 +67,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 return (db_number, 0)
             return (1, int(''.join(c for c in address if c.isdigit()) or '0'))
         except (ValueError, IndexError):
+            logger.warning("S7 address parse failed for '%s', defaulting to DB1 offset 0", address)  # FIXED-M04: 解析失败时记录警告
             return (1, 0)
 
     def _sync_value_to_db(self, point_name: str, value: Any) -> None:
@@ -139,15 +141,17 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             end = min(offset + size, len(self._output_data))
             return bytes(self._output_data[offset:end])
         elif area == self.S7_AREA_TIMERS:  # FIXED-P1: Timer区域读取
-            buf = self._timer_data
-            if offset + size > len(buf):
-                buf.extend(bytearray(offset + size - len(buf)))
-            return bytes(buf[offset:offset + size])
+            with self._area_lock:  # FIXED-C03: 加锁保护并发扩展
+                buf = self._timer_data
+                if offset + size > len(buf):
+                    buf.extend(bytearray(offset + size - len(buf)))
+                return bytes(buf[offset:offset + size])
         elif area == self.S7_AREA_COUNTERS:  # FIXED-P1: Counter区域读取
-            buf = self._counter_data
-            if offset + size > len(buf):
-                buf.extend(bytearray(offset + size - len(buf)))
-            return bytes(buf[offset:offset + size])
+            with self._area_lock:  # FIXED-C03: 加锁保护并发扩展
+                buf = self._counter_data
+                if offset + size > len(buf):
+                    buf.extend(bytearray(offset + size - len(buf)))
+                return bytes(buf[offset:offset + size])
         return b"\x00" * size
 
     def write_area(self, area: int, db_number: int, offset: int, data: bytes) -> None:
@@ -169,15 +173,17 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 self._output_data.extend(bytearray(end - len(self._output_data)))
             self._output_data[offset:offset + len(data)] = data
         elif area == self.S7_AREA_TIMERS:  # FIXED-P1: Timer区域写入
-            end = offset + len(data)
-            if end > len(self._timer_data):
-                self._timer_data.extend(bytearray(end - len(self._timer_data)))
-            self._timer_data[offset:offset + len(data)] = data
+            with self._area_lock:  # FIXED-C03: 加锁保护并发扩展
+                end = offset + len(data)
+                if end > len(self._timer_data):
+                    self._timer_data.extend(bytearray(end - len(self._timer_data)))
+                self._timer_data[offset:offset + len(data)] = data
         elif area == self.S7_AREA_COUNTERS:  # FIXED-P1: Counter区域写入
-            end = offset + len(data)
-            if end > len(self._counter_data):
-                self._counter_data.extend(bytearray(end - len(self._counter_data)))
-            self._counter_data[offset:offset + len(data)] = data
+            with self._area_lock:  # FIXED-C03: 加锁保护并发扩展
+                end = offset + len(data)
+                if end > len(self._counter_data):
+                    self._counter_data.extend(bytearray(end - len(self._counter_data)))
+                self._counter_data[offset:offset + len(data)] = data
 
 
 class S7Server(ProtocolServer):
@@ -288,6 +294,8 @@ class S7Server(ProtocolServer):
                     break
                 tpkt_len = struct.unpack(">H", tpkt_header[2:4])[0]
                 remaining = tpkt_len - 4
+                if remaining < 0 or remaining > 65535 - 4:  # FIXED-N02: TPKT长度域校验，防止0或超大值导致异常
+                    break
                 if remaining > 0:
                     payload = await reader.readexactly(remaining)
                     data = tpkt_header + payload
@@ -519,9 +527,9 @@ class S7Server(ProtocolServer):
 
         # FIXED-P0: Read Var 参数格式 = Function(1) + ItemCount(1) + Items(N*12)
         # 没有 reserved 字节！data[param_start+1] 就是 ItemCount
-        item_count = data[param_start + 1] if len(data) > param_start + 1 else 1
-        if item_count == 0:
-            item_count = 1
+        item_count = data[param_start + 1] if len(data) > param_start + 1 else 0
+        if item_count == 0:  # FIXED-N04: item_count=0时返回S7错误而非默认为1
+            return self._make_s7_error_response(data)
 
         item_offset = param_start + 2  # FIXED-P0: Items 从 param_start+2 开始
         item_results = []
@@ -629,12 +637,31 @@ class S7Server(ProtocolServer):
         param_start = 17
         func_code = data[param_start] if len(data) > param_start else 0x05
         # FIXED-P0: Write Var 参数格式 = Function(1) + ItemCount(1) + Items(N*12)
-        item_count = data[param_start + 1] if len(data) > param_start + 1 else 1
-        if item_count == 0:
-            item_count = 1
+        item_count = data[param_start + 1] if len(data) > param_start + 1 else 0
+        if item_count == 0:  # FIXED-N16: Write item_count=0时返回S7错误
+            return self._make_s7_error_response(data)
 
         item_offset = param_start + 2  # FIXED-P0: Items 从 param_start+2 开始
         result_codes = []
+
+        # FIXED-N15: 在循环外预先解析所有写入项数据，避免O(n²)和id()复用风险
+        data_section_start = param_start + 2 + item_count * 12
+        write_data_list = []
+        ptr = data_section_start
+        for _ in range(item_count):
+            if ptr + 4 > len(data):
+                write_data_list.append(b"")
+                break
+            ts = data[ptr + 1]
+            raw_len = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
+            dlen = raw_len // 8 if ts == 0x04 else raw_len
+            if ptr + 4 + dlen <= len(data):
+                write_data_list.append(data[ptr + 4:ptr + 4 + dlen])
+            else:
+                write_data_list.append(b"")
+            ptr += 4 + dlen
+            if dlen % 2 != 0:
+                ptr += 1
 
         for i in range(item_count):
             if item_offset + 12 > len(data):
@@ -655,24 +682,7 @@ class S7Server(ProtocolServer):
             offset = full_addr >> 3
             bit_number = full_addr & 0x07
 
-            write_data = b"\x00\x00\x00\x00"
-            data_section_start = param_start + 2 + item_count * 12  # FIXED-P0: 参数区=Function(1)+ItemCount(1)+Items
-            # FIXED-P0: Write Data section 格式 = 每个item: ReturnCode(1) + TransportSize(1) + Length(2) + Data(N) + Padding
-            # 没有 item count 字段，直接遍历 items
-            # 注意: TransportSize=0x04 时 Length 是位数，需要 //8 得到字节数
-            ptr = data_section_start
-            for j in range(i + 1):
-                if ptr + 4 > len(data):
-                    break
-                rc = data[ptr]
-                ts = data[ptr + 1]
-                raw_len = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
-                dlen = raw_len // 8 if ts == 0x04 else raw_len  # FIXED-P0: 位数转字节数
-                if j == i and ptr + 4 + dlen <= len(data):
-                    write_data = data[ptr + 4:ptr + 4 + dlen]
-                ptr += 4 + dlen
-                if dlen % 2 != 0:
-                    ptr += 1
+            write_data = write_data_list[i] if i < len(write_data_list) else b""
 
             behavior = self._behaviors.get(device_id or self._default_device_id)
             if behavior:
@@ -700,6 +710,18 @@ class S7Server(ProtocolServer):
                                 behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
                         except (struct.error, IndexError) as e:
                             logger.warning("S7 write value sync error for %s: %s", name, e)
+
+                        # 通过 on_write 回调将协议层写入传播到 DeviceInstance
+                        if self._on_write:
+                            resolved_id = device_id or self._default_device_id
+                            if resolved_id:
+                                try:
+                                    asyncio.ensure_future(
+                                        self._on_write(resolved_id, name, behavior._values.get(name))
+                                    )
+                                except Exception as cb_err:
+                                    logger.debug("S7 on_write callback schedule error: %s", cb_err)
+
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
                                 msg("s7", "point_written", area=area_name, db_number=db_number, offset=offset),
@@ -860,7 +882,7 @@ class S7Server(ProtocolServer):
         module_name = info.get("module_name", "ProtoForge S7")
         serial = info.get("serial_number", "PF-00000000")
         as_name = info.get("module_name", "ProtoForge")
-        copyright_str = "Original Siemens AG"
+        copyright_str = info.get("copyright", "Original Siemens AG")  # FIXED-L02: 版权信息从设备配置读取，支持非Siemens仿真
         module_type = info.get("module_name", "ProtoForge S7-1200")
 
         record = bytearray(130)
@@ -950,7 +972,26 @@ class S7Server(ProtocolServer):
         behavior = self._behaviors.get(device_id)
         if not behavior:
             return False
-        return behavior.on_write(point_name, value)
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                logger.warning("S7 write_point: point '%s' not found on device %s", point_name, device_id)
+                return False
+            if point.access not in ("w", "rw"):
+                logger.warning("S7 write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+        # 更新协议层 behavior 内部状态并同步到 DB 数据区
+        success = behavior.on_write(point_name, value)
+        if success and self._on_write:
+            try:
+                await self._on_write(device_id, point_name, value)
+            except Exception as e:
+                logger.warning("S7 write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
+        return success
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

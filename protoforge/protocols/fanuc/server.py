@@ -199,6 +199,8 @@ class FanucServer(ProtocolServer):
             return None
         session_id = struct.unpack(">H", data[4:6])[0]
         msg_len = struct.unpack(">H", data[6:8])[0]
+        if msg_len == 0 or msg_len > 4096:  # FIXED-R04: FOCAS2消息长度校验，0=无效，>4096=超出合理范围
+            return None
         if len(data) < 8 + msg_len:
             return None
         payload = data[8:8 + msg_len]

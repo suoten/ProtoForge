@@ -2,7 +2,7 @@ import asyncio
 import threading
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 from protoforge.models.device import DeviceConfig, PointValue
 
@@ -33,9 +33,27 @@ class ProtocolServer(ABC):
         self._default_device_sync_lock = threading.Lock()  # FIXED-P1: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         self._behaviors_lock = asyncio.Lock()  # FIXED: 添加锁保护_behaviors字典的并发访问
         self._behaviors_sync_lock = threading.Lock()  # FIXED: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
+        # 写回调：当外部客户端通过协议写入时，通过此回调传播到 DeviceInstance
+        self._on_write: Optional[Callable[[str, str, Any], Awaitable[bool]]] = None
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
+
+    def set_write_callback(self, callback: Callable[[str, str, Any], Awaitable[bool]]) -> None:
+        """设置写回调，用于将协议层写入传播到 DeviceInstance。
+
+        当外部客户端（如 Modbus master、OPC-UA client）通过协议写入数据时，
+        协议 server 通过此回调将写入操作传播到引擎的 DeviceInstance，
+        确保内部状态与协议数据一致。
+
+        :param callback: 异步回调函数 ``async def(device_id, point_name, value) -> bool``
+        """
+        self._on_write = callback
+
+    @property
+    def on_write(self) -> Optional[Callable[[str, str, Any], Awaitable[bool]]]:
+        """返回当前设置的写回调函数（可为 None）。"""
+        return self._on_write
 
     def _log_debug(self, direction: str, msg_type: str, summary: str,
                    device_id: str = "", detail: Optional[dict] = None):

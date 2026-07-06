@@ -3,7 +3,8 @@ import re
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_log_bus, _trigger_webhook_safe, _get_database
@@ -505,3 +506,459 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
     except Exception as e:
         logger.error("Write device point failed for %s/%s: %s", device_id, point_name, e)
         raise HTTPException(status_code=500, detail=f"Write device point failed: {e}")
+
+
+# ===========================================================================
+#  故障注入 API
+# ===========================================================================
+
+class InjectFaultRequest(BaseModel):
+    """注入故障请求。"""
+    fault_type: str = Field(..., description="故障类型，如 sensor_drift, sensor_stuck, comm_loss 等")
+    target: str = Field("*", description="目标点位名称，'*' 表示所有点位")
+    duration: float = Field(-1, description="故障持续时间 (s)，-1 表示永久")
+    severity: str = Field("medium", description="故障严重程度: low/medium/high/critical")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="故障参数")
+    trigger_mode: str = Field("manual", description="触发模式: manual/random/scheduled/conditional")
+    probability: float = Field(0.0, description="随机触发概率 (RANDOM 模式)")
+    start_time: float | None = Field(None, description="定时触发时间戳 (SCHEDULED 模式)")
+    description: str = Field("", description="故障描述")
+    auto_activate: bool = Field(True, description="创建后是否自动激活")
+
+
+@router.post("/devices/{device_id}/faults")
+async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: dict = Depends(require_operator)):
+    """注入故障到指定设备。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    from protoforge.core.fault_injection import FaultConfig, FaultType, TriggerMode
+
+    try:
+        fault_type = FaultType(req.fault_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid fault type: {req.fault_type}. Valid types: {[t.value for t in FaultType]}",
+        )
+
+    try:
+        trigger_mode = TriggerMode(req.trigger_mode)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid trigger mode: {req.trigger_mode}. Valid modes: {[m.value for m in TriggerMode]}",
+        )
+
+    params = dict(req.parameters)
+    if req.duration != -1 and "duration" not in params:
+        params["duration"] = req.duration
+
+    config = FaultConfig(
+        fault_type=fault_type,
+        target_point=req.target,
+        trigger_mode=trigger_mode,
+        parameters=params,
+        target_device=device_id,
+        probability=req.probability,
+        start_time=req.start_time,
+        description=req.description or f"{fault_type.value} on {req.target}",
+    )
+
+    fault_id = instance.inject_fault(config)
+
+    # FaultInjector 默认将故障添加为活跃状态。
+    # 如果 auto_activate=False，需要显式停用。
+    if not req.auto_activate:
+        instance.deactivate_fault(fault_id)
+
+    await _trigger_webhook_safe("fault.activated", {
+        "device_id": device_id,
+        "fault_id": fault_id,
+        "fault_type": fault_type.value,
+        "target_point": req.target,
+    })
+
+    logger.info("Fault injected: device=%s, fault_id=%s, type=%s", device_id, fault_id, fault_type.value)
+
+    return {
+        "fault_id": fault_id,
+        "device_id": device_id,
+        "fault_type": fault_type.value,
+        "target": req.target,
+        "severity": req.severity,
+        "trigger_mode": trigger_mode.value,
+        "active": req.auto_activate,
+        "parameters": params,
+    }
+
+
+@router.get("/devices/{device_id}/faults")
+async def list_device_faults(
+    device_id: str,
+    active_only: bool = Query(False, description="仅返回活跃故障"),
+    _user: dict = Depends(require_viewer),
+):
+    """列出设备上的故障。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    if active_only:
+        faults = instance.get_active_faults()
+    else:
+        faults = instance.get_all_faults()
+
+    return {
+        "device_id": device_id,
+        "faults": [f.to_dict() for f in faults],
+        "count": len(faults),
+    }
+
+
+@router.delete("/devices/{device_id}/faults/{fault_id}")
+async def remove_device_fault(device_id: str, fault_id: str, _user: dict = Depends(require_operator)):
+    """移除指定故障。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    success = instance.remove_fault(fault_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Fault not found: {fault_id}")
+
+    await _trigger_webhook_safe("fault.deactivated", {
+        "device_id": device_id,
+        "fault_id": fault_id,
+    })
+
+    return {"status": "ok", "fault_id": fault_id, "device_id": device_id}
+
+
+@router.delete("/devices/{device_id}/faults")
+async def clear_device_faults(device_id: str, _user: dict = Depends(require_operator)):
+    """清除设备上的所有故障。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    count = instance.clear_all_faults()
+
+    await _trigger_webhook_safe("fault.cleared", {"device_id": device_id, "count": count})
+
+    return {"status": "ok", "device_id": device_id, "cleared": count}
+
+
+# ===========================================================================
+#  状态控制 API
+# ===========================================================================
+
+class StateTransitionRequest(BaseModel):
+    """状态转换请求。"""
+    event: str = Field(..., description="触发事件: start/stop/startup_complete/stop_complete/fault/reset/maintenance/maintenance_complete/program_mode/program_exit/device_failure")
+    reason: str = Field("", description="转换原因")
+
+
+@router.post("/devices/{device_id}/state/transition")
+async def trigger_state_transition(
+    device_id: str, req: StateTransitionRequest, _user: dict = Depends(require_operator),
+):
+    """触发设备状态转换。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    old_state = instance.device_state.value
+    success = instance.state_machine.trigger(req.event, reason=req.reason)
+
+    if not success:
+        raise HTTPException(
+            status_code=409,
+            detail=f"State transition '{req.event}' not allowed from state '{old_state}'",
+        )
+
+    new_state = instance.device_state.value
+    log_bus = _get_log_bus()
+    log_bus.emit(instance.protocol, "system", device_id, "state_transition",
+                 f"State transition: {old_state} → {new_state} (event={req.event})",
+                 {"event": req.event, "from": old_state, "to": new_state, "reason": req.reason})
+
+    await _trigger_webhook_safe("device.state_changed", {
+        "device_id": device_id,
+        "event": req.event,
+        "from_state": old_state,
+        "to_state": new_state,
+        "reason": req.reason,
+    })
+
+    return {
+        "device_id": device_id,
+        "event": req.event,
+        "from_state": old_state,
+        "to_state": new_state,
+        "reason": req.reason,
+    }
+
+
+@router.get("/devices/{device_id}/state")
+async def get_device_state(device_id: str, _user: dict = Depends(require_viewer)):
+    """获取设备当前状态。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    return instance.get_state_info()
+
+
+@router.get("/devices/{device_id}/state/history")
+async def get_device_state_history(
+    device_id: str,
+    count: int = Query(50, ge=1, le=500, description="返回的历史记录数量"),
+    _user: dict = Depends(require_viewer),
+):
+    """获取设备状态转换历史。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    return {
+        "device_id": device_id,
+        "history": instance.get_state_history(count),
+        "count": len(instance.get_state_history(count)),
+    }
+
+
+# ===========================================================================
+#  控制回路 API
+# ===========================================================================
+
+class CreateControlLoopRequest(BaseModel):
+    """创建控制回路请求。"""
+    loop_id: str = Field(..., description="回路唯一标识")
+    loop_type: str = Field("simple", description="回路类型: simple/cascade/feedforward")
+    setpoint_point: str = Field("", description="设定值点位名")
+    measurement_point: str = Field("", description="测量值点位名 (PV)")
+    output_point: str = Field("", description="输出点位名 (CV)")
+    pid_params: dict[str, float] = Field(
+        default_factory=lambda: {"Kp": 1.0, "Ki": 0.1, "Kd": 0.01},
+        description="PID 参数",
+    )
+    output_limit: list[float] = Field(
+        [0.0, 100.0], description="输出限幅 [min, max]",
+    )
+    primary_loop_id: str | None = Field(None, description="主回路 ID (串级副回路用)")
+    disturbance_point: str | None = Field(None, description="扰动量点位名 (前馈控制用)")
+    feedforward_gain: float = Field(0.0, description="前馈补偿增益")
+    enabled: bool = Field(True, description="是否启用此回路")
+    auto_track: bool = Field(True, description="串级副回路无主回路输出时是否跟踪测量值")
+
+
+@router.post("/devices/{device_id}/control-loops")
+async def add_device_control_loop(
+    device_id: str, req: CreateControlLoopRequest, _user: dict = Depends(require_operator),
+):
+    """添加控制回路到设备。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    from protoforge.core.control_loop import ControlLoopConfig
+
+    loop_data = req.model_dump()
+    if loop_data.get("output_limit") and isinstance(loop_data["output_limit"], list):
+        ol = loop_data["output_limit"]
+        if len(ol) != 2:
+            raise HTTPException(status_code=400, detail="output_limit must be a list of [min, max]")
+        loop_data["output_limit"] = (float(ol[0]), float(ol[1]))
+
+    try:
+        config = ControlLoopConfig.from_dict(loop_data)
+    except (KeyError, ValueError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid control loop config: {e}")
+
+    try:
+        loop_id = instance.add_control_loop(config)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to add control loop: {e}")
+
+    logger.info("Control loop added: device=%s, loop_id=%s", device_id, loop_id)
+
+    return {
+        "status": "ok",
+        "device_id": device_id,
+        "loop_id": loop_id,
+        "loop_type": config.loop_type,
+    }
+
+
+@router.delete("/devices/{device_id}/control-loops/{loop_id}")
+async def remove_device_control_loop(
+    device_id: str, loop_id: str, _user: dict = Depends(require_operator),
+):
+    """移除控制回路。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    success = instance.remove_control_loop(loop_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Control loop not found: {loop_id}")
+
+    logger.info("Control loop removed: device=%s, loop_id=%s", device_id, loop_id)
+
+    return {"status": "ok", "device_id": device_id, "loop_id": loop_id}
+
+
+@router.get("/devices/{device_id}/control-loops")
+async def list_device_control_loops(device_id: str, _user: dict = Depends(require_viewer)):
+    """列出设备上的控制回路。"""
+    engine = _get_engine()
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    return instance.get_control_loop_info()
+
+
+# ---------------------------------------------------------------------------
+#  设备详情 & 网络仿真 & 时间序列 & 故障传播 API
+# ---------------------------------------------------------------------------
+
+@router.get("/devices/{device_id}/detail")
+async def get_device_detail(device_id: str, _user: dict = Depends(require_viewer)):
+    """获取设备详细信息，包含状态机、故障和控制回路信息。"""
+    engine = _get_engine()
+    try:
+        return engine.get_device_detail(device_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+class ConfigureNetworkRequest(BaseModel):
+    """配置网络仿真请求。"""
+    profile: str | dict[str, Any] = Field(..., description="预定义名称或配置字典")
+    enabled: bool = Field(True, description="是否启用")
+
+
+@router.post("/network/configure")
+async def configure_network(req: ConfigureNetworkRequest, _user: dict = Depends(require_operator)):
+    """配置网络仿真参数。"""
+    engine = _get_engine()
+    engine.configure_network(req.profile, req.enabled)
+    return {"status": "ok", "network_sim": engine.network_simulator.to_dict()}
+
+
+@router.get("/network/status")
+async def get_network_status(_user: dict = Depends(require_viewer)):
+    """获取网络仿真状态。"""
+    engine = _get_engine()
+    return engine.network_simulator.to_dict()
+
+
+class AddFaultPropagationRuleRequest(BaseModel):
+    """添加故障传播规则请求。"""
+    source_point: str = Field(..., description="源点位名称")
+    target_point: str = Field(..., description="目标点位名称")
+    condition: str = Field(..., description='触发条件，如 ">80"')
+    delay: float = Field(0.0, description="传播延迟 (s)")
+    effect_type: str = Field("sensor_noise", description="衍生故障类型")
+    effect_params: dict[str, Any] = Field(default_factory=dict, description="衍生故障参数")
+    severity: str = Field("medium", description="衍生故障严重级别")
+    duration: float = Field(-1.0, description="衍生故障持续时间 (s)")
+
+
+@router.post("/faults/propagation/rules")
+async def add_fault_propagation_rule(req: AddFaultPropagationRuleRequest, _user: dict = Depends(require_operator)):
+    """添加故障传播规则。"""
+    engine = _get_engine()
+    idx = engine.fault_propagation.add_rule(
+        source=req.source_point,
+        target=req.target_point,
+        condition=req.condition,
+        delay=req.delay,
+        effect_type=req.effect_type,
+        effect_params=req.effect_params,
+        severity=req.severity,
+        duration=req.duration,
+    )
+    return {"status": "ok", "rule_index": idx}
+
+
+@router.get("/faults/propagation/rules")
+async def list_fault_propagation_rules(_user: dict = Depends(require_viewer)):
+    """列出故障传播规则。"""
+    engine = _get_engine()
+    return engine.fault_propagation.to_dict()
+
+
+@router.delete("/faults/propagation/rules/{index}")
+async def remove_fault_propagation_rule(index: int, _user: dict = Depends(require_operator)):
+    """移除故障传播规则。"""
+    engine = _get_engine()
+    success = engine.fault_propagation.remove_rule(index)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Propagation rule {index} not found")
+    return {"status": "ok", "removed_index": index}
+
+
+class AddTimeSeriesPatternRequest(BaseModel):
+    """添加时间序列模式请求。"""
+    point_name: str = Field(..., description="点位名称")
+    pattern_type: str = Field("daily", description="模式类型: daily/weekly/seasonal/batch/aging/composite")
+    production_value: float = Field(80.0, description="生产时段目标值")
+    standby_value: float = Field(20.0, description="待机时段目标值")
+    base_value: float = Field(100.0, description="基准值")
+    work_start_hour: int = Field(8, description="工作开始小时")
+    work_end_hour: int = Field(18, description="工作结束小时")
+    weekend_production: bool = Field(False, description="周末是否生产")
+    seasonal_amplitude: float = Field(0.2, description="季节性波动幅度")
+    aging_rate: float = Field(0.02, description="老化速率")
+    offset_mode: bool = Field(False, description="偏移模式")
+
+
+@router.post("/timeseries/patterns")
+async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict = Depends(require_operator)):
+    """添加时间序列模式。"""
+    engine = _get_engine()
+    from protoforge.core.timeseries import TimeSeriesPattern
+    pattern = TimeSeriesPattern(
+        pattern_type=req.pattern_type,
+        production_value=req.production_value,
+        standby_value=req.standby_value,
+        base_value=req.base_value,
+        work_start_hour=req.work_start_hour,
+        work_end_hour=req.work_end_hour,
+        weekend_production=req.weekend_production,
+        seasonal_amplitude=req.seasonal_amplitude,
+        aging_rate=req.aging_rate,
+        offset_mode=req.offset_mode,
+    )
+    engine.timeseries_manager.add_pattern(req.point_name, pattern)
+    return {"status": "ok", "point_name": req.point_name, "pattern_type": req.pattern_type}
+
+
+@router.get("/timeseries/patterns")
+async def list_timeseries_patterns(_user: dict = Depends(require_viewer)):
+    """列出所有时间序列模式。"""
+    engine = _get_engine()
+    return engine.timeseries_manager.to_dict()
+
+
+@router.delete("/timeseries/patterns/{point_name}")
+async def remove_timeseries_pattern(point_name: str, _user: dict = Depends(require_operator)):
+    """移除时间序列模式。"""
+    engine = _get_engine()
+    success = engine.timeseries_manager.remove_pattern(point_name)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Pattern for point '{point_name}' not found")
+    return {"status": "ok", "removed_point": point_name}

@@ -14,8 +14,11 @@ async def seed_demo_data(engine: Any, template_manager: Any) -> None:
     def _cfg(name: str) -> dict:
         return port_map.get(name, {"host": "0.0.0.0", "port": 0})
 
-    await engine.start_protocol("modbus_tcp", _cfg("modbus_tcp"))
-    logger.info("  ✓ Modbus TCP started (port %s)", _cfg("modbus_tcp").get("port"))
+    try:
+        await engine.start_protocol("modbus_tcp", _cfg("modbus_tcp"))
+        logger.info("  ✓ Modbus TCP started (port %s)", _cfg("modbus_tcp").get("port"))
+    except Exception as e:
+        logger.warning("  ✗ Modbus TCP start failed: %s", e)
 
     try:
         await engine.start_protocol("mqtt", _cfg("mqtt"))

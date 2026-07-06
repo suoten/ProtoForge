@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import ipaddress
 import logging
 import os
@@ -10,6 +11,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 from protoforge.core.messages import msg, desc
+from protoforge.core.quality import QualityCode, QualitySystem
 from protoforge.protocols.behavior import StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
@@ -87,7 +89,7 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
             f.write(key.private_bytes(
                 serialization.Encoding.PEM,
                 serialization.PrivateFormat.TraditionalOpenSSL,
-                serialization.NoEncryption(),
+                serialization.NoEncryption(),  # FIXED-L04: 仿真环境使用明文私钥，生产环境应使用password参数加密
             ))
 
         logger.info("OPC-UA self-signed certificate generated at %s", cert_dir)
@@ -148,6 +150,7 @@ class OpcUaServer(ProtocolServer):
         self._point_nodes: dict[str, Any] = {}
         self._point_types: dict[str, str] = {}  # FIXED: 存储每个点位的数据类型
         self._device_namespaces: dict[str, str] = {}
+        self._point_qualities: dict[str, int] = {}  # 点位质量码: key="{device_id}.{point_name}" → QualityCode int
         self._endpoint = "opc.tcp://0.0.0.0:4840/protoforge"
         self._host = "0.0.0.0"
         self._port = 4840
@@ -377,7 +380,16 @@ class OpcUaServer(ProtocolServer):
         result = []
         for point in config.points:
             value = behavior.get_value(point.name)
-            result.append(PointValue(name=point.name, value=value, timestamp=now))
+            point_key = f"{device_id}.{point.name}"
+            qcode = self._point_qualities.get(point_key, int(QualityCode.GOOD))
+            qstr = QualitySystem.to_string(QualityCode(qcode))
+            result.append(PointValue(
+                name=point.name,
+                value=value,
+                timestamp=now,
+                quality=qstr,
+                quality_code=qcode,
+            ))
         return result
 
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
@@ -385,8 +397,22 @@ class OpcUaServer(ProtocolServer):
         if not behavior:
             logger.warning("OPC-UA write_point: behavior not found for device %s", device_id)
             return False
+
+        # 检查点位是否存在且可写
+        config = self._device_configs.get(device_id)
+        if config:
+            point = next((p for p in config.points if p.name == point_name), None)
+            if point is None:
+                logger.warning("OPC-UA write_point: point '%s' not found on device %s", point_name, device_id)
+                return False
+            if point.access not in ("w", "rw"):
+                logger.warning("OPC-UA write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+        # 更新协议层 behavior 内部状态
         success = behavior.on_write(point_name, value)
         if success:
+            # 同步写入值到 OPC-UA 节点
             point_node_key = f"{device_id}.{point_name}"
             node = self._point_nodes.get(point_node_key)
             if node:
@@ -409,6 +435,13 @@ class OpcUaServer(ProtocolServer):
                 except Exception as e:
                     logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
                     return False
+
+            # 通过 on_write 回调传播到 DeviceInstance，确保内部状态一致
+            if self._on_write:
+                try:
+                    await self._on_write(device_id, point_name, value)
+                except Exception as e:
+                    logger.warning("OPC-UA write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
         else:
             logger.warning("OPC-UA write_point: behavior.on_write returned False for %s.%s (value=%s)", device_id, point_name, value)
         return success
@@ -442,12 +475,41 @@ class OpcUaServer(ProtocolServer):
                             value = behavior.get_value(point.name)
                             data_type = self._point_types.get(point_node_key, "float32")
                             variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
-                            await node.set_value(asyncua_ua.Variant(value, variant_type))
+                            # 获取质量码，默认 GOOD
+                            qcode_int = self._point_qualities.get(point_node_key, int(QualityCode.GOOD))
+                            # 使用 DataValue 设置值和 OPC UA StatusCode
+                            dv = asyncua_ua.DataValue(
+                                asyncua_ua.Variant(value, variant_type),
+                                StatusCode=asyncua_ua.StatusCode(qcode_int),
+                                SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
+                            )
+                            await node.write_value(dv)
                         except Exception as e:
                             logger.debug("OPC-UA sync value error for %s.%s: %s", device_id, point.name, e)
             except Exception as e:
                 logger.warning("OPC-UA sync loop error: %s", e)
             await asyncio.sleep(self._sync_interval)
+
+    def set_point_quality(self, device_id: str, point_name: str, quality_code: int) -> None:
+        """设置点位质量码（供引擎/外部系统调用）。
+
+        :param device_id: 设备 ID
+        :param point_name: 点位名称
+        :param quality_code: OPC UA QualityCode 整数值
+        """
+        self._point_qualities[f"{device_id}.{point_name}"] = quality_code
+
+    def set_device_quality(self, device_id: str, quality_code: int) -> None:
+        """设置设备下所有点位的质量码。
+
+        :param device_id: 设备 ID
+        :param quality_code: OPC UA QualityCode 整数值
+        """
+        config = self._device_configs.get(device_id)
+        if not config:
+            return
+        for point in config.points:
+            self._point_qualities[f"{device_id}.{point.name}"] = quality_code
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
