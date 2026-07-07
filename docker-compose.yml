@@ -56,7 +56,9 @@ services:
       # GB28181 RTP 媒体流端口范围 (如需从外部播放视频流则映射)
       - "6000-6999:6000-6999/udp"
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD}@postgres:5432/protoforge
+      # 在 .env 中设置完整的数据库连接 URL，避免在 compose 文件中暴露凭据模式
+      # 示例: PROTOFORGE_DB_PATH=postgresql://protoforge:你的密码@postgres:5432/protoforge
+      PROTOFORGE_DB_PATH: ${PROTOFORGE_DB_PATH:?请在.env中设置PROTOFORGE_DB_PATH}
       PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env中设置PROTOFORGE_JWT_SECRET}
       PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env中设置PROTOFORGE_ADMIN_PASSWORD}
       PROTOFORGE_LOG_LEVEL: info
@@ -74,7 +76,7 @@ services:
     build: .
     command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD}@postgres:5432/protoforge_test
+      PROTOFORGE_DB_PATH: ${PROTOFORGE_DB_PATH_TEST:?请在.env中设置PROTOFORGE_DB_PATH_TEST}
       PROTOFORGE_NO_AUTH: "1"
     depends_on:
       init-test-db:

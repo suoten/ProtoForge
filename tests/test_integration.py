@@ -56,8 +56,11 @@ def test_edgelite_protocol_mapping():
     from protoforge.core.integration.protocol import DATA_TYPE_MAP, ACCESS_MODE_MAP
     # FIXED: DATA_TYPE_MAP and ACCESS_MODE_MAP are in protoforge.core.integration.protocol, not edgelite
     assert PROTOCOL_MAP["modbus_tcp"] == "modbus_tcp"
-    # FIXED: PROTOCOL_MAP filters out None values, so "ab" stays as "ab" (no mapping to allen_bradley)
-    assert PROTOCOL_MAP.get("ab") == "ab"
+    # PROTOCOL_MAP uses EdgeLite plugin_name for protocol aliases
+    # "ab" maps to "allen_bradley" (EdgeLite plugin_name) for compatibility with old and new EdgeLite versions
+    assert PROTOCOL_MAP.get("ab") == "allen_bradley"
+    assert PROTOCOL_MAP.get("s7") == "siemens_s7"
+    assert PROTOCOL_MAP.get("mqtt") == "mqtt_client"
     assert DATA_TYPE_MAP["float32"] == "float32"
     assert "float64" in DATA_TYPE_MAP
     assert ACCESS_MODE_MAP["ro"] == "r"

@@ -79,13 +79,29 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501", "B008", "B904"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern
+ignore = ["E501", "B008", "B904", "SIM102", "SIM115"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern; SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
 
 [tool.ruff.lint.per-file-ignores]
 "protoforge/mqtt_auth.py" = ["F401"]  # Optional dependency imports
 "protoforge/protocols/mqtt/server.py" = ["F401"]  # Optional dependency imports
 "protoforge/protocols/opcua/client.py" = ["F401"]  # Optional dependency imports
 "protoforge/protocols/opcua/server.py" = ["F401"]  # Optional dependency imports
+"protoforge/api/v1/router.py" = ["E402"]  # FastAPI router pattern: create router then import sub-routers
+"protoforge/grpc/server.py" = ["N802"]  # gRPC methods must be PascalCase per protocol convention
+"protoforge/core/behavior_models.py" = ["N803", "N806"]  # Physics variables (Kp, Ki, Kd, dT, J, A, dL)
+"protoforge/core/defaults.py" = ["E402"]  # Lazy import pattern for optional dependencies
+"protoforge/core/testing.py" = ["E402"]  # Lazy import pattern
+"protoforge/protocols/fanuc/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/fins/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/modbus/rtu_server.py" = ["N806"]  # Local constants (_RTU_CONN_TIMEOUT)
+"protoforge/protocols/mtconnect/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/opcda/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/toledo/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/audit/exception_lint.py" = ["N815"]  # AST visitor method names
+"protoforge/core/edgelite.py" = ["N806"]  # Local constant (_PLUGIN_NAME_TO_ALIAS)
+"protoforge/main.py" = ["N806"]  # Local constant (_EXAMPLE_SECRET)
+"protoforge/api/v1/common.py" = ["N818"]  # Exception naming convention (base class pattern)
+"protoforge/core/fault_injection.py" = ["N818"]  # Exception naming convention
 
 [tool.mypy]
 python_version = "3.10"

@@ -36,11 +36,6 @@ def main():
     # AFTER this point (in _run_server). Calling get_settings() here would
     # cache the old demo_mode value from .env, breaking 'protoforge demo' command.
 
-    parser = argparse.ArgumentParser(
-        prog="protoforge",
-        description="ProtoForge - IoT Protocol Simulation & Testing Platform",
-    )
-
     # Import settings lazily inside _run_server so demo_mode env var is already set
     from protoforge.config import get_settings
     settings = get_settings()

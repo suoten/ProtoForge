@@ -575,7 +575,7 @@ class S7Server(ProtocolServer):
             item_results.append((0xFF, value_bytes))
 
         data_len = 0
-        for result_code, val_bytes in item_results:
+        for _result_code, val_bytes in item_results:
             data_len += 1 + 1 + 2 + len(val_bytes)
             if len(val_bytes) % 2 != 0:
                 data_len += 1

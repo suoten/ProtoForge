@@ -141,9 +141,8 @@ class SafeEval:
             if isinstance(result, str) and len(result) > self._MAX_STR_LEN:
                 raise ValueError(f"String too long (max {self._MAX_STR_LEN})")
             # FIXED: S5 - check sequence multiplication size
-            if isinstance(node.op, (ast.Mult, ast.Repeat)) and isinstance(result, (list, tuple)):
-                if len(result) > self._MAX_SEQ_MULTIPLY:
-                    raise ValueError(f"Sequence too long after multiply (max {self._MAX_SEQ_MULTIPLY})")
+            if isinstance(node.op, (ast.Mult, ast.Repeat)) and isinstance(result, (list, tuple)) and len(result) > self._MAX_SEQ_MULTIPLY:
+                raise ValueError(f"Sequence too long after multiply (max {self._MAX_SEQ_MULTIPLY})")
             return result
         elif isinstance(node, ast.UnaryOp):
             op = _SAFE_OPS.get(type(node.op))
@@ -192,9 +191,8 @@ class SafeEval:
                     size = args[0] if len(args) == 1 else (args[1] - args[0]) if len(args) == 2 else ((args[1] - args[0]) // args[2])
                     if abs(size) > self._MAX_RANGE_SIZE:
                         raise ValueError(f"range size {abs(size)} exceeds limit ({self._MAX_RANGE_SIZE})")
-            if isinstance(node.func, ast.Name) and node.func.id == "list":
-                if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
-                    raise ValueError(f"list() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
+            if isinstance(node.func, ast.Name) and node.func.id == "list" and args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
+                raise ValueError(f"list() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
             # FIXED: W7 - dict()构造器大小限制
             if isinstance(node.func, ast.Name) and node.func.id == "dict":
                 if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:

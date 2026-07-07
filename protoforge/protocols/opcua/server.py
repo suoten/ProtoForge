@@ -354,7 +354,7 @@ class OpcUaServer(ProtocolServer):
         # 节点删除操作（网络IO）在锁外执行，避免持锁时间过长
         if nodes:
             point_nodes = nodes.get("points", {})
-            for point_name, point_node in point_nodes.items():
+            for _point_name, point_node in point_nodes.items():
                 try:
                     await point_node.delete()
                 except Exception as e:

@@ -268,8 +268,7 @@ class FaultInjector:
             )
 
             # SCHEDULED 模式：检查是否应该立即激活
-            if config.trigger_mode == TriggerMode.SCHEDULED and config.start_time:
-                if time.time() >= config.start_time:
+            if config.trigger_mode == TriggerMode.SCHEDULED and config.start_time and time.time() >= config.start_time:
                     self._activate(rt)
 
             return config.fault_id
@@ -574,7 +573,8 @@ class FaultInjector:
                     bit_idx = bit_pos % 8
                     byte_arr[byte_idx] ^= (1 << bit_idx)
                     return struct.unpack(">d", bytes(byte_arr))[0], True
-            except (struct.error, IndexError):
+            except (struct.error, IndexError) as e:
+                logger.debug("Bit flip operation failed: %s", e)
                 pass
 
         elif mode == "offset" and isinstance(value, (int, float)):

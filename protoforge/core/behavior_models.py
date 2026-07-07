@@ -780,10 +780,7 @@ class ValveBehavior(BaseBehavior):
 
         # --- 开度响应延迟（一阶滞后）---
         # 阀门以恒定速度移动：100% / opening_time 秒
-        if self.opening_time > 0:
-            max_rate = 100.0 / self.opening_time  # %/s
-        else:
-            max_rate = float("inf")
+        max_rate = 100.0 / self.opening_time if self.opening_time > 0 else float("inf")  # %/s
 
         diff = self._effective_target - self._opening
         max_change = max_rate * dt

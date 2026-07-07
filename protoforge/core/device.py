@@ -370,8 +370,7 @@ class DeviceInstance:
                 fault_active = True
             # 检查是否有 SENSOR_STUCK 故障
             for f in self._fault_injector.active_faults:
-                if f.is_active_now(time.time()) and f.fault_type == FaultType.SENSOR_STUCK:
-                    if f.target == "*" or f.target == point_name:
+                if f.is_active_now(time.time()) and f.fault_type == FaultType.SENSOR_STUCK and (f.target == "*" or f.target == point_name):
                         sensor_stuck = True
                         break
         except DeviceFailureException:

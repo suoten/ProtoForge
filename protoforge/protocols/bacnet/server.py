@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import socket
 import struct
@@ -61,10 +62,8 @@ class BACnetServer(ProtocolServer):
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             # FIXED-P0: Windows系统需要显式启用SO_BROADCAST，否则UDP广播(Who-Is)无法工作
-            try:
+            with contextlib.suppress(OSError):
                 self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            except OSError:
-                pass  # 部分平台不支持SO_BROADCAST，忽略
             self._sock.setblocking(False)
             self._sock.bind((self._host, self._port))
             self._task = asyncio.create_task(self._serve_udp())

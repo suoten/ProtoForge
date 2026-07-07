@@ -263,18 +263,16 @@ class Scenario:
         except (ValueError, TypeError):
             v, t = value, threshold
         try:
-            if operator == ">":
-                return v > t
-            elif operator == ">=":
-                return v >= t
-            elif operator == "<":
-                return v < t
-            elif operator == "<=":
-                return v <= t
-            elif operator == "==":
-                return v == t
-            elif operator == "!=":
-                return v != t
+            _ops = {
+                ">": lambda a, b: a > b,
+                ">=": lambda a, b: a >= b,
+                "<": lambda a, b: a < b,
+                "<=": lambda a, b: a <= b,
+                "==": lambda a, b: a == b,
+                "!=": lambda a, b: a != b,
+            }
+            if operator in _ops:
+                return _ops[operator](v, t)
         except TypeError:
             return False
         return False

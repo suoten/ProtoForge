@@ -152,12 +152,7 @@ class ExceptionLintVisitor(ast.NodeVisitor):
         for stmt in body:
             # Check for re-raise
             if isinstance(stmt, ast.Raise):
-                if stmt.exc is None:
-                    # bare raise - re-raising the caught exception
-                    has_reraise = True
-                else:
-                    # raise SomeException(...) - wrapping and re-raising
-                    has_reraise = True
+                has_reraise = True  # bare raise or raise SomeException(...) both count as re-raise
 
             # Check for logging
             if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):

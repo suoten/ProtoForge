@@ -462,10 +462,7 @@ class AbServer(ProtocolServer):
             if path_end < len(cip_data):
                 type_code = cip_data[path_end]
                 # 根据type_code确定跳过字节数：bool=4(type+0x00+0x01+0x00), string/其他=3(type+size_word)
-                if type_code == 0xC1:  # bool
-                    skip = 4
-                else:
-                    skip = 3
+                skip = 4 if type_code == 0xC1 else 3  # bool=4, string/other=3
                 if path_end + skip <= len(cip_data):
                     data_type = behavior.get_tag_type(tag_name)
                     value_data = cip_data[path_end + skip:]

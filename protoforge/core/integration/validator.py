@@ -117,8 +117,8 @@ class MappingValidator:
                     port_int = int(port)
                     if not (1 <= port_int <= 65535):
                         port_int = None
-                except ValueError:
-                    pass
+                except ValueError as e:
+                    logger.debug("Invalid port value '%s': %s", port, e)
             if port_int is None:
                 result["valid"] = False
                 result["issues"].append(f"Invalid port: {port} (must be 1-65535, int or str)")
