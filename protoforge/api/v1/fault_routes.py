@@ -3,7 +3,7 @@
 提供以下端点：
   - POST   /api/v1/faults           注入故障
   - DELETE /api/v1/faults/{id}      移除故障
-  - GET    /api/vaults              获取故障列表
+  - GET    /api/v1/faults              获取故障列表
   - POST   /api/v1/faults/clear     清除所有故障
   - POST   /api/v1/faults/{id}/activate   激活故障
   - POST   /api/v1/faults/{id}/deactivate 停用故障
@@ -17,11 +17,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _trigger_webhook_safe
+from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.core.fault_injection import (
     FaultConfig,
-    FaultScenario,
     FaultType,
     TriggerMode,
 )
@@ -201,7 +200,7 @@ async def clear_faults(req: ClearFaultsRequest, _user: dict = Depends(require_op
         total_cleared = instance.clear_all_faults()
         await _trigger_webhook_safe("fault.cleared", {"device_id": req.device_id, "count": total_cleared})
     else:
-        for dev_id, instance in engine.get_all_device_instances().items():
+        for _dev_id, instance in engine.get_all_device_instances().items():
             count = instance.clear_all_faults()
             total_cleared += count
         await _trigger_webhook_safe("fault.cleared", {"device_id": "*", "count": total_cleared})

@@ -8,10 +8,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+from protoforge.core.messages import desc, msg
+from protoforge.core.quality import QualityCode, QualitySystem
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
-from protoforge.core.quality import QualityCode, QualitySystem
 from protoforge.protocols.behavior import StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
@@ -51,11 +51,12 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
     os.makedirs(cert_dir, exist_ok=True)
 
     try:
+        import datetime
+
         from cryptography import x509
-        from cryptography.x509.oid import NameOID
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import rsa
-        import datetime
+        from cryptography.x509.oid import NameOID
 
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -589,7 +590,7 @@ class OpcUaServer(ProtocolServer):
         for point in config.points:
             try:
                 value = behavior.get_value(point.name) if behavior else 0
-                variant_type = type_map.get(point.data_type.value, None)
+                variant_type = type_map.get(point.data_type.value)
                 if variant_type:
                     # FIXED-P1: 优先使用point.address作为NodeId，客户端可按模板定义的NodeId寻址
                     node_id_str = point.address if point.address else point.name
@@ -629,8 +630,8 @@ class OpcUaServer(ProtocolServer):
                     await node.set_writable()
                 try:
                     await node.set_historized(True)  # FIXED-P1: 启用历史数据存储，客户端可通过HistoryRead读取
-                except Exception:
-                    pass
+                except Exception as hist_err:
+                    logger.debug("启用 OPC-UA 历史数据存储失败 (point=%s): %s", point.name, hist_err)
                 point_nodes[point.name] = node
                 self._point_nodes[f"{config.id}.{point.name}"] = node
                 self._point_types[f"{config.id}.{point.name}"] = point.data_type.value  # FIXED: 保存点位数据类型

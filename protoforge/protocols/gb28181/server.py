@@ -1,16 +1,15 @@
 import asyncio
 import logging
 import re
-import socket
 import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -573,7 +572,7 @@ class GB28181Server(ProtocolServer):
 
             gb_device = None
             # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
-            for did, dev in dict(self._gb_devices).items():
+            for _did, dev in dict(self._gb_devices).items():
                 if dev.device_id == device_id:
                     gb_device = dev
                     break
@@ -714,7 +713,7 @@ class GB28181Server(ProtocolServer):
 
         gb_device = None
         # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
-        for did, dev in dict(self._gb_devices).items():
+        for _did, dev in dict(self._gb_devices).items():
             if dev.device_id == device_id:
                 gb_device = dev
                 break
@@ -758,8 +757,9 @@ class GB28181Server(ProtocolServer):
         srtp_key_salt_b64 = ""
         srtp_context = None
         if getattr(self, '_srtp_enabled', False):
-            from protoforge.protocols.gb28181.rtp_streamer import SrtpContext, SrtpCryptoSuite
             import base64
+
+            from protoforge.protocols.gb28181.rtp_streamer import SrtpContext, SrtpCryptoSuite
             master_key, master_salt = SrtpContext.generate_master_key_salt()
             crypto_suite = getattr(self, '_srtp_crypto_suite', SrtpCryptoSuite.AES_CM_128_HMAC_SHA1_80)
             srtp_context = SrtpContext(master_key, master_salt, crypto_suite)

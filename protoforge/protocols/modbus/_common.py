@@ -1,3 +1,4 @@
+import logging
 import re
 import struct
 from typing import Any
@@ -5,6 +6,7 @@ from typing import Any
 from protoforge.models.device import PointConfig
 from protoforge.protocols.behavior import DefaultDeviceBehavior
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 #  Modbus 地址解析

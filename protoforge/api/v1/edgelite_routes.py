@@ -7,12 +7,12 @@
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine
+from protoforge.api.v1.auth import require_operator, require_viewer
 
 router = APIRouter(prefix="/edgelite", tags=["edgelite"])
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ async def batch_push_devices(
 
 
 @router.post("/test")
-async def test_edgelite_connection(config: Optional[dict[str, Any]] = Body(default=None), _user: dict = Depends(require_operator)):
+async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=None), _user: dict = Depends(require_operator)):
     """测试 EdgeLite 网关连通性。"""
     mgr = _get_integration_manager()
     if config is None:

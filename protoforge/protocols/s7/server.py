@@ -5,9 +5,9 @@ import threading
 import time
 from typing import Any
 
+from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 db_number = int(parts[0].replace('DB', '') or '1')
                 if len(parts) >= 2:
                     offset_part = parts[1]
-                    if offset_part.startswith('DBD'):
-                        offset = int(offset_part[3:] or '0')
-                    elif offset_part.startswith('DBW'):
+                    if offset_part.startswith('DBD') or offset_part.startswith('DBW'):
                         offset = int(offset_part[3:] or '0')
                     elif offset_part.startswith('DBX'):
                         byte_bit = offset_part[3:]
@@ -372,14 +370,12 @@ class S7Server(ProtocolServer):
             # data[17] = Reserved, data[18] = ParamCount, data[19] = 0x12, data[20] = length
             # data[21] = Method, data[22] = Type|Group, data[23] = SubFunction, data[24] = DataRef
             if len(data) > 23:
-                method = data[21]
+                data[21]
                 type_group = data[22]
                 sub_func = data[23]
                 group = type_group & 0x0F
                 # Group 4 = SZL, SubFunction 1 = READ_SZL
-                if group == 0x04 and sub_func == 0x01:
-                    return self._make_s7_szl_response(data, device_id), None
-                elif group == 0x04:
+                if group == 0x04 and sub_func == 0x01 or group == 0x04:
                     return self._make_s7_szl_response(data, device_id), None
             # PLC Control via User Data
             if len(data) > 17:
@@ -534,7 +530,7 @@ class S7Server(ProtocolServer):
         item_offset = param_start + 2  # FIXED-P0: Items 从 param_start+2 开始
         item_results = []
 
-        for i in range(item_count):
+        for _i in range(item_count):
             if item_offset + 12 > len(data):
                 item_results.append((0x0A, b"\x00"))
                 continue
@@ -562,14 +558,9 @@ class S7Server(ProtocolServer):
             area = item_spec[8]  # FIXED-P0: Area 在偏移8，DB Number 之后
             full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
             offset = full_addr >> 3
-            bit_number = full_addr & 0x07
+            full_addr & 0x07
 
-            if transport_size_code == 0x09:
-                read_size = (length + 7) // 8
-                is_bit = True
-            else:
-                read_size = length
-                is_bit = False
+            read_size = (length + 7) // 8 if transport_size_code == 9 else length
 
             if read_size <= 0:
                 read_size = 1
@@ -635,7 +626,7 @@ class S7Server(ProtocolServer):
 
         # FIXED: param_start=17 (TPKT(4)+COTP DT(3)+S7 Header(10))
         param_start = 17
-        func_code = data[param_start] if len(data) > param_start else 0x05
+        data[param_start] if len(data) > param_start else 0x05
         # FIXED-P0: Write Var 参数格式 = Function(1) + ItemCount(1) + Items(N*12)
         item_count = data[param_start + 1] if len(data) > param_start + 1 else 0
         if item_count == 0:  # FIXED-N16: Write item_count=0时返回S7错误
@@ -680,7 +671,7 @@ class S7Server(ProtocolServer):
             area = item_spec[8]  # FIXED-P0: Area 在偏移8
             full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
             offset = full_addr >> 3
-            bit_number = full_addr & 0x07
+            full_addr & 0x07
 
             write_data = write_data_list[i] if i < len(write_data_list) else b""
 
@@ -787,7 +778,7 @@ class S7Server(ProtocolServer):
             szl_index = struct.unpack(">H", data[data_offset + 6:data_offset + 8])[0]
 
         # 提取请求中的参数用于回显
-        req_method = data[21] if len(data) > 21 else 0x11
+        data[21] if len(data) > 21 else 0x11
         req_type_group = data[22] if len(data) > 22 else 0x44
         req_sub_func = data[23] if len(data) > 23 else 0x01
         req_data_ref = data[24] if len(data) > 24 else 0x00

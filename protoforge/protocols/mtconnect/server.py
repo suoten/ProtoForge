@@ -5,9 +5,9 @@ import uuid
 from typing import Any
 from xml.sax.saxutils import escape
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -183,9 +183,7 @@ class MtConnectServer(ProtocolServer):
             for point in config.points:
                 dt_val = point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type)
                 # FIXED-P1: 根据数据类型自动推断category
-                if dt_val == "bool":
-                    category = "EVENT"
-                elif any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
+                if dt_val == "bool" or any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
                     category = "EVENT"
                 else:
                     category = "SAMPLE"
@@ -222,8 +220,8 @@ class MtConnectServer(ProtocolServer):
                 f'  <Device id="{escape(dev_id)}" name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <Description manufacturer="{escape(manufacturer)}">Simulated Device</Description>\n'
                 + components_xml
-                + (f'    <DataItems>\n' + "\n".join(data_items) + '\n    </DataItems>\n' if data_items else "")
-                + f'  </Device>'
+                + ('    <DataItems>\n' + "\n".join(data_items) + '\n    </DataItems>\n' if data_items else "")
+                + '  </Device>'
             )
 
         return (
@@ -256,9 +254,7 @@ class MtConnectServer(ProtocolServer):
                 val = behavior.get_value(point.name)
                 dt_val = point.data_type.value if hasattr(point.data_type, "value") else str(point.data_type)
                 # FIXED-P1: 与probe保持一致的category推断逻辑
-                if dt_val == "bool":
-                    category = "EVENT"
-                elif any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
+                if dt_val == "bool" or any(kw in point.name.lower() for kw in ("status", "alarm", "mode", "execution", "state", "program")):
                     category = "EVENT"
                 else:
                     category = "SAMPLE"
@@ -292,11 +288,11 @@ class MtConnectServer(ProtocolServer):
             streams_xml.append(
                 f'  <DeviceStream name="{escape(config.name)}" uuid="{escape(dev_uuid)}">\n'
                 f'    <ComponentStream component="Device" name="{escape(config.name)}">\n'
-                + (f'      <Samples>\n' + "\n".join(samples_xml) + "\n      </Samples>\n" if samples_xml else "")
-                + (f'      <Events>\n' + "\n".join(events_xml) + "\n      </Events>\n" if events_xml else "")
-                + (f'      <Condition>\n' + "\n".join(conditions_xml) + "\n      </Condition>\n" if conditions_xml else "")
-                + f'    </ComponentStream>\n'
-                f'  </DeviceStream>'
+                + ('      <Samples>\n' + "\n".join(samples_xml) + "\n      </Samples>\n" if samples_xml else "")
+                + ('      <Events>\n' + "\n".join(events_xml) + "\n      </Events>\n" if events_xml else "")
+                + ('      <Condition>\n' + "\n".join(conditions_xml) + "\n      </Condition>\n" if conditions_xml else "")
+                + '    </ComponentStream>\n'
+                '  </DeviceStream>'
             )
 
         return (
@@ -368,9 +364,9 @@ class MtConnectServer(ProtocolServer):
                 f'    <ComponentStream component="Device" name="{escape(info["name"])}">\n'
                 f'      <Samples>\n'
                 + "\n".join(samples_xml) + "\n"
-                f'      </Samples>\n'
-                f'    </ComponentStream>\n'
-                f'  </DeviceStream>'
+                '      </Samples>\n'
+                '    </ComponentStream>\n'
+                '  </DeviceStream>'
             )
 
         first_seq = entries[0]["sequence"]
@@ -415,8 +411,8 @@ class MtConnectServer(ProtocolServer):
                 f'    <Description manufacturer="{escape(manufacturer)}" model="ProtoForge-Sim"/>\n'
                 f'    <Configuration>\n'
                 + "\n".join(description_items) + "\n"
-                f'    </Configuration>\n'
-                f'  </Asset>'
+                '    </Configuration>\n'
+                '  </Asset>'
             )
             if len(assets_xml) >= count:
                 break

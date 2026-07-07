@@ -1,14 +1,14 @@
 import ast
+import logging
 import math
+import operator
 import random
 import time
-import logging
-import operator
 from typing import Any
 
-from protoforge.models.device import DataType, GeneratorType, PointConfig
 from protoforge.core.behavior_models import BaseBehavior, create_behavior, get_behavior_input
 from protoforge.core.fault import FaultInjector
+from protoforge.models.device import DataType, GeneratorType, PointConfig
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ class SafeEval:
             return op(self._eval_node(node.operand))
         elif isinstance(node, ast.Compare):
             left = self._eval_node(node.left)
-            for op, comparator in zip(node.ops, node.comparators):
+            for op, comparator in zip(node.ops, node.comparators, strict=False):
                 op_func = _SAFE_OPS.get(type(op))
                 if op_func is None:
                     raise ValueError(f"Unsupported comparison: {type(op).__name__}")
@@ -217,10 +217,9 @@ class SafeEval:
             slice_val = self._eval_node(node.slice) if isinstance(node.slice, ast.AST) else node.slice
             if not hasattr(value, '__getitem__'):
                 raise TypeError(f"Cannot subscript type '{type(value).__name__}'")
-            if isinstance(slice_val, int):
-                if isinstance(value, (list, tuple, str)):
-                    if not (-len(value) <= slice_val < len(value)):
-                        raise IndexError(f"Index {slice_val} out of range for sequence of length {len(value)}")
+            if isinstance(slice_val, int) and isinstance(value, (list, tuple, str)):
+                if not (-len(value) <= slice_val < len(value)):
+                    raise IndexError(f"Index {slice_val} out of range for sequence of length {len(value)}")
             return value[slice_val]
         raise ValueError(f"Unsupported expression: {type(node).__name__}")
 
@@ -428,10 +427,7 @@ class DataGenerator:
         if behavior is None:
             # 优先使用 config_string 字符串配置
             config_str = config.get("config_string")
-            if config_str:
-                behavior = create_behavior(config_str)
-            else:
-                behavior = create_behavior(config)
+            behavior = create_behavior(config_str) if config_str else create_behavior(config)
 
             if behavior is None:
                 logger.warning(

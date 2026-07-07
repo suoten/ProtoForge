@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import hmac
 import json
@@ -6,12 +7,13 @@ import logging
 import os
 import threading  # FIXED: WebhookManager._lock需要threading.Lock
 import time
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT  # FIXED: 恢复导入，webhook使用此超时常量
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT  # FIXED: 恢复导入，webhook使用此超时常量
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +52,7 @@ class WebhookConfig:
     events: list[str] = field(default_factory=lambda: ["rule_triggered"])
     headers: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
-    secret: Optional[str] = None
+    secret: str | None = None
     last_triggered: float = 0
     trigger_count: int = 0
     error_count: int = 0
@@ -95,9 +97,9 @@ class WebhookManager:
                 rate_limit_seconds = rate_limit_seconds or 5.0
                 auto_disable_threshold = auto_disable_threshold or 50
         self._webhooks: dict[str, WebhookConfig] = {}
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._running = False
         self._rate_limit_seconds = rate_limit_seconds
         self._auto_disable_threshold = auto_disable_threshold
@@ -164,10 +166,8 @@ class WebhookManager:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         if self._client:
             await self._client.aclose()
             self._client = None
@@ -212,13 +212,13 @@ class WebhookManager:
             self._persist()
         return removed
 
-    def get_webhook(self, wh_id: str) -> Optional[WebhookConfig]:
+    def get_webhook(self, wh_id: str) -> WebhookConfig | None:
         return self._webhooks.get(wh_id)
 
     def list_webhooks(self) -> list[dict]:
         return [wh.to_dict() for wh in self._webhooks.values()]
 
-    def update_webhook(self, wh_id: str, config: dict[str, Any]) -> Optional[WebhookConfig]:
+    def update_webhook(self, wh_id: str, config: dict[str, Any]) -> WebhookConfig | None:
         webhook = self._webhooks.get(wh_id)
         if not webhook:
             return None

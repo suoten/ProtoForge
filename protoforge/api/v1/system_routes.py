@@ -1,12 +1,12 @@
 import json
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from protoforge.api.v1._helpers import _get_database, _get_engine, _get_template_manager
 from protoforge.api.v1.auth import require_admin, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_template_manager, _get_database
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -16,8 +16,8 @@ def _get_version() -> str:
     try:
         from importlib.metadata import version as pkg_version
         return pkg_version("protoforge")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("获取包版本失败: %s", e)
     try:
         import protoforge
         return getattr(protoforge, "__version__", "0.1.0")
@@ -92,15 +92,16 @@ async def update_settings(updates: dict[str, Any], _user: dict = Depends(require
     if not filtered:
         raise HTTPException(status_code=400, detail="No valid settings keys provided")
     try:
-        from protoforge.config import update_settings as _update_settings, get_all_settings_dict, ConfigValidationError
+        from protoforge.config import ConfigValidationError, get_all_settings_dict
+        from protoforge.config import update_settings as _update_settings
         changed = _update_settings(filtered)
 
         # 热更新 IntegrationManager：当 EdgeLite 连接配置变更时，自动重新配置并重连
         edgelite_keys = {"edgelite_url", "edgelite_username", "edgelite_password"}
         if edgelite_keys & set(filtered.keys()):
             try:
-                from protoforge.main import get_integration_manager
                 from protoforge.config import get_settings
+                from protoforge.main import get_integration_manager
                 mgr = get_integration_manager()
                 settings = get_settings()
                 # 先停止旧连接
@@ -129,11 +130,11 @@ async def update_settings(updates: dict[str, Any], _user: dict = Depends(require
 
 @router.get("/audit")
 async def query_audit_log(
-    username: Optional[str] = None,
-    action: Optional[str] = None,
-    resource_type: Optional[str] = None,
-    start_time: Optional[float] = None,
-    end_time: Optional[float] = None,
+    username: str | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
+    start_time: float | None = None,
+    end_time: float | None = None,
     limit: int = 100,
     offset: int = 0,
     _user: dict = Depends(require_admin),
@@ -172,7 +173,7 @@ async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)
 
 @router.delete("/audit")
 async def clear_audit_log(
-    before: Optional[float] = None,
+    before: float | None = None,
     _user: dict = Depends(require_admin),
 ):
     raise HTTPException(status_code=403, detail="Audit log cannot be cleared. Audit logs are append-only for compliance.")

@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import time
 from typing import Any
@@ -138,8 +137,9 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.DeviceResponse(ok=False, error="Engine not initialized")
         try:
-            from protoforge.models.device import DeviceConfig
             import uuid
+
+            from protoforge.models.device import DeviceConfig
             # FIXED: gRPC CreateDevice忽略template_id的点配置 — 从模板加载points
             points = []
             if request.template_id:
@@ -355,7 +355,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return pb2.OperationResponse(ok=False, error="Database not initialized")
         try:
-            from protoforge.config import update_settings, get_settings
+            from protoforge.config import update_settings
             settings_dict = dict(request.settings)
             result = update_settings(settings_dict)
             if not result.get("ok", True):

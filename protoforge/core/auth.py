@@ -7,7 +7,6 @@ import threading  # FIXED: _SECRET_KEY_LOCK需要threading.Lock
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional
 
 import jwt
 from passlib.context import CryptContext
@@ -39,7 +38,7 @@ def _load_persistent_secret_key() -> str:
             key_dir = os.path.dirname(_SECRET_KEY_FILE)
             os.makedirs(key_dir, exist_ok=True)
             if os.path.exists(_SECRET_KEY_FILE):
-                with open(_SECRET_KEY_FILE, "r") as f:
+                with open(_SECRET_KEY_FILE) as f:
                     saved = f.read().strip()
                 if saved and len(saved) >= _SECRET_KEY_MIN_LENGTH:
                     _SECRET_KEY = saved
@@ -113,7 +112,7 @@ def create_refresh_token(user_id: str, expires_in: int = None) -> str:
     return jwt.encode(payload, get_secret_key(), algorithm="HS256")
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, get_secret_key(), algorithms=["HS256"])
         return payload
@@ -125,7 +124,7 @@ def verify_token(token: str) -> Optional[dict]:
         return None
 
 
-def verify_token_with_reason(token: str) -> tuple[Optional[dict], Optional[str]]:
+def verify_token_with_reason(token: str) -> tuple[dict | None, str | None]:
     try:
         payload = jwt.decode(token, get_secret_key(), algorithms=["HS256"])
         return payload, None
@@ -135,7 +134,7 @@ def verify_token_with_reason(token: str) -> tuple[Optional[dict], Optional[str]]
         return None, f"token_invalid:{e}"
 
 
-def verify_refresh_token(token: str) -> Optional[str]:
+def verify_refresh_token(token: str) -> str | None:
     payload = verify_token(token)
     if not payload:
         return None
@@ -285,10 +284,10 @@ class UserManager:
     def set_database(self, db) -> None:
         self._db = db
 
-    def get_user_by_id(self, user_id: str) -> Optional[User]:
+    def get_user_by_id(self, user_id: str) -> User | None:
         return self._users_by_id.get(user_id)
 
-    def get_user_by_username(self, username: str) -> Optional[User]:
+    def get_user_by_username(self, username: str) -> User | None:
         return self._users.get(username)
 
     async def restore_from_db(self) -> None:
@@ -320,7 +319,7 @@ class UserManager:
         except Exception as e:
             logger.warning("Failed to restore users: %s", e)
 
-    async def authenticate(self, username: str, password: str) -> tuple[Optional[User], str]:
+    async def authenticate(self, username: str, password: str) -> tuple[User | None, str]:
         user = self._users.get(username)
         if not user:
             return None, "invalid_credentials"
@@ -357,7 +356,7 @@ class UserManager:
             logger.error("Failed to persist user %s: %s", user.username, e)
             raise RuntimeError(f"Failed to persist user: {e}") from e
 
-    async def create_user(self, username: str, password: str, role: str = "user") -> Optional[User]:
+    async def create_user(self, username: str, password: str, role: str = "user") -> User | None:
         if not username or not isinstance(username, str):
             raise ValueError("Username must be a non-empty string")
         if not _VALID_USERNAME_PATTERN.match(username):

@@ -5,9 +5,9 @@ import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -225,13 +225,9 @@ class FinsServer(ProtocolServer):
             return None
 
         command = struct.unpack(">H", data[0:2])[0]
-        if command == 0x0000:
+        if command == 0x0000 or command == 0x0001:
             return self._handle_fins_init(data)
-        elif command == 0x0001:
-            return self._handle_fins_init(data)
-        elif command == 0x0002:
-            return self._handle_fins_send(data)
-        elif command == 0x0003:
+        elif command == 0x0002 or command == 0x0003:
             return self._handle_fins_send(data)
 
         return self._make_fins_error(0x0204)
@@ -264,9 +260,7 @@ class FinsServer(ProtocolServer):
 
         if mrc == 0x01 and src == 0x01:  # FIXED-P1: 同时检查MRC和SRC，0x0101=内存区读取
             return self._handle_memory_read(data, fins_frame)
-        elif mrc == 0x01 and src == 0x02:  # FIXED-P1: 0x0102=内存区写入
-            return self._handle_memory_write(data, fins_frame)
-        elif mrc == 0x02 and src == 0x01:  # 0x0201=内存区写入(旧格式)
+        elif mrc == 0x01 and src == 0x02 or mrc == 0x02 and src == 0x01:  # FIXED-P1: 0x0102=内存区写入
             return self._handle_memory_write(data, fins_frame)
         elif mrc == 0x05 and src == 0x01:  # 0x0501=控制器读取
             return self._handle_controller_read(data, fins_frame)
@@ -288,7 +282,7 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        bit_addr = fins_frame[15]
+        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
         if word_count == 0 or word_count > 1000:  # FIXED-N13: word_count上限校验，防止恶意请求导致大量内存分配
             return self._make_fins_error(0x0204)
@@ -315,7 +309,7 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        bit_addr = fins_frame[15]
+        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
         if word_count == 0 or word_count > 1000:  # FIXED-N14: word_count上限校验
             return self._make_fins_error(0x0204)
@@ -507,7 +501,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + b"\x00\x00"
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        bit_addr = data[3]
+        data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         if word_count == 0 or word_count > 1000:  # FIXED-N17: UDP读取word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0x0204)
@@ -524,7 +518,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         server = self._server
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        bit_addr = data[3]
+        data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         if word_count == 0 or word_count > 1000:  # FIXED-N18: UDP写入word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0x0204)

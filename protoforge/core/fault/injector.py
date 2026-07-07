@@ -20,11 +20,11 @@ import logging
 import random
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from protoforge.core.fault.models import Fault, FaultSeverity, FaultType
 from protoforge.core.fault_injection import (
-    DeviceFailureException,
     FaultConfig,
     TriggerMode,
 )
@@ -46,8 +46,8 @@ class FaultInjector:
     def __init__(
         self,
         device_id: str = "",
-        on_fault_activated: Optional[Callable[[Fault], None]] = None,
-        on_fault_deactivated: Optional[Callable[[Fault], None]] = None,
+        on_fault_activated: Callable[[Fault], None] | None = None,
+        on_fault_deactivated: Callable[[Fault], None] | None = None,
     ):
         self._device_id = device_id
         self._on_activated = on_fault_activated

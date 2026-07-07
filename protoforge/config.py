@@ -1,4 +1,3 @@
-import json
 import logging
 import secrets
 import sys
@@ -6,7 +5,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -229,9 +228,8 @@ def _validate_setting(key: str, value: Any) -> str | None:
         valid_levels = {"debug", "info", "warning", "error", "critical"}
         if str(value).lower() not in valid_levels:
             return f"Log level must be one of {', '.join(valid_levels)}, got: {value}"  # FIXED: hardcoded Chinese
-    if key == "host" and value:
-        if not isinstance(value, str) or not value.strip():
-            return "Host address cannot be empty"  # FIXED: hardcoded Chinese
+    if key == "host" and value and (not isinstance(value, str) or not value.strip()):
+        return "Host address cannot be empty"  # FIXED: hardcoded Chinese
     return None
 
 

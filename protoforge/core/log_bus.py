@@ -3,8 +3,9 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

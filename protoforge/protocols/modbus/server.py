@@ -1,19 +1,20 @@
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc, msg  # FIXED: i18n消息常量
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDeviceBehavior, ModbusDataStore, parse_modbus_address
-from protoforge.core.messages import msg, desc  # FIXED: i18n消息常量
+from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior, parse_modbus_address
 
 logger = logging.getLogger(__name__)
 
 SIMDATA_AVAILABLE = False
 try:
-    from pymodbus.simulator import SimData, SimDevice, DataType
+    from pymodbus.simulator import DataType, SimData, SimDevice
     SIMDATA_AVAILABLE = True
 except ImportError:
     DataType = None
@@ -26,10 +27,8 @@ except ImportError:
     pass
 
 StartAsyncTcpServer = None
-try:
+with contextlib.suppress(ImportError):
     from pymodbus.server import StartAsyncTcpServer
-except ImportError:
-    pass
 
 
 class ModbusTcpServer(ProtocolServer):
@@ -321,7 +320,7 @@ class ModbusTcpServer(ProtocolServer):
                 w_count = struct.unpack(">H", data[6:8])[0]
                 if r_count == 0 or r_count > self._MAX_READ_REGISTERS or w_count == 0 or w_count > 121:  # FIXED-N03: r_count/w_count==0校验
                     return bytes([fc | 0x80, 0x03])
-                w_byte_count = data[8]
+                data[8]
                 for s in target_stores:
                     for i in range(w_count):
                         offset = 9 + i * 2

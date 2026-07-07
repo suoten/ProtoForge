@@ -1,6 +1,5 @@
 import asyncio
 import html
-import json
 import logging
 import re
 import time
@@ -13,7 +12,7 @@ __all__ = ["TestStatus", "TestStep", "TestCase", "TestSuite", "TestReport",
 
 logger = logging.getLogger(__name__)
 
-from typing import Any, Optional
+from typing import Any
 
 from protoforge.core.messages import tmsg
 
@@ -373,7 +372,7 @@ h1 {{ font-size:24px; margin-bottom:20px; color:#1a1a1a; }}
     <div class="errors" style="width:{error_pct}%"></div>
 </div>
 {case_rows}
-{f'<h2 style="margin-top:24px;font-size:18px">{tmsg('html_environment', lang)}</h2><table class="env-table"><thead><tr><th>{tmsg('html_key', lang)}</th><th>{tmsg('html_value', lang)}</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}
+{f'<h2 style="margin-top:24px;font-size:18px">{tmsg("html_environment", lang)}</h2><table class="env-table"><thead><tr><th>{tmsg("html_key", lang)}</th><th>{tmsg("html_value", lang)}</th></tr></thead><tbody>{env_rows}</tbody></table>' if env_rows else ''}
 </div>
 </body>
 </html>"""
@@ -663,10 +662,10 @@ class TestRunner:
                 logger.warning("Failed to persist test case: %s", e)
         return test_case
 
-    def get_test_case(self, case_id: str) -> Optional[TestCase]:
+    def get_test_case(self, case_id: str) -> TestCase | None:
         return self._test_cases.get(case_id)
 
-    def list_test_cases(self, tag: Optional[str] = None) -> list[TestCase]:
+    def list_test_cases(self, tag: str | None = None) -> list[TestCase]:
         cases = list(self._test_cases.values())
         if tag:
             cases = [c for c in cases if tag in c.tags]
@@ -692,7 +691,7 @@ class TestRunner:
                 logger.warning("Failed to persist test suite: %s", e)
         return suite
 
-    def get_test_suite(self, suite_id: str) -> Optional[TestSuite]:
+    def get_test_suite(self, suite_id: str) -> TestSuite | None:
         return self._test_suites.get(suite_id)
 
     def list_test_suites(self) -> list[TestSuite]:
@@ -880,7 +879,7 @@ class TestRunner:
         ]
 
     async def _execute_step(self, step: TestStep, api_client=None,
-                            var_store: Optional[VariableStore] = None) -> Any:
+                            var_store: VariableStore | None = None) -> Any:
         resolved_params = var_store.resolve(step.params) if var_store else step.params
         return await self._execute_step_with_params(step, resolved_params, api_client)
 
@@ -973,8 +972,8 @@ class TestRunner:
             method = params.get("method", "GET").upper()
             url = params.get("url", "")
             if url.startswith("http://") or url.startswith("https://"):
-                from urllib.parse import urlparse
                 import ipaddress
+                from urllib.parse import urlparse
                 parsed = urlparse(url)
                 if parsed.scheme.lower() not in ("http", "https"):
                     return {"error": f"SSRF protection: scheme '{parsed.scheme}' not allowed, only http/https permitted"}

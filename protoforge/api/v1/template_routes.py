@@ -1,26 +1,25 @@
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from protoforge.api.v1._helpers import _get_database, _get_template_manager
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.api.v1._helpers import _get_template_manager, _get_database
 from protoforge.models.template import TemplateDetail
-from protoforge.models.device import DeviceConfig
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("/templates")
-async def list_templates(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
+async def list_templates(protocol: str | None = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     return {"templates": tm.list_templates(protocol=protocol)}
 
 
 @router.get("/templates/search")
-async def search_templates(q: str = "", protocol: Optional[str] = None, tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
+async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None, _user: dict = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates(protocol=protocol)
 
@@ -45,7 +44,7 @@ async def list_template_tags(_user: dict = Depends(require_viewer)):
     for t in templates:
         for tag in (t.tags or []):
             tags.add(tag)
-    return {"tags": sorted(list(tags))}
+    return {"tags": sorted(tags)}
 
 
 @router.get("/templates/{template_id}")
@@ -141,7 +140,7 @@ async def instantiate_template(
     template_id: str,
     device_id: str = Query(...),
     device_name: str = Query(...),
-    body: Optional[dict[str, Any]] = None,
+    body: dict[str, Any] | None = None,
     _user: dict = Depends(require_operator),
 ):
     protocol_config = None

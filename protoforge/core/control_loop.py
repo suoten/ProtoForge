@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from protoforge.core.behavior_models import PIDController
 
@@ -79,14 +79,14 @@ class ControlLoopConfig:
     output_point: str = ""
     pid_params: dict[str, float] = field(default_factory=lambda: {"Kp": 1.0, "Ki": 0.1, "Kd": 0.01})
     output_limit: tuple[float, float] = (0.0, 100.0)
-    primary_loop_id: Optional[str] = None
-    disturbance_point: Optional[str] = None
+    primary_loop_id: str | None = None
+    disturbance_point: str | None = None
     feedforward_gain: float = 0.0
     enabled: bool = True
     auto_track: bool = True
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ControlLoopConfig":
+    def from_dict(cls, data: dict[str, Any]) -> ControlLoopConfig:
         """从字典创建配置，处理 output_limit 列表转元组。"""
         d = dict(data)
         ol = d.get("output_limit")
@@ -155,7 +155,7 @@ class ControlLoop:
         measurement: float,
         setpoint: float,
         dt: float,
-        disturbance: Optional[float] = None,
+        disturbance: float | None = None,
     ) -> float:
         """执行一个控制周期，返回控制输出。
 
@@ -275,7 +275,7 @@ class ControlLoopManager:
             return True
         return False
 
-    def get_loop(self, loop_id: str) -> Optional[ControlLoop]:
+    def get_loop(self, loop_id: str) -> ControlLoop | None:
         """获取回路实例。"""
         return self._loops.get(loop_id)
 
@@ -390,7 +390,7 @@ class ControlLoopManager:
         cfg: ControlLoopConfig,
         device: DeviceInstance,
         dt: float,
-    ) -> Optional[float]:
+    ) -> float | None:
         """执行单个简单/前馈回路。
 
         :return: 控制输出，None 表示跳过

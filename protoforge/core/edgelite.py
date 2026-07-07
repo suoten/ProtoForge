@@ -1,5 +1,4 @@
 import logging
-import os
 import re
 import threading
 import time
@@ -11,13 +10,13 @@ import httpx
 
 from protoforge.config import get_settings
 from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT, HTTP_TIMEOUT_SHORT
-from protoforge.core.messages import desc
 from protoforge.core.integration.protocol import (
     ACCESS_MODE_MAP,
     PROTOCOL_MAP_BASE,
     DataTypeMapper,
     ProtocolMapper,
 )
+from protoforge.core.messages import desc
 
 logger = logging.getLogger(__name__)
 
@@ -391,9 +390,7 @@ async def _get_edgelite_protocol_port_from_existing_device(
             devices = data.get("data", data.get("devices", []))
             for dev in devices:
                 config = dev.get("config", {})
-                if protocol == "mqtt":
-                    return config.get("port")
-                elif protocol in ("modbus_tcp", "s7", "mc", "opcua", "fins", "ab"):
+                if protocol == "mqtt" or protocol in ("modbus_tcp", "s7", "mc", "opcua", "fins", "ab"):
                     return config.get("port")
                 elif protocol == "http":
                     return config.get("server_port") or config.get("port")

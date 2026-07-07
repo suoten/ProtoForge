@@ -25,8 +25,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -62,7 +61,7 @@ class NetworkProfile:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "NetworkProfile":
+    def from_dict(cls, data: dict[str, Any]) -> NetworkProfile:
         return cls(
             latency_ms=float(data.get("latency_ms", 0.0)),
             jitter_ms=float(data.get("jitter_ms", 0.0)),

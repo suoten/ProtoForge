@@ -79,7 +79,13 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "B008", "B904"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern
+
+[tool.ruff.lint.per-file-ignores]
+"protoforge/mqtt_auth.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/mqtt/server.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/opcua/client.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/opcua/server.py" = ["F401"]  # Optional dependency imports
 
 [tool.mypy]
 python_version = "3.10"

@@ -1,11 +1,10 @@
 import logging
 import time
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from protoforge.api.v1.auth import require_admin, require_user, require_guest
+from protoforge.api.v1.auth import require_admin, require_guest
 from protoforge.core.messages import desc
 
 router = APIRouter()
@@ -58,7 +57,7 @@ class UpdateRoleRequest(BaseModel):
 @router.post("/auth/login")
 async def login(credentials: LoginRequest):
     try:
-        from protoforge.core.auth import user_manager, create_token, create_refresh_token
+        from protoforge.core.auth import create_refresh_token, create_token, user_manager
         user, error_code = await user_manager.authenticate(credentials.username, credentials.password)
 
         if not user:
@@ -88,7 +87,7 @@ async def login(credentials: LoginRequest):
 @router.post("/auth/refresh")
 async def refresh_token(data: RefreshRequest):
     try:
-        from protoforge.core.auth import verify_refresh_token, create_token, create_refresh_token, user_manager
+        from protoforge.core.auth import create_refresh_token, create_token, user_manager, verify_refresh_token
         user_id = verify_refresh_token(data.refresh_token)
 
         if not user_id:

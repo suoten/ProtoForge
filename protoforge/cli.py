@@ -14,7 +14,7 @@ def _load_dotenv_to_environ():
     if not env_file.exists():
         return
     try:
-        with open(env_file, "r", encoding="utf-8") as f:
+        with open(env_file, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith("#") or "=" not in line:
@@ -24,8 +24,9 @@ def _load_dotenv_to_environ():
                 value = value.strip().strip("\"'")
                 if key and key not in os.environ:
                     os.environ[key] = value
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("加载 .env 文件失败: %s", e)
 
 
 def main():
@@ -71,7 +72,7 @@ def main():
     migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
     migrate_parser.add_argument("--revision", default="head", help="Target revision (default: head)")
 
-    stop_parser = subparsers.add_parser("stop", help="Stop background daemon")
+    subparsers.add_parser("stop", help="Stop background daemon")
 
     audit_parser = subparsers.add_parser("audit", help="Run automated audit checks (3-layer consistency)")
     audit_parser.add_argument("--layer", choices=["1", "2", "3", "all"], default="all",
@@ -155,7 +156,7 @@ def _stop_command():
 
     # 等待进程退出，超时后强制 SIGKILL
     import time
-    for i in range(30):
+    for _i in range(30):
         try:
             os.kill(pid, 0)  # 检查进程是否还存在
         except ProcessLookupError:
@@ -204,7 +205,7 @@ def _daemonize():
     log_file.parent.mkdir(parents=True, exist_ok=True)
 
     # FIXED: P4 - W29 使用 with 语句包裹 open()，确保文件描述符关闭
-    with open(os.devnull, 'r') as si, \
+    with open(os.devnull) as si, \
          open(str(log_file), 'a') as so, \
          open(str(log_file), 'a') as se:
         os.dup2(si.fileno(), sys.stdin.fileno())
@@ -281,7 +282,7 @@ def _audit_command(args):
             # Check for unregistered models
             unregistered = scan_all_response_models()
             if unregistered:
-                print(f"\nUnregistered Response models (not in _MODEL_TABLE_MAP or _VIRTUAL_MODELS):")
+                print("\nUnregistered Response models (not in _MODEL_TABLE_MAP or _VIRTUAL_MODELS):")
                 for name, module, fields in unregistered:
                     print(f"  {name} ({module}): {sorted(fields)}")
 
@@ -425,9 +426,9 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         import atexit
         atexit.register(lambda: _get_pid_file().unlink(missing_ok=True))
 
-    import uvicorn
-
     from pathlib import Path as _Path
+
+    import uvicorn
     _log_dir = _Path("logs")
     _log_dir.mkdir(parents=True, exist_ok=True)
     _log_file = str(_log_dir / "protoforge.log")

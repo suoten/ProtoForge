@@ -80,10 +80,7 @@ _PUBLIC_PREFIXES = (
 def _is_public_path(path: str) -> bool:
     if path in _PUBLIC_PATHS:
         return True
-    for prefix in _PUBLIC_PREFIXES:
-        if path.startswith(prefix):
-            return True
-    return False
+    return any(path.startswith(prefix) for prefix in _PUBLIC_PREFIXES)
 
 
 async def auth_middleware(request: Request, call_next):

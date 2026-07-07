@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Any
@@ -163,10 +164,8 @@ class OpcUaClientProtocol(ProtocolServer):
         self._stopping = True
         if self._reconnect_task:
             self._reconnect_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._reconnect_task
-            except asyncio.CancelledError:
-                pass
             self._reconnect_task = None
         try:
             was_connected = self._connected
@@ -211,7 +210,7 @@ class OpcUaClientProtocol(ProtocolServer):
     async def remove_device(self, device_id: str) -> None:
         async with self._lock:  # FIXED: 添加锁保护，避免并发create/remove/read竞态
             self._device_configs.pop(device_id, None)
-            keys_to_remove = [k for k in self._point_nodes.keys() if k.startswith(f"{device_id}.")]
+            keys_to_remove = [k for k in self._point_nodes if k.startswith(f"{device_id}.")]
             for k in keys_to_remove:
                 self._point_nodes.pop(k, None)
         logger.info("OPC-UA Client device removed: %s", device_id)

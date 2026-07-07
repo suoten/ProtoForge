@@ -3,8 +3,9 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,6 @@ class EventBus:
         event_type = type(event).__name__
         with self._lock:  # FIXED: 添加锁保护history和dropped_count的读写
             self._history.append(event)
-            dropped = self._dropped_count
             queues = list(self._subscribers.get(event_type, []))
             callbacks = list(self._callbacks.get(event_type, []))
 

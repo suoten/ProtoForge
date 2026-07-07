@@ -40,7 +40,7 @@ import threading
 import time
 from typing import Any
 
-from protoforge.core.fault.models import Fault, FaultSeverity, FaultType
+from protoforge.core.fault.models import FaultSeverity, FaultType
 
 logger = logging.getLogger(__name__)
 

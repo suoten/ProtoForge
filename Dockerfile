@@ -31,7 +31,11 @@ COPY --from=builder /app/static/ static/
 COPY alembic.ini .
 COPY migrations/ migrations/
 
-RUN mkdir -p data
+RUN mkdir -p data && \
+    useradd -m -u 1000 protoforge && \
+    chown -R protoforge:protoforge /app
+
+USER protoforge
 
 EXPOSE 8000 5020 4840 1883 5060 5060/udp 47808/udp 102 8080 5000 9600 44818 51340 8193 7878 1701 34964 34980
 # GB28181 RTP 媒体流端口范围 (6000-6999/udp)，如需外部播放视频流请映射此范围

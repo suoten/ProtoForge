@@ -1,8 +1,9 @@
 import asyncio
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from enum import Enum
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 
@@ -27,14 +28,14 @@ class ProtocolServer(ABC):
 
     def __init__(self):
         self._status: ProtocolStatus = ProtocolStatus.STOPPED
-        self._debug_callback: Optional[Callable] = None
-        self._default_device_id: Optional[str] = None
+        self._debug_callback: Callable | None = None
+        self._default_device_id: str | None = None
         self._default_device_lock = asyncio.Lock()  # FIXED: 添加锁保护_default_device_id的并发访问
         self._default_device_sync_lock = threading.Lock()  # FIXED-P1: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         self._behaviors_lock = asyncio.Lock()  # FIXED: 添加锁保护_behaviors字典的并发访问
         self._behaviors_sync_lock = threading.Lock()  # FIXED: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         # 写回调：当外部客户端通过协议写入时，通过此回调传播到 DeviceInstance
-        self._on_write: Optional[Callable[[str, str, Any], Awaitable[bool]]] = None
+        self._on_write: Callable[[str, str, Any], Awaitable[bool]] | None = None
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
@@ -51,12 +52,12 @@ class ProtocolServer(ABC):
         self._on_write = callback
 
     @property
-    def on_write(self) -> Optional[Callable[[str, str, Any], Awaitable[bool]]]:
+    def on_write(self) -> Callable[[str, str, Any], Awaitable[bool]] | None:
         """返回当前设置的写回调函数（可为 None）。"""
         return self._on_write
 
     def _log_debug(self, direction: str, msg_type: str, summary: str,
-                   device_id: str = "", detail: Optional[dict] = None):
+                   device_id: str = "", detail: dict | None = None):
         if self._debug_callback:
             self._debug_callback(direction, msg_type, summary, device_id, detail)
 

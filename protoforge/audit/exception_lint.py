@@ -22,7 +22,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +101,7 @@ class ExceptionLintVisitor(ast.NodeVisitor):
         self.file_path = file_path
         self.violations: list[ExceptionLintViolation] = []
         self.total_except_blocks = 0
-        self._current_function: Optional[str] = None
+        self._current_function: str | None = None
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         old_function = self._current_function
@@ -130,9 +129,7 @@ class ExceptionLintVisitor(ast.NodeVisitor):
 
         # Check if it's catching Exception broadly
         is_broad_exception = False
-        if isinstance(node.type, ast.Name) and node.type.id == "Exception":
-            is_broad_exception = True
-        elif isinstance(node.type, ast.Attribute) and node.type.attr == "Exception":
+        if isinstance(node.type, ast.Name) and node.type.id == "Exception" or isinstance(node.type, ast.Attribute) and node.type.attr == "Exception":
             is_broad_exception = True
         elif isinstance(node.type, ast.Tuple):
             # Check if Exception is in the tuple
@@ -260,7 +257,7 @@ def scan_file(file_path: Path) -> tuple[list[ExceptionLintViolation], int]:
 
 def scan_directory(
     root_path: Path,
-    exclude_dirs: Optional[set[str]] = None,
+    exclude_dirs: set[str] | None = None,
 ) -> ExceptionLintResult:
     """Scan all Python files in a directory for exception handling violations."""
     if exclude_dirs is None:

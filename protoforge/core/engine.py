@@ -1,16 +1,24 @@
 import asyncio
+import contextlib
 import logging
 import re
 import socket
-from typing import Any, Optional
+from typing import Any
 
 from protoforge.core.device import DeviceInstance
-from protoforge.core.event_bus import EventBus, DeviceCreatedEvent, DeviceStartedEvent, DeviceStoppedEvent, DeviceRemovedEvent, ProtocolStatusEvent
+from protoforge.core.event_bus import (
+    DeviceCreatedEvent,
+    DeviceRemovedEvent,
+    DeviceStartedEvent,
+    DeviceStoppedEvent,
+    EventBus,
+    ProtocolStatusEvent,
+)
+from protoforge.core.fault.propagation import FaultPropagation
 from protoforge.core.generator import DataGenerator
 from protoforge.core.network_sim import NetworkSimulator
 from protoforge.core.scenario import Scenario
 from protoforge.core.timeseries import TimeSeriesManager
-from protoforge.core.fault.propagation import FaultPropagation
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, GeneratorType, PointValue
 from protoforge.models.scenario import ScenarioConfig, ScenarioDetail, ScenarioInfo, ScenarioStatus
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
@@ -94,7 +102,7 @@ class SimulationEngine:
         self._scenario_status: dict[str, ScenarioStatus] = {}
         self._scenarios_lock = asyncio.Lock()  # FIXED-P1: 保护场景字典并发访问
         self._generator = DataGenerator()
-        self._tick_task: Optional[asyncio.Task] = None
+        self._tick_task: asyncio.Task | None = None
         self._running = False
         self._event_bus = event_bus
         self._tick_interval = tick_interval
@@ -183,7 +191,6 @@ class SimulationEngine:
         logger.info("Starting protocol %s with config: %s", protocol_name, _sanitize_config(config))
 
         original_port = config.get("port")
-        port_changed_by_engine = False
 
         # 引擎层端口检测：启动前检查端口是否被占用
         if "port" in config and isinstance(config["port"], int):
@@ -202,9 +209,7 @@ class SimulationEngine:
                 config["port"] = new_port
                 config["_port_changed"] = True
                 config["_original_port"] = original_port
-                port_changed_by_engine = True
 
-        last_error = None
         for attempt in range(1, self._MAX_START_RETRIES + 1):
             try:
                 await server.start(config)
@@ -222,7 +227,7 @@ class SimulationEngine:
                             protocol_name, actual_port, original_port
                         )
 
-                for i in range(10):  # FIXED-H07: 增加等待次数从5到10，超时从1s增加到2s，适应慢启动场景
+                for _i in range(10):  # FIXED-H07: 增加等待次数从5到10，超时从1s增加到2s，适应慢启动场景
                     await asyncio.sleep(0.2)
                     if server.status == ProtocolStatus.ERROR:
                         break
@@ -253,7 +258,6 @@ class SimulationEngine:
                     ))
                 return  # SUCCESS
             except Exception as e:
-                last_error = e
                 error_str = str(e).lower()
                 is_retryable = any(err in error_str for err in self._RETRYABLE_ERRORS)
                 if is_retryable and attempt < self._MAX_START_RETRIES:
@@ -463,13 +467,13 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         return self._get_device_info(instance)
 
-    def get_device_instance(self, device_id: str) -> Optional[DeviceInstance]:
+    def get_device_instance(self, device_id: str) -> DeviceInstance | None:
         return self._devices.get(device_id)
 
     def get_all_device_instances(self) -> dict[str, DeviceInstance]:
         return dict(self._devices)
 
-    def get_scenario_config(self, scenario_id: str) -> Optional[ScenarioConfig]:
+    def get_scenario_config(self, scenario_id: str) -> ScenarioConfig | None:
         return self._scenarios.get(scenario_id)
 
     def get_all_scenario_configs(self) -> dict[str, ScenarioConfig]:
@@ -487,7 +491,7 @@ class SimulationEngine:
             return server.get_running_port()
         return None
 
-    def list_devices(self, protocol: Optional[str] = None) -> list[DeviceInfo]:
+    def list_devices(self, protocol: str | None = None) -> list[DeviceInfo]:
         result = []
         for instance in list(self._devices.values()):  # FIXED-L05: 使用list()快照避免并发修改
             if protocol and instance.protocol != protocol:
@@ -726,10 +730,8 @@ class SimulationEngine:
         if self._tick_task and not self._tick_task.done():
             logger.warning("Engine already running, cancelling old tick task")
             self._tick_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._tick_task
-            except asyncio.CancelledError:
-                pass
         self._running = True
         self._tick_task = asyncio.create_task(self._tick_loop())
         logger.info("Simulation engine started")
@@ -738,10 +740,8 @@ class SimulationEngine:
         self._running = False
         if self._tick_task:
             self._tick_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._tick_task
-            except asyncio.CancelledError:
-                pass
         for server in self._protocol_servers.values():
             if server.status == ProtocolStatus.RUNNING:
                 try:
@@ -775,8 +775,8 @@ class SimulationEngine:
                             if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
                                 try:
                                     await server.write_point(instance.id, pv.name, pv.value)
-                                except Exception:
-                                    pass  # 同步失败不阻断tick循环
+                                except Exception as sync_err:
+                                    logger.debug("同步点位值到协议服务器失败 (device=%s, point=%s): %s", instance.id, pv.name, sync_err)
                 except Exception as e:
                     logger.warning("Tick error for device %s: %s", instance.id, e)
             for scenario in list(self._scenario_instances.values()):
@@ -788,7 +788,7 @@ class SimulationEngine:
             try:
                 for inst in devices_snapshot:
                     dev_id = inst.id
-                    point_values = {name: val for name, val in inst._point_values.items()}
+                    point_values = dict(inst._point_values.items())
                     triggers = self._fault_propagation.check_propagation(point_values)
                     for trigger in triggers:
                         from protoforge.core.fault_injection import FaultConfig, FaultType, TriggerMode
@@ -884,7 +884,7 @@ class SimulationEngine:
         :param profile: 预定义名称 ("ideal"/"lan"/"wan"/...) 或配置字典
         :param enabled: 是否启用
         """
-        from protoforge.core.network_sim import NetworkProfile, PRESET_PROFILES
+        from protoforge.core.network_sim import NetworkProfile
         if isinstance(profile, str):
             self._network_sim.set_profile(profile)
         elif isinstance(profile, dict):

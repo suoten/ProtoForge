@@ -1,8 +1,7 @@
-import json
 import logging
 import time
-from dataclasses import dataclass, field, asdict
-from typing import Any, Optional
+from dataclasses import asdict, dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +72,11 @@ class AuditLogger:
             except Exception as e:
                 logger.warning("Failed to persist audit entry: %s", e)
 
-    async def query(self, username: Optional[str] = None,
-                    action: Optional[str] = None,
-                    resource_type: Optional[str] = None,
-                    start_time: Optional[float] = None,
-                    end_time: Optional[float] = None,
+    async def query(self, username: str | None = None,
+                    action: str | None = None,
+                    resource_type: str | None = None,
+                    start_time: float | None = None,
+                    end_time: float | None = None,
                     limit: int = 100,
                     offset: int = 0) -> tuple[list[dict], int]:
         if self._database:
@@ -119,7 +118,7 @@ class AuditLogger:
         now = time.time()
         today_start = now - (now % 86400)
         today_count = sum(1 for e in self._entries if e.timestamp >= today_start)
-        active_users = list(set(e.username for e in self._entries)) if self._entries else []
+        active_users = list({e.username for e in self._entries}) if self._entries else []
         last_action = _normalize_action(self._entries[-1].action) if self._entries else ""
         last_timestamp = self._entries[-1].timestamp if self._entries else 0
         # 优先从数据库获取真实总数，避免内存条目不完整导致统计不准确
@@ -136,7 +135,7 @@ class AuditLogger:
             "active_users": active_users,
             "last_action": last_action,
             "last_timestamp": last_timestamp,
-            "actions": list(set(_normalize_action(e.action) for e in self._entries)) if self._entries else [],
+            "actions": list({_normalize_action(e.action) for e in self._entries}) if self._entries else [],
         }
 
     async def delete_entry(self, entry_id: int) -> bool:
@@ -149,7 +148,7 @@ class AuditLogger:
             logger.warning("Failed to delete audit entry %d: %s", entry_id, e)
             return False
 
-    async def clear_entries(self, before_timestamp: Optional[float] = None) -> int:
+    async def clear_entries(self, before_timestamp: float | None = None) -> int:
         if before_timestamp:
             original_count = len(self._entries)
             self._entries = [e for e in self._entries if e.timestamp >= before_timestamp]

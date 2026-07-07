@@ -1,21 +1,21 @@
 import logging
 import re
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from protoforge.api.v1._helpers import _get_database, _get_engine, _get_log_bus, _trigger_webhook_safe
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_log_bus, _trigger_webhook_safe, _get_database
-from protoforge.models.device import DeviceConfig, DeviceInfo
+from protoforge.models.device import DeviceConfig
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.get("/devices")
-async def list_devices(protocol: Optional[str] = None, _user: dict = Depends(require_viewer)):
+async def list_devices(protocol: str | None = None, _user: dict = Depends(require_viewer)):
     engine = _get_engine()
     return {"devices": engine.list_devices(protocol=protocol)}
 
@@ -302,8 +302,8 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
         raise HTTPException(status_code=404, detail="Device not found")
 
     from protoforge.core.defaults import PROTOCOL_USAGE, get_protocol_defaults
-    from protoforge.core.messages import get_lang_from_request, desc
     from protoforge.core.edgelite import get_protoforge_host
+    from protoforge.core.messages import desc, get_lang_from_request
     lang = get_lang_from_request(request)
     usage = PROTOCOL_USAGE.get(device.protocol, {})
     defaults = get_protocol_defaults(device.protocol, lang=lang)
@@ -320,12 +320,11 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     # Check if protocol service is running
     protocol_status = None
     try:
-        from protoforge.core.engine import SimulationEngine
         server = engine.get_protocol_server(device.protocol)
         if server:
             protocol_status = server.status.value if hasattr(server.status, 'value') else str(server.status)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("获取协议服务状态失败: %s", e)
 
     code_examples = {}
 
@@ -607,10 +606,7 @@ async def list_device_faults(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    if active_only:
-        faults = instance.get_active_faults()
-    else:
-        faults = instance.get_all_faults()
+    faults = instance.get_active_faults() if active_only else instance.get_all_faults()
 
     return {
         "device_id": device_id,

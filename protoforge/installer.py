@@ -5,9 +5,9 @@ to avoid CMD batch file fragility.
 """
 
 import os
-import sys
-import subprocess
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).parent.parent
@@ -27,10 +27,6 @@ def main():
 
     # Step 1: Check Python version
     print("[1/5] 检查 Python ...")
-    if sys.version_info < (3, 10):
-        print(f"  [错误] Python 版本太低: {sys.version}，需要 3.10+")
-        input("按回车退出 ...")
-        sys.exit(1)
     print(f"       已找到 Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
 
     # Step 2: Create virtual environment
@@ -119,18 +115,19 @@ def main():
 
     # Read port and password from .env
     port = "8000"
-    password = "admin"
+    password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "")
     if env_file.exists():
         try:
-            with open(env_file, "r", encoding="utf-8") as f:
+            with open(env_file, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith("PROTOFORGE_PORT=") and not line.startswith("#"):
                         port = line.split("=", 1)[1].strip()
                     elif line.startswith("PROTOFORGE_ADMIN_PASSWORD=") and not line.startswith("#"):
                         password = line.split("=", 1)[1].strip()
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.warning("读取 .env 配置文件失败: %s", e)
 
     print()
     print("  +--------------------------------------------------+")

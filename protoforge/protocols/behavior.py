@@ -2,11 +2,16 @@ import logging
 import math
 import random
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from protoforge.models.device import PointConfig, GeneratorType
-from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.behavior_models import BaseBehavior, create_behavior, get_behavior_input
+from protoforge.models.device import GeneratorType, PointConfig
+from protoforge.protocols.base import (  # noqa: F401  # re-exported for protocol modules
+    DeviceBehavior,
+    ProtocolServer,
+    ProtocolStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +57,7 @@ class DynamicValueGenerator:
 
     def generate(self) -> Any:
         gt = self._point.generator_type
-        if gt == GeneratorType.FIXED:
-            return self._generate_fixed()
-        elif gt == GeneratorType.CONSTANT:
+        if gt == GeneratorType.FIXED or gt == GeneratorType.CONSTANT:
             return self._generate_fixed()
         elif gt == GeneratorType.SINE:
             return self._generate_sine()

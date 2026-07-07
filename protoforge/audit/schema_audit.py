@@ -13,7 +13,6 @@ each Response model to its DB table, then compare field names vs column names.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 from pydantic import BaseModel
 
@@ -244,7 +243,7 @@ def audit_schema_sync() -> SchemaAuditResult:
     _auto_register_models()
     result = SchemaAuditResult()
 
-    for model_cls, table_name in _MODEL_TABLE_MAP.items():
+    for model_cls, _table_name in _MODEL_TABLE_MAP.items():
         model_name = model_cls.__name__
         model_fields = set(model_cls.model_fields.keys())
 
@@ -254,7 +253,7 @@ def audit_schema_sync() -> SchemaAuditResult:
                 continue
 
     # Check that all registered virtual fields reference valid model names
-    for (model_name, field_name), reason in _VIRTUAL_FIELDS.items():
+    for (model_name, field_name), _reason in _VIRTUAL_FIELDS.items():
         # Try to find the model class
         found = False
         for model_cls in _MODEL_TABLE_MAP:
@@ -289,12 +288,13 @@ def scan_all_response_models() -> list[tuple[str, str, set[str]]]:
 
     try:
         import protoforge.models as models_pkg
-        for importer, modname, ispkg in pkgutil.walk_packages(
+        for _importer, modname, _ispkg in pkgutil.walk_packages(
             models_pkg.__path__, prefix="protoforge.models."
         ):
             try:
                 mod = importlib.import_module(modname)
-            except Exception:
+            except Exception as imp_err:
+                logger.debug("导入模型模块失败 %s: %s", modname, imp_err)
                 continue
             for attr_name in dir(mod):
                 attr = getattr(mod, attr_name)

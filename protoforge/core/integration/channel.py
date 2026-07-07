@@ -1,10 +1,11 @@
 import asyncio
+import contextlib
 import json
 import logging
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class HttpChannel(ChannelBase):
 
     async def connect(self) -> None:
         import httpx
+
         from protoforge.core.defaults import get_http_timeout_default
         self._client = httpx.AsyncClient(timeout=get_http_timeout_default(), base_url=self._base_url)
         if self._auth:
@@ -130,7 +132,7 @@ class HttpChannel(ChannelBase):
                 if action not in ("start_collect", "stop_collect"):
                     return {"ok": False, "error": f"Unknown action: {action}"}
                 resp = await self._client.post(
-                    f"/api/v1/integration/message",
+                    "/api/v1/integration/message",
                     json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
                     headers=headers,
                 )
@@ -148,7 +150,7 @@ class HttpChannel(ChannelBase):
                         if self._auth.csrf_token:
                             headers["X-CSRF-Token"] = self._auth.csrf_token
                         resp = await self._client.post(
-                            f"/api/v1/integration/message",
+                            "/api/v1/integration/message",
                             json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
                             headers=headers,
                         )
@@ -169,7 +171,7 @@ class HttpChannel(ChannelBase):
                         resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
                 return {"ok": resp.status_code == 200, "data": self._safe_json(resp) if resp.status_code == 200 else None}
 
-        except Exception as e:
+        except Exception:
             self._connected = False
             raise
 
@@ -232,8 +234,8 @@ class WebSocketChannel(ChannelBase):
         self._heartbeat_timeout = heartbeat_timeout
         self._connected = False
         self._ws: Any = None
-        self._receive_task: Optional[asyncio.Task] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._receive_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._missed_heartbeats = 0
         self._pending_responses: dict[str, asyncio.Future] = {}
 
@@ -280,7 +282,7 @@ class WebSocketChannel(ChannelBase):
         data = json.dumps(message)
         try:
             await self._ws.send(data)
-        except Exception as e:
+        except Exception:
             self._connected = False
             if msg_id and msg_id in self._pending_responses:
                 self._pending_responses.pop(msg_id, None)
@@ -299,16 +301,12 @@ class WebSocketChannel(ChannelBase):
         self._connected = False
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
         if self._receive_task:
             self._receive_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._receive_task
-            except asyncio.CancelledError:
-                pass
         if self._ws:
             try:
                 await self._ws.close()

@@ -3,9 +3,9 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from protoforge.api.v1._helpers import _get_database, _get_engine, _trigger_webhook_safe
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.api.v1._helpers import _get_engine, _get_database, _trigger_webhook_safe
-from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate, ScenarioDetail, ScenarioInfo
+from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

@@ -5,9 +5,9 @@ import struct
 import time
 from typing import Any
 
-from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
 from protoforge.core.messages import desc
+from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 

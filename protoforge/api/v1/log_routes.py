@@ -1,12 +1,12 @@
 import asyncio
 import json
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from protoforge.core.auth import verify_token
-from protoforge.api.v1.auth import require_operator, require_viewer
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+
 from protoforge.api.v1._helpers import _get_log_bus
+from protoforge.api.v1.auth import require_operator, require_viewer
+from protoforge.core.auth import verify_token
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 @router.get("/logs")
 async def get_logs(
     count: int = 100,
-    protocol: Optional[str] = None,
-    device_id: Optional[str] = None,
-    direction: Optional[str] = None,
-    message_type: Optional[str] = None,
+    protocol: str | None = None,
+    device_id: str | None = None,
+    direction: str | None = None,
+    message_type: str | None = None,
     _user: dict = Depends(require_viewer),
 ):
     if count < 1:
@@ -53,7 +53,6 @@ def _extract_ws_token(websocket: WebSocket) -> str | None:
 async def _ws_authenticate(websocket: WebSocket) -> tuple[bool, str]:
     """WebSocket 认证。必须先 accept 再验证/关闭，否则 close() 无效且 Starlette 会返回 403。"""
     from protoforge.api.v1.auth import is_no_auth
-    from starlette.websockets import WebSocketState
 
     if is_no_auth():
         await websocket.accept()

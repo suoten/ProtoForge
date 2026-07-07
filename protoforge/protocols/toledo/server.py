@@ -1,11 +1,12 @@
 import asyncio
+import contextlib
 import logging
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,8 @@ class ToledoDeviceBehavior(StandardDeviceBehavior):
                 except (ValueError, TypeError):
                     pass
             elif point_name == "tare":
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     self._tare = float(value)
-                except (ValueError, TypeError):
-                    pass
             return True
         return False
 
@@ -50,10 +49,8 @@ class ToledoDeviceBehavior(StandardDeviceBehavior):
             except (ValueError, TypeError):
                 pass
         elif point_name == "tare":
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 self._tare = float(value)
-            except (ValueError, TypeError):
-                pass
 
     def get_weight_string(self) -> str:
         net = self._weight - self._tare

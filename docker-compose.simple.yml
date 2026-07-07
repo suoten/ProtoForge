@@ -4,7 +4,7 @@
 # 启动：docker compose -f docker-compose.simple.yml up -d
 # 停止：docker compose -f docker-compose.simple.yml down
 # 地址：http://localhost:8000
-# 登录：admin / admin
+# 登录：admin / （启动时设置的密码）
 #
 # ⚠ 重要：协议端口映射说明
 # 默认只映射了 Web 管理界面端口 (8000)。
@@ -79,7 +79,7 @@ services:
     environment:
       PROTOFORGE_DB_PATH: data/protoforge.db
       PROTOFORGE_LOG_LEVEL: info
-      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-changeme}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?请在.env中设置PROTOFORGE_ADMIN_PASSWORD}
       PROTOFORGE_DEMO_MODE: "1"
     volumes:
       - protoforge-data:/app/data

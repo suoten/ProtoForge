@@ -4,9 +4,9 @@ import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +361,7 @@ class EtherCATServer(ProtocolServer):
 
     def _init_sm_channels(self) -> None:
         self._sm_channels = []
-        for i in range(SM_NUM_CHANNELS):
+        for _i in range(SM_NUM_CHANNELS):
             ch = bytearray(SM_REG_SIZE)
             ch[0:2] = struct.pack("<H", 0x0000)
             ch[2:4] = struct.pack("<H", 0x0000)
@@ -373,7 +373,7 @@ class EtherCATServer(ProtocolServer):
 
     def _init_fmmu_channels(self) -> None:
         self._fmmu_channels = []
-        for i in range(FMMU_NUM_CHANNELS):
+        for _i in range(FMMU_NUM_CHANNELS):
             ch = bytearray(FMMU_REG_SIZE)
             ch[0:4] = struct.pack("<I", 0x00000000)
             ch[4:6] = struct.pack("<H", 0x0000)
@@ -632,7 +632,7 @@ class EtherCATServer(ProtocolServer):
             return b"", 0x0001
 
         if address >= 0x10000000:
-            offset = address & 0x0FFFFFFF
+            address & 0x0FFFFFFF
             behavior = self._behaviors.get(self._default_device_id)
             config = self._device_configs.get(self._default_device_id)
             if behavior and config:

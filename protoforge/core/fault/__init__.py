@@ -29,8 +29,8 @@
     # value=42.5, quality="uncertain"
 """
 
-from protoforge.core.fault.models import Fault, FaultSeverity, FaultType
 from protoforge.core.fault.injector import FaultInjector
+from protoforge.core.fault.models import Fault, FaultSeverity, FaultType
 from protoforge.core.fault.propagation import FaultPropagation
 
 # 向后兼容：re-export 旧模块的关键类型

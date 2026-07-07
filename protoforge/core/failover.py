@@ -1,17 +1,17 @@
 import asyncio
-import json
 import logging
-from protoforge.core.defaults import HTTP_TIMEOUT_SHORT
 import time
-from typing import Any, Optional
+from typing import Any
+
+from protoforge.core.defaults import HTTP_TIMEOUT_SHORT
 
 logger = logging.getLogger(__name__)
 
 
 class FailoverManager:
     def __init__(self):
-        self._primary_url: Optional[str] = None
-        self._standby_url: Optional[str] = None
+        self._primary_url: str | None = None
+        self._standby_url: str | None = None
         self._is_primary = True
         try:
             from protoforge.config import get_settings
@@ -19,11 +19,11 @@ class FailoverManager:
         except Exception as e:
             logger.warning("Failed to load failover interval from config, using default 10s: %s", e)
             self._health_check_interval = 10
-        self._health_check_task: Optional[asyncio.Task] = None
+        self._health_check_task: asyncio.Task | None = None
         self._on_failover_callbacks = []
         self._on_recovery_callbacks = []
         self._failover_count = 0
-        self._last_failover_time: Optional[float] = None
+        self._last_failover_time: float | None = None
         self._status = "primary"
 
     def configure(

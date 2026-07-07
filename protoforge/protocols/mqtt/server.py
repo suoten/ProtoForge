@@ -3,9 +3,9 @@ import logging
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -491,7 +491,7 @@ class MqttBroker(ProtocolServer):
         # 先尝试获取 amqtt broker 内部信息
         try:
             if hasattr(self._broker, 'listeners') and self._broker.listeners:
-                for name, listener in self._broker.listeners.items():
+                for _name, listener in self._broker.listeners.items():
                     if hasattr(listener, 'server') and listener.server:
                         sock = getattr(listener.server, 'socket', None)
                         if sock:

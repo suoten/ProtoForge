@@ -5,8 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_log_bus
+from protoforge.api.v1.auth import require_operator, require_viewer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

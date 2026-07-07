@@ -7,7 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Depends  # FIXED: 导入Depends用于/metrics认证
+from fastapi import Depends, FastAPI  # FIXED: 导入Depends用于/metrics认证
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
@@ -264,7 +264,6 @@ async def lifespan(app: FastAPI):
         logger.error("Failed to initialize audit logger: %s", e)
 
     try:
-        from protoforge.core.recorder import Recorder
         from protoforge.api.v1.recorder_routes import _get_recorder
         recorder = _get_recorder()
         recorder.set_database(_database)
@@ -456,8 +455,10 @@ def _setup_file_logging(settings) -> None:
 
 def create_app() -> FastAPI:
     from pathlib import Path
-    from fastapi.staticfiles import StaticFiles
+
     from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
     from protoforge.config import get_settings
     settings = get_settings()
 

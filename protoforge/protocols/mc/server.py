@@ -4,9 +4,9 @@ import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,7 @@ class McDeviceBehavior(StandardDeviceBehavior):
             if match:
                 name = match.group(1).upper()
                 # FIXED-P2: X/Y设备地址使用十六进制解析
-                if name in ('X', 'Y'):
-                    offset = int(match.group(2), 16)
-                else:
-                    offset = int(match.group(2))
+                offset = int(match.group(2), 16) if name in ('X', 'Y') else int(match.group(2))
                 code = McDeviceBehavior.DEVICE_CODE_MAP.get(name, 0x44)
                 return (code, offset)
             return (0x44, int(address))
@@ -253,10 +250,10 @@ class McServer(ProtocolServer):
 
         network = data[2]
         pc = data[3]
-        req_dest_io = struct.unpack("<H", data[4:6])[0]
+        struct.unpack("<H", data[4:6])[0]
         req_dest_station = data[6]
-        req_data_len = struct.unpack("<H", data[7:9])[0]
-        cpu_monitor_timer = struct.unpack("<H", data[9:11])[0]
+        struct.unpack("<H", data[7:9])[0]
+        struct.unpack("<H", data[9:11])[0]
 
         # FIXED-P1: 根据network/station/pc路由到匹配设备
         routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
@@ -541,10 +538,10 @@ class McServer(ProtocolServer):
         try:
             network = self._ascii_to_hex(data[4:6])
             pc = self._ascii_to_hex(data[6:8])
-            req_dest_io = self._ascii_to_hex(data[8:12])
+            self._ascii_to_hex(data[8:12])
             req_dest_station = self._ascii_to_hex(data[12:14])
-            req_data_len = self._ascii_to_hex(data[14:18])
-            cpu_monitor_timer = self._ascii_to_hex(data[18:22])
+            self._ascii_to_hex(data[14:18])
+            self._ascii_to_hex(data[18:22])
             cmd = self._ascii_to_hex(data[22:26])
             subcmd = self._ascii_to_hex(data[26:30])
         except (ValueError, IndexError):
@@ -602,7 +599,7 @@ class McServer(ProtocolServer):
         try:
             start_addr = self._ascii_to_hex(data[30:34])
             device_code = self._ascii_to_hex(data[34:36])
-            word_count = self._ascii_to_hex(data[36:40])
+            self._ascii_to_hex(data[36:40])
             write_ascii = data[40:]
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)

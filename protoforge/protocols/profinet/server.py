@@ -6,9 +6,9 @@ import uuid
 from enum import IntEnum
 from typing import Any
 
+from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ class ProfinetServer(ProtocolServer):
                     proto_config = config.protocol_config or {}
                     device_name = proto_config.get("device_name", f"profinet-{device_id}")
                     chassis_id = device_name.encode("utf-8")
-                    port_id = f"port-001".encode("utf-8")
+                    port_id = b"port-001"
                     ttl = _struct.pack("!H", 120)
                     lldp_frame = bytearray()
                     lldp_frame += _struct.pack("!HB", 1, 4) + chassis_id[:255]
@@ -279,7 +279,7 @@ class ProfinetServer(ProtocolServer):
                     dest_mac = b"\x01\x80\xc2\x00\x0c\x0e"
                     src_mac = b"\x00\x00\x00\x00\x00\x01"
                     ethertype = b"\x88\xcc"
-                    frame = dest_mac + src_mac + ethertype + bytes(lldp_frame)
+                    dest_mac + src_mac + ethertype + bytes(lldp_frame)
                     self._log_debug("outbound", "lldp",
                                     f"LLDP frame sent for {device_name}",
                                     device_id=device_id)
@@ -596,7 +596,7 @@ class ProfinetServer(ProtocolServer):
         alarm_seq = struct.unpack(">H", data[5:7])[0]
         alarm_spec = data[7] if len(data) > 7 else 0
 
-        ar = self._active_ars.get(ar_id)
+        self._active_ars.get(ar_id)
 
         self._log_debug("inbound", "alarm_received",
                         f"PROFINET Alarm: AR[{ar_id}] type=0x{alarm_type:04X} seq={alarm_seq}",
@@ -651,12 +651,11 @@ class ProfinetServer(ProtocolServer):
 
         payload = data[1:]
         cycle_counter = 0
-        data_status = 0x01
         transfer_status = 0x00
 
         if len(payload) >= 4:
             cycle_counter = struct.unpack(">H", payload[0:2])[0]
-            data_status = payload[2]
+            payload[2]
             transfer_status = payload[3]
 
         rt_payload = payload[4:] if len(payload) > 4 else b""

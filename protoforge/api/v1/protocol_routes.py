@@ -1,10 +1,11 @@
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from typing import Any, Optional
 
-from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_log_bus
+from protoforge.api.v1.auth import require_operator, require_viewer
+from protoforge.core.defaults import get_friendly_error
 from protoforge.core.messages import get_lang_from_request
 
 router = APIRouter()
@@ -16,7 +17,7 @@ async def list_protocols(request: Request, _user: dict = Depends(require_viewer)
     engine = _get_engine()
     lang = get_lang_from_request(request)
     protocols = engine.get_protocols()
-    from protoforge.core.defaults import get_protocol_defaults, PROTOCOL_DEFAULTS
+    from protoforge.core.defaults import PROTOCOL_DEFAULTS, get_protocol_defaults
     from protoforge.core.messages import desc
     result = []
     for p in protocols:
@@ -62,7 +63,7 @@ async def start_all_protocols(request: Request, _user: dict = Depends(require_op
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
-    from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
+    from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
     results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
     for p in engine.get_protocols():
         name = p.get("name", "")
@@ -116,11 +117,11 @@ async def stop_all_protocols(_user: dict = Depends(require_operator)):
 
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, request: Request, config: Optional[dict[str, Any]] = None, _user: dict = Depends(require_operator)):
+async def start_protocol(protocol_name: str, request: Request, config: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
-    from protoforge.core.defaults import get_protocol_defaults, get_friendly_error
+    from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
     if config is None:
         config = get_protocol_defaults(protocol_name, lang=lang)
     original_port = config.get("port")

@@ -33,9 +33,10 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -88,12 +89,12 @@ class StateTransition:
                    在转换完成时执行
     """
 
-    from_state: Optional[DeviceState]
+    from_state: DeviceState | None
     to_state: DeviceState
     trigger: str
-    condition: Optional[Callable[..., bool]] = None
+    condition: Callable[..., bool] | None = None
     guard: str = ""
-    action: Optional[Callable[..., None]] = None
+    action: Callable[..., None] | None = None
 
     def matches(self, current_state: DeviceState, trigger: str) -> bool:
         """检查此转换是否匹配当前状态和触发事件。

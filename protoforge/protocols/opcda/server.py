@@ -4,9 +4,9 @@ import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ class OpcDaServer(ProtocolServer):
                     await self._server_task
                 except asyncio.CancelledError:
                     logger.debug("OPC-DA task cancelled")
-            for sid, writer in list(self._sub_clients.items()):
+            for _sid, writer in list(self._sub_clients.items()):
                 try:
                     writer.close()
                 except Exception as e:
@@ -210,7 +210,7 @@ class OpcDaServer(ProtocolServer):
         tags = []
         # FIXED-P1: 浏览所有设备的Tag，用"device_id/tag"格式区分
         for device_id, behavior in self._behaviors.items():
-            for tag in behavior.get_all_tags().keys():
+            for tag in behavior.get_all_tags():
                 if device_id == self._default_device_id:
                     tags.append(tag)
                 else:
@@ -314,9 +314,7 @@ class OpcDaServer(ProtocolServer):
                 return struct.unpack("<I", data[:4])[0]
             elif data_type == "float32" and len(data) >= 4:
                 return struct.unpack("<f", data[:4])[0]
-            elif data_type == "float64" and len(data) >= 8:
-                return struct.unpack("<d", data[:8])[0]
-            elif len(data) >= 8:
+            elif data_type == "float64" and len(data) >= 8 or len(data) >= 8:
                 return struct.unpack("<d", data[:8])[0]
         except (struct.error, IndexError) as e:
             logger.warning("OPC-DA value unpack error: %s", e)
@@ -387,9 +385,7 @@ class OpcDaServer(ProtocolServer):
                         data_type = behavior.get_data_type(tag)
                         prev_state = prev.get(tag)
                         value_changed = False
-                        if prev_state is None:
-                            value_changed = True
-                        elif prev_state["quality"] != quality:
+                        if prev_state is None or prev_state["quality"] != quality:
                             value_changed = True
                         elif deadband > 0:  # FIXED-P0: deadband过滤，值变化幅度小于deadband时不推送
                             try:

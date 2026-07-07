@@ -1,21 +1,18 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
-from protoforge.core.generator import DataGenerator
 from protoforge.core.control_loop import ControlLoopConfig, ControlLoopManager
-from protoforge.core.quality import QualitySystem
-from protoforge.core.state_machine import DeviceState, DeviceStateMachine, device_state_to_status
 from protoforge.core.fault import (
     DeviceFailureException,
-    Fault,
     FaultConfig,
     FaultInjector,
-    FaultSeverity,
     FaultType,
-    TriggerMode,
 )
+from protoforge.core.generator import DataGenerator
+from protoforge.core.quality import QualitySystem
+from protoforge.core.state_machine import DeviceState, DeviceStateMachine, device_state_to_status
 from protoforge.models.device import DeviceConfig, DeviceStatus, GeneratorType, PointConfig, PointValue
 
 logger = logging.getLogger(__name__)
@@ -54,7 +51,7 @@ class DeviceInstance:
             min_startup_time=config.protocol_config.get("min_startup_time", 2.0),
             device_id=config.id,
         )
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
 
         # 配置：STOP 状态下输出是否归零
         self._zero_output_on_stop: bool = config.protocol_config.get("zero_output_on_stop", False)
@@ -197,7 +194,7 @@ class DeviceInstance:
         return self._fault_injector
 
     @property
-    def control_loops(self) -> Optional[ControlLoopManager]:
+    def control_loops(self) -> ControlLoopManager | None:
         """返回控制回路管理器实例（未配置时为 None）。"""
         return self._control_loops
 
@@ -285,10 +282,9 @@ class DeviceInstance:
         current = self._state_machine.get_state()
 
         # STARTING → RUN 自动转换
-        if current == DeviceState.STARTING:
-            if self._state_machine.can_trigger("startup_complete"):
-                self._state_machine.trigger("startup_complete", reason="startup time reached")
-                current = DeviceState.RUN
+        if current == DeviceState.STARTING and self._state_machine.can_trigger("startup_complete"):
+            self._state_machine.trigger("startup_complete", reason="startup time reached")
+            current = DeviceState.RUN
 
         # 只有 RUN 状态下才生成数据
         if not DeviceStateMachine.should_generate_data(current):
@@ -331,7 +327,7 @@ class DeviceInstance:
                 except Exception as e:
                     logger.warning("Device %s: control loop tick error: %s", self.config.id, e)
 
-    def read_point(self, point_name: str) -> Optional[PointValue]:
+    def read_point(self, point_name: str) -> PointValue | None:
         """读取单个点位值。
 
         根据状态机状态返回不同质量标记：

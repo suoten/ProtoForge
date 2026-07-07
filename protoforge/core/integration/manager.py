@@ -12,31 +12,29 @@ import asyncio
 import logging
 import re
 import time
-import uuid
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import quote
 
 import httpx
 
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT, HTTP_TIMEOUT_SHORT
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 from protoforge.core.event_bus import (
-    EventBus,
     DeviceCreatedEvent,
+    DeviceRemovedEvent,
     DeviceStartedEvent,
     DeviceStoppedEvent,
-    DeviceRemovedEvent,
+    EventBus,
 )
-from protoforge.core.integration.channel import HttpChannel, WebSocketChannel, ChannelFactory
+from protoforge.core.integration.auth import IntegrationAuth
+from protoforge.core.integration.channel import WebSocketChannel
+from protoforge.core.integration.metrics import IntegrationMetrics
 from protoforge.core.integration.protocol import (
-    ACCESS_MODE_MAP,
     PROTOCOL_MAP_BASE,
     DataTypeMapper,
     ProtocolMapper,
 )
-from protoforge.core.integration.state import ConnectionStateMachine, ConnectionState
-from protoforge.core.integration.retry import RetryPolicy, IntegrationError, NetworkError
-from protoforge.core.integration.auth import IntegrationAuth
-from protoforge.core.integration.metrics import IntegrationMetrics
+from protoforge.core.integration.retry import IntegrationError, RetryPolicy
+from protoforge.core.integration.state import ConnectionState, ConnectionStateMachine
 from protoforge.core.integration.validator import MappingValidator
 from protoforge.core.messages import desc
 
@@ -74,9 +72,7 @@ class AlarmReactionRule:
             return False
         if self.source_device_id and self.source_device_id != source_device_id:
             return False
-        if self.alarm_severity and self.alarm_severity != severity:
-            return False
-        return True
+        return not (self.alarm_severity and self.alarm_severity != severity)
 
 
 class DeviceStatusCache:
@@ -453,13 +449,11 @@ class IntegrationManager:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
         from protoforge.core.edgelite import (
-            convert_device_to_edgelite,
-            get_edgelite_config_from_device,
-            _normalize_device_id,
             _get_protocol_status,
             _is_edgelite_local,
+            convert_device_to_edgelite,
+            get_edgelite_config_from_device,
             get_protoforge_host,
-            EDGELITE_PIP_PACKAGES,
         )
 
         el_config = get_edgelite_config_from_device(device)
@@ -815,8 +809,8 @@ class IntegrationManager:
                 csrf = (inner.get("csrf_token", "") if isinstance(inner, dict) else "") or login_data.get("csrf_token", "")
                 if csrf:
                     headers["X-CSRF-Token"] = csrf
-            except Exception:
-                pass
+            except Exception as csrf_err:
+                logger.debug("提取CSRF token失败: %s", csrf_err)
 
             # FIXED-P0: EdgeLite 初始管理员 may have must_change_password=True，
             # 导致除 change-password/me/logout 外所有端点返回 403。
@@ -829,8 +823,8 @@ class IntegrationManager:
                     user_info = me_data.get("data", me_data)
                     if isinstance(user_info, dict):
                         must_change = user_info.get("must_change_password", False)
-            except Exception:
-                pass
+            except Exception as me_err:
+                logger.debug("获取用户信息失败: %s", me_err)
 
             if must_change:
                 # 自动修改密码以解除 must_change_password 限制
@@ -856,10 +850,10 @@ class IntegrationManager:
                                 csrf2 = (inner2.get("csrf_token", "") if isinstance(inner2, dict) else "") or relogin_data.get("csrf_token", "")
                                 if csrf2:
                                     headers["X-CSRF-Token"] = csrf2
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
+                            except Exception as csrf2_err:
+                                logger.debug("提取重新登录CSRF token失败: %s", csrf2_err)
+                except Exception as pwd_err:
+                    logger.warning("自动修改EdgeLite密码失败: %s", pwd_err)
 
             try:
                 status_resp = await client.get(f"{test_url.rstrip('/')}/api/v1/system/status", headers=headers)
@@ -953,11 +947,11 @@ class IntegrationManager:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
         from protoforge.core.edgelite import (
-            _normalize_device_id,
-            get_edgelite_config_from_device,
-            _is_edgelite_local,
             _build_connect_error,
             _get_protocol_status,
+            _is_edgelite_local,
+            _normalize_device_id,
+            get_edgelite_config_from_device,
         )
 
         el_config = get_edgelite_config_from_device(device)
@@ -1416,7 +1410,7 @@ class IntegrationManager:
         """
         protocol_name = getattr(event, "protocol_name", "")
         new_status = getattr(event, "new_status", "")
-        old_status = getattr(event, "old_status", "")
+        getattr(event, "old_status", "")
 
         if new_status != "running":
             return  # 只在协议启动时处理
@@ -1432,7 +1426,7 @@ class IntegrationManager:
 
         affected_devices = []
         # FIX: 使用 get_all_device_instances() 获取字典副本，避免迭代时字典被修改
-        for dev_id, instance in engine.get_all_device_instances().items():
+        for _dev_id, instance in engine.get_all_device_instances().items():
             if instance.protocol == protocol_name:
                 affected_devices.append(instance)
 

@@ -4,9 +4,9 @@ import struct
 import time
 from typing import Any
 
+from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +160,9 @@ class AbServer(ProtocolServer):
             return None
 
         command = struct.unpack("<H", data[0:2])[0]
-        length = struct.unpack("<H", data[2:4])[0]
+        struct.unpack("<H", data[2:4])[0]
         session = struct.unpack("<I", data[4:8])[0]
-        status = struct.unpack("<I", data[8:12])[0]
+        struct.unpack("<I", data[8:12])[0]
         sender_context = data[12:20]
 
         if command == 0x0065:
@@ -271,7 +271,7 @@ class AbServer(ProtocolServer):
         session = struct.unpack("<I", data[4:8])[0]
         if len(data) < 40:
             return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
-        timeout = struct.unpack("<B", data[14:15])[0] if len(data) > 14 else 10
+        struct.unpack("<B", data[14:15])[0] if len(data) > 14 else 10
         item_count = struct.unpack("<H", data[16:18])[0] if len(data) > 17 else 0
         if item_count < 2:
             return self._make_cip_error_response(session, 0x00, 0x00, sender_context)

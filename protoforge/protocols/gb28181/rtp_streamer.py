@@ -1,10 +1,9 @@
-import struct
-import time
-import logging
 import asyncio
-import os
 import hashlib
 import hmac
+import logging
+import os
+import struct
 
 logger = logging.getLogger(__name__)
 
@@ -139,10 +138,7 @@ class BitWriter:
         for i in range(0, len(self._bits), 8):
             byte_val = 0
             for j in range(8):
-                if i + j < len(self._bits):
-                    byte_val = (byte_val << 1) | self._bits[i + j]
-                else:
-                    byte_val = byte_val << 1
+                byte_val = byte_val << 1 | self._bits[i + j] if i + j < len(self._bits) else byte_val << 1
             result.append(byte_val)
         return bytes(result)
 
@@ -232,6 +228,43 @@ def generate_h264_iframe(width: int = 352, height: int = 288) -> bytes:
     pps = b'\x00\x00\x00\x01\x68' + _add_emulation_prevention(_generate_pps()[5:])
     idr = b'\x00\x00\x00\x01\x65' + _add_emulation_prevention(_generate_idr_slice(width, height)[5:])
     return sps + pps + idr
+
+
+class _BitstreamWriter:
+    """简易位流写入器，用于H.264 P帧编码。"""
+
+    def __init__(self) -> None:
+        self._bits: list[int] = []
+
+    def write_bits(self, value: int, num_bits: int) -> None:
+        for i in range(num_bits - 1, -1, -1):
+            self._bits.append((value >> i) & 1)
+
+    def write_ue(self, value: int) -> None:
+        """写入无符号 Exp-Golomb 编码值。"""
+        val = value + 1
+        n = val.bit_length()
+        # 前导零
+        for _ in range(n - 1):
+            self._bits.append(0)
+        # 值的二进制表示
+        for i in range(n - 1, -1, -1):
+            self._bits.append((val >> i) & 1)
+
+    def write_rbsp_trailing(self) -> None:
+        """写入 RBSP 尾部：1 位 stop bit + 填充零至字节对齐。"""
+        self._bits.append(1)
+        while len(self._bits) % 8 != 0:
+            self._bits.append(0)
+
+    def to_bytes(self) -> bytes:
+        result = bytearray()
+        for i in range(0, len(self._bits), 8):
+            byte = 0
+            for j in range(8):
+                byte = byte << 1 | self._bits[i + j] if i + j < len(self._bits) else byte << 1
+            result.append(byte)
+        return bytes(result)
 
 
 def generate_h264_pframe(width: int = 352, height: int = 288) -> bytes:  # FIXED-P1: 生成P帧，大幅降低码率

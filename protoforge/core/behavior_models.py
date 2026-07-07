@@ -82,7 +82,7 @@ class BaseBehavior:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "BaseBehavior":
+    def from_dict(cls, data: dict[str, Any]) -> BaseBehavior:
         """从字典反序列化重建实例。
 
         如果 ``data`` 中包含 ``state``，则恢复状态；否则仅用参数构造。
@@ -894,7 +894,7 @@ class PIDController(BaseBehavior):
         # 积分项（抗积分饱和）
         # 仅当未饱和或饱和方向与误差方向相反时才累加积分
         prospective_integral = self._integral + error * dt
-        prospective_output = p_term + self.Ki * prospective_integral
+        p_term + self.Ki * prospective_integral
 
         if self.output_limit is not None:
             out_min, out_max = self.output_limit
@@ -974,7 +974,7 @@ class PIDController(BaseBehavior):
         return data
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PIDController":
+    def from_dict(cls, data: dict[str, Any]) -> PIDController:
         """反序列化，处理 output_limit 列表转元组。"""
         params = dict(data.get("params", data))
         ol = params.get("output_limit")

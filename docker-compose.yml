@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: protoforge
       POSTGRES_USER: protoforge
-      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:-protoforge2024}
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:?必须在.env中设置PROTOFORGE_DB_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -56,9 +56,9 @@ services:
       # GB28181 RTP 媒体流端口范围 (如需从外部播放视频流则映射)
       - "6000-6999:6000-6999/udp"
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge
-      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-}
-      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}  # FIXED: 默认密码不安全,生产环境务必设置环境变量
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD}@postgres:5432/protoforge
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env中设置PROTOFORGE_JWT_SECRET}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env中设置PROTOFORGE_ADMIN_PASSWORD}
       PROTOFORGE_LOG_LEVEL: info
       PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}  # FIXED: CORS通配符不安全,生产环境务必设置具体域名
       PROTOFORGE_GRPC_PORT: "0"
@@ -74,7 +74,7 @@ services:
     build: .
     command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
     environment:
-      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD:-protoforge2024}@postgres:5432/protoforge_test
+      PROTOFORGE_DB_PATH: postgresql://protoforge:${PROTOFORGE_DB_PASSWORD}@postgres:5432/protoforge_test
       PROTOFORGE_NO_AUTH: "1"
     depends_on:
       init-test-db:

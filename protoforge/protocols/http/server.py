@@ -4,9 +4,13 @@ import logging
 import time
 from typing import Any
 
+from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import StandardDeviceBehavior, ProtocolServer, ProtocolStatus  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
-from protoforge.core.messages import msg, desc
+from protoforge.protocols.behavior import (  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
+    ProtocolServer,
+    ProtocolStatus,
+    StandardDeviceBehavior,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +92,7 @@ class HttpSimulatorServer(ProtocolServer):
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
-        addr = writer.get_extra_info("peername")
+        writer.get_extra_info("peername")
         try:
             while self._server_running:
                 try:

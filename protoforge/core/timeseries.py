@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
@@ -180,10 +180,7 @@ class TimeSeriesPattern:
         dt = datetime.datetime.fromtimestamp(now)
         hour = dt.hour
 
-        if self.work_start_hour <= hour < self.work_end_hour:
-            target = self.production_value
-        else:
-            target = self.standby_value
+        target = self.production_value if self.work_start_hour <= hour < self.work_end_hour else self.standby_value
 
         if self.offset_mode:
             return target - self.base_value
@@ -196,10 +193,7 @@ class TimeSeriesPattern:
         weekday = dt.weekday()  # 0=Monday, 6=Sunday
 
         is_workday = weekday < 5  # 周一到周五
-        if not is_workday and not self.weekend_production:
-            target = self.standby_value
-        else:
-            target = self.production_value
+        target = self.standby_value if not is_workday and not self.weekend_production else self.production_value
 
         if self.offset_mode:
             return target - self.base_value
@@ -299,7 +293,7 @@ class TimeSeriesPattern:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TimeSeriesPattern":
+    def from_dict(cls, data: dict[str, Any]) -> TimeSeriesPattern:
         return cls(
             pattern_type=PatternType(data.get("pattern_type", "daily")),
             production_value=data.get("production_value", 80.0),

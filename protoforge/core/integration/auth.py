@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 import time
-from typing import Any
 
 import httpx
+
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
 
 logger = logging.getLogger(__name__)
 

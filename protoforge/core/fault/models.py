@@ -132,9 +132,7 @@ class Fault:
             return False
         if self.start_time > 0 and now < self.start_time:
             return False  # 尚未到开始时间
-        if self.is_expired(now):
-            return False
-        return True
+        return not self.is_expired(now)
 
     # -- 严重级别映射 -----------------------------------------------------
 
@@ -166,7 +164,7 @@ class Fault:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Fault":
+    def from_dict(cls, data: dict[str, Any]) -> Fault:
         """从字典反序列化。"""
         return cls(
             fault_id=data.get("fault_id", ""),

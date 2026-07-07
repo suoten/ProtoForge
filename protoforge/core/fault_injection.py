@@ -39,9 +39,10 @@ import threading
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +146,9 @@ class FaultConfig:
     parameters: dict[str, Any] = field(default_factory=dict)
     fault_id: str = ""
     target_device: str = ""
-    start_time: Optional[float] = None
+    start_time: float | None = None
     probability: float = 0.0
-    condition: Optional[Callable[[Any], bool]] = None
+    condition: Callable[[Any], bool] | None = None
     description: str = ""
 
     def __post_init__(self):
@@ -174,7 +175,7 @@ class FaultConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "FaultConfig":
+    def from_dict(cls, data: dict[str, Any]) -> FaultConfig:
         """从字典反序列化。"""
         return cls(
             fault_type=FaultType(data.get("fault_type", "sensor_stuck")),
@@ -241,8 +242,8 @@ class FaultInjector:
     def __init__(
         self,
         device_id: str = "",
-        on_fault_activated: Optional[Callable[[FaultConfig], None]] = None,
-        on_fault_deactivated: Optional[Callable[[FaultConfig], None]] = None,
+        on_fault_activated: Callable[[FaultConfig], None] | None = None,
+        on_fault_deactivated: Callable[[FaultConfig], None] | None = None,
     ):
         self._device_id = device_id
         self._faults: dict[str, _FaultRuntime] = {}
@@ -342,7 +343,7 @@ class FaultInjector:
         with self._lock:
             return [rt.config for rt in self._faults.values()]
 
-    def get_fault(self, fault_id: str) -> Optional[FaultConfig]:
+    def get_fault(self, fault_id: str) -> FaultConfig | None:
         """返回指定故障配置。"""
         with self._lock:
             rt = self._faults.get(fault_id)
@@ -396,9 +397,8 @@ class FaultInjector:
                     self._activate(rt)
             except Exception as e:
                 logger.warning("Fault condition callback error: %s", e)
-        elif cfg.trigger_mode == TriggerMode.SCHEDULED and cfg.start_time:
-            if time.time() >= cfg.start_time:
-                self._activate(rt)
+        elif cfg.trigger_mode == TriggerMode.SCHEDULED and cfg.start_time and time.time() >= cfg.start_time:
+            self._activate(rt)
 
     def _check_expiry(self, rt: _FaultRuntime) -> None:
         """检查故障是否过期。"""
@@ -658,7 +658,7 @@ class FaultPropagation:
 
     def __init__(
         self,
-        injectors: Optional[dict[str, FaultInjector]] = None,
+        injectors: dict[str, FaultInjector] | None = None,
     ):
         self._rules: list[PropagationRule] = []
         self._injectors: dict[str, FaultInjector] = injectors or {}
@@ -778,7 +778,7 @@ class TimelineEvent:
 
     time: float
     action: str  # "activate" | "deactivate" | "add" | "remove"
-    fault_config: Optional[FaultConfig] = None
+    fault_config: FaultConfig | None = None
     fault_id: str = ""
     description: str = ""
 
@@ -838,7 +838,7 @@ class FaultScenario:
         self,
         time_offset: float,
         action: str,
-        config: Optional[FaultConfig] = None,
+        config: FaultConfig | None = None,
         fault_id: str = "",
         description: str = "",
     ) -> int:
@@ -967,7 +967,7 @@ class FaultScenario:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], injector: FaultInjector) -> "FaultScenario":
+    def from_dict(cls, data: dict[str, Any], injector: FaultInjector) -> FaultScenario:
         """从字典反序列化场景。"""
         scenario = cls(
             scenario_id=data.get("scenario_id", ""),
@@ -989,6 +989,6 @@ class FaultScenario:
         return scenario
 
     @classmethod
-    def from_json(cls, json_str: str, injector: FaultInjector) -> "FaultScenario":
+    def from_json(cls, json_str: str, injector: FaultInjector) -> FaultScenario:
         """从 JSON 字符串反序列化场景。"""
         return cls.from_dict(json.loads(json_str), injector)
