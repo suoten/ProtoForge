@@ -1,0 +1,95 @@
+{
+    "id": "modbus_plc_controller",
+    "name": "PLC控制器",
+    "protocol": "modbus_tcp",
+    "description": "通用PLC控制器，支持数字输入/输出和寄存器读写",
+    "manufacturer": "Generic",
+    "model": "PLC-200",
+    "points": [
+        {
+            "name": "di_0",
+            "address": "0",
+            "data_type": "bool",
+            "description": "数字输入0",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "di_1",
+            "address": "1",
+            "data_type": "bool",
+            "description": "数字输入1",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "di_2",
+            "address": "2",
+            "data_type": "bool",
+            "description": "数字输入2",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "di_3",
+            "address": "3",
+            "data_type": "bool",
+            "description": "数字输入3",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "do_0",
+            "address": "10",
+            "data_type": "bool",
+            "description": "数字输出0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "do_1",
+            "address": "11",
+            "data_type": "bool",
+            "description": "数字输出1",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": false
+        },
+        {
+            "name": "register_0",
+            "address": "20",
+            "data_type": "int32",
+            "description": "保持寄存器0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "register_1",
+            "address": "21",
+            "data_type": "int32",
+            "description": "保持寄存器1",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "run_status",
+            "address": "30",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": ["工业控制", "PLC", "数字IO"]
+}

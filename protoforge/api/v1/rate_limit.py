@@ -1,3 +1,5 @@
+"""Request rate limiting middleware for API protection."""
+
 import threading
 import time
 

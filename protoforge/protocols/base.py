@@ -1,3 +1,5 @@
+"""Module: base."""
+
 import asyncio
 import threading
 from abc import ABC, abstractmethod

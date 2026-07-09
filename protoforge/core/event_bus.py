@@ -1,3 +1,5 @@
+"""Module: event bus."""
+
 import asyncio
 import logging
 import threading

@@ -1,3 +1,5 @@
+"""OPCUA protocol client implementation."""
+
 import asyncio
 import contextlib
 import logging

@@ -1,3 +1,5 @@
+"""Simulation engine orchestrating protocols, devices, and scenarios."""
+
 import asyncio
 import contextlib
 import logging

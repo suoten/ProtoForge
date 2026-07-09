@@ -1,5 +1,8 @@
+"""Authentication and authorization API routes (login, refresh, users)."""
+
 import logging
 import time
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -136,7 +139,7 @@ async def register(user_data: RegisterRequest):
 
 
 @router.get("/auth/me")
-async def get_current_user(_user: dict = Depends(require_guest)):
+async def get_current_user(_user: dict[str, Any] = Depends(require_guest)):
     from protoforge.core.auth import user_manager
     username = _user.get("username", "")
     user = user_manager.get_user_by_username(username)
@@ -152,7 +155,7 @@ async def get_current_user(_user: dict = Depends(require_guest)):
 
 
 @router.get("/auth/users")
-async def list_users(_user: dict = Depends(require_admin)):
+async def list_users(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         return {"users": user_manager.list_users()}
@@ -162,7 +165,7 @@ async def list_users(_user: dict = Depends(require_admin)):
 
 
 @router.post("/auth/change-password")
-async def change_password(data: ChangePasswordRequest, _user: dict = Depends(require_guest)):
+async def change_password(data: ChangePasswordRequest, _user: dict[str, Any] = Depends(require_guest)):
     try:
         from protoforge.core.auth import user_manager
 
@@ -192,7 +195,7 @@ async def change_password(data: ChangePasswordRequest, _user: dict = Depends(req
 
 
 @router.post("/auth/admin/reset-password")
-async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict = Depends(require_admin)):
+async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
 
@@ -210,7 +213,7 @@ async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict = De
 
 
 @router.put("/auth/users/{username}/role")
-async def update_user_role(username: str, data: UpdateRoleRequest, _user: dict = Depends(require_admin)):
+async def update_user_role(username: str, data: UpdateRoleRequest, _user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         valid_roles = {"admin", "operator", "user", "viewer", "guest"}
@@ -227,7 +230,7 @@ async def update_user_role(username: str, data: UpdateRoleRequest, _user: dict =
 
 
 @router.post("/auth/admin/unlock/{username}")
-async def admin_unlock_user(username: str, _user: dict = Depends(require_admin)):
+async def admin_unlock_user(username: str, _user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         if not await user_manager.reset_login_attempts(username):
@@ -241,7 +244,7 @@ async def admin_unlock_user(username: str, _user: dict = Depends(require_admin))
 
 
 @router.delete("/auth/users/{username}")
-async def delete_user(username: str, _user: dict = Depends(require_admin)):
+async def delete_user(username: str, _user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         if not await user_manager.delete_user(username):

@@ -1,3 +1,5 @@
+"""protocols package."""
+
 from protoforge.protocols.base import DeviceBehavior, ProtocolServer, ProtocolStatus
 
 _PROTOCOL_CLASSES: dict[str, str] = {

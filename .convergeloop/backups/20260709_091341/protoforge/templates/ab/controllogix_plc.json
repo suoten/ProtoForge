@@ -1,0 +1,76 @@
+{
+    "id": "ab_controllogix",
+    "name": "罗克韦尔ControlLogix PLC",
+    "protocol": "ab",
+    "description": "罗克韦尔ControlLogix系列PLC，EtherNet/IP CIP协议通信，支持标签读写",
+    "manufacturer": "Rockwell",
+    "model": "1756-L83E",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "Program:Main.RunMode",
+            "data_type": "uint16",
+            "description": "运行模式(0=PROGRAM 1=RUN 2=TEST)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_utilization",
+            "address": "Program:Main.CPU_Util",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "CPU利用率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15,
+            "max_value": 80
+        },
+        {
+            "name": "line_speed",
+            "address": "Program:Main.LineSpeed",
+            "data_type": "float32",
+            "unit": "m/min",
+            "description": "产线速度",
+            "access": "rw",
+            "generator_type": "sine",
+            "min_value": 10,
+            "max_value": 120
+        },
+        {
+            "name": "temperature",
+            "address": "Program:Main.Temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "工艺温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 60.0,
+            "max_value": 95.0
+        },
+        {
+            "name": "pressure",
+            "address": "Program:Main.Pressure",
+            "data_type": "float32",
+            "unit": "bar",
+            "description": "系统压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2.0,
+            "max_value": 8.0
+        },
+        {
+            "name": "fault_code",
+            "address": "Program:Main.FaultCode",
+            "data_type": "uint16",
+            "description": "故障代码(0=正常)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slot": 0
+    },
+    "tags": ["PLC", "罗克韦尔", "Rockwell", "ControlLogix", "EtherNet/IP", "工业控制"]
+}

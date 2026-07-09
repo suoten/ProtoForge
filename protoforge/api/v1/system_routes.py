@@ -1,3 +1,5 @@
+"""System management API routes (settings, backup, network status)."""
+
 import json
 import logging
 import time
@@ -26,7 +28,7 @@ def _get_version() -> str:
 
 
 @router.post("/setup/demo")
-async def setup_demo(_user: dict = Depends(require_admin)):
+async def setup_demo(_user: dict[str, Any] = Depends(require_admin)):
     engine = _get_engine()
     tm = _get_template_manager()
     from protoforge.core.demo import seed_demo_data
@@ -46,7 +48,7 @@ async def setup_demo(_user: dict = Depends(require_admin)):
 
 
 @router.get("/setup/status")
-async def setup_status(_user: dict = Depends(require_viewer)):
+async def setup_status(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         engine = _get_engine()
         devices = engine.get_all_device_ids()
@@ -66,7 +68,7 @@ async def setup_status(_user: dict = Depends(require_viewer)):
 
 
 @router.get("/settings")
-async def get_settings(_user: dict = Depends(require_admin)):
+async def get_settings(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.config import get_all_settings_dict
         return get_all_settings_dict()
@@ -87,7 +89,7 @@ _ALLOWED_SETTINGS_KEYS = {
 
 
 @router.put("/settings")
-async def update_settings(updates: dict[str, Any], _user: dict = Depends(require_admin)):
+async def update_settings(updates: dict[str, Any], _user: dict[str, Any] = Depends(require_admin)):
     filtered = {k: v for k, v in updates.items() if k in _ALLOWED_SETTINGS_KEYS}
     if not filtered:
         raise HTTPException(status_code=400, detail="No valid settings keys provided")
@@ -137,7 +139,7 @@ async def query_audit_log(
     end_time: float | None = None,
     limit: int = 100,
     offset: int = 0,
-    _user: dict = Depends(require_admin),
+    _user: dict[str, Any] = Depends(require_admin),
 ):
     try:
         if limit < 1 or limit > 10000:
@@ -157,7 +159,7 @@ async def query_audit_log(
 
 
 @router.get("/audit/stats")
-async def get_audit_stats(_user: dict = Depends(require_admin)):
+async def get_audit_stats(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.audit import audit_logger
         return await audit_logger.get_stats()
@@ -167,20 +169,20 @@ async def get_audit_stats(_user: dict = Depends(require_admin)):
 
 
 @router.delete("/audit/{entry_id}")
-async def delete_audit_entry(entry_id: int, _user: dict = Depends(require_admin)):
+async def delete_audit_entry(entry_id: int, _user: dict[str, Any] = Depends(require_admin)):
     raise HTTPException(status_code=403, detail="Audit log entries cannot be deleted. Audit logs are append-only for compliance.")
 
 
 @router.delete("/audit")
 async def clear_audit_log(
     before: float | None = None,
-    _user: dict = Depends(require_admin),
+    _user: dict[str, Any] = Depends(require_admin),
 ):
     raise HTTPException(status_code=403, detail="Audit log cannot be cleared. Audit logs are append-only for compliance.")
 
 
 @router.get("/backup")
-async def export_backup(_user: dict = Depends(require_admin)):
+async def export_backup(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from fastapi.responses import Response
         db = _get_database()
@@ -204,7 +206,7 @@ async def export_backup(_user: dict = Depends(require_admin)):
 
 
 @router.post("/backup/restore")
-async def import_backup(payload: dict[str, Any], _user: dict = Depends(require_admin)):
+async def import_backup(payload: dict[str, Any], _user: dict[str, Any] = Depends(require_admin)):
     try:
         db = _get_database()
         data = payload.get("data", {})

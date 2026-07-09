@@ -1,0 +1,148 @@
+name: API Consistency Check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  # Layer 2: Frontend API <-> Backend OpenAPI cross-check
+  check-api-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Export OpenAPI spec
+        run: python scripts/export-openapi.py || true
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm install
+
+      - name: Copy OpenAPI spec to web directory
+        run: cp openapi.json web/openapi.json || true
+
+      - name: Validate API consistency (existing check)
+        working-directory: web
+        run: npm run validate-api || true
+
+      - name: Layer 2 - API type consistency audit
+        run: python scripts/audit_api_types.py --openapi-file openapi.json --web-dir web
+
+  # Layer 3: Exception handling pattern scan
+  check-exception-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Layer 3 - Exception lint scan
+        run: python -m protoforge.audit.exception_lint protoforge --severity warning --max-violations 50
+
+  # Layer 1: Schema audit (model <-> DB column check, requires running DB)
+  check-schema-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python dependencies
+        run: pip install -e ".[all]"
+
+      - name: Layer 1 - Schema audit (static check)
+        run: |
+          python -c "
+          from protoforge.audit.schema_audit import audit_schema_sync, scan_all_response_models
+          result = audit_schema_sync()
+          print(result.summary())
+          unregistered = scan_all_response_models()
+          if unregistered:
+              print(f'\nUnregistered Response models (not in _MODEL_TABLE_MAP or _VIRTUAL_MODELS):')
+              for name, module, fields in unregistered:
+                  print(f'  {name} ({module}): {sorted(fields)}')
+          "
+
+  check-not-implemented:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Search for NotImplementedError
+        run: |
+          echo "=== Searching for NotImplementedError in backend code ==="
+          FOUND=0
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "NotImplementedError" protoforge/ --include="*.py" || true)
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "⚠️  Warning: Found NotImplementedError in backend code."
+            echo "   These endpoints may not be fully implemented."
+          else
+            echo "✅ No NotImplementedError found."
+          fi
+
+  check-hardcoded-urls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Search for hardcoded ports and URLs
+        run: |
+          echo "=== Searching for hardcoded ports and URLs in frontend code ==="
+          FOUND=0
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "localhost:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" || true)
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "127\.0\.0\.1:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" || true)
+
+          while IFS= read -r line; do
+            echo "⚠️  WARNING: $line"
+            FOUND=1
+          done < <(grep -rn "http://[^'\"]*:[0-9]" web/src/ --include="*.vue" --include="*.ts" --include="*.js" | grep -v "ws://" | grep -v "wss://" || true)
+
+          if [ "$FOUND" -eq 1 ]; then
+            echo ""
+            echo "⚠️  Warning: Found hardcoded ports/URLs in frontend code."
+            echo "   Consider using environment variables or config files instead."
+          else
+            echo "✅ No hardcoded ports/URLs found."
+          fi

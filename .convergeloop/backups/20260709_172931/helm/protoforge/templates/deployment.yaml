@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "protoforge.fullname" . }}
+  labels:
+    {{- include "protoforge.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "protoforge.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "protoforge.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: PROTOFORGE_DB_HOST
+              value: "{{ include "protoforge.fullname" . }}-postgres"
+            - name: PROTOFORGE_DB_PORT
+              value: "5432"
+            - name: PROTOFORGE_DB_NAME
+              value: {{ .Values.postgresql.database | quote }}
+            - name: PROTOFORGE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "protoforge.fullname" . }}-db-secret
+                  key: username
+            - name: PROTOFORGE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "protoforge.fullname" . }}-db-secret
+                  key: password
+            - name: PROTOFORGE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "protoforge.fullname" . }}-jwt-secret
+                  key: secret
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+        {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "protoforge.fullname" . }}-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}

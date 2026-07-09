@@ -1,3 +1,5 @@
+"""Legacy integration code retained for backward compatibility."""
+
 import json
 import logging
 from pathlib import Path

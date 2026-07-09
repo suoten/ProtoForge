@@ -1,3 +1,5 @@
+"""Module: webhook."""
+
 import asyncio
 import contextlib
 import hashlib
@@ -57,7 +59,7 @@ class WebhookConfig:
     trigger_count: int = 0
     error_count: int = 0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id, "name": self.name, "url": self.url,
             "events": self.events, "headers": self.headers,
@@ -279,7 +281,7 @@ class WebhookManager:
         webhook.last_triggered = time.time()
         self._persist()
 
-    async def _dispatch(self, msg: dict) -> None:
+    async def _dispatch(self, msg: dict[str, Any]) -> None:
         event = msg.get("event")
         payload = msg.get("payload")
         timestamp = msg.get("timestamp")

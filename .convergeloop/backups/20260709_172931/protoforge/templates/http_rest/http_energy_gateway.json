@@ -1,0 +1,85 @@
+{
+    "id": "http_energy_gateway",
+    "name": "能耗网关API",
+    "protocol": "http",
+    "description": "HTTP REST能耗数据网关仿真",
+    "manufacturer": "Generic",
+    "model": "EG-REST-01",
+    "points": [
+        {
+            "name": "active_power",
+            "address": "/api/power/active",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "有功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 200
+        },
+        {
+            "name": "reactive_power",
+            "address": "/api/power/reactive",
+            "data_type": "float32",
+            "unit": "kVar",
+            "description": "无功功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 50
+        },
+        {
+            "name": "voltage",
+            "address": "/api/voltage",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 218,
+            "max_value": 222
+        },
+        {
+            "name": "current",
+            "address": "/api/current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 300
+        },
+        {
+            "name": "total_energy",
+            "address": "/api/energy/total",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "累计能耗",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        },
+        {
+            "name": "power_factor",
+            "address": "/api/power_factor",
+            "data_type": "float32",
+            "description": "功率因数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.85,
+            "max_value": 0.99
+        }
+    ],
+    "protocol_config": {
+        "method": "GET",
+        "content_type": "application/json"
+    },
+    "tags": [
+        "能耗",
+        "HTTP",
+        "REST",
+        "电力"
+    ]
+}

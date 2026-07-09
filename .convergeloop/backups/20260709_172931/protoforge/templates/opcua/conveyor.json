@@ -1,0 +1,69 @@
+{
+    "id": "opcua_conveyor",
+    "name": "输送线",
+    "protocol": "opcua",
+    "description": "工业输送线OPC-UA仿真，支持速度、状态、计数等",
+    "manufacturer": "Generic",
+    "model": "CV-1000",
+    "points": [
+        {
+            "name": "speed",
+            "address": "ns=2;s=Speed",
+            "data_type": "float32",
+            "unit": "m/s",
+            "description": "输送速度",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 2.0
+        },
+        {
+            "name": "run_status",
+            "address": "ns=2;s=RunStatus",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "item_count",
+            "address": "ns=2;s=ItemCount",
+            "data_type": "uint32",
+            "description": "通过物品数",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        },
+        {
+            "name": "motor_current",
+            "address": "ns=2;s=MotorCurrent",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电机电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 2.0,
+            "max_value": 8.0
+        },
+        {
+            "name": "belt_tension",
+            "address": "ns=2;s=BeltTension",
+            "data_type": "float32",
+            "unit": "N",
+            "description": "皮带张力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 100,
+            "max_value": 500
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "输送线",
+        "OPC-UA",
+        "物流",
+        "工业自动化"
+    ]
+}

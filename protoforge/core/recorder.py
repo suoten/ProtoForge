@@ -1,3 +1,5 @@
+"""Module: recorder."""
+
 import asyncio
 import base64
 import contextlib
@@ -102,7 +104,7 @@ class RecordedMessage:
     data: Any
     raw: bytes | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = {
             "timestamp": self.timestamp, "protocol": self.protocol,
             "direction": self.direction, "device_id": self.device_id,
@@ -113,7 +115,7 @@ class RecordedMessage:
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "RecordedMessage":
+    def from_dict(cls, data: dict[str, Any]) -> "RecordedMessage":
         raw = None
         if "raw_hex" in data:
             try:  # FIXED: bytes.fromhex可能抛ValueError
@@ -137,7 +139,7 @@ class Recording:
     messages: list[RecordedMessage] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         duration = (self.end_time - self.start_time) if self.end_time > 0 else 0
         return {
             "id": self.id, "name": self.name, "protocol": self.protocol,
@@ -151,7 +153,7 @@ class Recording:
             "created_at": self.start_time,
         }
 
-    def to_full_dict(self) -> dict:
+    def to_full_dict(self) -> dict[str, Any]:
         d = self.to_dict()
         d["frames"] = [{**m.to_dict(), "index": i} for i, m in enumerate(self.messages)]
         d["events"] = d["frames"]
@@ -334,7 +336,7 @@ class Recorder:
         except Exception as e:
             logger.warning("Failed to restore recordings: %s", e)
 
-    async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict:
+    async def replay_recording(self, rec_id: str, speed: float = 1.0, target_engine=None) -> dict[str, Any]:
         import math
         if not isinstance(speed, (int, float)) or speed <= 0 or math.isinf(speed) or math.isnan(speed):  # FIXED: 排除NaN/Infinity
             raise ValueError(f"Speed must be a positive finite number, got: {speed}")

@@ -1,0 +1,710 @@
+import asyncio
+import logging
+import struct
+import time
+from typing import Any
+
+from protoforge.core.messages import desc
+from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+
+logger = logging.getLogger(__name__)
+
+_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+
+
+class McDeviceBehavior(StandardDeviceBehavior):
+    def __init__(self, points: list | None = None):
+        super().__init__(points)
+        self._device_memory: dict[int, bytearray] = {}
+        self._point_addresses: dict[str, tuple[int, int]] = {}
+        self._point_data_types: dict[str, str] = {}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                address = getattr(p, 'address', '0') or '0'
+                device_code, offset = self._parse_mc_address(str(address))
+                self._point_addresses[name] = (device_code, offset)
+                data_type = getattr(p, 'data_type', None)
+                if data_type is not None:
+                    self._point_data_types[name] = data_type.value if hasattr(data_type, 'value') else str(data_type)
+                self._sync_value_to_memory(name, self._values.get(name, 0))
+
+    DEVICE_CODE_MAP: dict[str, int] = {
+        'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
+        'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
+        'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
+        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'S': 0x53, 'SM': 0x93, 'SD': 0x9C,  # FIXED-P1: SM代码0x53→0x93，0x53是S(步进继电器)，补充S和SD；FIXED-M05: Z=0x5C为文件寄存器扩展索引，ZR=0x5A为文件寄存器
+    }
+
+    @staticmethod
+    def _parse_mc_address(address: str) -> tuple[int, int]:
+        try:
+            if ':' in address:
+                parts = address.split(':')
+                device_code = int(parts[0])
+                offset = int(parts[1]) if len(parts) > 1 else 0
+                return (device_code, offset)
+            import re
+            match = re.match(r'^([A-Za-z]+)(\d+)$', address)
+            if match:
+                name = match.group(1).upper()
+                # FIXED-P2: X/Y设备地址使用十六进制解析
+                offset = int(match.group(2), 16) if name in ('X', 'Y') else int(match.group(2))
+                code = McDeviceBehavior.DEVICE_CODE_MAP.get(name, 0x44)
+                return (code, offset)
+            return (0x44, int(address))
+        except (ValueError, IndexError):
+            return (0x44, 0)
+
+    def _sync_value_to_memory(self, point_name: str, value: Any) -> None:
+        if point_name not in self._point_addresses:
+            return
+        device_code, offset = self._point_addresses[point_name]
+        data_type = self._point_data_types.get(point_name, "")
+        try:
+            if data_type == "int32":
+                data = struct.pack("<i", int(value))
+            elif data_type == "uint32":
+                data = struct.pack("<I", int(value))
+            elif data_type == "float64":
+                data = struct.pack("<d", float(value))
+            elif data_type == "float32" or isinstance(value, float):
+                data = struct.pack("<f", float(value))
+            elif data_type == "int16":
+                data = struct.pack("<h", int(value))
+            elif data_type == "uint16":
+                data = struct.pack("<H", int(value))
+            elif data_type == "bool":
+                data = struct.pack("<?", bool(value))
+            else:
+                data = struct.pack("<H", int(value) & 0xFFFF)
+            self.write_memory(device_code, offset, data)
+        except (ValueError, TypeError, struct.error) as e:
+            logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            self._sync_value_to_memory(point_name, value)
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+        if point_name in self._point_addresses:
+            area_code, offset = self._point_addresses[point_name]
+            try:
+                data = struct.pack("<h", int(value))
+                self.write_memory(area_code, offset, data)
+            except (ValueError, TypeError, struct.error) as e:
+                logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
+
+    def read_memory(self, area_code: int, size: int) -> bytearray:
+        if area_code not in self._device_memory:
+            self._device_memory[area_code] = bytearray(max(size, 1024))
+        buf = self._device_memory[area_code]
+        if len(buf) < size:
+            buf.extend(bytearray(size - len(buf)))
+        return buf[:size]
+
+    def read_memory_offset(self, area_code: int, offset: int, size: int) -> bytearray:
+        """FIXED-H04: 带偏移量的内存读取，含越界保护"""
+        if area_code not in self._device_memory:
+            self._device_memory[area_code] = bytearray(1024)
+        buf = self._device_memory[area_code]
+        end = offset + size
+        if end > len(buf):
+            buf.extend(bytearray(end - len(buf)))
+        return buf[offset:offset + size]
+
+    def write_memory(self, area_code: int, offset: int, data: bytes) -> None:
+        if area_code not in self._device_memory:
+            self._device_memory[area_code] = bytearray(1024)
+        buf = self._device_memory[area_code]
+        end = offset + len(data)
+        if end > len(buf):
+            buf.extend(bytearray(end - len(buf)))
+        buf[offset:offset + len(data)] = data
+
+
+class McServer(ProtocolServer):
+    protocol_name = "mc"
+    protocol_display_name = "Mitsubishi MC"
+
+    SLMP_3E_BIN_SUBHEADER = 0x0054
+    SLMP_3E_ASCII_SUBHEADER = b"5000"
+
+    def __init__(self):
+        super().__init__()
+        self._behaviors: dict[str, McDeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._device_params: dict[str, dict] = {}
+        self._host = "0.0.0.0"
+        self._port = 5000
+        self._network = 0
+        self._station = 0
+        self._pc = 0xFF
+        self._server_task: asyncio.Task | None = None
+        self._server_running = False
+
+    async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 5000)
+        self._validate_port(self._port)
+        self._network = config.get("network", 0)
+        self._station = config.get("station", 0)
+        self._pc = config.get("pc", 0xFF)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("MC server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"MC service started {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start MC server: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    logger.debug("MC task cancelled")
+        except Exception as e:
+            logger.warning("MC server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("MC server stopped")
+            self._log_debug("system", "server_stop", "MC service stopped")
+
+    async def _serve(self) -> None:
+        try:
+            server = await asyncio.start_server(
+                self._handle_connection, self._host, self._port
+            )
+            async with server:
+                await server.serve_forever()
+        except asyncio.CancelledError:
+            logger.debug("MC server task cancelled")
+        except Exception as e:
+            logger.error("MC server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_connection(self, reader: asyncio.StreamReader,
+                                  writer: asyncio.StreamWriter) -> None:
+        addr = writer.get_extra_info("peername")
+        logger.debug("MC connection from %s", addr)
+        try:
+            while self._server_running:
+                header = await asyncio.wait_for(reader.readexactly(9), timeout=_READ_TIMEOUT)
+                if len(header) < 9:
+                    break
+                if header[:4] == self.SLMP_3E_ASCII_SUBHEADER:
+                    # FIXED-P0: ASCII SLMP 3E帧头需22字节(子头4+网络2+PC2+目标IO4+目标站2+数据长度4+定时器4)
+                    # 已读9字节，还需读13字节完成帧头
+                    ascii_header_rest = await asyncio.wait_for(reader.readexactly(13), timeout=_READ_TIMEOUT)
+                    ascii_header = header + ascii_header_rest
+                    try:
+                        data_len_field = int(ascii_header[14:18], 16)  # FIXED-P0: ASCII数据长度在偏移14-17(4字节16进制)
+                    except (ValueError, IndexError):
+                        break
+                    remaining = await asyncio.wait_for(reader.readexactly(data_len_field), timeout=_READ_TIMEOUT)
+                    data = ascii_header + remaining
+                else:
+                    data_len = struct.unpack("<H", header[7:9])[0]
+                    total_len = 9 + data_len
+                    remaining = await asyncio.wait_for(reader.readexactly(total_len - 9), timeout=_READ_TIMEOUT)
+                    data = header + remaining
+                response = self._process_slmp(data)
+                if response:
+                    writer.write(response)
+                    await writer.drain()
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError,
+                asyncio.IncompleteReadError, ConnectionAbortedError, BrokenPipeError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
+
+    def _process_slmp(self, data: bytes) -> bytes | None:
+        if len(data) < 11:
+            return None
+
+        if data[:4] == self.SLMP_3E_ASCII_SUBHEADER:
+            return self._process_slmp_ascii(data)
+
+        subheader = struct.unpack("<H", data[0:2])[0]
+        if subheader != self.SLMP_3E_BIN_SUBHEADER:
+            return self._make_error_response(data, 0xC059)
+
+        network = data[2]
+        pc = data[3]
+        struct.unpack("<H", data[4:6])[0]
+        req_dest_station = data[6]
+        struct.unpack("<H", data[7:9])[0]
+        struct.unpack("<H", data[9:11])[0]
+
+        # FIXED-P1: 根据network/station/pc路由到匹配设备
+        routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
+
+        if len(data) < 15:
+            return self._make_error_response(data, 0xC059)
+
+        cmd = struct.unpack("<H", data[11:13])[0]
+        subcmd = struct.unpack("<H", data[13:15])[0]
+
+        if cmd == 0x0401:
+            return self._handle_read(data, subcmd, routed_device_id)
+        elif cmd == 0x0402:
+            return self._handle_random_read(data, subcmd, routed_device_id)
+        elif cmd == 0x1401:
+            return self._handle_write(data, subcmd, routed_device_id)
+        elif cmd == 0x1402:
+            return self._handle_random_write(data, subcmd, routed_device_id)
+        elif cmd == 0x0001:
+            return self._handle_self_test(data)
+
+        return self._make_error_response(data, 0xC059)
+
+    def _handle_read(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 21:
+            return self._make_error_response(data, 0xC059)
+
+        start_addr = struct.unpack("<H", data[15:17])[0]
+        device_code = data[17]
+        word_count = struct.unpack("<H", data[18:20])[0]
+
+        if subcmd == 0x0000:
+            read_len = word_count * 2
+        elif subcmd == 0x0001:
+            read_len = word_count
+        else:
+            return self._make_error_response(data, 0xC059)
+
+        read_data = bytearray(read_len)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        if behavior:
+            read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
+
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", read_len + 2)
+        resp += struct.pack("<H", 0x0000)
+        resp += read_data
+
+        return bytes(resp)
+
+    def _handle_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 21:
+            return self._make_error_response(data, 0xC059)
+
+        start_addr = struct.unpack("<H", data[15:17])[0]
+        device_code = data[17]
+        word_count = struct.unpack("<H", data[18:20])[0]
+
+        if subcmd == 0x0000:
+            write_len = word_count * 2
+        elif subcmd == 0x0001:
+            write_len = word_count
+        else:
+            return self._make_error_response(data, 0xC059)
+
+        write_data = data[20:20 + write_len]
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        if behavior:
+            behavior.write_memory(device_code, start_addr, write_data)
+            for name, (p_code, p_offset) in behavior._point_addresses.items():
+                if p_code == device_code and p_offset == start_addr:
+                    try:
+                        dt = behavior._point_data_types.get(name, "")
+                        if dt == "int32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
+                        elif dt == "uint32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<I", write_data[:4])[0]
+                        elif dt == "float64" and len(write_data) >= 8:
+                            behavior._values[name] = struct.unpack("<d", write_data[:8])[0]
+                        elif dt == "float32" and len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
+                        elif dt == "int16" and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<h", write_data[:2])[0]
+                        elif dt == "uint16" and len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                        elif dt == "bool" and len(write_data) >= 1:
+                            behavior._values[name] = bool(write_data[0])
+                        elif len(write_data) >= 4:
+                            behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
+                        elif len(write_data) >= 2:
+                            behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                    except (struct.error, IndexError) as e:
+                        logger.warning("MC write value sync error: %s", e)
+                    # FIXED-H05: 移除break，遍历所有匹配点而非只更新第一个
+            self._log_debug("recv", "mc_write",
+                            f"Write device {device_code} offset {start_addr}",
+                            detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
+
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", 0x0000)
+
+        return bytes(resp)
+
+    def _handle_random_read(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 17:
+            return self._make_error_response(data, 0xC059)
+        try:
+            point_count = struct.unpack("<H", data[15:17])[0]
+        except (IndexError, struct.error):
+            return self._make_error_response(data, 0xC059)
+        read_data = bytearray()
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        offset = 17
+        for _ in range(min(point_count, 64)):
+            if offset + 3 > len(data):
+                break
+            start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+            device_code = data[offset + 2]
+            offset += 3
+            if behavior:
+                if subcmd == 0x0000:
+                    read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 使用read_memory_offset避免越界
+                elif subcmd == 0x0001:
+                    read_data += behavior.read_memory_offset(device_code, start_addr, 1)  # FIXED-N06: 使用read_memory_offset避免越界
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", len(read_data) + 2)
+        resp += struct.pack("<H", 0x0000)
+        resp += read_data
+        return bytes(resp)
+
+    def _handle_random_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 17:
+            return self._make_error_response(data, 0xC059)
+        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        try:
+            point_count = struct.unpack("<H", data[15:17])[0]
+        except (IndexError, struct.error):
+            return self._make_error_response(data, 0xC059)
+        offset = 17
+        for _ in range(min(point_count, 64)):
+            if subcmd == 0x0000:
+                if offset + 5 > len(data):
+                    break
+                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+                device_code = data[offset + 2]
+                write_val = data[offset + 3:offset + 5]
+                if behavior:
+                    behavior.write_memory(device_code, start_addr, write_val)
+                offset += 5
+            elif subcmd == 0x0001:
+                if offset + 4 > len(data):
+                    break
+                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
+                device_code = data[offset + 2]
+                write_val = data[offset + 3:offset + 4]
+                if behavior:
+                    behavior.write_memory(device_code, start_addr, write_val)
+                offset += 4
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += bytes([data[2], data[3]])
+        resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
+        resp += bytes([data[6]])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", 0x0000)
+        return bytes(resp)
+
+    def _handle_self_test(self, data: bytes) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        if len(data) >= 7:
+            resp += data[2:7]
+        else:
+            resp += bytes([0, 0, 0, 0, 0])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", 0x0000)
+        return bytes(resp)
+
+    def _make_error_response(self, data: bytes, error_code: int) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        if len(data) >= 7:
+            resp += data[2:7]
+        else:
+            resp += bytes([0, 0, 0, 0, 0])
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<H", error_code)
+        return bytes(resp)
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = McDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_params[device_config.id] = {  # FIXED-P1: 移入_behaviors_lock内保护
+                "network": proto_config.get("network", self._network),
+                "station": proto_config.get("station", self._station),
+                "pc": proto_config.get("pc", self._pc),
+            }
+        await self._update_default_device_async(device_config.id)
+
+        logger.info("MC device created: %s (network=%d, station=%d, pc=%d)",
+                     device_config.id,
+                     self._device_params[device_config.id]["network"],
+                     self._device_params[device_config.id]["station"],
+                     self._device_params[device_config.id]["pc"])
+        self._log_debug("system", "device_create",
+                        f"MC device created: {device_config.name}",
+                        device_id=device_config.id)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_params.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
+        await self._clear_default_device_async(device_id)
+        logger.info("MC device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"MC device removed: {device_id}",
+                        device_id=device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        behavior = self._behaviors.get(device_id)
+        config = self._device_configs.get(device_id)
+        if not behavior or not config:
+            return []
+        now = time.time()
+        return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "MC server listen address")},
+                "port": {"type": "integer", "default": 5000, "description": desc("mc_port", "MC port (default 5000)")},
+                "network": {"type": "integer", "default": 0, "description": desc("mc_network", "Network number")},
+                "station": {"type": "integer", "default": 0, "description": desc("mc_station", "Station number")},
+                "pc": {"type": "integer", "default": 255, "description": desc("mc_pc", "PC number (0xFF=self)")},
+            },
+        }
+
+    def _find_device_by_params(self, network: int, station: int, pc: int) -> str | None:  # FIXED-P1: 根据network/station/pc路由到匹配设备
+        for dev_id, params in self._device_params.items():
+            if (params.get("network") == network and
+                params.get("station") == station and
+                params.get("pc") == pc):
+                return dev_id
+        return None
+
+    @staticmethod
+    def _ascii_to_hex(ascii_str: bytes) -> int:
+        return int(ascii_str.decode("ascii"), 16)
+
+    @staticmethod
+    def _hex_to_ascii(val: int, width: int = 4) -> bytes:
+        return format(val, f"0{width}X").encode("ascii")
+
+    def _process_slmp_ascii(self, data: bytes) -> bytes | None:
+        if len(data) < 30:
+            return None
+        try:
+            network = self._ascii_to_hex(data[4:6])
+            pc = self._ascii_to_hex(data[6:8])
+            self._ascii_to_hex(data[8:12])
+            req_dest_station = self._ascii_to_hex(data[12:14])
+            self._ascii_to_hex(data[14:18])
+            self._ascii_to_hex(data[18:22])
+            cmd = self._ascii_to_hex(data[22:26])
+            subcmd = self._ascii_to_hex(data[26:30])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
+
+        if cmd == 0x0401:
+            return self._handle_read_ascii(data, subcmd, routed_device_id)
+        elif cmd == 0x0402:
+            return self._handle_random_read_ascii(data, subcmd, routed_device_id)
+        elif cmd == 0x1401:
+            return self._handle_write_ascii(data, subcmd, routed_device_id)
+        elif cmd == 0x1402:
+            return self._handle_random_write_ascii(data, subcmd, routed_device_id)
+        elif cmd == 0x0001:
+            return self._make_ascii_error_response(data, 0x0000)
+
+        return self._make_ascii_error_response(data, 0xC059)
+
+    def _handle_read_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            start_addr = self._ascii_to_hex(data[30:34])
+            device_code = self._ascii_to_hex(data[34:36])
+            word_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        if subcmd == 0x0000:
+            read_len = word_count * 2
+        elif subcmd == 0x0001:
+            read_len = word_count
+        else:
+            return self._make_ascii_error_response(data, 0xC059)
+
+        read_data = bytearray(read_len)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        if behavior:
+            mem = behavior.read_memory(device_code, start_addr + read_len)
+            read_data = mem[start_addr:start_addr + read_len]
+
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(4 + len(read_data) * 2)
+        resp += b"0000"
+        for b in read_data:
+            resp += self._hex_to_ascii(b, 2)
+        return bytes(resp)
+
+    def _handle_write_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            start_addr = self._ascii_to_hex(data[30:34])
+            device_code = self._ascii_to_hex(data[34:36])
+            self._ascii_to_hex(data[36:40])
+            write_ascii = data[40:]
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+
+        write_data = bytearray()
+        for i in range(0, len(write_ascii) - 1, 2):
+            try:
+                write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+            except ValueError:
+                break
+
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        if behavior:
+            behavior.write_memory(device_code, start_addr, bytes(write_data))
+
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(4)
+        resp += b"0000"
+        return bytes(resp)
+
+    def _handle_random_read_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        try:
+            point_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+        read_data = bytearray()
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        offset = 40
+        for _ in range(min(point_count, 64)):
+            if offset + 6 > len(data):
+                break
+            try:
+                start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+            except (ValueError, IndexError):
+                break
+            offset += 6
+            if behavior:
+                if subcmd == 0x0000:
+                    mem = behavior.read_memory(device_code, start_addr + 2)
+                    read_data += mem[start_addr:start_addr + 2]
+                elif subcmd == 0x0001:
+                    mem = behavior.read_memory(device_code, start_addr + 1)
+                    read_data += mem[start_addr:start_addr + 1]
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(4 + len(read_data) * 2)
+        resp += b"0000"
+        for b in read_data:
+            resp += self._hex_to_ascii(b, 2)
+        return bytes(resp)
+
+    def _handle_random_write_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
+        if len(data) < 40:
+            return self._make_ascii_error_response(data, 0xC059)
+        behavior = self._behaviors.get(device_id or self._default_device_id)
+        try:
+            point_count = self._ascii_to_hex(data[36:40])
+        except (ValueError, IndexError):
+            return self._make_ascii_error_response(data, 0xC059)
+        offset = 40
+        for _ in range(min(point_count, 64)):
+            if subcmd == 0x0000:
+                if offset + 10 > len(data):
+                    break
+                try:
+                    start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                    device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+                    write_ascii = data[offset + 6:offset + 10]
+                    write_data = bytearray()
+                    for i in range(0, len(write_ascii) - 1, 2):
+                        write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+                    if behavior:
+                        behavior.write_memory(device_code, start_addr, bytes(write_data))
+                except (ValueError, IndexError):
+                    break
+                offset += 10
+            elif subcmd == 0x0001:
+                if offset + 8 > len(data):
+                    break
+                try:
+                    start_addr = self._ascii_to_hex(data[offset:offset + 4])
+                    device_code = self._ascii_to_hex(data[offset + 4:offset + 6])
+                    write_ascii = data[offset + 6:offset + 8]
+                    write_data = bytearray()
+                    for i in range(0, len(write_ascii) - 1, 2):
+                        write_data.append(self._ascii_to_hex(write_ascii[i:i + 2]))
+                    if behavior:
+                        behavior.write_memory(device_code, start_addr, bytes(write_data))
+                except (ValueError, IndexError):
+                    break
+                offset += 8
+        resp = bytearray(b"5000")
+        resp += data[4:14]
+        resp += self._hex_to_ascii(4)
+        resp += b"0000"
+        return bytes(resp)
+
+    def _make_ascii_error_response(self, data: bytes, error_code: int) -> bytes:
+        resp = bytearray(b"5000")
+        if len(data) >= 14:
+            resp += data[4:14]
+        resp += self._hex_to_ascii(4)
+        resp += self._hex_to_ascii(error_code)
+        return bytes(resp)

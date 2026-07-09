@@ -1,0 +1,82 @@
+{
+    "id": "bacnet_chiller",
+    "name": "冷水机组",
+    "protocol": "bacnet",
+    "description": "BACnet冷水机组，支持制冷量、COP、进出水温度等",
+    "manufacturer": "Generic",
+    "model": "CH-500RT",
+    "points": [
+        {
+            "name": "chilled_water_in",
+            "address": "AV:1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "冷冻水进水温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10.0,
+            "max_value": 14.0
+        },
+        {
+            "name": "chilled_water_out",
+            "address": "AV:2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "冷冻水出水温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 9.0
+        },
+        {
+            "name": "cooling_capacity",
+            "address": "AV:3",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "制冷量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 200,
+            "max_value": 1800
+        },
+        {
+            "name": "cop",
+            "address": "AV:4",
+            "data_type": "float32",
+            "description": "COP能效比",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 3.5,
+            "max_value": 6.0
+        },
+        {
+            "name": "run_status",
+            "address": "BV:1",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "compressor_load",
+            "address": "AV:5",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "压缩机负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30,
+            "max_value": 95
+        }
+    ],
+    "protocol_config": {
+        "device_id": 104
+    },
+    "tags": [
+        "冷水机组",
+        "BACnet",
+        "制冷",
+        "楼宇"
+    ]
+}

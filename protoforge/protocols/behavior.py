@@ -1,3 +1,5 @@
+"""Module: behavior."""
+
 import logging
 import math
 import random

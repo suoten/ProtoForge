@@ -1,3 +1,5 @@
+"""ProtoForge command-line interface entry point."""
+
 import argparse
 import os
 import sys

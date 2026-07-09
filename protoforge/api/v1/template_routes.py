@@ -1,3 +1,5 @@
+"""Protocol template management API routes (CRUD, import, search)."""
+
 import logging
 from typing import Any
 
@@ -13,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/templates")
-async def list_templates(protocol: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_templates(protocol: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
     return {"templates": tm.list_templates(protocol=protocol)}
 
 
 @router.get("/templates/search")
-async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None, _user: dict = Depends(require_viewer)):
+async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates(protocol=protocol)
 
@@ -36,7 +38,7 @@ async def search_templates(q: str = "", protocol: str | None = None, tag: str | 
 
 
 @router.get("/templates/tags")
-async def list_template_tags(_user: dict = Depends(require_viewer)):
+async def list_template_tags(_user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates()
     tags = set()
@@ -48,7 +50,7 @@ async def list_template_tags(_user: dict = Depends(require_viewer)):
 
 
 @router.get("/templates/{template_id}")
-async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
+async def get_template(template_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
 
     try:
@@ -58,7 +60,7 @@ async def get_template(template_id: str, _user: dict = Depends(require_viewer)):
 
 
 @router.post("/templates")
-async def create_template(template: TemplateDetail, _user: dict = Depends(require_operator)):
+async def create_template(template: TemplateDetail, _user: dict[str, Any] = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
     try:
@@ -82,7 +84,7 @@ async def create_template(template: TemplateDetail, _user: dict = Depends(requir
 
 
 @router.delete("/templates/{template_id}")
-async def delete_template(template_id: str, _user: dict = Depends(require_operator)):
+async def delete_template(template_id: str, _user: dict[str, Any] = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
     try:
@@ -109,7 +111,7 @@ async def delete_template(template_id: str, _user: dict = Depends(require_operat
 
 
 @router.put("/templates/{template_id}")
-async def update_template(template_id: str, data: dict[str, Any], _user: dict = Depends(require_operator)):
+async def update_template(template_id: str, data: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     if not isinstance(data, dict) or not data:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty object")
     tm = _get_template_manager()
@@ -141,7 +143,7 @@ async def instantiate_template(
     device_id: str = Query(...),
     device_name: str = Query(...),
     body: dict[str, Any] | None = None,
-    _user: dict = Depends(require_operator),
+    _user: dict[str, Any] = Depends(require_operator),
 ):
     protocol_config = None
     if body:
@@ -155,7 +157,7 @@ async def instantiate_template(
 
 
 @router.get("/templates/{template_id}/export")  # FIXED-P1: 独立模板导出端点
-async def export_template(template_id: str, _user: dict = Depends(require_viewer)):
+async def export_template(template_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
     try:
         template = tm.get_template(template_id)
@@ -167,7 +169,7 @@ async def export_template(template_id: str, _user: dict = Depends(require_viewer
 
 
 @router.post("/templates/import")  # FIXED-P1: 独立模板导入端点
-async def import_template(data: dict[str, Any], _user: dict = Depends(require_operator)):
+async def import_template(data: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     if not isinstance(data, dict) or not data.get("id") or not data.get("name"):
         raise HTTPException(status_code=400, detail="Template must have 'id' and 'name' fields")
     data.pop("schema_version", None)

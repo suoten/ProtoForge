@@ -1,3 +1,5 @@
+"""Main API v1 router that aggregates all sub-routers."""
+
 import logging
 
 from fastapi import APIRouter

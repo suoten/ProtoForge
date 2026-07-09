@@ -1,0 +1,503 @@
+import asyncio
+import logging
+import struct
+import time
+from typing import Any
+
+from protoforge.core.messages import desc
+from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+
+logger = logging.getLogger(__name__)
+
+
+class FanucDeviceBehavior(StandardDeviceBehavior):
+    _DEFAULT_SPINDLE_SPEED = 3000
+    _DEFAULT_FEED_RATE = 500
+    _DEFAULT_OVERRIDE = 100
+    _DEFAULT_AXIS_COUNT = 5
+
+    def __init__(self, points: list | None = None):
+        super().__init__(points)
+        self._cnc_status = {
+            "alarm": 0,
+            "mode": 3,
+            "execution": 1,
+            "motion": 0,
+            "program": "O0001",
+            "speed_override": self._DEFAULT_OVERRIDE,
+            "feed_override": self._DEFAULT_OVERRIDE,
+            "spindle_speed": self._DEFAULT_SPINDLE_SPEED,
+            "feed_rate": self._DEFAULT_FEED_RATE,
+            "absolute_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "machine_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "relative_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+            "distance_pos": [0.0] * self._DEFAULT_AXIS_COUNT,
+        }
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            if point_name == "spindle_speed":
+                self._cnc_status["spindle_speed"] = value
+            elif point_name == "feed_rate":
+                self._cnc_status["feed_rate"] = value
+            elif point_name == "x_pos":
+                self._cnc_status["absolute_pos"][0] = value
+                self._cnc_status["machine_pos"][0] = value
+            elif point_name == "y_pos":
+                self._cnc_status["absolute_pos"][1] = value
+                self._cnc_status["machine_pos"][1] = value
+            elif point_name == "z_pos":
+                self._cnc_status["absolute_pos"][2] = value
+                self._cnc_status["machine_pos"][2] = value
+            elif point_name == "alarm":
+                self._cnc_status["alarm"] = value
+            elif point_name == "mode":
+                self._cnc_status["mode"] = value
+            elif point_name == "execution":
+                self._cnc_status["execution"] = value
+            elif point_name == "motion":
+                self._cnc_status["motion"] = value
+            elif point_name == "program":
+                self._cnc_status["program"] = str(value)
+            elif point_name == "speed_override":
+                self._cnc_status["speed_override"] = value
+            elif point_name == "feed_override":
+                self._cnc_status["feed_override"] = value
+            elif point_name.startswith("abs_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["absolute_pos"]):
+                        self._cnc_status["absolute_pos"][idx] = value
+                except (ValueError, IndexError) as e:
+                    logger.debug("FANUC on_write abs_pos index error for %s: %s", point_name, e)
+            elif point_name.startswith("machine_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["machine_pos"]):
+                        self._cnc_status["machine_pos"][idx] = value
+                except (ValueError, IndexError) as e:
+                    logger.debug("FANUC on_write machine_pos index error for %s: %s", point_name, e)
+            elif point_name.startswith("rel_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["relative_pos"]):
+                        self._cnc_status["relative_pos"][idx] = value
+                except (ValueError, IndexError) as e:
+                    logger.debug("FANUC on_write rel_pos index error for %s: %s", point_name, e)
+            elif point_name.startswith("dist_pos_"):
+                try:
+                    idx = int(point_name.split("_")[-1])
+                    if 0 <= idx < len(self._cnc_status["distance_pos"]):
+                        self._cnc_status["distance_pos"][idx] = value
+                except (ValueError, IndexError) as e:
+                    logger.debug("FANUC on_write dist_pos index error for %s: %s", point_name, e)
+            return True
+        return False
+
+
+class FanucServer(ProtocolServer):
+    protocol_name = "fanuc"
+    protocol_display_name = "FANUC FOCAS (Sim)"
+
+    FOCAS_HEADER_SIZE = 10
+
+    def __init__(self):
+        super().__init__()
+        self._behaviors: dict[str, FanucDeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._device_params: dict[str, dict] = {}
+        self._host = "0.0.0.0"
+        self._port = 8193
+        self._server_task: asyncio.Task | None = None
+        self._server_running = False
+        self._session_device_map: dict[int, str] = {}  # FIXED-P0: session_id→device_id映射，支持多CNC设备
+        self._next_session_id = 1
+
+    async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 8193)
+        self._validate_port(self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("FANUC FOCAS server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"FANUC service started {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start FANUC server: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    logger.debug("FANUC task cancelled")
+        except Exception as e:
+            logger.warning("FANUC server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("FANUC server stopped")
+            self._log_debug("system", "server_stop", "FANUC service stopped")
+
+    async def _serve(self) -> None:
+        try:
+            server = await asyncio.start_server(
+                self._handle_connection, self._host, self._port
+            )
+            async with server:
+                await server.serve_forever()
+        except asyncio.CancelledError:
+            logger.debug("FANUC server task cancelled")
+        except Exception as e:
+            logger.error("FANUC server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_connection(self, reader: asyncio.StreamReader,
+                                  writer: asyncio.StreamWriter) -> None:
+        addr = writer.get_extra_info("peername")
+        logger.debug("FANUC connection from %s", addr)
+        _READ_TIMEOUT = 30
+        try:
+            while self._server_running:
+                data = await asyncio.wait_for(reader.read(4096), timeout=_READ_TIMEOUT)
+                if not data:
+                    break
+                response = self._process_focas(data)
+                if response:
+                    writer.write(response)
+                    await writer.drain()
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
+
+    def _process_focas(self, data: bytes) -> bytes | None:
+        if len(data) < self.FOCAS_HEADER_SIZE:
+            return None
+
+        if data[:4] == b"FANC":
+            return self._process_focas2_ethernet(data)
+        else:
+            return self._process_focas_legacy(data)
+
+    def _process_focas2_ethernet(self, data: bytes) -> bytes | None:
+        if len(data) < 12:
+            return None
+        session_id = struct.unpack(">H", data[4:6])[0]
+        msg_len = struct.unpack(">H", data[6:8])[0]
+        if msg_len == 0 or msg_len > 4096:  # FIXED-R04: FOCAS2消息长度校验，0=无效，>4096=超出合理范围
+            return None
+        if len(data) < 8 + msg_len:
+            return None
+        payload = data[8:8 + msg_len]
+        if len(payload) < 4:
+            return None
+        func_id = struct.unpack("<H", payload[0:2])[0]
+        req_id = struct.unpack("<I", payload[2:6])[0] if len(payload) >= 6 else 0
+        result = self._dispatch_focas_function(func_id, req_id, payload[6:] if len(payload) > 6 else b"", session_id)  # FIXED-P0: 传入session_id
+        resp_payload = bytearray()
+        resp_payload += struct.pack("<H", func_id)
+        resp_payload += struct.pack("<I", req_id)
+        resp_payload += result
+        resp = bytearray(b"FANC")
+        resp += struct.pack(">H", session_id)
+        resp += struct.pack(">H", len(resp_payload))
+        resp += resp_payload
+        return bytes(resp)
+
+    def _process_focas_legacy(self, data: bytes) -> bytes | None:
+        func_id = struct.unpack("<H", data[0:2])[0]
+        req_id = struct.unpack("<I", data[2:6])[0]
+        payload = data[10:] if len(data) > 10 else b""
+        result = self._dispatch_focas_function(func_id, req_id, payload)  # FIXED-P0: legacy无session_id
+        resp = bytearray()
+        resp += struct.pack("<H", func_id)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += result
+        return bytes(resp)
+
+    def _dispatch_focas_function(self, func_id: int, req_id: int, payload: bytes, session_id: int = 0) -> bytes:  # FIXED-P0: 传入session_id
+        handlers = {
+            0x0001: self._handle_cnc_connect,
+            0x0002: self._handle_cnc_disconnect,
+            0x0101: self._handle_cnc_statinfo,
+            0x0102: self._handle_cnc_absolute,
+            0x0103: self._handle_cnc_machine,
+            0x0104: self._handle_cnc_relative,
+            0x0105: self._handle_cnc_distance,
+            0x0110: self._handle_cnc_rdspindlespd,
+            0x0111: self._handle_cnc_rdfeed,
+            0x0120: self._handle_cnc_alarm,
+            0x0130: self._handle_cnc_program,
+            0x0131: self._handle_cnc_sysinfo,  # FIXED-P1: CNC系列信息查询
+        }
+        handler = handlers.get(func_id)
+        if handler:
+            return handler(req_id, session_id)  # FIXED-P0: 传入session_id
+        return self._make_focas_error(req_id, 0x00000001)
+
+    def _resolve_device(self, session_id: int) -> str:  # FIXED-P0: 根据session_id路由到对应CNC设备
+        device_id = self._session_device_map.get(session_id)
+        if device_id and device_id in self._behaviors:
+            return device_id
+        return self._default_device_id
+
+    def _handle_cnc_connect(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        assigned_session = self._next_session_id
+        self._next_session_id += 1
+        device_ids = list(self._behaviors.keys())
+        if device_ids:
+            target_idx = (assigned_session - 1) % len(device_ids)
+            self._session_device_map[assigned_session] = device_ids[target_idx]
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0001)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<I", 0x00000001)
+        return bytes(resp)
+
+    def _handle_cnc_disconnect(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        self._session_device_map.pop(session_id, None)
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0002)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        return bytes(resp)
+
+    def _handle_cnc_statinfo(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        status = behavior._cnc_status if behavior else {
+            "alarm": 0, "mode": 3, "execution": 1, "motion": 0
+        }
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0101)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", status.get("alarm", 0))
+        resp += struct.pack("<H", status.get("mode", 3))
+        resp += struct.pack("<H", status.get("execution", 1))
+        resp += struct.pack("<H", status.get("motion", 0))
+        return bytes(resp)
+
+    def _handle_cnc_absolute(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("absolute_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0102)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
+            resp += struct.pack("<d", pos)
+        return bytes(resp)
+
+    def _handle_cnc_machine(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("machine_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0103)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
+            resp += struct.pack("<d", pos)
+        return bytes(resp)
+
+    def _handle_cnc_relative(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("relative_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0104)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
+            resp += struct.pack("<d", pos)
+        return bytes(resp)
+
+    def _handle_cnc_distance(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        axis_count = self._device_params.get(device_id, {}).get("axis_count", 3)
+        positions = behavior._cnc_status.get("distance_pos", [0.0] * axis_count) if behavior else [0.0] * axis_count
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0105)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", axis_count)
+        for pos in positions[:axis_count]:
+            resp += struct.pack("<d", pos)
+        return bytes(resp)
+
+    def _handle_cnc_rdspindlespd(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        speed = behavior._cnc_status.get("spindle_speed", self._DEFAULT_SPINDLE_SPEED) if behavior else self._DEFAULT_SPINDLE_SPEED
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0110)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<d", float(speed))
+        return bytes(resp)
+
+    def _handle_cnc_rdfeed(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        feed = behavior._cnc_status.get("feed_rate", self._DEFAULT_FEED_RATE) if behavior else self._DEFAULT_FEED_RATE
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0111)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<d", float(feed))
+        return bytes(resp)
+
+    def _handle_cnc_alarm(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        alarm = behavior._cnc_status.get("alarm", 0) if behavior else 0
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0120)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", alarm)
+        if alarm > 0:
+            resp += struct.pack("<H", 1)
+            resp += struct.pack("<H", alarm)
+            resp += struct.pack("<H", 1)
+            resp += b"ALM\x00"
+        else:
+            resp += struct.pack("<H", 0)
+        return bytes(resp)
+
+    def _handle_cnc_program(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
+        device_id = self._resolve_device(session_id)
+        behavior = self._behaviors.get(device_id)
+        prog = behavior._cnc_status.get("program", "O0001") if behavior else "O0001"
+
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0130)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        prog_bytes = prog.encode("ascii", errors="replace")
+        resp += struct.pack("<H", len(prog_bytes))
+        resp += prog_bytes
+        return bytes(resp)
+
+    def _handle_cnc_sysinfo(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P1: CNC系列信息
+        device_id = self._resolve_device(session_id)
+        cnc_type = self._device_params.get(device_id, {}).get("cnc_type", "0i-F")
+        type_map = {  # FIXED-P1: 不同CNC系列返回不同系列代码
+            "16i": (0x16, 0x00), "18i": (0x18, 0x00), "21i": (0x21, 0x00),
+            "30i": (0x30, 0x00), "31i": (0x31, 0x00), "32i": (0x32, 0x00),
+            "0i-F": (0x00, 0x0F), "0i-TD": (0x00, 0x0D), "0i-MD": (0x00, 0x0E),
+        }
+        series_code, sub_code = type_map.get(cnc_type, (0x00, 0x0F))
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0131)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", series_code)
+        resp += struct.pack("<H", sub_code)
+        resp += struct.pack("<H", 0x0002)  # version
+        resp += struct.pack("<H", 0x0001)  # axes
+        return bytes(resp)
+
+    def _make_focas_error(self, req_id: int, error_code: int) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", 0xFFFF)
+        resp += struct.pack("<I", req_id)
+        resp += struct.pack("<I", error_code)
+        return bytes(resp)
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = FanucDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_params[device_config.id] = {  # FIXED-P1: 移入_behaviors_lock内保护
+                "cnc_type": proto_config.get("cnc_type", "0i-F"),
+                "axis_count": proto_config.get("axis_count", 3),
+            }
+        await self._update_default_device_async(device_config.id)
+
+        axis_count = self._device_params[device_config.id]["axis_count"]
+        for key in ["absolute_pos", "machine_pos", "relative_pos", "distance_pos"]:
+            current = behavior._cnc_status[key]
+            if len(current) < axis_count:
+                behavior._cnc_status[key] = current + [0.0] * (axis_count - len(current))
+
+        logger.info("FANUC device created: %s (cnc_type=%s, axis=%d)",
+                     device_config.id,
+                     self._device_params[device_config.id]["cnc_type"],
+                     axis_count)
+        self._log_debug("system", "device_create",
+                        f"FANUC device created: {device_config.name}",
+                        device_id=device_config.id)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_params.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
+        await self._clear_default_device_async(device_id)
+        logger.info("FANUC device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"FANUC device removed: {device_id}",
+                        device_id=device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        behavior = self._behaviors.get(device_id)
+        config = self._device_configs.get(device_id)
+        if not behavior or not config:
+            return []
+        now = time.time()
+        return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "FOCAS server listen address")},
+                "port": {"type": "integer", "default": 8193, "description": desc("fanuc_port", "FOCAS port (default 8193)")},
+                "cnc_type": {"type": "string", "default": "0i-F", "enum": ["0i-F", "0i-TD", "0i-MD", "16i", "18i", "21i", "30i", "31i", "32i"], "description": desc("cnc_type", "CNC series type")},  # FIXED-P1
+                "axis_count": {"type": "integer", "default": 3, "minimum": 1, "maximum": 8, "description": desc("axis_count", "Number of CNC axes")},  # FIXED-P1
+            },
+        }

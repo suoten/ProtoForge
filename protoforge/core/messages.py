@@ -1,3 +1,5 @@
+"""Protocol message templates for internationalized logging across all protocols."""
+
 from __future__ import annotations
 
 import logging

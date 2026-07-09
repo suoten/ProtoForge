@@ -1,3 +1,5 @@
+"""Data forwarding target management API routes."""
+
 import logging
 import threading
 import time
@@ -26,7 +28,7 @@ def _get_forward_engine():
 
 
 @router.get("/forward/targets")
-async def list_forward_targets(_user: dict = Depends(require_viewer)):
+async def list_forward_targets(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         engine = _get_forward_engine()
         return {"targets": engine.list_targets()}
@@ -36,7 +38,7 @@ async def list_forward_targets(_user: dict = Depends(require_viewer)):
 
 
 @router.post("/forward/targets")
-async def add_forward_target(config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def add_forward_target(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
         from protoforge.core.forward import create_target
 
@@ -67,7 +69,7 @@ async def add_forward_target(config: dict[str, Any], _user: dict = Depends(requi
 
 
 @router.delete("/forward/targets/{name}")
-async def remove_forward_target(name: str, _user: dict = Depends(require_operator)):
+async def remove_forward_target(name: str, _user: dict[str, Any] = Depends(require_operator)):
     try:
         engine = _get_forward_engine()
         engine.remove_target(name)
@@ -78,7 +80,7 @@ async def remove_forward_target(name: str, _user: dict = Depends(require_operato
 
 
 @router.post("/forward/start")
-async def start_forward(_user: dict = Depends(require_operator)):
+async def start_forward(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_forward_engine()
     try:
         await engine.start()
@@ -88,7 +90,7 @@ async def start_forward(_user: dict = Depends(require_operator)):
 
 
 @router.post("/forward/stop")
-async def stop_forward(_user: dict = Depends(require_operator)):
+async def stop_forward(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_forward_engine()
     try:
         await engine.stop()
@@ -98,7 +100,7 @@ async def stop_forward(_user: dict = Depends(require_operator)):
 
 
 @router.get("/forward/stats")
-async def forward_stats(_user: dict = Depends(require_viewer)):
+async def forward_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         engine = _get_forward_engine()
         return engine.get_stats()

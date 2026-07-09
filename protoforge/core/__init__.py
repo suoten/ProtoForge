@@ -1,3 +1,5 @@
+"""Core simulation engine and business logic package."""
+
 from protoforge.core.device import DeviceInstance
 from protoforge.core.engine import SimulationEngine
 from protoforge.core.scenario import Scenario

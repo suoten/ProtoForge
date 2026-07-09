@@ -1,0 +1,74 @@
+{
+    "id": "opcda_power_plant",
+    "name": "电厂监控系统",
+    "protocol": "opcda",
+    "description": "电厂DCS监控OPC-DA接口仿真",
+    "manufacturer": "Generic",
+    "model": "PP-600MW",
+    "points": [
+        {
+            "name": "steam_temp",
+            "address": "PP.Steam.Temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "主蒸汽温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 530,
+            "max_value": 545
+        },
+        {
+            "name": "steam_pressure",
+            "address": "PP.Steam.Pressure",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "主蒸汽压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 16.0,
+            "max_value": 17.5
+        },
+        {
+            "name": "gen_power",
+            "address": "PP.Gen.Power",
+            "data_type": "float32",
+            "unit": "MW",
+            "description": "发电功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 400,
+            "max_value": 600
+        },
+        {
+            "name": "feed_water_flow",
+            "address": "PP.FeedWater.Flow",
+            "data_type": "float32",
+            "unit": "t/h",
+            "description": "给水流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1500,
+            "max_value": 2000
+        },
+        {
+            "name": "boiler_efficiency",
+            "address": "PP.Boiler.Eff",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "锅炉效率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 88,
+            "max_value": 95
+        }
+    ],
+    "protocol_config": {
+        "prog_id": "Matrikon.OPC.Simulation"
+    },
+    "tags": [
+        "电厂",
+        "OPC-DA",
+        "电力",
+        "发电"
+    ]
+}

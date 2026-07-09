@@ -1,3 +1,5 @@
+"""S7 protocol server implementation."""
+
 import asyncio
 import logging
 import struct

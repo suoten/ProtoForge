@@ -1,3 +1,5 @@
+"""integration package."""
+
 from protoforge.core.integration.auth import IntegrationAuth
 from protoforge.core.integration.channel import ChannelBase, ChannelFactory
 from protoforge.core.integration.manager import IntegrationManager

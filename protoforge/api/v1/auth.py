@@ -1,5 +1,8 @@
+"""Authentication middleware and JWT token management for the API."""
+
 import logging
 import time
+from typing import Any
 
 from fastapi import HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -32,7 +35,7 @@ class RoleChecker:
     def __init__(self, allowed_roles: list[str]):
         self._allowed_roles = allowed_roles
 
-    async def __call__(self, request: Request) -> dict:
+    async def __call__(self, request: Request) -> dict[str, Any]:
         payload = getattr(request.state, "user", None)
         if is_no_auth():
             if payload is None:

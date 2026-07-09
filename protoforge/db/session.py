@@ -1,3 +1,5 @@
+"""Module: session."""
+
 import json
 import logging
 import shutil
@@ -702,7 +704,7 @@ class Database:
             (template_id,),
         )
 
-    def _row_to_device(self, row: dict) -> DeviceConfig:
+    def _row_to_device(self, row: dict[str, Any]) -> DeviceConfig:
         points = [PointConfig(**p) for p in _safe_json_loads(row["points"], [])]
         protocol_config = _safe_json_loads(row["protocol_config"], {})
         position = None
@@ -719,7 +721,7 @@ class Database:
             position=position,
         )
 
-    def _row_to_scenario(self, row: dict) -> ScenarioConfig:
+    def _row_to_scenario(self, row: dict[str, Any]) -> ScenarioConfig:
         devices = [DeviceConfig(**d) for d in _safe_json_loads(row["devices"], [])]
         rules = [Rule(**r) for r in _safe_json_loads(row["rules"], [])]
         return ScenarioConfig(
@@ -730,7 +732,7 @@ class Database:
             rules=rules,
         )
 
-    def _row_to_template(self, row: dict) -> TemplateDetail:
+    def _row_to_template(self, row: dict[str, Any]) -> TemplateDetail:
         points = [PointConfig(**p) for p in _safe_json_loads(row["points"], [])]
         return TemplateDetail(
             id=row["id"],

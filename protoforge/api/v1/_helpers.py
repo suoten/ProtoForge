@@ -1,4 +1,7 @@
+"""Shared helper utilities for API v1 route handlers."""
+
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +26,7 @@ def _get_database():
     return get_database()
 
 
-async def _trigger_webhook_safe(event: str, payload: dict) -> None:
+async def _trigger_webhook_safe(event: str, payload: dict[str, Any]) -> None:
     try:
         from protoforge.core.webhook import webhook_manager
         await webhook_manager.trigger(event, payload)

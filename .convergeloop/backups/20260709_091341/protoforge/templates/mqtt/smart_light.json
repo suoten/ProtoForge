@@ -1,0 +1,60 @@
+{
+    "id": "mqtt_smart_light",
+    "name": "智能照明",
+    "protocol": "mqtt",
+    "description": "MQTT智能照明控制器，支持开关、亮度、色温调节",
+    "manufacturer": "Generic",
+    "model": "SL-200",
+    "points": [
+        {
+            "name": "power",
+            "address": "power",
+            "data_type": "bool",
+            "description": "开关状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "brightness",
+            "address": "brightness",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "亮度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 80
+        },
+        {
+            "name": "color_temp",
+            "address": "color_temp",
+            "data_type": "uint16",
+            "unit": "K",
+            "description": "色温",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 4000
+        },
+        {
+            "name": "power_consumption",
+            "address": "power_consumption",
+            "data_type": "float32",
+            "unit": "W",
+            "description": "功耗",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5.0,
+            "max_value": 30.0
+        }
+    ],
+    "protocol_config": {
+        "topic_prefix": "light",
+        "qos": 0
+    },
+    "tags": [
+        "照明",
+        "MQTT",
+        "智能家居",
+        "IoT"
+    ]
+}

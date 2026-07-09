@@ -1,0 +1,365 @@
+import asyncio
+import contextlib
+import logging
+import time
+from typing import Any
+
+from protoforge.core.messages import desc
+from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+
+logger = logging.getLogger(__name__)
+
+
+class ToledoDeviceBehavior(StandardDeviceBehavior):
+    def __init__(self, points: list | None = None):
+        super().__init__(points)
+        self._weight = 0.0
+        self._tare = 0.0
+        self._unit = "kg"
+        self._stable = True
+        self._zero = True
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                if name == "weight":
+                    self._weight = float(self._values.get(name, 0))
+                elif name == "tare":
+                    self._tare = float(self._values.get(name, 0))
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            if point_name == "weight":
+                with contextlib.suppress(ValueError, TypeError):
+                    self._weight = float(value)
+            elif point_name == "tare":
+                with contextlib.suppress(ValueError, TypeError):
+                    self._tare = float(value)
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+        if point_name == "weight":
+            with contextlib.suppress(ValueError, TypeError):
+                self._weight = float(value)
+        elif point_name == "tare":
+            with contextlib.suppress(ValueError, TypeError):
+                self._tare = float(value)
+
+    def get_weight_string(self) -> str:
+        net = self._weight - self._tare
+        sign = " " if net >= 0 else "-"
+        abs_net = abs(net)
+        stable_flag = " " if self._stable else "U"
+        zero_flag = "Z" if self._zero else " "
+        return f"{sign}{abs_net:08.3f}{self.unit_code()}{stable_flag}{zero_flag}\r\n"
+
+    def unit_code(self) -> str:
+        codes = {"kg": "kg", "g": "g ", "lb": "lb", "oz": "oz", "t": "t "}
+        return codes.get(self._unit, "kg")
+
+    def get_net_weight(self) -> float:
+        return self._weight - self._tare
+
+
+class ToledoServer(ProtocolServer):
+    protocol_name = "toledo"
+    protocol_display_name = "Mettler-Toledo"
+
+    STX = 0x02
+    ETX = 0x03
+    CR = 0x0D
+    LF = 0x0A
+
+    def __init__(self):
+        super().__init__()
+        self._behaviors: dict[str, ToledoDeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._host = "0.0.0.0"
+        self._port = 1701
+        self._server_task: asyncio.Task | None = None
+        self._server_running = False
+        self._continuous_mode = False
+        self._continuous_task: asyncio.Task | None = None
+        self._continuous_writers: set[asyncio.StreamWriter] = set()
+
+    async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 1701)
+        self._validate_port(self._port)
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("Toledo server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"Toledo service started {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start Toledo server: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        try:
+            self._server_running = False
+            self._continuous_mode = False
+            if self._continuous_task:
+                self._continuous_task.cancel()
+                try:
+                    await self._continuous_task
+                except asyncio.CancelledError:
+                    logger.debug("Toledo task cancelled")
+                self._continuous_task = None
+            for w in list(self._continuous_writers):
+                try:
+                    w.close()
+                except Exception as e:
+                    logger.debug("Toledo continuous writer close error: %s", e)
+            self._continuous_writers.clear()
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    logger.debug("Toledo task cancelled")
+        except Exception as e:
+            logger.warning("Toledo server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("Toledo server stopped")
+            self._log_debug("system", "server_stop", "Toledo service stopped")
+
+    async def _serve(self) -> None:
+        try:
+            server = await asyncio.start_server(
+                self._handle_connection, self._host, self._port
+            )
+            async with server:
+                await server.serve_forever()
+        except asyncio.CancelledError:
+            logger.debug("Toledo server task cancelled")
+        except Exception as e:
+            logger.error("Toledo server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_connection(self, reader: asyncio.StreamReader,
+                                  writer: asyncio.StreamWriter) -> None:
+        addr = writer.get_extra_info("peername")
+        logger.debug("Toledo connection from %s", addr)
+        _READ_TIMEOUT = 30
+        try:
+            while self._server_running:
+                data = await asyncio.wait_for(reader.read(1024), timeout=_READ_TIMEOUT)
+                if not data:
+                    break
+                response = self._process_toledo(data, writer)
+                if response:
+                    writer.write(response)
+                    await writer.drain()
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        finally:
+            self._continuous_writers.discard(writer)
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
+
+    def _process_toledo(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes | None:
+        if not data:
+            return None
+
+        cmd = data[0]
+
+        if cmd == self.STX:
+            return self._handle_stx_command(data, writer)
+        elif cmd == ord("S") or cmd == ord("s"):
+            if len(data) >= 2 and data[1] in (ord("U"), ord("u")):  # FIXED-P1: SU命令-不稳定重量
+                return self._handle_unstable_weight()
+            return self._handle_stable_weight()
+        elif cmd == ord("T") or cmd == ord("t"):
+            return self._handle_tare()
+        elif cmd == ord("Z") or cmd == ord("z"):
+            return self._handle_zero()
+        elif cmd == ord("P") or cmd == ord("p"):
+            return self._handle_print_weight()
+        elif cmd == ord("I"):
+            return self._handle_immediate()
+        elif cmd == ord("C"):
+            return self._handle_continuous_start(writer)
+        elif cmd == ord("D"):
+            return self._handle_continuous_stop(writer)
+
+        return self._handle_print_weight()
+
+    def _handle_stx_command(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes:
+        if len(data) < 2:
+            return self._handle_print_weight()
+
+        sub_cmd = data[1] if len(data) > 1 else 0
+        if sub_cmd == ord("S"):
+            return self._handle_stable_weight()
+        elif sub_cmd == ord("T"):
+            return self._handle_tare()
+        elif sub_cmd == ord("Z"):
+            return self._handle_zero()
+        elif sub_cmd == ord("P"):
+            return self._handle_print_weight()
+        elif sub_cmd == ord("C"):
+            return self._handle_continuous_start(writer)
+        elif sub_cmd == ord("D"):
+            return self._handle_continuous_stop(writer)
+
+        return self._handle_print_weight()
+
+    def _handle_stable_weight(self) -> bytes:
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
+        if not behavior:
+            return b"   0.000kg \r\n"
+        return behavior.get_weight_string().encode("ascii")
+
+    def _handle_unstable_weight(self) -> bytes:  # FIXED-P1: 不稳定重量响应
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
+        if not behavior:
+            return b"   0.000kg D\r\n"
+        result = behavior.get_weight_string()
+        result = result.replace(" S ", " D ")  # FIXED-P1: S=稳定→D=不稳定(动态)
+        return result.encode("ascii")
+
+    def _handle_tare(self) -> bytes:
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
+            behavior._tare = behavior._weight
+            # FIXED-N10: 同步tare值到_values字典，确保API读取一致
+            if hasattr(behavior, '_values') and 'tare' in behavior._values:
+                behavior._values['tare'] = behavior._tare
+        return self._handle_stable_weight()
+
+    def _handle_zero(self) -> bytes:
+        with self._behaviors_sync_lock:
+            behavior = self._behaviors.get(self._default_device_id)
+        if behavior:
+            behavior._weight = 0.0
+            behavior._tare = 0.0
+            behavior._zero = True
+            # FIXED-N11: 同步zero/weight/tare值到_values字典
+            if hasattr(behavior, '_values'):
+                behavior._values['weight'] = 0.0
+                behavior._values['tare'] = 0.0
+                if 'zero' in behavior._values:
+                    behavior._values['zero'] = True
+        return self._handle_stable_weight()
+
+    def _handle_print_weight(self) -> bytes:
+        return self._handle_stable_weight()
+
+    def _handle_immediate(self) -> bytes:
+        return self._handle_stable_weight()
+
+    def _handle_continuous_start(self, writer: asyncio.StreamWriter = None) -> bytes:
+        self._continuous_mode = True
+        if writer:
+            self._continuous_writers.add(writer)
+        if self._continuous_writers and (self._continuous_task is None or self._continuous_task.done()):
+            self._continuous_task = asyncio.create_task(self._continuous_send())
+        return self._handle_stable_weight()
+
+    def _handle_continuous_stop(self, writer: asyncio.StreamWriter = None) -> bytes:
+        if writer:
+            self._continuous_writers.discard(writer)
+        if not self._continuous_writers:
+            self._continuous_mode = False
+            if self._continuous_task:
+                self._continuous_task.cancel()
+                self._continuous_task = None
+        return self._handle_stable_weight()
+
+    async def _continuous_send(self) -> None:
+        try:
+            while self._server_running and self._continuous_writers:
+                async with self._behaviors_lock:
+                    behavior = self._behaviors.get(self._default_device_id)
+                if behavior:
+                    weight_str = behavior.get_weight_string().encode("ascii")
+                    dead_writers = []
+                    # FIXED-P0: 使用list()快照迭代，避免await让出控制权时其他协程修改_continuous_writers导致RuntimeError
+                    for w in list(self._continuous_writers):
+                        try:
+                            w.write(weight_str)
+                            await w.drain()
+                        except Exception as exc:
+                            logger.debug("Toledo continuous write failed: %s", exc)
+                            dead_writers.append(w)
+                    for w in dead_writers:
+                        self._continuous_writers.discard(w)
+                        try:
+                            w.close()
+                        except Exception as e:
+                            logger.debug("Dead writer close error: %s", e)
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            logger.debug("Toledo task cancelled")
+        except Exception as e:
+            logger.error("Toledo continuous send error: %s", e)
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = ToledoDeviceBehavior(device_config.points)
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+        await self._update_default_device_async(device_config.id)
+
+        proto_config = device_config.protocol_config or {}
+        scale_addr = proto_config.get("scale_addr", "1")
+        unit = proto_config.get("unit", "kg")
+        behavior._unit = unit
+
+        logger.info("Toledo device created: %s (addr=%s, unit=%s)",
+                     device_config.id, scale_addr, unit)
+        self._log_debug("system", "device_create",
+                        f"Toledo device created: {device_config.name}",
+                        device_id=device_config.id)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+        await self._clear_default_device_async(device_id)
+        logger.info("Toledo device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"Toledo device removed: {device_id}",
+                        device_id=device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        async with self._behaviors_lock:
+            behavior = self._behaviors.get(device_id)
+            config = self._device_configs.get(device_id)
+        if not behavior or not config:
+            return []
+        now = time.time()
+        return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        async with self._behaviors_lock:
+            behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "Toledo server listen address")},
+                "port": {"type": "integer", "default": 1701, "description": desc("toledo_port", "Toledo port (default 1701)")},
+            },
+        }

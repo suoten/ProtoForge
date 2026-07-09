@@ -1,3 +1,5 @@
+"""TOLEDO protocol server implementation."""
+
 import asyncio
 import contextlib
 import logging

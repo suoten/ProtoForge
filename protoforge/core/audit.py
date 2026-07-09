@@ -1,3 +1,5 @@
+"""Audit logging system for tracking API operations and data changes."""
+
 import logging
 import time
 from dataclasses import asdict, dataclass
@@ -18,7 +20,7 @@ class AuditEntry:
     ip_address: str = ""
     user_agent: str = ""
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # FIXED-P1: 添加action_label友好提示语
         canonical = _normalize_action(self.action)

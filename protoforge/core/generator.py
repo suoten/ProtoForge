@@ -1,3 +1,5 @@
+"""Module: generator."""
+
 import ast
 import logging
 import math

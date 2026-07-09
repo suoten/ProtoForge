@@ -476,7 +476,7 @@ class DeviceStateMachine:
     def on_enter_state(self, callback: Callable[[DeviceState, dict[str, Any]], Any]) -> None:
         """注册状态进入回调。
 
-        回调签名: ``callback(state: DeviceState, context: dict) -> Any``
+        回调签名: ``callback(state: DeviceState, context: dict[str, Any]) -> Any``
         ``context`` 包含 ``event`` (触发事件), ``from_state`` (前一状态) 等。
 
         :param callback: 回调函数
@@ -487,7 +487,7 @@ class DeviceStateMachine:
     def on_exit_state(self, callback: Callable[[DeviceState, dict[str, Any]], Any]) -> None:
         """注册状态退出回调。
 
-        回调签名: ``callback(state: DeviceState, context: dict) -> Any``
+        回调签名: ``callback(state: DeviceState, context: dict[str, Any]) -> Any``
         ``context`` 包含 ``event`` (触发事件), ``to_state`` (目标状态) 等。
 
         :param callback: 回调函数

@@ -1,3 +1,5 @@
+"""Common API utilities, exception handlers, and shared dependencies."""
+
 import time
 from typing import Any
 
@@ -9,7 +11,7 @@ class APIResponse:
     """统一的 API 响应格式"""
 
     @staticmethod
-    def success(data: Any = None, message: str = "ok") -> dict:
+    def success(data: Any = None, message: str = "ok") -> dict[str, Any]:
         return {
             "code": 0,
             "data": data,
@@ -24,7 +26,7 @@ class APIResponse:
         data: Any = None,
         error_type: str = "",
         detail: Any = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         result = {
             "code": code,
             "message": message,
@@ -39,37 +41,37 @@ class APIResponse:
         return result
 
     @staticmethod
-    def created(data: Any = None, message: str = "Created successfully") -> dict:
+    def created(data: Any = None, message: str = "Created successfully") -> dict[str, Any]:
         return APIResponse.success(data=data, message=message)
 
     @staticmethod
-    def updated(data: Any = None, message: str = "Updated successfully") -> dict:
+    def updated(data: Any = None, message: str = "Updated successfully") -> dict[str, Any]:
         return APIResponse.success(data=data, message=message)
 
     @staticmethod
-    def deleted(message: str = "Deleted successfully") -> dict:
+    def deleted(message: str = "Deleted successfully") -> dict[str, Any]:
         return APIResponse.success(message=message)
 
     @staticmethod
-    def not_found(resource: str, identifier: str = "") -> dict:
+    def not_found(resource: str, identifier: str = "") -> dict[str, Any]:
         msg = f"{resource} not found"
         if identifier:
             msg += f": {identifier}"
         return APIResponse.error(message=msg, code=404, error_type="NotFoundError")
 
     @staticmethod
-    def validation_error(field: str, reason: str = "") -> dict:
+    def validation_error(field: str, reason: str = "") -> dict[str, Any]:
         msg = f"Validation failed for '{field}'"
         if reason:
             msg += f": {reason}"
         return APIResponse.error(message=msg, code=400, error_type="ValidationError", detail={"field": field})
 
     @staticmethod
-    def unauthorized(message: str = "Authentication required") -> dict:
+    def unauthorized(message: str = "Authentication required") -> dict[str, Any]:
         return APIResponse.error(message=message, code=401, error_type="UnauthorizedError")
 
     @staticmethod
-    def forbidden(message: str = "Access denied") -> dict:
+    def forbidden(message: str = "Access denied") -> dict[str, Any]:
         return APIResponse.error(message=message, code=403, error_type="ForbiddenError")
 
 

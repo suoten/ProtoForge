@@ -1,3 +1,5 @@
+"""Module: auth."""
+
 import asyncio
 import logging
 import time

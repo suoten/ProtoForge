@@ -1,3 +1,5 @@
+"""Module: rtu server."""
+
 import asyncio
 import contextlib
 import logging
@@ -84,7 +86,7 @@ class ModbusRtuServer(ProtocolServer):
             self._data_stores[slave_id] = ModbusDataStore()
         return self._data_stores[slave_id]
 
-    def _build_sim_devices(self) -> list:
+    def _build_sim_devices(self) -> list[Any]:
         devices = []
         all_slave_ids = set(self._slave_map.values())
         if not all_slave_ids:

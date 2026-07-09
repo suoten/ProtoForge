@@ -1,0 +1,477 @@
+import ast
+import logging
+import math
+import operator
+import random
+import time
+from typing import Any
+
+from protoforge.core.behavior_models import BaseBehavior, create_behavior, get_behavior_input
+from protoforge.core.fault import FaultInjector
+from protoforge.models.device import DataType, GeneratorType, PointConfig
+
+logger = logging.getLogger(__name__)
+
+_SAFE_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+    ast.And: lambda a, b: a and b,
+    ast.Or: lambda a, b: a or b,
+    ast.Not: operator.not_,
+    ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b,
+}
+
+_SAFE_NAMES = {
+    "True": True, "False": False, "None": None,
+    "abs": abs, "min": min, "max": max, "round": round,
+    "int": int, "float": float, "bool": bool, "str": str,
+    "len": len, "range": range, "list": list, "dict": dict,
+    "pi": math.pi, "e": math.e,
+    "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "sqrt": math.sqrt, "log": math.log, "log10": math.log10,
+    "ceil": math.ceil, "floor": math.floor, "fabs": math.fabs,
+    "random": random.random, "randint": random.randint, "uniform": random.uniform,
+    "choice": random.choice,
+}
+
+_DANGEROUS_NAMES = {
+    "__import__", "__builtins__", "__class__", "__globals__", "__locals__",
+    "open", "file", "input", "exec", "eval", "compile", "reload",
+    "breakpoint", "exit", "quit", "help", "copyright", "credits", "license",
+}
+
+
+class SafeEval:
+    _MAX_DEPTH = 50
+    _MAX_CALL_ARGS = 10
+    _MAX_STR_LEN = 10000
+    _MAX_RANGE_SIZE = 100000  # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
+    _MAX_COMPLEXITY = 100000  # FIXED: W7 - 执行步骤计数上限，防止无限循环/超长表达式
+    _MAX_POW_EXPONENT = 10000  # FIXED: S4 - Pow指数上限，防止 2**1000000 导致CPU/内存DoS
+    _MAX_SEQ_MULTIPLY = 100000  # FIXED: S5 - 列表乘法上限，防止 [0]*1000000 导致内存DoS
+
+    def __init__(self, variables: dict[str, Any] | None = None):
+        self._variables = variables or {}
+        self._depth = 0
+        self._step_counter = 0  # FIXED: W7 - 步骤计数器
+
+    def eval_expr(self, expr: str) -> Any:
+        try:
+            tree = ast.parse(expr, mode="eval")
+            self._depth = 0
+            self._step_counter = 0  # FIXED: W7 - 重置步骤计数器
+            return self._eval_node(tree.body)
+        except Exception as e:
+            logger.warning("SafeEval error for expression '%s': %s", expr[:100], e)
+            return None
+
+    def exec_stmts(self, code: str) -> dict[str, Any]:
+        try:
+            tree = ast.parse(code, mode="exec")
+            local_vars = dict(self._variables)
+            self._depth = 0
+            self._step_counter = 0  # FIXED: W7 - 重置步骤计数器
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    value = self._eval_node(node.value)
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            local_vars[target.id] = value
+                        else:
+                            raise ValueError(f"Unsupported assignment target: {type(target).__name__}")
+                elif isinstance(node, ast.Expr):
+                    self._eval_node(node.value)
+                else:
+                    raise ValueError(f"Unsupported statement: {type(node).__name__}")
+            return local_vars
+        except Exception as e:
+            logger.debug("SafeEval exec error: %s", e)
+            return dict(self._variables)
+
+    def _eval_node(self, node: ast.AST) -> Any:
+        self._depth += 1
+        self._step_counter += 1  # FIXED: W7 - 递增步骤计数器
+        if self._depth > self._MAX_DEPTH:
+            raise RecursionError(f"Expression too deeply nested (max {self._MAX_DEPTH})")
+        if self._step_counter > self._MAX_COMPLEXITY:  # FIXED: W7 - 超过复杂度上限时抛出异常
+            raise RuntimeError(f"Expression too complex (max {self._MAX_COMPLEXITY} steps)")
+        try:
+            return self._eval_node_inner(node)
+        finally:
+            self._depth -= 1
+
+    def _eval_node_inner(self, node: ast.AST) -> Any:
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            if node.id in _DANGEROUS_NAMES:
+                raise NameError(f"Name '{node.id}' is not allowed (potentially dangerous)")
+            if node.id in _SAFE_NAMES:
+                return _SAFE_NAMES[node.id]
+            if node.id in self._variables:
+                return self._variables[node.id]
+            raise NameError(f"Name '{node.id}' is not allowed")
+        elif isinstance(node, ast.BinOp):
+            op = _SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            # FIXED: S4 - check Pow exponent before computing
+            if isinstance(node.op, ast.Pow):
+                right = self._eval_node(node.right)
+                if isinstance(right, (int, float)) and abs(right) > self._MAX_POW_EXPONENT:
+                    raise ValueError(f"Exponent too large (max {self._MAX_POW_EXPONENT})")
+                left = self._eval_node(node.left)
+                result = op(left, right)
+            else:
+                result = op(self._eval_node(node.left), self._eval_node(node.right))
+            if isinstance(result, str) and len(result) > self._MAX_STR_LEN:
+                raise ValueError(f"String too long (max {self._MAX_STR_LEN})")
+            # FIXED: S5 - check sequence multiplication size
+            if isinstance(node.op, (ast.Mult, ast.Repeat)) and isinstance(result, (list, tuple)) and len(result) > self._MAX_SEQ_MULTIPLY:
+                raise ValueError(f"Sequence too long after multiply (max {self._MAX_SEQ_MULTIPLY})")
+            return result
+        elif isinstance(node, ast.UnaryOp):
+            op = _SAFE_OPS.get(type(node.op))
+            if op is None:
+                raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
+            return op(self._eval_node(node.operand))
+        elif isinstance(node, ast.Compare):
+            left = self._eval_node(node.left)
+            for op, comparator in zip(node.ops, node.comparators, strict=False):
+                op_func = _SAFE_OPS.get(type(op))
+                if op_func is None:
+                    raise ValueError(f"Unsupported comparison: {type(op).__name__}")
+                right = self._eval_node(comparator)
+                if not op_func(left, right):
+                    return False
+                left = right
+            return True
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                result = True
+                for val in node.values:
+                    result = self._eval_node(val)
+                    if not result:
+                        return result
+                return result
+            elif isinstance(node.op, ast.Or):
+                result = False
+                for val in node.values:
+                    result = self._eval_node(val)
+                    if result:
+                        return result
+                return result
+        elif isinstance(node, ast.IfExp):
+            test = self._eval_node(node.test)
+            return self._eval_node(node.body) if test else self._eval_node(node.orelse)
+        elif isinstance(node, ast.Call):
+            func = self._eval_node(node.func)
+            if isinstance(node.func, ast.Name) and node.func.id in _DANGEROUS_NAMES:
+                raise NameError(f"Calling '{node.func.id}' is not allowed")
+            if len(node.args) > self._MAX_CALL_ARGS:
+                raise ValueError(f"Too many call arguments (max {self._MAX_CALL_ARGS})")
+            args = [self._eval_node(a) for a in node.args]
+            # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
+            if isinstance(node.func, ast.Name) and node.func.id == "range":
+                if args and isinstance(args[0], int) and len(args) <= 3:
+                    size = args[0] if len(args) == 1 else (args[1] - args[0]) if len(args) == 2 else ((args[1] - args[0]) // args[2])
+                    if abs(size) > self._MAX_RANGE_SIZE:
+                        raise ValueError(f"range size {abs(size)} exceeds limit ({self._MAX_RANGE_SIZE})")
+            if isinstance(node.func, ast.Name) and node.func.id == "list" and args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
+                raise ValueError(f"list() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
+            # FIXED: W7 - dict()构造器大小限制
+            if isinstance(node.func, ast.Name) and node.func.id == "dict":
+                if args and hasattr(args[0], '__len__') and len(args[0]) > self._MAX_RANGE_SIZE:
+                    raise ValueError(f"dict() input size {len(args[0])} exceeds limit ({self._MAX_RANGE_SIZE})")
+                if len(node.keywords) > self._MAX_CALL_ARGS:
+                    raise ValueError(f"dict() too many keyword arguments (max {self._MAX_CALL_ARGS})")
+            return func(*args)
+        elif isinstance(node, ast.Attribute):
+            value = self._eval_node(node.value)
+            if value is math:  # FIXED: W7 - isinstance(value, math.__class__)不严谨，改为value is math
+                allowed = {"pi", "e", "sin", "cos", "tan", "sqrt", "log", "log10", "ceil", "floor", "fabs"}
+                if node.attr in allowed:
+                    return getattr(value, node.attr)
+            if node.attr.startswith("__") or node.attr in _DANGEROUS_NAMES:
+                raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
+            raise AttributeError(f"Attribute access '{node.attr}' is not allowed")
+        elif isinstance(node, ast.Subscript):
+            # FIXED: 添加边界检查和类型校验，避免IndexError/TypeError
+            value = self._eval_node(node.value)
+            slice_val = self._eval_node(node.slice) if isinstance(node.slice, ast.AST) else node.slice
+            if not hasattr(value, '__getitem__'):
+                raise TypeError(f"Cannot subscript type '{type(value).__name__}'")
+            if isinstance(slice_val, int) and isinstance(value, (list, tuple, str)):
+                if not (-len(value) <= slice_val < len(value)):
+                    raise IndexError(f"Index {slice_val} out of range for sequence of length {len(value)}")
+            return value[slice_val]
+        raise ValueError(f"Unsupported expression: {type(node).__name__}")
+
+
+class ScriptEngine:
+    def __init__(self):
+        self._cache: dict[str, Any] = {}
+
+    def execute(self, script: str, context: dict[str, Any]) -> Any:
+        variables = dict(context)
+        variables["cache"] = self._cache
+        variables["time"] = time.time()
+        evaluator = SafeEval(variables)
+        result_vars = evaluator.exec_stmts(script)
+        return result_vars.get("result", 0)
+
+
+class DataGenerator:
+    def __init__(self, fault_injector: FaultInjector | None = None):
+        self._start_time: dict[str, float] = {}
+        self._random_walk_state: dict[str, float] = {}
+        self._script_engine = ScriptEngine()
+        self._behaviors: dict[str, BaseBehavior] = {}  # PHYSICAL 生成器行为模型缓存
+        self._fault_injector = fault_injector  # 故障注入器（可选）
+
+    def set_fault_injector(self, injector: FaultInjector | None) -> None:
+        """设置故障注入器。
+
+        设置后，每次 ``generate()`` 生成的值都会经过 ``FaultInjector.apply()`` 处理。
+
+        :param injector: 故障注入器实例，None 表示禁用故障注入
+        """
+        self._fault_injector = injector
+
+    def generate(self, point: PointConfig) -> Any:
+        key = f"{point.name}_{point.address}"
+        if key not in self._start_time:
+            self._start_time[key] = time.time()
+
+        elapsed = time.time() - self._start_time[key]
+
+        if point.generator_type in (GeneratorType.FIXED, GeneratorType.CONSTANT):  # FIXED-P1: constant合并到fixed分支
+            value = self._generate_fixed(point)
+        elif point.generator_type == GeneratorType.RANDOM:
+            value = self._generate_random(point)
+        elif point.generator_type == GeneratorType.SINE:
+            value = self._generate_sine(point, elapsed)
+        elif point.generator_type == GeneratorType.TRIANGLE:
+            value = self._generate_triangle(point, elapsed)
+        elif point.generator_type == GeneratorType.SAWTOOTH:
+            value = self._generate_sawtooth(point, elapsed)
+        elif point.generator_type == GeneratorType.SQUARE:
+            value = self._generate_square(point, elapsed)
+        elif point.generator_type == GeneratorType.INCREMENT:
+            value = self._generate_increment(point, elapsed)
+        elif point.generator_type == GeneratorType.SCRIPT:
+            value = self._generate_script(point, elapsed)
+        elif point.generator_type == GeneratorType.RANDOM_WALK:
+            value = self._generate_random_walk(point)
+        elif point.generator_type == GeneratorType.PHYSICAL:
+            value = self._generate_physical(point, elapsed)
+        else:
+            value = self._generate_fixed(point)
+
+        # 故障注入：对生成的值应用故障效果
+        if self._fault_injector is not None:
+            try:
+                value, _quality = self._fault_injector.apply(point.name, value)
+            except Exception:
+                # DEVICE_FAILURE 等异常向上传播，由 device.py 处理
+                raise
+
+        return value
+
+    def _generate_fixed(self, point: PointConfig) -> Any:
+        if point.fixed_value is not None:
+            return self._cast_value(point.fixed_value, point.data_type)
+        if point.min_value is not None and point.max_value is not None:
+            mid = (point.min_value + point.max_value) / 2
+            return self._cast_value(mid, point.data_type)
+        return self._cast_value(0, point.data_type)
+
+    def _generate_random(self, point: PointConfig) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        value = random.uniform(lo, hi)
+        return self._cast_value(value, point.data_type)
+
+    def _generate_sine(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
+        phase = point.generator_config.get("phase", 0.0)
+        mid = (lo + hi) / 2
+        amp = (hi - lo) / 2
+        value = mid + amp * math.sin(2 * math.pi * elapsed / period + phase)
+        return self._cast_value(value, point.data_type)
+
+    def _generate_triangle(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
+        mid = (lo + hi) / 2
+        amp = (hi - lo) / 2
+        t = (elapsed % period) / period
+        value = mid + amp * (4 * abs(t - 0.5) - 1)
+        return self._cast_value(value, point.data_type)
+
+    def _generate_sawtooth(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
+        t = (elapsed % period) / period
+        value = lo + (hi - lo) * t
+        return self._cast_value(value, point.data_type)
+
+    def _generate_square(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        period = point.generator_config.get("period", 10.0) or 10.0
+        if period <= 0:
+            period = 10.0
+        duty = point.generator_config.get("duty_cycle", 0.5)
+        duty = max(0.0, min(1.0, float(duty)))
+        t = (elapsed % period) / period
+        value = hi if t < duty else lo
+        return self._cast_value(value, point.data_type)
+
+    def _generate_increment(self, point: PointConfig, elapsed: float) -> Any:
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        step = point.generator_config.get("step", 1)
+        period = point.generator_config.get("period", 1.0) or 1.0
+        if period <= 0:
+            period = 1.0
+        wrap = point.generator_config.get("wrap", True)
+        count = int(elapsed / period)
+        value = lo + step * count
+        if wrap and hi > lo:
+            value = lo + (value - lo) % (hi - lo)
+        elif hi > lo:
+            value = min(value, hi)
+        return self._cast_value(value, point.data_type)
+
+    def _generate_script(self, point: PointConfig, elapsed: float) -> Any:
+        script = point.generator_config.get("script", "result = 0")
+        context = {
+            "elapsed": elapsed,
+            "min_value": point.min_value,
+            "max_value": point.max_value,
+            "point_name": point.name,
+            "point_address": point.address,
+        }
+        value = self._script_engine.execute(script, context)
+        return self._cast_value(value, point.data_type)
+
+    def _generate_random_walk(self, point: PointConfig) -> Any:
+        """Generate a value using random walk (Brownian motion)."""
+        key = f"{point.name}_{point.address}"
+        lo = point.min_value if point.min_value is not None else 0
+        hi = point.max_value if point.max_value is not None else 100
+        step_size = point.generator_config.get("step_size", (hi - lo) * 0.05)
+        if step_size <= 0:
+            step_size = (hi - lo) * 0.05
+        if key not in self._random_walk_state:
+            self._random_walk_state[key] = (lo + hi) / 2
+        current = self._random_walk_state[key]
+        delta = random.uniform(-step_size, step_size)
+        new_value = current + delta
+        new_value = max(lo, min(hi, new_value))
+        self._random_walk_state[key] = new_value
+        return self._cast_value(new_value, point.data_type)
+
+    def _generate_physical(self, point: PointConfig, elapsed: float) -> Any:
+        """使用物理行为模型生成值。
+
+        generator_config 支持两种格式:
+
+        1. 字典格式::
+
+            {
+                "behavior": "thermal",
+                "params": {"mass": 10, "specific_heat": 900, ...},
+                "input": 500,       # 行为模型的输入参数（如功率、扭矩等）
+                "dt": 0.1,          # 仿真时间步长 (s)
+                "config_string": "thermal:mass=10,specific_heat=900"  # 可选，字符串配置
+            }
+
+        2. 字符串格式（通过 config_string 字段或 behavior 字段）::
+
+            {"config_string": "thermal:mass=10,specific_heat=900"}
+
+        """
+        key = f"{point.name}_{point.address}"
+        config = point.generator_config or {}
+
+        # 获取或创建行为模型实例
+        behavior = self._behaviors.get(key)
+        if behavior is None:
+            # 优先使用 config_string 字符串配置
+            config_str = config.get("config_string")
+            behavior = create_behavior(config_str) if config_str else create_behavior(config)
+
+            if behavior is None:
+                logger.warning(
+                    "Failed to create behavior model for point %s, falling back to fixed",
+                    point.name,
+                )
+                return self._generate_fixed(point)
+            self._behaviors[key] = behavior
+
+        # 提取输入参数和时间步长
+        input_value, dt = get_behavior_input(config)
+
+        # 如果 input 未指定，尝试从 min/max 推断合理输入
+        if input_value == 0.0 and "input" not in config:
+            if point.min_value is not None and point.max_value is not None:
+                input_value = (point.min_value + point.max_value) / 2
+            elif point.fixed_value is not None:
+                input_value = point.fixed_value
+
+        try:
+            # 调用行为模型 update 方法
+            result = behavior.update(input_value, dt=dt)
+        except Exception as e:
+            logger.warning("Behavior model update error for point %s: %s", point.name, e)
+            return self._generate_fixed(point)
+
+        return self._cast_value(result, point.data_type)
+
+    def _cast_value(self, value: Any, data_type: DataType) -> Any:
+        try:
+            if data_type == DataType.BOOL:
+                return bool(value)
+            elif data_type == DataType.INT16:
+                v = int(value)
+                return max(-32768, min(32767, v))
+            elif data_type == DataType.INT32:
+                v = int(value)
+                return max(-2147483648, min(2147483647, v))
+            elif data_type == DataType.UINT16:
+                return int(abs(value)) & 0xFFFF
+            elif data_type == DataType.UINT32:
+                return int(abs(value)) & 0xFFFFFFFF
+            elif data_type in (DataType.FLOAT32, DataType.FLOAT64):
+                return float(value)
+            elif data_type == DataType.STRING:
+                return str(value)
+        except (ValueError, TypeError) as e:
+            logger.debug("Cast value error for %s: %s", data_type, e)
+        return value

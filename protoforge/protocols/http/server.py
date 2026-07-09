@@ -1,3 +1,5 @@
+"""HTTP protocol server implementation."""
+
 import asyncio
 import json
 import logging
@@ -279,7 +281,7 @@ class HttpSimulatorServer(ProtocolServer):
         )
         return header.encode("utf-8")
 
-    def _json_response(self, status: int, body: dict, keep_alive: bool = True) -> bytes:
+    def _json_response(self, status: int, body: dict[str, Any], keep_alive: bool = True) -> bytes:
         status_text = {200: "OK", 204: "No Content", 400: "Bad Request", 404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large", 500: "Internal Server Error"}.get(status, "OK")
         body_bytes = json.dumps(body, ensure_ascii=False).encode("utf-8")
         # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *

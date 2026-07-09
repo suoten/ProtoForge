@@ -1,3 +1,5 @@
+"""Module: state."""
+
 import asyncio
 import logging
 from collections.abc import Callable

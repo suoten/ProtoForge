@@ -1,3 +1,5 @@
+"""EdgeLite integration client for device synchronization and pipeline management."""
+
 import logging
 import re
 import threading
@@ -300,7 +302,7 @@ def _get_protocol_status(protocol: str) -> str:
         return "unknown"
 
 
-def _format_driver_config_for_display(config: dict) -> str:
+def _format_driver_config_for_display(config: dict[str, Any]) -> str:
     """Format driver_config as human-readable connection info for error messages."""
     if not config:
         return ""
@@ -354,7 +356,7 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
     return None
 
 
-async def _get_edgelite_device_config(client: httpx.AsyncClient, el_url: str, headers: dict, device_id: str) -> dict[str, Any] | None:
+async def _get_edgelite_device_config(client: httpx.AsyncClient, el_url: str, headers: dict[str, Any], device_id: str) -> dict[str, Any] | None:
     """查询 EdgeLite 设备配置，返回设备详情（包含实际使用的端口）"""
     try:
         resp = await client.get(
@@ -373,7 +375,7 @@ async def _get_edgelite_device_config(client: httpx.AsyncClient, el_url: str, he
 async def _get_edgelite_protocol_port_from_existing_device(
     client: httpx.AsyncClient,
     el_url: str,
-    headers: dict,
+    headers: dict[str, Any],
     protocol: str,
     protoforge_device_id: str,
 ) -> int | None:
@@ -1182,7 +1184,7 @@ def _get_default_port(protocol: str) -> int:
     return _PROTOCOL_DEFAULT_PORTS.get(protocol, 0)
 
 
-def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[str, str]:
+def _extract_driver_host_port(driver_config: dict[str, Any], protocol: str = "") -> tuple[str, str]:
     if not isinstance(driver_config, dict):
         return ("", "")
     host = ""
@@ -1242,7 +1244,7 @@ def _extract_driver_host_port(driver_config: dict, protocol: str = "") -> tuple[
     return (host, port)
 
 
-def _build_connect_error(driver_config: dict, protocol: str, protoforge_running: bool, same_server: bool = False) -> dict[str, Any]:
+def _build_connect_error(driver_config: dict[str, Any], protocol: str, protoforge_running: bool, same_server: bool = False) -> dict[str, Any]:
     driver_host, driver_port = _extract_driver_host_port(driver_config, protocol)
     proto_name = _PROTOCOL_DISPLAY.get(protocol, protocol.upper())
     default_port = _get_default_port(protocol)

@@ -1,0 +1,59 @@
+{
+    "id": "bacnet_lighting_panel",
+    "name": "照明配电箱",
+    "protocol": "bacnet",
+    "description": "BACnet照明配电箱，支持回路控制和能耗监测",
+    "manufacturer": "Generic",
+    "model": "LP-16",
+    "points": [
+        {
+            "name": "circuit1_status",
+            "address": "BV:1",
+            "data_type": "bool",
+            "description": "回路1状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "circuit2_status",
+            "address": "BV:2",
+            "data_type": "bool",
+            "description": "回路2状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "total_power",
+            "address": "AV:1",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "总功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 15.0
+        },
+        {
+            "name": "total_energy",
+            "address": "AV:2",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "累计能耗",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        }
+    ],
+    "protocol_config": {
+        "device_id": 103
+    },
+    "tags": [
+        "照明",
+        "配电箱",
+        "BACnet",
+        "楼宇"
+    ]
+}

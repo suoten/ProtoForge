@@ -1,0 +1,79 @@
+{
+    "id": "ethercat_servo_drive",
+    "name": "EtherCAT伺服驱动器",
+    "protocol": "ethercat",
+    "description": "EtherCAT总线伺服驱动器仿真(CiA 402)",
+    "manufacturer": "Generic",
+    "model": "EC-Servo-400W",
+    "points": [
+        {
+            "name": "position_actual",
+            "address": "0x6064",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "实际位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 360
+        },
+        {
+            "name": "velocity_actual",
+            "address": "0x606C",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "实际速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 3000
+        },
+        {
+            "name": "torque_actual",
+            "address": "0x6077",
+            "data_type": "float32",
+            "unit": "Nm",
+            "description": "实际扭矩",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 5.0
+        },
+        {
+            "name": "status_word",
+            "address": "0x6041",
+            "data_type": "uint16",
+            "description": "状态字",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 39
+        },
+        {
+            "name": "control_word",
+            "address": "0x6040",
+            "data_type": "uint16",
+            "description": "控制字",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 15
+        },
+        {
+            "name": "motor_temp",
+            "address": "0x2030",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "电机温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 75.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "EtherCAT",
+        "伺服",
+        "驱动器",
+        "CiA402"
+    ]
+}

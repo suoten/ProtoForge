@@ -1,3 +1,5 @@
+"""Protocol server management API routes (start/stop/config)."""
+
 import logging
 from typing import Any
 
@@ -13,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/protocols")
-async def list_protocols(request: Request, _user: dict = Depends(require_viewer)):
+async def list_protocols(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     lang = get_lang_from_request(request)
     protocols = engine.get_protocols()
@@ -32,14 +34,14 @@ async def list_protocols(request: Request, _user: dict = Depends(require_viewer)
 
 
 @router.get("/protocols/info")
-async def get_protocols_info(request: Request, _user: dict = Depends(require_viewer)):
+async def get_protocols_info(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     from protoforge.core.defaults import get_all_protocol_info
     lang = get_lang_from_request(request)
     return {"protocols": get_all_protocol_info(lang=lang)}
 
 
 @router.get("/protocols/{protocol_name}/config")
-async def get_protocol_config(protocol_name: str, _user: dict = Depends(require_viewer)):
+async def get_protocol_config(protocol_name: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     for p in engine.get_protocols():
         if p.get("name") == protocol_name:
@@ -49,7 +51,7 @@ async def get_protocol_config(protocol_name: str, _user: dict = Depends(require_
 
 
 @router.get("/protocols/{protocol_name}/device-config")
-async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(require_viewer)):
+async def get_protocol_device_config(protocol_name: str, _user: dict[str, Any] = Depends(require_viewer)):
     from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
     config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
@@ -59,7 +61,7 @@ async def get_protocol_device_config(protocol_name: str, _user: dict = Depends(r
 
 
 @router.post("/protocols/start-all")
-async def start_all_protocols(request: Request, _user: dict = Depends(require_operator)):
+async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
@@ -97,7 +99,7 @@ async def start_all_protocols(request: Request, _user: dict = Depends(require_op
 
 
 @router.post("/protocols/stop-all")
-async def stop_all_protocols(_user: dict = Depends(require_operator)):
+async def stop_all_protocols(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     results = {"stopped": [], "failed": [], "skipped": []}
@@ -117,7 +119,7 @@ async def stop_all_protocols(_user: dict = Depends(require_operator)):
 
 
 @router.post("/protocols/{protocol_name}/start")
-async def start_protocol(protocol_name: str, request: Request, config: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
+async def start_protocol(protocol_name: str, request: Request, config: dict[str, Any] | None = None, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
@@ -157,7 +159,7 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
 
 
 @router.post("/protocols/{protocol_name}/stop")
-async def stop_protocol(protocol_name: str, _user: dict = Depends(require_operator), request: Request = None):
+async def stop_protocol(protocol_name: str, _user: dict[str, Any] = Depends(require_operator), request: Request = None):
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request) if request else "zh"

@@ -1,0 +1,61 @@
+{
+    "id": "fins_e5cc_temp",
+    "name": "欧姆龙E5CC温控器",
+    "protocol": "fins",
+    "description": "欧姆龙E5CC数字温控器FINS协议仿真",
+    "manufacturer": "Omron",
+    "model": "E5CC",
+    "points": [
+        {
+            "name": "pv",
+            "address": "CIO1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "当前温度(PV)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "sv",
+            "address": "CIO2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "设定温度(SV)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 120.0
+        },
+        {
+            "name": "output",
+            "address": "CIO3",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "输出值(MV)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "alarm_status",
+            "address": "CIO4",
+            "data_type": "uint16",
+            "description": "报警状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "dest_node": 2,
+        "dest_unit": 0
+    },
+    "tags": [
+        "温控器",
+        "欧姆龙",
+        "E5CC",
+        "温度控制"
+    ]
+}

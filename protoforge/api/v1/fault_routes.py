@@ -79,7 +79,7 @@ def _fault_config_to_dict(config: FaultConfig) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 @router.post("/faults")
-async def create_fault(req: CreateFaultRequest, _user: dict = Depends(require_operator)):
+async def create_fault(req: CreateFaultRequest, _user: dict[str, Any] = Depends(require_operator)):
     """注入故障到指定设备。
 
     在目标设备上创建故障配置，可选自动激活。
@@ -142,7 +142,7 @@ async def create_fault(req: CreateFaultRequest, _user: dict = Depends(require_op
 
 
 @router.delete("/faults/{fault_id}")
-async def delete_fault(fault_id: str, device_id: str, _user: dict = Depends(require_operator)):
+async def delete_fault(fault_id: str, device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """从指定设备移除故障。"""
     instance = _get_device_instance(device_id)
     success = instance.remove_fault(fault_id)
@@ -158,7 +158,7 @@ async def delete_fault(fault_id: str, device_id: str, _user: dict = Depends(requ
 
 
 @router.get("/faults")
-async def list_faults(device_id: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_faults(device_id: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
     """获取故障列表。
 
     :param device_id: 设备 ID，不指定则返回所有设备的故障
@@ -185,7 +185,7 @@ async def list_faults(device_id: str | None = None, _user: dict = Depends(requir
 
 
 @router.post("/faults/clear")
-async def clear_faults(req: ClearFaultsRequest, _user: dict = Depends(require_operator)):
+async def clear_faults(req: ClearFaultsRequest, _user: dict[str, Any] = Depends(require_operator)):
     """清除故障。
 
     :param req.device_id: 设备 ID，None 表示清除所有设备的故障
@@ -209,7 +209,7 @@ async def clear_faults(req: ClearFaultsRequest, _user: dict = Depends(require_op
 
 
 @router.post("/faults/{fault_id}/activate")
-async def activate_fault(fault_id: str, req: FaultActionRequest, _user: dict = Depends(require_operator)):
+async def activate_fault(fault_id: str, req: FaultActionRequest, _user: dict[str, Any] = Depends(require_operator)):
     """激活指定故障。"""
     instance = _get_device_instance(req.device_id)
     success = instance.activate_fault(fault_id)
@@ -225,7 +225,7 @@ async def activate_fault(fault_id: str, req: FaultActionRequest, _user: dict = D
 
 
 @router.post("/faults/{fault_id}/deactivate")
-async def deactivate_fault(fault_id: str, req: FaultActionRequest, _user: dict = Depends(require_operator)):
+async def deactivate_fault(fault_id: str, req: FaultActionRequest, _user: dict[str, Any] = Depends(require_operator)):
     """停用指定故障。"""
     instance = _get_device_instance(req.device_id)
     success = instance.deactivate_fault(fault_id)
@@ -241,7 +241,7 @@ async def deactivate_fault(fault_id: str, req: FaultActionRequest, _user: dict =
 
 
 @router.get("/faults/types")
-async def list_fault_types(_user: dict = Depends(require_viewer)):
+async def list_fault_types(_user: dict[str, Any] = Depends(require_viewer)):
     """返回所有可用的故障类型和触发模式。"""
     return {
         "fault_types": [{"value": t.value, "name": t.name} for t in FaultType],

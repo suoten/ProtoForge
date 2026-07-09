@@ -1,0 +1,72 @@
+{
+    "id": "fanuc_robot",
+    "name": "FANUC工业机器人",
+    "protocol": "fanuc",
+    "description": "FANUC工业机器人FOCAS仿真",
+    "manufacturer": "FANUC",
+    "model": "LR-200iD",
+    "points": [
+        {
+            "name": "j1_angle",
+            "address": "j1",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "J1轴角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -180,
+            "max_value": 180
+        },
+        {
+            "name": "j2_angle",
+            "address": "j2",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "J2轴角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -120,
+            "max_value": 120
+        },
+        {
+            "name": "j3_angle",
+            "address": "j3",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "J3轴角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -180,
+            "max_value": 180
+        },
+        {
+            "name": "speed_override",
+            "address": "speed_override",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "速度倍率",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 100.0
+        },
+        {
+            "name": "cycle_count",
+            "address": "cycle_count",
+            "data_type": "uint32",
+            "description": "循环计数",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        }
+    ],
+    "protocol_config": {
+        "port": 8193
+    },
+    "tags": [
+        "机器人",
+        "FANUC",
+        "LR-200iD",
+        "工业自动化"
+    ]
+}

@@ -1,3 +1,5 @@
+"""Webhook configuration management API routes."""
+
 import logging
 import re
 import time
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/webhooks")
-async def list_webhooks(_user: dict = Depends(require_viewer)):
+async def list_webhooks(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         from protoforge.core.webhook import webhook_manager
         return {"webhooks": webhook_manager.list_webhooks()}
@@ -22,7 +24,7 @@ async def list_webhooks(_user: dict = Depends(require_viewer)):
 
 
 @router.post("/webhooks")
-async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def add_webhook(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
         from protoforge.core.webhook import webhook_manager
 
@@ -47,7 +49,7 @@ async def add_webhook(config: dict[str, Any], _user: dict = Depends(require_oper
 
 
 @router.put("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
-async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
+async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
 
@@ -71,7 +73,7 @@ async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict = 
 
 
 @router.delete("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
-async def delete_webhook(webhook_id: str, _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
+async def delete_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
         if not webhook_manager.remove_webhook(webhook_id):  # FIXED: wh_id→webhook_id 命名统一
@@ -85,7 +87,7 @@ async def delete_webhook(webhook_id: str, _user: dict = Depends(require_operator
 
 
 @router.post("/webhooks/{webhook_id}/test")  # FIXED: wh_id→webhook_id 命名统一
-async def test_webhook(webhook_id: str, _user: dict = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
+async def test_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
         from protoforge.core.webhook import webhook_manager
         webhook = webhook_manager.get_webhook(webhook_id)  # FIXED: wh_id→webhook_id 命名统一
@@ -100,7 +102,7 @@ async def test_webhook(webhook_id: str, _user: dict = Depends(require_operator))
 
 
 @router.get("/webhooks/stats")
-async def webhook_stats(_user: dict = Depends(require_viewer)):
+async def webhook_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         from protoforge.core.webhook import webhook_manager
         return webhook_manager.get_stats()

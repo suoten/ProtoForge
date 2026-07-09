@@ -1,3 +1,5 @@
+"""Shared utilities for MODBUS protocol implementation."""
+
 import logging
 import re
 import struct
@@ -159,7 +161,7 @@ class ModbusDataStore:
         logger.warning("Modbus get_point called with unknown FC=%d, address=%d", fc, address)  # FIXED-L01: 未知FC记录警告
         return 0
 
-    def set_values(self, fc: int, address: int, values: list) -> None:
+    def set_values(self, fc: int, address: int, values: list[Any]) -> None:
         for i, v in enumerate(values):
             addr = address + i
             if fc in (1, 5, 15):
@@ -171,7 +173,7 @@ class ModbusDataStore:
             elif fc == 4:
                 self._input_regs[addr] = int(v) & 0xFFFF
 
-    def get_values(self, fc: int, address: int, count: int = 1) -> list:
+    def get_values(self, fc: int, address: int, count: int = 1) -> list[Any]:
         result = []
         for i in range(count):
             addr = address + i

@@ -31,7 +31,7 @@ def _get_integration_manager():
 
 
 @router.post("")
-async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def import_edgelite(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     from protoforge.core.integration import import_edgelite_config
     engine = _get_engine()
 
@@ -55,7 +55,7 @@ async def import_edgelite(config: dict[str, Any], _user: dict = Depends(require_
 
 
 @router.post("/push/{device_id}")
-async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_operator)):
+async def push_device_to_edgelite(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """推送设备到 EdgeLite — 通过 IntegrationManager 统一入口。"""
     mgr = _get_integration_manager()
     engine = _get_engine()
@@ -79,7 +79,7 @@ async def push_device_to_edgelite(device_id: str, _user: dict = Depends(require_
 @router.post("/push")
 async def batch_push_devices(
     device_ids: list[str] = Body(default=[], embed=True),
-    _user: dict = Depends(require_operator),
+    _user: dict[str, Any] = Depends(require_operator),
 ):
     """批量推送设备到 EdgeLite。"""
     mgr = _get_integration_manager()
@@ -108,7 +108,7 @@ async def batch_push_devices(
 
 
 @router.post("/test")
-async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=None), _user: dict = Depends(require_operator)):
+async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=None), _user: dict[str, Any] = Depends(require_operator)):
     """测试 EdgeLite 网关连通性。"""
     mgr = _get_integration_manager()
     if config is None:
@@ -128,7 +128,7 @@ async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=
 
 
 @router.get("/status/{device_id}")
-async def get_edgelite_device_status(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_edgelite_device_status(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     """查询 EdgeLite 设备状态。"""
     mgr = _get_integration_manager()
     engine = _get_engine()
@@ -145,7 +145,7 @@ async def get_edgelite_device_status(device_id: str, _user: dict = Depends(requi
 
 
 @router.get("/points/{device_id}")
-async def read_edgelite_device_points(device_id: str, _user: dict = Depends(require_viewer)):
+async def read_edgelite_device_points(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     """从 EdgeLite 读取设备数据点。"""
     mgr = _get_integration_manager()
     engine = _get_engine()
@@ -168,7 +168,7 @@ async def read_edgelite_device_points(device_id: str, _user: dict = Depends(requ
 async def verify_edgelite_pipeline(
     device_id: str,
     auto_fix: bool = Query(default=True, description="自动修复管线问题"),
-    _user: dict = Depends(require_viewer),
+    _user: dict[str, Any] = Depends(require_viewer),
 ):
     """端到端管线验证，支持自动修复。"""
     mgr = _get_integration_manager()
@@ -225,7 +225,7 @@ async def verify_edgelite_pipeline(
 
 
 @router.delete("/push/{device_id}")
-async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(require_operator)):
+async def remove_device_from_edgelite(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """从 EdgeLite 删除设备。"""
     mgr = _get_integration_manager()
     engine = _get_engine()
@@ -242,7 +242,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict = Depends(requ
 
 
 @router.post("/pygbsentry")
-async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(require_operator)):
+async def import_pygbsentry(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     from protoforge.core.integration import import_pygbsentry_config
     engine = _get_engine()
 
@@ -266,14 +266,14 @@ async def import_pygbsentry(config: dict[str, Any], _user: dict = Depends(requir
 
 
 @router.get("/integration/status")
-async def get_integration_status(_user: dict = Depends(require_viewer)):
+async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)):
     """获取 IntegrationManager 状态。"""
     mgr = _get_integration_manager()
     return mgr.get_status()
 
 
 @router.get("/integration/metrics")
-async def get_integration_metrics(_user: dict = Depends(require_viewer)):
+async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer)):
     """获取 IntegrationManager 指标。"""
     mgr = _get_integration_manager()
     return mgr.get_metrics()
@@ -283,7 +283,7 @@ async def get_integration_metrics(_user: dict = Depends(require_viewer)):
 async def get_backhaul_data(
     device_id: str = Query(default="", description="设备ID，为空则返回全部"),
     limit: int = Query(default=100, ge=1, le=1000),
-    _user: dict = Depends(require_viewer),
+    _user: dict[str, Any] = Depends(require_viewer),
 ):
     """获取 EdgeLite 回传数据。"""
     mgr = _get_integration_manager()
@@ -291,7 +291,7 @@ async def get_backhaul_data(
 
 
 @router.get("/integration/protocols")
-async def get_supported_protocols(_user: dict = Depends(require_viewer)):
+async def get_supported_protocols(_user: dict[str, Any] = Depends(require_viewer)):
     """获取 EdgeLite 支持的协议映射。"""
     mgr = _get_integration_manager()
     return {"protocol_map": mgr.get_protocol_map(), "supported_source_protocols": mgr.get_supported_source_protocols()}

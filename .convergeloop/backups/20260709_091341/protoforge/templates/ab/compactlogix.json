@@ -1,0 +1,60 @@
+{
+    "id": "ab_compactlogix",
+    "name": "AB CompactLogix PLC",
+    "protocol": "ab",
+    "description": "罗克韦尔AB CompactLogix紧凑型PLC仿真",
+    "manufacturer": "Rockwell",
+    "model": "CompactLogix-5380",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "Program:Main.Run",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "temperature",
+            "address": "Program:Main.Temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "过程温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50.0,
+            "max_value": 150.0
+        },
+        {
+            "name": "flow_rate",
+            "address": "Program:Main.FlowRate",
+            "data_type": "float32",
+            "unit": "L/min",
+            "description": "流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 100
+        },
+        {
+            "name": "valve_pos",
+            "address": "Program:Main.ValvePos",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "阀门开度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 50.0
+        }
+    ],
+    "protocol_config": {
+        "slot": 0
+    },
+    "tags": [
+        "PLC",
+        "AB",
+        "Rockwell",
+        "CompactLogix"
+    ]
+}

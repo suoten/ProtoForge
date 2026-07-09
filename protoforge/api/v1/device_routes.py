@@ -1,3 +1,5 @@
+"""Device management API routes (CRUD, start/stop, config)."""
+
 import logging
 import re
 import uuid
@@ -15,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/devices")
-async def list_devices(protocol: str | None = None, _user: dict = Depends(require_viewer)):
+async def list_devices(protocol: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     return {"devices": engine.list_devices(protocol=protocol)}
 
 
 @router.post("/devices")
-async def create_device(config: DeviceConfig, _user: dict = Depends(require_operator)):
+async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(require_operator)):
     if not config.name or not config.name.strip():
         raise HTTPException(status_code=400, detail="Device name is required")
     if not config.id or not config.id.strip():
@@ -69,7 +71,7 @@ async def create_device(config: DeviceConfig, _user: dict = Depends(require_oper
 
 
 @router.post("/devices/quick-create")
-async def quick_create_device(params: dict[str, Any], _user: dict = Depends(require_operator)):
+async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     template_id = params.get("template_id", "")
     device_name = params.get("name", "")
     if not isinstance(template_id, str) or not isinstance(device_name, str):
@@ -135,7 +137,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict = Depends(requ
 async def batch_create_devices(
     configs: list[DeviceConfig],
     atomic: bool = False,
-    _user: dict = Depends(require_operator),
+    _user: dict[str, Any] = Depends(require_operator),
 ):
     """批量创建设备
 
@@ -220,7 +222,7 @@ async def batch_create_devices(
 
 
 @router.post("/devices/batch/delete")
-async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
+async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     deleted = 0
@@ -244,7 +246,7 @@ async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _u
 
 
 @router.post("/devices/batch/start")
-async def batch_start_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
+async def batch_start_devices(device_ids: list[str] = Body(..., embed=True), _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     started = 0
     errors = []
@@ -260,7 +262,7 @@ async def batch_start_devices(device_ids: list[str] = Body(..., embed=True), _us
 
 
 @router.post("/devices/batch/stop")
-async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _user: dict = Depends(require_operator)):
+async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     stopped = 0
     errors = []
@@ -275,7 +277,7 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
 
 
 @router.get("/devices/{device_id}")
-async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     try:
         return engine.get_device(device_id)
@@ -284,7 +286,7 @@ async def get_device(device_id: str, _user: dict = Depends(require_viewer)):
 
 
 @router.get("/devices/{device_id}/config")
-async def get_device_config(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_device_config(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
 
@@ -295,7 +297,7 @@ async def get_device_config(device_id: str, _user: dict = Depends(require_viewer
 
 
 @router.get("/devices/{device_id}/connection-guide")
-async def get_device_connection_guide(device_id: str, request: Request, _user: dict = Depends(require_viewer)):
+async def get_device_connection_guide(device_id: str, request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     device = engine.get_device(device_id)
     if not device:
@@ -361,7 +363,7 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
 
 
 @router.delete("/devices/{device_id}")
-async def delete_device(device_id: str, _user: dict = Depends(require_operator)):
+async def delete_device(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -402,7 +404,7 @@ async def delete_device(device_id: str, _user: dict = Depends(require_operator))
 
 
 @router.put("/devices/{device_id}")
-async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depends(require_operator)):
+async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -430,7 +432,7 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict = Depe
 
 
 @router.get("/devices/{device_id}/points")
-async def get_device_points(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_device_points(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
 
     try:
@@ -448,7 +450,7 @@ async def get_device_points(device_id: str, _user: dict = Depends(require_viewer
 
 
 @router.post("/devices/{device_id}/start")
-async def start_device(device_id: str, _user: dict = Depends(require_operator)):
+async def start_device(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
 
     try:
@@ -463,7 +465,7 @@ async def start_device(device_id: str, _user: dict = Depends(require_operator)):
 
 
 @router.post("/devices/{device_id}/stop")
-async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
+async def stop_device(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     try:
         await engine.stop_device(device_id)
@@ -477,7 +479,7 @@ async def stop_device(device_id: str, _user: dict = Depends(require_operator)):
 
 
 @router.put("/devices/{device_id}/points/{point_name}")  # FIXED: 添加try-except保护
-async def write_device_point(device_id: str, point_name: str, body: dict[str, Any] | None = None, _user: dict = Depends(require_operator)):
+async def write_device_point(device_id: str, point_name: str, body: dict[str, Any] | None = None, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     value = body.get("value") if body else None
@@ -526,7 +528,7 @@ class InjectFaultRequest(BaseModel):
 
 
 @router.post("/devices/{device_id}/faults")
-async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: dict = Depends(require_operator)):
+async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: dict[str, Any] = Depends(require_operator)):
     """注入故障到指定设备。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -598,7 +600,7 @@ async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: di
 async def list_device_faults(
     device_id: str,
     active_only: bool = Query(False, description="仅返回活跃故障"),
-    _user: dict = Depends(require_viewer),
+    _user: dict[str, Any] = Depends(require_viewer),
 ):
     """列出设备上的故障。"""
     engine = _get_engine()
@@ -616,7 +618,7 @@ async def list_device_faults(
 
 
 @router.delete("/devices/{device_id}/faults/{fault_id}")
-async def remove_device_fault(device_id: str, fault_id: str, _user: dict = Depends(require_operator)):
+async def remove_device_fault(device_id: str, fault_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """移除指定故障。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -636,7 +638,7 @@ async def remove_device_fault(device_id: str, fault_id: str, _user: dict = Depen
 
 
 @router.delete("/devices/{device_id}/faults")
-async def clear_device_faults(device_id: str, _user: dict = Depends(require_operator)):
+async def clear_device_faults(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """清除设备上的所有故障。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -662,7 +664,7 @@ class StateTransitionRequest(BaseModel):
 
 @router.post("/devices/{device_id}/state/transition")
 async def trigger_state_transition(
-    device_id: str, req: StateTransitionRequest, _user: dict = Depends(require_operator),
+    device_id: str, req: StateTransitionRequest, _user: dict[str, Any] = Depends(require_operator),
 ):
     """触发设备状态转换。"""
     engine = _get_engine()
@@ -703,7 +705,7 @@ async def trigger_state_transition(
 
 
 @router.get("/devices/{device_id}/state")
-async def get_device_state(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_device_state(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     """获取设备当前状态。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -717,7 +719,7 @@ async def get_device_state(device_id: str, _user: dict = Depends(require_viewer)
 async def get_device_state_history(
     device_id: str,
     count: int = Query(50, ge=1, le=500, description="返回的历史记录数量"),
-    _user: dict = Depends(require_viewer),
+    _user: dict[str, Any] = Depends(require_viewer),
 ):
     """获取设备状态转换历史。"""
     engine = _get_engine()
@@ -759,7 +761,7 @@ class CreateControlLoopRequest(BaseModel):
 
 @router.post("/devices/{device_id}/control-loops")
 async def add_device_control_loop(
-    device_id: str, req: CreateControlLoopRequest, _user: dict = Depends(require_operator),
+    device_id: str, req: CreateControlLoopRequest, _user: dict[str, Any] = Depends(require_operator),
 ):
     """添加控制回路到设备。"""
     engine = _get_engine()
@@ -798,7 +800,7 @@ async def add_device_control_loop(
 
 @router.delete("/devices/{device_id}/control-loops/{loop_id}")
 async def remove_device_control_loop(
-    device_id: str, loop_id: str, _user: dict = Depends(require_operator),
+    device_id: str, loop_id: str, _user: dict[str, Any] = Depends(require_operator),
 ):
     """移除控制回路。"""
     engine = _get_engine()
@@ -816,7 +818,7 @@ async def remove_device_control_loop(
 
 
 @router.get("/devices/{device_id}/control-loops")
-async def list_device_control_loops(device_id: str, _user: dict = Depends(require_viewer)):
+async def list_device_control_loops(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     """列出设备上的控制回路。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
@@ -831,7 +833,7 @@ async def list_device_control_loops(device_id: str, _user: dict = Depends(requir
 # ---------------------------------------------------------------------------
 
 @router.get("/devices/{device_id}/detail")
-async def get_device_detail(device_id: str, _user: dict = Depends(require_viewer)):
+async def get_device_detail(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     """获取设备详细信息，包含状态机、故障和控制回路信息。"""
     engine = _get_engine()
     try:
@@ -847,7 +849,7 @@ class ConfigureNetworkRequest(BaseModel):
 
 
 @router.post("/network/configure")
-async def configure_network(req: ConfigureNetworkRequest, _user: dict = Depends(require_operator)):
+async def configure_network(req: ConfigureNetworkRequest, _user: dict[str, Any] = Depends(require_operator)):
     """配置网络仿真参数。"""
     engine = _get_engine()
     engine.configure_network(req.profile, req.enabled)
@@ -855,7 +857,7 @@ async def configure_network(req: ConfigureNetworkRequest, _user: dict = Depends(
 
 
 @router.get("/network/status")
-async def get_network_status(_user: dict = Depends(require_viewer)):
+async def get_network_status(_user: dict[str, Any] = Depends(require_viewer)):
     """获取网络仿真状态。"""
     engine = _get_engine()
     return engine.network_simulator.to_dict()
@@ -874,7 +876,7 @@ class AddFaultPropagationRuleRequest(BaseModel):
 
 
 @router.post("/faults/propagation/rules")
-async def add_fault_propagation_rule(req: AddFaultPropagationRuleRequest, _user: dict = Depends(require_operator)):
+async def add_fault_propagation_rule(req: AddFaultPropagationRuleRequest, _user: dict[str, Any] = Depends(require_operator)):
     """添加故障传播规则。"""
     engine = _get_engine()
     idx = engine.fault_propagation.add_rule(
@@ -891,14 +893,14 @@ async def add_fault_propagation_rule(req: AddFaultPropagationRuleRequest, _user:
 
 
 @router.get("/faults/propagation/rules")
-async def list_fault_propagation_rules(_user: dict = Depends(require_viewer)):
+async def list_fault_propagation_rules(_user: dict[str, Any] = Depends(require_viewer)):
     """列出故障传播规则。"""
     engine = _get_engine()
     return engine.fault_propagation.to_dict()
 
 
 @router.delete("/faults/propagation/rules/{index}")
-async def remove_fault_propagation_rule(index: int, _user: dict = Depends(require_operator)):
+async def remove_fault_propagation_rule(index: int, _user: dict[str, Any] = Depends(require_operator)):
     """移除故障传播规则。"""
     engine = _get_engine()
     success = engine.fault_propagation.remove_rule(index)
@@ -923,7 +925,7 @@ class AddTimeSeriesPatternRequest(BaseModel):
 
 
 @router.post("/timeseries/patterns")
-async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict = Depends(require_operator)):
+async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict[str, Any] = Depends(require_operator)):
     """添加时间序列模式。"""
     engine = _get_engine()
     from protoforge.core.timeseries import TimeSeriesPattern
@@ -944,14 +946,14 @@ async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict =
 
 
 @router.get("/timeseries/patterns")
-async def list_timeseries_patterns(_user: dict = Depends(require_viewer)):
+async def list_timeseries_patterns(_user: dict[str, Any] = Depends(require_viewer)):
     """列出所有时间序列模式。"""
     engine = _get_engine()
     return engine.timeseries_manager.to_dict()
 
 
 @router.delete("/timeseries/patterns/{point_name}")
-async def remove_timeseries_pattern(point_name: str, _user: dict = Depends(require_operator)):
+async def remove_timeseries_pattern(point_name: str, _user: dict[str, Any] = Depends(require_operator)):
     """移除时间序列模式。"""
     engine = _get_engine()
     success = engine.timeseries_manager.remove_pattern(point_name)

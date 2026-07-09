@@ -1,3 +1,5 @@
+"""OPCDA protocol server implementation."""
+
 import asyncio
 import logging
 import struct

@@ -1,3 +1,5 @@
+"""EdgeLite integration API routes for device push/pull operations."""
+
 import logging
 from typing import Any
 
@@ -16,7 +18,7 @@ def _get_integration_manager():
 
 
 @router.get("/status")
-async def get_integration_status(_user: dict = Depends(require_viewer)):
+async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         return manager.get_status()
@@ -26,7 +28,7 @@ async def get_integration_status(_user: dict = Depends(require_viewer)):
 
 
 @router.get("/metrics")
-async def get_integration_metrics(_user: dict = Depends(require_viewer)):
+async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         return manager.get_metrics()
@@ -36,7 +38,7 @@ async def get_integration_metrics(_user: dict = Depends(require_viewer)):
 
 
 @router.post("/batch-push")
-async def batch_push(request: dict[str, Any], _user: dict = Depends(require_operator)):
+async def batch_push(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
         from protoforge.main import get_engine
         engine = get_engine()
@@ -79,7 +81,7 @@ async def batch_push(request: dict[str, Any], _user: dict = Depends(require_oper
 
 
 @router.post("/device/{device_id}/start")
-async def start_device_collect(device_id: str, _user: dict = Depends(require_operator)):
+async def start_device_collect(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     if not device_id or not device_id.strip():
         raise HTTPException(status_code=400, detail="device_id is required")
     try:
@@ -96,7 +98,7 @@ async def start_device_collect(device_id: str, _user: dict = Depends(require_ope
 
 
 @router.post("/device/{device_id}/stop")
-async def stop_device_collect(device_id: str, _user: dict = Depends(require_operator)):
+async def stop_device_collect(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     if not device_id or not device_id.strip():
         raise HTTPException(status_code=400, detail="device_id is required")
     try:
@@ -113,7 +115,7 @@ async def stop_device_collect(device_id: str, _user: dict = Depends(require_oper
 
 
 @router.get("/protocols")
-async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
+async def get_protocol_mappings(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         raw_map = manager.get_protocol_map()
@@ -136,7 +138,7 @@ async def get_protocol_mappings(_user: dict = Depends(require_viewer)):
 
 
 @router.post("/validate")
-async def validate_device_compatibility(request: dict[str, Any], _user: dict = Depends(require_viewer)):
+async def validate_device_compatibility(request: dict[str, Any], _user: dict[str, Any] = Depends(require_viewer)):
     try:
         if not isinstance(request, dict):  # FIXED-P1: 添加请求体类型校验
             raise HTTPException(status_code=400, detail="Request body must be a JSON object")
@@ -165,7 +167,7 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict = D
 
 
 @router.get("/backhaul-data")
-async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict = Depends(require_viewer)):
+async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
@@ -175,7 +177,7 @@ async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict =
 
 
 @router.get("/device-status")
-async def get_device_status_cache(_user: dict = Depends(require_viewer)):
+async def get_device_status_cache(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         status = manager.get_device_status_cache()
@@ -188,7 +190,7 @@ async def get_device_status_cache(_user: dict = Depends(require_viewer)):
 
 
 @router.get("/alarm-rules")
-async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
+async def get_alarm_reaction_rules(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         manager = _get_integration_manager()
         return {"rules": [
@@ -203,7 +205,7 @@ async def get_alarm_reaction_rules(_user: dict = Depends(require_viewer)):
 
 
 @router.post("/alarm-rules")
-async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends(require_operator)):
+async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
         from protoforge.core.integration.manager import AlarmReactionRule
         manager = _get_integration_manager()
@@ -237,7 +239,7 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict = Depends
 
 
 @router.delete("/alarm-rules/{rule_id}")
-async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require_operator)):
+async def delete_alarm_reaction_rule(rule_id: str, _user: dict[str, Any] = Depends(require_operator)):
     try:
         manager = _get_integration_manager()
         manager.remove_alarm_reaction_rule(rule_id)
@@ -248,7 +250,7 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict = Depends(require
 
 
 @router.post("/message")
-async def handle_integration_message(request: dict[str, Any], _user: dict = Depends(require_operator)):
+async def handle_integration_message(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     msg_type = request.get("type", "")
     payload = request.get("payload", {})
     if not isinstance(payload, dict):

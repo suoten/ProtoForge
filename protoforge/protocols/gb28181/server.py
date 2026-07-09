@@ -1,3 +1,5 @@
+"""GB28181 protocol server implementation."""
+
 import asyncio
 import logging
 import re
@@ -504,7 +506,7 @@ class GB28181Server(ProtocolServer):
         except Exception as e:
             logger.debug("Keepalive send failed for %s: %s", gb_device.device_id, e)
 
-    def _parse_sdp(self, sdp: str) -> dict:
+    def _parse_sdp(self, sdp: str) -> dict[str, Any]:
         result = {"media_ip": "", "media_port": 0, "media_type": ""}
         lines = sdp.strip().split("\r\n")
         conn_addr = ""

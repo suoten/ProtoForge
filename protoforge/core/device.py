@@ -1,3 +1,5 @@
+"""Device simulation model with state machine and point management."""
+
 import asyncio
 import logging
 import time

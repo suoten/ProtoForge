@@ -1,0 +1,422 @@
+import asyncio
+import contextlib
+import json
+import logging
+import time
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+class ChannelBase(ABC):
+    def __init__(self):
+        self._message_handlers: dict[str, list[Callable]] = {}
+
+    def on_message(self, msg_type: str, handler: Callable) -> None:
+        self._message_handlers.setdefault(msg_type, []).append(handler)
+
+    @abstractmethod
+    async def connect(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def send(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def close(self) -> None:
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def is_connected(self) -> bool:
+        raise NotImplementedError
+
+    @property
+    def channel_type(self) -> str:
+        return "base"
+
+    async def _dispatch_message(self, message: dict[str, Any]) -> None:
+        msg_type = message.get("type", "")
+        for handler in self._message_handlers.get(msg_type, []):
+            try:
+                result = handler(message)
+                if asyncio.iscoroutine(result):
+                    await result
+            except Exception as e:
+                logger.error("Message handler error for %s: %s", msg_type, e)
+
+
+class HttpChannel(ChannelBase):
+    def __init__(self, base_url: str, auth: Any = None):
+        super().__init__()
+        self._base_url = base_url.rstrip("/")
+        self._auth = auth
+        self._connected = False
+        self._client: Any = None
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    @property
+    def channel_type(self) -> str:
+        return "http"
+
+    async def connect(self) -> None:
+        import httpx
+
+        from protoforge.core.defaults import get_http_timeout_default
+        self._client = httpx.AsyncClient(timeout=get_http_timeout_default(), base_url=self._base_url)
+        if self._auth:
+            await self._auth.ensure_token()
+        self._connected = True
+        logger.info("HTTP channel connected to %s", self._base_url)
+
+    async def send(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        if not self._client or not self._connected:
+            raise ConnectionError("HTTP channel not connected")
+
+        headers = {}
+        if self._auth and self._auth.token:
+            headers["Authorization"] = f"Bearer {self._auth.token}"
+        if self._auth and hasattr(self._auth, 'csrf_token') and self._auth.csrf_token:
+            headers["X-CSRF-Token"] = self._auth.csrf_token
+
+        msg_type = message.get("type", "")
+        payload = message.get("payload", message)
+
+        try:
+            if msg_type in ("push_device", "batch_push"):
+                resp = await self._client.post("/api/v1/integration/push-device", json=payload, headers=headers)
+                if resp.status_code in (200, 201):
+                    resp_data = self._safe_json(resp)
+                    inner = resp_data.get("data", resp_data) if resp_data else {}
+                    return {"ok": True, "data": inner}
+                if resp.status_code == 409:
+                    device_id = payload.get("device_id", "")
+                    update_payload = {k: v for k, v in payload.items() if k != "device_id"}
+                    resp = await self._client.put(f"/api/v1/devices/{device_id}", json=update_payload, headers=headers)
+                    if resp.status_code == 200:
+                        resp_data = self._safe_json(resp)
+                        inner = resp_data.get("data", resp_data) if resp_data else {}
+                        return {"ok": True, "updated": True, "data": inner}
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
+                        resp = await self._client.post("/api/v1/integration/push-device", json=payload, headers=headers)
+                        if resp.status_code in (200, 201):
+                            return {"ok": True, "data": self._safe_json(resp) or {}}
+                return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+
+            elif msg_type == "delete_device":
+                device_id = payload.get("device_id", "")
+                resp = await self._client.delete(f"/api/v1/devices/{device_id}", headers=headers)
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
+                        resp = await self._client.delete(f"/api/v1/devices/{device_id}", headers=headers)
+                return {"ok": resp.status_code in (200, 204)}
+
+            elif msg_type == "device_control":
+                device_id = payload.get("device_id", "")
+                action = payload.get("action", "")
+                if action not in ("start_collect", "stop_collect"):
+                    return {"ok": False, "error": f"Unknown action: {action}"}
+                resp = await self._client.post(
+                    "/api/v1/integration/message",
+                    json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
+                    headers=headers,
+                )
+                if resp.status_code == 404:
+                    endpoint = "start" if action == "start_collect" else "stop"
+                    resp = await self._client.post(f"/api/v1/devices/{device_id}/{endpoint}", headers=headers)
+                if resp.status_code == 200:
+                    resp_data = self._safe_json(resp)
+                    inner = resp_data.get("data", resp_data) if resp_data else {}
+                    return {"ok": True, "data": inner}
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
+                        resp = await self._client.post(
+                            "/api/v1/integration/message",
+                            json={"type": "device_control", "payload": {"device_id": device_id, "action": action}},
+                            headers=headers,
+                        )
+                        if resp.status_code == 200:
+                            resp_data = self._safe_json(resp)
+                            inner = resp_data.get("data", resp_data) if resp_data else {}
+                            return {"ok": True, "data": inner}
+                return {"ok": resp.status_code == 200, "error": None if resp.status_code == 200 else f"HTTP {resp.status_code}"}
+
+            else:
+                resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
+                if resp.status_code == 401 and self._auth:
+                    refreshed = await self._safe_refresh_token()
+                    if refreshed:
+                        headers["Authorization"] = f"Bearer {self._auth.token}"
+                        if self._auth.csrf_token:
+                            headers["X-CSRF-Token"] = self._auth.csrf_token
+                        resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
+                return {"ok": resp.status_code == 200, "data": self._safe_json(resp) if resp.status_code == 200 else None}
+
+        except Exception:
+            self._connected = False
+            raise
+
+    @staticmethod
+    def _safe_json(resp) -> dict | None:
+        try:
+            return resp.json()
+        except Exception as e:
+            logger.debug("Failed to parse JSON response: %s", e)
+            return None
+
+    async def _safe_refresh_token(self) -> bool:
+        try:
+            await self._auth.refresh_token()
+            return True
+        except Exception as e:
+            logger.warning("Token refresh failed: %s", e)
+            return False
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+        self._connected = False
+
+
+class ChannelFactory:
+    _registry: dict[str, type[ChannelBase]] = {}
+
+    @classmethod
+    def register(cls, channel_type: str, channel_class: type[ChannelBase]) -> None:
+        cls._registry[channel_type] = channel_class
+
+    @classmethod
+    def create(cls, channel_type: str, **kwargs: Any) -> ChannelBase:
+        if channel_type not in cls._registry:
+            raise ValueError(f"Unknown channel type: {channel_type}, available: {list(cls._registry.keys())}")
+        return cls._registry[channel_type](**kwargs)
+
+    @classmethod
+    def available_types(cls) -> list[str]:
+        return list(cls._registry.keys())
+
+
+ChannelFactory.register("http", HttpChannel)
+
+
+class WebSocketChannel(ChannelBase):
+    def __init__(
+        self,
+        url: str,
+        auth: Any = None,
+        heartbeat_interval: float = 30.0,
+        heartbeat_timeout: int = 3,
+    ):
+        super().__init__()
+        self._url = url
+        self._auth = auth
+        self._heartbeat_interval = heartbeat_interval
+        self._heartbeat_timeout = heartbeat_timeout
+        self._connected = False
+        self._ws: Any = None
+        self._receive_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
+        self._missed_heartbeats = 0
+        self._pending_responses: dict[str, asyncio.Future] = {}
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected
+
+    @property
+    def channel_type(self) -> str:
+        return "websocket"
+
+    async def connect(self) -> None:
+        try:
+            import websockets
+        except ImportError:
+            logger.warning("websockets library not installed, WebSocket channel unavailable")
+            raise
+
+        # FIX: 不再将 token 拼入 URL 参数（会泄露到日志），
+        # EdgeLite 要求通过首帧 {"type": "auth", "token": "xxx"} 认证
+        connect_url = self._url
+
+        self._ws = await websockets.connect(
+            connect_url,
+            ping_interval=60,    # 每 60 秒发送协议级 ping，保持连接活跃（防止反向代理空闲超时断开）
+            ping_timeout=20,     # 等待 pong 响应超时 20 秒
+            close_timeout=5.0,
+            open_timeout=10.0,
+        )
+        self._connected = True
+        self._missed_heartbeats = 0
+        self._ready = False  # 认证/握手完成后才启动心跳
+
+        self._receive_task = asyncio.create_task(self._receive_loop())
+        # 心跳延迟到 mark_ready() 后启动
+
+        logger.info("WebSocket channel connected to %s", self._url)
+
+    async def send(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        if not self._ws or not self._connected:
+            raise ConnectionError("WebSocket channel not connected")
+
+        msg_id = message.get("id")
+        data = json.dumps(message)
+        try:
+            await self._ws.send(data)
+        except Exception:
+            self._connected = False
+            if msg_id and msg_id in self._pending_responses:
+                self._pending_responses.pop(msg_id, None)
+            raise
+        if msg_id and hasattr(self, '_pending_responses'):
+            future = asyncio.get_running_loop().create_future()
+            self._pending_responses[msg_id] = future
+            try:
+                return await asyncio.wait_for(future, timeout=10.0)
+            except asyncio.TimeoutError:
+                self._pending_responses.pop(msg_id, None)
+                return {"ok": False, "error": "timeout"}
+        return None
+
+    async def close(self) -> None:
+        self._connected = False
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_task
+        if self._receive_task:
+            self._receive_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._receive_task
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception as e:
+                logger.debug("WebSocket close error: %s", e)
+            self._ws = None
+        logger.info("WebSocket channel closed")
+
+    async def _receive_loop(self) -> None:
+        try:
+            async for raw in self._ws:
+                try:
+                    message = json.loads(raw) if isinstance(raw, str) else raw
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning("Invalid JSON received on WebSocket")
+                    continue
+                try:
+                    msg_type = message.get("type", "")
+                    if msg_type == "heartbeat_ack":
+                        self._missed_heartbeats = 0
+                    resp_id = message.get("id") or message.get("request_id")
+                    if resp_id and resp_id in self._pending_responses:
+                        future = self._pending_responses.pop(resp_id)
+                        if not future.done():
+                            future.set_result(message)
+                        continue
+                    await self._dispatch_message(message)
+                except Exception as e:
+                    logger.error("WebSocket receive error: %s", e)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning("WebSocket connection lost: %s", e)
+            self._connected = False
+
+    def mark_ready(self) -> None:
+        """标记连接已通过认证/握手，启动心跳。"""
+        if not self._ready and self._connected:
+            self._ready = True
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+    async def _heartbeat_loop(self) -> None:
+        try:
+            while self._connected:
+                await asyncio.sleep(self._heartbeat_interval)
+                if not self._connected or not self._ready:
+                    continue
+                try:
+                    await self.send({
+                        "type": "heartbeat",
+                        "timestamp": time.time(),
+                    })
+                except Exception as e:
+                    logger.warning("Heartbeat send failed: %s", e)
+                    self._missed_heartbeats += 1
+                    if self._missed_heartbeats >= self._heartbeat_timeout:
+                        await self._handle_timeout()
+                    continue
+        except asyncio.CancelledError:
+            pass
+
+    async def _handle_timeout(self) -> None:
+        logger.warning(
+            "WebSocket heartbeat timeout after %d missed heartbeats, disconnecting",
+            self._heartbeat_timeout,
+        )
+        self._connected = False
+        if self._ws:
+            try:
+                await self._ws.close()
+            except Exception as e:
+                logger.debug("WebSocket close error on timeout: %s", e)
+            self._ws = None
+
+
+ChannelFactory.register("websocket", WebSocketChannel)
+
+
+class ChannelManager:
+    def __init__(self, primary: ChannelBase, fallback: ChannelBase | None = None):
+        self._primary = primary
+        self._fallback = fallback
+        self._active: ChannelBase = primary
+
+    @property
+    def active_channel(self) -> ChannelBase:
+        return self._active
+
+    async def send(self, message: dict[str, Any]) -> dict[str, Any] | None:
+        if self._primary.is_connected:
+            try:
+                return await self._primary.send(message)
+            except Exception as e:
+                logger.warning("Primary channel send failed: %s, trying fallback", e)
+                if self._fallback:
+                    if not self._fallback.is_connected:
+                        try:
+                            await self._fallback.connect()
+                        except Exception as e:
+                            logger.debug("Fallback connect error: %s", e)
+                    if self._fallback.is_connected:
+                        self._active = self._fallback
+                        return await self._fallback.send(message)
+                raise
+        if self._fallback and self._fallback.is_connected:
+            self._active = self._fallback
+            return await self._fallback.send(message)
+        raise ConnectionError("No channel available")
+
+    async def close(self) -> None:
+        await self._primary.close()
+        if self._fallback:
+            await self._fallback.close()

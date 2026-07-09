@@ -1,3 +1,5 @@
+"""models package."""
+
 from protoforge.models.device import DataType, DeviceConfig, DeviceInfo, GeneratorType, PointConfig, PointValue
 from protoforge.models.integration import MessageType
 from protoforge.models.protocol import ProtocolInfo

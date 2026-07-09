@@ -1,3 +1,5 @@
+"""GRPC protocol server implementation."""
+
 import logging
 import time
 from typing import Any

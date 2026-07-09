@@ -1,3 +1,5 @@
+"""Module: main."""
+
 import logging
 import logging.handlers
 import os
@@ -6,6 +8,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI  # FIXED: 导入Depends用于/metrics认证
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,18 +112,14 @@ def get_integration_manager() -> IntegrationManager:
         return _integration_manager
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager
+def _check_startup_security(settings: Any) -> None:
+    """Log security warnings for insecure configuration on startup.
 
-    from protoforge.config import get_settings
-    settings = get_settings()
-
-    # FIXED: S2/S3 - startup security warnings for empty JWT secret, no_auth mode, and default password
-    # FIXED: 不再硬编码示例密钥值，改为检查密钥是否来自 .env.example（与示例文件内容相同）
+    Checks JWT secret, auth mode, admin password strength, CORS wildcard,
+    and admin password reset flag. Non-blocking; only logs warnings.
+    """
     _EXAMPLE_SECRET = ""
     try:
-        from pathlib import Path
         _example_env = Path(__file__).resolve().parent.parent / ".env.example"
         if _example_env.exists():
             for _line in _example_env.read_text(encoding="utf-8").splitlines():
@@ -155,44 +154,57 @@ async def lifespan(app: FastAPI):
             "Set PROTOFORGE_CORS_ORIGINS to specific domain(s) for production."
         )
 
+
+async def _init_core_services(settings: Any) -> tuple[Any, Any, Any, Any, Any, Any]:
+    """Initialize and start all core services.
+
+    Returns:
+        Tuple of (engine, template_manager, database, log_bus, event_bus,
+        integration_manager).
+    """
     from protoforge.core.auth import set_secret_key
+
     set_secret_key(settings.jwt_secret)
 
-    _log_bus = LogBus()
+    log_bus = LogBus()
+    event_bus = EventBus()
+    template_manager = TemplateManager()
+    template_manager.load_builtin_templates()
 
-    _event_bus = EventBus()
+    database = Database(db_path=settings.db_path)
+    await database.connect()
 
-    _template_manager = TemplateManager()
-    _template_manager.load_builtin_templates()
-
-    _database = Database(db_path=settings.db_path)
-    await _database.connect()
-
-    _engine = SimulationEngine(event_bus=_event_bus, tick_interval=getattr(settings, 'tick_interval', 1.0))
+    engine = SimulationEngine(event_bus=event_bus, tick_interval=getattr(settings, "tick_interval", 1.0))
     for protocol_cls in PROTOCOL_REGISTRY.values():
-        _engine.register_protocol(protocol_cls())
-    _engine.setup_debug_callbacks(_log_bus)
-    await _engine.start()
+        engine.register_protocol(protocol_cls())
+    engine.setup_debug_callbacks(log_bus)
+    await engine.start()
 
-    _integration_manager = IntegrationManager(event_bus=_event_bus)
-    integration_url = settings.edgelite_url
-    integration_user = settings.edgelite_username
-    integration_pass = settings.edgelite_password
-    if integration_url:
-        _integration_manager.configure(integration_url, integration_user, integration_pass)
-    await _integration_manager.start()
+    integration_manager = IntegrationManager(event_bus=event_bus)
+    if settings.edgelite_url:
+        integration_manager.configure(settings.edgelite_url, settings.edgelite_username, settings.edgelite_password)
+    await integration_manager.start()
 
-    restore_errors = []
+    return engine, template_manager, database, log_bus, event_bus, integration_manager
 
+
+async def _restore_persisted_data(engine: Any, database: Any, template_manager: Any, settings: Any) -> list[str]:
+    """Restore devices, scenarios, templates, and service state from database.
+
+    Returns a list of error strings for components that failed to restore.
+    """
+    restore_errors: list[str] = []
+
+    # Restore devices
     try:
-        saved_devices = await _database.load_all_devices()
+        saved_devices = await database.load_all_devices()
         restored = 0
         for dev in saved_devices:
             try:
                 if not dev.protocol_config:
                     dev.protocol_config = {}
                 dev.protocol_config["_skip_auto_push"] = True
-                await _engine.create_device(dev, allow_update=True)
+                await engine.create_device(dev, allow_update=True)
                 dev.protocol_config.pop("_skip_auto_push", None)
                 restored += 1
             except Exception as e:
@@ -203,11 +215,12 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"devices: {e}")
         logger.error("Failed to load devices from database: [%s] %s", type(e).__name__, e)
 
+    # Restore scenarios
     try:
-        saved_scenarios = await _database.load_all_scenarios()
+        saved_scenarios = await database.load_all_scenarios()
         for sc in saved_scenarios:
             try:
-                await _engine.create_scenario(sc)
+                await engine.create_scenario(sc)
             except Exception as e:
                 logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)
         logger.info("Restored %d scenarios from database", len(saved_scenarios))
@@ -215,11 +228,12 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"scenarios: {e}")
         logger.error("Failed to load scenarios from database: %s", e)
 
+    # Restore templates
     try:
-        saved_templates = await _database.load_all_templates()
+        saved_templates = await database.load_all_templates()
         for tmpl in saved_templates:
             try:
-                _template_manager.add_template(tmpl)
+                template_manager.add_template(tmpl)
             except Exception as e:
                 logger.error("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)
         logger.info("Restored %d templates from database", len(saved_templates))
@@ -227,25 +241,28 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"templates: {e}")
         logger.error("Failed to load templates from database: %s", e)
 
+    # Restore test data
     try:
         from protoforge.api.v1.test_routes import _get_test_runner
         runner = _get_test_runner()
-        runner.set_database(_database)
+        runner.set_database(database)
         await runner.restore_from_db()
         logger.info("Test data restored")
     except Exception as e:
         restore_errors.append(f"tests: {e}")
         logger.error("Failed to restore test data: %s", e)
 
+    # Restore users
     try:
         from protoforge.core.auth import user_manager
-        user_manager.set_database(_database)
+        user_manager.set_database(database)
         await user_manager.restore_from_db()
         logger.info("Users restored")
     except Exception as e:
         restore_errors.append(f"users: {e}")
         logger.error("Failed to restore users: %s", e)
 
+    # Start webhook manager
     try:
         from protoforge.core.webhook import webhook_manager
         await webhook_manager.start()
@@ -254,25 +271,28 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"webhooks: {e}")
         logger.error("Failed to start webhook manager: %s", e)
 
+    # Initialize audit logger
     try:
         from protoforge.core.audit import audit_logger
-        audit_logger.set_database(_database)
+        audit_logger.set_database(database)
         await audit_logger.restore_from_db()
         logger.info("Audit logger initialized")
     except Exception as e:
         restore_errors.append(f"audit: {e}")
         logger.error("Failed to initialize audit logger: %s", e)
 
+    # Initialize recorder persistence
     try:
         from protoforge.api.v1.recorder_routes import _get_recorder
         recorder = _get_recorder()
-        recorder.set_database(_database)
+        recorder.set_database(database)
         await recorder.restore_from_db()
         logger.info("Recorder persistence initialized")
     except Exception as e:
         restore_errors.append(f"recorder: {e}")
         logger.error("Failed to initialize recorder persistence: %s", e)
 
+    # Start failover manager
     try:
         from protoforge.core.failover import failover_manager
         primary_url = settings.failover_primary
@@ -286,39 +306,53 @@ async def lifespan(app: FastAPI):
         restore_errors.append(f"failover: {e}")
         logger.error("Failed to start failover manager: %s", e)
 
+    return restore_errors
+
+
+async def _start_optional_services(engine: Any, template_manager: Any, settings: Any) -> Any:
+    """Start demo data and gRPC server if configured.
+
+    Returns the gRPC server instance (or None).
+    """
     if settings.demo_mode:
         try:
             from protoforge.core.demo import seed_demo_data
-            await seed_demo_data(_engine, _template_manager)
+            await seed_demo_data(engine, template_manager)
             logger.info("Demo data seeded")
         except Exception as e:
             logger.error("Failed to seed demo data: %s", e)
 
     grpc_server = None
-    grpc_port = settings.grpc_port
-    if grpc_port > 0:
+    if settings.grpc_port > 0:
         try:
             from protoforge.grpc.server import start_grpc_server
-            grpc_server = await start_grpc_server(grpc_port)
+            grpc_server = await start_grpc_server(settings.grpc_port)
         except Exception as e:
             logger.warning("Failed to start gRPC server: %s", e)
 
+    return grpc_server
+
+
+def _suppress_noisy_loggers() -> None:
+    """Suppress verbose loggers from third-party libraries."""
     _deduplicate_file_handlers()
     logging.getLogger("asyncua").setLevel(logging.WARNING)
-    # Suppress noisy asyncua internal warnings/errors that flood the log
-    logging.getLogger("asyncua.client.ua_client.UASocketProtocol").setLevel(logging.CRITICAL)
-    logging.getLogger("asyncua.client.ua_client.UaClient").setLevel(logging.CRITICAL)
-    logging.getLogger("asyncua.client.client").setLevel(logging.CRITICAL)
-    logging.getLogger("asyncua.server.binary_server_asyncio").setLevel(logging.CRITICAL)
-    # Suppress noisy amqtt broker client disconnection logs
+    for name in (
+        "asyncua.client.ua_client.UASocketProtocol",
+        "asyncua.client.ua_client.UaClient",
+        "asyncua.client.client",
+        "asyncua.server.binary_server_asyncio",
+    ):
+        logging.getLogger(name).setLevel(logging.CRITICAL)
     logging.getLogger("amqtt.broker").setLevel(logging.CRITICAL)
-    # Suppress noisy transitions library state machine logs
     logging.getLogger("transitions.core").setLevel(logging.WARNING)
 
-    # Layer 1: Schema audit - Pydantic Response models <-> DB column cross-check
+
+async def _run_schema_audit(database: Any) -> None:
+    """Run schema audit to cross-check Pydantic models with DB columns."""
     try:
         from protoforge.audit.schema_audit import audit_schema
-        schema_result = await audit_schema(_database)
+        schema_result = await audit_schema(database)
         if schema_result.ok:
             logger.info("Schema audit passed")
         else:
@@ -326,17 +360,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Schema audit failed (non-fatal): %s", e)
 
-    if restore_errors:
-        logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
-    else:
-        logger.info("ProtoForge started successfully")
 
-    yield
-
+async def _shutdown_services(grpc_server: Any, integration_manager: Any, engine: Any, database: Any) -> None:
+    """Gracefully shut down all services with timeout protection."""
     import asyncio
 
     async def _stop_with_timeout(coro, name, timeout=10):
-        """执行停止协程，超时则跳过，避免 shutdown 阻塞导致进程僵死。"""
+        """Execute stop coroutine with timeout to prevent shutdown deadlock."""
         try:
             await asyncio.wait_for(coro, timeout=timeout)
         except asyncio.TimeoutError:
@@ -347,14 +377,14 @@ async def lifespan(app: FastAPI):
     if grpc_server:
         await _stop_with_timeout(grpc_server.stop(grace=5), "gRPC server")
 
-    await _stop_with_timeout(_integration_manager.stop(), "integration manager")
+    await _stop_with_timeout(integration_manager.stop(), "integration manager")
     try:
         from protoforge.core.webhook import webhook_manager
         await _stop_with_timeout(webhook_manager.stop(), "webhook manager")
     except Exception as e:
         logger.warning("Error loading webhook manager: %s", e)
-    await _stop_with_timeout(_engine.stop(), "engine")
-    await _stop_with_timeout(_database.close(), "database")
+    await _stop_with_timeout(engine.stop(), "engine")
+    await _stop_with_timeout(database.close(), "database")
     try:
         from protoforge.api.v1.test_routes import _close_internal_client
         await _stop_with_timeout(_close_internal_client(), "internal client", timeout=5)
@@ -367,6 +397,37 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.debug("Error loading HTTP client: %s", e)
     logger.info("ProtoForge stopped")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan context manager for startup and shutdown."""
+    global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager
+
+    from protoforge.config import get_settings
+    settings = get_settings()
+
+    _check_startup_security(settings)
+
+    (_engine, _template_manager, _database, _log_bus, _event_bus,
+     _integration_manager) = await _init_core_services(settings)
+
+    restore_errors = await _restore_persisted_data(_engine, _database, _template_manager, settings)
+
+    grpc_server = await _start_optional_services(_engine, _template_manager, settings)
+
+    _suppress_noisy_loggers()
+
+    await _run_schema_audit(_database)
+
+    if restore_errors:
+        logger.warning("ProtoForge started with %d restore error(s): %s", len(restore_errors), "; ".join(restore_errors))
+    else:
+        logger.info("ProtoForge started successfully")
+
+    yield
+
+    await _shutdown_services(grpc_server, _integration_manager, _engine, _database)
 
 
 _logging_configured = False
@@ -568,7 +629,7 @@ def create_app() -> FastAPI:
 
     @app.get("/metrics", response_class=PlainTextResponse)
     @app.get("/api/v1/metrics", response_class=PlainTextResponse)
-    async def prometheus_metrics(_user: dict = Depends(require_viewer)):  # FIXED: 添加认证保护，防止内部指标泄露
+    async def prometheus_metrics(_user: dict[str, Any] = Depends(require_viewer)):  # FIXED: 添加认证保护，防止内部指标泄露
         from protoforge.core.metrics import metrics
         try:
             engine = get_engine()

@@ -1,5 +1,8 @@
+"""Scenario management API routes (CRUD, start/stop)."""
+
 import logging
 import time
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -12,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/scenarios")
-async def list_scenarios(_user: dict = Depends(require_viewer)):
+async def list_scenarios(_user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     return {"scenarios": engine.list_scenarios()}
 
 
 @router.post("/scenarios")  # FIXED: 移除response_model=ScenarioInfo，避免过滤_persistence_warning
-async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
+async def create_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depends(require_operator)):
     if not config.name or not config.name.strip():
         raise HTTPException(status_code=400, detail="Scenario name is required")  # FIXED: 中文→英文
     if not config.id or not config.id.strip():
@@ -46,7 +49,7 @@ async def create_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
 
 @router.get("/scenarios/{scenario_id}")  # FIXED: 移除response_model=ScenarioDetail，与create/update保持一致
-async def get_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
+async def get_scenario(scenario_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     try:
         return engine.get_scenario(scenario_id)
@@ -55,7 +58,7 @@ async def get_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
 
 
 @router.post("/scenarios/{scenario_id}/start")
-async def start_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
+async def start_scenario(scenario_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     from protoforge.api.v1._helpers import _get_log_bus
     log_bus = _get_log_bus()
@@ -72,7 +75,7 @@ async def start_scenario(scenario_id: str, _user: dict = Depends(require_operato
 
 
 @router.post("/scenarios/{scenario_id}/stop")
-async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
+async def stop_scenario(scenario_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     from protoforge.api.v1._helpers import _get_log_bus
     log_bus = _get_log_bus()
@@ -90,7 +93,7 @@ async def stop_scenario(scenario_id: str, _user: dict = Depends(require_operator
 
 
 @router.put("/scenarios/{scenario_id}")
-async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user: dict = Depends(require_operator)):
+async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
 
@@ -130,7 +133,7 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
 
 
 @router.delete("/scenarios/{scenario_id}")
-async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operator)):
+async def delete_scenario(scenario_id: str, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
 
@@ -161,7 +164,7 @@ async def delete_scenario(scenario_id: str, _user: dict = Depends(require_operat
 
 
 @router.get("/scenarios/{scenario_id}/export")
-async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer)):
+async def export_scenario(scenario_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     db = _get_database()
 
@@ -189,7 +192,7 @@ async def export_scenario(scenario_id: str, _user: dict = Depends(require_viewer
 
 
 @router.post("/scenarios/import")
-async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_operator)):
+async def import_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     db = _get_database()
 
@@ -216,7 +219,7 @@ async def import_scenario(config: ScenarioConfig, _user: dict = Depends(require_
 
 
 @router.get("/scenarios/{scenario_id}/snapshot")
-async def get_scenario_snapshot(scenario_id: str, _user: dict = Depends(require_viewer)):
+async def get_scenario_snapshot(scenario_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     try:
         config = engine.get_scenario_config(scenario_id)

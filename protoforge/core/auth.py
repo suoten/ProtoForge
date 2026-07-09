@@ -1,3 +1,5 @@
+"""User authentication, JWT management, and role-based access control."""
+
 import asyncio
 import logging
 import os
@@ -7,6 +9,7 @@ import threading  # FIXED: _SECRET_KEY_LOCK需要threading.Lock
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 import jwt
 from passlib.context import CryptContext
@@ -153,7 +156,7 @@ class User:
     login_attempts: int = 0
     locked_until: float = 0.0
 
-    def to_dict(self, include_hash: bool = False) -> dict:
+    def to_dict(self, include_hash: bool = False) -> dict[str, Any]:
         d = {
             "id": self.id,
             "username": self.username,
@@ -167,7 +170,7 @@ class User:
         return d
 
     @classmethod
-    def from_dict(cls, data: dict) -> "User":
+    def from_dict(cls, data: dict[str, Any]) -> "User":
         pw_hash = data.get("password_hash", "")
         if not pw_hash or not isinstance(pw_hash, str) or not pw_hash.startswith("$"):
             logger.warning("User '%s' has invalid/missing password_hash, marking as locked", data.get("username", "?"))

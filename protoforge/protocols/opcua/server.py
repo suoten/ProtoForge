@@ -1,3 +1,5 @@
+"""OPCUA protocol server implementation."""
+
 import asyncio
 import datetime
 import ipaddress

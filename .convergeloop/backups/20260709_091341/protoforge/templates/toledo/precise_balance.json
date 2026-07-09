@@ -1,0 +1,54 @@
+{
+    "id": "toledo_precise_scale",
+    "name": "梅特勒-托利多精密天平",
+    "protocol": "toledo",
+    "description": "梅特勒-托利多精密分析天平，高精度称重，支持mg级数据采集",
+    "manufacturer": "Mettler-Toledo",
+    "model": "XPR226DR",
+    "points": [
+        {
+            "name": "weight",
+            "address": "net_weight",
+            "data_type": "float32",
+            "unit": "g",
+            "description": "称量值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.001,
+            "max_value": 220.0
+        },
+        {
+            "name": "tare",
+            "address": "tare_weight",
+            "data_type": "float32",
+            "unit": "g",
+            "description": "去皮值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0.0
+        },
+        {
+            "name": "stable",
+            "address": "stable_flag",
+            "data_type": "bool",
+            "description": "读数稳定",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "below_range",
+            "address": "below_range",
+            "data_type": "bool",
+            "description": "低于量程",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "unit": "g",
+        "decimal_places": 3
+    },
+    "tags": ["称重", "梅特勒-托利多", "Mettler-Toledo", "天平", "精密", "分析天平"]
+}

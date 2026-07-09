@@ -1,3 +1,5 @@
+"""Default configuration values and built-in protocol defaults."""
+
 PROTOCOL_DEFAULTS = {
     "modbus_tcp": {
         "host": "0.0.0.0", "port": 5020,
@@ -430,6 +432,7 @@ HTTP_TIMEOUT_SHORT = 5.0
 HTTP_TIMEOUT_LONG = 30.0
 
 import logging
+from typing import Any
 
 _defaults_logger = logging.getLogger(__name__)
 
@@ -544,7 +547,7 @@ def get_friendly_error(detail: str, lang: str = "zh") -> str:
     return detail
 
 
-def get_protocol_defaults(protocol_name: str, lang: str = "zh") -> dict:
+def get_protocol_defaults(protocol_name: str, lang: str = "zh") -> dict[str, Any]:
     try:
         from protoforge.config import get_protocol_port_map
         base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})

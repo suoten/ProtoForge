@@ -1,0 +1,71 @@
+{
+    "id": "mc_q03udv",
+    "name": "三菱Q03UDV PLC",
+    "protocol": "mc",
+    "description": "三菱Q系列PLC，MC协议二进制通信",
+    "manufacturer": "Mitsubishi",
+    "model": "Q03UDV",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "D0",
+            "data_type": "uint16",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "D1",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 60
+        },
+        {
+            "name": "scan_time",
+            "address": "D2",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "扫描时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 15.0
+        },
+        {
+            "name": "error_code",
+            "address": "D4",
+            "data_type": "uint16",
+            "description": "错误代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "link_status",
+            "address": "D5",
+            "data_type": "uint16",
+            "description": "网络链接状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {
+        "network": 0,
+        "station": 0,
+        "pc": 255
+    },
+    "tags": [
+        "PLC",
+        "三菱",
+        "Mitsubishi",
+        "Q系列",
+        "工业控制"
+    ]
+}

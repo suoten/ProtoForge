@@ -1,3 +1,5 @@
+"""Application configuration using pydantic-settings with env var support."""
+
 import logging
 import secrets
 import sys

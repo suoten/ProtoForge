@@ -1,0 +1,84 @@
+{
+    "id": "s7_servo_drive",
+    "name": "西门子伺服驱动器",
+    "protocol": "s7",
+    "description": "西门子SINAMICS伺服驱动器仿真",
+    "manufacturer": "Siemens",
+    "model": "SINAMICS-S120",
+    "points": [
+        {
+            "name": "speed_actual",
+            "address": "DB1.DBD0",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "实际转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 3000
+        },
+        {
+            "name": "torque_actual",
+            "address": "DB1.DBD4",
+            "data_type": "float32",
+            "unit": "Nm",
+            "description": "实际扭矩",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 50
+        },
+        {
+            "name": "position_actual",
+            "address": "DB1.DBD8",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "实际位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 360
+        },
+        {
+            "name": "current",
+            "address": "DB1.DBD12",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电机电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "temperature",
+            "address": "DB1.DBD16",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "电机温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "fault_code",
+            "address": "DB1.DBW20",
+            "data_type": "uint16",
+            "description": "故障代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "rack": 0,
+        "slot": 1
+    },
+    "tags": [
+        "伺服",
+        "驱动器",
+        "西门子",
+        "SINAMICS"
+    ]
+}

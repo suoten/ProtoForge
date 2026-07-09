@@ -1,0 +1,176 @@
+{
+  "patterns": [
+    {
+      "id": "pattern_mral0rnn_yx4nxn",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "-",
+          "[🔒阻塞][CRITICAL]",
+          "secret",
+          "安全问题:",
+          "数据库连接字符串含凭据"
+        ],
+        "errorSummary": "[🔒阻塞][CRITICAL] 安全问题: secret - 数据库连接字符串含凭据"
+      },
+      "fixDescription": "已修复 .env 和 .env.example 中的数据库连接字符串凭据问题，将 $POSTGRES_USER:$POSTGRES_PASSWORD 替换为安全占位符",
+      "successCount": 2,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T11:54:34.710Z",
+      "createdAt": "2026-07-07T11:45:02.723Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mralemg8_upi7zt",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "-",
+          "[🔒阻塞][CRITICAL]",
+          "secret",
+          "安全问题:",
+          "硬编码密码"
+        ],
+        "errorSummary": "[🔒阻塞][CRITICAL] 安全问题: secret - 硬编码密码"
+      },
+      "fixDescription": "installer.py 中无硬编码密码，第138行已对密码进行脱敏显示（*号），这是一个误报",
+      "successCount": 2,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T11:57:01.902Z",
+      "createdAt": "2026-07-07T11:55:49.160Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mralhl04_73k11v",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "FastAPI",
+          "[🔒阻塞][ERROR]",
+          "路由可能缺少认证依赖"
+        ],
+        "errorSummary": "[🔒阻塞][ERROR] FastAPI 路由可能缺少认证依赖"
+      },
+      "fixDescription": "log_routes.py 已在第22行使用 Depends(require_viewer) 进行认证，误报",
+      "successCount": 1,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T11:58:07.252Z",
+      "createdAt": "2026-07-07T11:58:07.252Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mralizhn_b5r36y",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "[🔒阻塞][ERROR]",
+          "连接可能缺少断连重连逻辑"
+        ],
+        "errorSummary": "[🔒阻塞][ERROR] 连接可能缺少断连重连逻辑"
+      },
+      "fixDescription": "第378行是临时TCP socket连接用于测试端口可达性，使用了try-except处理连接失败，不需要断连重连逻辑，误报",
+      "successCount": 10,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T12:32:47.154Z",
+      "createdAt": "2026-07-07T11:59:12.683Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mralkdk7_nf3ngr",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "[🔒阻塞][ERROR]",
+          "资源可能未正确关闭"
+        ],
+        "errorSummary": "[🔒阻塞][ERROR] 资源可能未正确关闭"
+      },
+      "fixDescription": "cli.py 第203-205行已使用 with 语句包裹 open()，确保文件正确关闭，误报",
+      "successCount": 3,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T12:24:18.160Z",
+      "createdAt": "2026-07-07T12:00:17.575Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mralrsyw_ca7k0y",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "[🔒阻塞][ERROR]",
+          "catch/except",
+          "块",
+          "空"
+        ],
+        "errorSummary": "[🔒阻塞][ERROR] 空 catch/except 块"
+      },
+      "fixDescription": "已修复 fault_injection.py 第576-577行空 except 块，添加了调试日志",
+      "successCount": 5,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T12:38:03.342Z",
+      "createdAt": "2026-07-07T12:06:04.136Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    },
+    {
+      "id": "pattern_mramy1mo_jhmg66",
+      "signature": {
+        "category": "fix_issue",
+        "severity": "unknown",
+        "fileType": "",
+        "keywords": [
+          "[🔒阻塞][ERROR]",
+          "可能的硬编码凭证"
+        ],
+        "errorSummary": "[🔒阻塞][ERROR] 可能的硬编码凭证"
+      },
+      "fixDescription": "文件路径 F:\\Program Files (x86)\\CatPawAI\\web\\src\\i18n.js 不在项目中，是 CatPaw IDE 自身文件，误报",
+      "successCount": 6,
+      "failureCount": 0,
+      "successRate": 1,
+      "lastUsed": "2026-07-07T12:45:27.919Z",
+      "createdAt": "2026-07-07T12:38:54.912Z",
+      "usedInProjects": [
+        "e:/硕腾网络/PyGBSentry/ProtoForge"
+      ],
+      "tags": []
+    }
+  ],
+  "version": "1.0",
+  "lastUpdated": "2026-07-07T12:45:27.919Z"
+}

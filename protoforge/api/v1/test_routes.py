@@ -1,3 +1,5 @@
+"""Testing API routes for test cases, suites, and reports."""
+
 import logging
 import threading  # FIXED: 全局变量锁保护需要
 import time
@@ -85,7 +87,7 @@ async def _close_internal_client():
 
 
 @router.post("/tests/cases")
-async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(require_user)):
+async def create_test_case(case_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
     if not isinstance(case_def, dict) or not case_def:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty object")
     from protoforge.core.testing import TestCase
@@ -99,14 +101,14 @@ async def create_test_case(case_def: dict[str, Any], _user: dict = Depends(requi
 
 
 @router.get("/tests/cases")
-async def list_test_cases(tag: Optional[str] = None, _user: dict = Depends(require_viewer)):
+async def list_test_cases(tag: Optional[str] = None, _user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     cases = runner.list_test_cases(tag=tag)
     return {"cases": [c.to_dict() for c in cases]}
 
 
 @router.get("/tests/cases/{case_id}")
-async def get_test_case(case_id: str, _user: dict = Depends(require_viewer)):
+async def get_test_case(case_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     tc = runner.get_test_case(case_id)
 
@@ -116,7 +118,7 @@ async def get_test_case(case_id: str, _user: dict = Depends(require_viewer)):
 
 
 @router.put("/tests/cases/{case_id}")
-async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict = Depends(require_user)):
+async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
     from protoforge.core.testing import TestCase
 
     runner = _get_test_runner()
@@ -137,7 +139,7 @@ async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict =
 
 
 @router.delete("/tests/cases/{case_id}")
-async def delete_test_case(case_id: str, _user: dict = Depends(require_user)):
+async def delete_test_case(case_id: str, _user: dict[str, Any] = Depends(require_user)):
     runner = _get_test_runner()
     if not await runner.delete_test_case(case_id):
         raise HTTPException(status_code=404, detail="Test case not found")
@@ -145,7 +147,7 @@ async def delete_test_case(case_id: str, _user: dict = Depends(require_user)):
 
 
 @router.post("/tests/suites")  # FIXED: 添加test_case_ids和tags的类型校验
-async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(require_user)):
+async def create_test_suite(suite_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
     import time as _time
     from protoforge.core.testing import TestSuite
 
@@ -173,14 +175,14 @@ async def create_test_suite(suite_def: dict[str, Any], _user: dict = Depends(req
 
 
 @router.get("/tests/suites")
-async def list_test_suites(_user: dict = Depends(require_viewer)):
+async def list_test_suites(_user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     suites = runner.list_test_suites()
     return {"suites": [s.to_dict() for s in suites]}
 
 
 @router.get("/tests/suites/{suite_id}")
-async def get_test_suite(suite_id: str, _user: dict = Depends(require_viewer)):
+async def get_test_suite(suite_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     suite = runner.get_test_suite(suite_id)
 
@@ -190,7 +192,7 @@ async def get_test_suite(suite_id: str, _user: dict = Depends(require_viewer)):
 
 
 @router.delete("/tests/suites/{suite_id}")
-async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
+async def delete_test_suite(suite_id: str, _user: dict[str, Any] = Depends(require_user)):
     runner = _get_test_runner()
     if not await runner.delete_test_suite(suite_id):
         raise HTTPException(status_code=404, detail="Test suite not found")
@@ -198,7 +200,7 @@ async def delete_test_suite(suite_id: str, _user: dict = Depends(require_user)):
 
 
 @router.post("/tests/run")
-async def run_test(request: Request, payload: dict[str, Any] = Body(...), _user: dict = Depends(require_user)):  # FIXED: 添加request参数
+async def run_test(request: Request, payload: dict[str, Any] = Body(...), _user: dict[str, Any] = Depends(require_user)):  # FIXED: 添加request参数
     test_cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
     if not isinstance(test_cases, list) or not test_cases:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty array of test cases")
@@ -220,7 +222,7 @@ async def run_test(request: Request, payload: dict[str, Any] = Body(...), _user:
 
 
 @router.post("/tests/run/case/{case_id}")
-async def run_test_case_by_id(case_id: str, request: Request, _user: dict = Depends(require_user)):
+async def run_test_case_by_id(case_id: str, request: Request, _user: dict[str, Any] = Depends(require_user)):
     runner = _get_test_runner()
     tc = runner.get_test_case(case_id)
 
@@ -235,7 +237,7 @@ async def run_test_case_by_id(case_id: str, request: Request, _user: dict = Depe
 
 
 @router.post("/tests/run/suite/{suite_id}")
-async def run_test_suite_by_id(suite_id: str, request: Request, _user: dict = Depends(require_user)):
+async def run_test_suite_by_id(suite_id: str, request: Request, _user: dict[str, Any] = Depends(require_user)):
     runner = _get_test_runner()
     api_client = await _get_internal_client()
     lang = get_lang_from_request(request)
@@ -249,19 +251,19 @@ async def run_test_suite_by_id(suite_id: str, request: Request, _user: dict = De
 
 
 @router.get("/tests/reports")
-async def list_test_reports(_user: dict = Depends(require_viewer)):
+async def list_test_reports(_user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     return {"reports": runner.get_reports()}
 
 
 @router.get("/tests/reports/trend")
-async def get_report_trend(count: int = 20, _user: dict = Depends(require_viewer)):
+async def get_report_trend(count: int = 20, _user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     return {"trends": runner.get_report_trend(count=count)}
 
 
 @router.get("/tests/reports/{report_id}")
-async def get_test_report(report_id: str, _user: dict = Depends(require_viewer)):
+async def get_test_report(report_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     runner = _get_test_runner()
     report = runner.get_report(report_id)
 
@@ -271,7 +273,7 @@ async def get_test_report(report_id: str, _user: dict = Depends(require_viewer))
 
 
 @router.get("/tests/reports/{report_id}/html")
-async def get_test_report_html(report_id: str, request: Request, _user: dict = Depends(require_viewer)):
+async def get_test_report_html(report_id: str, request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     from protoforge.core.auth import verify_token
     token = request.query_params.get("token")
     if not _user and not token:
@@ -291,7 +293,7 @@ async def get_test_report_html(report_id: str, request: Request, _user: dict = D
 
 
 @router.post("/tests/quick-test")
-async def quick_test(scope: str = "all", target_id: Optional[str] = None, request: Request = None, _user: dict = Depends(require_user)):
+async def quick_test(scope: str = "all", target_id: Optional[str] = None, request: Request = None, _user: dict[str, Any] = Depends(require_user)):
     # FIXED: 添加scope参数校验，无效值返回400而非静默空结果
     valid_scopes = {"all", "device", "scenario", "protocol"}
     if scope not in valid_scopes:
@@ -435,7 +437,7 @@ async def quick_test(scope: str = "all", target_id: Optional[str] = None, reques
 
 
 @router.get("/tests/suggestions")
-async def get_test_suggestions(request: Request, _user: dict = Depends(require_viewer)):
+async def get_test_suggestions(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     lang = get_lang_from_request(request)
     suggestions = []
@@ -486,7 +488,7 @@ async def get_test_suggestions(request: Request, _user: dict = Depends(require_v
 
 
 @router.get("/tests/action-types")
-async def get_test_action_types(request: Request, _user: dict = Depends(require_viewer)):
+async def get_test_action_types(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     lang = get_lang_from_request(request)
     return {"action_types": [
         {"value": "create_device", "label": tmsg("action_create_device", lang), "category": tmsg("category_device", lang), "params": ["id", "name", "protocol", "points"]},
@@ -512,7 +514,7 @@ async def get_test_action_types(request: Request, _user: dict = Depends(require_
 
 
 @router.get("/tests/assertion-types")
-async def get_test_assertion_types(request: Request, _user: dict = Depends(require_viewer)):
+async def get_test_assertion_types(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
     lang = get_lang_from_request(request)
     return {"assertion_types": [
         {"value": "status_code", "label": tmsg("assert_type_status_code", lang), "description": tmsg("assert_type_status_code_desc", lang), "simple": True},

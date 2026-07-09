@@ -1,6 +1,9 @@
+"""Log streaming and device log WebSocket API routes."""
+
 import asyncio
 import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
@@ -19,7 +22,7 @@ async def get_logs(
     device_id: str | None = None,
     direction: str | None = None,
     message_type: str | None = None,
-    _user: dict = Depends(require_viewer),
+    _user: dict[str, Any] = Depends(require_viewer),
 ):
     if count < 1:
         count = 1
@@ -37,7 +40,7 @@ async def get_logs(
 
 
 @router.delete("/logs")
-async def clear_logs(_user: dict = Depends(require_operator)):
+async def clear_logs(_user: dict[str, Any] = Depends(require_operator)):
     log_bus = _get_log_bus()
     log_bus.clear()
     return {"status": "ok", "message": "Logs cleared"}

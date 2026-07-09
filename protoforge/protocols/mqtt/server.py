@@ -1,3 +1,5 @@
+"""MQTT protocol server implementation."""
+
 import asyncio
 import logging
 import time

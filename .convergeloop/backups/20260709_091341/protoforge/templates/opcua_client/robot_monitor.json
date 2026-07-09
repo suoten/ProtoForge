@@ -1,0 +1,77 @@
+{
+    "id": "opcua_client_robot",
+    "name": "远程机器人状态监控",
+    "protocol": "opcua_client",
+    "description": "通过OPC-UA客户端连接远程工业机器人，监控关节角度、速度、负载等状态",
+    "manufacturer": "Generic",
+    "model": "Robot-Remote-600",
+    "points": [
+        {
+            "name": "joint1_angle",
+            "address": "ns=2;s=Joint1Angle",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节1角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -180.0,
+            "max_value": 180.0
+        },
+        {
+            "name": "joint2_angle",
+            "address": "ns=2;s=Joint2Angle",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节2角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -90.0,
+            "max_value": 90.0
+        },
+        {
+            "name": "speed",
+            "address": "ns=2;s=Speed",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "末端速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 2000.0
+        },
+        {
+            "name": "load",
+            "address": "ns=2;s=Load",
+            "data_type": "float32",
+            "unit": "kg",
+            "description": "负载重量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "running",
+            "address": "ns=2;s=Running",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "error_code",
+            "address": "ns=2;s=ErrorCode",
+            "data_type": "uint32",
+            "description": "错误码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "namespace": "urn:protoforge:simulation",
+        "security_mode": "None"
+    },
+    "tags": ["机器人", "远程监控", "OPC-UA客户端"]
+}
