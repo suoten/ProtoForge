@@ -1,0 +1,66 @@
+{
+    "id": "profinet_io_module",
+    "name": "PROFINET IO模块",
+    "protocol": "profinet",
+    "description": "PROFINET远程IO模块仿真",
+    "manufacturer": "Generic",
+    "model": "PN-IO-16",
+    "points": [
+        {
+            "name": "di_0_7",
+            "address": "DI0",
+            "data_type": "uint16",
+            "description": "数字输入0-7",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 255
+        },
+        {
+            "name": "di_8_15",
+            "address": "DI1",
+            "data_type": "uint16",
+            "description": "数字输入8-15",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 255
+        },
+        {
+            "name": "do_0_7",
+            "address": "DO0",
+            "data_type": "uint16",
+            "description": "数字输出0-7",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "ai_ch0",
+            "address": "AI0",
+            "data_type": "float32",
+            "unit": "mA",
+            "description": "模拟输入通道0",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 4.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "ao_ch0",
+            "address": "AO0",
+            "data_type": "float32",
+            "unit": "mA",
+            "description": "模拟输出通道0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 12.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "PROFINET",
+        "IO模块",
+        "远程IO"
+    ]
+}

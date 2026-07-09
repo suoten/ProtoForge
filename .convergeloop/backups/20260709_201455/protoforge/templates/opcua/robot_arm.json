@@ -1,0 +1,104 @@
+{
+    "id": "opcua_robot_arm",
+    "name": "工业机器人",
+    "protocol": "opcua",
+    "description": "六轴工业机器人OPC-UA仿真，支持关节角度、末端坐标等",
+    "manufacturer": "Generic",
+    "model": "Robot-6AX",
+    "points": [
+        {
+            "name": "joint1_angle",
+            "address": "ns=2;s=Joint1",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节1角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -180,
+            "max_value": 180
+        },
+        {
+            "name": "joint2_angle",
+            "address": "ns=2;s=Joint2",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节2角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -135,
+            "max_value": 135
+        },
+        {
+            "name": "joint3_angle",
+            "address": "ns=2;s=Joint3",
+            "data_type": "float32",
+            "unit": "°",
+            "description": "关节3角度",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": -150,
+            "max_value": 150
+        },
+        {
+            "name": "tcp_x",
+            "address": "ns=2;s=TCP_X",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端X坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -1000,
+            "max_value": 1000
+        },
+        {
+            "name": "tcp_y",
+            "address": "ns=2;s=TCP_Y",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端Y坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -1000,
+            "max_value": 1000
+        },
+        {
+            "name": "tcp_z",
+            "address": "ns=2;s=TCP_Z",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "末端Z坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 1500
+        },
+        {
+            "name": "load_weight",
+            "address": "ns=2;s=LoadWeight",
+            "data_type": "float32",
+            "unit": "kg",
+            "description": "负载重量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "speed_percent",
+            "address": "ns=2;s=SpeedPercent",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "运行速度百分比",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 75.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "机器人",
+        "OPC-UA",
+        "六轴",
+        "工业自动化"
+    ]
+}

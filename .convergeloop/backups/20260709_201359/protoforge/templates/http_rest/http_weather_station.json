@@ -1,0 +1,75 @@
+{
+    "id": "http_weather_station",
+    "name": "气象站API",
+    "protocol": "http",
+    "description": "HTTP REST气象站数据接口仿真",
+    "manufacturer": "Generic",
+    "model": "WS-REST-01",
+    "points": [
+        {
+            "name": "temperature",
+            "address": "/api/temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -10.0,
+            "max_value": 40.0
+        },
+        {
+            "name": "humidity",
+            "address": "/api/humidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 90.0
+        },
+        {
+            "name": "wind_speed",
+            "address": "/api/wind_speed",
+            "data_type": "float32",
+            "unit": "m/s",
+            "description": "风速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 25.0
+        },
+        {
+            "name": "wind_direction",
+            "address": "/api/wind_direction",
+            "data_type": "uint16",
+            "unit": "°",
+            "description": "风向",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 360
+        },
+        {
+            "name": "rainfall",
+            "address": "/api/rainfall",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "降雨量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 50.0
+        }
+    ],
+    "protocol_config": {
+        "method": "GET",
+        "content_type": "application/json"
+    },
+    "tags": [
+        "气象站",
+        "HTTP",
+        "REST",
+        "天气"
+    ]
+}

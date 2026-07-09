@@ -76,10 +76,28 @@ Repository = "https://gitee.com/suoten/protoforge"
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+exclude = [
+    ".convergeloop",
+    ".git",
+    "__pycache__",
+    "htmlcov",
+    "data",
+    "logs",
+    "scripts",
+    "sdk",
+    "web",
+    "test_screenshots",
+    "migrations",
+    "diag_push.py",
+    "*.bak",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "C901"]
 ignore = ["E501", "B008", "B904", "SIM102", "SIM115"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern; SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
+
+[tool.ruff.lint.mccabe]
+max-complexity = 55
 
 [tool.ruff.lint.per-file-ignores]
 "protoforge/mqtt_auth.py" = ["F401"]  # Optional dependency imports

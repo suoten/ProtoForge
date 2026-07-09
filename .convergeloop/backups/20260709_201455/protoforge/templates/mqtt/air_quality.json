@@ -1,0 +1,85 @@
+{
+    "id": "mqtt_air_quality",
+    "name": "空气质量监测站",
+    "protocol": "mqtt",
+    "description": "MQTT空气质量监测站，支持AQI、PM10、SO2等",
+    "manufacturer": "Generic",
+    "model": "AQ-500",
+    "points": [
+        {
+            "name": "aqi",
+            "address": "aqi",
+            "data_type": "uint16",
+            "description": "空气质量指数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 200
+        },
+        {
+            "name": "pm10",
+            "address": "pm10",
+            "data_type": "float32",
+            "unit": "μg/m³",
+            "description": "PM10浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 250
+        },
+        {
+            "name": "so2",
+            "address": "so2",
+            "data_type": "float32",
+            "unit": "μg/m³",
+            "description": "SO2浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 100
+        },
+        {
+            "name": "no2",
+            "address": "no2",
+            "data_type": "float32",
+            "unit": "μg/m³",
+            "description": "NO2浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 120
+        },
+        {
+            "name": "o3",
+            "address": "o3",
+            "data_type": "float32",
+            "unit": "μg/m³",
+            "description": "O3浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 200
+        },
+        {
+            "name": "co",
+            "address": "co",
+            "data_type": "float32",
+            "unit": "mg/m³",
+            "description": "CO浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 5.0
+        }
+    ],
+    "protocol_config": {
+        "topic_prefix": "sensor/air",
+        "qos": 1
+    },
+    "tags": [
+        "空气质量",
+        "MQTT",
+        "环保",
+        "IoT"
+    ]
+}

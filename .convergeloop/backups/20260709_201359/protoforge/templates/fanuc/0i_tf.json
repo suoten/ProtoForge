@@ -1,0 +1,74 @@
+{
+    "id": "fanuc_0i_tf",
+    "name": "FANUC 0i-TF车床",
+    "protocol": "fanuc",
+    "description": "FANUC 0i-TF车床数控系统仿真",
+    "manufacturer": "FANUC",
+    "model": "0i-TF",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "spindle_speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 200,
+            "max_value": 4000
+        },
+        {
+            "name": "x_diameter",
+            "address": "x_diameter",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴直径值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "z_position",
+            "address": "z_position",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -200,
+            "max_value": 200
+        },
+        {
+            "name": "feed_per_rev",
+            "address": "feed_per_rev",
+            "data_type": "float32",
+            "unit": "mm/rev",
+            "description": "每转进给",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.05,
+            "max_value": 0.5
+        },
+        {
+            "name": "tool_wear_comp",
+            "address": "tool_wear_comp",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "刀补磨损值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 0.5
+        }
+    ],
+    "protocol_config": {
+        "port": 8193
+    },
+    "tags": [
+        "车床",
+        "FANUC",
+        "0i-TF",
+        "数控"
+    ]
+}

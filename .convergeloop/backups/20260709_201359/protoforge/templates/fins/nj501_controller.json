@@ -1,0 +1,68 @@
+{
+    "id": "fins_nj501",
+    "name": "欧姆龙NJ501控制器",
+    "protocol": "fins",
+    "description": "欧姆龙NJ系列机器自动化控制器，FINS TCP协议通信，支持运动控制",
+    "manufacturer": "Omron",
+    "model": "NJ501-1500",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "CIO0",
+            "data_type": "uint16",
+            "description": "运行模式(0=STOP 1=RUN 2=DEBUG)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "axis1_position",
+            "address": "DM100",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴1位置",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0,
+            "max_value": 800
+        },
+        {
+            "name": "axis1_speed",
+            "address": "DM102",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "轴1速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 500
+        },
+        {
+            "name": "axis1_torque",
+            "address": "DM104",
+            "data_type": "float32",
+            "unit": "N·m",
+            "description": "轴1扭矩",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 12.0
+        },
+        {
+            "name": "task_time",
+            "address": "DM200",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "任务执行时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 4.0
+        }
+    ],
+    "protocol_config": {
+        "fins_node": 2,
+        "fins_unit": 0
+    },
+    "tags": ["PLC", "欧姆龙", "Omron", "NJ", "FINS", "运动控制", "机器自动化"]
+}

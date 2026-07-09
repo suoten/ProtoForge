@@ -1,0 +1,119 @@
+"""Request rate limiting middleware for API protection."""
+
+import threading
+import time
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+
+class RateLimiter:
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60, cleanup_interval: int = 300):
+        self._max_requests = max_requests
+        self._window_seconds = window_seconds
+        self._cleanup_interval = cleanup_interval
+        self._requests: dict[str, list[float]] = {}
+        self._last_cleanup = time.time()
+        self._lock = threading.Lock()
+
+    def _cleanup(self) -> None:
+        now = time.time()
+        with self._lock:  # FIXED: 整个cleanup在锁内执行，避免与is_allowed竞态
+            if now - self._last_cleanup < self._cleanup_interval:
+                return
+            window_start = now - self._window_seconds
+            stale_keys = [k for k, ts_list in self._requests.items() if all(t <= window_start for t in ts_list)]
+            for k in stale_keys:
+                del self._requests[k]
+            self._last_cleanup = now
+
+    def is_allowed(self, key: str) -> bool:
+        self._cleanup()
+        now = time.time()
+        window_start = now - self._window_seconds
+
+        with self._lock:
+            if key not in self._requests:
+                self._requests[key] = []
+
+            self._requests[key] = [t for t in self._requests[key] if t > window_start]
+
+            if len(self._requests[key]) >= self._max_requests:
+                return False
+
+            self._requests[key].append(now)
+            return True
+
+    def get_remaining(self, key: str) -> int:
+        now = time.time()
+        window_start = now - self._window_seconds
+        with self._lock:
+            if key not in self._requests:
+                return self._max_requests
+            self._requests[key] = [t for t in self._requests[key] if t > window_start]
+            return max(0, self._max_requests - len(self._requests[key]))
+
+    def get_retry_after(self, key: str) -> int:
+        with self._lock:
+            if key not in self._requests or not self._requests[key]:
+                return 0
+            oldest = min(self._requests[key])
+            retry = int(oldest + self._window_seconds - time.time()) + 1
+            return max(0, retry)
+
+
+def _get_rate_limits():
+    try:
+        from protoforge.config import get_settings
+        s = get_settings()
+        return (
+            RateLimiter(max_requests=getattr(s, 'rate_limit_max_requests', 100), window_seconds=getattr(s, 'rate_limit_window_seconds', 60)),
+            RateLimiter(max_requests=getattr(s, 'rate_limit_auth_max_requests', 10), window_seconds=getattr(s, 'rate_limit_auth_window_seconds', 60)),
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to load rate limit settings, using defaults: %s", e)
+        return RateLimiter(max_requests=100, window_seconds=60), RateLimiter(max_requests=10, window_seconds=60)
+
+_default_limiter, _auth_limiter = _get_rate_limits()
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    client_ip = get_client_ip(request)
+
+    # FIXED: 改为精确匹配，避免change-password被login的startswith误匹配
+    if path in ("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/change-password"):
+        limiter = _auth_limiter
+        key = f"auth:{client_ip}"
+    else:
+        limiter = _default_limiter
+        key = f"api:{client_ip}:{path}"
+
+    if not limiter.is_allowed(key):
+        retry_after = limiter.get_retry_after(key)
+        return JSONResponse(
+            status_code=429,
+            content={
+                "code": 429,
+                "error_code": "RATE_LIMITED",
+                "message": "Too many requests, please try again later",
+                "detail": "Too many requests, please try again later",
+                "data": None,
+                "retry_after": retry_after,
+                "timestamp": int(time.time() * 1000),
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(limiter._max_requests)
+    response.headers["X-RateLimit-Remaining"] = str(limiter.get_remaining(key))
+    return response

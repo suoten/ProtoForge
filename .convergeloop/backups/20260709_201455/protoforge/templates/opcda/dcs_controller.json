@@ -1,0 +1,72 @@
+{
+    "id": "opcda_dcs_controller",
+    "name": "DCS控制器",
+    "protocol": "opcda",
+    "description": "DCS分布式控制系统OPC-DA接口仿真",
+    "manufacturer": "Generic",
+    "model": "DCS-4000",
+    "points": [
+        {
+            "name": "reactor_temp",
+            "address": "DCS.Reactor.Temp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "反应器温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 150,
+            "max_value": 350
+        },
+        {
+            "name": "reactor_pressure",
+            "address": "DCS.Reactor.Pressure",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "反应器压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 5.0
+        },
+        {
+            "name": "feed_rate",
+            "address": "DCS.Feed.Rate",
+            "data_type": "float32",
+            "unit": "kg/h",
+            "description": "进料速率",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 100,
+            "max_value": 500
+        },
+        {
+            "name": "product_quality",
+            "address": "DCS.Product.Quality",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "产品质量指标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 90,
+            "max_value": 99.9
+        },
+        {
+            "name": "safety_valve",
+            "address": "DCS.Safety.Valve",
+            "data_type": "bool",
+            "description": "安全阀状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": false
+        }
+    ],
+    "protocol_config": {
+        "prog_id": "Matrikon.OPC.Simulation"
+    },
+    "tags": [
+        "DCS",
+        "OPC-DA",
+        "化工",
+        "过程控制"
+    ]
+}

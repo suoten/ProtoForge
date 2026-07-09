@@ -1,0 +1,103 @@
+{
+    "id": "opcua_cnc_machine",
+    "name": "CNC数控机床",
+    "protocol": "opcua",
+    "description": "CNC数控机床OPC-UA仿真，支持主轴转速、进给速度、坐标等参数",
+    "manufacturer": "Generic",
+    "model": "CNC-3000",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "ns=2;s=SpindleSpeed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1000,
+            "max_value": 8000
+        },
+        {
+            "name": "feed_rate",
+            "address": "ns=2;s=FeedRate",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "进给速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50,
+            "max_value": 5000
+        },
+        {
+            "name": "x_position",
+            "address": "ns=2;s=XPosition",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500,
+            "max_value": 500
+        },
+        {
+            "name": "y_position",
+            "address": "ns=2;s=YPosition",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -300,
+            "max_value": 300
+        },
+        {
+            "name": "z_position",
+            "address": "ns=2;s=ZPosition",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -200,
+            "max_value": 200
+        },
+        {
+            "name": "coolant_temp",
+            "address": "ns=2;s=CoolantTemp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "冷却液温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 18.0,
+            "max_value": 35.0
+        },
+        {
+            "name": "tool_wear",
+            "address": "ns=2;s=ToolWear",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "刀具磨损度",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "run_status",
+            "address": "ns=2;s=RunStatus",
+            "data_type": "uint16",
+            "description": "运行状态(0=停机 1=运行 2=暂停)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "CNC",
+        "数控机床",
+        "OPC-UA",
+        "加工"
+    ]
+}

@@ -1,0 +1,685 @@
+<template>
+  <n-config-provider :locale="naiveLocale" :date-locale="naiveDateLocale">
+  <n-message-provider>
+    <n-dialog-provider>
+      <div v-if="!loggedIn" class="login-wrapper">
+        <Login @login-success="onLogin" />
+      </div>
+      <n-layout v-else has-sider class="app-layout">
+        <n-layout-sider
+          bordered
+          :width="220"
+          :collapsed-width="64"
+          collapse-mode="width"
+          :collapsed="collapsed"
+          show-trigger
+          @collapse="collapsed = true; localStorage.setItem('sider_collapsed', 'true')"
+          @expand="collapsed = false; localStorage.setItem('sider_collapsed', 'false')"
+          :native-scrollbar="false"
+          class="app-sider"
+        >
+          <div class="sider-logo" @click="$router.push('/')">
+            <svg v-if="!collapsed" viewBox="0 0 512 512" width="28" height="28">
+              <defs><linearGradient id="logoBg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
+              <rect width="512" height="512" rx="96" fill="url(#logoBg)"/>
+              <g transform="translate(256,256)" fill="none" stroke="white" stroke-width="12">
+                <polygon points="0,-130 112.6,-65 112.6,65 0,130 -112.6,65 -112.6,-65" opacity="0.3"/>
+                <polygon points="0,-85 73.6,-42.5 73.6,42.5 0,85 -73.6,42.5 -73.6,-42.5" opacity="0.5"/>
+              </g>
+              <g transform="translate(256,256)">
+                <circle r="24" fill="white" opacity="0.9"/>
+                <circle r="14" fill="#fbbf24"/>
+              </g>
+            </svg>
+            <span v-if="!collapsed" class="logo-text">ProtoForge</span>
+            <svg v-else viewBox="0 0 512 512" width="28" height="28">
+              <defs><linearGradient id="logoBg2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
+              <rect width="512" height="512" rx="96" fill="url(#logoBg2)"/>
+              <g transform="translate(256,256)">
+                <circle r="24" fill="white" opacity="0.9"/>
+                <circle r="14" fill="#fbbf24"/>
+              </g>
+            </svg>
+          </div>
+          <n-menu
+            :value="currentRoute"
+            :collapsed="collapsed"
+            :collapsed-width="64"
+            :collapsed-icon-size="20"
+            :options="menuOptions"
+            @update:value="navigate"
+          />
+        </n-layout-sider>
+        <n-layout>
+          <n-layout-header bordered class="app-header">
+            <n-space align="center" size="small">
+              <n-auto-complete
+                v-model:value="searchQuery"
+                :options="searchResults"
+                :placeholder="t('header.searchPlaceholder')"
+                clearable
+                size="small"
+                style="width: 280px"
+                @select="onSearchSelect"
+                @update:value="onSearchInput"
+              >
+                <template #prefix>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#999" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                </template>
+              </n-auto-complete>
+            </n-space>
+            <n-breadcrumb class="app-breadcrumb">
+              <n-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx" @click="item.path && $router.push(item.path)">
+                {{ item.label }}
+              </n-breadcrumb-item>
+            </n-breadcrumb>
+            <n-space align="center" size="medium">
+              <n-tag v-if="wsConnected" size="small" :bordered="false" type="success" role="status" aria-live="polite">
+                <template #icon><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg></template>
+                {{ t('common.online') }}
+              </n-tag>
+              <n-dropdown :options="langMenuOptions" @select="onLangMenuSelect">
+                <n-button quaternary size="small" round aria-label="Switch language">
+                  <template #icon>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                  </template>
+                  {{ locale === 'zh' ? t('common.chinese') : 'EN' }}
+                </n-button>
+              </n-dropdown>
+              <n-dropdown :options="userMenuOptions" @select="onUserMenuSelect">
+                <n-button quaternary size="small" round aria-label="User menu">
+                  <template #icon>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  </template>
+                  {{ username }}
+                </n-button>
+              </n-dropdown>
+            </n-space>
+          </n-layout-header>
+          <n-layout-content class="app-content">
+            <router-view v-slot="{ Component }">
+              <transition name="pf-fade" mode="out-in">
+                <component :is="Component" />
+              </transition>
+            </router-view>
+          </n-layout-content>
+        </n-layout>
+      </n-layout>
+
+      <ChangePasswordModal v-model:show="showChangePassword" @success="onChangePasswordSuccess" />
+    </n-dialog-provider>
+  </n-message-provider>
+  </n-config-provider>
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, h, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NAutoComplete, NTag, NButton, NDropdown, NConfigProvider, NBreadcrumb, NBreadcrumbItem, zhCN, dateZhCN, enUS, dateEnUS } from 'naive-ui'
+import { useI18n } from './i18n.js'
+import { createDiscreteApi } from 'naive-ui'
+import api, { setNotifyFunction } from './api.js'
+import Login from './views/Login.vue'
+import ChangePasswordModal from './components/ChangePasswordModal.vue'
+
+const router = useRouter()
+const route = useRoute()
+const { message: discreteMessage, dialog: discreteDialog } = createDiscreteApi(['message', 'dialog'])
+const message = discreteMessage
+const { t, locale, setLocale } = useI18n()
+
+const naiveLocale = computed(() => locale.value === 'zh' ? zhCN : enUS)
+const naiveDateLocale = computed(() => locale.value === 'zh' ? dateZhCN : dateEnUS)
+
+setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }), t)
+const loggedIn = ref(false)
+const collapsed = ref(localStorage.getItem('sider_collapsed') === 'true')
+const username = ref(localStorage.getItem('username') || '')
+const searchQuery = ref('')
+const searchResults = ref([])
+const searchData = ref({ devices: [], templates: [], scenarios: [], protocols: [] })
+const wsConnected = ref(false)
+let ws = null
+
+const currentRoute = computed(() => route.path)
+
+const breadcrumbs = computed(() => {
+  const path = route.path
+  const crumbs = [{ label: t('nav.dashboard'), path: '/' }]
+  const routeMap = {
+    '/devices': [{ label: t('nav.devices'), path: '/devices' }],
+    '/protocols': [{ label: t('nav.protocols'), path: '/protocols' }],
+    '/scenarios': [{ label: t('nav.scenarios'), path: '/scenarios' }],
+    '/scenario-editor': [{ label: t('nav.scenarios'), path: '/scenarios' }, { label: t('nav.scenarioEditor'), path: '/scenario-editor' }],
+    '/templates': [{ label: t('nav.templates'), path: '/templates' }],
+    '/marketplace': [{ label: t('nav.marketplace'), path: '/marketplace' }],
+    '/testing': [{ label: t('nav.testing'), path: '/testing' }],
+    '/logs': [{ label: t('nav.logs'), path: '/logs' }],
+    '/integration': [{ label: t('nav.integration'), path: '/integration' }],
+    '/forward': [{ label: t('nav.forward'), path: '/forward' }],
+    '/recorder': [{ label: t('nav.recorder'), path: '/recorder' }],
+    '/webhook': [{ label: t('nav.webhook'), path: '/webhook' }],
+    '/settings': [{ label: t('nav.settings'), path: '/settings' }],
+    '/audit': [{ label: t('nav.audit'), path: '/audit' }],
+    '/backup': [{ label: t('nav.backup'), path: '/backup' }],
+  }
+  if (path.startsWith('/scenario/')) {
+    crumbs.push({ label: t('nav.scenarios'), path: '/scenarios' })
+    crumbs.push({ label: t('nav.scenarioEditor') })
+    return crumbs
+  }
+  const extra = routeMap[path] || []
+  return [...crumbs, ...extra]
+})
+
+watch(() => route.path, (path) => {
+  const titles = {
+    '/': 'ProtoForge',
+    '/devices': 'Devices - ProtoForge',
+    '/protocols': 'Protocols - ProtoForge',
+    '/scenarios': 'Scenarios - ProtoForge',
+    '/scenario-editor': 'Scenario Editor - ProtoForge',
+    '/templates': 'Templates - ProtoForge',
+    '/marketplace': 'Marketplace - ProtoForge',
+    '/testing': 'Testing - ProtoForge',
+    '/logs': 'Logs - ProtoForge',
+    '/integration': 'Integration - ProtoForge',
+    '/forward': 'Forward - ProtoForge',
+    '/recorder': 'Recorder - ProtoForge',
+    '/webhook': 'Webhook - ProtoForge',
+    '/settings': 'Settings - ProtoForge',
+    '/audit': 'Audit - ProtoForge',
+    '/backup': 'Backup - ProtoForge',
+  }
+  document.title = titles[path] || 'ProtoForge'
+}, { immediate: true })
+
+function svgIcon(pathD, color = 'currentColor') {
+  return () => h('svg', { viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: color, 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('path', { d: pathD })
+  ])
+}
+
+const menuOptions = computed(() => [
+  {
+    type: 'group',
+    label: '核心',
+    key: 'group-core',
+    children: [
+      { label: t('nav.dashboard'), key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
+      { label: t('nav.devices'), key: '/devices', icon: svgIcon('M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z') },
+      { label: t('nav.protocols'), key: '/protocols', icon: svgIcon('M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '仿真',
+    key: 'group-simulation',
+    children: [
+      { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
+      { label: t('nav.scenarioEditor'), key: '/scenario-editor', icon: svgIcon('M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z') },
+      { label: t('nav.templates'), key: '/templates', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6') },
+      { label: t('nav.marketplace'), key: '/marketplace', icon: svgIcon('M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '测试',
+    key: 'group-testing',
+    children: [
+      { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
+      { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
+    ]
+  },
+  {
+    type: 'group',
+    label: '集成',
+    key: 'group-integration',
+    children: [
+      { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
+      { label: t('nav.forward'), key: '/forward', icon: svgIcon('M22 12h-4l-3 9L9 3l-3 9H2') },
+      { label: t('nav.recorder'), key: '/recorder', icon: svgIcon('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M12 6v6l4 2') },
+      { label: t('nav.webhook'), key: '/webhook', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
+    ]
+  },
+  {
+    type: 'group',
+    label: t('nav.groupSystem'),
+    key: 'group-system',
+    children: [
+      { label: t('nav.settings'), key: '/settings', icon: svgIcon('M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z') },
+      { label: t('nav.audit'), key: '/audit', icon: svgIcon('M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z') },
+      { label: t('nav.backup'), key: '/backup', icon: svgIcon('M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3') },
+    ]
+  },
+])
+
+const userMenuOptions = computed(() => [
+  { label: t('header.changePassword'), key: 'change-password' },
+  { label: t('header.logout'), key: 'logout' },
+])
+
+const langMenuOptions = computed(() => [
+  { label: t('common.chinese'), key: 'zh' },
+  { label: 'English', key: 'en' },
+])
+
+function onLangMenuSelect(key) {
+  setLocale(key)
+}
+
+function navigate(key) {
+  router.push(key)
+}
+
+function onLogin() {
+  loggedIn.value = true
+  username.value = localStorage.getItem('username') || ''
+  loadSearchData()
+  connectWebSocket()
+}
+
+const showChangePassword = ref(false)
+
+function onChangePasswordSuccess() {
+  if (ws) { ws.close(); ws = null }
+  loggedIn.value = false
+}
+
+function onUserMenuSelect(key) {
+  if (key === 'logout') {
+    discreteDialog.warning({
+      title: t('common.confirm'),
+      content: t('header.logoutConfirm'),
+      positiveText: t('header.logout'),
+      negativeText: t('common.cancel'),
+      onPositiveClick: () => {
+        if (ws) { ws.close(); ws = null }
+        if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
+        localStorage.removeItem('token')
+        localStorage.removeItem('refresh_token')
+        localStorage.removeItem('username')
+        localStorage.removeItem('role')
+        loggedIn.value = false
+      }
+    })
+  } else if (key === 'change-password') {
+    showChangePassword.value = true
+  }
+}
+
+function onGlobalKeydown(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault()
+    const searchInput = document.querySelector('.app-header .n-auto-complete input')
+    if (searchInput) searchInput.focus()
+  }
+}
+
+onMounted(async () => {
+  window.addEventListener('keydown', onGlobalKeydown)
+  const token = localStorage.getItem('token')
+  if (token) {
+    const valid = await api.ensureValidToken()
+    if (valid) {
+      loggedIn.value = true
+      username.value = localStorage.getItem('username') || ''
+      loadSearchData()
+      connectWebSocket()
+    } else {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('role')
+    }
+  }
+})
+
+onUnmounted(() => {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
+  if (ws) { ws.close(); ws = null }
+})
+
+function onSearchInput(query) {
+  if (!query) { searchResults.value = []; return }
+  const q = query.toLowerCase()
+  const results = []
+  for (const d of searchData.value.devices) {
+    if ((d.name || '').toLowerCase().includes(q) || (d.id || '').toLowerCase().includes(q))
+      results.push({ label: `[${t('nav.devices')}] ${d.name || d.id}`, value: `/devices?highlight=${encodeURIComponent(d.id)}` })
+  }
+  for (const tmpl of searchData.value.templates) {
+    if ((tmpl.name || '').toLowerCase().includes(q))
+      results.push({ label: `[${t('nav.templates')}] ${tmpl.name}`, value: `/templates?highlight=${encodeURIComponent(tmpl.id)}` })
+  }
+  for (const s of searchData.value.scenarios) {
+    if ((s.name || '').toLowerCase().includes(q))
+      results.push({ label: `[${t('nav.scenarios')}] ${s.name}`, value: `/scenario/${encodeURIComponent(s.id)}` })
+  }
+  for (const p of searchData.value.protocols) {
+    const name = p.display_name || p.name || ''
+    if (name.toLowerCase().includes(q))
+      results.push({ label: `[${t('nav.protocols')}] ${name}`, value: '/protocols' })
+  }
+  searchResults.value = results.slice(0, 10)
+}
+
+function onSearchSelect(val) {
+  router.push(val)
+  searchQuery.value = ''
+}
+
+let wsReconnectTimer = null
+let wsReconnectDelay = 1000
+let wsReconnectAttempts = 0
+let searchRefreshTimer = null
+const WS_MAX_RECONNECT_DELAY = 30000
+const WS_MAX_RECONNECT_ATTEMPTS = 20
+
+function connectWebSocket() {
+  if (!loggedIn.value) return
+  const token = localStorage.getItem('token')
+  if (!token) return
+  try {
+    ws = api.createLogWs()
+    if (!ws) return
+  } catch (e) {
+    console.error('Failed to create WebSocket:', e.message)
+    wsReconnectAttempts++
+    if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+      wsReconnectTimer = setTimeout(connectWebSocket, 5000)
+    }
+    return
+  }
+  ws.onopen = () => { wsConnected.value = true; wsReconnectDelay = 1000; wsReconnectAttempts = 0; loadSearchData() }  // FIXED-P0: WS重连后刷新数据
+  ws.onclose = () => {
+    wsConnected.value = false
+    if (loggedIn.value) {
+      wsReconnectAttempts++
+      if (wsReconnectAttempts < WS_MAX_RECONNECT_ATTEMPTS) {
+        const delay = wsReconnectDelay
+        wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+        wsReconnectTimer = setTimeout(async () => {  // FIXED: WS reconnect was infinite loop when token expired
+          const valid = await api.ensureValidToken().catch(() => false)
+          if (valid) {
+            connectWebSocket()
+          } else {
+            if (ws) { try { ws.close() } catch (_) {} }  // FIXED: close stale WS before logout on token expiry
+            loggedIn.value = false
+            localStorage.removeItem('token')
+            localStorage.removeItem('refresh_token')
+          }
+        }, delay)
+      }
+    }
+  }
+  ws.onerror = () => {
+    wsConnected.value = false
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_RECONNECT_DELAY)
+  }
+  ws.onmessage = () => {
+    // Log WebSocket: messages are handled by the Logs view's own WebSocket connection.
+    // This connection is used only for online status indication (wsConnected).
+  }
+}
+
+async function loadSearchData() {
+  const results = await Promise.allSettled([
+    api.getDevices(), api.getTemplates(), api.getScenarios(), api.getProtocols(),
+  ])
+  searchData.value = {
+    devices: results[0].status === 'fulfilled' ? (results[0].value || []) : [],
+    templates: results[1].status === 'fulfilled' ? (results[1].value || []) : [],
+    scenarios: results[2].status === 'fulfilled' ? (results[2].value || []) : [],
+    protocols: results[3].status === 'fulfilled' ? (results[3].value || []) : [],
+  }
+  if (!searchRefreshTimer) {
+    searchRefreshTimer = setInterval(loadSearchData, 60000)
+  }
+}
+</script>
+
+<style>
+/* FIXED: removed external CDN font import (fonts.loli.net), Inter falls back to system fonts */
+
+:root {
+  --pf-primary: #6366f1;
+  --pf-primary-light: #818cf8;
+  --pf-accent: #8b5cf6;
+  --pf-success: #10b981;
+  --pf-warning: #f59e0b;
+  --pf-danger: #ef4444;
+  --pf-bg: #f8fafc;
+  --pf-sider-bg: #ffffff;
+  --pf-header-bg: #ffffff;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--pf-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-layout { height: 100vh; }
+
+.app-sider {
+  background: var(--pf-sider-bg) !important;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+
+.sider-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sider-logo:hover { opacity: 0.8; }
+
+.logo-text {
+  font-size: 18px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.5px;
+}
+
+.app-header {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--pf-header-bg) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.app-breadcrumb {
+  margin-left: 8px;
+  font-size: 13px;
+}
+.app-breadcrumb .n-breadcrumb-item {
+  cursor: pointer;
+}
+.app-breadcrumb .n-breadcrumb-item:last-child {
+  cursor: default;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.app-content {
+  padding: 24px;
+  background: var(--pf-bg) !important;
+  min-height: calc(100vh - 56px);
+}
+
+.login-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.n-menu .n-menu-item-content::before {
+  border-radius: 8px !important;
+  margin: 2px 8px !important;
+}
+
+.n-card {
+  border-radius: 12px !important;
+  border: 1px solid rgba(0,0,0,0.06) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
+  transition: all 0.2s ease;
+}
+
+.n-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
+}
+
+.n-button--primary-type {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  border: none !important;
+  font-weight: 500 !important;
+  color: #fff !important;
+}
+
+.n-button--success-type {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-button--warning-type {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-button--error-type {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-button--info-type {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+.n-tag--success-type {
+  background: rgba(16,185,129,0.1) !important;
+  color: #059669 !important;
+  border-color: rgba(16,185,129,0.2) !important;
+}
+
+.n-tag--error-type {
+  background: rgba(239,68,68,0.1) !important;
+  color: #dc2626 !important;
+  border-color: rgba(239,68,68,0.2) !important;
+}
+
+.n-tag--warning-type {
+  background: rgba(245,158,11,0.1) !important;
+  color: #d97706 !important;
+  border-color: rgba(245,158,11,0.2) !important;
+}
+
+.n-tag--info-type {
+  background: rgba(99,102,241,0.1) !important;
+  color: #6366f1 !important;
+  border-color: rgba(99,102,241,0.2) !important;
+}
+
+.n-data-table .n-data-table-th {
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  color: #64748b !important;
+}
+
+.n-input, .n-select {
+  border-radius: 8px !important;
+}
+
+.n-modal .n-card {
+  border-radius: 16px !important;
+}
+
+.n-tabs .n-tabs-tab {
+  font-weight: 500 !important;
+}
+
+.pf-gradient-card {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.pf-gradient-card-green {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.pf-gradient-card-orange {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.pf-gradient-card-rose {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.pf-stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.pf-section-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.3px;
+}
+
+.pf-section-desc {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.pf-fade-enter-active,
+.pf-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.pf-fade-enter-from,
+.pf-fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 1024px) {
+  .app-header { padding: 0 12px !important; }
+  .app-content { padding: 16px !important; }
+  .n-modal .n-card { width: 90vw !important; max-width: 560px; }
+}
+@media (max-width: 768px) {
+  .app-header .n-auto-complete { width: 180px !important; }
+  .app-content { padding: 12px !important; }
+  .n-data-table { overflow-x: auto; }
+}
+</style>

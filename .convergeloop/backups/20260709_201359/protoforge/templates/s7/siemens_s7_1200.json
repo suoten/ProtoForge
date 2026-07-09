@@ -1,0 +1,106 @@
+{
+    "id": "s7_siemens_s7_1200",
+    "name": "S7协议-S7-1200",
+    "protocol": "s7",
+    "description": "西门子S7-1200 PLC原生S7通信协议接口，支持DB区读写、I/O区访问",
+    "manufacturer": "Siemens",
+    "model": "S7-1200",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "DB1.DBX0.0",
+            "data_type": "uint16",
+            "description": "运行模式(0=STOP 1=RUN)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "cpu_load",
+            "address": "DB1.DBW2",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 85
+        },
+        {
+            "name": "di_status",
+            "address": "DB1.DBW4",
+            "data_type": "uint16",
+            "description": "数字输入状态(位图)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 255
+        },
+        {
+            "name": "do_status",
+            "address": "DB1.DBW6",
+            "data_type": "uint16",
+            "description": "数字输出状态(位图)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "ai_channel0",
+            "address": "DB1.DBD8",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "模拟输入通道0(温度)",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 18.0,
+            "max_value": 32.0
+        },
+        {
+            "name": "ao_channel0",
+            "address": "DB1.DBD12",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "模拟输出通道0",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 5.0
+        },
+        {
+            "name": "pressure",
+            "address": "DB1.DBD16",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "压力值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 3.0
+        },
+        {
+            "name": "flow_rate",
+            "address": "DB1.DBD20",
+            "data_type": "float32",
+            "unit": "L/min",
+            "description": "流量值",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "error_code",
+            "address": "DB1.DBW24",
+            "data_type": "uint16",
+            "description": "错误代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "rack": 0,
+        "slot": 1
+    },
+    "tags": ["PLC", "西门子", "Siemens", "S7", "S7-1200", "工业控制"]
+}

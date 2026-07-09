@@ -1,0 +1,966 @@
+"""GB28181 protocol server implementation."""
+
+import asyncio
+import logging
+import re
+import threading
+import time
+import uuid
+import xml.etree.ElementTree as ET
+from typing import Any
+
+from protoforge.core.messages import desc, msg
+from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+
+logger = logging.getLogger(__name__)
+
+
+class GB28181Device:
+    def __init__(self, device_id: str, server_id: str, host: str, port: int,
+                 username: str = "", password: str = "", realm: str = "gb28181"):
+        self.device_id = device_id
+        self.server_id = server_id
+        self.host = host
+        self.port = port
+        self.username = username or device_id
+        self.password = password
+        self.realm = realm
+        self.sip_uri = f"sip:{device_id}@{host}:{port}"
+        self.registered = False
+        self.expires = 3600
+        self.call_id = ""
+        self.cseq = 1
+        self.branch_prefix = "z9hG4bK"
+        self.rtp_streamer = None
+        self._protoforge_device_id = ""
+        self._register_interval = 3600
+        self._invite_call_id = ""
+        self._invite_media_ip = ""
+        self._invite_media_port = 0
+        self._local_media_port = 0  # FIXED-P0: 记录本地分配的媒体端口，BYE时释放
+        self._video_width = 352  # FIXED-P0: 视频流参数，可从模板配置覆盖
+        self._video_height = 288
+        self._video_fps = 25
+
+    def make_register_request(self) -> str:
+        self.call_id = uuid.uuid4().hex[:16]
+        branch = f"{self.branch_prefix}{uuid.uuid4().hex[:12]}"
+        self.cseq += 1
+        return (
+            f"REGISTER sip:{self.server_id} SIP/2.0\r\n"
+            f"Via: SIP/2.0/UDP {self.host}:{self.port};branch={branch};rport\r\n"
+            f"From: <sip:{self.device_id}@{self.host}>;tag={uuid.uuid4().hex[:8]}\r\n"
+            f"To: <sip:{self.device_id}@{self.host}>\r\n"
+            f"Call-ID: {self.call_id}@{self.host}\r\n"
+            f"CSeq: {self.cseq} REGISTER\r\n"
+            f"Contact: <sip:{self.device_id}@{self.host}:{self.port}>\r\n"
+            f"Max-Forwards: 70\r\n"
+            f"User-Agent: ProtoForge-GB28181/1.0\r\n"
+            f"Expires: {self.expires}\r\n"
+            f"Allow: REGISTER, INVITE, ACK, BYE, MESSAGE, NOTIFY, SUBSCRIBE\r\n"
+            f"Content-Length: 0\r\n\r\n"
+        )
+
+    def make_catalog_response(self, sn: str, device_name: str = "ProtoForge-Camera",
+                               manufacturer: str = "ProtoForge", model: str = "PF-CAM-100",
+                               civil_code: str = "340200") -> str:
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>Catalog</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<SumNum>1</SumNum>\r\n'
+            f'<DeviceList Num="1">\r\n'
+            f'<Item>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<Name>{device_name}</Name>\r\n'
+            f'<Manufacturer>{manufacturer}</Manufacturer>\r\n'
+            f'<Model>{model}</Model>\r\n'
+            f'<Owner>Owner</Owner>\r\n'
+            f'<CivilCode>{civil_code}</CivilCode>\r\n'
+            f'<Block>Block</Block>\r\n'
+            f'<Address>Address</Address>\r\n'
+            f'<Parental>0</Parental>\r\n'
+            f'<SafetyWay>0</SafetyWay>\r\n'
+            f'<RegisterWay>1</RegisterWay>\r\n'
+            f'<Secrecy>0</Secrecy>\r\n'
+            f'<Status>ON</Status>\r\n'
+            f'<Longitude>0.0</Longitude>\r\n'
+            f'<Latitude>0.0</Latitude>\r\n'
+            f'</Item>\r\n'
+            f'</DeviceList>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def make_heartbeat_response(self, sn: str) -> str:
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>Keepalive</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<Status>OK</Status>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def make_sdp_answer(self, media_ip: str, media_port: int, ssrc: str,
+                        stream_type: str = "Play",
+                        srtp_enabled: bool = False,
+                        srtp_crypto_suite: str = "AES_CM_128_HMAC_SHA1_80",
+                        srtp_key_salt: str = "") -> str:
+        ssrc_full = ssrc if len(ssrc) == 10 else f"0{ssrc}"
+        proto = "RTP/SAVP" if srtp_enabled else "RTP/AVP"
+        sdp = (
+            f"v=0\r\n"
+            f"o=- 0 0 IN IP4 {media_ip}\r\n"
+            f"s={stream_type}\r\n"
+            f"c=IN IP4 {media_ip}\r\n"
+            f"t=0 0\r\n"
+            f"m=video {media_port} {proto} 96 97 98\r\n"
+        )
+        if srtp_enabled and srtp_key_salt:
+            sdp += f"a=crypto:1 {srtp_crypto_suite} inline:{srtp_key_salt}\r\n"
+        sdp += (
+            f"a=sendonly\r\n"
+            f"a=rtpmap:96 PS/90000\r\n"
+            f"a=rtpmap:97 MPEG4/90000\r\n"
+            f"a=rtpmap:98 H264/90000\r\n"
+            f"y={ssrc_full}\r\n"
+            f"f=v/2/4///a///\r\n"
+        )
+        return sdp
+
+    def make_control_response(self, sn: str, parsed_ptz: dict | None = None) -> str:
+        # FIXED-P0: 解析PTZ命令并返回实际执行结果
+        result = "OK"
+        if parsed_ptz:
+            ptz_cmd = parsed_ptz.get("cmd", "")
+            speed = parsed_ptz.get("speed", 0)
+            preset = parsed_ptz.get("preset", 0)
+            if ptz_cmd:
+                result = f"PTZ:{ptz_cmd}(speed={speed})"
+                if preset:
+                    result += f",preset={preset}"
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>DeviceControl</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<Result>{result}</Result>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def parse_ptz_command(self, body: str) -> dict | None:
+        """解析PTZ云台控制命令"""
+        try:
+            root = ET.fromstring(body)
+            ptz_cmd = root.findtext("PTZCmd", "")
+            if ptz_cmd and len(ptz_cmd) >= 8:
+                # PTZCmd格式: 0x68+命令码+速度+预置位 (每2位hex)
+                return {
+                    "raw": ptz_cmd,
+                    "cmd": ptz_cmd[2:4] if len(ptz_cmd) >= 4 else "",
+                    "speed": int(ptz_cmd[4:6], 16) if len(ptz_cmd) >= 6 else 0,
+                    "preset": int(ptz_cmd[6:8], 16) if len(ptz_cmd) >= 8 else 0,
+                }
+            preset_cmd = root.findtext("PresetCmd", "")
+            if preset_cmd:
+                return {"cmd": "preset", "raw": preset_cmd, "preset": int(preset_cmd) if preset_cmd.isdigit() else 0}
+            guard_cmd = root.findtext("GuardCmd", "")
+            if guard_cmd:
+                return {"cmd": "guard", "raw": guard_cmd}
+        except (ET.ParseError, ValueError, IndexError):
+            pass
+        return None
+
+    def make_device_info_response(self, sn: str) -> str:
+        """生成DeviceInfo响应"""
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>DeviceInfo</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<DeviceName>ProtoForge-Camera</DeviceName>\r\n'
+            f'<Manufacturer>ProtoForge</Manufacturer>\r\n'
+            f'<Model>PF-CAM-100</Model>\r\n'
+            f'<Firmware>V1.0.0</Firmware>\r\n'
+            f'<Channel>1</Channel>\r\n'
+            f'<Status>ON</Status>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def make_config_response(self, sn: str) -> str:
+        xml_body = (
+            f'<?xml version="1.0" encoding="GB2312"?>\r\n'
+            f'<Response>\r\n'
+            f'<CmdType>DeviceConfig</CmdType>\r\n'
+            f'<SN>{sn}</SN>\r\n'
+            f'<DeviceID>{self.device_id}</DeviceID>\r\n'
+            f'<Result>OK</Result>\r\n'
+            f'</Response>'
+        )
+        return xml_body
+
+    def make_register_with_auth(self, nonce: str) -> str:
+        import hashlib
+        ha1 = hashlib.md5(f"{self.username}:{self.realm}:{self.password}".encode()).hexdigest()
+        ha2 = hashlib.md5(f"REGISTER:sip:{self.server_id}".encode()).hexdigest()
+        response = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()
+
+        self.cseq += 1
+        branch = f"{self.branch_prefix}{uuid.uuid4().hex[:12]}"
+        return (
+            f"REGISTER sip:{self.server_id} SIP/2.0\r\n"
+            f"Via: SIP/2.0/UDP {self.host}:{self.port};branch={branch};rport\r\n"
+            f"From: <sip:{self.device_id}@{self.host}>;tag={uuid.uuid4().hex[:8]}\r\n"
+            f"To: <sip:{self.device_id}@{self.host}>\r\n"
+            f"Call-ID: {self.call_id}@{self.host}\r\n"
+            f"CSeq: {self.cseq} REGISTER\r\n"
+            f"Contact: <sip:{self.device_id}@{self.host}:{self.port}>\r\n"
+            f"Authorization: Digest username=\"{self.username}\", realm=\"{self.realm}\", "
+            f"nonce=\"{nonce}\", uri=\"sip:{self.server_id}\", response=\"{response}\"\r\n"
+            f"Max-Forwards: 70\r\n"
+            f"User-Agent: ProtoForge-GB28181/1.0\r\n"
+            f"Expires: {self.expires}\r\n"
+            f"Content-Length: 0\r\n\r\n"
+        )
+
+
+class GB28181DeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDeviceBehavior，复用_points/_values/_generators初始化
+    def __init__(self, points: list[PointConfig]):
+        super().__init__(points)  # FIXED: 调用super().__init__()初始化父类属性
+
+    # FIXED-P1: 删除有缺陷的 generate_value 覆写，继承 StandardDeviceBehavior 已修复的实现
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+
+    def get_value(self, point_name: str) -> Any:
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                value = gen.generate()
+                self._values[point_name] = value
+                return value
+        return self._values.get(point_name, 0)
+
+
+class GB28181Server(ProtocolServer):
+    protocol_name = "gb28181"
+    protocol_display_name = "GB28181"
+
+    def __init__(self):
+        super().__init__()
+        self._behaviors: dict[str, GB28181DeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._gb_devices: dict[str, GB28181Device] = {}
+        self._gb_devices_lock = asyncio.Lock()  # FIXED-P0: 保护_gb_devices并发读写
+        self._transport: asyncio.DatagramTransport | None = None
+        self._host = "0.0.0.0"
+        self._port = 5060
+        self._server_id = "34020000002000000001"
+        self._heartbeat_task: asyncio.Task | None = None
+        self._rtp_tasks: list[asyncio.Task] = []
+        self._allocated_media_ports: set[int] = set()
+        self._media_ports_lock = threading.Lock()
+
+    async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 5060)
+        self._validate_port(self._port)
+        self._server_id = config.get("server_id", "34020000002000000001")
+        self._srtp_enabled = config.get("srtp_enabled", False)
+        self._srtp_crypto_suite = config.get("srtp_crypto_suite", "AES_CM_128_HMAC_SHA1_80")
+
+        try:
+            loop = asyncio.get_running_loop()
+            self._transport, _ = await loop.create_datagram_endpoint(
+                lambda: _SIPProtocolHandler(self),
+                local_addr=(self._host, self._port),
+            )
+
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+            self._status = ProtocolStatus.RUNNING
+            self._log_debug("system", "server_start",
+                            msg("gb28181", "service_started", host=self._host, port=self._port),
+                            detail={"server_id": self._server_id, "port": self._port})
+            logger.info("GB28181 server starting on %s:%d", self._host, self._port)
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            self._log_debug("system", "server_error", msg("gb28181", "service_start_failed", error=e))
+            logger.error("Failed to start GB28181 server: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        try:
+            for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
+                if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
+                    await gb_device.rtp_streamer.stop()
+            if self._heartbeat_task:
+                self._heartbeat_task.cancel()
+                try:
+                    await self._heartbeat_task
+                except asyncio.CancelledError:
+                    logger.debug("GB28181 task cancelled")
+                except Exception as e:
+                    logger.warning("GB28181 heartbeat task error: %s", e)
+            for t in self._rtp_tasks:
+                if not t.done():
+                    t.cancel()
+            for t in self._rtp_tasks:
+                try:
+                    await t
+                except (asyncio.CancelledError, Exception) as e:
+                    logger.debug("GB28181 RTP task cancel error: %s", e)
+            self._rtp_tasks.clear()
+            if self._transport:
+                self._transport.close()
+        except Exception as e:
+            logger.warning("GB28181 server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            self._log_debug("system", "server_stop", msg("gb28181", "service_stopped"))
+            logger.info("GB28181 server stopped")
+
+    @property
+    def actual_port(self) -> int:
+        return self._port
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = GB28181DeviceBehavior(device_config.points)
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+        await self._update_default_device_async(device_config.id)
+
+        proto_config = device_config.protocol_config or {}
+        gb_device_id = proto_config.get("device_id", device_config.id)
+        sip_server_id = proto_config.get("sip_server_id", self._server_id)
+        sip_server_addr = proto_config.get("sip_server_addr", "")  # FIXED: removed hardcoded 127.0.0.1 fallback
+        sip_server_port = proto_config.get("sip_server_port", 5060)
+        register_interval = proto_config.get("register_interval", 3600)
+
+        gb_device = GB28181Device(
+            device_id=gb_device_id,
+            server_id=sip_server_id,
+            host=sip_server_addr,
+            port=sip_server_port,
+            username=proto_config.get("username", gb_device_id),
+            password=proto_config.get("password", ""),
+            realm=proto_config.get("realm", "gb28181"),
+        )
+        gb_device._protoforge_device_id = device_config.id
+        gb_device._register_interval = register_interval
+        gb_device._video_width = proto_config.get("video_width", 352)  # FIXED-P0: 从模板配置读取视频流参数
+        gb_device._video_height = proto_config.get("video_height", 288)
+        gb_device._video_fps = proto_config.get("video_fps", 25)
+        async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发写入
+            self._gb_devices[device_config.id] = gb_device
+
+        if self._status == ProtocolStatus.RUNNING:
+            if sip_server_addr:  # FIXED-P1: 空地址时跳过注册，避免sendto到('', port)导致socket family mismatch
+                await self._register_device(gb_device)
+            else:
+                logger.warning("GB28181 device %s has no sip_server_addr configured, skipping REGISTER", device_config.id)
+
+        self._log_debug("system", "device_created",
+                        f"Device created: {device_config.name} (GB ID={gb_device_id})",
+                        device_id=device_config.id,
+                        detail={"gb_id": gb_device_id, "server": f"{sip_server_addr}:{sip_server_port}"})
+        logger.info("GB28181 device created: %s (gb_id=%s, server=%s:%d)",
+                     device_config.id, gb_device_id, sip_server_addr, sip_server_port)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发读写
+            gb = self._gb_devices.pop(device_id, None)
+        if gb:
+            if gb.rtp_streamer and gb.rtp_streamer.is_running:
+                await gb.rtp_streamer.stop()
+            gb.registered = False
+            with self._media_ports_lock:  # FIXED-P0: remove_device时释放已分配的媒体端口
+                self._allocated_media_ports.discard(gb._local_media_port)
+                self._allocated_media_ports.discard(gb._local_media_port + 1)
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+        await self._clear_default_device_async(device_id)
+        self._log_debug("system", "device_removed", msg("gb28181", "device_removed"), device_id=device_id)
+        logger.info("GB28181 device removed: %s", device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return []
+        config = self._device_configs.get(device_id)
+        if not config:
+            return []
+        now = time.time()
+        result = []
+        for point in config.points:
+            value = behavior.get_value(point.name)
+            result.append(PointValue(name=point.name, value=value, timestamp=now))
+        return result
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address")},  # FIXED: 中文硬编码→i18n常量
+                "port": {"type": "integer", "default": 5060, "description": desc("listen_port")},  # FIXED: 中文硬编码→i18n常量
+                "server_id": {"type": "string", "default": "34020000002000000001", "description": desc("sip_server_id")},  # FIXED: 中文硬编码→i18n常量
+                "sip_server_addr": {"type": "string", "default": "", "description": desc("sip_server_addr", "SIP server address for REGISTER")},  # FIXED-P1
+                "sip_server_port": {"type": "integer", "default": 5060, "description": desc("sip_server_port", "SIP server port")},  # FIXED-P1
+                "srtp_enabled": {"type": "boolean", "default": False, "description": desc("srtp_enabled")},  # FIXED: 中文硬编码→i18n常量
+                "srtp_crypto_suite": {
+                    "type": "string",
+                    "default": "AES_CM_128_HMAC_SHA1_80",
+                    "enum": ["AES_CM_128_HMAC_SHA1_80", "AES_CM_128_HMAC_SHA1_32"],
+                    "description": desc("srtp_crypto_suite")},
+                "video_width": {"type": "integer", "default": 352, "description": desc("video_width", "Video width (pixels)")},  # FIXED-P0
+                "video_height": {"type": "integer", "default": 288, "description": desc("video_height", "Video height (pixels)")},  # FIXED-P0
+                "video_fps": {"type": "integer", "default": 25, "description": desc("video_fps", "Video frame rate (fps)")},  # FIXED-P0
+            },
+        }
+
+    async def _register_device(self, gb_device: GB28181Device) -> None:
+        register_msg = gb_device.make_register_request()
+        try:
+            server_host = gb_device.host
+            server_port = gb_device.port
+            if self._transport:
+                self._transport.sendto(
+                    register_msg.encode("utf-8"),
+                    (server_host, server_port),
+                )
+                self._log_debug("out", "sip_register",
+                                f"Sending REGISTER to {server_host}:{server_port}",
+                                device_id=gb_device._protoforge_device_id,
+                                detail={"gb_id": gb_device.device_id,
+                                        "server": f"{server_host}:{server_port}"})
+                logger.info("Sent REGISTER for device %s to %s:%d",
+                            gb_device.device_id, server_host, server_port)
+        except Exception as e:
+            self._log_debug("out", "sip_register_error",
+                            msg("gb28181", "register_failed", error=e),
+                            device_id=gb_device._protoforge_device_id)
+            logger.warning("Failed to send REGISTER for %s: %s", gb_device.device_id, e)
+
+    async def _heartbeat_loop(self) -> None:
+        while self._status == ProtocolStatus.RUNNING:
+            async with self._gb_devices_lock:  # FIXED-P0: 保护_gb_devices并发迭代
+                devices_snapshot = list(self._gb_devices.values())
+            for gb_device in devices_snapshot:
+                await self._send_keepalive(gb_device)
+            async with self._gb_devices_lock:
+                expires_list = [gb.expires for gb in self._gb_devices.values()]
+            refresh_interval = max(60, min(expires_list, default=3600) // 2)
+            await asyncio.sleep(refresh_interval)
+
+    async def _send_keepalive(self, gb_device) -> None:
+        if not self._transport:
+            return
+        if not gb_device.host:  # FIXED-P1: 空地址时跳过keepalive，避免sendto到('', port)导致socket错误
+            return
+        keepalive_body = f'<?xml version="1.0"?>\r\n<Notify>\r\n<CmdType>Keepalive</CmdType>\r\n<SN>{int(time.time()) % 100000}</SN>\r\n<DeviceID>{gb_device.device_id}</DeviceID>\r\n<Status>OK</Status>\r\n</Notify>'
+        local_host = self._host if self._host != "0.0.0.0" else "127.0.0.1"
+        local_port = self._port
+        msg = (
+            f"MESSAGE sip:{self._server_id}@{local_host} SIP/2.0\r\n"
+            f"Via: SIP/2.0/UDP {local_host}:{local_port};rport;branch={uuid.uuid4().hex[:8]}\r\n"
+            f"From: <sip:{gb_device.device_id}@{local_host}>;tag={gb_device.device_id}\r\n"
+            f"To: <sip:{self._server_id}@{local_host}>\r\n"
+            f"Call-ID: {uuid.uuid4().hex[:16]}@{local_host}\r\n"
+            f"CSeq: {int(time.time()) % 100000} MESSAGE\r\n"
+            f"Content-Type: Application/MANSCDP+xml\r\n"
+            f"Content-Length: {len(keepalive_body.encode())}\r\n\r\n"
+            f"{keepalive_body}"
+        )
+        try:
+            dest_host = gb_device.host
+            dest_port = gb_device.port
+            self._transport.sendto(msg.encode(), (dest_host, dest_port))
+        except Exception as e:
+            logger.debug("Keepalive send failed for %s: %s", gb_device.device_id, e)
+
+    def _parse_sdp(self, sdp: str) -> dict[str, Any]:
+        result = {"media_ip": "", "media_port": 0, "media_type": ""}
+        lines = sdp.strip().split("\r\n")
+        conn_addr = ""
+        for line in lines:
+            if line.startswith("c=IN IP4 "):
+                conn_addr = line[9:].strip().split("/")[0]
+            elif line.startswith("m=video "):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        result["media_port"] = int(parts[1])
+                    except ValueError as e:
+                        logger.debug("GB28181 SDP media port parse error: %s", e)
+                    result["media_type"] = "video"
+            elif line.startswith("m=audio "):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        result["media_port"] = int(parts[1])
+                    except ValueError as e:
+                        logger.debug("GB28181 SDP audio port parse error: %s", e)
+                    result["media_type"] = "audio"
+        if conn_addr:
+            result["media_ip"] = conn_addr
+        if result["media_port"] == 0:
+            logger.warning("GB28181 SDP解析未找到有效媒体描述(m=video/m=audio)，可能无法建立RTP流")
+        return result
+
+    def handle_message(self, data: bytes, addr: tuple) -> None:
+        try:
+            message = data.decode("utf-8", errors="replace")
+            first_line = message.split("\r\n")[0]
+            self._log_debug("in", "sip_recv",
+                            f"SIP message received from {addr[0]}:{addr[1]}: {first_line[:80]}",
+                            detail={"from": f"{addr[0]}:{addr[1]}",
+                                    "first_line": first_line[:120]})
+            if "MESSAGE" in first_line:
+                self._handle_message(message, addr)
+            elif "INVITE" in first_line:
+                self._handle_invite(message, addr)
+            elif "BYE" in first_line:
+                self._handle_bye(message, addr)
+            elif "ACK" in first_line:
+                self._handle_ack(message, addr)
+            elif "200 OK" in message:
+                self._handle_200_ok(message, addr)
+            elif "401" in first_line:
+                self._handle_401(message, addr)
+            else:
+                self._log_debug("in", "sip_unknown",
+                                f"Unhandled SIP message: {first_line[:60]}")
+        except Exception as e:
+            self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))
+
+    def _handle_message(self, message: str, addr: tuple) -> None:
+        body_start = message.find("\r\n\r\n")
+        if body_start == -1:
+            return
+        body = message[body_start + 4:]
+        try:
+            root = ET.fromstring(body)
+            cmd_type = root.findtext("CmdType", "")
+            sn = root.findtext("SN", "0")
+            device_id = root.findtext("DeviceID", "")
+
+            gb_device = None
+            # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+            for _did, dev in dict(self._gb_devices).items():
+                if dev.device_id == device_id:
+                    gb_device = dev
+                    break
+            if not gb_device:
+                self._log_debug("in", "sip_message_unknown",
+                                f"Unknown device MESSAGE: {cmd_type}, DeviceID={device_id}")
+                return
+
+            pf_id = gb_device._protoforge_device_id
+            self._log_debug("in", f"sip_{cmd_type.lower()}",
+                            f"Received {cmd_type} request (SN={sn})",
+                            device_id=pf_id,
+                            detail={"cmd": cmd_type, "sn": sn, "gb_id": device_id})
+
+            if cmd_type == "Catalog":
+                response_body = gb_device.make_catalog_response(sn)  # 使用默认参数
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_catalog_response",
+                                msg("gb28181", "catalog_response_sent"),
+                                device_id=pf_id)
+            elif cmd_type == "Keepalive":
+                response_body = gb_device.make_heartbeat_response(sn)
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_keepalive_response",
+                                msg("gb28181", "keepalive_response_sent"),  # FIXED: 中文硬编码→i18n常量
+                                device_id=pf_id)
+            elif cmd_type == "DeviceControl":
+                parsed_ptz = gb_device.parse_ptz_command(body)
+                response_body = gb_device.make_control_response(sn, parsed_ptz)
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_control_response",
+                                msg("gb28181", "device_control_response_sent"),  # FIXED: 中文硬编码→i18n常量
+                                device_id=pf_id,
+                                detail={"ptz": parsed_ptz.get("cmd") if parsed_ptz else "N/A"})
+            elif cmd_type == "DeviceInfo":
+                response_body = gb_device.make_device_info_response(sn)
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_deviceinfo_response",
+                                msg("gb28181", "device_info_response_sent"),
+                                device_id=pf_id)
+            elif cmd_type == "DeviceConfig":
+                response_body = gb_device.make_config_response(sn)
+                self._send_response(message, response_body, addr)
+                self._log_debug("out", "sip_config_response",
+                                msg("gb28181", "device_config_response_sent"),
+                                device_id=pf_id)
+        except ET.ParseError:
+            self._log_debug("in", "sip_xml_error", msg("gb28181", "xml_parse_failed"))
+
+    def _handle_200_ok(self, message: str, addr: tuple) -> None:
+        call_id = ""
+        for line in message.split("\r\n"):
+            if line.startswith("Call-ID:"):
+                call_id = line.split(":", 1)[1].strip().split("@")[0]
+                break
+        for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
+            if gb_device.call_id and gb_device.call_id == call_id:
+                was_registered = gb_device.registered
+                gb_device.registered = True
+                pf_id = gb_device._protoforge_device_id
+                if not was_registered:
+                    self._log_debug("in", "sip_register_ok",
+                                    msg("gb28181", "register_success"),
+                                    device_id=pf_id,
+                                    detail={"gb_id": gb_device.device_id,
+                                            "server": f"{gb_device.host}:{gb_device.port}"})
+                else:
+                    self._log_debug("in", "sip_register_refresh",
+                                    msg("gb28181", "register_refresh_success"),  # FIXED: 中文硬编码→i18n常量
+                                    device_id=pf_id)
+                logger.info("Device %s registered successfully", gb_device.device_id)
+                break
+
+    def _handle_401(self, message: str, addr: tuple) -> None:
+        nonce_match = re.search(r'nonce="([^"]+)"', message)
+        realm_match = re.search(r'realm="([^"]+)"', message)
+        if not nonce_match:
+            return
+
+        nonce = nonce_match.group(1)
+        realm = realm_match.group(1) if realm_match else "gb28181"
+
+        call_id = ""
+        for line in message.split("\r\n"):
+            if line.startswith("Call-ID:"):
+                call_id = line.split(":", 1)[1].strip().split("@")[0]
+                break
+
+        # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+        for gb_device in dict(self._gb_devices).values():
+            if not call_id:
+                continue
+            if gb_device.call_id != call_id:
+                continue
+            auth_request = gb_device.make_register_with_auth(nonce)
+            pf_id = gb_device._protoforge_device_id
+            try:
+                if self._transport:
+                    self._transport.sendto(auth_request.encode("utf-8"), addr)
+                    self._log_debug("out", "sip_register_auth",
+                                    f"Sending authenticated REGISTER (Digest auth, nonce={nonce[:8]}...)",
+                                    device_id=pf_id,
+                                    detail={"realm": realm, "nonce": nonce[:16]})
+                    logger.info("Sent authenticated REGISTER for %s", gb_device.device_id)
+            except Exception as e:
+                self._log_debug("out", "sip_register_auth_error",
+                                msg("gb28181", "auth_register_failed", error=e),
+                                device_id=pf_id)
+
+    def _handle_invite(self, message: str, addr: tuple) -> None:
+        lines = message.split("\r\n")
+        via = ""
+        from_header = ""
+        to_header = ""
+        call_id = ""
+        cseq = ""
+        for line in lines:
+            if line.startswith("Via:"):
+                via = line
+            elif line.startswith("From:"):
+                from_header = line
+            elif line.startswith("To:"):
+                to_header = line
+            elif line.startswith("Call-ID:"):
+                call_id = line
+            elif line.startswith("CSeq:"):
+                cseq = line
+
+        device_id = ""
+        if to_header:
+            m = re.search(r'sip:(\d+)@', to_header)
+            if m:
+                device_id = m.group(1)
+
+        if self._transport:
+            trying = f"SIP/2.0 100 Trying\r\n{via}\r\n{from_header}\r\n{to_header}\r\n{call_id}\r\n{cseq}\r\nContent-Length: 0\r\n\r\n"
+            self._transport.sendto(trying.encode("utf-8"), addr)
+
+        gb_device = None
+        # FIXED-P0: 使用快照迭代，避免与 remove_device 并发修改字典时 RuntimeError
+        for _did, dev in dict(self._gb_devices).items():
+            if dev.device_id == device_id:
+                gb_device = dev
+                break
+        if not gb_device:
+            self._log_debug("in", "sip_invite_no_device",
+                            f"INVITE but no matching device: {device_id}")
+            return
+
+        pf_id = gb_device._protoforge_device_id
+
+        body_start = message.find("\r\n\r\n")
+        sdp_info = {"media_ip": addr[0], "media_port": 0}
+        if body_start != -1:
+            sdp = message[body_start + 4:]
+            sdp_info = self._parse_sdp(sdp)
+            if not sdp_info["media_ip"]:
+                sdp_info["media_ip"] = addr[0]
+
+        self._log_debug("in", "sip_invite",
+                        f"INVITE (video request) received from {addr[0]}:{addr[1]}",
+                        device_id=pf_id,
+                        detail={"gb_id": device_id,
+                                "media_addr": f"{sdp_info['media_ip']}:{sdp_info['media_port']}"})
+
+        media_ip = self._host if self._host != "0.0.0.0" else "127.0.0.1"
+        try:
+            base_port = 6000 + (int(device_id[-4:], 10) % 1000)
+        except (ValueError, IndexError):
+            base_port = 6000
+        media_port = base_port
+        with self._media_ports_lock:
+            while media_port in self._allocated_media_ports:
+                media_port += 2
+                if media_port > 6999:
+                    media_port = 6000
+                    break
+            self._allocated_media_ports.add(media_port)
+            self._allocated_media_ports.add(media_port + 1)
+        ssrc = device_id[-10:] if len(device_id) >= 10 else f"0{device_id}"
+
+        srtp_key_salt_b64 = ""
+        srtp_context = None
+        if getattr(self, '_srtp_enabled', False):
+            import base64
+
+            from protoforge.protocols.gb28181.rtp_streamer import SrtpContext, SrtpCryptoSuite
+            master_key, master_salt = SrtpContext.generate_master_key_salt()
+            crypto_suite = getattr(self, '_srtp_crypto_suite', SrtpCryptoSuite.AES_CM_128_HMAC_SHA1_80)
+            srtp_context = SrtpContext(master_key, master_salt, crypto_suite)
+            key_salt_raw = master_key + master_salt
+            srtp_key_salt_b64 = base64.b64encode(key_salt_raw).decode("ascii")
+
+        sdp_body = gb_device.make_sdp_answer(
+            media_ip, media_port, ssrc,
+            srtp_enabled=getattr(self, '_srtp_enabled', False),
+            srtp_crypto_suite=getattr(self, '_srtp_crypto_suite', 'AES_CM_128_HMAC_SHA1_80'),
+            srtp_key_salt=srtp_key_salt_b64,
+        )
+        sdp_bytes = sdp_body.encode("utf-8")
+
+        response = (
+            f"SIP/2.0 200 OK\r\n"
+            f"{via}\r\n"
+            f"{from_header}\r\n"
+            f"{to_header};tag={uuid.uuid4().hex[:8]}\r\n"
+            f"{call_id}\r\n"
+            f"{cseq}\r\n"
+            f"Contact: <sip:{gb_device.device_id}@{gb_device.host}:{gb_device.port}>\r\n"
+            f"Content-Type: application/sdp\r\n"
+            f"Content-Length: {len(sdp_bytes)}\r\n\r\n"
+        )
+        if self._transport:
+            self._transport.sendto(response.encode("utf-8") + sdp_bytes, addr)
+
+        gb_device._invite_call_id = call_id
+        gb_device._invite_media_ip = sdp_info["media_ip"]
+        gb_device._invite_media_port = sdp_info["media_port"]
+        gb_device._local_media_port = media_port  # FIXED-P0: 记录本地端口用于BYE时释放
+        gb_device._srtp_context = srtp_context
+
+        self._log_debug("out", "sip_invite_ok",
+                        msg("gb28181", "invite_ok_sent", detail=f"{media_ip}:{media_port}"),
+                        device_id=pf_id,
+                        detail={"media": f"{media_ip}:{media_port}",
+                                "ssrc": ssrc,
+                                "waiting_ack": True})
+        logger.info("Sent INVITE 200 OK with SDP for %s (media: %s:%d)", device_id, media_ip, media_port)
+
+    def _handle_ack(self, message: str, addr: tuple) -> None:
+        lines = message.split("\r\n")
+        call_id = ""
+        for line in lines:
+            if line.startswith("Call-ID:"):
+                call_id = line
+                break
+
+        gb_devices_snapshot = dict(self._gb_devices)  # FIXED-P0: 快照读取避免并发迭代
+        for gb_device in gb_devices_snapshot.values():
+            if gb_device._invite_call_id and call_id == gb_device._invite_call_id:
+                pf_id = gb_device._protoforge_device_id
+                dest_ip = gb_device._invite_media_ip
+                dest_port = gb_device._invite_media_port
+
+                if dest_ip and dest_port > 0:
+                    if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
+                        t = asyncio.create_task(gb_device.rtp_streamer.stop())
+                        t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                        self._rtp_tasks = [t for t in self._rtp_tasks if not t.done()]  # FIXED-P0: 先清理再append，避免后append的任务被列表推导覆盖丢失
+                        self._rtp_tasks.append(t)
+                    try:
+                        from protoforge.protocols.gb28181.rtp_streamer import RtpStreamer
+                        try:  # FIXED-P1: int()对设备ID做异常保护，非数字时回退0
+                            ssrc = int(gb_device.device_id[-10:]) if len(gb_device.device_id) >= 10 else 0
+                        except (ValueError, IndexError):
+                            ssrc = 0
+                        ssrc = ssrc % 0x3FFFFFFF
+                        streamer = RtpStreamer(
+                            dest_ip=dest_ip,
+                            dest_port=dest_port,
+                            ssrc=ssrc,
+                            width=gb_device._video_width,
+                            height=gb_device._video_height,
+                            fps=gb_device._video_fps,
+                            srtp_context=getattr(gb_device, '_srtp_context', None),
+                            gop_size=gb_device._video_fps,  # FIXED-P1: GOP间隔=1秒帧数
+                        )
+                        streamer.set_debug_callback(
+                            lambda direction, msg_type, summary, detail=None, did=pf_id:
+                                self._log_debug(direction, msg_type, summary, device_id=did, detail=detail)
+                        )
+                        gb_device.rtp_streamer = streamer
+                        t = asyncio.ensure_future(streamer.start())
+                        t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                        self._rtp_tasks.append(t)
+
+                        self._log_debug("out", "rtp_stream_start",
+                                        f"ACK received, starting RTP video stream to {dest_ip}:{dest_port}",
+                                        device_id=pf_id,
+                                        detail={"dest": f"{dest_ip}:{dest_port}",
+                                                "ssrc": ssrc,
+                                                "resolution": "352x288",
+                                                "fps": 25})
+                    except Exception as e:
+                        self._log_debug("out", "rtp_stream_error",
+                                        msg("gb28181", "rtp_start_failed", error=e),
+                                        device_id=pf_id)
+                else:
+                    self._log_debug("in", "sip_ack_no_media",
+                                    msg("gb28181", "ack_no_media"),
+                                    device_id=pf_id)
+                break
+
+    def _handle_bye(self, message: str, addr: tuple) -> None:
+        lines = message.split("\r\n")
+        via = ""
+        from_header = ""
+        to_header = ""
+        call_id = ""
+        cseq = ""
+        for line in lines:
+            if line.startswith("Via:"):
+                via = line
+            elif line.startswith("From:"):
+                from_header = line
+            elif line.startswith("To:"):
+                to_header = line
+            elif line.startswith("Call-ID:"):
+                call_id = line
+            elif line.startswith("CSeq:"):
+                cseq = line
+
+        response = (
+            f"SIP/2.0 200 OK\r\n"
+            f"{via}\r\n"
+            f"{from_header}\r\n"
+            f"{to_header}\r\n"
+            f"{call_id}\r\n"
+            f"{cseq}\r\n"
+            f"Content-Length: 0\r\n\r\n"
+        )
+        if self._transport:
+            self._transport.sendto(response.encode("utf-8"), addr)
+
+        for gb_device in dict(self._gb_devices).values():  # FIXED-P0: 快照读取避免并发迭代
+            if gb_device._invite_call_id and call_id == gb_device._invite_call_id:
+                pf_id = gb_device._protoforge_device_id
+                if gb_device.rtp_streamer and gb_device.rtp_streamer.is_running:
+                    t = asyncio.ensure_future(gb_device.rtp_streamer.stop())
+                    t.add_done_callback(lambda fut: fut.exception() if not fut.cancelled() else None)
+                    self._rtp_tasks.append(t)
+                    self._log_debug("out", "rtp_stream_stop",
+                                    msg("gb28181", "bye_received"),
+                                    device_id=pf_id)
+                gb_device._invite_call_id = ""
+                with self._media_ports_lock:  # FIXED-P0: BYE时释放已分配的媒体端口
+                    self._allocated_media_ports.discard(gb_device._local_media_port)
+                    self._allocated_media_ports.discard(gb_device._local_media_port + 1)
+                gb_device._local_media_port = 0
+                break
+
+        self._log_debug("out", "sip_bye_ok", msg("gb28181", "bye_ok_sent"))
+        logger.info("Sent BYE 200 OK")
+
+    def _send_response(self, original_message: str, body: str, addr: tuple) -> None:
+        if not self._transport:
+            return
+        lines = original_message.split("\r\n")
+        via = ""
+        from_header = ""
+        to_header = ""
+        call_id = ""
+        cseq = ""
+        for line in lines:
+            if line.startswith("Via:"):
+                via = line
+            elif line.startswith("From:"):
+                from_header = line
+            elif line.startswith("To:"):
+                to_header = line
+            elif line.startswith("Call-ID:"):
+                call_id = line
+            elif line.startswith("CSeq:"):
+                cseq = line
+
+        body_bytes = body.encode("gb2312", errors="replace")
+        response = (
+            f"SIP/2.0 200 OK\r\n"
+            f"{via}\r\n"
+            f"{from_header}\r\n"
+            f"{to_header};tag={uuid.uuid4().hex[:8]}\r\n"
+            f"{call_id}\r\n"
+            f"{cseq}\r\n"
+            f"Contact: <sip:{self._server_id}@{self._host}:{self._port}>\r\n"
+            f"Content-Type: Application/MANSCDP+xml\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n\r\n"
+        )
+        self._transport.sendto(response.encode("utf-8") + body_bytes, addr)
+
+
+class _SIPProtocolHandler(asyncio.DatagramProtocol):
+    def __init__(self, server: GB28181Server):
+        self._server = server
+
+    def datagram_received(self, data: bytes, addr: tuple) -> None:
+        self._server.handle_message(data, addr)
+
+    def error_received(self, exc: Exception) -> None:
+        logger.debug("SIP protocol error: %s", exc)

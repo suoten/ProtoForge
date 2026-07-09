@@ -1,0 +1,435 @@
+"""Module: forward."""
+
+import asyncio
+import contextlib
+import ipaddress
+import json
+import logging
+import socket
+import time
+from abc import ABC, abstractmethod
+from typing import Any
+from urllib.parse import urlparse
+
+import httpx
+
+from protoforge.core.defaults import HTTP_TIMEOUT_DEFAULT
+from protoforge.core.log_bus import LogBus, LogEntry
+
+logger = logging.getLogger(__name__)
+
+_BLOCKED_NETWORKS = None
+
+
+def _get_blocked_networks() -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+    global _BLOCKED_NETWORKS
+    if _BLOCKED_NETWORKS is None:
+        _BLOCKED_NETWORKS = [
+            ipaddress.ip_network("127.0.0.0/8"),
+            ipaddress.ip_network("10.0.0.0/8"),
+            ipaddress.ip_network("172.16.0.0/12"),
+            ipaddress.ip_network("192.168.0.0/16"),
+            ipaddress.ip_network("169.254.0.0/16"),
+            ipaddress.ip_network("::1/128"),
+            ipaddress.ip_network("fc00::/7"),
+            ipaddress.ip_network("fe80::/10"),
+        ]
+    return _BLOCKED_NETWORKS
+
+
+_ALLOWED_SCHEMES = {"http", "https"}
+
+
+def _is_url_allowed(url: str, allow_private: bool = True) -> tuple[bool, str]:  # FIXED-P1: 添加allow_private参数
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+            return False, f"URL scheme '{parsed.scheme}' not allowed, only http/https permitted"
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "URL has no hostname"
+        try:
+            resolved_ips = socket.getaddrinfo(hostname, None)
+        except socket.gaierror:
+            return False, f"Cannot resolve hostname: {hostname}"
+        if not resolved_ips:
+            return False, f"No DNS records found for hostname: {hostname}"
+        if not allow_private:  # FIXED-P1: 仅在allow_private=False时检查内网IP
+            for _family, _, _, _, sockaddr in resolved_ips:
+                ip = ipaddress.ip_address(sockaddr[0])
+                for network in _get_blocked_networks():
+                    if ip in network:
+                        return False, f"URL resolves to internal IP {ip} (network {network})"
+        return True, ""
+    except Exception as e:
+        return False, f"URL validation error: {e}"
+
+
+class ForwardTarget(ABC):
+    @abstractmethod
+    async def send(self, records: list[dict[str, Any]]) -> None:
+        ...
+
+    @abstractmethod
+    async def close(self) -> None:
+        ...
+
+
+class InfluxDBTarget(ForwardTarget):
+    def __init__(self, url: str, token: str, org: str, bucket: str):
+        self._url = url.rstrip("/")
+        self._token = token
+        self._org = org
+        self._bucket = bucket
+        self._client: httpx.AsyncClient | None = None
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def token(self) -> str:
+        return self._token
+
+    @property
+    def org(self) -> str:
+        return self._org
+
+    @property
+    def bucket(self) -> str:
+        return self._bucket
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            from protoforge.core.defaults import get_http_timeout_default
+            self._client = httpx.AsyncClient(
+                base_url=self._url,
+                headers={"Authorization": f"Token {self._token}"},
+                timeout=get_http_timeout_default(),
+            )
+        return self._client
+
+    async def send(self, records: list[dict[str, Any]]) -> None:
+        def _esc_tag(s: str) -> str:
+            return str(s).replace("\n", "\\n").replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+
+        def _esc_field(s: str) -> str:
+            return str(s).replace("\\", "\\\\").replace('"', '\\"')
+
+        lines = []
+        for r in records:
+            measurement = _esc_tag(r.get("protocol", "device"))
+            device_id = _esc_tag(r.get('device_id', 'unknown'))
+            protocol = _esc_tag(r.get('protocol', 'unknown'))
+            tags = f"device_id={device_id},protocol={protocol}"
+            fields_parts = []
+            if "value" in r:
+                value = r.get("value", "")
+                try:
+                    fields_parts.append(f"value={float(value)}")
+                except (ValueError, TypeError):
+                    fields_parts.append(f'value="{_esc_field(value)}"')
+            point_name = r.get("point_name", "")
+            if point_name:
+                fields_parts.append(f'point_name="{_esc_field(point_name)}"')
+            if not fields_parts:
+                continue
+            fields = ",".join(fields_parts)
+            try:
+                ts = int(float(r.get("timestamp", time.time())) * 1e9)
+            except (ValueError, TypeError):
+                ts = int(time.time() * 1e9)
+            lines.append(f"{measurement},{tags} {fields} {ts}")
+        if not lines:
+            return
+        client = await self._ensure_client()
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                resp = await client.post(
+                    "/api/v2/write",
+                    params={"org": self._org, "bucket": self._bucket, "precision": "ns"},
+                    content="\n".join(lines),
+                )
+                if resp.status_code >= 400:
+                    logger.warning("InfluxDB write failed: %d %s", resp.status_code, resp.text[:200])
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 * (attempt + 1))
+                        continue
+                break
+            except Exception as e:
+                logger.warning("InfluxDB send error (attempt %d/%d): %s", attempt + 1, max_retries, e)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(1 * (attempt + 1))
+                else:
+                    logger.error("InfluxDB write failed after %d retries, data lost", max_retries)
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+
+class HTTPTarget(ForwardTarget):
+    def __init__(self, url: str, headers: dict[str, str] | None = None, method: str = "POST"):
+        self._url = url
+        self._headers = headers or {}
+        self._method = method.upper()
+        self._client: httpx.AsyncClient | None = None
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+    @property
+    def method(self) -> str:
+        return self._method
+
+    async def _ensure_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        return self._client
+
+    async def send(self, records: list[dict[str, Any]]) -> None:
+        client = await self._ensure_client()
+        try:
+            payload = {"timestamp": time.time(), "records": records}
+            if self._method == "POST":
+                resp = await client.post(self._url, json=payload, headers=self._headers)
+            else:
+                resp = await client.put(self._url, json=payload, headers=self._headers)
+            if resp.status_code >= 400:
+                logger.warning("HTTP forward failed: %d %s", resp.status_code, resp.text[:200])
+                raise RuntimeError(f"HTTP forward failed: {resp.status_code}")
+        except httpx.TimeoutException as e:
+            logger.warning("HTTP forward timeout: %s", e)
+            raise RuntimeError("HTTP forward timeout") from e
+        except httpx.ConnectError as e:
+            logger.warning("HTTP forward connection error: %s", e)
+            raise RuntimeError("HTTP forward connection error") from e
+        except Exception as e:
+            logger.warning("HTTP forward error: %s", e)
+            raise
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+
+class FileTarget(ForwardTarget):
+    def __init__(self, path: str, format: str = "jsonl"):
+        import os
+        from pathlib import Path
+        base_dir = str(Path.cwd().resolve())
+        resolved_path = str(Path(path).resolve())
+        if not (resolved_path.startswith(base_dir + os.sep) or resolved_path == base_dir):
+            raise ValueError(
+                f"FileTarget path '{path}' escapes the allowed directory. "
+                "Only relative paths within the working directory are permitted."
+            )
+        self._path = str(resolved_path)
+        self._format = format
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    async def send(self, records: list[dict[str, Any]]) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._write_sync, records)
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error("File forward write failed: %s", e)
+            raise
+
+    def _write_sync(self, records: list[dict[str, Any]]) -> None:
+        try:
+            with open(self._path, "a", encoding="utf-8") as f:
+                for r in records:
+                    if self._format == "jsonl":
+                        f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                    else:
+                        f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
+        except (OSError, PermissionError, FileNotFoundError) as e:
+            logger.error("FileTarget write failed to %s: %s", self._path, e)
+
+    async def close(self) -> None:
+        try:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.flush()
+        except Exception as e:
+            logger.debug("FileTarget close flush error: %s", e)
+
+
+class ForwardEngine:
+    def __init__(self, log_bus: LogBus, queue_maxsize: int = 10000,
+                 batch_size: int = 100, flush_interval: float = 5.0,
+                 retry_count: int = 3):
+        self._log_bus = log_bus
+        self._targets: dict[str, ForwardTarget] = {}
+        self._running = False
+        self._task: asyncio.Task | None = None
+        self._queue_maxsize = queue_maxsize
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_maxsize)
+        self._batch_size = batch_size
+        self._flush_interval = flush_interval
+        self._sent_count: int = 0
+        self._failed_count: int = 0
+        self._dropped_count: int = 0
+        self._retry_count = retry_count
+
+    def add_target(self, name: str, target: ForwardTarget) -> None:
+        self._targets[name] = target
+        logger.info("Forward target added: %s", name)
+
+    def remove_target(self, name: str) -> None:
+        target = self._targets.pop(name, None)
+        if target and hasattr(target, 'close'):
+            async def _safe_close():
+                try:
+                    await target.close()
+                except Exception as exc:
+                    logger.warning("Failed to close forward target %s: %s", name, exc)
+            try:
+                task = asyncio.get_running_loop().create_task(_safe_close())
+                self._pending_close_tasks = getattr(self, '_pending_close_tasks', [])
+                self._pending_close_tasks.append(task)  # FIXED: 保持引用，防止GC回收导致任务未执行
+                task.add_done_callback(lambda t: self._pending_close_tasks.remove(t) if t in self._pending_close_tasks else None)
+            except RuntimeError:
+                try:
+                    asyncio.ensure_future(_safe_close())
+                except Exception as exc:
+                    logger.debug("Failed to schedule target close: %s", exc)
+        logger.info("Forward target removed: %s", name)
+
+    def list_targets(self) -> list[dict[str, Any]]:
+        result = []
+        for name, target in self._targets.items():
+            info: dict[str, Any] = {"name": name}
+            if isinstance(target, InfluxDBTarget):
+                info.update({"type": "influxdb", "protocol": "influxdb", "url": target.url})
+            elif isinstance(target, HTTPTarget):
+                info.update({"type": "http", "protocol": "http", "url": target.url, "method": target.method})
+            elif isinstance(target, FileTarget):
+                info.update({"type": "file", "protocol": "file", "path": target.path})
+            else:
+                info["type"] = type(target).__name__
+            if hasattr(target, 'url') and target.url:
+                from urllib.parse import urlparse
+                parsed = urlparse(target.url)
+                info.setdefault("host", parsed.hostname or "")
+                info.setdefault("port", parsed.port or "")
+            result.append(info)
+        return result
+
+    async def start(self) -> None:
+        if self._running:
+            return
+        self._running = True
+        self._queue = asyncio.Queue(maxsize=self._queue_maxsize)
+        self._log_bus.subscribe(self._queue)
+        self._task = asyncio.create_task(self._forward_loop())
+        logger.info("Forward engine started with %d targets", len(self._targets))
+
+    async def stop(self) -> None:
+        self._running = False
+        self._log_bus.unsubscribe(self._queue)
+        if self._task:
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+        for target in self._targets.values():
+            try:
+                await target.close()
+            except Exception as e:
+                logger.warning("Error closing target: %s", e)
+        logger.info("Forward engine stopped")
+
+    async def _forward_loop(self) -> None:
+        while self._running:
+            records = []
+            queue_size = self._queue.qsize()
+            if queue_size > self._queue.maxsize * 0.5:
+                logger.warning(
+                    "Forward engine queue is at %d/%d (%.0f%%), consider reducing load or increasing batch size",
+                    queue_size, self._queue.maxsize, queue_size / self._queue.maxsize * 100
+                )
+            try:
+                while len(records) < self._batch_size:
+                    timeout = 0.1 if records else self._flush_interval
+                    try:
+                        msg: LogEntry = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+                    except asyncio.QueueFull:
+                        self._dropped_count += 1
+                        continue
+                    records.append({
+                        "timestamp": msg.timestamp,
+                        "protocol": msg.protocol,
+                        "direction": msg.direction,
+                        "device_id": msg.device_id,
+                        "message_type": msg.message_type,
+                        "summary": msg.summary,
+                        "detail": msg.detail,
+                    })
+            except asyncio.TimeoutError:
+                logger.debug("ForwardEngine flush timeout, no records in queue")  # FIXED-P1: 超时时记录日志而非静默忽略
+            if records and self._targets:
+                for name, target in self._targets.items():
+                    for attempt in range(self._retry_count):
+                        try:
+                            await target.send(records)
+                            self._sent_count += len(records)
+                            break
+                        except Exception as e:
+                            if attempt < self._retry_count - 1:
+                                await asyncio.sleep(min(0.5 * (2 ** attempt), 30.0))
+                            else:
+                                self._failed_count += len(records)
+                                logger.warning("Forward to %s failed after %d retries: %s", name, self._retry_count, e)
+
+    def get_stats(self) -> dict[str, Any]:
+        return {
+            "running": self._running,
+            "targets": len(self._targets),
+            "queue_size": self._queue.qsize(),
+            "total_forwards": self._sent_count + self._failed_count,
+            "success_count": self._sent_count,
+            "fail_count": self._failed_count,
+            "dropped_count": self._dropped_count,
+        }
+
+
+def create_target(config: dict[str, Any]) -> ForwardTarget:
+    target_type = config.get("type", "http")
+    if target_type == "influxdb":
+        url = config.get("url")
+        if not url:
+            raise ValueError("InfluxDB target requires 'url' parameter")
+        token = config.get("token")
+        if not token:
+            raise ValueError("InfluxDB target requires 'token' parameter")
+        allowed, reason = _is_url_allowed(url, allow_private=True)  # FIXED-P1: InfluxDB默认允许内网
+        return InfluxDBTarget(
+            url=url, token=token,
+            org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
+        )
+    elif target_type == "http":
+        url = config.get("url")
+        if not url:
+            raise ValueError("HTTP target requires 'url' parameter")
+        allowed, reason = _is_url_allowed(url, allow_private=False)  # FIXED-P1: HTTP Webhook默认禁止内网
+        return HTTPTarget(
+            url=url, headers=config.get("headers"),
+            method=config.get("method", "POST"),
+        )
+    elif target_type == "file":
+        if not config.get("path"):
+            raise ValueError("File target requires 'path' parameter")
+        return FileTarget(
+            path=config["path"], format=config.get("format", "jsonl"),
+        )
+    else:
+        raise ValueError(f"Unknown target type: {target_type}")

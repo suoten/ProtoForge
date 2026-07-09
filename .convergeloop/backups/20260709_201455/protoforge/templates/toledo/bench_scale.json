@@ -1,0 +1,46 @@
+{
+    "id": "toledo_bench_scale",
+    "name": "梅特勒-托利多台秤",
+    "protocol": "toledo",
+    "description": "梅特勒-托利多精密台秤仿真",
+    "manufacturer": "Mettler-Toledo",
+    "model": "ML3002T",
+    "points": [
+        {
+            "name": "weight",
+            "address": "weight",
+            "data_type": "float32",
+            "unit": "g",
+            "description": "重量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 3000.0
+        },
+        {
+            "name": "stable",
+            "address": "stable",
+            "data_type": "bool",
+            "description": "读数稳定",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "unit",
+            "address": "unit",
+            "data_type": "uint16",
+            "description": "单位(0=g 1=kg 2=lb)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "台秤",
+        "梅特勒-托利多",
+        "精密称重",
+        "Toledo"
+    ]
+}

@@ -1,0 +1,89 @@
+# ProtoForge Docker Compose Configuration（生产环境 / 开发者）
+# 新手请用 docker-compose.simple.yml，无需编译直接用预构建镜像
+#
+# Quick start: docker compose up -d
+# Simple mode: docker compose -f docker-compose.simple.yml up -d
+# With custom settings: Set PROTOFORGE_DB_PASSWORD, PROTOFORGE_JWT_SECRET, PROTOFORGE_ADMIN_PASSWORD in .env
+# Run tests: docker compose --profile test up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: protoforge
+      POSTGRES_USER: protoforge
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:?必须在.env中设置PROTOFORGE_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U protoforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  init-test-db:
+    profiles: [test]
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "psql -U protoforge -h postgres -d protoforge -c 'SELECT 1 FROM pg_database WHERE datname = $$protoforge_test$$' | grep -q 1 || psql -U protoforge -h postgres -d postgres -c 'CREATE DATABASE protoforge_test'"
+
+  protoforge:
+    build: .
+    command: ["sh", "-c", "alembic upgrade head || :; python -m protoforge.cli run"]
+    ports:
+      - "8000:8000"
+      - "5020:5020"
+      - "4840:4840"
+      - "1883:1883"
+      - "5060:5060"
+      - "5060:5060/udp"
+      - "47808:47808/udp"
+      - "102:102"
+      - "8080:8080"
+      - "5000:5000"
+      - "9600:9600"
+      - "44818:44818"
+      - "51340:51340"
+      - "8193:8193"
+      - "7878:7878"
+      - "1701:1701"
+      - "34964:34964"
+      - "34980:34980"
+      # GB28181 RTP 媒体流端口范围 (如需从外部播放视频流则映射)
+      - "6000-6999:6000-6999/udp"
+    environment:
+      # 在 .env 中设置完整的数据库连接 URL，避免在 compose 文件中暴露凭据模式
+      # 示例: PROTOFORGE_DB_PATH=postgresql://protoforge:你的密码@postgres:5432/protoforge
+      PROTOFORGE_DB_PATH: ${PROTOFORGE_DB_PATH:?请在.env中设置PROTOFORGE_DB_PATH}
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env中设置PROTOFORGE_JWT_SECRET}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env中设置PROTOFORGE_ADMIN_PASSWORD}
+      PROTOFORGE_LOG_LEVEL: info
+      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}  # FIXED: CORS通配符不安全,生产环境务必设置具体域名
+      PROTOFORGE_GRPC_PORT: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - protoforge-data:/app/data
+    restart: unless-stopped
+
+  protoforge-test:
+    profiles: [test]
+    build: .
+    command: ["sh", "-c", "pip install -e '.[dev,all]' && python -m pytest tests/ -v --tb=short"]
+    environment:
+      PROTOFORGE_DB_PATH: ${PROTOFORGE_DB_PATH_TEST:?请在.env中设置PROTOFORGE_DB_PATH_TEST}
+      PROTOFORGE_NO_AUTH: "1"
+    depends_on:
+      init-test-db:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+
+volumes:
+  postgres-data:
+  protoforge-data:

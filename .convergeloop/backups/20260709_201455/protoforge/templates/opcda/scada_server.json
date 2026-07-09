@@ -1,0 +1,60 @@
+{
+    "id": "opcda_scada_server",
+    "name": "SCADA OPC-DA服务器",
+    "protocol": "opcda",
+    "description": "传统SCADA系统OPC-DA接口仿真",
+    "manufacturer": "Generic",
+    "model": "SCADA-DA-01",
+    "points": [
+        {
+            "name": "plant_status",
+            "address": "Plant.Status",
+            "data_type": "uint16",
+            "description": "工厂状态(0=停机 1=运行 2=维护)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "total_output",
+            "address": "Plant.TotalOutput",
+            "data_type": "float32",
+            "unit": "t/h",
+            "description": "总产量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50,
+            "max_value": 200
+        },
+        {
+            "name": "energy_consumption",
+            "address": "Plant.Energy",
+            "data_type": "float32",
+            "unit": "MWh",
+            "description": "能耗",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        },
+        {
+            "name": "alarm_count",
+            "address": "Plant.AlarmCount",
+            "data_type": "uint16",
+            "description": "活跃告警数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 10
+        }
+    ],
+    "protocol_config": {
+        "prog_id": "Matrikon.OPC.Simulation"
+    },
+    "tags": [
+        "SCADA",
+        "OPC-DA",
+        "工厂数据",
+        "传统系统"
+    ]
+}

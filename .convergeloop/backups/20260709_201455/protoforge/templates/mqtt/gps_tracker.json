@@ -1,0 +1,74 @@
+{
+    "id": "mqtt_gps_tracker",
+    "name": "GPS定位器",
+    "protocol": "mqtt",
+    "description": "MQTT GPS定位器，支持位置、速度、电量上报",
+    "manufacturer": "Generic",
+    "model": "GPS-100",
+    "points": [
+        {
+            "name": "latitude",
+            "address": "latitude",
+            "data_type": "float64",
+            "unit": "°",
+            "description": "纬度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 32.0
+        },
+        {
+            "name": "longitude",
+            "address": "longitude",
+            "data_type": "float64",
+            "unit": "°",
+            "description": "经度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 120.0,
+            "max_value": 122.0
+        },
+        {
+            "name": "speed",
+            "address": "speed",
+            "data_type": "float32",
+            "unit": "km/h",
+            "description": "速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 120
+        },
+        {
+            "name": "battery",
+            "address": "battery",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "电池电量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 100
+        },
+        {
+            "name": "satellites",
+            "address": "satellites",
+            "data_type": "uint16",
+            "description": "卫星数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 4,
+            "max_value": 12
+        }
+    ],
+    "protocol_config": {
+        "topic_prefix": "tracker/gps",
+        "qos": 0
+    },
+    "tags": [
+        "GPS",
+        "MQTT",
+        "定位",
+        "IoT"
+    ]
+}

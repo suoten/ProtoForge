@@ -1,0 +1,179 @@
+{
+    "id": "modbus_fanuc_cnc",
+    "name": "Fanuc CNC 数控系统",
+    "protocol": "modbus_tcp",
+    "description": "FANUC Series 0i-MF数控系统，支持Modbus TCP数据采集，适用于车床、铣床、加工中心",
+    "manufacturer": "FANUC",
+    "model": "0i-MF",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "0",
+            "data_type": "uint16",
+            "unit": "RPM",
+            "description": "主轴实际转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 12000
+        },
+        {
+            "name": "feed_rate",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "实际进给速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10000.0
+        },
+        {
+            "name": "spindle_override",
+            "address": "3",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "主轴倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "feed_override",
+            "address": "4",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "进给倍率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 100
+        },
+        {
+            "name": "running_mode",
+            "address": "5",
+            "data_type": "uint16",
+            "description": "运行模式(1=MDI 2=AUTO 3=JOG 4=EDIT 5=HANDLE)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 2
+        },
+        {
+            "name": "exec_status",
+            "address": "6",
+            "data_type": "uint16",
+            "description": "执行状态(0=空闲 1=运行 2=暂停 3=M00停 4=M01停)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "tool_no",
+            "address": "7",
+            "data_type": "uint16",
+            "description": "当前刀具号T",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 3
+        },
+        {
+            "name": "abs_x",
+            "address": "8",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -800.0,
+            "max_value": 800.0
+        },
+        {
+            "name": "abs_y",
+            "address": "10",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "abs_z",
+            "address": "12",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -600.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "mach_x",
+            "address": "14",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -800.0,
+            "max_value": 800.0
+        },
+        {
+            "name": "mach_y",
+            "address": "16",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "mach_z",
+            "address": "18",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴机械坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -600.0,
+            "max_value": 200.0
+        },
+        {
+            "name": "part_count",
+            "address": "20",
+            "data_type": "uint16",
+            "description": "加工计数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 99999
+        },
+        {
+            "name": "cycle_time",
+            "address": "21",
+            "data_type": "uint16",
+            "unit": "s",
+            "description": "循环时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 3600
+        },
+        {
+            "name": "alarm_no",
+            "address": "22",
+            "data_type": "uint16",
+            "description": "报警号(0=无报警)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 6
+    },
+    "tags": ["CNC", "FANUC", "数控", "机床", "发那科"]
+}

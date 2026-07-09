@@ -1,0 +1,61 @@
+{
+    "id": "gb28181_ip_camera",
+    "name": "网络摄像机",
+    "protocol": "gb28181",
+    "description": "GB28181网络摄像机，支持实时视频、云台控制",
+    "manufacturer": "Generic",
+    "model": "IPC-200",
+    "points": [
+        {
+            "name": "online",
+            "address": "status",
+            "data_type": "bool",
+            "description": "在线状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "resolution",
+            "address": "resolution",
+            "data_type": "uint16",
+            "description": "分辨率(0=QCIF 1=CIF 2=4CIF 3=D1)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "bitrate",
+            "address": "bitrate",
+            "data_type": "float32",
+            "unit": "kbps",
+            "description": "码率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 512,
+            "max_value": 4096
+        },
+        {
+            "name": "framerate",
+            "address": "framerate",
+            "data_type": "uint16",
+            "unit": "fps",
+            "description": "帧率",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 25
+        }
+    ],
+    "protocol_config": {
+        "server_id": "34020000002000000001",
+        "username": "34020000002000000001",
+        "password": "",
+        "realm": "3402000000"
+    },
+    "tags": [
+        "摄像机",
+        "GB28181",
+        "IPC",
+        "视频监控"
+    ]
+}

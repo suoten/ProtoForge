@@ -1,0 +1,78 @@
+{
+    "id": "opcua_hvac_controller",
+    "name": "HVAC空调控制器",
+    "protocol": "opcua",
+    "description": "楼宇HVAC空调系统OPC-UA仿真，支持温湿度设定和监控",
+    "manufacturer": "Generic",
+    "model": "HVAC-800",
+    "points": [
+        {
+            "name": "room_temp",
+            "address": "ns=2;s=RoomTemp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "室内温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 28.0
+        },
+        {
+            "name": "room_humidity",
+            "address": "ns=2;s=RoomHumidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "室内湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 35.0,
+            "max_value": 70.0
+        },
+        {
+            "name": "set_temp",
+            "address": "ns=2;s=SetTemp",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "设定温度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 24.0
+        },
+        {
+            "name": "fan_speed",
+            "address": "ns=2;s=FanSpeed",
+            "data_type": "uint16",
+            "description": "风机转速档位(0-3)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 2
+        },
+        {
+            "name": "mode",
+            "address": "ns=2;s=Mode",
+            "data_type": "uint16",
+            "description": "运行模式(0=制冷 1=制热 2=通风 3=自动)",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        },
+        {
+            "name": "power_consumption",
+            "address": "ns=2;s=PowerConsumption",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "实时功耗",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 5.0
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "HVAC",
+        "空调",
+        "楼宇",
+        "OPC-UA"
+    ]
+}

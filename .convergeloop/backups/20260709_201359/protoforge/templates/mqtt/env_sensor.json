@@ -1,0 +1,75 @@
+{
+    "id": "mqtt_env_sensor",
+    "name": "环境监测传感器",
+    "protocol": "mqtt",
+    "description": "MQTT环境监测传感器，支持温湿度、PM2.5、CO2等",
+    "manufacturer": "Generic",
+    "model": "ENV-100",
+    "points": [
+        {
+            "name": "temperature",
+            "address": "temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15.0,
+            "max_value": 35.0
+        },
+        {
+            "name": "humidity",
+            "address": "humidity",
+            "data_type": "float32",
+            "unit": "%RH",
+            "description": "湿度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "pm25",
+            "address": "pm25",
+            "data_type": "float32",
+            "unit": "μg/m³",
+            "description": "PM2.5浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 150
+        },
+        {
+            "name": "co2",
+            "address": "co2",
+            "data_type": "float32",
+            "unit": "ppm",
+            "description": "CO2浓度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 400,
+            "max_value": 1500
+        },
+        {
+            "name": "noise",
+            "address": "noise",
+            "data_type": "float32",
+            "unit": "dB",
+            "description": "噪声",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30,
+            "max_value": 80
+        }
+    ],
+    "protocol_config": {
+        "topic_prefix": "sensor/env",
+        "qos": 1
+    },
+    "tags": [
+        "传感器",
+        "MQTT",
+        "环境监测",
+        "IoT"
+    ]
+}

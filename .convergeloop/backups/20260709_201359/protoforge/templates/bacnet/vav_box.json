@@ -1,0 +1,62 @@
+{
+    "id": "bacnet_vav_box",
+    "name": "VAV变风量箱",
+    "protocol": "bacnet",
+    "description": "BACnet VAV变风量末端，支持风量控制和温度调节",
+    "manufacturer": "Generic",
+    "model": "VAV-100",
+    "points": [
+        {
+            "name": "room_temp",
+            "address": "AV:1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "房间温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 22.0,
+            "max_value": 27.0
+        },
+        {
+            "name": "setpoint",
+            "address": "AV:2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度设定",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 24.0
+        },
+        {
+            "name": "airflow",
+            "address": "AV:3",
+            "data_type": "float32",
+            "unit": "m³/h",
+            "description": "风量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50,
+            "max_value": 500
+        },
+        {
+            "name": "damper_pos",
+            "address": "AV:4",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "风门开度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 100
+        }
+    ],
+    "protocol_config": {
+        "device_id": 102
+    },
+    "tags": [
+        "VAV",
+        "变风量",
+        "BACnet",
+        "楼宇"
+    ]
+}

@@ -1,0 +1,143 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "protoforge"
+version = "0.1.0"
+description = "IoT Protocol Simulation & Testing Platform - Postman for IoT"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "suoten", email = "suoten@163.com" },
+]
+keywords = ["iot", "modbus", "opc-ua", "mqtt", "simulation", "testing", "gb28181", "bacnet", "s7", "mc", "fins", "ab", "opc-da", "fanuc", "mtconnect", "toledo"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Networking",
+]
+
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "pymodbus>=3.6.0",
+    "aiosqlite>=0.19.0",
+    "websockets>=12.0",
+    "httpx>=0.27.0",
+    "PyJWT>=2.8.0",
+    "passlib[bcrypt]>=1.7.4",
+    "bcrypt<4.1",
+    "alembic>=1.13.0",
+]
+
+[project.optional-dependencies]
+deploy = ["gunicorn>=21.2.0"]
+opcua = ["asyncua>=1.0.0", "cryptography>=42.0.0"]
+mqtt = ["amqtt>=0.11.0"]
+bacnet = ["bacpypes>=0.18.0"]  # FIXED: add missing bacnet extras
+s7 = ["python-snap7>=1.3.0"]  # FIXED: add missing s7 extras
+postgres = ["asyncpg>=0.29.0"]
+grpc = ["grpcio>=1.62.0", "grpcio-tools>=1.62.0"]
+all = [
+    "asyncua>=1.0.0",
+    "cryptography>=42.0.0",
+    "amqtt>=0.11.0",
+    "bacpypes>=0.18.0",
+    "python-snap7>=1.3.0",
+    "asyncpg>=0.29.0",
+    "grpcio>=1.62.0",
+    "grpcio-tools>=1.62.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+    "mypy>=1.8.0",
+    "alembic>=1.13.0",
+]
+
+[project.scripts]
+protoforge = "protoforge.cli:main"
+
+[project.urls]
+Homepage = "https://gitee.com/suoten/protoforge"
+Repository = "https://gitee.com/suoten/protoforge"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501", "B008", "B904", "SIM102", "SIM115"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern; SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
+
+[tool.ruff.lint.per-file-ignores]
+"protoforge/mqtt_auth.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/mqtt/server.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/opcua/client.py" = ["F401"]  # Optional dependency imports
+"protoforge/protocols/opcua/server.py" = ["F401"]  # Optional dependency imports
+"protoforge/api/v1/router.py" = ["E402"]  # FastAPI router pattern: create router then import sub-routers
+"protoforge/grpc/server.py" = ["N802"]  # gRPC methods must be PascalCase per protocol convention
+"protoforge/core/behavior_models.py" = ["N803", "N806"]  # Physics variables (Kp, Ki, Kd, dT, J, A, dL)
+"protoforge/core/defaults.py" = ["E402"]  # Lazy import pattern for optional dependencies
+"protoforge/core/testing.py" = ["E402"]  # Lazy import pattern
+"protoforge/protocols/fanuc/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/fins/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/modbus/rtu_server.py" = ["N806"]  # Local constants (_RTU_CONN_TIMEOUT)
+"protoforge/protocols/mtconnect/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/opcda/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/protocols/toledo/server.py" = ["N806"]  # Local constants (_READ_TIMEOUT)
+"protoforge/audit/exception_lint.py" = ["N815"]  # AST visitor method names
+"protoforge/core/edgelite.py" = ["N806"]  # Local constant (_PLUGIN_NAME_TO_ALIAS)
+"protoforge/main.py" = ["N806"]  # Local constant (_EXAMPLE_SECRET)
+"protoforge/api/v1/common.py" = ["N818"]  # Exception naming convention (base class pattern)
+"protoforge/core/fault_injection.py" = ["N818"]  # Exception naming convention
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+exclude = [
+    "migrations/",
+    "tests/",
+]
+
+[[tool.mypy.overrides]]
+module = "pymodbus.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "asyncua.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "amqtt.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "asyncpg.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::pytest.PytestCollectionWarning",
+]
+addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-fail-under=20"

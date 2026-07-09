@@ -1,0 +1,384 @@
+"""GRPC protocol server implementation."""
+
+import logging
+import time
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+try:
+    import grpc
+    from grpc import aio as grpc_aio
+
+    GRPC_AVAILABLE = True
+except ImportError:
+    GRPC_AVAILABLE = False
+    logger.debug("grpcio not installed, gRPC server will not be available")
+
+try:
+    from protoforge.grpc import protoforge_pb2 as pb2
+    from protoforge.grpc import protoforge_pb2_grpc as pb2_grpc
+    PB2_AVAILABLE = True
+except ImportError:
+    PB2_AVAILABLE = False
+    logger.debug("ProtoForge protobuf modules not generated. Run: python -m grpc_tools.protoc")
+
+
+def _get_engine():
+    try:
+        from protoforge.main import get_engine
+        return get_engine()
+    except RuntimeError:
+        return None
+
+
+def _get_database():
+    try:
+        from protoforge.main import get_database
+        return get_database()
+    except RuntimeError:
+        return None
+
+
+class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE else object):
+    async def GetHealth(self, request, context):
+        engine = _get_engine()
+        db = _get_database()
+        device_count = 0
+        if engine:
+            try:
+                device_count = len(engine.list_devices())
+            except Exception as e:
+                logger.debug("gRPC device count error: %s", e)
+        db_status = "unknown"
+        if db:
+            try:
+                await db.load_all_devices()
+                db_status = "ok"
+            except Exception as e:
+                logger.debug("gRPC DB health check error: %s", e)
+                db_status = "error"
+        return pb2.HealthResponse(
+            status="ok",
+            uptime=int(time.time()),
+            device_count=device_count,
+            database=db_status,
+        )
+
+    async def ListDevices(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Engine not initialized")
+            return pb2.ListDevicesResponse()
+        devices = engine.list_devices()
+        limit = request.limit or 100
+        offset = request.offset or 0
+        sliced = devices[offset : offset + limit]
+        device_infos = []
+        for d in sliced:
+            if isinstance(d, dict):
+                dev_id = d.get("id", "")
+                dev_name = d.get("name", "")
+                dev_proto = d.get("protocol", "")
+                dev_status = d.get("status", "unknown")
+                dev_points = len(d.get("points", []))
+            else:
+                dev_id = getattr(d, "id", "")
+                dev_name = getattr(d, "name", "")
+                dev_proto = getattr(d, "protocol", "")
+                dev_status = getattr(d, "status", "unknown")
+                if hasattr(dev_status, "value"):
+                    dev_status = dev_status.value
+                dev_points = len(getattr(d, "points", []))
+            device_infos.append(pb2.DeviceInfo(
+                id=dev_id,
+                name=dev_name,
+                protocol=dev_proto,
+                status=dev_status,
+                point_count=dev_points,
+            ))
+        return pb2.ListDevicesResponse(devices=device_infos, total=len(devices))
+
+    async def GetDevice(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.DeviceResponse(ok=False, error="Engine not initialized")
+        try:
+            device = engine.get_device(request.device_id)
+            if isinstance(device, dict):
+                dev_id = device.get("id", "")
+                dev_name = device.get("name", "")
+                dev_proto = device.get("protocol", "")
+                dev_status = device.get("status", "unknown")
+                dev_points = len(device.get("points", []))
+            else:
+                dev_id = getattr(device, "id", "")
+                dev_name = getattr(device, "name", "")
+                dev_proto = getattr(device, "protocol", "")
+                dev_status = getattr(device, "status", "unknown")
+                if hasattr(dev_status, "value"):
+                    dev_status = dev_status.value
+                dev_points = len(getattr(device, "points", []))
+            info = pb2.DeviceInfo(
+                id=dev_id,
+                name=dev_name,
+                protocol=dev_proto,
+                status=dev_status,
+                point_count=dev_points,
+            )
+            return pb2.DeviceResponse(device=info, ok=True)
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.NOT_FOUND)
+            return pb2.DeviceResponse(ok=False, error=str(e))
+
+    async def CreateDevice(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.DeviceResponse(ok=False, error="Engine not initialized")
+        try:
+            import uuid
+
+            from protoforge.models.device import DeviceConfig
+            # FIXED: gRPC CreateDevice忽略template_id的点配置 — 从模板加载points
+            points = []
+            if request.template_id:
+                try:
+                    from protoforge.core.template import TemplateManager
+                    tm = TemplateManager()
+                    template = tm.get_template(request.template_id)
+                    if template and hasattr(template, 'points'):
+                        points = template.points
+                except Exception as e:
+                    logger.warning("gRPC CreateDevice: failed to load template %s: %s", request.template_id, e)
+            config = DeviceConfig(
+                id=str(uuid.uuid4()),
+                name=request.name,
+                protocol=request.protocol,
+                template_id=request.template_id or None,
+                protocol_config=dict(request.protocol_config) if request.protocol_config else {},
+                points=points,
+            )
+            result = await engine.create_device(config)
+            dev_id = result.id if hasattr(result, "id") else str(result)
+            dev_name = result.name if hasattr(result, "name") else request.name
+            dev_proto = result.protocol if hasattr(result, "protocol") else request.protocol
+            return pb2.DeviceResponse(
+                device=pb2.DeviceInfo(id=dev_id, name=dev_name, protocol=dev_proto),
+                ok=True,
+            )
+        except Exception as e:
+            return pb2.DeviceResponse(ok=False, error=str(e))
+
+    async def DeleteDevice(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.DeleteDeviceResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.remove_device(request.device_id)
+            return pb2.DeleteDeviceResponse(ok=True)
+        except Exception as e:
+            return pb2.DeleteDeviceResponse(ok=False, error=str(e))
+
+    async def StartDevice(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.start_device(request.device_id)
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+    async def StopDevice(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.stop_device(request.device_id)
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+    async def ReadPoints(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.ReadPointsResponse(error="Engine not initialized")
+        try:
+            points = await engine.read_device_points(request.device_id)
+            pb_points = []
+            for p in points:
+                pb_points.append(pb2.PointValue(
+                    name=p.name,
+                    value=str(p.value),
+                    timestamp=p.timestamp,
+                ))
+            return pb2.ReadPointsResponse(points=pb_points)
+        except Exception as e:
+            return pb2.ReadPointsResponse(error=str(e))
+
+    async def WritePoint(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.write_device_point(request.device_id, request.point_name, request.value)
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+    async def ListScenarios(self, request, context):
+        db = _get_database()
+        if not db:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.ListScenariosResponse()
+        try:
+            scenarios = await db.load_all_scenarios()
+            limit = request.limit or 100
+            offset = request.offset or 0
+            sliced = scenarios[offset : offset + limit]
+            scenario_infos = []
+            engine = _get_engine()
+            for s in sliced:
+                s_id = s.id if hasattr(s, 'id') else s.get("id", "")
+                s_status = "stopped"
+                if engine:
+                    try:
+                        scenario_obj = engine.get_scenario(s_id)
+                        if scenario_obj:
+                            s_status = scenario_obj.status.value if hasattr(scenario_obj.status, 'value') else str(scenario_obj.status)
+                    except Exception as e:
+                        logger.debug("gRPC scenario status error: %s", e)
+                scenario_infos.append(pb2.ScenarioInfo(
+                    id=s_id,
+                    name=s.name if hasattr(s, 'name') else s.get("name", ""),
+                    status=s_status,
+                    device_count=len(s.devices) if hasattr(s, 'devices') else len(s.get("devices", [])),
+                ))
+            return pb2.ListScenariosResponse(scenarios=scenario_infos, total=len(scenarios))
+        except Exception as e:
+            logger.warning("ListScenarios failed: %s", e)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return pb2.ListScenariosResponse()
+
+    async def GetScenario(self, request, context):
+        db = _get_database()
+        if not db:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.ScenarioDetailResponse(ok=False, error="Database not initialized")
+        try:
+            scenarios = await db.load_all_scenarios()
+            target = None
+            for s in scenarios:
+                s_id = s.id if hasattr(s, 'id') else s.get("id", "")
+                if s_id == request.scenario_id:
+                    target = s
+                    break
+            if not target:
+                context.set_code(grpc.StatusCode.NOT_FOUND)
+                return pb2.ScenarioDetailResponse(ok=False, error=f"Scenario not found: {request.scenario_id}")
+            s_id = target.id if hasattr(target, 'id') else target.get("id", "")
+            s_name = target.name if hasattr(target, 'name') else target.get("name", "")
+            s_desc = target.description if hasattr(target, 'description') else target.get("description", "")
+            s_devices = target.devices if hasattr(target, 'devices') else target.get("devices", [])
+            s_status = "stopped"
+            engine = _get_engine()
+            if engine:
+                try:
+                    scenario_obj = engine.get_scenario(s_id)
+                    if scenario_obj:
+                        s_status = scenario_obj.status.value if hasattr(scenario_obj.status, 'value') else str(scenario_obj.status)
+                except Exception as e:
+                    logger.debug("gRPC GetScenario status error: %s", e)
+            device_ids = []
+            for d in s_devices:
+                if isinstance(d, dict):
+                    device_ids.append(d.get("id", ""))
+                elif hasattr(d, 'id'):
+                    device_ids.append(d.id)
+            detail = pb2.ScenarioDetail(
+                id=s_id, name=s_name, status=s_status,
+                device_count=len(s_devices), description=s_desc,
+                device_ids=device_ids,
+            )
+            return pb2.ScenarioDetailResponse(scenario=detail, ok=True)
+        except Exception as e:
+            logger.warning("GetScenario failed: %s", e)
+            context.set_code(grpc.StatusCode.INTERNAL)
+            return pb2.ScenarioDetailResponse(ok=False, error=str(e))
+
+    async def StartScenario(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.start_scenario(request.scenario_id)
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+    async def StopScenario(self, request, context):
+        engine = _get_engine()
+        if not engine:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Engine not initialized")
+        try:
+            await engine.stop_scenario(request.scenario_id)
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+    async def GetSettings(self, request, context):
+        db = _get_database()
+        if not db:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.SettingsResponse()
+        try:
+            data = await db.export_all()
+            settings = {}
+            for table, rows in data.items():
+                settings[table] = len(rows) if isinstance(rows, list) else 0
+            return pb2.SettingsResponse(settings=settings)
+        except Exception as e:
+            logger.debug("GetSettings failed: %s", e)
+            return pb2.SettingsResponse()
+
+    async def UpdateSettings(self, request, context):
+        db = _get_database()
+        if not db:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            return pb2.OperationResponse(ok=False, error="Database not initialized")
+        try:
+            from protoforge.config import update_settings
+            settings_dict = dict(request.settings)
+            result = update_settings(settings_dict)
+            if not result.get("ok", True):
+                return pb2.OperationResponse(ok=False, error=result.get("error", "Invalid settings"))
+            return pb2.OperationResponse(ok=True)
+        except Exception as e:
+            return pb2.OperationResponse(ok=False, error=str(e))
+
+
+class _NullGrpcServer:  # FIXED: start_grpc_server返回None导致调用方None.stop()崩溃
+    async def stop(self, grace=None):
+        pass
+
+
+async def start_grpc_server(port: int = 50051) -> Any:
+    if not GRPC_AVAILABLE or not PB2_AVAILABLE:
+        logger.warning("gRPC dependencies not available. Install: pip install grpcio grpcio-tools")
+        return _NullGrpcServer()
+    server = grpc_aio.server()
+    pb2_grpc.add_ProtoForgeServiceServicer_to_server(ProtoForgeServicer(), server)
+    server.add_insecure_port(f"[::]:{port}")
+    await server.start()
+    logger.info("gRPC server started on port %d", port)
+    return server

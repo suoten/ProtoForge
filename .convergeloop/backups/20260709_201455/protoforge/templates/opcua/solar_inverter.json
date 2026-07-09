@@ -1,0 +1,83 @@
+{
+    "id": "opcua_solar_inverter",
+    "name": "光伏逆变器",
+    "protocol": "opcua",
+    "description": "光伏逆变器OPC-UA仿真，支持发电功率、电压、效率等",
+    "manufacturer": "Generic",
+    "model": "PV-INV-50K",
+    "points": [
+        {
+            "name": "dc_voltage",
+            "address": "ns=2;s=DCVoltage",
+            "data_type": "float32",
+            "unit": "V",
+            "description": "直流侧电压",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 400,
+            "max_value": 600
+        },
+        {
+            "name": "dc_current",
+            "address": "ns=2;s=DCCurrent",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "直流侧电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 100
+        },
+        {
+            "name": "ac_power",
+            "address": "ns=2;s=ACPower",
+            "data_type": "float32",
+            "unit": "kW",
+            "description": "交流输出功率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 50
+        },
+        {
+            "name": "efficiency",
+            "address": "ns=2;s=Efficiency",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "转换效率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 95.0,
+            "max_value": 99.0
+        },
+        {
+            "name": "total_energy",
+            "address": "ns=2;s=TotalEnergy",
+            "data_type": "float32",
+            "unit": "kWh",
+            "description": "累计发电量",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        },
+        {
+            "name": "grid_frequency",
+            "address": "ns=2;s=GridFreq",
+            "data_type": "float32",
+            "unit": "Hz",
+            "description": "电网频率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 49.9,
+            "max_value": 50.1
+        }
+    ],
+    "protocol_config": {},
+    "tags": [
+        "光伏",
+        "逆变器",
+        "OPC-UA",
+        "新能源"
+    ]
+}
