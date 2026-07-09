@@ -1,4 +1,30 @@
-"""S7 protocol server implementation."""
+"""S7 协议服务器实现.
+
+本模块实现了 Siemens S7 通信协议的仿真服务器，
+支持以下功能:
+    - S7 CPU 连接与机架/槽位握手
+    - DB (Data Block) 读写
+    - I/Q/M/T/C 区域数据访问
+    - 多变量读取 (Read Var)
+    - 周期性数据交换
+
+支持与以下真实网关对接:
+    - Siemens S7-300/400/1200/1500 PLC
+    - DeltaTec S7 网关
+    - Anybus S7 网关
+    - 任何标准 S7 客户端
+
+协议规范:
+    - ISO-on-TCP (RFC 1006) 传输层
+    - S7 通信层 (COTP + S7 协议)
+    - TSAP 寻址 (本地/远程)
+
+典型用法::
+
+    server = S7Server()
+    await server.start({"host": "0.0.0.0", "port": 102})
+    device_id = await server.create_device(device_config)
+"""
 
 import asyncio
 import logging

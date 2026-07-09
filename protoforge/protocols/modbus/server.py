@@ -5,6 +5,7 @@ import contextlib
 import logging
 import struct
 import time
+from collections.abc import Callable
 from typing import Any
 
 from protoforge.core.messages import desc, msg  # FIXED: i18n消息常量
@@ -163,186 +164,300 @@ class ModbusTcpServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Modbus TCP writer close error: %s", e)
 
+    # Modbus 异常码
+    _EX_ILLEGAL_FUNCTION = 0x01
+    _EX_ILLEGAL_DATA_ADDRESS = 0x02
+    _EX_ILLEGAL_DATA_VALUE = 0x03
+
+    _FC_NAMES: dict[int, str] = {
+        0x01: "Read Coils", 0x02: "Read Discrete Inputs",
+        0x03: "Read Holding Registers", 0x04: "Read Input Registers",
+        0x05: "Write Single Coil", 0x06: "Write Single Register",
+        0x0F: "Write Multiple Coils", 0x10: "Write Multiple Registers",
+        0x16: "Mask Write Register", 0x17: "Read/Write Multiple Registers",
+    }
+
+    def _err_response(self, fc: int, code: int) -> bytes:
+        """生成 Modbus 异常响应帧。
+
+        :param fc: 功能码
+        :param code: 异常码 (0x01=非法功能, 0x02=非法地址, 0x03=非法数据值)
+        :return: 异常响应字节
+        """
+        return bytes([fc | 0x80, code])
+
+    def _read_bits(
+        self, fc: int, data: bytes, store: ModbusDataStore,
+        getter: Callable[[int], int], max_count: int, slave_id: int, fc_name: str,
+    ) -> bytes:
+        """处理读位操作 (FC01/FC02)。
+
+        :param fc: 功能码 (0x01 或 0x02)
+        :param data: PDU 数据部分
+        :param store: Modbus 数据存储
+        :param getter: 取位值的回调 (get_coil 或 get_discrete_input)
+        :param max_count: 最大读取数量
+        :param slave_id: 从站 ID (用于日志)
+        :param fc_name: 功能码名称 (用于日志)
+        :return: 响应 PDU
+        """
+        if len(data) < 4:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        start = struct.unpack(">H", data[0:2])[0]
+        count = struct.unpack(">H", data[2:4])[0]
+        if count == 0 or count > max_count:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                        detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        byte_count = (count + 7) // 8
+        bits = bytearray(byte_count)
+        for i in range(count):
+            if getter(start + i):
+                bits[i // 8] |= (1 << (i % 8))
+        return bytes([fc, byte_count]) + bytes(bits)
+
+    def _read_regs(
+        self, fc: int, data: bytes, store: ModbusDataStore,
+        area: int, max_count: int, slave_id: int, fc_name: str,
+    ) -> bytes:
+        """处理读寄存器操作 (FC03/FC04)。
+
+        :param fc: 功能码 (0x03 或 0x04)
+        :param data: PDU 数据部分
+        :param store: Modbus 数据存储
+        :param area: 数据区 (3=holding, 4=input)
+        :param max_count: 最大读取数量
+        :param slave_id: 从站 ID (用于日志)
+        :param fc_name: 功能码名称 (用于日志)
+        :return: 响应 PDU
+        """
+        if len(data) < 4:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        start = struct.unpack(">H", data[0:2])[0]
+        count = struct.unpack(">H", data[2:4])[0]
+        if count == 0 or count > max_count:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
+                        detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        byte_count = count * 2
+        regs = bytearray(byte_count)
+        for i in range(count):
+            val = store.get_point(area, start + i)
+            regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+        return bytes([fc, byte_count]) + bytes(regs)
+
+    def _write_single(
+        self, fc: int, data: bytes, target_stores: list[ModbusDataStore],
+        is_broadcast: bool, slave_id: int, fc_name: str,
+    ) -> bytes | None:
+        """处理写单个操作 (FC05/FC06)。
+
+        :param fc: 功能码 (0x05 或 0x06)
+        :param data: PDU 数据部分
+        :param target_stores: 目标数据存储列表
+        :param is_broadcast: 是否广播请求
+        :param slave_id: 从站 ID (用于日志)
+        :param fc_name: 功能码名称 (用于日志)
+        :return: 响应 PDU 或 None (广播)
+        """
+        if len(data) < 4:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        start = struct.unpack(">H", data[0:2])[0]
+        val = struct.unpack(">H", data[2:4])[0]
+        if fc == 0x05 and val not in (0xFF00, 0x0000):
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        for s in target_stores:
+            if fc == 0x05:
+                s.set_coil(start, 1 if val == 0xFF00 else 0)
+            else:
+                s.set_point(6, start, val)
+        self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
+                        detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
+        return None if is_broadcast else (bytes([fc]) + data[0:4])
+
+    def _write_multiple_coils(
+        self, fc: int, data: bytes, target_stores: list[ModbusDataStore],
+        is_broadcast: bool, slave_id: int, fc_name: str,
+    ) -> bytes | None:
+        """处理写多个线圈 (FC0F)。
+
+        :param fc: 功能码 (0x0F)
+        :param data: PDU 数据部分
+        :param target_stores: 目标数据存储列表
+        :param is_broadcast: 是否广播请求
+        :param slave_id: 从站 ID (用于日志)
+        :param fc_name: 功能码名称 (用于日志)
+        :return: 响应 PDU 或 None (广播)
+        """
+        if len(data) < 5:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        start = struct.unpack(">H", data[0:2])[0]
+        count = struct.unpack(">H", data[2:4])[0]
+        byte_count = data[4]
+        if count == 0 or count > 1968:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        expected_bytes = (count + 7) // 8
+        if byte_count != expected_bytes:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        for s in target_stores:
+            for i in range(count):
+                byte_idx = 5 + i // 8
+                bit_idx = i % 8
+                if byte_idx < len(data):
+                    s.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
+        self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
+                        detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        return None if is_broadcast else (bytes([fc]) + data[0:4])
+
+    def _write_multiple_regs(
+        self, fc: int, data: bytes, target_stores: list[ModbusDataStore],
+        is_broadcast: bool, slave_id: int, fc_name: str,
+    ) -> bytes | None:
+        """处理写多个寄存器 (FC10)。
+
+        :param fc: 功能码 (0x10)
+        :param data: PDU 数据部分
+        :param target_stores: 目标数据存储列表
+        :param is_broadcast: 是否广播请求
+        :param slave_id: 从站 ID (用于日志)
+        :param fc_name: 功能码名称 (用于日志)
+        :return: 响应 PDU 或 None (广播)
+        """
+        if len(data) < 5:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        start = struct.unpack(">H", data[0:2])[0]
+        count = struct.unpack(">H", data[2:4])[0]
+        byte_count = data[4]
+        if count == 0 or count > 123:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        if byte_count != count * 2:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        for s in target_stores:
+            for i in range(count):
+                offset = 5 + i * 2
+                if offset + 2 <= len(data):
+                    val = struct.unpack(">H", data[offset:offset + 2])[0]
+                    s.set_point(16, start + i, val)
+        self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
+                        detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        return None if is_broadcast else (bytes([fc]) + data[0:4])
+
+    def _mask_write_reg(
+        self, fc: int, data: bytes, target_stores: list[ModbusDataStore],
+        is_broadcast: bool, slave_id: int,
+    ) -> bytes | None:
+        """处理掩码写寄存器 (FC16)。
+
+        :param fc: 功能码 (0x16)
+        :param data: PDU 数据部分
+        :param target_stores: 目标数据存储列表
+        :param is_broadcast: 是否广播请求
+        :param slave_id: 从站 ID (用于日志)
+        :return: 响应 PDU 或 None (广播)
+        """
+        if len(data) < 6:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        addr = struct.unpack(">H", data[0:2])[0]
+        and_mask = struct.unpack(">H", data[2:4])[0]
+        or_mask = struct.unpack(">H", data[4:6])[0]
+        for s in target_stores:
+            current = s.get_point(3, addr)
+            new_val = (current & and_mask) | (or_mask & ~and_mask)
+            new_val &= 0xFFFF
+            s.set_point(6, addr, new_val)
+        self._log_debug("inbound", "modbus_write",
+                        f"MaskWrite: addr={addr} and={and_mask:#06x} or={or_mask:#06x}",
+                        detail={"fc": fc, "addr": addr, "unit": slave_id})
+        return None if is_broadcast else (bytes([fc]) + data[0:6])
+
+    def _read_write_multiple(
+        self, fc: int, data: bytes, store: ModbusDataStore,
+        target_stores: list[ModbusDataStore], is_broadcast: bool, slave_id: int,
+    ) -> bytes | None:
+        """处理读写多个寄存器 (FC17)。
+
+        :param fc: 功能码 (0x17)
+        :param data: PDU 数据部分
+        :param store: 主数据存储 (用于读取)
+        :param target_stores: 目标数据存储列表 (用于写入)
+        :param is_broadcast: 是否广播请求
+        :param slave_id: 从站 ID (用于日志)
+        :return: 响应 PDU 或 None (广播)
+        """
+        if len(data) < 9:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        r_start = struct.unpack(">H", data[0:2])[0]
+        r_count = struct.unpack(">H", data[2:4])[0]
+        w_start = struct.unpack(">H", data[4:6])[0]
+        w_count = struct.unpack(">H", data[6:8])[0]
+        if r_count == 0 or r_count > self._MAX_READ_REGISTERS or w_count == 0 or w_count > 121:
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        for s in target_stores:
+            for i in range(w_count):
+                offset = 9 + i * 2
+                if offset + 2 <= len(data):
+                    val = struct.unpack(">H", data[offset:offset + 2])[0]
+                    s.set_point(6, w_start + i, val)
+        if is_broadcast:
+            return None
+        r_byte_count = r_count * 2
+        regs = bytearray(r_byte_count)
+        for i in range(r_count):
+            val = store.get_point(3, r_start + i)
+            regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
+        self._log_debug("inbound", "modbus_rw",
+                        f"ReadWriteMultiple: r={r_start}/{r_count} w={w_start}/{w_count}",
+                        detail={"fc": fc, "r_start": r_start, "w_start": w_start, "unit": slave_id})
+        return bytes([fc, r_byte_count]) + bytes(regs)
+
     def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes | None:
+        """处理 Modbus PDU 帧，根据功能码分派到对应处理器。
+
+        支持 FC01-FC06, FC0F, FC10, FC16, FC17 共 10 种功能码。
+        广播请求 (unit_id=0) 对读操作不返回响应，对写操作遍历所有从站。
+
+        :param unit_id: MBAP Unit ID (0=广播, 1-247=从站)
+        :param fc: 功能码
+        :param data: PDU 数据部分 (不含功能码)
+        :return: 响应 PDU 字节，或 None (广播/无需响应)
+        """
         is_broadcast = (unit_id == 0)
         slave_id = unit_id if unit_id else 1
-        fc_names = {0x01: "Read Coils", 0x02: "Read Discrete Inputs", 0x03: "Read Holding Registers",
-                    0x04: "Read Input Registers", 0x05: "Write Single Coil", 0x06: "Write Single Register",
-                    0x0F: "Write Multiple Coils", 0x10: "Write Multiple Registers"}
-        fc_name = fc_names.get(fc, f"FC{fc:02X}")
+        fc_name = self._FC_NAMES.get(fc, f"FC{fc:02X}")
+
+        # 广播读操作不返回响应
         if is_broadcast and fc in (0x01, 0x02, 0x03, 0x04):
             return None
+
         # 广播写入时遍历所有从站
         target_stores = list(self._data_stores.values()) if is_broadcast else [self._get_data_store(slave_id)]
-        if not target_stores:  # FIXED-H02: 无从站时忽略广播请求，避免target_stores[0] IndexError
+        if not target_stores:
             return None
-        store = target_stores[0]  # 用于读取和日志
+        store = target_stores[0]
+
         try:
             if fc == 0x01:
-                if len(data) < 4:  # FIXED-P1: 前置长度校验，数据不足返回Illegal Data Value(0x03)而非被外层捕获返回0x02
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
-                count = struct.unpack(">H", data[2:4])[0]
-                if count == 0 or count > self._MAX_READ_COILS:  # FIXED-P0: FC01读线圈应检查_MAX_READ_COILS(2000)；FIXED-P2: count==0校验
-                    return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                byte_count = (count + 7) // 8
-                bits = bytearray(byte_count)
-                for i in range(count):
-                    if store.get_coil(start + i):
-                        bits[i // 8] |= (1 << (i % 8))
-                return bytes([fc, byte_count]) + bytes(bits)
+                return self._read_bits(fc, data, store, store.get_coil, self._MAX_READ_COILS, slave_id, fc_name)
             elif fc == 0x02:
-                if len(data) < 4:  # FIXED-P1: 前置长度校验
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec地址从0开始
-                count = struct.unpack(">H", data[2:4])[0]
-                if count == 0 or count > self._MAX_READ_COILS:  # FIXED-P0: FC02读离散输入应检查_MAX_READ_COILS(2000)；FIXED-P2: count==0校验
-                    return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                byte_count = (count + 7) // 8
-                bits = bytearray(byte_count)
-                for i in range(count):
-                    if store.get_discrete_input(start + i):
-                        bits[i // 8] |= (1 << (i % 8))
-                return bytes([fc, byte_count]) + bytes(bits)
+                return self._read_bits(fc, data, store, store.get_discrete_input, self._MAX_READ_COILS, slave_id, fc_name)
             elif fc == 0x03:
-                if len(data) < 4:  # FIXED-P0: 前置长度校验，数据不足时返回Illegal Data Value(0x03)
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移，Modbus spec定义地址从0开始
-                count = struct.unpack(">H", data[2:4])[0]
-                if count == 0 or count > self._MAX_READ_REGISTERS:  # FIXED-P0: FC0x03应检查_MAX_READ_REGISTERS(2000)而非_MAX_READ_COILS(125)；FIXED-P2: count==0校验
-                    return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                byte_count = count * 2
-                regs = bytearray(byte_count)
-                for i in range(count):
-                    val = store.get_point(3, start + i)
-                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
-                return bytes([fc, byte_count]) + bytes(regs)
+                return self._read_regs(fc, data, store, 3, self._MAX_READ_REGISTERS, slave_id, fc_name)
             elif fc == 0x04:
-                if len(data) < 4:  # FIXED-P0: 前置长度校验
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                count = struct.unpack(">H", data[2:4])[0]
-                if count == 0 or count > self._MAX_READ_REGISTERS:  # FIXED-P0: FC0x04应检查_MAX_READ_REGISTERS(2000)而非_MAX_READ_COILS(125)；FIXED-P2: count==0校验
-                    return bytes([fc | 0x80, 0x03])
-                self._log_debug("inbound", "modbus_read", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                byte_count = count * 2
-                regs = bytearray(byte_count)
-                for i in range(count):
-                    val = store.get_point(4, start + i)
-                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
-                return bytes([fc, byte_count]) + bytes(regs)
-            elif fc == 0x05:
-                if len(data) < 4:
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                val = struct.unpack(">H", data[2:4])[0]
-                if val not in (0xFF00, 0x0000):  # FIXED-P2: FC05值校验，非0xFF00/0x0000返回异常码0x03
-                    return bytes([fc | 0x80, 0x03])
-                for s in target_stores:
-                    s.set_coil(start, 1 if val == 0xFF00 else 0)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
-                                detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
-                return None if is_broadcast else (bytes([fc]) + data[0:4])
-            elif fc == 0x06:
-                if len(data) < 4:
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                val = struct.unpack(">H", data[2:4])[0]
-                for s in target_stores:
-                    s.set_point(6, start, val)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
-                                detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
-                return None if is_broadcast else (bytes([fc]) + data[0:4])
+                return self._read_regs(fc, data, store, 4, self._MAX_READ_REGISTERS, slave_id, fc_name)
+            elif fc in (0x05, 0x06):
+                return self._write_single(fc, data, target_stores, is_broadcast, slave_id, fc_name)
             elif fc == 0x0F:
-                if len(data) < 5:  # FIXED-P0: 前置长度校验(需start+count+byte_count=5字节)
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                count = struct.unpack(">H", data[2:4])[0]
-                byte_count = data[4]
-                if count == 0 or count > 1968:  # FIXED-P2: count==0校验；FC0F最多写1968个线圈
-                    return bytes([fc | 0x80, 0x03])
-                expected_bytes = (count + 7) // 8
-                if byte_count != expected_bytes:  # FIXED-P2: byte_count与count一致性校验
-                    return bytes([fc | 0x80, 0x03])
-                for s in target_stores:
-                    for i in range(count):
-                        byte_idx = 5 + i // 8
-                        bit_idx = i % 8
-                        if byte_idx < len(data):
-                            s.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                return None if is_broadcast else (bytes([fc]) + data[0:4])
+                return self._write_multiple_coils(fc, data, target_stores, is_broadcast, slave_id, fc_name)
             elif fc == 0x10:
-                if len(data) < 5:
-                    return bytes([fc | 0x80, 0x03])
-                start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                count = struct.unpack(">H", data[2:4])[0]
-                byte_count = data[4]
-                if count == 0 or count > 123:  # FIXED-P2: count==0校验；FC10最多写123个寄存器(规范要求)
-                    return bytes([fc | 0x80, 0x03])
-                if byte_count != count * 2:  # FIXED-P2: byte_count与count一致性校验
-                    return bytes([fc | 0x80, 0x03])
-                for s in target_stores:
-                    for i in range(count):
-                        offset = 5 + i * 2
-                        if offset + 2 <= len(data):
-                            val = struct.unpack(">H", data[offset:offset + 2])[0]
-                            s.set_point(16, start + i, val)
-                self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
-                                detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
-                return None if is_broadcast else (bytes([fc]) + data[0:4])
+                return self._write_multiple_regs(fc, data, target_stores, is_broadcast, slave_id, fc_name)
             elif fc == 0x16:
-                if len(data) < 6:  # FIXED-P0: 前置长度校验(需addr+and_mask+or_mask=6字节)
-                    return bytes([fc | 0x80, 0x03])
-                addr = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                and_mask = struct.unpack(">H", data[2:4])[0]
-                or_mask = struct.unpack(">H", data[4:6])[0]
-                for s in target_stores:
-                    current = s.get_point(3, addr)
-                    new_val = (current & and_mask) | (or_mask & ~and_mask)
-                    new_val &= 0xFFFF
-                    s.set_point(6, addr, new_val)
-                self._log_debug("inbound", "modbus_write", f"MaskWrite: addr={addr} and={and_mask:#06x} or={or_mask:#06x}",
-                                detail={"fc": fc, "addr": addr, "unit": slave_id})
-                return None if is_broadcast else (bytes([fc]) + data[0:6])
+                return self._mask_write_reg(fc, data, target_stores, is_broadcast, slave_id)
             elif fc == 0x17:
-                if len(data) < 9:  # FIXED-P0: 前置长度校验(需r_start+r_count+w_start+w_count+w_byte_count=9字节)
-                    return bytes([fc | 0x80, 0x03])
-                r_start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
-                r_count = struct.unpack(">H", data[2:4])[0]
-                w_start = struct.unpack(">H", data[4:6])[0]  # FIXED-P0: 移除+1偏移
-                w_count = struct.unpack(">H", data[6:8])[0]
-                if r_count == 0 or r_count > self._MAX_READ_REGISTERS or w_count == 0 or w_count > 121:  # FIXED-N03: r_count/w_count==0校验
-                    return bytes([fc | 0x80, 0x03])
-                data[8]
-                for s in target_stores:
-                    for i in range(w_count):
-                        offset = 9 + i * 2
-                        if offset + 2 <= len(data):
-                            val = struct.unpack(">H", data[offset:offset + 2])[0]
-                            s.set_point(6, w_start + i, val)
-                if is_broadcast:  # FIXED-P1: 广播请求不应返回响应
-                    return None
-                r_byte_count = r_count * 2
-                regs = bytearray(r_byte_count)
-                for i in range(r_count):
-                    val = store.get_point(3, r_start + i)
-                    regs[i * 2:i * 2 + 2] = struct.pack(">H", val & 0xFFFF)
-                self._log_debug("inbound", "modbus_rw", f"ReadWriteMultiple: r={r_start}/{r_count} w={w_start}/{w_count}",
-                                detail={"fc": fc, "r_start": r_start, "w_start": w_start, "unit": slave_id})
-                return bytes([fc, r_byte_count]) + bytes(regs)
+                return self._read_write_multiple(fc, data, store, target_stores, is_broadcast, slave_id)
             else:
-                return bytes([fc | 0x80, 0x01])
+                return self._err_response(fc, self._EX_ILLEGAL_FUNCTION)
         except (IndexError, struct.error):
-            return bytes([fc | 0x80, 0x02])
+            return self._err_response(fc, self._EX_ILLEGAL_DATA_ADDRESS)
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING

@@ -1,0 +1,74 @@
+{
+    "id": "fins_nj_controller",
+    "name": "欧姆龙NJ控制器",
+    "protocol": "fins",
+    "description": "欧姆龙NJ系列机器自动化控制器",
+    "manufacturer": "Omron",
+    "model": "NJ501",
+    "points": [
+        {
+            "name": "run_mode",
+            "address": "D0",
+            "data_type": "uint16",
+            "description": "运行模式(0=编程 1=运行 2=监视)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "axis1_pos",
+            "address": "D10",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴1位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -200,
+            "max_value": 200
+        },
+        {
+            "name": "axis1_vel",
+            "address": "D12",
+            "data_type": "float32",
+            "unit": "mm/s",
+            "description": "轴1速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 500
+        },
+        {
+            "name": "axis1_torque",
+            "address": "D14",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "轴1扭矩",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 100
+        },
+        {
+            "name": "task_time",
+            "address": "D20",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "任务执行时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 5.0
+        }
+    ],
+    "protocol_config": {
+        "dest_node": 1,
+        "dest_unit": 0
+    },
+    "tags": [
+        "控制器",
+        "欧姆龙",
+        "Omron",
+        "NJ",
+        "运动控制"
+    ]
+}

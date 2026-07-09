@@ -237,7 +237,7 @@ class ControlLoopManager:
         # 在设备 tick 中
         outputs = manager.tick(device, dt=0.1)
         for point_name, value in outputs.items():
-            device._point_values[point_name] = value
+            device.set_point_value_internal(point_name, value)
     """
 
     def __init__(self):
@@ -415,7 +415,7 @@ class ControlLoopManager:
         """
         if not point_name:
             raise ValueError("Point name is empty")
-        value = device._point_values.get(point_name)
+        value = device.get_raw_point_value(point_name)
         if value is None:
             raise ValueError(f"Point '{point_name}' not found on device '{device.config.id}'")
         try:

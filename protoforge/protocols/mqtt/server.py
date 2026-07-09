@@ -1,4 +1,27 @@
-"""MQTT protocol server implementation."""
+"""MQTT 协议 Broker 实现.
+
+本模块实现了轻量级 MQTT 消息代理 (Broker)，
+支持以下功能:
+    - MQTT 3.1.1 协议完整实现
+    - QoS 0/1/2 消息传递保证
+    - 主题通配符订阅 (+/#, 层级匹配)
+    - 遗嘱消息 (Last Will and Testament)
+    - 保留消息 (Retained Messages)
+    - 客户端认证与 ACL
+    - 消息持久化与重连恢复
+
+支持与以下真实物联网网关对接:
+    - EMQX / Mosquitto / HiveMQ 客户端
+    - AWS IoT Core / Azure IoT Hub
+    - 阿里云 IoT / 腾讯云 IoT
+    - 任何标准 MQTT 客户端
+
+典型用法::
+
+    broker = MqttBroker()
+    await broker.start({"host": "0.0.0.0", "port": 1883})
+    device_id = await broker.create_device(device_config)
+"""
 
 import asyncio
 import logging

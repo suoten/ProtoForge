@@ -1,0 +1,83 @@
+{
+    "id": "bacnet_ahu",
+    "name": "空调机组AHU",
+    "protocol": "bacnet",
+    "description": "BACnet空调机组，支持送风温度、回风温度、风机频率等",
+    "manufacturer": "Generic",
+    "model": "AHU-5000",
+    "points": [
+        {
+            "name": "supply_temp",
+            "address": "AV:1",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "送风温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 12.0,
+            "max_value": 20.0
+        },
+        {
+            "name": "return_temp",
+            "address": "AV:2",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "回风温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 22.0,
+            "max_value": 28.0
+        },
+        {
+            "name": "fan_speed",
+            "address": "AV:3",
+            "data_type": "float32",
+            "unit": "Hz",
+            "description": "风机频率",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 50.0
+        },
+        {
+            "name": "filter_dp",
+            "address": "AV:4",
+            "data_type": "float32",
+            "unit": "Pa",
+            "description": "滤网压差",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50,
+            "max_value": 300
+        },
+        {
+            "name": "damper_pos",
+            "address": "AV:5",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "风门开度",
+            "access": "rw",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 100
+        },
+        {
+            "name": "run_status",
+            "address": "BV:1",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "device_id": 101
+    },
+    "tags": [
+        "AHU",
+        "空调机组",
+        "BACnet",
+        "楼宇"
+    ]
+}

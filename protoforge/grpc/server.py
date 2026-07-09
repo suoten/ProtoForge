@@ -26,7 +26,7 @@ except ImportError:
 
 def _get_engine():
     try:
-        from protoforge.main import get_engine
+        from protoforge.core.registry import get_engine
         return get_engine()
     except RuntimeError:
         return None
@@ -34,7 +34,7 @@ def _get_engine():
 
 def _get_database():
     try:
-        from protoforge.main import get_database
+        from protoforge.core.registry import get_database
         return get_database()
     except RuntimeError:
         return None

@@ -19,6 +19,24 @@ from protoforge.core.engine import SimulationEngine
 from protoforge.core.event_bus import EventBus
 from protoforge.core.integration.manager import IntegrationManager
 from protoforge.core.log_bus import LogBus
+from protoforge.core.registry import (
+    clear_all as _clear_registry,
+)
+from protoforge.core.registry import (
+    register_database as _register_database,
+)
+from protoforge.core.registry import (
+    register_engine as _register_engine,
+)
+from protoforge.core.registry import (
+    register_integration_manager as _register_integration_manager,
+)
+from protoforge.core.registry import (
+    register_log_bus as _register_log_bus,
+)
+from protoforge.core.registry import (
+    register_template_manager as _register_template_manager,
+)
 from protoforge.core.template import TemplateManager
 from protoforge.db.session import Database
 from protoforge.protocols import PROTOCOL_REGISTRY
@@ -412,6 +430,13 @@ async def lifespan(app: FastAPI):
     (_engine, _template_manager, _database, _log_bus, _event_bus,
      _integration_manager) = await _init_core_services(settings)
 
+    # 注册服务到 ServiceRegistry，消除子模块对 main.py 的循环依赖
+    _register_engine(_engine)
+    _register_database(_database)
+    _register_integration_manager(_integration_manager)
+    _register_log_bus(_log_bus)
+    _register_template_manager(_template_manager)
+
     restore_errors = await _restore_persisted_data(_engine, _database, _template_manager, settings)
 
     grpc_server = await _start_optional_services(_engine, _template_manager, settings)
@@ -428,6 +453,9 @@ async def lifespan(app: FastAPI):
     yield
 
     await _shutdown_services(grpc_server, _integration_manager, _engine, _database)
+
+    # 注销所有服务，避免重启时状态残留
+    _clear_registry()
 
 
 _logging_configured = False

@@ -1,4 +1,27 @@
-"""OPCUA protocol server implementation."""
+"""OPC UA 协议服务器实现.
+
+本模块实现了 OPC UA (OPC Unified Architecture) 协议的仿真服务器，
+支持以下功能:
+    - 标准 OPC UA 地址空间和节点管理
+    - 安全通信 (X.509 证书/用户名密码)
+    - 订阅与数据变更通知 (Monitored Items)
+    - 历史数据访问 (History Read)
+    - 设备发现与端点管理
+
+支持与以下真实网关对接:
+    - Kepware OPC UA Gateway
+    - Matrikon OPC UA Explorer
+    - Siemens SIMATIC NET
+    - 任何标准 OPC UA 客户端
+
+典型用法::
+
+    server = OpcUaServer()
+    await server.start({"host": "0.0.0.0", "port": 4840})
+    device_id = await server.create_device(device_config)
+
+:requires: asyncua (pip install asyncua)
+"""
 
 import asyncio
 import datetime

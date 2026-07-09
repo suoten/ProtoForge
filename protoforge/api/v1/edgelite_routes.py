@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def _get_integration_manager():
     """获取 IntegrationManager 实例。"""
-    from protoforge.main import get_integration_manager
+    from protoforge.core.registry import get_integration_manager
     try:
         mgr = get_integration_manager()
     except RuntimeError:

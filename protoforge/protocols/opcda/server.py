@@ -1,4 +1,21 @@
-"""OPCDA protocol server implementation."""
+"""OPC DA (Data Access) 协议仿真服务器.
+
+本模块实现了 OPC DA (Classic) 协议的仿真服务器，
+支持以下功能:
+    - OPC DA 2.05a / 3.0 协议
+    - DCOM 通信
+    - 组 (Group) 与数据项 (Item) 管理
+    - 同步/异步读取
+    - 订阅与回调通知
+    - 服务器浏览 (Browse)
+
+支持与以下真实客户端对接:
+    - Kepware OPC DA Client
+    - Matrikon OPC Explorer
+    - 任何标准 OPC DA 客户端
+
+:requires: OpenOPCDA / win32com (Windows only)
+"""
 
 import asyncio
 import logging

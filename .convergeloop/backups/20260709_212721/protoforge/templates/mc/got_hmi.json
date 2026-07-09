@@ -1,0 +1,62 @@
+{
+    "id": "mc_got_hmi",
+    "name": "三菱GOT触摸屏",
+    "protocol": "mc",
+    "description": "三菱GOT系列触摸屏仿真，支持画面切换和数据监控",
+    "manufacturer": "Mitsubishi",
+    "model": "GOT2000",
+    "points": [
+        {
+            "name": "current_page",
+            "address": "D100",
+            "data_type": "uint16",
+            "description": "当前画面号",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "backlight",
+            "address": "D101",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "背光亮度",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 80
+        },
+        {
+            "name": "touch_x",
+            "address": "D102",
+            "data_type": "uint16",
+            "unit": "px",
+            "description": "触摸X坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 800
+        },
+        {
+            "name": "touch_y",
+            "address": "D103",
+            "data_type": "uint16",
+            "unit": "px",
+            "description": "触摸Y坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 480
+        }
+    ],
+    "protocol_config": {
+        "network": 0,
+        "station": 1,
+        "pc": 255
+    },
+    "tags": [
+        "HMI",
+        "触摸屏",
+        "三菱",
+        "GOT"
+    ]
+}

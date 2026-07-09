@@ -103,7 +103,7 @@ async def update_settings(updates: dict[str, Any], _user: dict[str, Any] = Depen
         if edgelite_keys & set(filtered.keys()):
             try:
                 from protoforge.config import get_settings
-                from protoforge.main import get_integration_manager
+                from protoforge.core.registry import get_integration_manager
                 mgr = get_integration_manager()
                 settings = get_settings()
                 # 先停止旧连接

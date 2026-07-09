@@ -158,4 +158,4 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",
 ]
-addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-fail-under=20"
+addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-report=json --cov-fail-under=20"

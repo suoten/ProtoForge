@@ -1,4 +1,24 @@
-"""HTTP protocol server implementation."""
+"""HTTP REST API 协议仿真服务器.
+
+本模块实现了 HTTP RESTful 接口的仿真服务器，
+支持以下功能:
+    - GET/POST/PUT/DELETE 全 HTTP 方法
+    - JSON/XML 数据格式
+    - 自定义路由与响应模板
+    - 认证 (Bearer Token / API Key)
+    - Webhook 回调推送
+    - 数据回传 (Backhaul)
+
+支持与以下真实网关对接:
+    - 任何 HTTP REST 客户端
+    - IoT 平台 HTTP 接入
+    - 边缘计算网关 REST 通道
+
+典型用法::
+
+    server = HttpSimulatorServer()
+    await server.start({"host": "0.0.0.0", "port": 8080})
+"""
 
 import asyncio
 import json

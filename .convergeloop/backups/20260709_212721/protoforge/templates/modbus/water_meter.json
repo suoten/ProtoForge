@@ -1,0 +1,61 @@
+{
+    "id": "modbus_water_meter",
+    "name": "智能水表",
+    "protocol": "modbus_tcp",
+    "description": "远传智能水表，支持累计流量和瞬时流量监测",
+    "manufacturer": "Generic",
+    "model": "WM-100",
+    "points": [
+        {
+            "name": "total_flow",
+            "address": "0",
+            "data_type": "float32",
+            "unit": "m³",
+            "description": "累计流量",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        },
+        {
+            "name": "instant_flow",
+            "address": "2",
+            "data_type": "float32",
+            "unit": "m³/h",
+            "description": "瞬时流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "pressure",
+            "address": "4",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "管道压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.2,
+            "max_value": 0.6
+        },
+        {
+            "name": "valve_status",
+            "address": "6",
+            "data_type": "bool",
+            "description": "阀门状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 1
+    },
+    "tags": [
+        "水表",
+        "Modbus",
+        "流量",
+        "水务"
+    ]
+}

@@ -1,0 +1,92 @@
+{
+    "id": "fanuc_focas_cnc",
+    "name": "FANUC数控系统",
+    "protocol": "fanuc",
+    "description": "FANUC FOCAS/Ethernet数控系统仿真",
+    "manufacturer": "FANUC",
+    "model": "Series-0i",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "spindle_speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 500,
+            "max_value": 6000
+        },
+        {
+            "name": "feed_rate",
+            "address": "feed_rate",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "进给速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 100,
+            "max_value": 3000
+        },
+        {
+            "name": "x_abs",
+            "address": "x_abs",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -300,
+            "max_value": 300
+        },
+        {
+            "name": "y_abs",
+            "address": "y_abs",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -200,
+            "max_value": 200
+        },
+        {
+            "name": "z_abs",
+            "address": "z_abs",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴绝对坐标",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -150,
+            "max_value": 150
+        },
+        {
+            "name": "run_status",
+            "address": "run_status",
+            "data_type": "uint16",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "tool_number",
+            "address": "tool_number",
+            "data_type": "uint16",
+            "description": "当前刀号",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        }
+    ],
+    "protocol_config": {
+        "port": 8193
+    },
+    "tags": [
+        "CNC",
+        "FANUC",
+        "数控",
+        "FOCAS"
+    ]
+}

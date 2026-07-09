@@ -1,0 +1,72 @@
+{
+    "id": "ab_controllogix",
+    "name": "AB ControlLogix PLC",
+    "protocol": "ab",
+    "description": "罗克韦尔AB ControlLogix PLC EtherNet/IP仿真",
+    "manufacturer": "Rockwell",
+    "model": "ControlLogix-5570",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "Program:Main.Run",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "cpu_load",
+            "address": "Program:Main.CPULoad",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 15,
+            "max_value": 75
+        },
+        {
+            "name": "motor_speed",
+            "address": "Program:Main.MotorSpeed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "电机转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 1800
+        },
+        {
+            "name": "line_pressure",
+            "address": "Program:Main.LinePressure",
+            "data_type": "float32",
+            "unit": "PSI",
+            "description": "管道压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 50,
+            "max_value": 200
+        },
+        {
+            "name": "product_count",
+            "address": "Program:Main.Count",
+            "data_type": "uint32",
+            "description": "产品计数",
+            "access": "r",
+            "generator_type": "increment",
+            "min_value": 0,
+            "max_value": 999999
+        }
+    ],
+    "protocol_config": {
+        "slot": 0
+    },
+    "tags": [
+        "PLC",
+        "AB",
+        "Rockwell",
+        "ControlLogix",
+        "EtherNet/IP"
+    ]
+}

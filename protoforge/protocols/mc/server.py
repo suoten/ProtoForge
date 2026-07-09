@@ -1,4 +1,17 @@
-"""MC protocol server implementation."""
+"""Mitsubishi MELSEC MC 协议仿真服务器.
+
+本模块实现了三菱 MC (Mitsubishi Communication) 协议的仿真服务器，
+支持以下功能:
+    - MC/Binary 协议帧解析
+    - 位设备 (X/Y/M/S/T/C) 读写
+    - 字设备 (D/R/ZR) 读写
+    - 随机读写 (Random Read/Write)
+    - 批量读取 (Batch Read)
+
+支持与以下真实设备对接:
+    - Mitsubishi Q/L/R/iQ-R 系列 PLC
+    - 任何标准 MC 协议客户端
+"""
 
 import asyncio
 import logging

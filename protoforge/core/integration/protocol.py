@@ -198,6 +198,16 @@ class ProtocolMapper:
     def add_mapping(self, protoforge_protocol: str, edgelite_protocol: str | None) -> None:
         self._map[protoforge_protocol] = edgelite_protocol
 
+    @property
+    def edgelite_protocols(self) -> set[str]:
+        """返回 EdgeLite 支持的协议集合（只读视图）。"""
+        return set(self._edgelite_protocols)
+
+    @property
+    def protocol_map(self) -> dict[str, str | None]:
+        """返回协议映射表的副本（只读）。"""
+        return dict(self._map)
+
 
 class DataTypeMapper:
     def __init__(

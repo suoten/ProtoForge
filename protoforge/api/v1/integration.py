@@ -13,7 +13,7 @@ router = APIRouter(prefix="/integration", tags=["integration"])
 
 
 def _get_integration_manager():
-    from protoforge.main import get_integration_manager
+    from protoforge.core.registry import get_integration_manager
     return get_integration_manager()
 
 
@@ -40,7 +40,7 @@ async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer
 @router.post("/batch-push")
 async def batch_push(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
-        from protoforge.main import get_engine
+        from protoforge.core.registry import get_engine
         engine = get_engine()
         manager = _get_integration_manager()
 

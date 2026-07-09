@@ -1,4 +1,18 @@
-"""FINS protocol server implementation."""
+"""FINS (Factory Interface Network Service) 协议仿真服务器.
+
+本模块实现了 Omron FINS 通信协议的仿真服务器，
+支持以下功能:
+    - FINS/TCP (端口 9600) 传输
+    - FINS/UDP (端口 9600) 传输
+    - 内存区域读写 (CIO/DM/HR/AR/DM/EM)
+    - 状态读取与控制
+    - 节点地址寻址
+
+支持与以下真实设备对接:
+    - Omron CJ/CS/CP/NJ/NX 系列 PLC
+    - Anybus FINS 网关
+    - 任何标准 FINS 客户端
+"""
 
 import asyncio
 import logging

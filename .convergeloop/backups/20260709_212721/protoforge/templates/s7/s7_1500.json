@@ -1,0 +1,94 @@
+{
+    "id": "s7_s7_1500",
+    "name": "西门子S7-1500 PLC",
+    "protocol": "s7",
+    "description": "西门子S7-1500高端PLC仿真，支持多DB块和复杂控制",
+    "manufacturer": "Siemens",
+    "model": "S7-1516",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "DB1.DBX0.0",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "cycle_time",
+            "address": "DB1.DBD2",
+            "data_type": "float32",
+            "unit": "ms",
+            "description": "循环时间",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1.0,
+            "max_value": 10.0
+        },
+        {
+            "name": "memory_used",
+            "address": "DB1.DBD6",
+            "data_type": "float32",
+            "unit": "%",
+            "description": "内存使用率",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20,
+            "max_value": 80
+        },
+        {
+            "name": "axis1_pos",
+            "address": "DB2.DBD0",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴1位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500,
+            "max_value": 500
+        },
+        {
+            "name": "axis2_pos",
+            "address": "DB2.DBD4",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "轴2位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -300,
+            "max_value": 300
+        },
+        {
+            "name": "axis1_torque",
+            "address": "DB2.DBD8",
+            "data_type": "float32",
+            "unit": "Nm",
+            "description": "轴1扭矩",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 25.0
+        },
+        {
+            "name": "error_code",
+            "address": "DB1.DBW10",
+            "data_type": "uint16",
+            "description": "错误代码",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "rack": 0,
+        "slot": 1
+    },
+    "tags": [
+        "PLC",
+        "西门子",
+        "Siemens",
+        "S7-1500",
+        "高端控制"
+    ]
+}

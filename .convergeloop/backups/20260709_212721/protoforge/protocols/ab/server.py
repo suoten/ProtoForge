@@ -1,0 +1,599 @@
+"""AB protocol server implementation."""
+
+import asyncio
+import logging
+import struct
+import time
+from typing import Any
+
+from protoforge.core.messages import desc
+from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+
+logger = logging.getLogger(__name__)
+
+_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+
+_CIP_TYPE_MAP = {
+    "bool": (0xC1, 1),
+    "int16": (0xC3, 2),
+    "uint16": (0xC7, 2),
+    "int32": (0xC4, 4),
+    "dint": (0xC4, 4),
+    "uint32": (0xC8, 4),
+    "float32": (0xCA, 4),
+    "float64": (0xCB, 8),
+    "string": (0xA0, 0),
+}
+
+
+class AbDeviceBehavior(StandardDeviceBehavior):
+    def __init__(self, points: list | None = None):
+        super().__init__(points)
+        self._tags: dict[str, Any] = {}
+        self._data_types: dict[str, str] = {}
+        if points:
+            for p in points:
+                name = p.name if hasattr(p, 'name') else p.get("name", "")
+                data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "int32")
+                self._tags[name] = self._values.get(name, 0)
+                self._data_types[name] = data_type
+
+    def on_write(self, point_name: str, value: Any) -> bool:
+        if point_name in self._values:
+            self._values[point_name] = value
+            self._tags[point_name] = value
+            return True
+        return False
+
+    def set_value(self, point_name: str, value: Any) -> None:
+        self._values[point_name] = value
+        self._tags[point_name] = value
+
+    def get_tag(self, tag_name: str) -> Any:
+        if tag_name in self._tags:
+            return self._tags[tag_name]
+        return None
+
+    def set_tag(self, tag_name: str, value: Any) -> None:
+        self._tags[tag_name] = value
+        self._values[tag_name] = value
+
+    def get_tag_type(self, tag_name: str) -> str:
+        return self._data_types.get(tag_name, "int32")
+
+    def get_data_type(self, point_name: str) -> str:
+        return self._data_types.get(point_name, "int32")
+
+
+class AbServer(ProtocolServer):
+    protocol_name = "ab"
+    protocol_display_name = "Rockwell AB"
+
+    EIP_HEADER_SIZE = 24
+
+    def __init__(self):
+        super().__init__()
+        self._behaviors: dict[str, AbDeviceBehavior] = {}
+        self._device_configs: dict[str, DeviceConfig] = {}
+        self._device_slots: dict[str, int] = {}
+        self._host = "0.0.0.0"
+        self._port = 44818
+        self._session_handle = 1
+        self._server_task: asyncio.Task | None = None
+        self._server_running = False
+
+    async def start(self, config: dict[str, Any]) -> None:
+        self._status = ProtocolStatus.STARTING
+        self._host = config.get("host", "0.0.0.0")
+        self._port = config.get("port", 44818)
+        self._validate_port(self._port)
+        self._start_config = config
+        try:
+            self._server_running = True
+            self._server_task = asyncio.create_task(self._serve())
+            self._status = ProtocolStatus.RUNNING
+            logger.info("AB EtherNet/IP server started on %s:%d", self._host, self._port)
+            self._log_debug("system", "server_start",
+                            f"AB service started {self._host}:{self._port}",
+                            detail={"host": self._host, "port": self._port})
+        except Exception as e:
+            self._status = ProtocolStatus.ERROR
+            logger.error("Failed to start AB server: %s", e)
+            raise
+
+    async def stop(self) -> None:
+        try:
+            self._server_running = False
+            if self._server_task:
+                self._server_task.cancel()
+                try:
+                    await self._server_task
+                except asyncio.CancelledError:
+                    logger.debug("AB task cancelled")
+        except Exception as e:
+            logger.warning("AB server stop error: %s", e)
+        finally:
+            self._status = ProtocolStatus.STOPPED
+            logger.info("AB server stopped")
+            self._log_debug("system", "server_stop", "AB service stopped")
+
+    async def _serve(self) -> None:
+        try:
+            server = await asyncio.start_server(
+                self._handle_connection, self._host, self._port
+            )
+            async with server:
+                await server.serve_forever()
+        except asyncio.CancelledError:
+            logger.debug("AB server task cancelled")
+        except Exception as e:
+            logger.error("AB server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_connection(self, reader: asyncio.StreamReader,
+                                  writer: asyncio.StreamWriter) -> None:
+        addr = writer.get_extra_info("peername")
+        logger.debug("AB connection from %s", addr)
+        try:
+            while self._server_running:
+                # FIXED-C04: 先读EIP头24字节获取length，再读剩余数据，避免大报文截断
+                header = await asyncio.wait_for(reader.readexactly(24), timeout=_READ_TIMEOUT)
+                eip_length = struct.unpack("<H", header[2:4])[0]
+                payload = b""
+                if eip_length > 0:
+                    payload = await asyncio.wait_for(reader.readexactly(eip_length), timeout=_READ_TIMEOUT)
+                data = header + payload
+                response = self._process_eip(data)
+                if response:
+                    writer.write(response)
+                    await writer.drain()
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+            logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        finally:
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception as e:
+                logger.debug("Writer wait_closed error: %s", e)
+
+    def _process_eip(self, data: bytes) -> bytes | None:
+        if len(data) < self.EIP_HEADER_SIZE:
+            return None
+
+        command = struct.unpack("<H", data[0:2])[0]
+        struct.unpack("<H", data[2:4])[0]
+        session = struct.unpack("<I", data[4:8])[0]
+        struct.unpack("<I", data[8:12])[0]
+        sender_context = data[12:20]
+
+        if command == 0x0065:
+            return self._handle_register_session(data)
+        elif command == 0x0066:
+            return self._make_eip_response(0x0066, session, b"", sender_context)
+        elif command == 0x006F:
+            return self._handle_send_rr_data(data, sender_context)
+        elif command == 0x0070:
+            return self._handle_send_unit_data(data, sender_context)
+        elif command == 0x0001:
+            return self._handle_list_identity(data, session, sender_context)
+
+        return self._make_eip_error(command, session, 0x01, sender_context)
+
+    def _handle_list_identity(self, data: bytes, session: int,
+                              sender_context: bytes = bytes(8)) -> bytes:
+        config = getattr(self, '_start_config', {})
+        host = config.get("host", self._host)
+        port = config.get("port", self._port)
+        try:
+            ip_parts = [int(x) for x in host.split(".")]
+            ip_bytes = bytes(ip_parts) if len(ip_parts) == 4 else b"\x00\x00\x00\x00"
+        except (ValueError, AttributeError):
+            ip_bytes = b"\x00\x00\x00\x00"
+        identity = bytearray()
+        identity += struct.pack("<I", 0x00000001)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x008E)
+        identity += struct.pack("<H", 0x0001)
+        identity += struct.pack("<H", port)
+        identity += ip_bytes
+        identity += bytes([0x01, 0x00])
+        identity += struct.pack("<I", 0x00000000)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x0000)
+        identity += struct.pack("<H", 0x0000)
+        device_name = config.get("device_name", "ProtoForge-AB").encode("utf-8")
+        identity += struct.pack("<B", len(device_name))
+        identity += device_name
+        # Bug 3 fix: 添加Item封装层 (Item Count + Item Type + Item Length)
+        item_payload = bytearray()
+        item_payload += struct.pack("<H", 0x0001)              # Item Count = 1
+        item_payload += struct.pack("<H", 0x000C)              # Item Type = List Identity Item
+        item_payload += struct.pack("<H", len(identity))       # Item Length
+        item_payload += identity
+        return self._make_eip_response(0x0001, session, bytes(item_payload), sender_context)
+
+    def _make_eip_response(self, command: int, session: int, payload: bytes,
+                           sender_context: bytes = bytes(8)) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", command)
+        resp += struct.pack("<H", len(payload))
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += sender_context
+        resp += struct.pack("<I", 0x00000000)
+        resp += payload
+        return bytes(resp)
+
+    def _handle_register_session(self, data: bytes) -> bytes:
+        sender_context = data[12:20] if len(data) >= 20 else bytes(8)
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0065)
+        resp += struct.pack("<H", 0x0004)
+        new_session = self._session_handle
+        self._session_handle = (self._session_handle + 1) & 0xFFFFFFFF  # FIXED-M06: 防止溢出为负数
+        resp += struct.pack("<I", new_session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += sender_context
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<H", 0x0001)
+        resp += struct.pack("<H", 0x0000)
+        return bytes(resp)
+
+    def _handle_send_rr_data(self, data: bytes,
+                             sender_context: bytes = bytes(8)) -> bytes:
+        if len(data) < self.EIP_HEADER_SIZE + 6:
+            return self._make_eip_error(0x006F, struct.unpack("<I", data[4:8])[0], 0x01,
+                                        sender_context)
+
+        session = struct.unpack("<I", data[4:8])[0]
+
+        cip_offset = 30
+        if len(data) <= cip_offset + 2:
+            return self._make_eip_error(0x006F, session, 0x01, sender_context)
+
+        cip_service = data[cip_offset]
+        cip_data = data[cip_offset:]
+
+        if cip_service == 0x0E:
+            return self._handle_cip_forward_open(session, cip_data, sender_context)
+        elif cip_service == 0x4C:
+            return self._handle_cip_forward_close(session, cip_data, sender_context)
+        elif cip_service == 0x52:
+            return self._handle_cip_read_tag(session, cip_data, sender_context)
+        elif cip_service == 0x4D:
+            return self._handle_cip_write_tag(session, cip_data, sender_context)
+
+        return self._make_cip_error_response(session, cip_service, 0x01, sender_context)
+
+    def _handle_send_unit_data(self, data: bytes,
+                               sender_context: bytes = bytes(8)) -> bytes:
+        session = struct.unpack("<I", data[4:8])[0]
+        if len(data) < 40:
+            return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+        struct.unpack("<B", data[14:15])[0] if len(data) > 14 else 10
+        item_count = struct.unpack("<H", data[16:18])[0] if len(data) > 17 else 0
+        if item_count < 2:
+            return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+        t_o_conn_id = struct.unpack("<I", data[22:26])[0] if len(data) >= 26 else 0
+        seq_num = struct.unpack("<H", data[30:32])[0] if len(data) >= 32 else 0
+        cip_data = data[34:] if len(data) > 34 else b""
+        if len(cip_data) > 2:
+            service = cip_data[0]
+            if service == 0x4C:
+                cip_resp = self._handle_cip_read_tag(session, cip_data, sender_context)
+            elif service == 0x4D:
+                cip_resp = self._handle_cip_write_tag(session, cip_data, sender_context)
+            else:
+                return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+            return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
+                                                 sender_context)
+        return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+
+    def _wrap_unit_data_response(self, session: int, conn_id: int, seq_num: int,
+                                 cip_resp: bytes,
+                                 sender_context: bytes = bytes(8)) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", 0x0070)
+        resp += struct.pack("<H", 0)
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += sender_context
+        resp += struct.pack("<I", 0x00000000)
+        items = bytearray()
+        items += struct.pack("<H", 2)
+        items += struct.pack("<H", 0x00B1)
+        items += struct.pack("<H", 4)
+        items += struct.pack("<I", conn_id)
+        items += struct.pack("<H", 0x00B1)
+        items += struct.pack("<H", 2 + len(cip_resp))
+        items += struct.pack("<H", seq_num)
+        items += cip_resp
+        resp += items
+        resp[2:4] = struct.pack("<H", len(resp) - 24)
+        return bytes(resp)
+
+    def _handle_cip_forward_open(self, session: int, cip_data: bytes,
+                                 sender_context: bytes = bytes(8)) -> bytes:
+        o_t_rpi = struct.unpack("<I", cip_data[6:10])[0] if len(cip_data) >= 10 else 0x00010000
+        t_o_rpi = struct.unpack("<I", cip_data[10:14])[0] if len(cip_data) >= 14 else 0x00010000
+        o_t_params = struct.unpack("<H", cip_data[14:16])[0] if len(cip_data) >= 16 else 0x4302
+        t_o_params = struct.unpack("<H", cip_data[16:18])[0] if len(cip_data) >= 18 else 0x4302
+        conn_serial = struct.unpack("<H", cip_data[18:20])[0] if len(cip_data) >= 20 else 0x0001
+        vendor_id = struct.unpack("<H", cip_data[20:22])[0] if len(cip_data) >= 22 else 0x0001
+        orig_serial = struct.unpack("<I", cip_data[22:26])[0] if len(cip_data) >= 26 else 0x00000001
+        cip_resp = bytearray()
+        cip_resp += bytes([0xD6, 0x00])
+        cip_resp += bytes([0x00, 0x00])
+        cip_resp += struct.pack("<I", 0x00000001)
+        cip_resp += struct.pack("<I", 0x00000002)
+        cip_resp += struct.pack("<H", conn_serial)
+        cip_resp += struct.pack("<H", vendor_id)
+        cip_resp += struct.pack("<I", orig_serial)
+        cip_resp += struct.pack("<I", o_t_rpi)
+        cip_resp += struct.pack("<I", t_o_rpi)
+        cip_resp += struct.pack("<H", o_t_params)
+        cip_resp += struct.pack("<H", t_o_params)
+        cip_resp += bytes([0xA3])
+        return self._wrap_cip_response(session, cip_resp, sender_context)
+
+    def _handle_cip_forward_close(self, session: int, cip_data: bytes,
+                                  sender_context: bytes = bytes(8)) -> bytes:
+        cip_resp = bytearray()
+        cip_resp += bytes([0xCE])
+        cip_resp += bytes([0x00, 0x00])
+        return self._wrap_cip_response(session, cip_resp, sender_context)
+
+    @staticmethod
+    def _pack_cip_value(data_type: str, value: Any) -> bytes:
+        type_info = _CIP_TYPE_MAP.get(data_type, (0xC1, 4))
+        type_code, size = type_info
+        try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0
+            if data_type == "bool":
+                return bytes([type_code, 0x00, 0x01, 0x00, 0x01 if value else 0x00])
+            elif data_type == "string":
+                s = str(value).encode("utf-8")
+                return struct.pack("<BH", type_code, len(s)) + s + b"\x00"
+            elif data_type in ("int16",):
+                return struct.pack("<BHh", type_code, size, int(value))
+            elif data_type in ("uint16",):
+                return struct.pack("<BHH", type_code, size, int(value))
+            elif data_type in ("int32",):
+                return struct.pack("<BHi", type_code, size, int(value))
+            elif data_type in ("uint32",):
+                return struct.pack("<BHI", type_code, size, int(value))
+            elif data_type in ("float32",):
+                return struct.pack("<BHf", type_code, size, float(value))
+            elif data_type in ("float64",):
+                return struct.pack("<BHd", type_code, size, float(value))
+            else:
+                return struct.pack("<BHi", type_code, 4, int(value))
+        except (ValueError, TypeError):
+            return struct.pack("<BHi", type_code, 4, 0)
+
+    def _parse_cip_tag_path(self, cip_data: bytes) -> str:
+        tag_parts = []
+        offset = 2
+        while offset < len(cip_data):
+            segment_type = cip_data[offset]
+            if segment_type == 0x91:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                tag_len = cip_data[offset]
+                offset += 1
+                if offset + tag_len > len(cip_data):
+                    break
+                tag_name = cip_data[offset:offset + tag_len].decode("ascii", errors="replace").rstrip("\x00")
+                tag_parts.append(tag_name)
+                offset += tag_len
+                if tag_len % 2 != 0:
+                    offset += 1
+            elif segment_type == 0x28:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                member_id = cip_data[offset]
+                offset += 1
+                if tag_parts:
+                    tag_parts[-1] = f"{tag_parts[-1]}.{member_id}"
+            elif segment_type == 0x00:
+                offset += 1
+            else:
+                offset += 1
+        return ".".join(tag_parts) if tag_parts else ""
+
+    def _get_path_end_offset(self, cip_data: bytes) -> int:
+        offset = 2
+        while offset < len(cip_data):
+            segment_type = cip_data[offset]
+            if segment_type == 0x91:
+                offset += 1
+                if offset >= len(cip_data):
+                    break
+                tag_len = cip_data[offset]
+                offset += 1 + tag_len
+                if tag_len % 2 != 0:
+                    offset += 1
+            elif segment_type == 0x28:
+                offset += 2
+            elif segment_type == 0x00:
+                offset += 1
+            else:
+                offset += 1
+        return offset
+
+    def _handle_cip_read_tag(self, session: int, cip_data: bytes,
+                             sender_context: bytes = bytes(8)) -> bytes:
+        tag_value = 0
+        data_type = "int32"
+        behavior = self._behaviors.get(self._default_device_id)
+        tag_name = self._parse_cip_tag_path(cip_data)
+        if tag_name and behavior:
+            # Bug 6 fix: 检查tag是否存在，不存在时返回CIP错误(0x04=路径段错误)
+            if tag_name not in behavior._tags and tag_name not in behavior._data_types:
+                return self._make_cip_error_response(session, 0x52, 0x04, sender_context)
+            tag_value = behavior.get_tag(tag_name)
+            if tag_value is None:
+                tag_value = behavior.get_value(tag_name)
+            data_type = behavior.get_data_type(tag_name)
+        elif not tag_name:
+            if behavior and behavior._values:
+                data_type = "dint"
+                tag_value = 0
+
+        cip_resp = bytearray()
+        cip_resp += bytes([0xD2])
+        cip_resp += bytes([0x00, 0x00])
+        cip_resp += self._pack_cip_value(data_type, tag_value)
+        return self._wrap_cip_response(session, cip_resp, sender_context)
+
+    def _handle_cip_write_tag(self, session: int, cip_data: bytes,
+                              sender_context: bytes = bytes(8)) -> bytes:
+        tag_name = self._parse_cip_tag_path(cip_data)
+        behavior = self._behaviors.get(self._default_device_id)
+        if tag_name and behavior:
+            path_end = self._get_path_end_offset(cip_data)
+            if path_end < 0 or path_end + 3 > len(cip_data):  # FIXED-N07: 路径偏移校验，至少需要3字节(type+size)
+                cip_resp = bytearray()
+                cip_resp += bytes([0xCD])
+                cip_resp += bytes([0x04, 0x00])  # Path destination unknown
+                return self._wrap_cip_response(session, cip_resp, sender_context)
+            if path_end < len(cip_data):
+                type_code = cip_data[path_end]
+                # 根据type_code确定跳过字节数：bool=4(type+0x00+0x01+0x00), string/其他=3(type+size_word)
+                skip = 4 if type_code == 0xC1 else 3  # bool=4, string/other=3
+                if path_end + skip <= len(cip_data):
+                    data_type = behavior.get_tag_type(tag_name)
+                    value_data = cip_data[path_end + skip:]
+                    write_value = self._unpack_cip_value(data_type, value_data)
+                    behavior.set_tag(tag_name, write_value)
+                    self._log_debug("recv", "cip_write",
+                                    f"Write tag {tag_name}={write_value}",
+                                    detail={"tag": tag_name, "value": write_value})
+
+        cip_resp = bytearray()
+        cip_resp += bytes([0xCD])
+        if not (tag_name and behavior):  # FIXED-L03: tag不存在或behavior为None时返回CIP错误码0x04(Path destination unknown)
+            cip_resp += bytes([0x04, 0x00])
+        else:
+            cip_resp += bytes([0x00, 0x00])
+        return self._wrap_cip_response(session, cip_resp, sender_context)
+
+    @staticmethod
+    def _unpack_cip_value(data_type: str, data: bytes) -> Any:
+        try:
+            if data_type == "bool" and len(data) >= 5:
+                return bool(data[4])
+            elif data_type == "bool" and len(data) >= 1:
+                return bool(data[0])
+            elif data_type == "int16" and len(data) >= 2:
+                return struct.unpack("<h", data[:2])[0]
+            elif data_type == "uint16" and len(data) >= 2:
+                return struct.unpack("<H", data[:2])[0]
+            elif data_type == "int32" and len(data) >= 4:
+                return struct.unpack("<i", data[:4])[0]
+            elif data_type == "uint32" and len(data) >= 4:
+                return struct.unpack("<I", data[:4])[0]
+            elif data_type == "float32" and len(data) >= 4:
+                return struct.unpack("<f", data[:4])[0]
+            elif data_type == "float64" and len(data) >= 8:
+                return struct.unpack("<d", data[:8])[0]
+            elif len(data) >= 4:
+                return struct.unpack("<i", data[:4])[0]
+        except (struct.error, IndexError) as e:
+            logger.warning("AB CIP value unpack error: %s", e)
+        return 0
+
+    def _wrap_cip_response(self, session: int, cip_data: bytes,
+                           sender_context: bytes = bytes(8)) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", 0x006F)
+        resp += struct.pack("<H", len(cip_data) + 22)
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", 0x00000000)
+        resp += sender_context
+        resp += struct.pack("<I", 0x00000000)
+        resp += struct.pack("<I", 0x00000000)          # Interface Handle: 4 bytes
+        resp += struct.pack("<H", 0x0000)              # Timeout: 2 bytes
+        resp += struct.pack("<H", 0x0002)              # Item Count: 2 bytes
+        resp += struct.pack("<H", 0x0000)              # Item1 Type (Null Address): 2 bytes
+        resp += struct.pack("<H", 0x0004)              # Item1 Length: 2 bytes
+        resp += struct.pack("<I", 0x00000000)          # Item1 Data: 4 bytes
+        resp += struct.pack("<H", 0x00B2)              # Item2 Type (Unconnected Data): 2 bytes
+        resp += struct.pack("<H", len(cip_data) + 2)   # Item2 Length: 2 bytes
+        resp += struct.pack("<H", 0x0000)              # Item2 Data prefix: 2 bytes
+        resp += cip_data
+        return bytes(resp)
+
+    def _make_cip_error_response(self, session: int, service: int, error: int,
+                                 sender_context: bytes = bytes(8)) -> bytes:
+        cip_resp = bytearray()
+        cip_resp += bytes([(service | 0x80) & 0xFF])
+        cip_resp += bytes([0x00])
+        cip_resp += struct.pack("<I", 0x00000000)
+        cip_resp += bytes([error])
+        return self._wrap_cip_response(session, cip_resp, sender_context)
+
+    def _make_eip_error(self, command: int, session: int, status: int,
+                        sender_context: bytes = bytes(8)) -> bytes:
+        resp = bytearray()
+        resp += struct.pack("<H", command)
+        resp += struct.pack("<H", 0x0000)
+        resp += struct.pack("<I", session)
+        resp += struct.pack("<I", status)
+        resp += sender_context
+        resp += struct.pack("<I", 0x00000000)
+        return bytes(resp)
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        behavior = AbDeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_slots[device_config.id] = proto_config.get("slot", 0)  # FIXED-P1: 移入_behaviors_lock内保护
+        await self._update_default_device_async(device_config.id)
+
+        logger.info("AB device created: %s (slot=%d)",
+                     device_config.id, self._device_slots[device_config.id])
+        self._log_debug("system", "device_create",
+                        f"AB device created: {device_config.name}",
+                        device_id=device_config.id)
+        return device_config.id
+
+    async def remove_device(self, device_id: str) -> None:
+        async with self._behaviors_lock:
+            self._behaviors.pop(device_id, None)
+            self._device_configs.pop(device_id, None)  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
+            self._device_slots.pop(device_id, None)  # FIXED-P1: 移入_behaviors_lock内保护
+        await self._clear_default_device_async(device_id)
+        logger.info("AB device removed: %s", device_id)
+        self._log_debug("system", "device_remove",
+                        f"AB device removed: {device_id}",
+                        device_id=device_id)
+
+    async def read_points(self, device_id: str) -> list[PointValue]:
+        behavior = self._behaviors.get(device_id)
+        config = self._device_configs.get(device_id)
+        if not behavior or not config:
+            return []
+        now = time.time()
+        return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return False
+        return behavior.on_write(point_name, value)
+
+    def get_config_schema(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "EtherNet/IP server listen address")},
+                "port": {"type": "integer", "default": 44818, "description": desc("ab_port", "EtherNet/IP port (default 44818)")},
+            },
+        }

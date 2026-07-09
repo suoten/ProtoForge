@@ -1,0 +1,84 @@
+{
+    "id": "s7_s7_1200",
+    "name": "西门子S7-1200 PLC",
+    "protocol": "s7",
+    "description": "西门子S7-1200 PLC仿真，支持DB块读写",
+    "manufacturer": "Siemens",
+    "model": "S7-1214C",
+    "points": [
+        {
+            "name": "run_status",
+            "address": "DB1.DBX0.0",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "cpu_load",
+            "address": "DB1.DBW2",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "CPU负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10,
+            "max_value": 70
+        },
+        {
+            "name": "temperature",
+            "address": "DB1.DBD4",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "模块温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 25.0,
+            "max_value": 55.0
+        },
+        {
+            "name": "speed_setpoint",
+            "address": "DB1.DBD8",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "速度设定",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 1500.0
+        },
+        {
+            "name": "actual_speed",
+            "address": "DB1.DBD12",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "实际速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 1450,
+            "max_value": 1550
+        },
+        {
+            "name": "pressure",
+            "address": "DB1.DBD16",
+            "data_type": "float32",
+            "unit": "bar",
+            "description": "系统压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 3.0,
+            "max_value": 8.0
+        }
+    ],
+    "protocol_config": {
+        "rack": 0,
+        "slot": 1
+    },
+    "tags": [
+        "PLC",
+        "西门子",
+        "Siemens",
+        "S7-1200",
+        "工业控制"
+    ]
+}

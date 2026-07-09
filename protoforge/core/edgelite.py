@@ -291,13 +291,9 @@ def _get_local_ips() -> set[str]:
 def _get_protocol_status(protocol: str) -> str:
     """Get the running status of a protocol server. Returns 'running', 'stopped', or 'unknown'."""
     try:
-        from protoforge.main import get_engine
-        from protoforge.protocols.base import ProtocolStatus
+        from protoforge.core.registry import get_engine
         engine = get_engine()
-        server = engine._protocol_servers.get(protocol)
-        if server is None:
-            return "stopped"
-        return "running" if server.status == ProtocolStatus.RUNNING else "stopped"
+        return "running" if engine.is_protocol_running(protocol) else "stopped"
     except Exception:
         return "unknown"
 
@@ -333,7 +329,7 @@ def _format_driver_config_for_display(config: dict[str, Any]) -> str:
 def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) -> int | None:
     # 1. 优先从运行中的协议服务器获取实际端口（端口可能因占用而自动切换）
     try:
-        from protoforge.main import get_engine
+        from protoforge.core.registry import get_engine
         engine = get_engine()
         running_port = engine.get_protocol_running_port(protocol)
         if running_port is not None:
@@ -1042,7 +1038,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
         DeprecationWarning, stacklevel=2,
     )
     try:
-        from protoforge.main import get_integration_manager
+        from protoforge.core.registry import get_integration_manager
         mgr = get_integration_manager()
         return await mgr.get_device_status(device)
     except RuntimeError as e:
@@ -1408,7 +1404,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             device_protocol = getattr(device, "protocol", "") or ""
             protoforge_running = False
             try:
-                from protoforge.main import get_engine
+                from protoforge.core.registry import get_engine
                 engine = get_engine()
                 protoforge_running = engine.is_protocol_running(device_protocol)
             except Exception as e:

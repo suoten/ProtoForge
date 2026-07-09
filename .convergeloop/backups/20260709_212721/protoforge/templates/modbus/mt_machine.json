@@ -1,0 +1,126 @@
+{
+    "id": "modbus_mt_machine",
+    "name": "MT数控机床",
+    "protocol": "modbus_tcp",
+    "description": "MT系列数控机床控制器，支持Modbus TCP，可监控主轴转速、进给速度、刀具状态等",
+    "manufacturer": "MT",
+    "model": "MT-500CNC",
+    "points": [
+        {
+            "name": "spindle_speed",
+            "address": "0",
+            "data_type": "uint16",
+            "unit": "RPM",
+            "description": "主轴转速",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 8000
+        },
+        {
+            "name": "feed_rate",
+            "address": "1",
+            "data_type": "float32",
+            "unit": "mm/min",
+            "description": "进给速度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.0,
+            "max_value": 5000.0
+        },
+        {
+            "name": "tool_number",
+            "address": "3",
+            "data_type": "uint16",
+            "description": "当前刀具号",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "coolant_on",
+            "address": "4",
+            "data_type": "bool",
+            "description": "冷却液开关",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "machine_state",
+            "address": "5",
+            "data_type": "uint16",
+            "description": "机床状态(0=空闲 1=运行 2=暂停 3=报警)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 1
+        },
+        {
+            "name": "spindle_load",
+            "address": "6",
+            "data_type": "uint16",
+            "unit": "%",
+            "description": "主轴负载",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 5,
+            "max_value": 95
+        },
+        {
+            "name": "x_position",
+            "address": "7",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "X轴位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -500.0,
+            "max_value": 500.0
+        },
+        {
+            "name": "y_position",
+            "address": "9",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Y轴位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -300.0,
+            "max_value": 300.0
+        },
+        {
+            "name": "z_position",
+            "address": "11",
+            "data_type": "float32",
+            "unit": "mm",
+            "description": "Z轴位置",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": -400.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "part_count",
+            "address": "13",
+            "data_type": "uint16",
+            "description": "加工件数",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0,
+            "max_value": 9999
+        },
+        {
+            "name": "alarm_code",
+            "address": "14",
+            "data_type": "uint16",
+            "description": "报警代码(0=无报警)",
+            "access": "r",
+            "generator_type": "fixed",
+            "fixed_value": 0
+        }
+    ],
+    "protocol_config": {
+        "slave_id": 5
+    },
+    "tags": ["机床", "MT", "数控", "CNC", "加工中心"]
+}

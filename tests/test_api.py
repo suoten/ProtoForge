@@ -15,6 +15,13 @@ from protoforge.protocols.modbus.server import ModbusTcpServer
 from protoforge.protocols.bacnet.server import BACnetServer
 from protoforge.protocols.s7.server import S7Server
 import protoforge.main as main_module
+from protoforge.core.registry import (
+    clear_all as _clear_registry,
+    register_database as _register_database,
+    register_engine as _register_engine,
+    register_log_bus as _register_log_bus,
+    register_template_manager as _register_template_manager,
+)
 
 
 @pytest_asyncio.fixture
@@ -35,6 +42,12 @@ async def client():
     main_module._engine.register_protocol(S7Server())
     await main_module._engine.start()
 
+    # 注册服务到 ServiceRegistry，供子模块通过 registry 获取
+    _register_engine(main_module._engine)
+    _register_database(main_module._database)
+    _register_log_bus(main_module._log_bus)
+    _register_template_manager(main_module._template_manager)
+
     transport = ASGITransport(app=main_module.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -46,6 +59,7 @@ async def client():
     main_module._template_manager = None
     main_module._database = None
     main_module._log_bus = None
+    _clear_registry()
 
 
 @pytest.mark.asyncio

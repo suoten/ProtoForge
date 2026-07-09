@@ -480,6 +480,41 @@ class DeviceInstance:
     def get_point_config(self, point_name: str):  # FIXED-M07: 提供公开方法访问点配置，避免直接访问私有属性
         return self._point_configs.get(point_name)
 
+    def get_point_values_snapshot(self) -> dict[str, Any]:
+        """返回点位值的快照字典（浅拷贝）。
+
+        供引擎 tick 循环和控制回路等内部模块使用，
+        避免直接访问 ``_point_values`` 私有属性。
+
+        :return: 点位名称→值的字典副本
+        """
+        return dict(self._point_values)
+
+    def get_raw_point_value(self, point_name: str) -> Any:
+        """获取点位的原始值（未经故障注入处理）。
+
+        供控制回路读取测量值和设定值使用，
+        避免直接访问 ``_point_values`` 私有属性。
+
+        :param point_name: 点位名称
+        :return: 原始值，点位不存在时返回 ``None``
+        """
+        return self._point_values.get(point_name)
+
+    def set_point_value_internal(self, point_name: str, value: Any) -> None:
+        """直接设置点位值（内部控制回路输出专用）。
+
+        供控制回路管理器在 ``tick()`` 中将控制器输出写回设备使用，
+        避免直接访问 ``_point_values`` 私有属性。
+        此方法不经过状态机检查和写入范围校验，
+        **仅供内部模块使用**，外部写入应通过 ``write_point()``。
+
+        :param point_name: 点位名称
+        :param value: 要设置的值
+        """
+        if point_name in self._point_values:
+            self._point_values[point_name] = value
+
     async def write_point(self, point_name: str, value: Any) -> bool:
         """写入点位值。
 

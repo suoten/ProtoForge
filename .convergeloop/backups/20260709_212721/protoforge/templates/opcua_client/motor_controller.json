@@ -1,0 +1,57 @@
+{
+    "id": "opcua_client_motor",
+    "name": "远程电机控制器",
+    "protocol": "opcua_client",
+    "description": "通过OPC-UA客户端连接远程电机控制器，读取转速/电流/温度并控制启停",
+    "manufacturer": "Generic",
+    "model": "MC-Remote-500",
+    "points": [
+        {
+            "name": "speed",
+            "address": "ns=2;s=Speed",
+            "data_type": "float32",
+            "unit": "RPM",
+            "description": "电机转速",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.0,
+            "max_value": 3000.0
+        },
+        {
+            "name": "current",
+            "address": "ns=2;s=Current",
+            "data_type": "float32",
+            "unit": "A",
+            "description": "电机电流",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.5,
+            "max_value": 15.0
+        },
+        {
+            "name": "temperature",
+            "address": "ns=2;s=Temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "电机温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 30.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "running",
+            "address": "ns=2;s=Running",
+            "data_type": "bool",
+            "description": "运行状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        }
+    ],
+    "protocol_config": {
+        "namespace": "urn:protoforge:simulation",
+        "security_mode": "None"
+    },
+    "tags": ["电机", "远程监控", "OPC-UA客户端"]
+}

@@ -1,0 +1,78 @@
+{
+    "id": "opcua_client_plc",
+    "name": "远程PLC数据采集",
+    "protocol": "opcua_client",
+    "description": "通过OPC-UA客户端连接远程PLC，采集温度、压力、流量等过程数据",
+    "manufacturer": "Generic",
+    "model": "PLC-Remote-300",
+    "points": [
+        {
+            "name": "temperature",
+            "address": "ns=2;s=Temperature",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "过程温度",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 20.0,
+            "max_value": 80.0
+        },
+        {
+            "name": "pressure",
+            "address": "ns=2;s=Pressure",
+            "data_type": "float32",
+            "unit": "MPa",
+            "description": "管道压力",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 0.1,
+            "max_value": 2.0
+        },
+        {
+            "name": "flow_rate",
+            "address": "ns=2;s=FlowRate",
+            "data_type": "float32",
+            "unit": "m³/h",
+            "description": "流量",
+            "access": "r",
+            "generator_type": "random",
+            "min_value": 10.0,
+            "max_value": 100.0
+        },
+        {
+            "name": "level",
+            "address": "ns=2;s=Level",
+            "data_type": "float32",
+            "unit": "m",
+            "description": "液位",
+            "access": "r",
+            "generator_type": "sine",
+            "min_value": 0.5,
+            "max_value": 5.0
+        },
+        {
+            "name": "pump_running",
+            "address": "ns=2;s=PumpRunning",
+            "data_type": "bool",
+            "description": "泵运行状态",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": true
+        },
+        {
+            "name": "setpoint",
+            "address": "ns=2;s=Setpoint",
+            "data_type": "float32",
+            "unit": "°C",
+            "description": "温度设定值",
+            "access": "rw",
+            "generator_type": "fixed",
+            "fixed_value": 50.0
+        }
+    ],
+    "protocol_config": {
+        "namespace": "urn:protoforge:simulation",
+        "security_mode": "None"
+    },
+    "tags": ["PLC", "过程控制", "数据采集", "OPC-UA客户端"]
+}

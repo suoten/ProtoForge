@@ -1,0 +1,996 @@
+"""ProtoForge Python SDK - 物联网协议仿真与测试 SDK"""
+
+import asyncio
+import logging
+import os
+import time
+from typing import Any, cast
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+class ProtoForgeClient:
+    def __init__(self, base_url: str = "", timeout: float = 30.0,
+                 retries: int = 0, retry_delay: float = 1.0):
+        # FIXED: P4 - Q6 写死配置修复，base_url 默认为空，连接时检查
+        if not base_url:
+            base_url = os.environ.get("PROTOFORGE_SDK_URL", "http://localhost:8000")
+        self._base_url = base_url.rstrip("/")
+        self._api_url = f"{self._base_url}/api/v1"
+        self._retries = retries
+        self._retry_delay = retry_delay
+        self._client = httpx.Client(timeout=timeout)
+
+    def close(self) -> None:
+        self._client.close()
+
+    # FIXED: SDK ProtoForgeClient无__del__兜底 — 不使用with语句时连接池不释放
+    def __del__(self) -> None:
+        try:
+            self._client.close()
+        except Exception as e:
+            logger.debug("Failed to close SDK client: %s", e)
+
+    def __enter__(self) -> "ProtoForgeClient":
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        self.close()
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        url = f"{self._api_url}{path}"
+        last_error: Exception | None = None
+        for attempt in range(self._retries + 1):
+            try:
+                resp = self._client.request(method, url, **kwargs)
+                resp.raise_for_status()
+                return resp
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                last_error = e
+                if attempt < self._retries:
+                    time.sleep(self._retry_delay)
+        assert last_error is not None, "unreachable"
+        raise last_error
+
+    def _get(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = self._request("GET", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    def _post(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = self._request("POST", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    def _put(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = self._request("PUT", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    def _delete(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = self._request("DELETE", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    def _unwrap_list(self, path: str, key: str | None = None, **kwargs: Any) -> list[Any]:
+        result = self._get(path, **kwargs)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and key:
+            return cast("list[Any]", result.get(key, []))
+        if isinstance(result, dict):
+            for v in result.values():
+                if isinstance(v, list):
+                    return v
+        return []
+
+    def health(self) -> dict[str, Any]:
+        return cast("dict[str, Any]", self._request("GET", "/health").json())
+
+    def list_protocols(self) -> list[Any]:
+        return self._unwrap_list("/protocols", "protocols")
+
+    def start_protocol(self, name: str, config: dict | None = None) -> dict[str, Any]:
+        # FIXED-P1: config为None时不发送{}，让后端使用默认配置
+        return self._post(f"/protocols/{name}/start", json=config)
+
+    def stop_protocol(self, name: str) -> dict[str, Any]:
+        return self._post(f"/protocols/{name}/stop")
+
+    def list_devices(self, protocol: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if protocol:
+            params["protocol"] = protocol
+        return self._unwrap_list("/devices", "devices", params=params)
+
+    def create_device(self, device_id: str, name: str, protocol: str,
+                      points: list[dict[str, Any]] | None = None,
+                      template_id: str | None = None,
+                      protocol_config: dict[str, Any] | None = None) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "id": device_id,
+            "name": name,
+            "protocol": protocol,
+            "points": points or [],
+        }
+        if template_id:
+            data["template_id"] = template_id
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return self._post("/devices", json=data)
+
+    def quick_create(self, template_id: str, name: str, device_id: str | None = None, protocol_config: dict[str, Any] | None = None) -> dict[str, Any]:
+        # FIXED-P1: 补充protocol_config参数，与Go/C#/Java SDK和前端对齐
+        data: dict[str, Any] = {"template_id": template_id, "name": name, "id": device_id or name}
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return self._post("/devices/quick-create", json=data)
+
+    def start_device(self, device_id: str) -> dict[str, Any]:
+        return self._post(f"/devices/{device_id}/start")
+
+    def stop_device(self, device_id: str) -> dict[str, Any]:
+        return self._post(f"/devices/{device_id}/stop")
+
+    def get_device(self, device_id: str) -> dict[str, Any]:
+        return self._get(f"/devices/{device_id}")
+
+    def delete_device(self, device_id: str) -> dict[str, Any]:
+        return self._delete(f"/devices/{device_id}")
+
+    def read_points(self, device_id: str) -> list[Any]:
+        return self._unwrap_list(f"/devices/{device_id}/points", "points")
+
+    def write_point(self, device_id: str, point_name: str, value: Any) -> dict[str, Any]:
+        return self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
+
+    def batch_create_devices(self, configs: list[dict]) -> dict[str, Any]:
+        return self._post("/devices/batch", json=configs)
+
+    def batch_delete_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端为POST /devices/batch/delete，请求体为{device_ids:[...]}
+        return self._post("/devices/batch/delete", json={"device_ids": device_ids})
+
+    def batch_start_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return self._post("/devices/batch/start", json={"device_ids": device_ids})
+
+    def batch_stop_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return self._post("/devices/batch/stop", json={"device_ids": device_ids})
+
+    def list_templates(self, protocol: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if protocol:
+            params["protocol"] = protocol
+        return self._unwrap_list("/templates", "templates", params=params)
+
+    def get_template(self, template_id: str) -> dict[str, Any]:
+        return self._get(f"/templates/{template_id}")
+
+    def create_template(self, template: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/templates", json=template)
+
+    def search_templates(self, q: str = "", protocol: str | None = None,
+                         tag: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if protocol:
+            params["protocol"] = protocol
+        if tag:
+            params["tag"] = tag
+        return self._unwrap_list("/templates/search", "templates", params=params)
+
+    def list_template_tags(self) -> list[Any]:
+        return self._unwrap_list("/templates/tags", "tags")
+
+    def instantiate_template(self, template_id: str, device_id: str,
+                             device_name: str, protocol_config: dict | None = None) -> dict[str, Any]:
+        params = {"device_id": device_id, "device_name": device_name}
+        body = {"protocol_config": protocol_config} if protocol_config else None
+        return self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
+
+    def list_scenarios(self) -> list[Any]:
+        return self._unwrap_list("/scenarios", "scenarios")
+
+    def create_scenario(self, scenario_id: str, name: str,
+                        description: str = "", devices: list | None = None,
+                        rules: list | None = None) -> dict[str, Any]:
+        data = {
+            "id": scenario_id,
+            "name": name,
+            "description": description,
+            "devices": devices or [],
+            "rules": rules or [],
+        }
+        return self._post("/scenarios", json=data)
+
+    def get_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return self._get(f"/scenarios/{scenario_id}")
+
+    def start_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return self._post(f"/scenarios/{scenario_id}/start")
+
+    def stop_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return self._post(f"/scenarios/{scenario_id}/stop")
+
+    def export_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return self._get(f"/scenarios/{scenario_id}/export")
+
+    def import_scenario(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/scenarios/import", json=config)
+
+    def get_scenario_snapshot(self, scenario_id: str) -> dict[str, Any]:
+        return self._get(f"/scenarios/{scenario_id}/snapshot")
+
+    def get_logs(self, count: int = 100, protocol: str | None = None,
+                 device_id: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {"count": count}
+        if protocol:
+            params["protocol"] = protocol
+        if device_id:
+            params["device_id"] = device_id
+        return self._unwrap_list("/logs", "entries", params=params)
+
+    def create_test_case(self, case_def: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/tests/cases", json=case_def)
+
+    def list_test_cases(self, tag: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if tag:
+            params["tag"] = tag
+        return self._unwrap_list("/tests/cases", "cases", params=params)
+
+    def get_test_case(self, case_id: str) -> dict[str, Any]:
+        return self._get(f"/tests/cases/{case_id}")
+
+    def update_test_case(self, case_id: str, case_def: dict[str, Any]) -> dict[str, Any]:
+        return self._put(f"/tests/cases/{case_id}", json=case_def)
+
+    def delete_test_case(self, case_id: str) -> dict[str, Any]:
+        return self._delete(f"/tests/cases/{case_id}")
+
+    def create_test_suite(self, suite_def: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/tests/suites", json=suite_def)
+
+    def list_test_suites(self) -> list[Any]:
+        return self._unwrap_list("/tests/suites", "suites")
+
+    def get_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return self._get(f"/tests/suites/{suite_id}")
+
+    def delete_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return self._delete(f"/tests/suites/{suite_id}")
+
+    def run_tests(self, test_cases: list[dict]) -> dict[str, Any]:
+        # FIXED-P0: 后端期望dict类型payload，非裸数组
+        return self._post("/tests/run", json={"test_cases": test_cases})
+
+    def run_test_case(self, case_id: str) -> dict[str, Any]:
+        return self._post(f"/tests/run/case/{case_id}")
+
+    def run_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return self._post(f"/tests/run/suite/{suite_id}")
+
+    def list_test_reports(self) -> list[Any]:
+        return self._unwrap_list("/tests/reports", "reports")
+
+    def get_test_report(self, report_id: str) -> dict[str, Any]:
+        return self._get(f"/tests/reports/{report_id}")
+
+    def get_test_report_html(self, report_id: str) -> str:
+        resp = self._request("GET", f"/tests/reports/{report_id}/html")
+        return resp.text
+
+    def get_report_trend(self, count: int = 20) -> list[Any]:
+        return self._unwrap_list("/tests/reports/trend", "trends", params={"count": count})
+
+    def import_edgelite(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    def import_pygbsentry(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/edgelite/pygbsentry", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    def update_device(self, device_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+        current = self._get(f"/devices/{device_id}")
+        config = self._get(f"/devices/{device_id}/config")
+        merged = {**config, **updates}
+        if "points" not in merged and "points" in current:
+            merged["points"] = current["points"]
+        return self._put(f"/devices/{device_id}", json=merged)
+
+    def remove_forward_target(self, name: str) -> dict[str, Any]:
+        return self._delete(f"/forward/targets/{name}")
+
+    def delete_recording(self, recording_id: str) -> dict[str, Any]:
+        return self._delete(f"/recorder/recordings/{recording_id}")
+
+    def replay_recording(self, recording_id: str, speed: float = 1.0) -> dict[str, Any]:
+        return self._post(f"/recorder/recordings/{recording_id}/replay", json={"speed": speed})
+
+    def get_recorder_stats(self) -> dict[str, Any]:
+        return self._get("/recorder/stats")
+
+    def login(self, username: str, password: str) -> dict[str, Any]:
+        resp = self._post("/auth/login", json={"username": username, "password": password})
+        token = resp.get("access_token")
+        if token:
+            self._client.headers["Authorization"] = f"Bearer {token}"
+        return resp
+
+    def refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        return self._post("/auth/refresh", json={"refresh_token": refresh_token})
+
+    def change_password(self, username: str, old_password: str, new_password: str) -> dict[str, Any]:
+        return self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
+
+    def list_forward_targets(self) -> list[Any]:
+        return self._unwrap_list("/forward/targets", "targets")
+
+    def add_forward_target(self, target: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/forward/targets", json=target)
+
+    def start_forward(self) -> dict[str, Any]:
+        return self._post("/forward/start")
+
+    def stop_forward(self) -> dict[str, Any]:
+        return self._post("/forward/stop")
+
+    def get_forward_stats(self) -> dict[str, Any]:
+        return self._get("/forward/stats")
+
+    def start_recording(self, protocol: str | None = None, device_id: str | None = None) -> dict[str, Any]:
+        data = {"name": "SDK Recording"}
+        if protocol:
+            data["protocol"] = protocol
+        if device_id:
+            data["device_id"] = device_id
+        return self._post("/recorder/start", json=data)
+
+    def stop_recording(self) -> dict[str, Any]:
+        return self._post("/recorder/stop")
+
+    def list_recordings(self) -> list[Any]:
+        return self._unwrap_list("/recorder/recordings", "recordings")
+
+    def get_recording(self, recording_id: str) -> dict[str, Any]:
+        return self._get(f"/recorder/recordings/{recording_id}")
+
+    def export_recording(self, recording_id: str) -> dict[str, Any]:
+        return self._get(f"/recorder/recordings/{recording_id}/export")
+
+    def get_settings(self) -> dict[str, Any]:
+        return self._get("/settings")
+
+    def update_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        return self._put("/settings", json=updates)
+
+    def update_scenario(self, scenario_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        return self._put(f"/scenarios/{scenario_id}", json=config)
+
+    def delete_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return self._delete(f"/scenarios/{scenario_id}")
+
+    def get_protocol_config(self, protocol_name: str) -> dict[str, Any]:
+        return self._get(f"/protocols/{protocol_name}/config")
+
+    def get_device_config(self, device_id: str) -> dict[str, Any]:
+        return self._get(f"/devices/{device_id}/config")
+
+    def get_device_connection_guide(self, device_id: str) -> dict[str, Any]:
+        return self._get(f"/devices/{device_id}/connection-guide")
+
+    def quick_test(self, scope: str = "all", target_id: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"scope": scope}
+        if target_id:
+            params["target_id"] = target_id
+        return self._post("/tests/quick-test", params=params)
+
+    def list_webhooks(self) -> list[Any]:
+        return self._unwrap_list("/webhooks", "webhooks")
+
+    def add_webhook(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/webhooks", json=config)
+
+    def delete_webhook(self, webhook_id: str) -> dict[str, Any]:
+        return self._delete(f"/webhooks/{webhook_id}")
+
+    def setup_demo(self) -> dict[str, Any]:
+        return self._post("/setup/demo")
+
+    def get_setup_status(self) -> dict[str, Any]:
+        return self._get("/setup/status")
+
+    def register(self, username: str, password: str) -> dict[str, Any]:
+        # FIXED-P1: 移除后端不接受的role字段，与Go/C#/Java SDK对齐
+        return self._post("/auth/register", json={"username": username, "password": password})
+
+    def list_users(self) -> list[Any]:
+        return self._unwrap_list("/auth/users", "users")
+
+    def admin_reset_password(self, username: str, new_password: str) -> dict[str, Any]:
+        return self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
+
+    def update_user_role(self, username: str, role: str) -> dict[str, Any]:
+        return self._put(f"/auth/users/{username}/role", json={"role": role})
+
+    def admin_unlock_user(self, username: str) -> dict[str, Any]:
+        return self._post(f"/auth/admin/unlock/{username}")
+
+    def delete_user(self, username: str) -> dict[str, Any]:
+        return self._delete(f"/auth/users/{username}")
+
+    def get_protocols_info(self) -> list[Any]:
+        return self._unwrap_list("/protocols/info", "protocols")
+
+    def get_protocol_device_config(self, protocol_name: str) -> dict[str, Any]:
+        return self._get(f"/protocols/{protocol_name}/device-config")
+
+    def clear_logs(self) -> dict[str, Any]:
+        return self._delete("/logs")
+
+    def get_test_suggestions(self) -> list[Any]:
+        return self._unwrap_list("/tests/suggestions", "suggestions")
+
+    def get_test_action_types(self) -> list[Any]:
+        return self._unwrap_list("/tests/action-types", "action_types")
+
+    def get_test_assertion_types(self) -> list[Any]:
+        return self._unwrap_list("/tests/assertion-types", "assertion_types")
+
+    def update_webhook(self, webhook_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        return self._put(f"/webhooks/{webhook_id}", json=config)
+
+    def test_webhook(self, webhook_id: str) -> dict[str, Any]:
+        return self._post(f"/webhooks/{webhook_id}/test")
+
+    def get_webhook_stats(self) -> dict[str, Any]:
+        return self._get("/webhooks/stats")
+
+    def get_integration_status(self) -> dict[str, Any]:
+        return self._get("/integration/status")
+
+    def get_integration_metrics(self) -> dict[str, Any]:
+        return self._get("/integration/metrics")
+
+    def push_device_integration(self, device_id: str) -> dict[str, Any]:
+        return self._post(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
+
+    def batch_push(self, device_ids: list[str]) -> dict[str, Any]:
+        return self._post("/integration/batch-push", json={"device_ids": device_ids})
+
+    def delete_device_from_edgelite(self, device_id: str) -> dict[str, Any]:
+        return self._delete(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
+
+    def start_device_collect(self, device_id: str) -> dict[str, Any]:
+        return self._post(f"/integration/device/{device_id}/start")
+
+    def stop_device_collect(self, device_id: str) -> dict[str, Any]:
+        return self._post(f"/integration/device/{device_id}/stop")
+
+    def get_protocol_mappings(self) -> dict[str, Any]:
+        return self._get("/integration/protocols")
+
+    def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict[str, Any]:
+        # FIXED-P1: 补充protocol/points/driver_config参数，与Go/C#/Java SDK对齐
+        return self._post("/integration/validate", json={"device_id": device_id, "protocol": protocol, "points": points or [], "driver_config": driver_config or {}})
+
+    def test_integration_connection(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if device_id:
+            params["device_id"] = device_id
+        return self._get("/integration/backhaul-data", params=params)
+
+    def get_device_status_cache(self) -> dict[str, Any]:
+        return self._get("/integration/device-status")
+
+    def get_alarm_rules(self) -> list[Any]:
+        return self._unwrap_list("/integration/alarm-rules", "rules")
+
+    def add_alarm_rule(self, rule: dict[str, Any]) -> dict[str, Any]:
+        return self._post("/integration/alarm-rules", json=rule)
+
+    def delete_alarm_rule(self, rule_id: str) -> dict[str, Any]:
+        return self._delete(f"/integration/alarm-rules/{rule_id}")
+
+    def query_audit_log(self, **kwargs: Any) -> dict[str, Any]:
+        return self._get("/audit", params=kwargs)
+
+    def get_audit_stats(self) -> dict[str, Any]:
+        return self._get("/audit/stats")
+
+
+class AsyncProtoForgeClient:
+    def __init__(self, base_url: str = "", timeout: float = 30.0,
+                 retries: int = 0, retry_delay: float = 1.0):
+        # FIXED: P4 - Q6 写死配置修复，base_url 默认为空，连接时检查
+        if not base_url:
+            base_url = os.environ.get("PROTOFORGE_SDK_URL", "http://localhost:8000")
+        self._base_url = base_url.rstrip("/")
+        self._api_url = f"{self._base_url}/api/v1"
+        self._retries = retries
+        self._retry_delay = retry_delay
+        self._client = httpx.AsyncClient(timeout=timeout)
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+    # FIXED: AsyncProtoForgeClient无__del__兜底 — 不使用with语句时连接池不释放
+    def __del__(self) -> None:
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(self._client.aclose())
+            else:
+                loop.run_until_complete(self._client.aclose())
+        except Exception as e:
+            logger.debug("Failed to close async SDK client: %s", e)
+
+    async def __aenter__(self) -> "AsyncProtoForgeClient":
+        return self
+
+    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        await self.close()
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        url = f"{self._api_url}{path}"
+        last_error: Exception | None = None
+        for attempt in range(self._retries + 1):
+            try:
+                resp = await self._client.request(method, url, **kwargs)
+                resp.raise_for_status()
+                return resp
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                last_error = e
+                if attempt < self._retries:
+                    await asyncio.sleep(self._retry_delay)
+        assert last_error is not None, "unreachable"
+        raise last_error
+
+    async def _get(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = await self._request("GET", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    async def _post(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = await self._request("POST", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    async def _put(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = await self._request("PUT", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    async def _delete(self, path: str, **kwargs: Any) -> dict[str, Any]:
+        resp = await self._request("DELETE", path, **kwargs)
+        return cast("dict[str, Any]", resp.json())
+
+    async def _unwrap_list(self, path: str, key: str | None = None, **kwargs: Any) -> list[Any]:
+        result = await self._get(path, **kwargs)
+        if isinstance(result, list):
+            return result
+        if isinstance(result, dict) and key:
+            return cast("list[Any]", result.get(key, []))
+        if isinstance(result, dict):
+            for v in result.values():
+                if isinstance(v, list):
+                    return v
+        return []
+
+    async def health(self) -> dict[str, Any]:
+        resp = await self._request("GET", "/health")
+        return cast("dict[str, Any]", resp.json())
+
+    async def list_protocols(self) -> list[Any]:
+        return await self._unwrap_list("/protocols", "protocols")
+
+    async def list_devices(self, protocol: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if protocol:
+            params["protocol"] = protocol
+        return await self._unwrap_list("/devices", "devices", params=params)
+
+    async def create_device(self, device_id: str, name: str, protocol: str,
+                            points: list[dict[str, Any]] | None = None,
+                            template_id: str | None = None,
+                            protocol_config: dict[str, Any] | None = None) -> dict[str, Any]:
+        data: dict[str, Any] = {"id": device_id, "name": name, "protocol": protocol, "points": points or []}
+        if template_id:
+            data["template_id"] = template_id
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return await self._post("/devices", json=data)
+
+    async def quick_create(self, template_id: str, name: str, device_id: str | None = None, protocol_config: dict[str, Any] | None = None) -> dict[str, Any]:
+        # FIXED-P1: 补充protocol_config参数，与Go/C#/Java SDK和前端对齐
+        data: dict[str, Any] = {"template_id": template_id, "name": name, "id": device_id or name}
+        if protocol_config:
+            data["protocol_config"] = protocol_config
+        return await self._post("/devices/quick-create", json=data)
+
+    async def start_device(self, device_id: str) -> dict[str, Any]:
+        return await self._post(f"/devices/{device_id}/start")
+
+    async def stop_device(self, device_id: str) -> dict[str, Any]:
+        return await self._post(f"/devices/{device_id}/stop")
+
+    async def get_device(self, device_id: str) -> dict[str, Any]:
+        return await self._get(f"/devices/{device_id}")
+
+    async def delete_device(self, device_id: str) -> dict[str, Any]:
+        return await self._delete(f"/devices/{device_id}")
+
+    async def read_points(self, device_id: str) -> list[Any]:
+        return await self._unwrap_list(f"/devices/{device_id}/points", "points")
+
+    async def write_point(self, device_id: str, point_name: str, value: Any) -> dict[str, Any]:
+        return await self._put(f"/devices/{device_id}/points/{point_name}", json={"value": value})
+
+    async def batch_create_devices(self, configs: list[dict]) -> dict[str, Any]:
+        return await self._post("/devices/batch", json=configs)
+
+    async def batch_delete_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端为POST /devices/batch/delete，请求体为{device_ids:[...]}
+        return await self._post("/devices/batch/delete", json={"device_ids": device_ids})
+
+    async def list_templates(self, protocol: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if protocol:
+            params["protocol"] = protocol
+        return await self._unwrap_list("/templates", "templates", params=params)
+
+    async def search_templates(self, q: str = "", protocol: str | None = None,
+                               tag: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if q:
+            params["q"] = q
+        if protocol:
+            params["protocol"] = protocol
+        if tag:
+            params["tag"] = tag
+        return await self._unwrap_list("/templates/search", "templates", params=params)
+
+    async def create_scenario(self, scenario_id: str, name: str,
+                              description: str = "", devices: list | None = None,
+                              rules: list | None = None) -> dict[str, Any]:
+        data = {"id": scenario_id, "name": name, "description": description,
+                "devices": devices or [], "rules": rules or []}
+        return await self._post("/scenarios", json=data)
+
+    async def start_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return await self._post(f"/scenarios/{scenario_id}/start")
+
+    async def stop_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return await self._post(f"/scenarios/{scenario_id}/stop")
+
+    async def get_scenario_snapshot(self, scenario_id: str) -> dict[str, Any]:
+        return await self._get(f"/scenarios/{scenario_id}/snapshot")
+
+    async def get_logs(self, count: int = 100, protocol: str | None = None,
+                       device_id: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {"count": count}
+        if protocol:
+            params["protocol"] = protocol
+        if device_id:
+            params["device_id"] = device_id
+        return await self._unwrap_list("/logs", "entries", params=params)
+
+    async def create_test_case(self, case_def: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/tests/cases", json=case_def)
+
+    async def list_test_cases(self, tag: str | None = None) -> list[Any]:
+        params: dict[str, Any] = {}
+        if tag:
+            params["tag"] = tag
+        return await self._unwrap_list("/tests/cases", "cases", params=params)
+
+    async def run_tests(self, test_cases: list[dict]) -> dict[str, Any]:
+        # FIXED-P0: 后端期望dict类型payload，非裸数组
+        return await self._post("/tests/run", json={"test_cases": test_cases})
+
+    async def run_test_case(self, case_id: str) -> dict[str, Any]:
+        return await self._post(f"/tests/run/case/{case_id}")
+
+    async def run_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return await self._post(f"/tests/run/suite/{suite_id}")
+
+    async def list_test_reports(self) -> list[Any]:
+        return await self._unwrap_list("/tests/reports", "reports")
+
+    async def get_test_report(self, report_id: str) -> dict[str, Any]:
+        return await self._get(f"/tests/reports/{report_id}")
+
+    async def get_test_report_html(self, report_id: str) -> str:
+        resp = await self._request("GET", f"/tests/reports/{report_id}/html")
+        return resp.text
+
+    async def get_report_trend(self, count: int = 20) -> list[Any]:
+        return await self._unwrap_list("/tests/reports/trend", "trends", params={"count": count})
+
+    async def import_edgelite(self, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/edgelite", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    async def import_pygbsentry(self, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/edgelite/pygbsentry", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    async def update_device(self, device_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+        try:
+            current = await self._get(f"/devices/{device_id}")
+        except Exception as e:
+            raise ValueError(f"Device not found: {device_id}") from e
+        try:
+            config = await self._get(f"/devices/{device_id}/config")
+        except Exception as exc:
+            logger.warning("Failed to load device config for %s, using empty config: %s", device_id, exc)
+            config = {}
+        merged = {**config, **updates}
+        if "points" not in merged and "points" in current:
+            merged["points"] = current["points"]
+        return await self._put(f"/devices/{device_id}", json=merged)
+
+    async def remove_forward_target(self, name: str) -> dict[str, Any]:
+        return await self._delete(f"/forward/targets/{name}")
+
+    async def delete_recording(self, recording_id: str) -> dict[str, Any]:
+        return await self._delete(f"/recorder/recordings/{recording_id}")
+
+    async def replay_recording(self, recording_id: str, speed: float = 1.0) -> dict[str, Any]:
+        return await self._post(f"/recorder/recordings/{recording_id}/replay", json={"speed": speed})
+
+    async def get_recorder_stats(self) -> dict[str, Any]:
+        return await self._get("/recorder/stats")
+
+    async def login(self, username: str, password: str) -> dict[str, Any]:
+        resp = await self._post("/auth/login", json={"username": username, "password": password})
+        token = resp.get("access_token")
+        if token:
+            self._client.headers["Authorization"] = f"Bearer {token}"
+        return resp
+
+    async def refresh_token(self, refresh_token: str) -> dict[str, Any]:
+        return await self._post("/auth/refresh", json={"refresh_token": refresh_token})
+
+    async def change_password(self, username: str, old_password: str, new_password: str) -> dict[str, Any]:
+        return await self._post("/auth/change-password", json={"username": username, "old_password": old_password, "new_password": new_password})
+
+    async def start_protocol(self, name: str, config: dict | None = None) -> dict[str, Any]:
+        # FIXED-P1: config为None时不发送{}，让后端使用默认配置
+        return await self._post(f"/protocols/{name}/start", json=config)
+
+    async def stop_protocol(self, name: str) -> dict[str, Any]:
+        return await self._post(f"/protocols/{name}/stop")
+
+    async def batch_start_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return await self._post("/devices/batch/start", json={"device_ids": device_ids})
+
+    async def batch_stop_devices(self, device_ids: list[str]) -> dict[str, Any]:
+        # FIXED-P0: 后端Body(embed=True)要求{device_ids:[...]}格式
+        return await self._post("/devices/batch/stop", json={"device_ids": device_ids})
+
+    async def get_template(self, template_id: str) -> dict[str, Any]:
+        return await self._get(f"/templates/{template_id}")
+
+    async def create_template(self, template: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/templates", json=template)
+
+    async def list_template_tags(self) -> list[Any]:
+        return await self._unwrap_list("/templates/tags", "tags")
+
+    async def instantiate_template(self, template_id: str, device_id: str,
+                                   device_name: str, protocol_config: dict | None = None) -> dict[str, Any]:
+        params = {"device_id": device_id, "device_name": device_name}
+        body = {"protocol_config": protocol_config} if protocol_config else None
+        return await self._post(f"/templates/{template_id}/instantiate", params=params, json=body)
+
+    async def list_scenarios(self) -> list[Any]:
+        return await self._unwrap_list("/scenarios", "scenarios")
+
+    async def get_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return await self._get(f"/scenarios/{scenario_id}")
+
+    async def export_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return await self._get(f"/scenarios/{scenario_id}/export")
+
+    async def import_scenario(self, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/scenarios/import", json=config)
+
+    async def get_test_case(self, case_id: str) -> dict[str, Any]:
+        return await self._get(f"/tests/cases/{case_id}")
+
+    async def update_test_case(self, case_id: str, case_def: dict[str, Any]) -> dict[str, Any]:
+        return await self._put(f"/tests/cases/{case_id}", json=case_def)
+
+    async def delete_test_case(self, case_id: str) -> dict[str, Any]:
+        return await self._delete(f"/tests/cases/{case_id}")
+
+    async def create_test_suite(self, suite_def: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/tests/suites", json=suite_def)
+
+    async def list_test_suites(self) -> list[Any]:
+        return await self._unwrap_list("/tests/suites", "suites")
+
+    async def get_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return await self._get(f"/tests/suites/{suite_id}")
+
+    async def delete_test_suite(self, suite_id: str) -> dict[str, Any]:
+        return await self._delete(f"/tests/suites/{suite_id}")
+
+    async def list_forward_targets(self) -> list[Any]:
+        return await self._unwrap_list("/forward/targets", "targets")
+
+    async def add_forward_target(self, target: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/forward/targets", json=target)
+
+    async def start_forward(self) -> dict[str, Any]:
+        return await self._post("/forward/start")
+
+    async def stop_forward(self) -> dict[str, Any]:
+        return await self._post("/forward/stop")
+
+    async def get_forward_stats(self) -> dict[str, Any]:
+        return await self._get("/forward/stats")
+
+    async def start_recording(self, protocol: str | None = None, device_id: str | None = None) -> dict[str, Any]:
+        data = {"name": "SDK Recording"}
+        if protocol:
+            data["protocol"] = protocol
+        if device_id:
+            data["device_id"] = device_id
+        return await self._post("/recorder/start", json=data)
+
+    async def stop_recording(self) -> dict[str, Any]:
+        return await self._post("/recorder/stop")
+
+    async def list_recordings(self) -> list[Any]:
+        return await self._unwrap_list("/recorder/recordings", "recordings")
+
+    async def get_recording(self, recording_id: str) -> dict[str, Any]:
+        return await self._get(f"/recorder/recordings/{recording_id}")
+
+    async def export_recording(self, recording_id: str) -> dict[str, Any]:
+        return await self._get(f"/recorder/recordings/{recording_id}/export")
+
+    async def get_settings(self) -> dict[str, Any]:
+        return await self._get("/settings")
+
+    async def update_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        return await self._put("/settings", json=updates)
+
+    async def update_scenario(self, scenario_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._put(f"/scenarios/{scenario_id}", json=config)
+
+    async def delete_scenario(self, scenario_id: str) -> dict[str, Any]:
+        return await self._delete(f"/scenarios/{scenario_id}")
+
+    async def get_protocol_config(self, protocol_name: str) -> dict[str, Any]:
+        return await self._get(f"/protocols/{protocol_name}/config")
+
+    async def get_device_config(self, device_id: str) -> dict[str, Any]:
+        return await self._get(f"/devices/{device_id}/config")
+
+    async def get_device_connection_guide(self, device_id: str) -> dict[str, Any]:
+        return await self._get(f"/devices/{device_id}/connection-guide")
+
+    async def quick_test(self, scope: str = "all", target_id: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"scope": scope}
+        if target_id:
+            params["target_id"] = target_id
+        return await self._post("/tests/quick-test", params=params)
+
+    async def list_webhooks(self) -> list[Any]:
+        return await self._unwrap_list("/webhooks", "webhooks")
+
+    async def add_webhook(self, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/webhooks", json=config)
+
+    async def delete_webhook(self, webhook_id: str) -> dict[str, Any]:
+        return await self._delete(f"/webhooks/{webhook_id}")
+
+    async def setup_demo(self) -> dict[str, Any]:
+        return await self._post("/setup/demo")
+
+    async def get_setup_status(self) -> dict[str, Any]:
+        return await self._get("/setup/status")
+
+    async def register(self, username: str, password: str) -> dict[str, Any]:
+        # FIXED-P1: 移除后端不接受的role字段，与Go/C#/Java SDK对齐
+        return await self._post("/auth/register", json={"username": username, "password": password})
+
+    async def list_users(self) -> list[Any]:
+        return await self._unwrap_list("/auth/users", "users")
+
+    async def admin_reset_password(self, username: str, new_password: str) -> dict[str, Any]:
+        return await self._post("/auth/admin/reset-password", json={"username": username, "new_password": new_password})
+
+    async def update_user_role(self, username: str, role: str) -> dict[str, Any]:
+        return await self._put(f"/auth/users/{username}/role", json={"role": role})
+
+    async def admin_unlock_user(self, username: str) -> dict[str, Any]:
+        return await self._post(f"/auth/admin/unlock/{username}")
+
+    async def delete_user(self, username: str) -> dict[str, Any]:
+        return await self._delete(f"/auth/users/{username}")
+
+    async def get_protocols_info(self) -> list[Any]:
+        return await self._unwrap_list("/protocols/info", "protocols")
+
+    async def get_protocol_device_config(self, protocol_name: str) -> dict[str, Any]:
+        return await self._get(f"/protocols/{protocol_name}/device-config")
+
+    async def clear_logs(self) -> dict[str, Any]:
+        return await self._delete("/logs")
+
+    async def get_test_suggestions(self) -> list[Any]:
+        return await self._unwrap_list("/tests/suggestions", "suggestions")
+
+    async def get_test_action_types(self) -> list[Any]:
+        return await self._unwrap_list("/tests/action-types", "action_types")
+
+    async def get_test_assertion_types(self) -> list[Any]:
+        return await self._unwrap_list("/tests/assertion-types", "assertion_types")
+
+    async def update_webhook(self, webhook_id: str, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._put(f"/webhooks/{webhook_id}", json=config)
+
+    async def test_webhook(self, webhook_id: str) -> dict[str, Any]:
+        return await self._post(f"/webhooks/{webhook_id}/test")
+
+    async def get_webhook_stats(self) -> dict[str, Any]:
+        return await self._get("/webhooks/stats")
+
+    async def get_integration_status(self) -> dict[str, Any]:
+        return await self._get("/integration/status")
+
+    async def get_integration_metrics(self) -> dict[str, Any]:
+        return await self._get("/integration/metrics")
+
+    async def push_device_integration(self, device_id: str) -> dict[str, Any]:
+        return await self._post(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
+
+    async def batch_push(self, device_ids: list[str]) -> dict[str, Any]:
+        return await self._post("/integration/batch-push", json={"device_ids": device_ids})
+
+    async def delete_device_from_edgelite(self, device_id: str) -> dict[str, Any]:
+        return await self._delete(f"/edgelite/push/{device_id}")  # FIXED: 路由前缀从/integration改为/edgelite
+
+    async def start_device_collect(self, device_id: str) -> dict[str, Any]:
+        return await self._post(f"/integration/device/{device_id}/start")
+
+    async def stop_device_collect(self, device_id: str) -> dict[str, Any]:
+        return await self._post(f"/integration/device/{device_id}/stop")
+
+    async def get_protocol_mappings(self) -> dict[str, Any]:
+        return await self._get("/integration/protocols")
+
+    async def validate_device_compatibility(self, device_id: str, protocol: str = "", points: list | None = None, driver_config: dict | None = None) -> dict[str, Any]:
+        # FIXED-P1: 补充protocol/points/driver_config参数，与Go/C#/Java SDK对齐
+        return await self._post("/integration/validate", json={"device_id": device_id, "protocol": protocol, "points": points or [], "driver_config": driver_config or {}})
+
+    async def test_integration_connection(self, config: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/edgelite/test", json=config)  # FIXED: 路由前缀从/integration改为/edgelite
+
+    async def get_backhaul_data(self, device_id: str = "", limit: int = 100) -> dict[str, Any]:
+        params: dict[str, Any] = {"limit": limit}
+        if device_id:
+            params["device_id"] = device_id
+        return await self._get("/integration/backhaul-data", params=params)
+
+    async def get_device_status_cache(self) -> dict[str, Any]:
+        return await self._get("/integration/device-status")
+
+    async def get_alarm_rules(self) -> list[Any]:
+        return await self._unwrap_list("/integration/alarm-rules", "rules")
+
+    async def add_alarm_rule(self, rule: dict[str, Any]) -> dict[str, Any]:
+        return await self._post("/integration/alarm-rules", json=rule)
+
+    async def delete_alarm_rule(self, rule_id: str) -> dict[str, Any]:
+        return await self._delete(f"/integration/alarm-rules/{rule_id}")
+
+    async def query_audit_log(self, **kwargs: Any) -> dict[str, Any]:
+        return await self._get("/audit", params=kwargs)
+
+    async def get_audit_stats(self) -> dict[str, Any]:
+        return await self._get("/audit/stats")

@@ -100,6 +100,10 @@ class DeviceStatusCache:
     def clear(self) -> None:
         self._cache.clear()
 
+    def get_all(self) -> dict[str, str]:
+        """返回所有缓存的状态字典（设备ID→状态）。"""
+        return {k: v for k, (v, _) in self._cache.items()}
+
 
 class IntegrationManager:
     """ProtoForge 统一集成管理器 — 与 EdgeLite 联调的唯一入口。
@@ -289,7 +293,7 @@ class IntegrationManager:
             # FIXED-P0: 获取 EdgeLite 支持的协议列表，触发别名适配
             # 之前只在 _connect_websocket 中获取，HTTP 模式下协议列表永远为空，
             # 导致 ProtocolMapper 无法适配 EdgeLite 旧版的 plugin_name 格式
-            if not self._protocol_mapper._edgelite_protocols:
+            if not self._protocol_mapper.edgelite_protocols:
                 await self._fetch_edgelite_protocols_via_http()
             await self._flush_retry_queue()
         except Exception as e:
@@ -395,7 +399,7 @@ class IntegrationManager:
 
         # 无论 WebSocket 是否连接成功，都通过 REST API 获取 EdgeLite 支持的协议列表
         # 这样即使 WebSocket 不可用，推送时也能正确过滤不支持的协议
-        if not self._protocol_mapper._edgelite_protocols:
+        if not self._protocol_mapper.edgelite_protocols:
             await self._fetch_edgelite_protocols_via_http()
 
     async def _on_ws_handshake_ack(self, message: dict[str, Any]) -> None:
@@ -471,7 +475,7 @@ class IntegrationManager:
         if payload is None:
             protocol = getattr(device, "protocol", "") or ""
             logger.warning("push_device skipped: protocol %s not supported by EdgeLite (map=%s, edgelite_protocols=%s)",
-                           protocol, self._protocol_mapper._map.get(protocol), list(self._protocol_mapper._edgelite_protocols)[:10])
+                           protocol, self._protocol_mapper.protocol_map.get(protocol), list(self._protocol_mapper.edgelite_protocols)[:10])
             return {
                 "ok": False, "skipped": True,
                 "reason": "Protocol not supported by EdgeLite",
@@ -1038,7 +1042,7 @@ class IntegrationManager:
             if auto_fix and not protoforge_running:
                 # 自修复：尝试启动协议服务器
                 try:
-                    from protoforge.main import get_engine
+                    from protoforge.core.registry import get_engine
                     engine = get_engine()
                     if engine:
                         # FIX: start_protocol 需要 config 参数，从引擎配置中获取协议端口
@@ -1199,7 +1203,7 @@ class IntegrationManager:
 
         if rule.action == "stop_device":
             try:
-                from protoforge.main import get_engine
+                from protoforge.core.registry import get_engine
                 engine = get_engine()
                 if engine:
                     await engine.stop_device(target_id)
@@ -1208,7 +1212,7 @@ class IntegrationManager:
 
         elif rule.action == "start_device":
             try:
-                from protoforge.main import get_engine
+                from protoforge.core.registry import get_engine
                 engine = get_engine()
                 if engine:
                     await engine.start_device(target_id)
@@ -1342,7 +1346,7 @@ class IntegrationManager:
 
         logger.info("IntegrationManager: auto-pushing DeviceCreatedEvent for %s", event.device_id)
         try:
-            from protoforge.main import get_engine
+            from protoforge.core.registry import get_engine
             engine = get_engine()
             if engine:
                 instance = engine.get_device_instance(event.device_id)
@@ -1419,7 +1423,7 @@ class IntegrationManager:
 
         # 查找所有使用此协议的设备
         try:
-            from protoforge.main import get_engine
+            from protoforge.core.registry import get_engine
             engine = get_engine()
         except RuntimeError:
             return
@@ -1614,7 +1618,7 @@ class IntegrationManager:
         return self._protocol_mapper.get_supported_source_protocols()
 
     def get_device_status_cache(self) -> dict[str, str]:
-        return {k: v for k, (v, _) in self._device_status_cache._cache.items()}
+        return self._device_status_cache.get_all()
 
     async def send_device_control(self, device_id: str, action: str) -> dict[str, Any]:
         """通过 WebSocket 向 EdgeLite 发送设备控制命令。"""

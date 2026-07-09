@@ -1,4 +1,19 @@
-"""PROFINET protocol server implementation."""
+"""PROFINET IO 协议仿真服务器.
+
+本模块实现了 PROFINET IO 实时以太网协议的仿真服务器，
+支持以下功能:
+    - PROFINET IO 设备发现 (DCP)
+    - 实时数据交换 (RT)
+    - 等时同步实时 (IRT)
+    - GSDML 设备描述文件解析
+    - 子模块配置
+    - 周期性数据交换
+
+支持与以下真实主站对接:
+    - Siemens SIMATIC S7
+    - Codesys PROFINET Master
+    - 任何标准 PROFINET IO Controller
+"""
 
 import asyncio
 import logging

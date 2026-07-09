@@ -1,4 +1,19 @@
-"""GB28181 protocol server implementation."""
+"""GB28181 协议仿真服务器.
+
+本模块实现了 GB/T 28181-2016 安全防范视频监控联网系统传输协议的仿真服务器，
+支持以下功能:
+    - SIP 信令 (注册/INVITE/BYE)
+    - RTP/RTCP 媒体流传输
+    - 视频点播与回放
+    - PTZ 控制
+    - 设备目录查询
+    - 报警事件上报
+
+支持与以下真实平台对接:
+    - 海康/大华/宇视 NVR
+    - GB28181 视频监控平台
+    - 任何标准 GB28181 SIP 服务器
+"""
 
 import asyncio
 import logging

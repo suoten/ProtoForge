@@ -359,7 +359,7 @@ class SimulationEngine:
         # FIXED: 删除设备时同时删除数据库记录，保持一致性
         if persist:
             try:
-                from protoforge.main import get_database
+                from protoforge.core.registry import get_database
                 db = get_database()
                 if db is not None:
                     await db.delete_device(device_id)
@@ -790,7 +790,7 @@ class SimulationEngine:
             try:
                 for inst in devices_snapshot:
                     dev_id = inst.id
-                    point_values = dict(inst._point_values.items())
+                    point_values = inst.get_point_values_snapshot()
                     triggers = self._fault_propagation.check_propagation(point_values)
                     for trigger in triggers:
                         from protoforge.core.fault_injection import FaultConfig, FaultType, TriggerMode
