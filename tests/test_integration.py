@@ -61,6 +61,15 @@ def test_edgelite_protocol_mapping():
     assert PROTOCOL_MAP.get("ab") == "allen_bradley"
     assert PROTOCOL_MAP.get("s7") == "siemens_s7"
     assert PROTOCOL_MAP.get("mqtt") == "mqtt_client"
+    # FIXED: previously-mapped-None protocols now map to EdgeLite plugin_names (drivers verified to exist)
+    assert PROTOCOL_MAP.get("bacnet") == "bacnet_ip"
+    assert PROTOCOL_MAP.get("fanuc") == "fanuc_cnc"
+    assert PROTOCOL_MAP.get("mtconnect") == "mtconnect"
+    assert PROTOCOL_MAP.get("toledo") == "toledo"
+    assert PROTOCOL_MAP.get("profinet") == "profinet"
+    assert PROTOCOL_MAP.get("ethercat") == "ethercat"
+    # gb28181 has no EdgeLite driver (industrial gateway, no video stream)
+    assert PROTOCOL_MAP.get("gb28181") is None
     assert DATA_TYPE_MAP["float32"] == "float32"
     assert "float64" in DATA_TYPE_MAP
     assert ACCESS_MODE_MAP["ro"] == "r"

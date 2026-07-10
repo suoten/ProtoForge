@@ -1,0 +1,220 @@
+# ProtoForge + EdgeLite 联合一键部署
+#
+# 同时启动 ProtoForge（工业设备仿真平台）和 EdgeLite（边缘网关），
+# 实现真正的联调环境：ProtoForge 仿真设备 → EdgeLite 连接采集 → 数据北向转发。
+#
+# 端口冲突解决策略：
+#   - ProtoForge 保持原端口（8000/5020/4840/1883/8080/...）
+#   - EdgeLite API → 8081(host) 避让 ProtoForge 8080
+#   - EdgeLite mosquitto → 1884(host) 避让 ProtoForge 1883
+#   - InfluxDB → 8086(host) 无冲突
+#
+# 容器间通信：
+#   - EdgeLite 驱动通过服务名连接 ProtoForge：protoforge:5020 (Modbus)、protoforge:4840 (OPC-UA) 等
+#   - EdgeLite MQTT 通过服务名连接 mosquitto:1883
+#   - EdgeLite InfluxDB 通过服务名连接 influxdb:8086
+#
+# 快速启动：
+#   1. 复制 .env.joint.example 为 .env.joint 并填写密码
+#   2. docker compose -f docker-compose.joint.yml --env-file .env.joint up -d
+#   3. 访问 ProtoForge API: http://localhost:8000
+#   4. 访问 EdgeLite API: http://localhost:8081
+#
+# 联调验证：
+#   1. 在 ProtoForge 创建设备（POST http://localhost:8000/api/v1/devices）
+#   2. 调用 ProtoForge 的 EdgeLite 集成 API 推送设备到 EdgeLite
+#   3. 在 EdgeLite 查看设备数据采集（GET http://localhost:8081/api/v1/devices）
+
+services:
+  # ═══════════════════════════════════════════════════════════════
+  # ProtoForge（工业设备仿真平台）—— 保持原端口
+  # ═══════════════════════════════════════════════════════════════
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: protoforge
+      POSTGRES_USER: protoforge
+      POSTGRES_PASSWORD: ${PROTOFORGE_DB_PASSWORD:?必须在.env.joint中设置PROTOFORGE_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U protoforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - joint-net
+
+  protoforge:
+    build: .
+    command: ["sh", "-c", "alembic upgrade head || :; python -m protoforge.cli run"]
+    ports:
+      - "8000:8000"       # ProtoForge REST API
+      - "5020:5020"       # Modbus TCP
+      - "4840:4840"       # OPC-UA
+      - "1883:1883"       # ProtoForge MQTT 仿真服务
+      - "5060:5060"       # GB28181 SIP
+      - "5060:5060/udp"
+      - "47808:47808/udp" # BACnet
+      - "102:102"         # S7
+      - "8080:8080"       # ProtoForge HTTP 仿真服务
+      - "5000:5000"
+      - "9600:9600"
+      - "44818:44818"
+      - "51340:51340"
+      - "8193:8193"
+      - "7878:7878"
+      - "1701:1701"
+      - "34964:34964"
+      - "34980:34980"
+      - "6000-6999:6000-6999/udp"  # GB28181 RTP
+    environment:
+      PROTOFORGE_DB_PATH: ${PROTOFORGE_DB_PATH:?请在.env.joint中设置PROTOFORGE_DB_PATH}
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env.joint中设置PROTOFORGE_JWT_SECRET}
+      PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env.joint中设置PROTOFORGE_ADMIN_PASSWORD}
+      PROTOFORGE_LOG_LEVEL: info
+      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}
+      PROTOFORGE_GRPC_PORT: "0"
+      # EdgeLite 联调配置：容器间通过服务名通信
+      EDGELITE_URL: http://edgelite:8080
+      EDGELITE_ADMIN_PASSWORD: ${EDGELITE_ADMIN_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - protoforge-data:/app/data
+    restart: unless-stopped
+    networks:
+      - joint-net
+
+  # ═══════════════════════════════════════════════════════════════
+  # EdgeLite（边缘网关）—— 端口避让
+  # ═══════════════════════════════════════════════════════════════
+
+  edgelite:
+    build:
+      context: ${EDGELITE_PATH:-../EdgeLite/EdgeLite-v1.0-Community}
+      dockerfile: docker/Dockerfile
+    container_name: edgelite-gateway
+    ports:
+      - "127.0.0.1:8081:8080"  # EdgeLite API: 8081(host) → 8080(container)，避让 ProtoForge 8080
+    volumes:
+      - edgelite-data:/app/data
+      - edgelite-configs:/app/configs:ro
+      - edgelite-logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - EDGELITE_INFLUXDB__URL=http://influxdb:8086
+      - EDGELITE_INFLUXDB__TOKEN=${INFLUXDB_TOKEN:?INFLUXDB_TOKEN must be set in .env.joint}
+      - EDGELITE_MQTT__BROKER=mosquitto
+      - EDGELITE_MQTT__USERNAME=edgelite
+      - EDGELITE_MQTT__PASSWORD=${MQTT_PASSWORD:?MQTT_PASSWORD must be set in .env.joint}
+      - EDGELITE_SECURITY__SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in .env.joint}
+      - EDGELITE_SERVER__HOST=0.0.0.0
+      - EDGELITE_SERVER__PORT=8080
+      - EDGELITE_SERVER__CORS_ALLOWED_ORIGINS=http://localhost:8080;http://localhost:8081;http://localhost:3000
+      - EDGELITE_ADMIN_PASSWORD=${EDGELITE_ADMIN_PASSWORD:-admin}
+      - EDGELITE_RESET_ADMIN_PASSWORD=${ADMIN_RESET_PASSWORD:-false}
+    depends_on:
+      influxdb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.urlopen('http://localhost:8080/health/live'); exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
+    networks:
+      - joint-net
+
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: edgelite-influxdb
+    ports:
+      - "127.0.0.1:8086:8086"  # 无端口冲突
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME:-edgelite}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD:?INFLUXDB_PASSWORD must be set in .env.joint}
+      - DOCKER_INFLUXDB_INIT_ORG=edgelite
+      - DOCKER_INFLUXDB_INIT_BUCKET=edgelite
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN:?INFLUXDB_TOKEN must be set in .env.joint}
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "1.0"
+    networks:
+      - joint-net
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: edgelite-mosquitto
+    ports:
+      - "127.0.0.1:1884:1883"  # MQTT: 1884(host) → 1883(container)，避让 ProtoForge 1883
+    volumes:
+      - ${EDGELITE_PATH:-../EdgeLite/EdgeLite-v1.0-Community}/docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-config:/mosquitto/config
+    environment:
+      - MQTT_PASSWORD=${MQTT_PASSWORD:?MQTT_PASSWORD must be set in .env.joint}
+    entrypoint: ["/bin/sh", "-c", "if [ ! -f /mosquitto/config/passwd ]; then touch /mosquitto/config/passwd && echo \"$${MQTT_PASSWORD:?MQTT_PASSWORD must be set in .env.joint}\" | mosquitto_passwd /mosquitto/config/passwd edgelite; fi && exec /docker-entrypoint.sh mosquitto -c /mosquitto/config/mosquitto.conf"]
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.25"
+    networks:
+      - joint-net
+
+volumes:
+  postgres-data:
+  protoforge-data:
+  edgelite-data:
+  edgelite-configs:
+  edgelite-logs:
+  influxdb-data:
+  mosquitto-data:
+  mosquitto-config:
+
+networks:
+  joint-net:
+    driver: bridge

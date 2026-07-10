@@ -330,6 +330,90 @@ pip install -e ".[s7]"        # Siemens S7
 
 ***
 
+## 🔗 与第三方系统对接
+
+### ProtoForge 是什么？—— 一句话搞懂
+
+> **ProtoForge 是一台「虚拟设备工厂」。它启动标准协议服务端（Modbus TCP Server、OPC-UA Server、S7 Server……），任何能连接这些协议的软件都能直接对接，不需要任何适配层或特殊 SDK。**
+
+### 对接架构图
+
+```
+                    ┌─────────────────────────────────┐
+                    │        ProtoForge（仿真端）         │
+                    │                                   │
+                    │  Modbus TCP Server  ←─ 端口 5020  │
+                    │  OPC-UA Server      ←─ 端口 4840  │
+                    │  S7 Server          ←─ 端口 102   │
+                    │  MQTT Broker        ←─ 端口 1883  │
+                    │  HTTP Server        ←─ 端口 8080  │
+                    │  GB28181 SIP        ←─ 端口 5060  │
+                    │  ...（17 种协议服务端）              │
+                    └──────────┬──────────────────────┘
+                               │ 标准 TCP/UDP 协议通信
+                               │（和真实设备一模一样）
+          ┌──────────┬─────────┼─────────┬──────────┐
+          ▼          ▼         ▼         ▼          ▼
+     ┌─────────┐ ┌────────┐ ┌───────┐ ┌───────┐ ┌─────────┐
+     │ EdgeLite│ │Kepware │ │Node-RED│ │Ignition│ │ 你的程序 │
+     │  网关   │ │  网关  │ │       │ │ SCADA │ │(pymodbus│
+     │         │ │        │ │       │ │       │ │  等)   │
+     └─────────┘ └────────┘ └───────┘ └───────┘ └─────────┘
+       自动注册      手动配置    手动配置   手动配置    直接连接
+```
+
+### 三种对接方式
+
+| 方式 | 适合场景 | 怎么做 |
+|------|---------|--------|
+| **① 直接连接**（推荐） | 你有自己的采集程序或网关 | ProtoForge 启动协议服务后，你的程序作为客户端连接对应端口即可（如 pymodbus 连 5020） |
+| **② EdgeLite 自动注册** | 你用 EdgeLite 做网关 | 设备配置中填 `edgelite_url`，ProtoForge 自动把设备配置推送到 EdgeLite，免手动配置 |
+| **③ 标准网关手动配置** | 你用 Kepware/Node-RED/Ignition 等第三方网关 | 在网关中手动添加设备，地址填 ProtoForge 的 IP 和端口（如 `127.0.0.1:5020`） |
+
+### 方式 ①：直接连接（最通用）
+
+ProtoForge 启动协议服务后，任何协议客户端都能直接连接。**不需要在 ProtoForge 做任何额外配置。**
+
+```python
+# Python — 用 pymodbus 连接 ProtoForge 的 Modbus TCP 仿真设备
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=5020)
+client.connect()
+result = client.read_holding_registers(address=100, count=2, device_id=1)
+print(f"温度: {result.registers}")
+```
+
+```javascript
+// Node.js — 用 mqtt 库连接 ProtoForge 的 MQTT 仿真设备
+import mqtt from 'mqtt'
+const client = mqtt.connect('mqtt://127.0.0.1:1883')
+client.on('message', (topic, message) => {
+  console.log(`${topic}: ${message.toString()}`)
+})
+client.subscribe('sensor/temperature')
+```
+
+### 方式 ②：EdgeLite 自动注册（便捷）
+
+如果你用 [EdgeLite](https://github.com/suoten/EdgeLiteGateway) 做网关，ProtoForge 可以自动把设备配置推送过去，免去手动在 EdgeLite 中添加设备的步骤。详见下方 [EdgeLite 网关对接](#-edgelite-网关对接) 章节。
+
+### 方式 ③：标准网关手动配置（Kepware / Node-RED / Ignition 等）
+
+以 Kepware 为例：
+
+1. ProtoForge 中启动 Modbus TCP 协议服务（默认端口 5020）
+2. ProtoForge 中创建一台 Modbus 设备（记住 slave_id 和测点地址）
+3. Kepware 中新建一个 Modbus TCP 驱动，IP 填 ProtoForge 所在机器 IP，端口填 5020
+4. Kepware 中新建设备，slave_id 与 ProtoForge 中一致
+5. Kepware 中添加点位，地址与 ProtoForge 中一致
+
+**就是这么简单——ProtoForge 对你的网关来说，和一台真实 PLC 没有任何区别。**
+
+> 💡 **核心理解**：ProtoForge 不是网关，不采集数据，不转发数据。它是「被采集的对象」——一台虚拟设备。你的网关/SCADA/采集程序去连它，就像连真实设备一样。
+
+***
+
 ## 🔗 EdgeLite 网关对接
 
 ProtoForge 支持将模拟设备自动注册到 [EdgeLite](https://github.com/suoten/EdgeLiteGateway) 物联网网关，和 GB28181 填「上级SIP服务器地址」一样的体验：
@@ -348,6 +432,86 @@ EdgeLite：设备 protocol_config 填 edgelite_url → 自动注册到 EdgeLite 
 | `edgelite_password` | 密码            | `admin123`                  |
 
 > 不填就不推送，不影响 ProtoForge 正常使用。详见 [INTEGRATION.md](INTEGRATION.md)。
+
+### 🔌 EdgeLite 联合一键部署（推荐）
+
+不想手动配置两套系统？ProtoForge 提供 `docker-compose.joint.yml`，**一条命令同时启动 ProtoForge + EdgeLite + MQTT + InfluxDB**，开箱即用联调。
+
+#### 第 1 步：准备配置文件
+
+```bash
+# 复制环境变量模板
+cp .env.joint.example .env.joint
+
+# 用编辑器打开 .env.joint，把所有 change_me_* 改成你自己的密码
+# 重点修改这几项：
+#   PROTOFORGE_ADMIN_PASSWORD=你的强密码
+#   PROTOFORGE_JWT_SECRET=至少32位随机字符串
+#   EDGELITE_ADMIN_PASSWORD=你的强密码
+#   SECRET_KEY=至少32位随机字符串
+```
+
+> 💡 JWT 密钥可以用这个命令生成：`python -c "import secrets; print(secrets.token_urlsafe(32))"`
+
+#### 第 2 步：一键启动
+
+```bash
+docker compose -f docker-compose.joint.yml --env-file .env.joint up -d
+```
+
+等待 30 秒让所有服务就绪，然后：
+
+- **ProtoForge 界面**：http://localhost:8000 （用 `.env.joint` 里的 `PROTOFORGE_ADMIN_PASSWORD` 登录）
+- **EdgeLite 界面**：http://localhost:8081 （用 `.env.joint` 里的 `EDGELITE_ADMIN_PASSWORD` 登录）
+
+#### 第 3 步：验证联调
+
+1. 打开 ProtoForge（http://localhost:8000），创建一台 Modbus 设备，在协议配置中填写：
+   ```
+   edgelite_url: http://edgelite:8100
+   edgelite_username: admin
+   edgelite_password: （你在 .env.joint 里设的 EDGELITE_ADMIN_PASSWORD）
+   ```
+2. 启动设备的 Modbus 协议，ProtoForge 会自动把设备推送到 EdgeLite
+3. 打开 EdgeLite（http://localhost:8081），在设备列表中能看到刚推送的设备，数据实时采集
+
+> 🔍 也可以调用 ProtoForge 的 API 一键验证全链路：
+> ```bash
+> curl -X POST http://localhost:8000/api/v1/edgelite/verify-pipeline \
+>   -H "Authorization: Bearer <你的token>" \
+>   -H "Content-Type: application/json" \
+>   -d '{"device_id": "你的设备ID", "auto_fix": true}'
+> ```
+> 返回 `{"ok": true}` 说明认证→注册→连接→采集四步全通。
+
+#### 📋 端口映射表
+
+联合部署后，以下端口被占用（如需修改请在 `.env.joint` 中调整）：
+
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| ProtoForge Web/API | 8000 | 主界面 + REST API |
+| ProtoForge Modbus TCP | 5020 | Modbus 仿真设备 |
+| ProtoForge OPC-UA | 4840 | OPC-UA 仿真设备 |
+| ProtoForge MQTT | 1883 | MQTT 仿真设备 |
+| ProtoForge HTTP | 8080 | HTTP Webhook 仿真 |
+| EdgeLite Web/API | 8081 | EdgeLite 管理界面（避让 ProtoForge 8080） |
+| EdgeLite MQTT | 1884 | EdgeLite MQTT 服务（避让 ProtoForge 1883） |
+| InfluxDB | 8086 | 时序数据库 |
+
+#### 🛠 故障排查 FAQ
+
+**Q: 启动时报端口占用？**
+A: 检查本机是否已有其他服务占用上述端口。Windows 用 `netstat -ano | findstr :8000`，Linux 用 `lsof -i:8000`。可在 `.env.joint` 中修改端口映射。
+
+**Q: EdgeLite 设备列表里看不到推送的设备？**
+A: ① 确认设备协议配置里的 `edgelite_url` 填的是 `http://edgelite:8100`（容器内网名），不是 `localhost`；② 在 ProtoForge 调用 `verify-pipeline` API 看具体哪一步失败；③ 查看 EdgeLite 日志 `docker compose -f docker-compose.joint.yml logs edgelite`。
+
+**Q: 联调 API 返回 401？**
+A: EdgeLite 密码不匹配。确认设备配置里的 `edgelite_password` 与 `.env.joint` 中的 `EDGELITE_ADMIN_PASSWORD` 一致。首次登录 EdgeLite 可能要求改密码，改完后同步更新 ProtoForge 设备配置。
+
+**Q: 停止联合部署？**
+A: `docker compose -f docker-compose.joint.yml down`（加 `-v` 会同时删除数据卷，谨慎使用）。
 
 ***
 
@@ -561,30 +725,60 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 
 ## 🎬 场景规则引擎
 
-4 种规则类型 × 4 种动作，支持冷却机制和 Webhook 联动。
+5 种规则类型 × 5 种动作，支持冷却机制、多设备协同链式联动和时间序列回放。
 
 **规则类型**：
 
-| 类型             | 说明                  | 配置示例                                                               |
-| -------------- | ------------------- | ------------------------------------------------------------------ |
-| `threshold`    | 阈值规则（支持 AND/OR 多条件） | `{"conditions": [{"operator": ">", "value": 80}], "logic": "and"}` |
-| `value_change` | 值变化规则（支持 delta 阈值）  | `{"delta": 10}`                                                    |
-| `timer`        | 定时规则                | `{"interval": 60}`                                                 |
-| `script`       | 脚本规则（安全沙箱）          | `{"expression": "value > 80 and value < 120"}`                     |
+| 类型              | 说明                   | 配置示例                                                               |
+| --------------- | -------------------- | ------------------------------------------------------------------ |
+| `threshold`     | 阈值规则（支持 AND/OR 多条件）  | `{"conditions": [{"operator": ">", "value": 80}], "logic": "and"}` |
+| `value_change`  | 值变化规则（支持 delta 阈值）   | `{"delta": 10}`                                                    |
+| `timer`         | 定时规则                 | `{"interval": 60}`                                                 |
+| `script`        | 脚本规则（安全沙箱）           | `{"expression": "value > 80 and value < 120"}`                     |
+| `collaboration` | 多设备协同联动（链式动作 + 故障注入） | 见下方协同联动示例                                                          |
 
 **规则动作**：
 
-| 动作          | 说明      |
-| ----------- | ------- |
-| `set`       | 设定目标测点值 |
-| `toggle`    | 切换布尔值   |
-| `increment` | 递增      |
-| `decrement` | 递减      |
+| 动作              | 说明                  |
+| --------------- | ------------------- |
+| `set`           | 设定目标测点值             |
+| `toggle`        | 切换布尔值               |
+| `increment`     | 递增                  |
+| `decrement`     | 递减                  |
+| `inject_fault`  | 注入故障（传感器噪声/漂移/卡死等）  |
 
-**冷却机制**：在 `condition` 中设置 `cooldown`（秒），防止规则频繁触发：
+**协同联动示例**（温度超 80°C → 启动风扇 → 注入传感器噪声）：
 
 ```json
-{"cooldown": 30, "conditions": [...]}
+{
+  "rule_type": "collaboration",
+  "source_device_id": "temp-sensor",
+  "source_point": "temperature",
+  "condition": {"operator": ">", "value": 80},
+  "actions": [
+    {"target_device_id": "fan", "target_point": "speed", "action_type": "set", "value": 100},
+    {"target_device_id": "temp-sensor", "target_point": "temperature", "action_type": "inject_fault", "value": {"fault_type": "sensor_noise", "parameters": {"noise_std": 2.0, "duration": 60}}}
+  ],
+  "cooldown": 5.0
+}
+```
+
+**时间序列回放**：场景支持 `replay_config`，从历史数据（内联 JSON / CSV 文件）驱动仿真，支持加速回放（`speed`）和循环（`loop`）：
+
+```json
+{
+  "replay_config": {
+    "source": [{"ts": 0, "device_id": "sensor", "point": "temp", "value": 25.0}],
+    "speed": 2.0,
+    "loop": true
+  }
+}
+```
+
+**冷却机制**：协同规则在 Rule 级设置 `cooldown`（秒），防止规则频繁触发：
+
+```json
+{"cooldown": 30}
 ```
 
 ***

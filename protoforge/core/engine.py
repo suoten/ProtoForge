@@ -634,7 +634,9 @@ class SimulationEngine:
                     pass  # device added to scenario below
 
             # Create scenario instance
-            scenario = Scenario(config)
+            # 绑定引擎 write_device_point：协同规则写入时立即传播到协议服务器，
+            # 确保上位机/EdgeLite 可见（而非等下一 tick 同步）
+            scenario = Scenario(config, on_write_point=self.write_device_point)
             for device_config in config.devices:
                 if device_config.id in failed_devices:
                     continue

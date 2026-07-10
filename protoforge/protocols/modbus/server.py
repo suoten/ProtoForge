@@ -53,7 +53,10 @@ class ModbusTcpServer(ProtocolServer):
         self._slave_map: dict[str, int] = {}
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
-        self._use_simdata = SIMDATA_AVAILABLE
+        # FIXED: 始终使用原生帧处理器（_serve_datastore_only），SimData 在服务启动时
+        # 创建不可变快照、不支持动态设备注册，导致初始值全零且外部写入无法反映。
+        # 原生处理器直接读写 _data_stores，与 _apply_device_to_context / _read_register 同源。
+        self._use_simdata = False
         self._server_running = False  # FIXED-P0: _handle_native_modbus引用此属性但未初始化
 
     @property
@@ -99,6 +102,7 @@ class ModbusTcpServer(ProtocolServer):
         if not all_slave_ids:
             all_slave_ids = {1}
 
+        self._sim_data_map.clear() if hasattr(self, '_sim_data_map') else None
         for slave_id in all_slave_ids:
             store = self._get_data_store(slave_id)
             # FIXED-M09: 根据实际数据范围动态确定初始化大小，而非硬编码0-99
@@ -116,7 +120,7 @@ class ModbusTcpServer(ProtocolServer):
         return devices
 
     async def _serve_datastore_only(self) -> None:
-        logger.info("Modbus TCP running in native frame mode (pymodbus SimData/OldAPI unavailable)")
+        logger.info("Modbus TCP running in native frame mode (primary path)")
         try:
             server = await asyncio.start_server(
                 self._handle_native_modbus, self._host, self._port
@@ -273,6 +277,9 @@ class ModbusTcpServer(ProtocolServer):
                 s.set_point(6, start, val)
         self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} val={val}",
                         detail={"fc": fc, "start": start, "value": val, "unit": slave_id})
+        # FIXED: 异步通知 _on_write 回调，将外部写入传播到 DeviceInstance（双向写关键）
+        write_val = bool(val == 0xFF00) if fc == 0x05 else val
+        self._notify_external_write(slave_id, fc, start, write_val)
         return None if is_broadcast else (bytes([fc]) + data[0:4])
 
     def _write_multiple_coils(
@@ -307,6 +314,8 @@ class ModbusTcpServer(ProtocolServer):
                     s.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
         self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
                         detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        # FIXED: 异步通知 _on_write 回调（逐地址通知，仅通知映射到点位的首个地址）
+        self._notify_external_write(slave_id, fc, start, True)
         return None if is_broadcast else (bytes([fc]) + data[0:4])
 
     def _write_multiple_regs(
@@ -340,6 +349,8 @@ class ModbusTcpServer(ProtocolServer):
                     s.set_point(16, start + i, val)
         self._log_debug("inbound", "modbus_write", f"{fc_name}: addr={start} count={count}",
                         detail={"fc": fc, "start": start, "count": count, "unit": slave_id})
+        # FIXED: 异步通知 _on_write 回调（通知起始地址，值由 DeviceInstance 从 store 读取）
+        self._notify_external_write(slave_id, fc, start, None)
         return None if is_broadcast else (bytes([fc]) + data[0:4])
 
     def _mask_write_reg(
@@ -368,6 +379,8 @@ class ModbusTcpServer(ProtocolServer):
         self._log_debug("inbound", "modbus_write",
                         f"MaskWrite: addr={addr} and={and_mask:#06x} or={or_mask:#06x}",
                         detail={"fc": fc, "addr": addr, "unit": slave_id})
+        # FIXED: 异步通知 _on_write 回调
+        self._notify_external_write(slave_id, fc, addr, new_val)
         return None if is_broadcast else (bytes([fc]) + data[0:6])
 
     def _read_write_multiple(
@@ -398,6 +411,8 @@ class ModbusTcpServer(ProtocolServer):
                 if offset + 2 <= len(data):
                     val = struct.unpack(">H", data[offset:offset + 2])[0]
                     s.set_point(6, w_start + i, val)
+        # FIXED: 异步通知 _on_write 回调
+        self._notify_external_write(slave_id, fc, w_start, None)
         if is_broadcast:
             return None
         r_byte_count = r_count * 2
@@ -471,49 +486,21 @@ class ModbusTcpServer(ProtocolServer):
 
         try:
             self._server_running = True  # FIXED-P0: native模式需要此标志
-            if self._use_simdata:
-                devices = self._build_sim_devices()
-                self._server_task = asyncio.create_task(
-                    StartAsyncTcpServer(context=devices, address=(self._host, self._port))
-                )
-            elif OLD_API_AVAILABLE:
-                slaves_dict = {}
-                for device_config in self._device_configs.values():
-                    slave_id = self._slave_map.get(device_config.id, self._next_slave_id)
-                    if device_config.id not in self._slave_map:
-                        self._slave_map[device_config.id] = slave_id
-                        self._next_slave_id = max(self._next_slave_id, slave_id + 1)
-                    slaves_dict[slave_id] = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(0, [0] * 100),
-                        ir=ModbusSequentialDataBlock(0, [0] * 100),
-                        co=ModbusSequentialDataBlock(0, [False] * 100),
-                        di=ModbusSequentialDataBlock(0, [False] * 100),
-                    )
-                if not slaves_dict:
-                    slaves_dict[1] = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(0, [0] * 100),
-                        ir=ModbusSequentialDataBlock(0, [0] * 100),
-                        co=ModbusSequentialDataBlock(0, [False] * 100),
-                        di=ModbusSequentialDataBlock(0, [False] * 100),
-                    )
-                self._context = ModbusServerContext(devices=slaves_dict, single=False)
-                self._server_task = asyncio.create_task(
-                    StartAsyncTcpServer(context=self._context, address=(self._host, self._port))
-                )
-            else:
-                logger.warning("Neither SimData nor old API available, Modbus TCP server starting in data-store-only mode")
-                self._server_task = asyncio.create_task(
-                    self._serve_datastore_only()
-                )
+            # FIXED: 始终使用原生帧处理器——完整实现 FC01-FC17，直接读写 _data_stores，
+            # 支持动态设备注册（设备注册后 _apply_device_to_context 写 store，原生处理器立即可读）。
+            # SimData 在启动时创建不可变快照、OldAPI 限制 100 寄存器，均不适合生产场景。
+            self._server_task = asyncio.create_task(
+                self._serve_datastore_only()
+            )
 
             if self._server_task:
                 self._server_task.add_done_callback(self._on_server_task_done)
 
             self._status = ProtocolStatus.RUNNING
-            logger.info("Modbus TCP server starting on %s:%d (simdata=%s)", self._host, self._port, self._use_simdata)
+            logger.info("Modbus TCP server starting on %s:%d (native frame handler)", self._host, self._port)
             self._log_debug("system", "server_start",
                             msg("modbus_tcp", "service_started", host=self._host, port=self._port),  # FIXED: 中文硬编码→i18n常量
-                            detail={"host": self._host, "port": self._port, "simdata": self._use_simdata})
+                            detail={"host": self._host, "port": self._port, "mode": "native"})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.error("Failed to start Modbus TCP server: %s", e)
@@ -556,18 +543,9 @@ class ModbusTcpServer(ProtocolServer):
             self._next_slave_id = max(self._next_slave_id, slave_id + 1)
 
         if self._status == ProtocolStatus.RUNNING:
+            # FIXED: 原生帧处理器直接读写 _data_stores，无需 ModbusDeviceContext/OldAPI 上下文。
+            # _apply_device_to_context 将 behavior 初始值写入 store，原生处理器立即可读。
             self._get_data_store(slave_id)
-            if not self._use_simdata and OLD_API_AVAILABLE:
-                try:
-                    device_context = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(0, [0] * 100),
-                        ir=ModbusSequentialDataBlock(0, [0] * 100),
-                        co=ModbusSequentialDataBlock(0, [False] * 100),
-                        di=ModbusSequentialDataBlock(0, [False] * 100),
-                    )
-                    self._add_slave_to_context(slave_id, device_context)
-                except Exception as e:
-                    logger.warning("Failed to create ModbusDeviceContext: %s", e)
             self._apply_device_to_context(device_config)
 
         logger.info("Modbus device created: %s (slave_id=%d)", device_config.id, slave_id)
@@ -597,10 +575,13 @@ class ModbusTcpServer(ProtocolServer):
         config = self._device_configs.get(device_id)
         if not config:
             return []
+        slave_id = self._slave_map.get(device_id, 1)
         now = time.time()
         result = []
         for point in config.points:
-            value = behavior.get_value(point.name)
+            # FIXED: 从 store 读取（非 behavior），支持外部 Modbus 写入反映——双向写关键。
+            # store 由 _apply_device_to_context（behavior→store）和原生帧处理器（外部写入→store）共同维护。
+            value = self._read_register(point, slave_id)
             result.append(PointValue(name=point.name, value=value, timestamp=now))
         return result
 
@@ -693,6 +674,8 @@ class ModbusTcpServer(ProtocolServer):
                         store.holding_regs[addr] = int(value) & 0xFFFF
             except (ValueError, TypeError) as e:
                 logger.warning("Failed to write register %s: %s", point.address, e)
+        # FIXED: 原生帧处理器直接读写 _data_stores，无需同步到 pymodbus context/SimData。
+        # _sync_to_pymodbus_context 仅对 OldAPI 路径有效（self._context 为 None 时是空操作）。
         self._sync_to_pymodbus_context(slave_id, store)
 
     def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:
@@ -758,3 +741,75 @@ class ModbusTcpServer(ProtocolServer):
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("Failed to read register %s: %s", point.address, e)
             return None
+
+    # FC → Modbus area mapping for reverse write notification
+    _FC_AREA_MAP: dict[int, str] = {
+        0x01: "coil", 0x05: "coil", 0x0F: "coil",
+        0x03: "holding", 0x06: "holding", 0x10: "holding", 0x16: "holding",
+    }
+
+    @staticmethod
+    def _point_reg_count(point: PointConfig) -> int:
+        """返回点位占用的寄存器/线圈数（用于反向映射地址范围匹配）。"""
+        dt = point.data_type.value
+        if dt in ("bool", "int16", "uint16"):
+            return 1
+        elif dt in ("float32", "int32", "uint32"):
+            return 2
+        elif dt in ("float64",):
+            return 4
+        elif dt in ("string",):
+            return 32
+        return 1
+
+    def _resolve_write_target(self, slave_id: int, address: int, fc: int) -> tuple[str, str] | None:
+        """反向映射 Modbus (slave_id, address, fc) → (device_id, point_name)。
+
+        用于外部 Modbus 写入后，将写入操作传播到 DeviceInstance（通过 _on_write 回调）。
+        """
+        target_area = self._FC_AREA_MAP.get(fc)
+        if not target_area:
+            return None
+        for device_id, s_id in self._slave_map.items():
+            if s_id != slave_id:
+                continue
+            config = self._device_configs.get(device_id)
+            if not config:
+                continue
+            for point in config.points:
+                try:
+                    p_addr, p_area = parse_modbus_address(point.address)
+                    # auto 区域按数据类型自动判定（与 _apply_device_to_context 的存储规则一致）
+                    if p_area == "auto":
+                        if point.data_type.value == "bool":
+                            p_area = "coil"
+                        else:
+                            p_area = "holding"
+                    if p_area == target_area and p_addr <= address < p_addr + self._point_reg_count(point):
+                        return device_id, point.name
+                except (ValueError, TypeError):
+                    continue
+        return None
+
+    def _notify_external_write(self, slave_id: int, fc: int, address: int, value: Any) -> None:
+        """外部 Modbus 写入后异步触发 _on_write 回调，传播到 DeviceInstance。
+
+        通过 asyncio.create_task 异步触发，不阻塞 Modbus 帧处理。
+        """
+        if not self._on_write:
+            return
+        target = self._resolve_write_target(slave_id, address, fc)
+        if not target:
+            return
+        device_id, point_name = target
+        asyncio.create_task(self._fire_write_callback(device_id, point_name, value))
+
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        """异步执行 _on_write 回调，捕获异常防止影响事件循环。"""
+        if not self._on_write:
+            return
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("External write callback error for %s.%s: %s", device_id, point_name, e)
+

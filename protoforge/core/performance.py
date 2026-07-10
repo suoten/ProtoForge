@@ -513,7 +513,7 @@ class CircuitBreaker:
                     self._state = "closed"
                     self._failure_count = 0
             return result
-        except self._expected_exception as e:
+        except self._expected_exception:
             async with self._lock:
                 self._failure_count += 1
                 self._last_failure_time = time.monotonic()

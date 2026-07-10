@@ -567,24 +567,124 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     return base
 
 
+# EdgeLite plugin_name → ProtoForge 别名（与 _build_driver_config 内部一致）
+_PLUGIN_NAME_TO_ALIAS: dict[str, str] = {
+    "siemens_s7": "s7",
+    "mqtt_client": "mqtt",
+    "mitsubishi_mc": "mc",
+    "http_webhook": "http",
+    "omron_fins": "fins",
+    "allen_bradley": "ab",
+}
+
+# ProtoForge S7 地址: DB1.DBD2 / DB1.DBX0.0 / DB1.DBB5 / DB1.DBW10
+# EdgeLite   S7 地址: DB1.D2  / DB1.X0.0  / DB1.B5   / DB1.W10   (s7.py:_parse_address)
+_S7_ADDR_RE = re.compile(r'^DB(\d+)\.DB([XBWD])(\d+)(\.\d+)?$')
+
+
+def _normalize_protocol_alias(protocol: str) -> str:
+    """将 EdgeLite plugin_name 规范化为 ProtoForge 别名，供地址翻译内部分支使用。"""
+    return _PLUGIN_NAME_TO_ALIAS.get(protocol or "", protocol or "")
+
+
+def _translate_point_address(
+    protocol: str,
+    address: Any,
+    data_type: str = "float32",
+) -> dict[str, Any]:
+    """将 ProtoForge 点位地址翻译为 EdgeLite 驱动所需格式。
+
+    返回 dict 至少包含 ``address``；Modbus 协议额外包含 ``register_type``，
+    使 EdgeLite 驱动从与 ProtoForge 服务端一致的存储区读取（解决 bool 点位
+    ProtoForge 存 coils 而 EdgeLite 默认读 holding 的错位问题）。
+
+    - Modbus: 复用 ``parse_modbus_address`` 得 (addr_int, area)，复刻服务端
+      存储规则（``auto+bool→coil``，``auto→holding``，见 modbus/server.py:654-668）
+      输出 ``register_type``（coil/discrete/input/holding，与 EdgeLite 契约一致）
+    - S7: ``DB1.DBD2→DB1.D2``、``DB1.DBX0.0→DB1.X0.0``（剥类型 token 首字母 B）；
+      已符合 EdgeLite 格式则透传
+    - OPC-UA/MQTT/HTTP/其他: ``address`` 即 node_id/topic/path，透传
+
+    :param protocol: ProtoForge 协议名或 EdgeLite plugin_name
+    :param address: 原始点位地址
+    :param data_type: 点位数据类型（Modbus auto 区域判定用）
+    :return: ``{"address": str, ...}`` 字典
+    """
+    norm = _normalize_protocol_alias(protocol)
+    addr_str = "" if address is None else str(address)
+
+    if norm in ("modbus_tcp", "modbus_rtu"):
+        if not addr_str:
+            return {"address": "0", "register_type": "holding"}
+        try:
+            # 懒导入避免 core.edgelite ↔ protocols.modbus 循环依赖
+            from protoforge.protocols.modbus._common import parse_modbus_address
+            addr_int, area = parse_modbus_address(addr_str)
+        except (ValueError, TypeError) as e:
+            logger.warning("Unparseable Modbus address %r (%s); defaulting to holding", addr_str, e)
+            try:
+                addr_int = int(addr_str)
+            except (ValueError, TypeError):
+                addr_int = 0
+            return {"address": str(addr_int), "register_type": "holding"}
+        # 复刻 modbus/server.py:654-668 的存储区判定
+        if area == "coil":
+            reg_type = "coil"
+        elif area == "discrete":
+            reg_type = "discrete"
+        elif area == "input":
+            reg_type = "input"
+        elif area == "auto":
+            reg_type = "coil" if data_type == "bool" else "holding"
+        else:  # holding
+            reg_type = "holding"
+        return {"address": str(addr_int), "register_type": reg_type}
+
+    if norm == "s7":
+        if not addr_str:
+            return {"address": ""}
+        m = _S7_ADDR_RE.match(addr_str)
+        if m:
+            # DB1.DBD2 → DB1.D2，DB1.DBX0.0 → DB1.X0.0
+            translated = f"DB{m.group(1)}.{m.group(2)}{m.group(3)}"
+            if m.group(4):
+                translated += m.group(4)
+            return {"address": translated}
+        # 已是 EdgeLite 格式（DB1.D2）或非 DB 地址（I0.0 等），透传
+        return {"address": addr_str}
+
+    # OPC-UA/MQTT/HTTP/其他：address 即 node_id/topic/path，透传
+    return {"address": addr_str}
+
+
 def _build_points(
     points: list[dict[str, Any]],
     data_type_mapper: DataTypeMapper | None = None,
+    protocol: str = "",
 ) -> list[dict[str, Any]]:
     mapper = data_type_mapper or DataTypeMapper()
     result = []
     for p in points:
         source_dt = p.get("data_type", "float32")
         dt_result = mapper.map(source_dt)
+        addr_info = _translate_point_address(protocol, p.get("address", "0"), source_dt)
         point_def: dict[str, Any] = {
             "name": p.get("name", ""),
             "data_type": dt_result.target_type,
             "unit": p.get("unit", ""),
-            "address": str(p.get("address", "0")),
+            "address": addr_info["address"],
             "access_mode": ACCESS_MODE_MAP.get(p.get("access", "rw"), "rw"),
         }
-        min_val = p.get("min_value") or p.get("min")
-        max_val = p.get("max_value") or p.get("max")
+        # Modbus 协议需要 register_type 字段，使 EdgeLite 读取正确的存储区
+        if "register_type" in addr_info:
+            point_def["register_type"] = addr_info["register_type"]
+        # FIXED: 不能用 `or`，否则 min_value=0.0 会被当作 falsy 跳过（0°C 是合法下限）
+        min_val = p.get("min_value")
+        if min_val is None:
+            min_val = p.get("min")
+        max_val = p.get("max_value")
+        if max_val is None:
+            max_val = p.get("max")
         if min_val is not None:
             point_def["min"] = min_val
         if max_val is not None:
@@ -624,7 +724,7 @@ def convert_device_to_edgelite(
             points_data.append(p)
 
     driver_config = _build_driver_config(protocol, config, protoforge_host, el_config)
-    edgelite_points = _build_points(points_data, data_type_mapper)
+    edgelite_points = _build_points(points_data, data_type_mapper, protocol=protocol)
 
     raw_device_id = getattr(device, "id", "")
     normalized_id = _normalize_device_id(raw_device_id)

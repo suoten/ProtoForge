@@ -1031,7 +1031,14 @@ class IntegrationManager:
 
         dev_data = dev_data_raw.get("data", dev_data_raw)
         el_status = dev_data.get("status", "unknown")
-        result["steps"]["register"] = {"ok": True, "status": el_status}
+        # FIXED: 保留 auto_fix 阶段设置的 auto_fixed 标志——原代码直接覆盖会丢失该标志，
+        # 导致调用方无法区分"设备本已注册"与"auto_fix 自动注册"。
+        register_step: dict[str, Any] = {"ok": True, "status": el_status}
+        prior = result["steps"].get("register", {})
+        if prior.get("auto_fixed"):
+            register_step["auto_fixed"] = True
+            register_step["fix_detail"] = prior.get("fix_detail", "")
+        result["steps"]["register"] = register_step
 
         # Step 3: 连接检查
         if el_status == "offline":

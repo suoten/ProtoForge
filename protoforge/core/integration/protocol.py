@@ -19,14 +19,15 @@ PROTOCOL_MAP_BASE: dict[str, str | None] = {
     "mc": "mitsubishi_mc",
     "fins": "omron_fins",
     "ab": "allen_bradley",
-    "bacnet": None,
-    "fanuc": None,        # EdgeLite 无 fanuc 驱动
-    "mtconnect": None,    # EdgeLite 无 mtconnect 驱动
-    "toledo": None,       # EdgeLite 无 toledo 驱动
+    # FIXED: EdgeLite 实际有这些驱动（plugin_name 已核对），原映射为 None 导致无法推送
+    "bacnet": "bacnet_ip",        # bacnet.py plugin_name="bacnet_ip"
+    "fanuc": "fanuc_cnc",         # fanuc.py plugin_name="fanuc_cnc"
+    "mtconnect": "mtconnect",     # mtconnect.py plugin_name="mtconnect"
+    "toledo": "toledo",           # toledo.py plugin_name="toledo"
     "opcda": "opc_da",
-    "profinet": None,
-    "ethercat": None,
-    "gb28181": None,
+    "profinet": "profinet",       # profinet.py plugin_name="profinet"
+    "ethercat": "ethercat",       # ethercat.py plugin_name="ethercat"
+    "gb28181": None,              # EdgeLite 无 GB28181 摄像头驱动（工业网关不涉及视频流）
     "onvif": "onvif",
     "dlt645": "dlt645",
     "iec104": "iec104",

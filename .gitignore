@@ -70,3 +70,11 @@ openapi.json
 # Agent/browser config
 ab-config.json
 agent-browser.json
+.agent-browser-home/
+
+# Tool-generated directories (not part of project source)
+.convergeloop/
+.loopengine/
+.trae/
+.mypy_cache/
+.ruff_cache/
