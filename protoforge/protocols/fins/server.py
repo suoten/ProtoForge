@@ -169,7 +169,7 @@ class FinsServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start FINS server: %s", e)
+            logger.exception("Failed to start FINS server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -203,7 +203,7 @@ class FinsServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("FINS server task cancelled")
         except Exception as e:
-            logger.error("FINS server error: %s", e)
+            logger.exception("FINS server error: %s", e)
             self._status = ProtocolStatus.ERROR
         finally:
             if self._udp_transport:

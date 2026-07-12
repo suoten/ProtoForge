@@ -83,7 +83,7 @@ async def login(credentials: LoginRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Login failed: %s", e)
+        logger.exception("Login failed: %s", e)
         raise HTTPException(status_code=500, detail="Login failed, please try again later") from e
 
 
@@ -116,7 +116,7 @@ async def refresh_token(data: RefreshRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Token refresh failed: %s", e)
+        logger.exception("Token refresh failed: %s", e)
         raise HTTPException(status_code=500, detail="Token refresh failed") from e
 
 
@@ -127,9 +127,9 @@ async def register(user_data: RegisterRequest):
     try:
         user = await user_manager.create_user(user_data.username, user_data.password, role="user")
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
-        logger.error("User creation failed: %s", e)
+        logger.exception("User creation failed: %s", e)
         raise HTTPException(status_code=500, detail="User creation failed, please try again later") from e
 
     if not user:
@@ -160,7 +160,7 @@ async def list_users(_user: dict[str, Any] = Depends(require_admin)):
         from protoforge.core.auth import user_manager
         return {"users": user_manager.list_users()}
     except Exception as e:
-        logger.error("Failed to list users: %s", e)
+        logger.exception("Failed to list users: %s", e)
         raise HTTPException(status_code=500, detail="Failed to list users") from e
 
 
@@ -190,7 +190,7 @@ async def change_password(data: ChangePasswordRequest, _user: dict[str, Any] = D
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Change password failed: %s", e)
+        logger.exception("Change password failed: %s", e)
         raise HTTPException(status_code=500, detail=desc("auth.password_change_failed")) from e
 
 
@@ -208,7 +208,7 @@ async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict[str,
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Admin reset password failed: %s", e)
+        logger.exception("Admin reset password failed: %s", e)
         raise HTTPException(status_code=500, detail="Password reset failed, please try again later") from e
 
 
@@ -225,7 +225,7 @@ async def update_user_role(username: str, data: UpdateRoleRequest, _user: dict[s
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Update user role failed: %s", e)
+        logger.exception("Update user role failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update user role") from e
 
 
@@ -239,7 +239,7 @@ async def admin_unlock_user(username: str, _user: dict[str, Any] = Depends(requi
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Unlock user failed: %s", e)
+        logger.exception("Unlock user failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to unlock user") from e
 
 
@@ -253,5 +253,5 @@ async def delete_user(username: str, _user: dict[str, Any] = Depends(require_adm
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Delete user failed: %s", e)
+        logger.exception("Delete user failed: %s", e)
         raise HTTPException(status_code=500, detail="Failed to delete user") from e

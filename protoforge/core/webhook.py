@@ -263,7 +263,7 @@ class WebhookManager:
                 body_bytes = json.dumps(body).encode("utf-8")
                 sig = hmac.new(webhook.secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
             except (UnicodeEncodeError, TypeError) as enc_err:
-                logger.error("Failed to compute HMAC for webhook %s: %s", webhook.id, enc_err)
+                logger.exception("Failed to compute HMAC for webhook %s: %s", webhook.id, enc_err)
                 return
             headers["X-ProtoForge-Signature"] = sig
         try:

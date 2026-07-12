@@ -148,14 +148,14 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
         return result
 
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
         error_detail = str(e)
         friendly = get_friendly_error(error_detail, lang=lang)
-        raise HTTPException(status_code=503, detail=friendly)
+        raise HTTPException(status_code=503, detail=friendly) from e
     except Exception as e:
-        logger.error("Failed to start protocol %s: %s", protocol_name, e)
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang))
+        logger.exception("Failed to start protocol %s: %s", protocol_name, e)
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang)) from e
 
 
 @router.post("/protocols/{protocol_name}/stop")
@@ -169,10 +169,10 @@ async def stop_protocol(protocol_name: str, _user: dict[str, Any] = Depends(requ
         log_bus.emit(protocol_name, "system", "", "protocol_stop", f"Protocol {protocol_name} stopped")
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
         error_detail = str(e)
         friendly = get_friendly_error(error_detail, lang=lang)
-        raise HTTPException(status_code=503, detail=friendly)
+        raise HTTPException(status_code=503, detail=friendly) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang))
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang)) from e

@@ -1215,7 +1215,7 @@ class IntegrationManager:
                 if engine:
                     await engine.stop_device(target_id)
             except Exception as e:
-                logger.error("Alarm reaction stop_device failed: %s", e)
+                logger.exception("Alarm reaction stop_device failed: %s", e)
 
         elif rule.action == "start_device":
             try:
@@ -1224,7 +1224,7 @@ class IntegrationManager:
                 if engine:
                     await engine.start_device(target_id)
             except Exception as e:
-                logger.error("Alarm reaction start_device failed: %s", e)
+                logger.exception("Alarm reaction start_device failed: %s", e)
 
         elif rule.action == "log_only":
             logger.warning("Alarm logged: rule=%s severity=%s source=%s", rule.rule_id, rule.alarm_severity, rule.source_device_id)
@@ -1499,7 +1499,7 @@ class IntegrationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Retry queue consumer error: %s", e)
+                logger.exception("Retry queue consumer error: %s", e)
 
     async def _flush_retry_queue(self) -> None:
         if self._retry_queue.empty():
@@ -1549,7 +1549,7 @@ class IntegrationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Periodic state sync error: %s", e)
+                logger.exception("Periodic state sync error: %s", e)
 
     async def _ws_reconnect_loop(self) -> None:
         """WebSocket 断线自动重连循环。
@@ -1588,7 +1588,7 @@ class IntegrationManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("WebSocket reconnect loop error: %s", e)
+                logger.exception("WebSocket reconnect loop error: %s", e)
 
     # ─── 状态回调 ────────────────────────────────────────────
 

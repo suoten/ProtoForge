@@ -242,7 +242,7 @@ class EtherCATServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start EtherCAT server: %s", e)
+            logger.exception("Failed to start EtherCAT server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -506,7 +506,7 @@ class EtherCATServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("EtherCAT server task cancelled")
         except Exception as e:
-            logger.error("EtherCAT server error: %s", e)
+            logger.exception("EtherCAT server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,

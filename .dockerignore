@@ -18,3 +18,16 @@ venv
 tests
 .github
 .gitlab-ci.yml
+# FIXED: 排除工具链大目录，加速构建并减小上下文
+.convergeloop
+.loopengine
+.trae
+.agent-browser-home
+test_screenshots
+htmlcov
+.coverage
+coverage.xml
+coverage.json
+logs
+data
+Makefile

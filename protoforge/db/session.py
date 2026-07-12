@@ -67,7 +67,7 @@ class Database:
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
         except Exception as e:
-            logger.error("Failed to connect to SQLite database at %s: %s", self._db_path, e)
+            logger.exception("Failed to connect to SQLite database at %s: %s", self._db_path, e)
             raise RuntimeError(f"SQLite connection failed: {e}") from e
 
     async def _attempt_db_recovery(self, db_path: str, shutil, sqlite3) -> None:
@@ -121,17 +121,17 @@ class Database:
                 shutil.move(db_path, backup_path)
                 logger.warning("Corrupted database moved to %s, will recreate", backup_path)
             except OSError as move_err:
-                logger.error("Failed to backup corrupted database: %s", move_err)
+                logger.exception("Failed to backup corrupted database: %s", move_err)
                 # Last resort: try to delete and recreate
                 try:
                     db_file.unlink(missing_ok=True)
                     logger.warning("Deleted corrupted database, will recreate")
                 except OSError as del_err:
-                    logger.error("Failed to delete corrupted database: %s", del_err)
+                    logger.exception("Failed to delete corrupted database: %s", del_err)
                     raise RuntimeError(
                         f"Database is corrupted and could not be recovered or backed up. "
                         f"Please manually delete {db_path} and restart."
-                    )
+                    ) from move_err
 
     async def _try_wal_recovery(self, db_path: str) -> bool:
         """Try to recover database via WAL checkpoint. Returns True if recovery succeeded."""
@@ -234,7 +234,7 @@ class Database:
         except ImportError:
             raise RuntimeError(
                 "PostgreSQL support requires asyncpg. Install it with: pip install asyncpg"
-            )
+            ) from None
         try:
             self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10)
             self._is_postgres = True
@@ -243,7 +243,7 @@ class Database:
                 await self._migrate_postgres_tables(conn)
             logger.info("PostgreSQL database connected")
         except Exception as e:
-            logger.error("Failed to connect to PostgreSQL database: %s", e)
+            logger.exception("Failed to connect to PostgreSQL database: %s", e)
             raise RuntimeError(f"PostgreSQL connection failed: {e}") from e
 
     async def close(self) -> None:

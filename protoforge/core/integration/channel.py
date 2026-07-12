@@ -48,7 +48,7 @@ class ChannelBase(ABC):
                 if asyncio.iscoroutine(result):
                     await result
             except Exception as e:
-                logger.error("Message handler error for %s: %s", msg_type, e)
+                logger.exception("Message handler error for %s: %s", msg_type, e)
 
 
 class HttpChannel(ChannelBase):
@@ -337,7 +337,7 @@ class WebSocketChannel(ChannelBase):
                         continue
                     await self._dispatch_message(message)
                 except Exception as e:
-                    logger.error("WebSocket receive error: %s", e)
+                    logger.exception("WebSocket receive error: %s", e)
         except asyncio.CancelledError:
             pass
         except Exception as e:

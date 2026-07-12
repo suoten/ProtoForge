@@ -25,6 +25,7 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true  # FIXED: 启用只读根文件系统
             capabilities:
               drop:
                 - ALL
@@ -76,6 +77,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+            - name: tmp  # FIXED: 为只读根文件系统提供可写 tmp 目录
+              mountPath: /tmp
       volumes:
         - name: data
         {{- if .Values.persistence.enabled }}
@@ -84,3 +87,5 @@ spec:
         {{- else }}
           emptyDir: {}
         {{- end }}
+        - name: tmp
+          emptyDir: {}

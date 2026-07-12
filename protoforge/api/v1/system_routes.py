@@ -44,7 +44,7 @@ async def setup_demo(_user: dict[str, Any] = Depends(require_admin)):
         }
     except Exception as e:
         from protoforge.core.defaults import get_friendly_error
-        raise HTTPException(status_code=500, detail=get_friendly_error(str(e)))
+        raise HTTPException(status_code=500, detail=get_friendly_error(str(e))) from e
 
 
 @router.get("/setup/status")
@@ -63,7 +63,7 @@ async def setup_status(_user: dict[str, Any] = Depends(require_viewer)):
             "templates_available": len(_get_template_manager().list_templates()),
         }
     except Exception as e:
-        logger.error("Failed to get setup status: %s", e)
+        logger.exception("Failed to get setup status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get system status: {e}") from e
 
 
@@ -73,7 +73,7 @@ async def get_settings(_user: dict[str, Any] = Depends(require_admin)):
         from protoforge.config import get_all_settings_dict
         return get_all_settings_dict()
     except Exception as e:
-        logger.error("Failed to get settings: %s", e)
+        logger.exception("Failed to get settings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get settings: {e}") from e
 
 
@@ -126,7 +126,7 @@ async def update_settings(updates: dict[str, Any], _user: dict[str, Any] = Depen
     except ConfigValidationError as e:
         raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e
     except Exception as e:
-        logger.error("Failed to update settings: %s", e)
+        logger.exception("Failed to update settings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {e}") from e
 
 
@@ -154,7 +154,7 @@ async def query_audit_log(
         )
         return {"entries": entries, "total": total}
     except Exception as e:
-        logger.error("Failed to query audit log: %s", e)
+        logger.exception("Failed to query audit log: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to query audit log: {e}") from e
 
 
@@ -164,7 +164,7 @@ async def get_audit_stats(_user: dict[str, Any] = Depends(require_admin)):
         from protoforge.core.audit import audit_logger
         return await audit_logger.get_stats()
     except Exception as e:
-        logger.error("Failed to get audit stats: %s", e)
+        logger.exception("Failed to get audit stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get audit stats: {e}") from e
 
 
@@ -201,7 +201,7 @@ async def export_backup(_user: dict[str, Any] = Depends(require_admin)):
             headers={"Content-Disposition": f"attachment; filename=protoforge_backup_{int(time.time())}.json"},
         )
     except Exception as e:
-        logger.error("Failed to export backup: %s", e)
+        logger.exception("Failed to export backup: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to export backup: {e}") from e
 
 
@@ -219,5 +219,5 @@ async def import_backup(payload: dict[str, Any], _user: dict[str, Any] = Depends
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to import backup: %s", e)
+        logger.exception("Failed to import backup: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to restore backup: {e}") from e

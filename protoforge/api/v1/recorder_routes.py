@@ -40,7 +40,7 @@ async def start_recording(config: dict[str, Any] | None = None, _user: dict[str,
         )
         return rec.to_dict()
     except Exception as e:
-        logger.error("Failed to start recording: %s", e)
+        logger.exception("Failed to start recording: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to start recording: {e}") from e
 
 
@@ -55,7 +55,7 @@ async def stop_recording(_user: dict[str, Any] = Depends(require_operator)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to stop recording: %s", e)
+        logger.exception("Failed to stop recording: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to stop recording: {e}") from e
 
 
@@ -65,7 +65,7 @@ async def list_recordings(_user: dict[str, Any] = Depends(require_viewer)):
         recorder = _get_recorder()
         return {"recordings": recorder.list_recordings()}
     except Exception as e:
-        logger.error("Failed to list recordings: %s", e)
+        logger.exception("Failed to list recordings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list recordings: {e}") from e
 
 
@@ -81,7 +81,7 @@ async def get_recording(rec_id: str, _user: dict[str, Any] = Depends(require_vie
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to get recording %s: %s", rec_id, e)
+        logger.exception("Failed to get recording %s: %s", rec_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to get recording: {e}") from e
 
 
@@ -94,7 +94,7 @@ async def delete_recording(rec_id: str, _user: dict[str, Any] = Depends(require_
         await recorder.delete_recording_persisted(rec_id)
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete recording: {str(e)}") from e
 
 
 @router.post("/recorder/recordings/{rec_id}/replay")
@@ -110,9 +110,9 @@ async def replay_recording(rec_id: str, config: dict[str, Any] | None = None, _u
         result = await recorder.replay_recording(rec_id, speed=speed, target_engine=_get_engine())
         return result
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to replay recording %s: %s", rec_id, e)
+        logger.exception("Failed to replay recording %s: %s", rec_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to replay recording: {e}") from e
 
 
@@ -129,7 +129,7 @@ async def export_recording(rec_id: str, _user: dict[str, Any] = Depends(require_
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to export recording %s: %s", rec_id, e)
+        logger.exception("Failed to export recording %s: %s", rec_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to export recording: {e}") from e
 
 
@@ -139,5 +139,5 @@ async def recorder_stats(_user: dict[str, Any] = Depends(require_viewer)):
         recorder = _get_recorder()
         return recorder.get_stats()
     except Exception as e:
-        logger.error("Failed to get recorder stats: %s", e)
+        logger.exception("Failed to get recorder stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get recorder stats: {e}") from e

@@ -80,7 +80,7 @@ def parse_modbus_address(address: str) -> tuple[int, str]:
     try:
         return int(addr_str), "auto"
     except ValueError:
-        raise ValueError(f"Invalid Modbus address: {address}")
+        raise ValueError(f"Invalid Modbus address: {address}") from None
 
 
 class ModbusDeviceBehavior(DefaultDeviceBehavior):

@@ -320,7 +320,7 @@ class GB28181Server(ProtocolServer):
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             self._log_debug("system", "server_error", msg("gb28181", "service_start_failed", error=e))
-            logger.error("Failed to start GB28181 server: %s", e)
+            logger.exception("Failed to start GB28181 server: %s", e)
             raise
 
     async def stop(self) -> None:

@@ -99,7 +99,7 @@ class AbServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start AB server: %s", e)
+            logger.exception("Failed to start AB server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -128,7 +128,7 @@ class AbServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("AB server task cancelled")
         except Exception as e:
-            logger.error("AB server error: %s", e)
+            logger.exception("AB server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,

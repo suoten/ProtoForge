@@ -192,7 +192,7 @@ class Scenario:
             try:
                 device.stop()
             except Exception as e:
-                logger.error("Failed to stop device %s: %s", device.id, e)
+                logger.exception("Failed to stop device %s: %s", device.id, e)
 
     async def tick(self) -> None:
         if self._status != ScenarioStatus.RUNNING:

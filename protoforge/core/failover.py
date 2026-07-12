@@ -90,7 +90,7 @@ class FailoverManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Failover health check error: %s", e)
+                logger.exception("Failover health check error: %s", e)
 
     async def _check_peer_health(self, url: str) -> bool:
         try:
@@ -115,7 +115,7 @@ class FailoverManager:
                 else:
                     callback()
             except Exception as e:
-                logger.error("Failover callback failed: %s", e)
+                logger.exception("Failover callback failed: %s", e)
 
     async def demote_to_standby(self) -> None:
         logger.info("Demoting to standby (primary recovered)")
@@ -128,7 +128,7 @@ class FailoverManager:
                 else:
                     callback()
             except Exception as e:
-                logger.error("Failover callback failed: %s", e)
+                logger.exception("Failover callback failed: %s", e)
 
     def get_status(self) -> dict[str, Any]:
         return {

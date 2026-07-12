@@ -228,11 +228,11 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
                 restored += 1
             except Exception as e:
                 dev.protocol_config.pop("_skip_auto_push", None)
-                logger.error("Failed to restore device %s: [%s] %s", dev.id, type(e).__name__, e)
+                logger.exception("Failed to restore device %s: [%s] %s", dev.id, type(e).__name__, e)
         logger.info("Restored %d/%d devices from database", restored, len(saved_devices))
     except Exception as e:
         restore_errors.append(f"devices: {e}")
-        logger.error("Failed to load devices from database: [%s] %s", type(e).__name__, e)
+        logger.exception("Failed to load devices from database: [%s] %s", type(e).__name__, e)
 
     # Restore scenarios
     try:
@@ -241,11 +241,11 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
             try:
                 await engine.create_scenario(sc)
             except Exception as e:
-                logger.error("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)
+                logger.exception("Failed to restore scenario %s: [%s] %s", sc.id, type(e).__name__, e)
         logger.info("Restored %d scenarios from database", len(saved_scenarios))
     except Exception as e:
         restore_errors.append(f"scenarios: {e}")
-        logger.error("Failed to load scenarios from database: %s", e)
+        logger.exception("Failed to load scenarios from database: %s", e)
 
     # Restore templates
     try:
@@ -254,11 +254,11 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
             try:
                 template_manager.add_template(tmpl)
             except Exception as e:
-                logger.error("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)
+                logger.exception("Failed to restore template %s: [%s] %s", tmpl.id, type(e).__name__, e)
         logger.info("Restored %d templates from database", len(saved_templates))
     except Exception as e:
         restore_errors.append(f"templates: {e}")
-        logger.error("Failed to load templates from database: %s", e)
+        logger.exception("Failed to load templates from database: %s", e)
 
     # Restore test data
     try:
@@ -269,7 +269,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
         logger.info("Test data restored")
     except Exception as e:
         restore_errors.append(f"tests: {e}")
-        logger.error("Failed to restore test data: %s", e)
+        logger.exception("Failed to restore test data: %s", e)
 
     # Restore users
     try:
@@ -279,7 +279,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
         logger.info("Users restored")
     except Exception as e:
         restore_errors.append(f"users: {e}")
-        logger.error("Failed to restore users: %s", e)
+        logger.exception("Failed to restore users: %s", e)
 
     # Start webhook manager
     try:
@@ -288,7 +288,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
         logger.info("Webhook manager started")
     except Exception as e:
         restore_errors.append(f"webhooks: {e}")
-        logger.error("Failed to start webhook manager: %s", e)
+        logger.exception("Failed to start webhook manager: %s", e)
 
     # Initialize audit logger
     try:
@@ -298,7 +298,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
         logger.info("Audit logger initialized")
     except Exception as e:
         restore_errors.append(f"audit: {e}")
-        logger.error("Failed to initialize audit logger: %s", e)
+        logger.exception("Failed to initialize audit logger: %s", e)
 
     # Initialize recorder persistence
     try:
@@ -309,7 +309,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
         logger.info("Recorder persistence initialized")
     except Exception as e:
         restore_errors.append(f"recorder: {e}")
-        logger.error("Failed to initialize recorder persistence: %s", e)
+        logger.exception("Failed to initialize recorder persistence: %s", e)
 
     # Start failover manager
     try:
@@ -323,7 +323,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
             logger.info("Failover manager started (role=%s)", "primary" if is_primary else "standby")
     except Exception as e:
         restore_errors.append(f"failover: {e}")
-        logger.error("Failed to start failover manager: %s", e)
+        logger.exception("Failed to start failover manager: %s", e)
 
     return restore_errors
 
@@ -339,7 +339,7 @@ async def _start_optional_services(engine: Any, template_manager: Any, settings:
             await seed_demo_data(engine, template_manager)
             logger.info("Demo data seeded")
         except Exception as e:
-            logger.error("Failed to seed demo data: %s", e)
+            logger.exception("Failed to seed demo data: %s", e)
 
     grpc_server = None
     if settings.grpc_port > 0:
@@ -449,7 +449,7 @@ async def lifespan(app: FastAPI):
         try:
             _grpc_server = await _start_optional_services(_engine, _template_manager, settings)
         except Exception as e:
-            logger.error("Background optional services startup failed: %s", e)
+            logger.exception("Background optional services startup failed: %s", e)
 
     import asyncio as _asyncio
     _bg_task = _asyncio.create_task(_bg_start_optional_services())

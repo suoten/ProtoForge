@@ -162,7 +162,7 @@ class InfluxDBTarget(ForwardTarget):
                 if attempt < max_retries - 1:
                     await asyncio.sleep(1 * (attempt + 1))
                 else:
-                    logger.error("InfluxDB write failed after %d retries, data lost", max_retries)
+                    logger.exception("InfluxDB write failed after %d retries, data lost", max_retries)
 
     async def close(self) -> None:
         if self._client:
@@ -242,7 +242,7 @@ class FileTarget(ForwardTarget):
         except ValueError:
             raise
         except Exception as e:
-            logger.error("File forward write failed: %s", e)
+            logger.exception("File forward write failed: %s", e)
             raise
 
     def _write_sync(self, records: list[dict[str, Any]]) -> None:
@@ -254,7 +254,7 @@ class FileTarget(ForwardTarget):
                     else:
                         f.write(f"{r.get('timestamp', 0)}|{r.get('device_id', '')}|{r.get('point_name', '')}|{r.get('value', '')}\n")
         except (OSError, PermissionError, FileNotFoundError) as e:
-            logger.error("FileTarget write failed to %s: %s", self._path, e)
+            logger.exception("FileTarget write failed to %s: %s", self._path, e)
 
     async def close(self) -> None:
         try:

@@ -33,7 +33,7 @@ services:
 
   protoforge:
     build: .
-    command: ["sh", "-c", "alembic upgrade head || :; python -m protoforge.cli run"]
+    command: ["sh", "-c", "alembic upgrade head && python -m protoforge.cli run"]
     deploy:
       resources:
         limits:
@@ -70,7 +70,7 @@ services:
       PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env中设置PROTOFORGE_JWT_SECRET}
       PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env中设置PROTOFORGE_ADMIN_PASSWORD}
       PROTOFORGE_LOG_LEVEL: info
-      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-*}  # FIXED: CORS通配符不安全,生产环境务必设置具体域名
+      PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}  # FIXED: 默认仅允许本地访问，生产环境务必设置具体域名
       PROTOFORGE_GRPC_PORT: "0"
     depends_on:
       postgres:
@@ -84,6 +84,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    # FIXED: 添加日志轮转配置，防止日志文件无限增长
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   protoforge-test:
     profiles: [test]

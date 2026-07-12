@@ -425,7 +425,7 @@ class DeviceStateMachine:
                 try:
                     cb(old_state, exit_kwargs)
                 except Exception as e:
-                    logger.error("Exit callback error: %s", e)
+                    logger.exception("Exit callback error: %s", e)
 
             # 执行状态转换
             self._state = matched.to_state
@@ -452,7 +452,7 @@ class DeviceStateMachine:
                 try:
                     matched.action(**kwargs)
                 except Exception as e:
-                    logger.error("Transition action error for '%s': %s", event, e)
+                    logger.exception("Transition action error for '%s': %s", event, e)
 
             # 调用进入回调
             enter_kwargs = {"event": event, "from_state": old_state, **kwargs}
@@ -460,14 +460,14 @@ class DeviceStateMachine:
                 try:
                     cb(matched.to_state, enter_kwargs)
                 except Exception as e:
-                    logger.error("Enter callback error: %s", e)
+                    logger.exception("Enter callback error: %s", e)
 
             # 调用转换通知回调（用于 WebSocket 事件广播）
             for cb in self._transition_callbacks:
                 try:
                     cb(entry)
                 except Exception as e:
-                    logger.error("Transition callback error: %s", e)
+                    logger.exception("Transition callback error: %s", e)
 
             return True
 

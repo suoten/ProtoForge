@@ -37,7 +37,7 @@ services:
     command:
       - sh
       - -c
-      - alembic upgrade head || :; python -m protoforge.cli demo
+      - alembic upgrade head && python -m protoforge.cli demo
     ports:
       - "8000:8000"
       # === 协议端口（按需取消注释） ===
@@ -89,6 +89,12 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    # FIXED: 添加日志轮转配置
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
 volumes:
   protoforge-data:

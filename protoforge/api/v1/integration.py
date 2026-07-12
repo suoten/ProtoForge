@@ -23,7 +23,7 @@ async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)
         manager = _get_integration_manager()
         return manager.get_status()
     except Exception as e:
-        logger.error("Failed to get integration status: %s", e)
+        logger.exception("Failed to get integration status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get integration status: {e}") from e
 
 
@@ -33,7 +33,7 @@ async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer
         manager = _get_integration_manager()
         return manager.get_metrics()
     except Exception as e:
-        logger.error("Failed to get integration metrics: %s", e)
+        logger.exception("Failed to get integration metrics: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get integration metrics: {e}") from e
 
 
@@ -76,7 +76,7 @@ async def batch_push(request: dict[str, Any], _user: dict[str, Any] = Depends(re
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Batch push failed: %s", e)
+        logger.exception("Batch push failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Batch push failed: {e}") from e
 
 
@@ -93,7 +93,7 @@ async def start_device_collect(device_id: str, _user: dict[str, Any] = Depends(r
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Start device collect failed for %s: %s", device_id, e)
+        logger.exception("Start device collect failed for %s: %s", device_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to start device collection: {e}") from e
 
 
@@ -110,7 +110,7 @@ async def stop_device_collect(device_id: str, _user: dict[str, Any] = Depends(re
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Stop device collect failed for %s: %s", device_id, e)
+        logger.exception("Stop device collect failed for %s: %s", device_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to stop device collection: {e}") from e
 
 
@@ -133,7 +133,7 @@ async def get_protocol_mappings(_user: dict[str, Any] = Depends(require_viewer))
             "supported_source_protocols": manager.get_supported_source_protocols(),
         }
     except Exception as e:
-        logger.error("Failed to get protocol mappings: %s", e)
+        logger.exception("Failed to get protocol mappings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get protocol mappings: {e}") from e
 
 
@@ -143,8 +143,8 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict[str
         if not isinstance(request, dict):  # FIXED-P1: 添加请求体类型校验
             raise HTTPException(status_code=400, detail="Request body must be a JSON object")
         manager = _get_integration_manager()
-        # FIXED: 统一参数名 - 只接受driver_config，移除对config的隐式兼容，避免前端必须猜测参数名
-        driver_config = request.get("driver_config", {})
+        # FIXED: 兼容前端可能发送的 config 或 driver_config 参数名
+        driver_config = request.get("driver_config") or request.get("config", {})
         report = manager.validator.validate(
             device_id=request.get("device_id", ""),
             protocol=request.get("protocol", ""),
@@ -162,7 +162,7 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict[str
             "errors": report.errors,
         }
     except Exception as e:
-        logger.error("Device compatibility validation failed: %s", e)
+        logger.exception("Device compatibility validation failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Device compatibility validation failed: {e}") from e
 
 
@@ -172,7 +172,7 @@ async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict[s
         manager = _get_integration_manager()
         return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
     except Exception as e:
-        logger.error("Failed to get backhaul data: %s", e)
+        logger.exception("Failed to get backhaul data: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get backhaul data: {e}") from e
 
 
@@ -185,7 +185,7 @@ async def get_device_status_cache(_user: dict[str, Any] = Depends(require_viewer
             return {"devices": [{"device_id": did, "status": s} for did, s in status.items()]}
         return {"devices": status if isinstance(status, list) else []}
     except Exception as e:
-        logger.error("Failed to get device status cache: %s", e)
+        logger.exception("Failed to get device status cache: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get device status: {e}") from e
 
 
@@ -200,7 +200,7 @@ async def get_alarm_reaction_rules(_user: dict[str, Any] = Depends(require_viewe
             for r in manager.get_alarm_reaction_rules()
         ]}
     except Exception as e:
-        logger.error("Failed to get alarm rules: %s", e)
+        logger.exception("Failed to get alarm rules: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get alarm rules: {e}") from e
 
 
@@ -234,7 +234,7 @@ async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict[str, Any]
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Add alarm rule failed: %s", e)
+        logger.exception("Add alarm rule failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to add alarm rule: {e}") from e
 
 
@@ -245,7 +245,7 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict[str, Any] = Depen
         manager.remove_alarm_reaction_rule(rule_id)
         return {"status": "ok"}
     except Exception as e:
-        logger.error("Delete alarm rule failed: %s", e)
+        logger.exception("Delete alarm rule failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to delete alarm rule: {e}") from e
 
 
@@ -270,5 +270,5 @@ async def handle_integration_message(request: dict[str, Any], _user: dict[str, A
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Integration message failed: %s", e)
+        logger.exception("Integration message failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to send integration message: {e}") from e

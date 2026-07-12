@@ -102,7 +102,7 @@ class ToledoServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start Toledo server: %s", e)
+            logger.exception("Failed to start Toledo server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -145,7 +145,7 @@ class ToledoServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("Toledo server task cancelled")
         except Exception as e:
-            logger.error("Toledo server error: %s", e)
+            logger.exception("Toledo server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
@@ -310,7 +310,7 @@ class ToledoServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("Toledo task cancelled")
         except Exception as e:
-            logger.error("Toledo continuous send error: %s", e)
+            logger.exception("Toledo continuous send error: %s", e)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = ToledoDeviceBehavior(device_config.points)

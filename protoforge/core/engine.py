@@ -270,7 +270,7 @@ class SimulationEngine:
                     await asyncio.sleep(self._RETRY_DELAY_SECONDS)
                     continue
                 else:
-                    logger.error("Failed to start protocol %s: %s", protocol_name, e)
+                    logger.exception("Failed to start protocol %s: %s", protocol_name, e)
                     raise RuntimeError(f"Failed to start protocol {protocol_name}: {e}") from e
 
     async def stop_protocol(self, protocol_name: str) -> None:
@@ -287,7 +287,7 @@ class SimulationEngine:
                     new_status="stopped",
                 ))
         except Exception as e:
-            logger.error("Failed to stop protocol %s: %s", protocol_name, e)
+            logger.exception("Failed to stop protocol %s: %s", protocol_name, e)
             raise RuntimeError(f"Failed to stop protocol {protocol_name}: {e}") from e
 
     async def create_device(self, config: DeviceConfig, allow_update: bool = False) -> DeviceInfo:
@@ -389,7 +389,7 @@ class SimulationEngine:
         try:
             await self.remove_device(device_id)
         except Exception as e:
-            logger.error("Failed to remove old device %s during update: %s, attempting to continue", device_id, e)
+            logger.exception("Failed to remove old device %s during update: %s, attempting to continue", device_id, e)
             # FIXED-H06: remove失败不直接raise，继续尝试创建新设备，避免设备丢失
         config.id = device_id
         try:
@@ -401,7 +401,7 @@ class SimulationEngine:
                     logger.warning("Failed to restart device %s after update: %s", device_id, e)
             return result
         except Exception as e:
-            logger.error("Failed to create new device %s during update: %s, restoring old", device_id, e)
+            logger.exception("Failed to create new device %s during update: %s, restoring old", device_id, e)
             try:
                 await self.create_device(old_config)
                 if was_running:
@@ -433,7 +433,7 @@ class SimulationEngine:
         try:
             instance.start()
         except Exception as e:
-            logger.error("Failed to start device %s: %s", device_id, e)
+            logger.exception("Failed to start device %s: %s", device_id, e)
             raise
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
@@ -456,7 +456,7 @@ class SimulationEngine:
         try:
             instance.stop()
         except Exception as e:
-            logger.error("Failed to stop device %s: %s", device_id, e)
+            logger.exception("Failed to stop device %s: %s", device_id, e)
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
             try:
@@ -683,7 +683,7 @@ class SimulationEngine:
                     logger.info("Rolled back device %s after scenario start failure", dev_id)
                 except Exception as rollback_err:
                     logger.warning("Failed to rollback device %s: %s", dev_id, rollback_err)
-            logger.error("Failed to start scenario %s: %s", scenario_id, e)
+            logger.exception("Failed to start scenario %s: %s", scenario_id, e)
             raise
 
     async def stop_scenario(self, scenario_id: str) -> None:

@@ -48,12 +48,12 @@ async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(re
             except Exception as db_err:
                 db_ok = False
                 db_err_msg = str(db_err)
-                logger.error("Failed to save device %s to DB: %s", config.id, db_err)
+                logger.exception("Failed to save device %s to DB: %s", config.id, db_err)
                 try:  # FIXED-P1: 持久化失败时回滚内存中的设备创建
                     await engine.remove_device(config.id)
                 except Exception as rollback_err:
-                    logger.error("Failed to rollback device %s after DB save failure: %s", config.id, rollback_err)
-                raise HTTPException(status_code=500, detail=f"Device persistence failed: {db_err_msg}")
+                    logger.exception("Failed to rollback device %s after DB save failure: %s", config.id, rollback_err)
+                raise HTTPException(status_code=500, detail=f"Device persistence failed: {db_err_msg}") from db_err
         try:
             await engine.start_device(config.id)
         except Exception as start_err:
@@ -65,9 +65,9 @@ async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(re
         return resp
 
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/devices/quick-create")
@@ -118,7 +118,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = De
             except Exception as db_err:
                 db_ok = False
                 db_err_msg = str(db_err)
-                logger.error("Failed to save device %s to DB (quick-create): %s", config.id, db_err)
+                logger.exception("Failed to save device %s to DB (quick-create): %s", config.id, db_err)
         try:
             await engine.start_device(device_id)
         except Exception as start_err:
@@ -130,7 +130,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = De
             resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."
         return resp
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/devices/batch")
@@ -163,7 +163,7 @@ async def batch_create_devices(
                         await db.save_device(config)
                     except Exception as db_err:
                         db_ok = False
-                        logger.error("Failed to persist device %s: %s", config.id, db_err)
+                        logger.exception("Failed to persist device %s: %s", config.id, db_err)
                 try:
                     await engine.start_device(config.id)
                 except Exception as start_err:
@@ -188,7 +188,7 @@ async def batch_create_devices(
                                     logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
                             logger.info("Rolled back device: %s", dev_id)
                         except Exception as rollback_err:
-                            logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
+                            logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
 
                     return {
                         "status": "failed",
@@ -216,9 +216,9 @@ async def batch_create_devices(
                         except Exception as e:
                             logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
                 except Exception as rollback_err:
-                    logger.error("Failed to rollback device %s: %s", dev_id, rollback_err)
+                    logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
 
-        raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}") from e
 
 
 @router.post("/devices/batch/delete")
@@ -235,7 +235,7 @@ async def batch_delete_devices(device_ids: list[str] = Body(..., embed=True), _u
                 try:
                     await db.delete_device(device_id)
                 except Exception as db_err:
-                    logger.error("Failed to delete device %s from DB: %s", device_id, db_err)
+                    logger.exception("Failed to delete device %s from DB: %s", device_id, db_err)
                     errors.append({"id": device_id, "error": f"Deleted from memory but DB deletion failed: {db_err}"})
                     deleted += 1
                     continue
@@ -282,7 +282,7 @@ async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_vie
     try:
         return engine.get_device(device_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/devices/{device_id}/config")
@@ -391,16 +391,16 @@ async def delete_device(device_id: str, _user: dict[str, Any] = Depends(require_
         except Exception as db_err:
             db_ok = False
             db_err_msg = str(db_err)
-            logger.error("Failed to delete device %s from DB: %s", device_id, db_err)
+            logger.exception("Failed to delete device %s from DB: %s", device_id, db_err)
         log_bus.emit(info.protocol, "system", device_id, "device_removed", f"Device {info.name} removed")
         resp = {"status": "ok"}
         if not db_ok:
             resp["_persistence_warning"] = f"Device deleted from memory, but DB deletion failed: {db_err_msg}. Device may reappear after restart."
         return resp
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/devices/{device_id}")
@@ -419,16 +419,16 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, A
             except Exception as db_err:
                 db_ok = False
                 db_err_msg = str(db_err)
-                logger.error("Failed to update device %s in DB: %s", device_id, db_err)
+                logger.exception("Failed to update device %s in DB: %s", device_id, db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
         response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else {"id": device_id, "name": config.name, "protocol": config.protocol}
         if not db_ok:
             response["_persistence_warning"] = f"Device updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
         return response
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/devices/{device_id}/points")
@@ -446,7 +446,7 @@ async def get_device_points(device_id: str, _user: dict[str, Any] = Depends(requ
             "protocol_active": protocol_active,
         }
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/devices/{device_id}/start")
@@ -458,10 +458,10 @@ async def start_device(device_id: str, _user: dict[str, Any] = Depends(require_o
         await _trigger_webhook_safe("device_online", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to start device %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to start device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/devices/{device_id}/stop")
@@ -472,10 +472,10 @@ async def stop_device(device_id: str, _user: dict[str, Any] = Depends(require_op
         await _trigger_webhook_safe("device_offline", {"device_id": device_id})
         return {"status": "ok"}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to stop device %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to stop device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/devices/{device_id}/points/{point_name}")  # FIXED: 添加try-except保护
@@ -503,10 +503,10 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
                 resp["warning"] = f"Protocol {instance.protocol} is not running - write only affects memory, not visible to external clients"
         return resp
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        logger.error("Write device point failed for %s/%s: %s", device_id, point_name, e)
-        raise HTTPException(status_code=500, detail=f"Write device point failed: {e}")
+        logger.exception("Write device point failed for %s/%s: %s", device_id, point_name, e)
+        raise HTTPException(status_code=500, detail=f"Write device point failed: {e}") from e
 
 
 # ===========================================================================
@@ -543,7 +543,7 @@ async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: di
         raise HTTPException(
             status_code=400,
             detail=f"Invalid fault type: {req.fault_type}. Valid types: {[t.value for t in FaultType]}",
-        )
+        ) from None
 
     try:
         trigger_mode = TriggerMode(req.trigger_mode)
@@ -551,7 +551,7 @@ async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: di
         raise HTTPException(
             status_code=400,
             detail=f"Invalid trigger mode: {req.trigger_mode}. Valid modes: {[m.value for m in TriggerMode]}",
-        )
+        ) from None
 
     params = dict(req.parameters)
     if req.duration != -1 and "duration" not in params:
@@ -781,12 +781,12 @@ async def add_device_control_loop(
     try:
         config = ControlLoopConfig.from_dict(loop_data)
     except (KeyError, ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"Invalid control loop config: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid control loop config: {e}") from e
 
     try:
         loop_id = instance.add_control_loop(config)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to add control loop: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to add control loop: {e}") from e
 
     logger.info("Control loop added: device=%s, loop_id=%s", device_id, loop_id)
 
@@ -839,7 +839,7 @@ async def get_device_detail(device_id: str, _user: dict[str, Any] = Depends(requ
     try:
         return engine.get_device_detail(device_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 class ConfigureNetworkRequest(BaseModel):

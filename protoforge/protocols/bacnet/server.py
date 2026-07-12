@@ -78,7 +78,7 @@ class BACnetServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start BACnet server: %s", e)
+            logger.exception("Failed to start BACnet server: %s", e)
             raise
 
     async def stop(self) -> None:

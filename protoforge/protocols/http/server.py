@@ -80,7 +80,7 @@ class HttpSimulatorServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start HTTP server: %s", e)
+            logger.exception("Failed to start HTTP server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -109,7 +109,7 @@ class HttpSimulatorServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("HTTP server task cancelled")
         except Exception as e:
-            logger.error("HTTP server error: %s", e)
+            logger.exception("HTTP server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,

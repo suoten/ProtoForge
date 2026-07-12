@@ -78,3 +78,18 @@ agent-browser.json
 .trae/
 .mypy_cache/
 .ruff_cache/
+
+# ConvergeLoop 自动补充（防止 git add -A 卡死）
+env/
+site-packages/
+.tox/
+dist/
+.next/
+.nuxt/
+.output/
+vendor/
+target/
+*.dll
+*.dylib
+*.exe
+*.bin
