@@ -44,6 +44,6 @@ try:
             return False
 
 except ImportError:
-    pass
+    logger.debug("amqtt not installed, MQTT auth plugin disabled")
 except Exception as e:  # FIXED-P1: 捕获非ImportError异常并记录，避免吞没系统信号
     logger.warning("MQTT auth plugin load error: %s", e)

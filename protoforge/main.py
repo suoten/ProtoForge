@@ -653,7 +653,7 @@ def create_app() -> FastAPI:
                 if hasattr(_database, '_pool') and _database._pool:
                     # 检查连接池是否有可用连接
                     db_health = "ok"
-            except Exception:
+            except (AttributeError, RuntimeError, OSError):
                 db_health = "degraded"
 
         # FIXED-P1: 协议未启动不算degraded，仅当有协议处于error状态时才判定degraded

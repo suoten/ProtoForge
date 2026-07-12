@@ -193,7 +193,7 @@ class ControlLoop:
 
     def is_saturated(self) -> bool:
         """返回 PID 是否处于饱和状态。"""
-        return self._pid.is_saturated()
+        return bool(self._pid.is_saturated())
 
     def reset(self) -> None:
         """重置 PID 控制器内部状态（积分项、微分项等）。"""

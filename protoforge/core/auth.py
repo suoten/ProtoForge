@@ -323,32 +323,33 @@ class UserManager:
             logger.warning("Failed to restore users: %s", e)
 
     async def authenticate(self, username: str, password: str) -> tuple[User | None, str]:
-        user = self._users.get(username)
-        if not user:
-            return None, "invalid_credentials"
+        async with self._users_lock:
+            user = self._users.get(username)
+            if not user:
+                return None, "invalid_credentials"
 
-        if user.locked_until > time.time():
-            remaining = int(user.locked_until - time.time())
-            logger.warning("User %s is locked until %.0f", username, user.locked_until)
-            return None, f"account_locked:{remaining}"
+            if user.locked_until > time.time():
+                remaining = int(user.locked_until - time.time())
+                logger.warning("User %s is locked until %.0f", username, user.locked_until)
+                return None, f"account_locked:{remaining}"
 
-        if not verify_password(password, user.password_hash):
-            user.login_attempts += 1
-            max_attempts = _get_max_login_attempts()
-            lockout_dur = _get_lockout_duration()
-            if user.login_attempts >= max_attempts:
-                user.locked_until = time.time() + lockout_dur
-                logger.warning("User %s locked for %d seconds due to failed logins", username, lockout_dur)
-            await self._persist_user(user)
-            return None, "invalid_credentials"
+            if not verify_password(password, user.password_hash):
+                user.login_attempts += 1
+                max_attempts = _get_max_login_attempts()
+                lockout_dur = _get_lockout_duration()
+                if user.login_attempts >= max_attempts:
+                    user.locked_until = time.time() + lockout_dur
+                    logger.warning("User %s locked for %d seconds due to failed logins", username, lockout_dur)
+                await self._persist_user(user)
+                return None, "invalid_credentials"
 
-        user.login_attempts = 0
-        user.locked_until = 0.0
-        try:
-            await self._persist_user(user)
-        except RuntimeError as e:
-            logger.exception("Failed to persist login state for %s after successful auth: %s", username, e)
-        return user, ""
+            user.login_attempts = 0
+            user.locked_until = 0.0
+            try:
+                await self._persist_user(user)
+            except RuntimeError as e:
+                logger.exception("Failed to persist login state for %s after successful auth: %s", username, e)
+            return user, ""
 
     async def _persist_user(self, user: User) -> None:
         if not self._db:

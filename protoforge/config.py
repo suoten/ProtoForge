@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     no_auth: bool = False
     admin_password: str = ""  # FIXED: default empty; auto-generates random password if unset
     reset_admin_password: bool = False  # 设为 true 时，启动时用 PROTOFORGE_ADMIN_PASSWORD 重置 admin 密码
-    grpc_port: int = 0  # FIXED: default to 0 (disabled); set PROTOFORGE_GRPC_PORT to enable (e.g. 50051)
+    grpc_port: int = 0  # 0 means disabled; set PROTOFORGE_GRPC_PORT to a positive port (e.g. 50051) to enable gRPC
     failover_role: str = ""
     failover_primary: str = ""
     failover_standby: str = ""
@@ -267,30 +267,33 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
         "edgelite_url", "edgelite_username", "edgelite_password",
         "protoforge_public_host",
     }
-    for key, value in updates.items():
-        if key.endswith("_port") or key in allowed_keys:
-            if value == "***":
-                continue
-            validation_error = _validate_setting(key, value)
-            if validation_error:
-                errors.append(validation_error)
-                continue
-            _settings_overrides[key] = value
-            if hasattr(s, key):
-                old_val = getattr(s, key)
-                if old_val != value:
-                    setattr(s, key, value)
-                    changed[key] = {"old": old_val, "new": value}
-    if errors:
-        raise ConfigValidationError(errors)
-    _save_env()
+    with _settings_lock:
+        for key, value in updates.items():
+            if key.endswith("_port") or key in allowed_keys:
+                if value == "***":
+                    continue
+                validation_error = _validate_setting(key, value)
+                if validation_error:
+                    errors.append(validation_error)
+                    continue
+                _settings_overrides[key] = value
+                if hasattr(s, key):
+                    old_val = getattr(s, key)
+                    if old_val != value:
+                        setattr(s, key, value)
+                        changed[key] = {"old": old_val, "new": value}
+        if errors:
+            raise ConfigValidationError(errors)
+        _save_env()
     return changed
 
 
 def _save_env() -> None:
+    """Save settings overrides to .env file. Caller must hold _settings_lock."""
     prefix = "PROTOFORGE_"
     lines = []
     try:
+        overrides_snapshot = dict(_settings_overrides)
         if _ENV_FILE.exists():
             content = _ENV_FILE.read_text(encoding="utf-8")
             content = content.replace("\r\n", "\n")
@@ -298,8 +301,8 @@ def _save_env() -> None:
                 if "=" in line:
                     key = line.split("=", 1)[0].strip()
                     field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
-                    if field_name in _settings_overrides:
-                        lines.append(f"{key}={_settings_overrides[field_name]}")
+                    if field_name in overrides_snapshot:
+                        lines.append(f"{key}={overrides_snapshot[field_name]}")
                     else:
                         lines.append(line)
                 else:
@@ -310,7 +313,7 @@ def _save_env() -> None:
             if "=" in line:
                 existing_keys.add(line.split("=", 1)[0].strip())
 
-        for key, value in _settings_overrides.items():
+        for key, value in overrides_snapshot.items():
             env_key = f"{prefix}{key.upper()}"
             if env_key not in existing_keys:
                 lines.append(f"{env_key}={value}")

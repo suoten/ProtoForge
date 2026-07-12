@@ -315,7 +315,7 @@ class MotorBehavior(BaseBehavior):
 
     def is_stalled(self) -> bool:
         """返回是否处于堵转状态。"""
-        return self._stalled
+        return bool(self._stalled)
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -675,11 +675,11 @@ class LevelBehavior(BaseBehavior):
 
     def is_overflow(self) -> bool:
         """返回是否溢出。"""
-        return self._overflow
+        return bool(self._overflow)
 
     def is_low_alarm(self) -> bool:
         """返回是否低液位报警。"""
-        return self._low_alarm
+        return bool(self._low_alarm)
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -939,7 +939,7 @@ class PIDController(BaseBehavior):
 
     def is_saturated(self) -> bool:
         """返回是否处于饱和状态。"""
-        return self._saturated
+        return bool(self._saturated)
 
     def _state(self) -> dict[str, Any]:
         return {
