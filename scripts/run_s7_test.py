@@ -3,8 +3,8 @@ import asyncio
 import socket
 import struct
 import sys
-import time
 import threading
+import time
 
 
 def build_cotp_cr(rack=0, slot=1):
@@ -63,7 +63,7 @@ def recv_tpkt(sock, timeout=5.0):
     if header[0] != 0x03:
         raise ConnectionError(f"Invalid TPKT version: 0x{header[0]:02X}")
     tpkt_len = struct.unpack(">H", header[2:4])[0]
-    remaining = tpkt_len - 4
+    tpkt_len - 4
     data = header
     while len(data) < tpkt_len:
         chunk = sock.recv(tpkt_len - len(data))
@@ -95,11 +95,11 @@ def run_tests(host, port):
         elif resp[5] != 0xD0:
             errors.append(f"COTP CC: PDU Type 错误 0x{resp[5]:02X} (期望 0xD0)")
         else:
-            print(f"  COTP CC 验证通过! PDU Type=0xD0")
+            print("  COTP CC 验证通过! PDU Type=0xD0")
         sock.close()
-    except socket.timeout:
+    except TimeoutError:
         errors.append("COTP CR: 超时无响应 - P0 Bug未修复!")
-        print(f"  FAIL: 超时无响应")
+        print("  FAIL: 超时无响应")
     except Exception as e:
         errors.append(f"COTP CR: {e}")
         print(f"  FAIL: {e}")
@@ -121,7 +121,7 @@ def run_tests(host, port):
             if resp[9] != 0x00 or resp[10] != 0x00:
                 errors.append(f"S7 Setup: Reserved 非零: 0x{resp[9]:02X}{resp[10]:02X}")
             else:
-                print(f"  Reserved: 0x0000 OK")
+                print("  Reserved: 0x0000 OK")
             # PDU Reference
             resp_ref = struct.unpack(">H", resp[11:13])[0]
             if resp_ref != pdu_ref:
@@ -132,15 +132,15 @@ def run_tests(host, port):
             if resp[17] != 0 or resp[18] != 0:
                 errors.append(f"S7 Setup: Error Class={resp[17]}, Code={resp[18]}")
             else:
-                print(f"  Error Class/Code: 0/0 OK")
+                print("  Error Class/Code: 0/0 OK")
             # PDU Size
             if len(resp) >= 27:
                 neg_pdu = struct.unpack(">H", resp[25:27])[0]
                 print(f"  协商 PDU Size: {neg_pdu}")
         sock.close()
-    except socket.timeout:
+    except TimeoutError:
         errors.append("S7 Setup: 超时无响应")
-        print(f"  FAIL: 超时无响应")
+        print("  FAIL: 超时无响应")
     except Exception as e:
         errors.append(f"S7 Setup: {e}")
         print(f"  FAIL: {e}")
@@ -161,9 +161,9 @@ def run_tests(host, port):
         print(f"  收到响应 ({len(resp)} bytes): {resp.hex()}")
         if len(resp) >= 19:
             if resp[9] != 0x00 or resp[10] != 0x00:
-                errors.append(f"S7 Read: Reserved 非零")
+                errors.append("S7 Read: Reserved 非零")
             else:
-                print(f"  Reserved: 0x0000 OK")
+                print("  Reserved: 0x0000 OK")
             resp_ref = struct.unpack(">H", resp[11:13])[0]
             if resp_ref != pdu_ref:
                 errors.append(f"S7 Read: PDU Ref 不匹配: {resp_ref} != {pdu_ref}")
@@ -172,11 +172,11 @@ def run_tests(host, port):
             if resp[17] != 0 or resp[18] != 0:
                 errors.append(f"S7 Read: Error Class={resp[17]}, Code={resp[18]}")
             else:
-                print(f"  Error Class/Code: 0/0 OK")
+                print("  Error Class/Code: 0/0 OK")
         sock.close()
-    except socket.timeout:
+    except TimeoutError:
         errors.append("S7 Read: 超时无响应")
-        print(f"  FAIL: 超时无响应")
+        print("  FAIL: 超时无响应")
     except Exception as e:
         errors.append(f"S7 Read: {e}")
         print(f"  FAIL: {e}")
@@ -213,11 +213,11 @@ def run_tests(host, port):
             if resp[8] != 0x03:
                 errors.append(f"SZL: Msg Type 错误 0x{resp[8]:02X}")
             else:
-                print(f"  Msg Type: 0x03 (Ack Data) OK")
+                print("  Msg Type: 0x03 (Ack Data) OK")
             if resp[9] != 0x00 or resp[10] != 0x00:
-                errors.append(f"SZL: Reserved 非零")
+                errors.append("SZL: Reserved 非零")
             else:
-                print(f"  Reserved: 0x0000 OK")
+                print("  Reserved: 0x0000 OK")
             resp_ref = struct.unpack(">H", resp[11:13])[0]
             if resp_ref != 3:
                 errors.append(f"SZL: PDU Ref 不匹配: {resp_ref} != 3")
@@ -226,11 +226,11 @@ def run_tests(host, port):
             if resp[17] != 0 or resp[18] != 0:
                 errors.append(f"SZL: Error Class={resp[17]}, Code={resp[18]}")
             else:
-                print(f"  Error Class/Code: 0/0 OK")
+                print("  Error Class/Code: 0/0 OK")
         sock.close()
-    except socket.timeout:
+    except TimeoutError:
         errors.append("SZL: 超时无响应")
-        print(f"  FAIL: 超时无响应")
+        print("  FAIL: 超时无响应")
     except Exception as e:
         errors.append(f"SZL: {e}")
         print(f"  FAIL: {e}")
@@ -241,7 +241,7 @@ def run_tests(host, port):
         for i, err in enumerate(errors, 1):
             print(f"    {i}. {err}")
     else:
-        print(f"  全部验证通过!")
+        print("  全部验证通过!")
     print("=" * 60)
     return len(errors) == 0
 
@@ -251,8 +251,8 @@ def main():
     port = 1102
 
     # 在后台线程启动 S7 服务器
-    from protoforge.protocols.s7.server import S7Server
     from protoforge.models.device import DeviceConfig, PointConfig
+    from protoforge.protocols.s7.server import S7Server
 
     server = S7Server()
     loop = asyncio.new_event_loop()

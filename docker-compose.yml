@@ -34,6 +34,14 @@ services:
   protoforge:
     build: .
     command: ["sh", "-c", "alembic upgrade head || :; python -m protoforge.cli run"]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
     ports:
       - "8000:8000"
       - "5020:5020"
@@ -70,6 +78,12 @@ services:
     volumes:
       - protoforge-data:/app/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   protoforge-test:
     profiles: [test]

@@ -18,9 +18,9 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,all]"
       - name: Ruff check
-        run: ruff check protoforge/ --exit-zero
+        run: ruff check protoforge/ tests/ scripts/
       - name: MyPy check
-        run: mypy protoforge/ --ignore-missing-imports || true
+        run: mypy protoforge/ --ignore-missing-imports
 
   unit-tests:
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,all]"
       - name: Run Unit Tests
-        run: python -m pytest tests/ -v --tb=short || true
+        run: python -m pytest tests/ -v --tb=short
 
   build-frontend:
     runs-on: ubuntu-latest

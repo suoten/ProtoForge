@@ -24,7 +24,7 @@ except ImportError:
 
 OLD_API_AVAILABLE = False
 try:
-    from pymodbus.datastore import ModbusDeviceContext, ModbusSequentialDataBlock, ModbusServerContext
+    from pymodbus.datastore import ModbusDeviceContext, ModbusSequentialDataBlock, ModbusServerContext  # noqa: F401
     OLD_API_AVAILABLE = True
 except ImportError:
     pass
@@ -781,10 +781,7 @@ class ModbusTcpServer(ProtocolServer):
                     p_addr, p_area = parse_modbus_address(point.address)
                     # auto 区域按数据类型自动判定（与 _apply_device_to_context 的存储规则一致）
                     if p_area == "auto":
-                        if point.data_type.value == "bool":
-                            p_area = "coil"
-                        else:
-                            p_area = "holding"
+                        p_area = "coil" if point.data_type.value == "bool" else "holding"
                     if p_area == target_area and p_addr <= address < p_addr + self._point_reg_count(point):
                         return device_id, point.name
                 except (ValueError, TypeError):

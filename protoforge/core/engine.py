@@ -422,6 +422,12 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         if instance.status == DeviceStatus.ONLINE:
             return
+        # FIXED: Check if device is already in STARTING state (maps to OFFLINE)
+        # to prevent double-start which causes ERROR state transition failure
+        from protoforge.core.state_machine import DeviceState
+        if instance.state_machine.get_state() == DeviceState.STARTING:
+            logger.debug("Device %s already in STARTING state, skipping start", device_id)
+            return
         if instance.status == DeviceStatus.ERROR:
             instance.stop()
         try:

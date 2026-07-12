@@ -10,16 +10,15 @@ Usage:  python scripts/diag_mc.py
 """
 
 import asyncio
+import os
 import socket
 import struct
 import sys
-import os
-import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.mc.server import McServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.mc.server import McServer
 
 HOST = "127.0.0.1"
 PORT = 5000
@@ -141,12 +140,12 @@ def test_batch_read():
         cc = parse_completion_code(resp)
         if cc != 0x0000:
             print(f"  Completion code: 0x{cc:04X}")
-            print(f"  FAIL - expected 0x0000")
+            print("  FAIL - expected 0x0000")
             return False
         data = resp[11:]
         words = [struct.unpack("<H", data[i:i+2])[0] for i in range(0, len(data), 2)]
         print(f"  Read {len(words)} words: {words}")
-        print(f"  PASS")
+        print("  PASS")
         return True
     except Exception as e:
         print(f"  FAIL - {e}")
@@ -165,10 +164,10 @@ def test_batch_write():
         cc = parse_completion_code(resp)
         if cc != 0x0000:
             print(f"  Completion code: 0x{cc:04X}")
-            print(f"  FAIL - expected 0x0000")
+            print("  FAIL - expected 0x0000")
             return False
         print(f"  Write completion code: 0x{cc:04X}")
-        print(f"  PASS")
+        print("  PASS")
         return True
     except Exception as e:
         print(f"  FAIL - {e}")
@@ -184,7 +183,7 @@ def test_batch_read_verify():
         cc = parse_completion_code(resp)
         if cc != 0x0000:
             print(f"  Completion code: 0x{cc:04X}")
-            print(f"  FAIL - expected 0x0000")
+            print("  FAIL - expected 0x0000")
             return False
         data = resp[11:]
         d0 = struct.unpack("<H", data[0:2])[0]
@@ -198,9 +197,9 @@ def test_batch_read_verify():
             print(f"  D1 mismatch: expected 5678, got {d1}")
             ok = False
         if ok:
-            print(f"  PASS")
+            print("  PASS")
         else:
-            print(f"  FAIL")
+            print("  FAIL")
         return ok
     except Exception as e:
         print(f"  FAIL - {e}")
@@ -216,10 +215,10 @@ def test_self_diagnosis():
         cc = parse_completion_code(resp)
         if cc != 0x0000:
             print(f"  Completion code: 0x{cc:04X}")
-            print(f"  FAIL - expected 0x0000")
+            print("  FAIL - expected 0x0000")
             return False
         print(f"  Self-diagnosis completion code: 0x{cc:04X}")
-        print(f"  PASS")
+        print("  PASS")
         return True
     except Exception as e:
         print(f"  FAIL - {e}")

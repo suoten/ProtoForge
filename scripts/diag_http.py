@@ -8,16 +8,16 @@ Usage:
     python scripts/diag_http.py
 """
 
-import sys
+import asyncio
+import json
 import os
 import socket
-import json
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.http.server import HttpSimulatorServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.http.server import HttpSimulatorServer
 
 HOST = "127.0.0.1"
 PORT = 8080
@@ -61,7 +61,7 @@ def http_request(method: str, path: str, body: dict | None = None) -> tuple[int,
                 if not chunk:
                     break
                 data += chunk
-            except socket.timeout:
+            except TimeoutError:
                 break
 
         response = data.decode("utf-8", errors="replace")
@@ -111,7 +111,7 @@ async def start_server() -> HttpSimulatorServer:
     await server.start({"host": HOST, "port": PORT})
 
     # Wait for the server to start accepting connections.
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         probe.settimeout(0.5)

@@ -8,17 +8,17 @@ Usage:
     python scripts/diag_mqtt.py
 """
 
-import sys
+import asyncio
+import json
 import os
 import socket
 import struct
-import asyncio
-import json
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.mqtt.server import MqttBroker
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.mqtt.server import MqttBroker
 
 HOST = "127.0.0.1"
 PORT = 1883
@@ -176,7 +176,7 @@ async def start_server() -> MqttBroker:
     await server.start({"host": HOST, "port": PORT, "publish_interval": 2})
 
     # Wait for the server to start accepting connections.
-    for attempt in range(30):
+    for _attempt in range(30):
         await asyncio.sleep(0.2)
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         probe.settimeout(0.5)
@@ -285,7 +285,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                         break
                 if received:
                     break
-        except socket.timeout:
+        except TimeoutError:
             pass
 
         if received:

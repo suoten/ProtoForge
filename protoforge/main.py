@@ -1,5 +1,6 @@
 """Module: main."""
 
+import contextlib
 import logging
 import logging.handlers
 import os
@@ -439,7 +440,19 @@ async def lifespan(app: FastAPI):
 
     restore_errors = await _restore_persisted_data(_engine, _database, _template_manager, settings)
 
-    grpc_server = await _start_optional_services(_engine, _template_manager, settings)
+    # Start optional services (demo data, gRPC) in background to avoid blocking startup
+    # This ensures the /health endpoint is available quickly for health checks
+    _grpc_server = None
+
+    async def _bg_start_optional_services():
+        nonlocal _grpc_server
+        try:
+            _grpc_server = await _start_optional_services(_engine, _template_manager, settings)
+        except Exception as e:
+            logger.error("Background optional services startup failed: %s", e)
+
+    import asyncio as _asyncio
+    _bg_task = _asyncio.create_task(_bg_start_optional_services())
 
     _suppress_noisy_loggers()
 
@@ -452,7 +465,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    await _shutdown_services(grpc_server, _integration_manager, _engine, _database)
+    # Cancel background task if still running
+    _bg_task.cancel()
+    with contextlib.suppress(_asyncio.CancelledError):
+        await _bg_task
+
+    await _shutdown_services(_grpc_server, _integration_manager, _engine, _database)
 
     # 注销所有服务，避免重启时状态残留
     _clear_registry()

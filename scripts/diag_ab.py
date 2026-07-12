@@ -6,15 +6,17 @@ running on 127.0.0.1:44818.
 Usage: python scripts/diag_ab.py
 """
 import asyncio
+import os
 import struct
 import sys
-import os
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.ab.server import AbServer
+import contextlib
+
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.ab.server import AbServer
 
 HOST = "127.0.0.1"
 PORT = 44818
@@ -145,7 +147,7 @@ async def test_register_session(reader, writer):
         return None
     parsed = parse_eip_header(resp)
     if parsed is None:
-        print(f"    FAIL: Could not parse EIP header")
+        print("    FAIL: Could not parse EIP header")
         return None
     cmd, length, session, status = parsed
     if cmd != 0x0065:
@@ -155,7 +157,7 @@ async def test_register_session(reader, writer):
         print(f"    FAIL: Non-zero status 0x{status:08X}")
         return None
     if session == 0:
-        print(f"    FAIL: Session handle is 0")
+        print("    FAIL: Session handle is 0")
         return None
     print(f"    PASS: Session handle = 0x{session:08X}")
     return session
@@ -171,14 +173,14 @@ async def test_list_identity(reader, writer, session):
         return False
     parsed = parse_eip_header(resp)
     if parsed is None:
-        print(f"    FAIL: Could not parse EIP header")
+        print("    FAIL: Could not parse EIP header")
         return False
     cmd, length, status, _ = parsed
     if cmd != 0x0001:
         print(f"    FAIL: Command mismatch (got 0x{cmd:04X}, expected 0x0001)")
         return False
     if length == 0:
-        print(f"    FAIL: No identity payload returned")
+        print("    FAIL: No identity payload returned")
         return False
     payload = resp[24:]
     if len(payload) >= 2:
@@ -218,7 +220,7 @@ async def test_forward_open(reader, writer, session):
         return None
     parsed = parse_eip_header(resp)
     if parsed is None:
-        print(f"    FAIL: Could not parse EIP header")
+        print("    FAIL: Could not parse EIP header")
         return None
     cmd, length, resp_session, status = parsed
     if cmd != 0x006F:
@@ -229,17 +231,17 @@ async def test_forward_open(reader, writer, session):
         return None
     cip_data = parse_cip_from_rr_response(resp)
     if cip_data is None or len(cip_data) < 2:
-        print(f"    FAIL: No CIP data in response")
+        print("    FAIL: No CIP data in response")
         return None
     service_resp = cip_data[0]
     if service_resp == 0xD6:  # Forward Open success
         if len(cip_data) >= 10:
             o_t_conn_id = struct.unpack("<I", cip_data[2:6])[0]
             t_o_conn_id = struct.unpack("<I", cip_data[6:10])[0]
-            print(f"    PASS: Forward Open succeeded")
+            print("    PASS: Forward Open succeeded")
             print(f"           O_T_ConnectionID=0x{o_t_conn_id:08X}, T_O_ConnectionID=0x{t_o_conn_id:08X}")
             return o_t_conn_id
-        print(f"    PASS: Forward Open response received (short)")
+        print("    PASS: Forward Open response received (short)")
         return 0x10000001
     else:
         if len(cip_data) >= 4:
@@ -318,7 +320,7 @@ async def test_read_tag(reader, writer, session, conn_id, tag_name, expected_typ
         return False, None
     parsed = parse_eip_header(resp)
     if parsed is None:
-        print(f"    FAIL: Could not parse EIP header")
+        print("    FAIL: Could not parse EIP header")
         return False, None
     cmd, length, resp_session, status = parsed
     if cmd not in (0x0070, 0x006F):
@@ -326,13 +328,10 @@ async def test_read_tag(reader, writer, session, conn_id, tag_name, expected_typ
         return False, None
 
     # Parse CIP from response (handles double-wrapping)
-    if cmd == 0x006F:
-        cip_data = parse_cip_from_rr_response(resp)
-    else:
-        cip_data = parse_cip_from_unit_response(resp)
+    cip_data = parse_cip_from_rr_response(resp) if cmd == 111 else parse_cip_from_unit_response(resp)
 
     if cip_data is None or len(cip_data) < 4:
-        print(f"    FAIL: No CIP data in response")
+        print("    FAIL: No CIP data in response")
         return False, None
 
     service_resp = cip_data[0]
@@ -342,7 +341,7 @@ async def test_read_tag(reader, writer, session, conn_id, tag_name, expected_typ
             print(f"    PASS: {tag_name} = {value} ({dtype})")
             return True, value
         else:
-            print(f"    FAIL: Could not parse value from CIP response")
+            print("    FAIL: Could not parse value from CIP response")
             return False, None
     else:
         if len(cip_data) >= 4:
@@ -394,7 +393,7 @@ async def test_write_tag(reader, writer, session, conn_id, tag_name, data_type, 
         return False
     parsed = parse_eip_header(resp)
     if parsed is None:
-        print(f"    FAIL: Could not parse EIP header")
+        print("    FAIL: Could not parse EIP header")
         return False
     cmd, length, resp_session, status = parsed
     if cmd not in (0x0070, 0x006F):
@@ -402,13 +401,10 @@ async def test_write_tag(reader, writer, session, conn_id, tag_name, data_type, 
         return False
 
     # Parse CIP from response (handles double-wrapping)
-    if cmd == 0x006F:
-        cip_data = parse_cip_from_rr_response(resp)
-    else:
-        cip_data = parse_cip_from_unit_response(resp)
+    cip_data = parse_cip_from_rr_response(resp) if cmd == 111 else parse_cip_from_unit_response(resp)
 
     if cip_data is None or len(cip_data) < 1:
-        print(f"    FAIL: No CIP data in response")
+        print("    FAIL: No CIP data in response")
         return False
 
     service_resp = cip_data[0]
@@ -517,11 +513,11 @@ async def run_tests():
         ok_write = parsed is not None and parsed[0] == 0x006F
         cip_resp_data = parse_cip_from_rr_response(resp)
         if ok_write and cip_resp_data and cip_resp_data[0] == 0xCD:
-            print(f"\n[5] Write Tag 'Temperature' = 42.5 (CIP 0x4D via SendRRData 0x006F)")
-            print(f"    PASS: Write to 'Temperature' succeeded")
+            print("\n[5] Write Tag 'Temperature' = 42.5 (CIP 0x4D via SendRRData 0x006F)")
+            print("    PASS: Write to 'Temperature' succeeded")
         else:
-            print(f"\n[5] Write Tag 'Temperature' = 42.5 (CIP 0x4D via SendRRData 0x006F)")
-            print(f"    FAIL: Write response error")
+            print("\n[5] Write Tag 'Temperature' = 42.5 (CIP 0x4D via SendRRData 0x006F)")
+            print("    FAIL: Write response error")
         results.append(("Write Tag (Temperature=42.5)", ok_write))
 
         # Test 5b: Write Tag (Pressure = 200) via SendRRData
@@ -540,11 +536,11 @@ async def run_tests():
         ok_write_press = parsed is not None and parsed[0] == 0x006F
         cip_resp_data = parse_cip_from_rr_response(resp)
         if ok_write_press and cip_resp_data and cip_resp_data[0] == 0xCD:
-            print(f"\n[5] Write Tag 'Pressure' = 200 (CIP 0x4D via SendRRData 0x006F)")
-            print(f"    PASS: Write to 'Pressure' succeeded")
+            print("\n[5] Write Tag 'Pressure' = 200 (CIP 0x4D via SendRRData 0x006F)")
+            print("    PASS: Write to 'Pressure' succeeded")
         else:
-            print(f"\n[5] Write Tag 'Pressure' = 200 (CIP 0x4D via SendRRData 0x006F)")
-            print(f"    FAIL: Write response error")
+            print("\n[5] Write Tag 'Pressure' = 200 (CIP 0x4D via SendRRData 0x006F)")
+            print("    FAIL: Write response error")
         results.append(("Write Tag (Pressure=200)", ok_write_press))
 
         # Test 6: Read back and verify
@@ -580,10 +576,8 @@ async def run_tests():
         print(f"\nFAIL: Unexpected error: {e}")
     finally:
         writer.close()
-        try:
+        with contextlib.suppress(Exception):
             await writer.wait_closed()
-        except Exception:
-            pass
     return results
 
 

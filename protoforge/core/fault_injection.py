@@ -729,7 +729,7 @@ class FaultPropagation:
         """处理待执行的传播任务（应在引擎 tick 循环中调用）。"""
         with self._lock:
             now = time.time()
-            remaining = deque()
+            remaining: deque = deque()
             while self._pending:
                 task = self._pending.popleft()
                 if now >= task["execute_at"]:

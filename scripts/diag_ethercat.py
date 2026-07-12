@@ -10,16 +10,16 @@ Usage:
     python scripts/diag_ethercat.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.ethercat.server import EtherCATServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.ethercat.server import EtherCATServer
 
 HOST = "127.0.0.1"
 PORT = 34980
@@ -152,7 +152,7 @@ async def start_server() -> EtherCATServer:
     await server.create_device(config)
 
     # Wait for the server to start accepting connections
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         if server._server_task.done():
             exc = server._server_task.exception()

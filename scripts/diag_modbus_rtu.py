@@ -9,16 +9,16 @@ Usage:
     python scripts/diag_modbus_rtu.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.modbus.rtu_server import ModbusRtuServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.modbus.rtu_server import ModbusRtuServer
 
 HOST = "127.0.0.1"
 PORT = 5021
@@ -64,10 +64,10 @@ def _send_recv(sock: socket.socket, unit_id: int, pdu: bytes) -> bytes:
 
     # Read MBAP header (7 bytes)
     header = _recv_exact(sock, 7)
-    resp_tx_id = struct.unpack(">H", header[0:2])[0]
-    resp_proto_id = struct.unpack(">H", header[2:4])[0]
+    struct.unpack(">H", header[0:2])[0]
+    struct.unpack(">H", header[2:4])[0]
     resp_length = struct.unpack(">H", header[4:6])[0]
-    resp_unit_id = header[6]
+    header[6]
 
     # Read remaining payload (Length field includes UnitID byte already read)
     payload_len = resp_length - 1
@@ -147,7 +147,7 @@ async def start_server() -> ModbusRtuServer:
     })
 
     # Wait for the server to start accepting connections.
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         probe.settimeout(0.5)
@@ -187,11 +187,9 @@ def run_tests() -> list[tuple[str, bool, str]]:
 
     # Try to connect - the server might be on a different port if PORT was taken
     connected = False
-    actual_port = PORT
     for port in [PORT, PORT + 1, PORT + 2, PORT + 3]:
         try:
             sock.connect((HOST, port))
-            actual_port = port
             connected = True
             break
         except ConnectionError:

@@ -3,16 +3,18 @@ ProtoForge PROFINET Server Diagnostic Test
 Target: 127.0.0.1:34964 (CM TCP tunnel)
 """
 
-import sys
+import asyncio
 import os
 import struct
-import asyncio
+import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.profinet.server import ProfinetServer
+import contextlib
+
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.profinet.server import ProfinetServer
 
 HOST = "127.0.0.1"
 PORT = 34964
@@ -70,10 +72,8 @@ async def open_connection():
 async def close_connection(reader, writer):
     """Close a TCP connection gracefully."""
     writer.close()
-    try:
+    with contextlib.suppress(Exception):
         await writer.wait_closed()
-    except Exception:
-        pass
 
 
 async def start_server():
@@ -137,10 +137,8 @@ async def test_dcp_identify():
         record("DCP Identify", False, f"error: {e}")
         return
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await close_connection(reader, writer)
-        except Exception:
-            pass
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_DCP:
         record("DCP Identify", False, f"unexpected response (len={len(resp) if resp else 0})")
@@ -195,13 +193,11 @@ async def test_dcp_get():
         record("DCP Get", False, f"error: {e}")
         return
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await close_connection(reader, writer)
-        except Exception:
-            pass
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_DCP:
-        record("DCP Get", False, f"unexpected response")
+        record("DCP Get", False, "unexpected response")
         return
     if len(resp) < 11:
         record("DCP Get", False, f"response too short ({len(resp)} bytes)")
@@ -248,13 +244,11 @@ async def test_dcp_set():
         record("DCP Set", False, f"error: {e}")
         return
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await close_connection(reader, writer)
-        except Exception:
-            pass
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_DCP:
-        record("DCP Set", False, f"unexpected response")
+        record("DCP Set", False, "unexpected response")
         return
     # DCP Set response has no data, so minimum is: msg_type(1) + service_id(1) + service_type(1) + xid(4) + reserved(2) + data_len(2) = 11
     if len(resp) < 11:
@@ -307,7 +301,7 @@ async def test_cm_connect(reader, writer):
         return None
 
     if resp is None or len(resp) < 3 or resp[0] != MSG_TYPE_CM:
-        record("CM Connect", False, f"unexpected response")
+        record("CM Connect", False, "unexpected response")
         return None
 
     resp_op = resp[1]
@@ -370,7 +364,7 @@ async def test_cm_control(reader, writer, ar_id):
         return
 
     if resp is None or len(resp) < 3 or resp[0] != MSG_TYPE_CM:
-        record("CM Control (ApplicationReady)", False, f"unexpected response")
+        record("CM Control (ApplicationReady)", False, "unexpected response")
         return
 
     resp_op = resp[1]
@@ -404,7 +398,7 @@ async def test_cm_read(reader, writer):
         return
 
     if resp is None or len(resp) < 3 or resp[0] != MSG_TYPE_CM:
-        record("CM Read", False, f"unexpected response")
+        record("CM Read", False, "unexpected response")
         return
     if resp[1] != CM_OP_READ:
         record("CM Read", False, f"unexpected cm_op=0x{resp[1]:02X}")
@@ -432,7 +426,7 @@ async def test_cm_write(reader, writer):
         return
 
     if resp is None or len(resp) < 3 or resp[0] != MSG_TYPE_CM:
-        record("CM Write", False, f"unexpected response")
+        record("CM Write", False, "unexpected response")
         return
     if resp[1] != CM_OP_WRITE:
         record("CM Write", False, f"unexpected cm_op=0x{resp[1]:02X}")
@@ -467,7 +461,7 @@ async def test_rt_cyclic(reader, writer):
         return
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_RT:
-        record("RT Cyclic Data", False, f"unexpected response")
+        record("RT Cyclic Data", False, "unexpected response")
         return
 
     data = resp[1:]
@@ -512,7 +506,7 @@ async def test_rt_cyclic_write(reader, writer):
         return
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_RT:
-        record("RT Cyclic Write+Read", False, f"unexpected response")
+        record("RT Cyclic Write+Read", False, "unexpected response")
         return
 
     data = resp[1:]
@@ -554,7 +548,7 @@ async def test_alarm(reader, writer, ar_id):
         return
 
     if resp is None or len(resp) < 2 or resp[0] != MSG_TYPE_ALARM:
-        record("Alarm", False, f"unexpected response")
+        record("Alarm", False, "unexpected response")
         return
 
     data = resp[1:]
@@ -592,7 +586,7 @@ async def test_cm_release(reader, writer, ar_id):
         return
 
     if resp is None or len(resp) < 3 or resp[0] != MSG_TYPE_CM:
-        record("CM Release", False, f"unexpected response")
+        record("CM Release", False, "unexpected response")
         return
     if resp[1] != CM_OP_RELEASE:
         record("CM Release", False, f"unexpected cm_op=0x{resp[1]:02X}")
@@ -623,7 +617,7 @@ async def test_unknown_msg_type():
         # Server returns None for unknown types, so no response is sent.
         # Try to read with a short timeout - if we get nothing, that's expected.
         try:
-            hdr = await asyncio.wait_for(reader.readexactly(2), timeout=2)
+            await asyncio.wait_for(reader.readexactly(2), timeout=2)
             # If we got a response, that's also fine
             record("Unknown Message Type (graceful)", True,
                    "server responded to unknown msg type")
@@ -638,10 +632,8 @@ async def test_unknown_msg_type():
     except Exception as e:
         record("Unknown Message Type (graceful)", False, str(e))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             await close_connection(reader, writer)
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------

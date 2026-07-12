@@ -29,13 +29,13 @@ def check_tcp(ip: str, port: int, timeout: float = 5.0) -> bool:
                 print(f"    设备主动发送了数据 ({len(banner)} bytes): {banner.hex()}")
                 # 尝试识别协议
                 if banner[:2] == b'\x03\x00':
-                    print(f"    -> 看起来像 TPKT/S7 协议头")
+                    print("    -> 看起来像 TPKT/S7 协议头")
                 elif banner[:4] == b'MQTT':
-                    print(f"    -> 这是 MQTT 协议，不是 S7!")
+                    print("    -> 这是 MQTT 协议，不是 S7!")
                 elif b'HTTP' in banner[:10]:
-                    print(f"    -> 这是 HTTP 协议，不是 S7!")
+                    print("    -> 这是 HTTP 协议，不是 S7!")
                 elif banner[0] == 0x00 and len(banner) >= 8:
-                    print(f"    -> 可能是 Modbus TCP 协议")
+                    print("    -> 可能是 Modbus TCP 协议")
                 else:
                     try:
                         text = banner.decode('ascii', errors='replace')
@@ -44,17 +44,17 @@ def check_tcp(ip: str, port: int, timeout: float = 5.0) -> bool:
                         pass
                 print(f"    *** 该设备在端口 {port} 上运行的不是标准 S7 协议 ***")
             else:
-                print(f"    设备未主动发送数据 (符合 S7 PLC 行为)")
-        except socket.timeout:
-            print(f"    设备未主动发送数据 (符合 S7 PLC 行为)")
+                print("    设备未主动发送数据 (符合 S7 PLC 行为)")
+        except TimeoutError:
+            print("    设备未主动发送数据 (符合 S7 PLC 行为)")
 
         sock.close()
         return True
-    except socket.timeout:
+    except TimeoutError:
         print(f"    TCP 连接超时 ({timeout}s) - 端口不可达或被防火墙拦截")
         return False
     except ConnectionRefusedError:
-        print(f"    TCP 连接被拒绝 - 端口没有监听服务")
+        print("    TCP 连接被拒绝 - 端口没有监听服务")
         return False
     except OSError as e:
         print(f"    TCP 连接失败: {e}")
@@ -143,7 +143,7 @@ def check_s7_cotp(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
                     sock.close()
                     return True
                 elif pdu_type == 0xE0:
-                    print(f"    收到 COTP CR 而非 CC - 可能是对端也是客户端模式")
+                    print("    收到 COTP CR 而非 CC - 可能是对端也是客户端模式")
                     print(f"    响应 ({len(full_response)} bytes): {full_response.hex()}")
                 else:
                     print(f"    收到未知 PDU Type: 0x{pdu_type:02X}")
@@ -151,10 +151,10 @@ def check_s7_cotp(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
             else:
                 print(f"    COTP 响应太短: {full_response.hex()}")
 
-        except socket.timeout:
+        except TimeoutError:
             elapsed = time.time() - start
             print(f"    COTP 响应超时 ({elapsed:.1f}s) - 设备不回复 S7 协议")
-            print(f"    可能原因: 1)不是S7设备 2)rack/slot错误 3)S7通信未启用")
+            print("    可能原因: 1)不是S7设备 2)rack/slot错误 3)S7通信未启用")
             # 尝试读取设备可能延迟发送的任何数据
             try:
                 sock.settimeout(3.0)
@@ -162,9 +162,9 @@ def check_s7_cotp(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
                 if late_data:
                     print(f"    设备延迟发送了数据 ({len(late_data)} bytes): {late_data.hex()}")
                     if late_data[:2] == b'\x03\x00':
-                        print(f"    -> 这是 TPKT 协议数据，但不是 COTP CC 响应")
-                    print(f"    *** 设备可能不是标准 S7 PLC，或使用了非标准 S7 实现 ***")
-            except socket.timeout:
+                        print("    -> 这是 TPKT 协议数据，但不是 COTP CC 响应")
+                    print("    *** 设备可能不是标准 S7 PLC，或使用了非标准 S7 实现 ***")
+            except TimeoutError:
                 pass
 
         sock.close()
@@ -177,7 +177,7 @@ def check_s7_cotp(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
 
 def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0) -> bool:
     """Layer 3: S7 Communication Setup 检查"""
-    print(f"\n[3] S7 Communication Setup 检查")
+    print("\n[3] S7 Communication Setup 检查")
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -195,7 +195,7 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
         sock.sendall(tpkt)
         header = sock.recv(4)
         tpkt_len = struct.unpack(">H", header[2:4])[0]
-        remaining = tpkt_len - 4
+        tpkt_len - 4
         resp = header
         while len(resp) < tpkt_len:
             chunk = sock.recv(tpkt_len - len(resp))
@@ -204,11 +204,11 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
             resp += chunk
 
         if len(resp) < 6 or resp[5] != 0xD0:
-            print(f"    COTP 连接失败，无法继续 S7 Setup 检查")
+            print("    COTP 连接失败，无法继续 S7 Setup 检查")
             sock.close()
             return False
 
-        print(f"    COTP 连接成功")
+        print("    COTP 连接成功")
 
         # Step 2: S7 Setup Communication
         s7_setup = bytes([
@@ -226,17 +226,17 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
             0x01, 0xE0,               # PDU Size = 480
         ])
 
-        print(f"    发送 S7 Setup Communication")
+        print("    发送 S7 Setup Communication")
         sock.sendall(s7_setup)
 
         header = sock.recv(4)
         if len(header) < 4:
-            print(f"    S7 Setup 响应不完整")
+            print("    S7 Setup 响应不完整")
             sock.close()
             return False
 
         tpkt_len = struct.unpack(">H", header[2:4])[0]
-        remaining = tpkt_len - 4
+        tpkt_len - 4
         resp = header
         while len(resp) < tpkt_len:
             chunk = sock.recv(tpkt_len - len(resp))
@@ -248,7 +248,7 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
             error_class = resp[17]
             error_code = resp[18]
             if error_class == 0 and error_code == 0:
-                print(f"    S7 Setup Communication 成功!")
+                print("    S7 Setup Communication 成功!")
                 # 解析协商的 PDU Size
                 if len(resp) >= 27:
                     pdu_size = struct.unpack(">H", resp[25:27])[0]
@@ -263,8 +263,8 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
         sock.close()
         return False
 
-    except socket.timeout:
-        print(f"    S7 Setup 超时")
+    except TimeoutError:
+        print("    S7 Setup 超时")
         return False
     except Exception as e:
         print(f"    S7 Setup 检查失败: {e}")
@@ -273,7 +273,7 @@ def check_s7_setup(ip: str, port: int, rack: int, slot: int, timeout: float = 5.
 
 def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0) -> bool:
     """Layer 4: S7 Read 测试 - 完整连接后尝试读取数据"""
-    print(f"\n[4] S7 Read 数据读取测试")
+    print("\n[4] S7 Read 数据读取测试")
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -298,7 +298,7 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
                 break
             resp += chunk
         if len(resp) < 6 or resp[5] != 0xD0:
-            print(f"    COTP 连接失败")
+            print("    COTP 连接失败")
             sock.close()
             return False
 
@@ -323,7 +323,7 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
                 break
             resp += chunk
         if len(resp) < 20 or resp[7] != 0x32 or resp[8] != 0x03:
-            print(f"    S7 Setup 失败")
+            print("    S7 Setup 失败")
             sock.close()
             return False
 
@@ -353,12 +353,12 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
             0x00,                     # Area = 0x00 (system/SZL)
             0x11, 0x00, 0x00,         # SZL ID(2) + SZL Index(1) in address field
         ])
-        print(f"    发送 SZL Read (Module Identification)")
+        print("    发送 SZL Read (Module Identification)")
         sock.sendall(szl_read)
 
         header = sock.recv(4)
         if len(header) < 4:
-            print(f"    SZL Read 无响应")
+            print("    SZL Read 无响应")
             sock.close()
             return False
 
@@ -374,7 +374,7 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
             error_class = resp[17]
             error_code = resp[18]
             if error_class == 0 and error_code == 0:
-                print(f"    SZL Read 成功! 设备支持 S7 数据读取")
+                print("    SZL Read 成功! 设备支持 S7 数据读取")
                 # 尝试解析模块名称
                 if len(resp) > 30:
                     # SZL data 包含模块信息
@@ -407,7 +407,7 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
             0x84,                     # Area = DB
             0x00, 0x00, 0x00,         # Address = 0 (byte offset 0)
         ])
-        print(f"    发送 DB1 Read (DB1.DBD0, 4 bytes)")
+        print("    发送 DB1 Read (DB1.DBD0, 4 bytes)")
         sock.sendall(db_read)
 
         header = sock.recv(4)
@@ -427,21 +427,21 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
                 if len(resp) > 20:
                     result_code = resp[20]
                     if result_code == 0xFF:
-                        print(f"    DB1 Read 成功! 数据可读")
+                        print("    DB1 Read 成功! 数据可读")
                     elif result_code == 0x0A:
-                        print(f"    DB1 不存在或不可读 (Result Code=0x0A)")
-                        print(f"    这是正常的 - 需要在 TIA Portal 中创建 DB1")
+                        print("    DB1 不存在或不可读 (Result Code=0x0A)")
+                        print("    这是正常的 - 需要在 TIA Portal 中创建 DB1")
                     else:
                         print(f"    DB1 Read 返回: Result Code=0x{result_code:02X}")
                 return True  # SZL already succeeded
             else:
-                print(f"    DB1 Read 响应异常")
+                print("    DB1 Read 响应异常")
 
         sock.close()
         return True  # SZL succeeded even if DB read failed
 
-    except socket.timeout:
-        print(f"    S7 Read 超时")
+    except TimeoutError:
+        print("    S7 Read 超时")
         return False
     except Exception as e:
         print(f"    S7 Read 检查失败: {e}")
@@ -450,7 +450,7 @@ def check_s7_read(ip: str, port: int, rack: int, slot: int, timeout: float = 5.0
 
 def try_different_rack_slot(ip: str, port: int, timeout: float = 3.0):
     """尝试不同的 rack/slot 组合"""
-    print(f"\n[4] 尝试不同 rack/slot 组合")
+    print("\n[4] 尝试不同 rack/slot 组合")
 
     combinations = [
         (0, 1),   # S7-1200/1500 默认
@@ -479,7 +479,7 @@ def try_different_rack_slot(ip: str, port: int, timeout: float = 3.0):
                 header = sock.recv(4)
                 if len(header) >= 4:
                     tpkt_len = struct.unpack(">H", header[2:4])[0]
-                    remaining = tpkt_len - 4
+                    tpkt_len - 4
                     resp = header
                     while len(resp) < tpkt_len:
                         chunk = sock.recv(tpkt_len - len(resp))
@@ -499,7 +499,7 @@ def try_different_rack_slot(ip: str, port: int, timeout: float = 3.0):
                         print(f"    rack={rack}, slot={slot}: 响应不完整")
                 else:
                     print(f"    rack={rack}, slot={slot}: 无响应")
-            except socket.timeout:
+            except TimeoutError:
                 print(f"    rack={rack}, slot={slot}: 超时")
 
             sock.close()
@@ -510,7 +510,7 @@ def try_different_rack_slot(ip: str, port: int, timeout: float = 3.0):
 
 def check_modbus_tcp(ip: str, port: int, timeout: float = 3.0):
     """检查设备是否是 Modbus TCP 设备 (很多设备端口102跑的是Modbus)"""
-    print(f"\n[5] Modbus TCP 协议探测")
+    print("\n[5] Modbus TCP 协议探测")
 
     # Modbus TCP 读取保持寄存器 (功能码 0x03), 从地址 0 读 10 个寄存器
     modbus_req = bytes([
@@ -539,7 +539,7 @@ def check_modbus_tcp(ip: str, port: int, timeout: float = 3.0):
                         byte_count = resp[8]
                         print(f"    Modbus TCP 响应成功! 读取到 {byte_count} 字节数据")
                         print(f"    响应: {resp.hex()}")
-                        print(f"    *** 该设备是 Modbus TCP 设备，不是 S7 PLC! ***")
+                        print("    *** 该设备是 Modbus TCP 设备，不是 S7 PLC! ***")
                         return True
                     elif func_code == 0x83:
                         # 异常响应
@@ -547,16 +547,16 @@ def check_modbus_tcp(ip: str, port: int, timeout: float = 3.0):
                         exc_names = {1: "Illegal Function", 2: "Illegal Data Address",
                                     3: "Illegal Data Value", 4: "Server Device Failure"}
                         print(f"    Modbus TCP 异常响应: {exc_names.get(exception_code, f'Code {exception_code}')}")
-                        print(f"    *** 该设备是 Modbus TCP 设备，不是 S7 PLC! ***")
+                        print("    *** 该设备是 Modbus TCP 设备，不是 S7 PLC! ***")
                         return True
                 else:
                     print(f"    非 Modbus 协议响应 (Protocol ID={protocol_id})")
             elif resp:
                 print(f"    收到数据但不是 Modbus: {resp.hex()}")
             else:
-                print(f"    设备未响应 Modbus 请求")
-        except socket.timeout:
-            print(f"    Modbus 探测超时 - 设备不是 Modbus TCP")
+                print("    设备未响应 Modbus 请求")
+        except TimeoutError:
+            print("    Modbus 探测超时 - 设备不是 Modbus TCP")
 
         sock.close()
     except Exception as e:

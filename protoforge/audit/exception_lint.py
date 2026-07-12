@@ -22,6 +22,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +317,7 @@ def quick_scan_file(file_path: Path) -> list[ExceptionLintViolation]:
     Less accurate than AST scan but catches patterns in files
     that might not parse correctly.
     """
-    violations = []
+    violations: list[dict[str, Any]] = []
     try:
         content = file_path.read_text(encoding="utf-8")
     except Exception:
