@@ -107,7 +107,7 @@ class OpcDaServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start OPC-DA server: %s", e)
+            logger.exception("Failed to start OPC-DA server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -149,7 +149,7 @@ class OpcDaServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("OPC-DA server task cancelled")
         except Exception as e:
-            logger.error("OPC-DA server error: %s", e)
+            logger.exception("OPC-DA server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
@@ -452,7 +452,7 @@ class OpcDaServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("OPC-DA task cancelled")
         except Exception as e:
-            logger.error("OPC-DA subscription push error: %s", e)
+            logger.exception("OPC-DA subscription push error: %s", e)
 
     def _handle_get_status(self, data: bytes) -> bytes:
         resp = bytearray()

@@ -347,7 +347,7 @@ class UserManager:
         try:
             await self._persist_user(user)
         except RuntimeError as e:
-            logger.error("Failed to persist login state for %s after successful auth: %s", username, e)
+            logger.exception("Failed to persist login state for %s after successful auth: %s", username, e)
         return user, ""
 
     async def _persist_user(self, user: User) -> None:
@@ -356,7 +356,7 @@ class UserManager:
         try:
             await self._db.save_user(user.to_dict(include_hash=True))
         except Exception as e:
-            logger.error("Failed to persist user %s: %s", user.username, e)
+            logger.exception("Failed to persist user %s: %s", user.username, e)
             raise RuntimeError(f"Failed to persist user: {e}") from e
 
     async def create_user(self, username: str, password: str, role: str = "user") -> User | None:
@@ -387,7 +387,7 @@ class UserManager:
                 try:
                     await self._db.save_user(user.to_dict(include_hash=True))
                 except Exception as e:
-                    logger.error("Failed to persist user %s: %s", username, e)
+                    logger.exception("Failed to persist user %s: %s", username, e)
                     raise RuntimeError(f"Failed to create user: {e}") from e
             self._users[username] = user
             self._users_by_id[user.id] = user
@@ -411,7 +411,7 @@ class UserManager:
                     try:
                         await self._db.delete_user(username)
                     except Exception as e:
-                        logger.error("Failed to delete user %s from DB: %s", username, e)
+                        logger.exception("Failed to delete user %s from DB: %s", username, e)
                         raise RuntimeError(f"Failed to delete user: {e}") from e
                 del self._users[username]
                 self._users_by_id.pop(user.id, None)
@@ -444,7 +444,7 @@ class UserManager:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.error("Failed to update user password for %s: %s", username, e)
+                logger.exception("Failed to update user password for %s: %s", username, e)
                 user.password_hash = old_hash
                 return False, "Password update failed, please try again later"
         return True, ""
@@ -479,7 +479,7 @@ class UserManager:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.error("Failed to reset user password for %s: %s", username, e)
+                logger.exception("Failed to reset user password for %s: %s", username, e)
                 user.password_hash = old_hash
                 user.login_attempts = old_attempts
                 user.locked_until = old_locked
@@ -503,7 +503,7 @@ class UserManager:
             try:
                 await self._db.save_user(user.to_dict(include_hash=True))
             except Exception as e:
-                logger.error("Failed to update user role for %s: %s", username, e)
+                logger.exception("Failed to update user role for %s: %s", username, e)
                 user.role = old_role
                 self._token_versions[user.id] = self._token_versions.get(user.id, 0) - 1
                 return False

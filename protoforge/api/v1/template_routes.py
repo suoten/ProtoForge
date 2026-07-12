@@ -56,7 +56,7 @@ async def get_template(template_id: str, _user: dict[str, Any] = Depends(require
     try:
         return tm.get_template(template_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/templates")
@@ -76,7 +76,7 @@ async def create_template(template: TemplateDetail, _user: dict[str, Any] = Depe
         except Exception as db_err:
             db_ok = False
             db_err_msg = str(db_err)
-            logger.error("Failed to persist template %s: %s", template.id, db_err)
+            logger.exception("Failed to persist template %s: %s", template.id, db_err)
     resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
     if not db_ok:
         resp["_persistence_warning"] = f"Template created, but persistence failed: {db_err_msg}. Data will be lost after restart."
@@ -90,7 +90,7 @@ async def delete_template(template_id: str, _user: dict[str, Any] = Depends(requ
     try:
         tm.get_template(template_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     try:
         tm.remove_template(template_id)
     except ValueError as e:
@@ -103,7 +103,7 @@ async def delete_template(template_id: str, _user: dict[str, Any] = Depends(requ
         except Exception as db_err:
             db_ok = False
             db_err_msg = str(db_err)
-            logger.error("Failed to delete template %s from DB: %s", template_id, db_err)
+            logger.exception("Failed to delete template %s from DB: %s", template_id, db_err)
     resp = {"status": "ok"}
     if not db_ok:
         resp["_persistence_warning"] = f"Template deleted from memory, but DB deletion failed: {db_err_msg}. Template may reappear after restart."
@@ -119,7 +119,7 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict[st
     try:
         tm.get_template(template_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     data["id"] = template_id
     updated = tm.update_template(template_id, data)
     db_ok = True
@@ -130,7 +130,7 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict[st
         except Exception as db_err:
             db_ok = False
             db_err_msg = str(db_err)
-            logger.error("Failed to update template %s in DB: %s", template_id, db_err)
+            logger.exception("Failed to update template %s in DB: %s", template_id, db_err)
     resp = updated.model_dump() if hasattr(updated, 'model_dump') and callable(updated.model_dump()) else updated
     if not db_ok:
         resp["_persistence_warning"] = f"Template updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
@@ -153,7 +153,7 @@ async def instantiate_template(
     try:
         return tm.create_device_from_template(template_id, device_id, device_name, protocol_config)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/templates/{template_id}/export")  # FIXED-P1: 独立模板导出端点
@@ -162,7 +162,7 @@ async def export_template(template_id: str, _user: dict[str, Any] = Depends(requ
     try:
         template = tm.get_template(template_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     data = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
     data["schema_version"] = "1.0"
     return JSONResponse(content=data, headers={"Content-Disposition": f'attachment; filename="template_{template_id}.json"'})
@@ -179,11 +179,11 @@ async def import_template(data: dict[str, Any], _user: dict[str, Any] = Depends(
         template = TemplateDetail(**data)
         tm.add_template(template)
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if db:
         try:
             await db.save_template(template)
         except Exception as db_err:
-            logger.error("Failed to persist imported template %s: %s", template.id, db_err)
+            logger.exception("Failed to persist imported template %s: %s", template.id, db_err)
     resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
     return resp

@@ -448,7 +448,7 @@ class BatchProcessor:
         try:
             await self._processor(batch)
         except Exception as e:
-            logger.error("Batch processor error: %s", e)
+            logger.exception("Batch processor error: %s", e)
 
     async def flush(self) -> None:
         """手动触发刷新."""

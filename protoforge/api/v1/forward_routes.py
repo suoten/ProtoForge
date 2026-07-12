@@ -33,7 +33,7 @@ async def list_forward_targets(_user: dict[str, Any] = Depends(require_viewer)):
         engine = _get_forward_engine()
         return {"targets": engine.list_targets()}
     except Exception as e:
-        logger.error("Failed to list forward targets: %s", e)
+        logger.exception("Failed to list forward targets: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list forward targets: {e}") from e
 
 
@@ -64,7 +64,7 @@ async def add_forward_target(config: dict[str, Any], _user: dict[str, Any] = Dep
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to add forward target: %s", e)
+        logger.exception("Failed to add forward target: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to add forward target: {e}") from e
 
 
@@ -75,7 +75,7 @@ async def remove_forward_target(name: str, _user: dict[str, Any] = Depends(requi
         engine.remove_target(name)
         return {"status": "ok"}
     except Exception as e:
-        logger.error("Failed to remove forward target: %s", e)
+        logger.exception("Failed to remove forward target: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to remove forward target: {e}") from e
 
 
@@ -86,7 +86,7 @@ async def start_forward(_user: dict[str, Any] = Depends(require_operator)):
         await engine.start()
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start data forwarding: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start data forwarding: {str(e)}") from e
 
 
 @router.post("/forward/stop")
@@ -96,7 +96,7 @@ async def stop_forward(_user: dict[str, Any] = Depends(require_operator)):
         await engine.stop()
         return {"status": "ok"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop data forwarding: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop data forwarding: {str(e)}") from e
 
 
 @router.get("/forward/stats")
@@ -105,5 +105,5 @@ async def forward_stats(_user: dict[str, Any] = Depends(require_viewer)):
         engine = _get_forward_engine()
         return engine.get_stats()
     except Exception as e:
-        logger.error("Failed to get forward stats: %s", e)
+        logger.exception("Failed to get forward stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get forward stats: {e}") from e

@@ -774,9 +774,9 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
             json={"username": username, "password": password},
         )
     except httpx.ConnectError as e:
-        raise EdgeLiteError("connection", desc("edgelite.error.connection").format(error=e), desc("edgelite.suggestion.verify_gateway"))
+        raise EdgeLiteError("connection", desc("edgelite.error.connection").format(error=e), desc("edgelite.suggestion.verify_gateway")) from e
     except httpx.TimeoutException:
-        raise EdgeLiteError("timeout", desc("edgelite.error.timeout"), desc("edgelite.suggestion.check_online_latency"))
+        raise EdgeLiteError("timeout", desc("edgelite.error.timeout"), desc("edgelite.suggestion.check_online_latency")) from None
 
     if login_resp.status_code == 401:
         raise EdgeLiteError("auth", desc("edgelite.error.auth"), desc("edgelite.suggestion.check_credentials"))
@@ -786,7 +786,7 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     try:
         data = login_resp.json()
     except Exception as e:
-        raise EdgeLiteError("parse_error", desc("edgelite.error.parse_error").format(error=e), desc("edgelite.suggestion.check_version"))
+        raise EdgeLiteError("parse_error", desc("edgelite.error.parse_error").format(error=e), desc("edgelite.suggestion.check_version")) from e
     inner = data.get("data")
     token = (inner.get("access_token", "") if isinstance(inner, dict) else "") or data.get("access_token", "")
     if not token:

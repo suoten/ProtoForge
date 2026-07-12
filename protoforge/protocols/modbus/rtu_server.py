@@ -65,7 +65,7 @@ class ModbusRtuServer(ProtocolServer):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error("Modbus RTU server task failed: %s", e)
+            logger.exception("Modbus RTU server task failed: %s", e)
             self._status = ProtocolStatus.ERROR
 
     def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
@@ -200,7 +200,7 @@ class ModbusRtuServer(ProtocolServer):
                             detail={"port": self._port, "baudrate": self._baudrate, "simdata": self._use_simdata})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start Modbus RTU server: %s", e)
+            logger.exception("Failed to start Modbus RTU server: %s", e)
             raise
 
     @staticmethod
@@ -228,7 +228,7 @@ class ModbusRtuServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("Modbus RTU server task cancelled")
         except Exception as e:
-            logger.error("Modbus RTU TCP bridge server error: %s", e)
+            logger.exception("Modbus RTU TCP bridge server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_native_modbus_rtu(self, reader: asyncio.StreamReader,

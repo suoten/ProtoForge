@@ -94,7 +94,7 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "C901"]
-ignore = ["E501", "B008", "B904", "SIM102", "SIM115"]  # B008: FastAPI Depends(); B904: HTTPException raise pattern; SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
+ignore = ["E501", "B008", "SIM102", "SIM115"]  # B008: FastAPI Depends(); SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
 
 [tool.ruff.lint.mccabe]
 max-complexity = 55

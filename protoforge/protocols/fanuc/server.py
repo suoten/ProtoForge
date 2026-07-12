@@ -132,7 +132,7 @@ class FanucServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start FANUC server: %s", e)
+            logger.exception("Failed to start FANUC server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -161,7 +161,7 @@ class FanucServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("FANUC server task cancelled")
         except Exception as e:
-            logger.error("FANUC server error: %s", e)
+            logger.exception("FANUC server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,

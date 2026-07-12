@@ -82,7 +82,7 @@ class FaultInjector:
                 try:
                     self._on_activated(fault)
                 except Exception as e:
-                    logger.error("Fault activated callback error: %s", e)
+                    logger.exception("Fault activated callback error: %s", e)
             return fault.fault_id
 
     def remove_fault(self, fault_id: str) -> bool:
@@ -102,7 +102,7 @@ class FaultInjector:
                         try:
                             self._on_deactivated(f)
                         except Exception as e:
-                            logger.error("Fault deactivated callback error: %s", e)
+                            logger.exception("Fault deactivated callback error: %s", e)
                     return True
             return False
 
@@ -122,7 +122,7 @@ class FaultInjector:
                         try:
                             self._on_deactivated(f)
                         except Exception as e:
-                            logger.error("Fault deactivated callback error: %s", e)
+                            logger.exception("Fault deactivated callback error: %s", e)
                 self.active_faults.clear()
             else:
                 to_remove = [f for f in self.active_faults if f.target == target or f.target == "*"]
@@ -134,7 +134,7 @@ class FaultInjector:
                         try:
                             self._on_deactivated(f)
                         except Exception as e:
-                            logger.error("Fault deactivated callback error: %s", e)
+                            logger.exception("Fault deactivated callback error: %s", e)
                 count = len(to_remove)
             logger.info("Faults cleared: count=%d, device=%s", count, self._device_id)
             return count
@@ -180,7 +180,7 @@ class FaultInjector:
                             try:
                                 self._on_activated(f)
                             except Exception as e:
-                                logger.error("Fault activated callback error: %s", e)
+                                logger.exception("Fault activated callback error: %s", e)
                     return True
             return False
 
@@ -194,7 +194,7 @@ class FaultInjector:
                         try:
                             self._on_deactivated(f)
                         except Exception as e:
-                            logger.error("Fault deactivated callback error: %s", e)
+                            logger.exception("Fault deactivated callback error: %s", e)
                     return True
             return False
 
@@ -456,7 +456,7 @@ class FaultInjector:
             try:
                 self._on_deactivated(fault)
             except Exception as e:
-                logger.error("Fault deactivated callback error: %s", e)
+                logger.exception("Fault deactivated callback error: %s", e)
 
     # -- 序列化 -----------------------------------------------------------
 

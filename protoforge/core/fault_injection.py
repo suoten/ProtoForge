@@ -366,7 +366,7 @@ class FaultInjector:
             try:
                 self._on_activated(rt.config)
             except Exception as e:
-                logger.error("Fault activated callback error: %s", e)
+                logger.exception("Fault activated callback error: %s", e)
 
     def _deactivate(self, rt: _FaultRuntime) -> None:
         """停用故障（内部方法，调用者需持锁）。"""
@@ -380,7 +380,7 @@ class FaultInjector:
             try:
                 self._on_deactivated(rt.config)
             except Exception as e:
-                logger.error("Fault deactivated callback error: %s", e)
+                logger.exception("Fault deactivated callback error: %s", e)
 
     def _check_auto_triggers(self, rt: _FaultRuntime, value: Any) -> None:
         """检查自动触发条件（RANDOM / CONDITIONAL 模式）。"""
@@ -929,7 +929,7 @@ class FaultScenario:
                     self._added_fault_ids.remove(event.fault_id)
                 logger.info("Scenario %s: fault removed at t=%.1f: %s", self.scenario_id, event.time, event.fault_id)
         except Exception as e:
-            logger.error("Scenario %s: event execution error: %s", self.scenario_id, e)
+            logger.exception("Scenario %s: event execution error: %s", self.scenario_id, e)
 
     def get_timeline(self) -> list[dict[str, Any]]:
         """返回时间线事件列表。"""

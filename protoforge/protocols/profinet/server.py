@@ -251,7 +251,7 @@ class ProfinetServer(ProtocolServer):
                                     "device_name": self._device_name})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start PROFINET server: %s", e)
+            logger.exception("Failed to start PROFINET server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -339,7 +339,7 @@ class ProfinetServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("PROFINET server task cancelled")
         except Exception as e:
-            logger.error("PROFINET IO server error: %s", e)
+            logger.exception("PROFINET IO server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def _handle_connection(self, reader: asyncio.StreamReader,

@@ -84,7 +84,7 @@ def _get_or_create_salt() -> bytes:
                 f.write(new_salt)
             logger.info("Generated and saved new recording salt")
         except Exception as e:
-            logger.error("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart!", e)
+            logger.exception("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart!", e)
         return new_salt
 
 
@@ -462,7 +462,7 @@ class Recorder:
             result["encrypted"] = True
             return result
         except Exception as e:
-            logger.error("Recording encryption failed, saving unencrypted: %s", e)
+            logger.exception("Recording encryption failed, saving unencrypted: %s", e)
             return data
 
     def _decrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:

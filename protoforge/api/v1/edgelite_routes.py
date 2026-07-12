@@ -51,7 +51,7 @@ async def import_edgelite(config: dict[str, Any], _user: dict[str, Any] = Depend
             resp["errors"] = errors
         return resp
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/push/{device_id}")
@@ -72,8 +72,8 @@ async def push_device_to_edgelite(device_id: str, _user: dict[str, Any] = Depend
             logger.warning("EdgeLite push failed for %s: %s", device_id, result.get("error", ""))
         return result
     except Exception as e:
-        logger.error("EdgeLite push exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}")
+        logger.exception("EdgeLite push exception for %s: %s", device_id, e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}") from e
 
 
 @router.post("/push")
@@ -103,8 +103,8 @@ async def batch_push_devices(
             result["not_found"] = not_found
         return result
     except Exception as e:
-        logger.error("Batch push exception: %s", e)
-        raise HTTPException(status_code=502, detail=f"Batch push failed: {e}")
+        logger.exception("Batch push exception: %s", e)
+        raise HTTPException(status_code=502, detail=f"Batch push failed: {e}") from e
 
 
 @router.post("/test")
@@ -123,8 +123,8 @@ async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=
     try:
         return await mgr.test_connection(url, username, password)
     except Exception as e:
-        logger.error("EdgeLite connection test failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}")
+        logger.exception("EdgeLite connection test failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}") from e
 
 
 @router.get("/status/{device_id}")
@@ -140,8 +140,8 @@ async def get_edgelite_device_status(device_id: str, _user: dict[str, Any] = Dep
     try:
         return await mgr.get_device_status(instance)
     except Exception as e:
-        logger.error("EdgeLite status check exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}")
+        logger.exception("EdgeLite status check exception for %s: %s", device_id, e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}") from e
 
 
 @router.get("/points/{device_id}")
@@ -160,8 +160,8 @@ async def read_edgelite_device_points(device_id: str, _user: dict[str, Any] = De
             return result
         return result
     except Exception as e:
-        logger.error("EdgeLite read points exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}")
+        logger.exception("EdgeLite read points exception for %s: %s", device_id, e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}") from e
 
 
 @router.get("/pipeline/{device_id}")
@@ -220,8 +220,8 @@ async def verify_edgelite_pipeline(
                     logger.debug("Data comparison failed: %s", exc)
         return result
     except Exception as e:
-        logger.error("EdgeLite pipeline verification exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}")
+        logger.exception("EdgeLite pipeline verification exception for %s: %s", device_id, e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}") from e
 
 
 @router.delete("/push/{device_id}")
@@ -237,8 +237,8 @@ async def remove_device_from_edgelite(device_id: str, _user: dict[str, Any] = De
     try:
         return await mgr.delete_device(instance)
     except Exception as e:
-        logger.error("EdgeLite remove device exception for %s: %s", device_id, e)
-        raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}")
+        logger.exception("EdgeLite remove device exception for %s: %s", device_id, e)
+        raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}") from e
 
 
 @router.post("/pygbsentry")
@@ -262,36 +262,8 @@ async def import_pygbsentry(config: dict[str, Any], _user: dict[str, Any] = Depe
             resp["errors"] = errors
         return resp
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.get("/integration/status")
-async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)):
-    """获取 IntegrationManager 状态。"""
-    mgr = _get_integration_manager()
-    return mgr.get_status()
-
-
-@router.get("/integration/metrics")
-async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer)):
-    """获取 IntegrationManager 指标。"""
-    mgr = _get_integration_manager()
-    return mgr.get_metrics()
-
-
-@router.get("/integration/backhaul-data")
-async def get_backhaul_data(
-    device_id: str = Query(default="", description="设备ID，为空则返回全部"),
-    limit: int = Query(default=100, ge=1, le=1000),
-    _user: dict[str, Any] = Depends(require_viewer),
-):
-    """获取 EdgeLite 回传数据。"""
-    mgr = _get_integration_manager()
-    return {"data": mgr.get_backhaul_data(device_id=device_id, limit=limit)}
-
-
-@router.get("/integration/protocols")
-async def get_supported_protocols(_user: dict[str, Any] = Depends(require_viewer)):
-    """获取 EdgeLite 支持的协议映射。"""
-    mgr = _get_integration_manager()
-    return {"protocol_map": mgr.get_protocol_map(), "supported_source_protocols": mgr.get_supported_source_protocols()}
+# NOTE: 以下 integration 相关路由已迁移至 protoforge/api/v1/integration.py
+# 此处不再重复定义，避免路由冲突和维护成本。

@@ -75,7 +75,7 @@ class ModbusTcpServer(ProtocolServer):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error("Modbus TCP server task failed: %s", e)
+            logger.exception("Modbus TCP server task failed: %s", e)
             self._status = ProtocolStatus.ERROR
 
     def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
@@ -130,7 +130,7 @@ class ModbusTcpServer(ProtocolServer):
         except asyncio.CancelledError:
             logger.debug("Modbus server task cancelled")
         except Exception as e:
-            logger.error("Modbus native frame server error: %s", e)
+            logger.exception("Modbus native frame server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
     _CONN_TIMEOUT = 30  # FIXED: 连接读取超时秒数，防止Slowloris攻击
@@ -503,7 +503,7 @@ class ModbusTcpServer(ProtocolServer):
                             detail={"host": self._host, "port": self._port, "mode": "native"})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start Modbus TCP server: %s", e)
+            logger.exception("Failed to start Modbus TCP server: %s", e)
             raise
 
     async def stop(self) -> None:

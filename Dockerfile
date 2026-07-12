@@ -11,10 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY README.md .
 COPY protoforge/ protoforge/
-RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]" || pip install --no-cache-dir "."
+# FIXED: 分开安装可选依赖和核心包，避免降级安装掩盖依赖错误
+RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
+
+# FIXED: 优化 npm 依赖缓存 — 先复制 package.json 安装依赖，再复制源码构建
+COPY web/package.json web/package-lock.json* web/
+RUN cd web && npm ci || npm install
 
 COPY web/ web/
-RUN cd web && npm install && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
+RUN cd web && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
 
 FROM python:3.12-slim
 
@@ -43,4 +48,5 @@ EXPOSE 6000-6999/udp
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["sh", "-c", "alembic upgrade head || echo 'WARNING: Database migration failed, continuing with auto-create tables'; python -m protoforge.cli demo"]
+# FIXED: 迁移失败时终止启动，避免静默忽略导致数据不一致
+CMD ["sh", "-c", "alembic upgrade head && python -m protoforge.cli demo"]

@@ -19,7 +19,7 @@ async def list_webhooks(_user: dict[str, Any] = Depends(require_viewer)):
         from protoforge.core.webhook import webhook_manager
         return {"webhooks": webhook_manager.list_webhooks()}
     except Exception as e:
-        logger.error("Failed to list webhooks: %s", e)
+        logger.exception("Failed to list webhooks: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list webhooks: {e}") from e
 
 
@@ -44,8 +44,8 @@ async def add_webhook(config: dict[str, Any], _user: dict[str, Any] = Depends(re
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to add webhook: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to add webhook: {e}") from e  # FIXED: 中文→英文
+        logger.exception("Failed to add webhook: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to add webhook: {e}") from e  # FIXED: 中文→英文 from e
 
 
 @router.put("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
@@ -68,8 +68,8 @@ async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict[st
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        logger.error("Failed to update webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
-        raise HTTPException(status_code=500, detail=f"Failed to update webhook: {e}") from e  # FIXED: 中文→英文
+        logger.exception("Failed to update webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
+        raise HTTPException(status_code=500, detail=f"Failed to update webhook: {e}") from e  # FIXED: 中文→英文 from e
 
 
 @router.delete("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
@@ -82,8 +82,8 @@ async def delete_webhook(webhook_id: str, _user: dict[str, Any] = Depends(requir
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to delete webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
-        raise HTTPException(status_code=500, detail=f"Failed to delete webhook: {e}") from e  # FIXED: 中文→英文
+        logger.exception("Failed to delete webhook %s: %s", webhook_id, e)  # FIXED: wh_id→webhook_id 命名统一
+        raise HTTPException(status_code=500, detail=f"Failed to delete webhook: {e}") from e  # FIXED: 中文→英文 from e
 
 
 @router.post("/webhooks/{webhook_id}/test")  # FIXED: wh_id→webhook_id 命名统一
@@ -98,7 +98,7 @@ async def test_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Webhook test failed: {str(e)}")  # FIXED: 中文→英文
+        raise HTTPException(status_code=502, detail=f"Webhook test failed: {str(e)}") from e  # FIXED: 中文→英文 from e
 
 
 @router.get("/webhooks/stats")
@@ -107,5 +107,5 @@ async def webhook_stats(_user: dict[str, Any] = Depends(require_viewer)):
         from protoforge.core.webhook import webhook_manager
         return webhook_manager.get_stats()
     except Exception as e:
-        logger.error("Failed to get webhook stats: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get webhook stats: {e}") from e  # FIXED: 中文→英文
+        logger.exception("Failed to get webhook stats: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get webhook stats: {e}") from e  # FIXED: 中文→英文 from e

@@ -509,4 +509,4 @@ class RtpStreamer:
             logger.debug("RTP streamer task cancelled")
         except Exception as e:
             self._log("out", "rtp_error", f"RTP stream error: {e}")
-            logger.error("RTP stream error: %s", e)
+            logger.exception("RTP stream error: %s", e)

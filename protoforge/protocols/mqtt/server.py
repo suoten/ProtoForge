@@ -170,8 +170,8 @@ class MqttBroker(ProtocolServer):
                         broker_config["listeners"]["default"]["ssl"] = ssl_context
                         logger.info("MQTT TLS enabled with cert: %s", tls_cert_path)
                     except Exception as e:
-                        logger.error("Failed to load MQTT TLS certificate: %s", e)
-                        raise RuntimeError(f"MQTT TLS certificate error: {e}")
+                        logger.exception("Failed to load MQTT TLS certificate: %s", e)
+                        raise RuntimeError(f"MQTT TLS certificate error: {e}") from e
                 else:
                     logger.warning(
                         "MQTT TLS is enabled but tls_cert_path or tls_key_path is not configured. "
@@ -205,7 +205,7 @@ class MqttBroker(ProtocolServer):
                             detail={"host": self._host, "port": self._port})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start MQTT Broker: %s", e)
+            logger.exception("Failed to start MQTT Broker: %s", e)
             raise
 
     async def stop(self) -> None:

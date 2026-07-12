@@ -21,10 +21,10 @@ spec:
         fsGroup: 1000
       containers:
         - name: protoforge
-          image: suoten/protoforge:latest
+          image: suoten/protoforge:0.1.0  # FIXED: 使用语义版本标签而非 latest
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: false
+            readOnlyRootFilesystem: true  # FIXED: 启用只读根文件系统
             capabilities:
               drop:
                 - ALL
@@ -79,10 +79,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /app/data
+            - name: tmp  # FIXED: 为只读根文件系统提供可写 tmp 目录
+              mountPath: /tmp
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: protoforge-data
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -189,3 +193,14 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+# FIXED: 添加 PDB 保证滚动更新时至少保持 1 个可用副本
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: protoforge-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: protoforge

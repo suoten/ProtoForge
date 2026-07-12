@@ -92,7 +92,7 @@ async def create_fault(req: CreateFaultRequest, _user: dict[str, Any] = Depends(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid fault type: {req.fault_type}. Valid types: {[t.value for t in FaultType]}",
-        )
+        ) from None
 
     try:
         trigger_mode = TriggerMode(req.trigger_mode)
@@ -100,7 +100,7 @@ async def create_fault(req: CreateFaultRequest, _user: dict[str, Any] = Depends(
         raise HTTPException(
             status_code=400,
             detail=f"Invalid trigger mode: {req.trigger_mode}. Valid modes: {[m.value for m in TriggerMode]}",
-        )
+        ) from None
 
     config = FaultConfig(
         fault_type=fault_type,

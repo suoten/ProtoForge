@@ -247,7 +247,7 @@ async def run_test_suite_by_id(suite_id: str, request: Request, _user: dict[str,
         await _trigger_webhook_safe("test_complete", {"report_id": report.id, "passed": report.passed, "failed": report.failed, "total": report.total})
         return report.to_dict()
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/tests/reports")

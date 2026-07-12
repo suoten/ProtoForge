@@ -127,7 +127,7 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
         )
         return "", ""
     except Exception as e:
-        logger.error("Failed to generate OPC-UA certificates: %s", e)
+        logger.exception("Failed to generate OPC-UA certificates: %s", e)
         return "", ""
 
     return cert_path, key_path
@@ -201,7 +201,7 @@ class OpcUaServer(ProtocolServer):
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error("OPC-UA server task failed: %s", e)
+            logger.exception("OPC-UA server task failed: %s", e)
             self._status = ProtocolStatus.ERROR
 
     async def start(self, config: dict[str, Any]) -> None:
@@ -309,7 +309,7 @@ class OpcUaServer(ProtocolServer):
                             msg("opcua", "service_started", host=self._host, port=self._port))
         except Exception as e:
             self._status = ProtocolStatus.ERROR
-            logger.error("Failed to start OPC-UA server: %s", e)
+            logger.exception("Failed to start OPC-UA server: %s", e)
             raise
 
     async def stop(self) -> None:
@@ -595,7 +595,7 @@ class OpcUaServer(ProtocolServer):
                 device_idx, config.name
             )
         except Exception as e:
-            logger.error("Failed to create OPC-UA device folder for %s: %s", config.id, e)
+            logger.exception("Failed to create OPC-UA device folder for %s: %s", config.id, e)
             return
         point_nodes = {}
         if not ASYNCUA_AVAILABLE:
