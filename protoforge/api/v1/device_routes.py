@@ -184,8 +184,8 @@ async def batch_create_devices(
                             if db:
                                 try:
                                     await db.delete_device(dev_id)
-                                except Exception as e:
-                                    logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
+                                except Exception as del_err:
+                                    logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, del_err)
                             logger.info("Rolled back device: %s", dev_id)
                         except Exception as rollback_err:
                             logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
@@ -213,8 +213,8 @@ async def batch_create_devices(
                     if db:
                         try:
                             await db.delete_device(dev_id)
-                        except Exception as e:
-                            logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, e)
+                        except Exception as del_err:
+                            logger.debug("Failed to delete device %s from DB during rollback: %s", dev_id, del_err)
                 except Exception as rollback_err:
                     logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
 

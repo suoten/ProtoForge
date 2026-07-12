@@ -457,7 +457,7 @@ class FaultInjector:
 
             return modified_value, is_faulty
 
-    def _apply_single(self, rt: _FaultRuntime, point_name: str, value: Any) -> tuple[Any, bool]:
+    def _apply_single(self, rt: _FaultRuntime, _point_name: str, value: Any) -> tuple[Any, bool]:
         """应用单个故障效果。
 
         :return: (修改后的值, 是否应用了故障效果)
@@ -680,7 +680,7 @@ class FaultPropagation:
         with self._lock:
             self._injectors[device_id] = injector
 
-    def on_fault_activated(self, fault_config: FaultConfig, source_device_id: str) -> None:
+    def on_fault_activated(self, _fault_config: FaultConfig, source_device_id: str) -> None:
         """故障激活回调：检查并触发传播规则。
 
         应注册为源设备 FaultInjector 的 on_fault_activated 回调。
@@ -947,7 +947,7 @@ class FaultScenario:
     @property
     def is_running(self) -> bool:
         """场景是否正在运行。"""
-        return self._started
+        return True if self._started else False
 
     # -- 序列化 -----------------------------------------------------------
 

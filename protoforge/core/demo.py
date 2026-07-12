@@ -558,7 +558,7 @@ async def _create_demo_scenario(
         logger.warning("  ✗ Scenario creation failed %s: %s", scenario_name, e)
 
 
-async def seed_demo_data(engine: Any, template_manager: Any) -> None:
+async def seed_demo_data(engine: Any, _template_manager: Any) -> None:
     """Seed the simulation engine with demo protocols, devices, and scenarios.
 
     This function starts all supported protocols, creates devices across four

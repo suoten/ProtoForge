@@ -83,16 +83,16 @@ class ExceptionLintResult:
 # ---------------------------------------------------------------------------
 
 # Patterns that indicate a "swallowed" exception (returning a default value)
-_SWALLOW_RETURN_VALUES = {
+_SWALLOW_RETURN_VALUES: frozenset[str] = frozenset({
     "None", "[]", "False", "0", "{}", "set()", "''", '""',
-}
+})
 
 # Functions/methods where returning a default is acceptable
-_KNOWN_SAFE_FUNCTIONS = {
+_KNOWN_SAFE_FUNCTIONS: frozenset[str] = frozenset({
     "_safe_json_loads",  # explicitly designed to return default on parse failure
     "__str__",  # str representation should never raise
     "__repr__",
-}
+})
 
 
 class ExceptionLintVisitor(ast.NodeVisitor):
@@ -113,7 +113,7 @@ class ExceptionLintVisitor(ast.NodeVisitor):
     visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
-        self.total_except_blocks += 1
+        self.total_except_blocks = self.total_except_blocks + 1
 
         # Check for bare except (no exception type)
         if node.type is None:
@@ -273,8 +273,8 @@ def scan_directory(
 
         violations, except_count = scan_file(py_file)
         result.violations.extend(violations)
-        result.total_except_blocks += except_count
-        result.files_scanned += 1
+        result.total_except_blocks = result.total_except_blocks + except_count
+        result.files_scanned = result.files_scanned + 1
 
     return result
 
@@ -287,13 +287,13 @@ def scan_paths(paths: list[Path]) -> ExceptionLintResult:
         if path.is_file() and path.suffix == ".py":
             violations, except_count = scan_file(path)
             result.violations.extend(violations)
-            result.total_except_blocks += except_count
-            result.files_scanned += 1
+            result.total_except_blocks = result.total_except_blocks + except_count
+            result.files_scanned = result.files_scanned + 1
         elif path.is_dir():
             sub_result = scan_directory(path)
             result.violations.extend(sub_result.violations)
-            result.total_except_blocks += sub_result.total_except_blocks
-            result.files_scanned += sub_result.files_scanned
+            result.total_except_blocks = result.total_except_blocks + sub_result.total_except_blocks
+            result.files_scanned = result.files_scanned + sub_result.files_scanned
 
     return result
 

@@ -97,15 +97,15 @@ class TTLCache:
         with self._sync_lock:
             entry = self._store.get(key)
             if entry is None:
-                self._misses += 1
+                self._misses = self._misses + 1
                 return None
             value, expiry = entry
             if self._is_expired(expiry):
                 del self._store[key]
-                self._evictions += 1
-                self._misses += 1
+                self._evictions = self._evictions + 1
+                self._misses = self._misses + 1
                 return None
-            self._hits += 1
+            self._hits = self._hits + 1
             return value
 
     def set_sync(self, key: str, value: Any, ttl: float | None = None) -> None:
@@ -322,7 +322,7 @@ class PerformanceMonitor:
         self._lock = threading.Lock()
 
     @contextmanager
-    def timer(self, name: str, tags: dict[str, str] | None = None):
+    def timer(self, name: str, _tags: dict[str, str] | None = None):
         """同步计时上下文管理器."""
         start = time.perf_counter()
         try:
@@ -334,7 +334,7 @@ class PerformanceMonitor:
                 self._counters[f"{name}_count"] += 1
 
     @asynccontextmanager
-    async def atimer(self, name: str, tags: dict[str, str] | None = None):
+    async def atimer(self, name: str, _tags: dict[str, str] | None = None):
         """异步计时上下文管理器."""
         start = time.perf_counter()
         try:

@@ -21,7 +21,7 @@ try:
     from pymodbus.simulator import DataType, SimData, SimDevice
     SIMDATA_AVAILABLE = True
 except ImportError:
-    DataType = None
+    DataType = None  # type: ignore[assignment,misc]
 
 OLD_API_AVAILABLE = False
 try:
@@ -30,9 +30,9 @@ try:
 except ImportError:
     pass
 
-StartAsyncSerialServer = None
+StartAsyncSerialServer = None  # type: ignore[assignment]
 with contextlib.suppress(ImportError):
-    from pymodbus.server import StartAsyncSerialServer
+    from pymodbus.server import StartAsyncSerialServer  # type: ignore[assignment]
 
 
 class ModbusRtuServer(ProtocolServer):

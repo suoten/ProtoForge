@@ -238,6 +238,7 @@ class Database:
         try:
             self._pg_pool = await asyncpg.create_pool(self._db_path, min_size=2, max_size=10)
             self._is_postgres = True
+            assert self._pg_pool is not None, "PostgreSQL pool creation failed"
             async with self._pg_pool.acquire() as conn:
                 await self._create_tables_postgres(conn)
                 await self._migrate_postgres_tables(conn)
@@ -260,6 +261,7 @@ class Database:
             self._db = None
 
     async def _create_tables_sqlite(self) -> None:
+        assert self._db is not None, "SQLite database not connected"
         await self._db.executescript("""
             CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY,
@@ -386,6 +388,7 @@ class Database:
         await self._migrate_sqlite_tables()
 
     async def _migrate_sqlite_tables(self) -> None:
+        assert self._db is not None, "SQLite database not connected"
         try:
             cursor = await self._db.execute("PRAGMA table_info(users)")
             columns = {row[1] for row in await cursor.fetchall()}
@@ -562,6 +565,7 @@ class Database:
                 await conn.execute(sql, *params)
         else:
             # FIXED: W4 - SQLite 分支 commit 失败时 rollback 保护
+            assert self._db is not None, "SQLite database not connected"
             try:
                 await self._db.execute(sql, params)
                 await self._db.commit()
@@ -577,6 +581,7 @@ class Database:
                 row = await conn.fetchrow(sql, *params)
                 return dict(row) if row else None
         else:
+            assert self._db is not None, "SQLite database not connected"
             async with self._db.execute(sql, params) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
@@ -589,6 +594,7 @@ class Database:
                 rows = await conn.fetch(sql, *params)
                 return [dict(r) for r in rows]
         else:
+            assert self._db is not None, "SQLite database not connected"
             async with self._db.execute(sql, params) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
@@ -1019,6 +1025,7 @@ class Database:
                 (entry_id,),
             )
         else:
+            assert self._db is not None, "SQLite database not connected"
             cursor = await self._db.execute(
                 "DELETE FROM audit_log WHERE id = ?", (entry_id,)
             )
@@ -1040,6 +1047,7 @@ class Database:
                 )
                 return count
             else:
+                assert self._db is not None, "SQLite database not connected"
                 cursor = await self._db.execute(
                     "DELETE FROM audit_log WHERE timestamp < ?", (before_timestamp,)
                 )
@@ -1052,6 +1060,7 @@ class Database:
                 await self._execute("DELETE FROM audit_log")
                 return count
             else:
+                assert self._db is not None, "SQLite database not connected"
                 cursor = await self._db.execute("DELETE FROM audit_log")
                 await self._db.commit()
                 return cursor.rowcount
@@ -1099,7 +1108,7 @@ class Database:
                       "integration_config", "alarm_reaction_rules"}
 
     async def export_all(self) -> dict[str, Any]:
-        result = {}
+        result: dict[str, Any] = {}
         for table in ("devices", "scenarios", "templates", "test_cases",
                        "test_suites", "test_reports", "users", "recordings",
                        "integration_config", "alarm_reaction_rules"):
@@ -1148,11 +1157,13 @@ class Database:
         }
         # FIXED: W5 - import_all 添加事务保护，失败时回滚已导入行
         if not self._is_postgres:
+            assert self._db is not None, "SQLite database not connected"
             await self._db.execute("BEGIN TRANSACTION")
         # FIXED-P1: PostgreSQL 使用 conn.transaction() 实现事务保护
         pg_conn = None
         pg_txn = None
         if self._is_postgres:
+            assert self._pg_pool is not None, "PostgreSQL pool not initialized"
             pg_conn = await self._pg_pool.acquire()
             pg_txn = pg_conn.transaction()
             await pg_txn.start()
@@ -1178,17 +1189,19 @@ class Database:
                         logger.debug("Failed to import row into %s: %s", table, e)
                 restored[table] = count
             if not self._is_postgres:
+                assert self._db is not None, "SQLite database not connected"
                 await self._db.commit()
             elif pg_txn:
                 await pg_txn.commit()
         except Exception:
             if not self._is_postgres:
+                assert self._db is not None, "SQLite database not connected"
                 await self._db.rollback()
             elif pg_txn:
                 await pg_txn.rollback()
             raise
         finally:
             # FIXED-P1: 释放 PostgreSQL 连接回连接池
-            if pg_conn and self._is_postgres:
+            if pg_conn and self._is_postgres and self._pg_pool:
                 await self._pg_pool.release(pg_conn)
         return restored

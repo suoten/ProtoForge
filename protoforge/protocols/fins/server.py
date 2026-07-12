@@ -305,7 +305,7 @@ class FinsServer(ProtocolServer):
 
         read_size = word_count * 2
         read_data = bytearray(read_size)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
             read_data = behavior.read_area(area, word_addr * 2, read_size)
 
@@ -331,7 +331,7 @@ class FinsServer(ProtocolServer):
             return self._make_fins_error(0x0204)
 
         write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
             for name, (p_area, p_offset) in behavior._point_addresses.items():
@@ -374,7 +374,7 @@ class FinsServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_controller_read(self, data: bytes, fins_frame: bytes) -> bytes:
-        device_config = self._device_configs.get(self._default_device_id)
+        device_config = self._device_configs.get(self._default_device_id or "")
         # FINS控制器读取响应数据布局(End Code之后):
         # Controller Model(1) + Controller Version(1) + System Version(2) + Controller Name(20) + Status(2) = 26 bytes
         controller_data = bytearray(26)
@@ -521,7 +521,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         word_count = struct.unpack(">H", data[4:6])[0]
         if word_count == 0 or word_count > 1000:  # FIXED-N17: UDP读取word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0x0204)
-        behavior = server._behaviors.get(server._default_device_id)
+        behavior = server._behaviors.get(server._default_device_id or "")
         read_size = word_count * 2
         resp_data = bytearray(read_size)
         if behavior:
@@ -539,7 +539,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         if word_count == 0 or word_count > 1000:  # FIXED-N18: UDP写入word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0x0204)
         write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
-        behavior = server._behaviors.get(server._default_device_id)
+        behavior = server._behaviors.get(server._default_device_id or "")
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
             # FIXED-H10: UDP写入后同步更新点值，与TCP写入保持一致
@@ -573,7 +573,7 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:
         server = self._server
-        device_config = server._device_configs.get(server._default_device_id)
+        device_config = server._device_configs.get(server._default_device_id or "")
         # FINS控制器读取响应数据布局(End Code之后):
         # Controller Model(1) + Controller Version(1) + System Version(2) + Controller Name(20) + Status(2) = 26 bytes
         controller_data = bytearray(26)

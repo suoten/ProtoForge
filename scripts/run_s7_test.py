@@ -278,17 +278,18 @@ def main():
         loop.run_forever()
 
     t = threading.Thread(target=run_loop, daemon=True)
-    t.start()
+    try:
+        t.start()
 
-    # 等待服务器就绪
-    time.sleep(0.5)
+        # 等待服务器就绪
+        time.sleep(0.5)
 
-    # 运行测试
-    success = run_tests(host, port)
-
-    # 停止服务器
-    loop.call_soon_threadsafe(loop.stop)
-    t.join(timeout=2)
+        # 运行测试
+        success = run_tests(host, port)
+    finally:
+        # 停止服务器
+        loop.call_soon_threadsafe(loop.stop)
+        t.join(timeout=2)
 
     sys.exit(0 if success else 1)
 

@@ -419,7 +419,7 @@ async def _shutdown_services(grpc_server: Any, integration_manager: Any, engine:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     """Application lifespan context manager for startup and shutdown."""
     global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager
 
@@ -660,9 +660,14 @@ def create_app() -> FastAPI:
         has_error = any(d.get("status") == "error" for d in protocol_details.values())
         status = "ok" if (db_ok and engine_ok and not has_error) else "degraded"
 
+        try:
+            ts = int(time.time() * 1000)
+        except (ValueError, TypeError):
+            ts = 0
+
         return {
             "status": status,
-            "timestamp": int(time.time() * 1000),
+            "timestamp": ts,
             "database": db_ok,
             "database_health": db_health,
             "engine": engine_ok,

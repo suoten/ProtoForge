@@ -308,7 +308,7 @@ class McServer(ProtocolServer):
             return self._make_error_response(data, 0xC059)
 
         read_data = bytearray(read_len)
-        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         if behavior:
             read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
 
@@ -339,7 +339,7 @@ class McServer(ProtocolServer):
             return self._make_error_response(data, 0xC059)
 
         write_data = data[20:20 + write_len]
-        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         if behavior:
             behavior.write_memory(device_code, start_addr, write_data)
             for name, (p_code, p_offset) in behavior._point_addresses.items():
@@ -389,7 +389,7 @@ class McServer(ProtocolServer):
         except (IndexError, struct.error):
             return self._make_error_response(data, 0xC059)
         read_data = bytearray()
-        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         offset = 17
         for _ in range(min(point_count, 64)):
             if offset + 3 > len(data):
@@ -415,7 +415,7 @@ class McServer(ProtocolServer):
     def _handle_random_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 17:
             return self._make_error_response(data, 0xC059)
-        behavior = self._behaviors.get(device_id or self._default_device_id)  # FIXED-P1: 使用路由后的device_id
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         try:
             point_count = struct.unpack("<H", data[15:17])[0]
         except (IndexError, struct.error):
@@ -595,7 +595,7 @@ class McServer(ProtocolServer):
             return self._make_ascii_error_response(data, 0xC059)
 
         read_data = bytearray(read_len)
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         if behavior:
             mem = behavior.read_memory(device_code, start_addr + read_len)
             read_data = mem[start_addr:start_addr + read_len]
@@ -626,7 +626,7 @@ class McServer(ProtocolServer):
             except ValueError:
                 break
 
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         if behavior:
             behavior.write_memory(device_code, start_addr, bytes(write_data))
 
@@ -644,7 +644,7 @@ class McServer(ProtocolServer):
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)
         read_data = bytearray()
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         offset = 40
         for _ in range(min(point_count, 64)):
             if offset + 6 > len(data):
@@ -673,7 +673,7 @@ class McServer(ProtocolServer):
     def _handle_random_write_ascii(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 40:
             return self._make_ascii_error_response(data, 0xC059)
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         try:
             point_count = self._ascii_to_hex(data[36:40])
         except (ValueError, IndexError):

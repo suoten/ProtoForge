@@ -36,7 +36,7 @@ class ProtoForgeClient:
     def __enter__(self) -> "ProtoForgeClient":
         return self
 
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    def __exit__(self, _exc_type: object, _exc_val: object, _exc_tb: object) -> None:
         self.close()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
@@ -532,7 +532,7 @@ class AsyncProtoForgeClient:
     async def __aenter__(self) -> "AsyncProtoForgeClient":
         return self
 
-    async def __aexit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+    async def __aexit__(self, _exc_type: object, _exc_val: object, _exc_tb: object) -> None:
         await self.close()
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:

@@ -13,6 +13,7 @@ import os
 import re
 import socket
 import sys
+import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -27,11 +28,13 @@ SOCKET_TIMEOUT = 5
 # Result tracking
 # ---------------------------------------------------------------------------
 results: list[tuple[str, bool, str]] = []
+_results_lock = threading.Lock()
 
 
 def record(name: str, passed: bool, detail: str = "") -> None:
     tag = "PASS" if passed else "FAIL"
-    results.append((name, passed, detail))
+    with _results_lock:
+        results.append((name, passed, detail))
     print(f"  [{tag}] {name}" + (f"  -- {detail}" if detail else ""))
 
 
@@ -315,17 +318,19 @@ async def main() -> None:
     await _server_ref.stop()
     print("[Teardown] Server stopped.\n")
 
-    total = len(results)
-    passed = sum(1 for _, ok, _ in results if ok)
-    failed = total - passed
+    with _results_lock:
+        total = len(results)
+        passed = sum(1 for _, ok, _ in results if ok)
+        failed = total - passed
     print("=" * 60)
     print(f"Results: {passed}/{total} passed, {failed} failed")
     print("=" * 60)
     if failed:
         print("\nFailed tests:")
-        for name, ok, detail in results:
-            if not ok:
-                print(f"  - {name}: {detail}")
+        with _results_lock:
+            for name, ok, detail in results:
+                if not ok:
+                    print(f"  - {name}: {detail}")
         sys.exit(1)
     else:
         print("\nAll tests passed!")

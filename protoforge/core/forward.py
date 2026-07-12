@@ -350,7 +350,7 @@ class ForwardEngine:
 
     async def _forward_loop(self) -> None:
         while self._running:
-            records = []
+            records: list[Any] = []
             queue_size = self._queue.qsize()
             if queue_size > self._queue.maxsize * 0.5:
                 logger.warning(

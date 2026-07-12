@@ -127,7 +127,7 @@ class EventBus:
             except Exception as e:
                 logger.exception("Event callback error for %s: %s", event_type, e)
 
-    async def _safe_callback(self, coro: Coroutine, event_type: str, callback: Callable) -> None:
+    async def _safe_callback(self, coro: Coroutine, event_type: str, _callback: Callable) -> None:
         """安全执行异步回调，避免异常传播"""
         try:
             await coro

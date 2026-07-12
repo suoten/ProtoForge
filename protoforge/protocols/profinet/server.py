@@ -657,11 +657,11 @@ class ProfinetServer(ProtocolServer):
 
     def _handle_rt_tunnel(self, data: bytes) -> bytes | None:
         active_ar = None
-        ar_device_id = self._default_device_id  # FIXED-P0: 默认设备
+        ar_device_id: str = self._default_device_id or ""  # FIXED-P0: 默认设备
         for ar in list(self._active_ars.values()):  # FIXED-P0: 快照迭代
             if ar.state == ARState.W_DATA:
                 active_ar = ar
-                ar_device_id = self._ar_device_map.get(ar.ar_id, self._default_device_id)  # FIXED-P0
+                ar_device_id = self._ar_device_map.get(ar.ar_id, self._default_device_id) or ""  # FIXED-P0
                 break
         behavior = self._behaviors.get(ar_device_id)  # FIXED-P0: 使用AR映射的设备
         config = self._device_configs.get(ar_device_id)
@@ -679,13 +679,14 @@ class ProfinetServer(ProtocolServer):
 
         if self._output_size > 0 and len(rt_payload) >= self._output_size:
             output_data = rt_payload[:self._output_size]
-            behavior.set_output_data(config, output_data)
+            if behavior and config:
+                behavior.set_output_data(config, output_data)
             self._log_debug("inbound", "cyclic_write",
                             f"PROFINET IO cyclic write {len(output_data)} bytes cycle={cycle_counter}",
                             device_id=ar_device_id or "",
                             detail={"size": len(output_data), "cycle": cycle_counter})
 
-        input_data = behavior.get_input_data(config)
+        input_data = behavior.get_input_data(config) if behavior and config else b""
 
         resp_cycle = (cycle_counter + 1) & 0xFFFF
         resp = bytearray()

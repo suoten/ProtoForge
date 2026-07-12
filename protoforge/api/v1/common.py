@@ -113,21 +113,21 @@ def setup_exception_handlers(app) -> None:
     from fastapi.exceptions import HTTPException
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    async def http_exception_handler(_request: Request, exc: HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
             content=APIResponse.error(message=str(exc.detail), code=exc.status_code),
         )
 
     @app.exception_handler(ProtoForgeException)
-    async def protoforge_exception_handler(request: Request, exc: ProtoForgeException):
+    async def protoforge_exception_handler(_request: Request, exc: ProtoForgeException):
         return JSONResponse(
             status_code=exc.status_code,
             content=APIResponse.error(message=exc.message, code=exc.code),
         )
 
     @app.exception_handler(ValueError)
-    async def value_error_handler(request: Request, exc: ValueError):
+    async def value_error_handler(_request: Request, exc: ValueError):
         import logging
         logger = logging.getLogger("protoforge.api")
         logger.warning("ValueError in API: %s", exc)
@@ -144,7 +144,7 @@ def setup_exception_handlers(app) -> None:
         )
 
     @app.exception_handler(RuntimeError)
-    async def runtime_error_handler(request: Request, exc: RuntimeError):
+    async def runtime_error_handler(_request: Request, exc: RuntimeError):
         import logging
         logger = logging.getLogger("protoforge.api")
         logger.error("RuntimeError in API: %s", exc)
@@ -161,7 +161,7 @@ def setup_exception_handlers(app) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def generic_exception_handler(request: Request, exc: Exception):
+    async def generic_exception_handler(_request: Request, exc: Exception):
         import logging
         logger = logging.getLogger("protoforge.api")
         logger.exception("Unhandled exception in API: %s", exc)

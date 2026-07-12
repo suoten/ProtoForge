@@ -7,6 +7,7 @@ import asyncio
 import os
 import struct
 import sys
+import threading
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -36,12 +37,14 @@ CM_OP_READ = 0x03
 CM_OP_WRITE = 0x04
 CM_OP_CONTROL = 0x05
 
-results = []
+results: list[tuple[str, bool]] = []
+_results_lock = threading.Lock()
 
 
 def record(name, passed, detail=""):
     status = "PASS" if passed else "FAIL"
-    results.append((name, passed))
+    with _results_lock:
+        results.append((name, passed))
     msg = f"  [{status}] {name}"
     if detail:
         msg += f"\n         {detail}"
@@ -703,11 +706,12 @@ async def main():
     print("\n" + "=" * 60)
     print("  Test Summary")
     print("=" * 60)
-    passed = sum(1 for _, p in results if p)
-    failed = len(results) - passed
-    for name, p in results:
-        print(f"  [{'PASS' if p else 'FAIL'}]  {name}")
-    print(f"\n  Total: {len(results)}, Passed: {passed}, Failed: {failed}")
+    with _results_lock:
+        passed = sum(1 for _, p in results if p)
+        failed = len(results) - passed
+        for name, p in results:
+            print(f"  [{'PASS' if p else 'FAIL'}]  {name}")
+        print(f"\n  Total: {len(results)}, Passed: {passed}, Failed: {failed}")
     if failed == 0:
         print("  All tests PASSED!")
     print("=" * 60)

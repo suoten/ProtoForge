@@ -101,7 +101,7 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
             .add_extension(
                 x509.SubjectAlternativeName([
                     x509.DNSName("localhost"),
-                    x509.IPAddress(ipaddress.IPAddress("0.0.0.0")),
+                    x509.IPAddress(ipaddress.IPv4Address("0.0.0.0")),
                 ]),
                 critical=False,
             )

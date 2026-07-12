@@ -112,10 +112,10 @@ class BACnetServer(ProtocolServer):
         loop = asyncio.get_running_loop()
         while True:
             try:
-                data, addr = await loop.sock_recvfrom(self._sock, 2048)
+                data, addr = await loop.sock_recvfrom(self._sock, 2048)  # type: ignore[attr-defined]
                 response = self._handle_bacnet_packet(data, addr)
                 if response:
-                    await loop.sock_sendto(self._sock, response, addr)
+                    await loop.sock_sendto(self._sock, response, addr)  # type: ignore[attr-defined]
                 # Bug1-FIX: BBMD转发应针对Original Broadcast NPDU (Type=0x0B)，而非BVLC-Result (Type=0x00)
                 if self._bbmd_enabled and data[0] == 0x81 and len(data) >= 2 and data[1] == 0x0B:
                     self._bbmd_forward(data, addr)
@@ -683,7 +683,7 @@ class BACnetServer(ProtocolServer):
                         self._finalize_bvlc_length(resp)
                         if self._sock:
                             try:
-                                await loop.sock_sendto(self._sock, bytes(resp), addr)
+                                await loop.sock_sendto(self._sock, bytes(resp), addr)  # type: ignore[attr-defined]
                             except Exception:
                                 dead_subs.append(sub_id)
                 for sid in dead_subs:
@@ -740,7 +740,7 @@ class BACnetServer(ProtocolServer):
 
             self._finalize_bvlc_length(resp)
             responses += bytes(resp)
-        return responses if responses else None
+        return responses if responses else b""
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id

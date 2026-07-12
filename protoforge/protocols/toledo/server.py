@@ -199,7 +199,7 @@ class ToledoServer(ProtocolServer):
 
         return self._handle_print_weight()
 
-    def _handle_stx_command(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes:
+    def _handle_stx_command(self, data: bytes, writer: asyncio.StreamWriter | None = None) -> bytes:
         if len(data) < 2:
             return self._handle_print_weight()
 
@@ -221,14 +221,14 @@ class ToledoServer(ProtocolServer):
 
     def _handle_stable_weight(self) -> bytes:
         with self._behaviors_sync_lock:
-            behavior = self._behaviors.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
         if not behavior:
             return b"   0.000kg \r\n"
         return behavior.get_weight_string().encode("ascii")
 
     def _handle_unstable_weight(self) -> bytes:  # FIXED-P1: 不稳定重量响应
         with self._behaviors_sync_lock:
-            behavior = self._behaviors.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
         if not behavior:
             return b"   0.000kg D\r\n"
         result = behavior.get_weight_string()
@@ -237,7 +237,7 @@ class ToledoServer(ProtocolServer):
 
     def _handle_tare(self) -> bytes:
         with self._behaviors_sync_lock:
-            behavior = self._behaviors.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
             behavior._tare = behavior._weight
             # FIXED-N10: 同步tare值到_values字典，确保API读取一致
@@ -247,7 +247,7 @@ class ToledoServer(ProtocolServer):
 
     def _handle_zero(self) -> bytes:
         with self._behaviors_sync_lock:
-            behavior = self._behaviors.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
             behavior._weight = 0.0
             behavior._tare = 0.0
@@ -266,7 +266,7 @@ class ToledoServer(ProtocolServer):
     def _handle_immediate(self) -> bytes:
         return self._handle_stable_weight()
 
-    def _handle_continuous_start(self, writer: asyncio.StreamWriter = None) -> bytes:
+    def _handle_continuous_start(self, writer: asyncio.StreamWriter | None = None) -> bytes:
         self._continuous_mode = True
         if writer:
             self._continuous_writers.add(writer)
@@ -274,7 +274,7 @@ class ToledoServer(ProtocolServer):
             self._continuous_task = asyncio.create_task(self._continuous_send())
         return self._handle_stable_weight()
 
-    def _handle_continuous_stop(self, writer: asyncio.StreamWriter = None) -> bytes:
+    def _handle_continuous_stop(self, writer: asyncio.StreamWriter | None = None) -> bytes:
         if writer:
             self._continuous_writers.discard(writer)
         if not self._continuous_writers:
@@ -288,7 +288,7 @@ class ToledoServer(ProtocolServer):
         try:
             while self._server_running and self._continuous_writers:
                 async with self._behaviors_lock:
-                    behavior = self._behaviors.get(self._default_device_id)
+                    behavior = self._behaviors.get(self._default_device_id or "")
                 if behavior:
                     weight_str = behavior.get_weight_string().encode("ascii")
                     dead_writers = []

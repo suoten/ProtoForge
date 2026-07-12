@@ -429,7 +429,7 @@ class AbServer(ProtocolServer):
                              sender_context: bytes = bytes(8)) -> bytes:
         tag_value = 0
         data_type = "int32"
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(self._default_device_id or "")
         tag_name = self._parse_cip_tag_path(cip_data)
         if tag_name and behavior:
             # Bug 6 fix: 检查tag是否存在，不存在时返回CIP错误(0x04=路径段错误)
@@ -453,7 +453,7 @@ class AbServer(ProtocolServer):
     def _handle_cip_write_tag(self, session: int, cip_data: bytes,
                               sender_context: bytes = bytes(8)) -> bytes:
         tag_name = self._parse_cip_tag_path(cip_data)
-        behavior = self._behaviors.get(self._default_device_id)
+        behavior = self._behaviors.get(self._default_device_id or "")
         if tag_name and behavior:
             path_end = self._get_path_end_offset(cip_data)
             if path_end < 0 or path_end + 3 > len(cip_data):  # FIXED-N07: 路径偏移校验，至少需要3字节(type+size)

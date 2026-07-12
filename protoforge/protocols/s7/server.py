@@ -596,7 +596,7 @@ class S7Server(ProtocolServer):
                 read_size = 65535
 
             value_bytes = b"\x00" * read_size
-            behavior = self._behaviors.get(device_id or self._default_device_id)
+            behavior = self._behaviors.get(device_id or self._default_device_id or "")
             if behavior:
                 value_bytes = behavior.read_area(area, db_number, offset, read_size)
 
@@ -703,7 +703,7 @@ class S7Server(ProtocolServer):
 
             write_data = write_data_list[i] if i < len(write_data_list) else b""
 
-            behavior = self._behaviors.get(device_id or self._default_device_id)
+            behavior = self._behaviors.get(device_id or self._default_device_id or "")
             if behavior:
                 behavior.write_area(area, db_number, offset, write_data)
                 for name, (p_db, p_offset) in behavior._point_addresses.items():
@@ -863,7 +863,7 @@ class S7Server(ProtocolServer):
         # FIXED-P0: SZL 0x0011 = Order Code (snap7 parse_order_code_szl)
         # 数据记录格式: OrderCode(20) + V1(1) + V2(1) + V3(1) = 23 bytes
         # 注意: 不包含 LengthDR + NDR 头，snap7 的 parse_read_szl_response 已跳过 SZL_ID+Index
-        info = self._device_info.get(self._default_device_id, {})
+        info = self._device_info.get(self._default_device_id or "", {})
         order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
         fw_parts = fw_rev_str.replace("V", "").split(".")
@@ -877,7 +877,7 @@ class S7Server(ProtocolServer):
     def _build_szl_component_identification(self, index: int) -> bytes:
         # FIXED-P0: SZL 0x0012 = Component Identification
         # 数据记录格式与 0x0011 类似，不包含 LengthDR + NDR 头
-        info = self._device_info.get(self._default_device_id, {})
+        info = self._device_info.get(self._default_device_id or "", {})
         order_num = info.get("order_number", "6ES7 000-0AA00-0AA0")
         fw_rev_str = info.get("firmware_revision", "V1.0.0")
         fw_parts = fw_rev_str.replace("V", "").split(".")
@@ -897,7 +897,7 @@ class S7Server(ProtocolServer):
         #   Copyright[80:106]      (26 bytes)
         #   ModuleName[106:130]    (24 bytes)
         # 不包含 LengthDR + NDR 头
-        info = self._device_info.get(self._default_device_id, {})
+        info = self._device_info.get(self._default_device_id or "", {})
         module_name = info.get("module_name", "ProtoForge S7")
         serial = info.get("serial_number", "PF-00000000")
         as_name = info.get("module_name", "ProtoForge")
@@ -1040,7 +1040,7 @@ class S7Server(ProtocolServer):
         }
 
     def _build_szl_plc_status(self, device_id: str | None = None) -> bytes:  # FIXED-P1: SZL 0x0032 PLC状态
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         run_status = 0x08  # 默认RUN状态
         if behavior:
             val = behavior._values.get("run_status")
@@ -1051,7 +1051,7 @@ class S7Server(ProtocolServer):
         return record
 
     def _make_s7_plc_control_response(self, data: bytes, device_id: str | None = None, start: bool = True) -> bytes:  # FIXED-P1: Start/Stop PLC
-        behavior = self._behaviors.get(device_id or self._default_device_id)
+        behavior = self._behaviors.get(device_id or self._default_device_id or "")
         if behavior and "run_status" in behavior._values:
             behavior._values["run_status"] = start
             behavior.write_area(S7DeviceBehavior.S7_AREA_DB, 1, 0, struct.pack(">B", 1 if start else 0))

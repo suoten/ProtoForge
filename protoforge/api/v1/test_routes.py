@@ -293,7 +293,7 @@ async def get_test_report_html(report_id: str, request: Request, _user: dict[str
 
 
 @router.post("/tests/quick-test")
-async def quick_test(scope: str = "all", target_id: Optional[str] = None, request: Request = None, _user: dict[str, Any] = Depends(require_user)):
+async def quick_test(scope: str = "all", target_id: Optional[str] = None, request: Request | None = None, _user: dict[str, Any] = Depends(require_user)):
     # FIXED: 添加scope参数校验，无效值返回400而非静默空结果
     valid_scopes = {"all", "device", "scenario", "protocol"}
     if scope not in valid_scopes:

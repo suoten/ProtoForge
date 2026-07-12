@@ -216,10 +216,10 @@ def get_protoforge_host() -> str:
     if host in ("0.0.0.0", ""):
         import socket
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                s.settimeout(2)
-                s.connect(("8.8.8.8", 80))
-                host = s.getsockname()[0]
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.settimeout(2)
+                sock.connect(("8.8.8.8", 80))
+                host = sock.getsockname()[0]
         except Exception as e:
             logger.debug("Failed to detect local IP via UDP: %s", e)
             try:
@@ -279,7 +279,7 @@ def _get_local_ips() -> set[str]:
         hostname = socket.gethostname()
         for info in socket.getaddrinfo(hostname, None):
             if len(info) >= 5:
-                ip = info[4][0]
+                ip = str(info[4][0])
                 # 过滤掉 IPv6 link-local 地址 (fe80::)
                 if not ip.startswith("fe80:"):
                     ips.add(ip)
@@ -333,7 +333,7 @@ def _get_protocol_actual_port(protocol: str, protocol_config: dict[str, Any]) ->
         engine = get_engine()
         running_port = engine.get_protocol_running_port(protocol)
         if running_port is not None:
-            return running_port
+            return int(running_port)
     except Exception as e:
         logger.debug("Failed to get protocol running port for %s: %s", protocol, e)
     # 2. 其次从设备配置中取端口
@@ -373,7 +373,7 @@ async def _get_edgelite_protocol_port_from_existing_device(
     el_url: str,
     headers: dict[str, Any],
     protocol: str,
-    protoforge_device_id: str,
+    _protoforge_device_id: str,
 ) -> int | None:
     """从 EdgeLite 已有的同协议设备中提取端口配置（EdgeLite 可能修改了默认端口）"""
     try:
@@ -1300,7 +1300,7 @@ def _extract_driver_host_port(driver_config: dict[str, Any], protocol: str = "")
                 logger.debug("Failed to parse HTTP push URL: %s", e)
                 host = push_url
         else:
-            host = driver_config.get("host", driver_config.get("ip", ""))
+            host = str(driver_config.get("host", driver_config.get("ip", "")))
             port = str(driver_config.get("port", ""))
     elif protocol == "opcua":
         server_url = driver_config.get("server_url", driver_config.get("endpoint", ""))
@@ -1332,10 +1332,10 @@ def _extract_driver_host_port(driver_config: dict[str, Any], protocol: str = "")
             host = driver_config.get("host", "")
             port = str(driver_config.get("port", ""))
     elif protocol in ("iec104", "modbus_tcp", "database", "opcda", "profinet", "ethercat"):
-        host = driver_config.get("host", driver_config.get("ip", ""))
+        host = str(driver_config.get("host", driver_config.get("ip", "")))
         port = str(driver_config.get("port", ""))
     else:
-        host = driver_config.get("ip", driver_config.get("host", ""))
+        host = str(driver_config.get("ip", driver_config.get("host", "")))
         port = str(driver_config.get("port", ""))
     return (host, port)
 
