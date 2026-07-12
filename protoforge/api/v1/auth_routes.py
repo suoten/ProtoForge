@@ -84,7 +84,7 @@ async def login(credentials: LoginRequest):
         raise
     except Exception as e:
         logger.exception("Login failed: %s", e)
-        raise HTTPException(status_code=500, detail="Login failed, please try again later") from e
+        raise HTTPException(status_code=500, detail="Internal server error during login. Check server logs or contact administrator.") from e
 
 
 @router.post("/auth/refresh")
@@ -130,7 +130,7 @@ async def register(user_data: RegisterRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         logger.exception("User creation failed: %s", e)
-        raise HTTPException(status_code=500, detail="User creation failed, please try again later") from e
+        raise HTTPException(status_code=500, detail="Internal server error during user creation. Check server logs or contact administrator.") from e
 
     if not user:
         raise HTTPException(status_code=409, detail="Username already exists")
@@ -209,7 +209,7 @@ async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict[str,
         raise
     except Exception as e:
         logger.exception("Admin reset password failed: %s", e)
-        raise HTTPException(status_code=500, detail="Password reset failed, please try again later") from e
+        raise HTTPException(status_code=500, detail="Internal server error during password reset. Check server logs or contact administrator.") from e
 
 
 @router.put("/auth/users/{username}/role")

@@ -216,12 +216,12 @@ class ScenarioExecutionError(ScenarioError):
 
 # ============ 工具函数 ============
 
-def is_protoforge_error(e: Exception) -> bool:
+def _is_protoforge_error(e: Exception) -> bool:
     """判断是否为 ProtoForge 异常"""
     return isinstance(e, ProtoForgeError)
 
 
-def get_error_code(e: Exception) -> str:
+def _get_error_code(e: Exception) -> str:
     """获取错误的代码标识"""
     if isinstance(e, ProtoForgeError):
         return e.__class__.__name__
