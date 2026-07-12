@@ -809,7 +809,8 @@ class GB28181Server(ProtocolServer):
         gb_device._invite_media_ip = sdp_info["media_ip"]
         gb_device._invite_media_port = sdp_info["media_port"]
         gb_device._local_media_port = media_port  # FIXED-P0: 记录本地端口用于BYE时释放
-        gb_device._srtp_context = srtp_context
+        if srtp_context:
+            gb_device._srtp_context = srtp_context  # type: ignore[attr-defined]
 
         self._log_debug("out", "sip_invite_ok",
                         msg("gb28181", "invite_ok_sent", detail=f"{media_ip}:{media_port}"),

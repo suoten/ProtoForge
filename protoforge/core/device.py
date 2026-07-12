@@ -99,22 +99,22 @@ class DeviceInstance:
 
     def _register_state_callbacks(self) -> None:
         """注册状态机内部回调。"""
-        def on_enter_starting(state: DeviceState, context: dict[str, Any]) -> None:
+        def on_enter_starting(_state: DeviceState, _context: dict[str, Any]) -> None:
             self._start_time = time.time()
             logger.info("Device %s entering STARTING state", self.config.id)
 
-        def on_enter_run(state: DeviceState, context: dict[str, Any]) -> None:
+        def on_enter_run(_state: DeviceState, _context: dict[str, Any]) -> None:
             self._start_time = time.time()
             logger.info("Device %s entered RUN state", self.config.id)
 
-        def on_enter_stop(state: DeviceState, context: dict[str, Any]) -> None:
+        def on_enter_stop(_state: DeviceState, _context: dict[str, Any]) -> None:
             self._start_time = None
             if self._zero_output_on_stop:
                 for name in self._point_values:
                     self._point_values[name] = 0
             logger.info("Device %s entered STOP state", self.config.id)
 
-        def on_enter_error(state: DeviceState, context: dict[str, Any]) -> None:
+        def on_enter_error(_state: DeviceState, _context: dict[str, Any]) -> None:
             # 设置安全值
             for name, safe_val in self._safe_values.items():
                 if name in self._point_values:

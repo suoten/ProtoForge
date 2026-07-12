@@ -294,7 +294,8 @@ class WebhookManager:
             if event not in webhook.events and "*" not in webhook.events:
                 continue
 
-            if timestamp - webhook.last_triggered < self._rate_limit_seconds:
+            last_triggered = webhook.last_triggered or 0.0
+            if timestamp - last_triggered < self._rate_limit_seconds:
                 continue
 
             # Auto-disable threshold: use lower threshold for client errors (4xx = misconfiguration)

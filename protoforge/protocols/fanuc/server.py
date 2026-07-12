@@ -21,7 +21,7 @@ class FanucDeviceBehavior(StandardDeviceBehavior):
 
     def __init__(self, points: list | None = None):
         super().__init__(points)
-        self._cnc_status = {
+        self._cnc_status: dict[str, Any] = {
             "alarm": 0,
             "mode": 3,
             "execution": 1,
@@ -257,7 +257,7 @@ class FanucServer(ProtocolServer):
         device_id = self._session_device_map.get(session_id)
         if device_id and device_id in self._behaviors:
             return device_id
-        return self._default_device_id
+        return self._default_device_id or ""
 
     def _handle_cnc_connect(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
         assigned_session = self._next_session_id
@@ -361,7 +361,7 @@ class FanucServer(ProtocolServer):
     def _handle_cnc_rdspindlespd(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
         device_id = self._resolve_device(session_id)
         behavior = self._behaviors.get(device_id)
-        speed = behavior._cnc_status.get("spindle_speed", self._DEFAULT_SPINDLE_SPEED) if behavior else self._DEFAULT_SPINDLE_SPEED
+        speed = behavior._cnc_status.get("spindle_speed", 3000.0) if behavior else 3000.0  # 默认3000 rpm
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0110)
@@ -373,7 +373,7 @@ class FanucServer(ProtocolServer):
     def _handle_cnc_rdfeed(self, req_id: int, session_id: int = 0) -> bytes:  # FIXED-P0
         device_id = self._resolve_device(session_id)
         behavior = self._behaviors.get(device_id)
-        feed = behavior._cnc_status.get("feed_rate", self._DEFAULT_FEED_RATE) if behavior else self._DEFAULT_FEED_RATE
+        feed = behavior._cnc_status.get("feed_rate", 500.0) if behavior else 500.0  # 默认500进给速度
 
         resp = bytearray()
         resp += struct.pack("<H", 0x0111)

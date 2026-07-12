@@ -1,6 +1,9 @@
 """Default configuration values and built-in protocol defaults."""
 
-PROTOCOL_DEFAULTS = {
+from types import MappingProxyType
+from typing import Any
+
+PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
     "modbus_tcp": {
         "host": "0.0.0.0", "port": 5020,
         "display_name": "Modbus TCP",
@@ -204,7 +207,7 @@ PROTOCOL_DEVICE_CONFIG = {
     ],
 }
 
-PROTOCOL_USAGE = {
+PROTOCOL_USAGE: dict[str, dict[str, Any]] = {
     "modbus_tcp": {
         "mode": "server",
         "mode_label": "Server Simulation (Slave)",
@@ -432,7 +435,8 @@ HTTP_TIMEOUT_SHORT = 5.0
 HTTP_TIMEOUT_LONG = 30.0
 
 import logging
-from typing import Any
+
+# from typing import Any  # moved to top of file
 
 _defaults_logger = logging.getLogger(__name__)
 
@@ -463,7 +467,7 @@ def get_http_timeout_long() -> float:
         _defaults_logger.debug("Failed to read http_timeout_long from config, using default: %s", e)
         return HTTP_TIMEOUT_LONG
 
-ERROR_MESSAGES = {
+ERROR_MESSAGES: MappingProxyType[str, str] = MappingProxyType({
     "Device not found": "The device was not found, it may have been deleted or the ID is incorrect. Please check the device list.",
     "Scenario not found": "The scenario was not found, it may have been deleted. Please check the scenario list.",
     "Template not found": "The template was not found. Please select an available template from the template marketplace.",
@@ -495,10 +499,10 @@ ERROR_MESSAGES = {
     "authentication failed": "Authentication failed. Please check that the username, password, or authentication key is correct.",
     "access denied": "Access denied. The target server rejected the connection. Please check authentication credentials and permissions.",
     "endpoint": "Failed to connect to the specified endpoint. Please check that the server address and port are correct, and that the target service is running.",
-}
+})
 
 
-ERROR_MESSAGES_ZH = {
+ERROR_MESSAGES_ZH: MappingProxyType[str, str] = MappingProxyType({
     "Device not found": "设备未找到，可能已被删除或ID不正确。请检查设备列表。",
     "Scenario not found": "场景未找到，可能已被删除。请检查场景列表。",
     "Template not found": "模板未找到。请从模板市场选择可用的模板。",
@@ -530,7 +534,7 @@ ERROR_MESSAGES_ZH = {
     "authentication failed": "认证失败。请检查用户名、密码或认证密钥是否正确。",
     "access denied": "访问被拒绝。目标服务器拒绝了连接。请检查认证凭据和权限。",
     "endpoint": "无法连接到指定的端点。请检查服务器地址和端口是否正确，以及目标服务是否运行。",
-}
+})
 
 
 def get_friendly_error(detail: str, lang: str = "zh") -> str:

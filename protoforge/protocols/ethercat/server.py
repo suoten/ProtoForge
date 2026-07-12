@@ -545,11 +545,11 @@ class EtherCATServer(ProtocolServer):
 
     def _resolve_device_by_addr(self, address: int) -> str:  # FIXED-P0: 根据地址路由到对应从站设备
         if address >= 0x10000000:
-            return self._default_device_id
+            return self._default_device_id or ""
         slave_addr = self._slave_addr
         if address >= 0x1000 and address < 0x2000:
-            return self._slave_device_map.get(slave_addr, self._default_device_id)
-        return self._default_device_id
+            return self._slave_device_map.get(slave_addr, self._default_device_id) or ""
+        return self._default_device_id or ""
 
     def _process_frame(self, data: bytes) -> bytes | None:
         if len(data) < 12:
@@ -609,8 +609,8 @@ class EtherCATServer(ProtocolServer):
 
         if address >= 0x10000000:
             offset = address & 0x0FFFFFFF
-            behavior = self._behaviors.get(self._default_device_id)
-            config = self._device_configs.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
+            config = self._device_configs.get(self._default_device_id or "")
             if behavior and config:
                 input_data = behavior.get_pd_input(config)
                 if offset < len(input_data):
@@ -635,8 +635,8 @@ class EtherCATServer(ProtocolServer):
 
         if address >= 0x10000000:
             address & 0x0FFFFFFF
-            behavior = self._behaviors.get(self._default_device_id)
-            config = self._device_configs.get(self._default_device_id)
+            behavior = self._behaviors.get(self._default_device_id or "")
+            config = self._device_configs.get(self._default_device_id or "")
             if behavior and config:
                 behavior.set_pd_output(config, payload[:length])
                 self._log_debug("inbound", "pdo_write",

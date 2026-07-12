@@ -150,8 +150,12 @@ def start_server():
     ready = threading.Event()
 
     thread = threading.Thread(target=_run_server_in_thread, args=(server, loop, ready), daemon=True)
-    thread.start()
-    ready.wait(timeout=10)
+    try:
+        thread.start()
+        ready.wait(timeout=10)
+    except Exception:
+        thread.join(timeout=1)
+        raise
     return server, loop
 
 

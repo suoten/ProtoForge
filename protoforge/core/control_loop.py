@@ -178,7 +178,7 @@ class ControlLoop:
             output = max(out_min, min(out_max, output))
 
         self._last_output = output
-        self._tick_count += 1
+        self._tick_count = self._tick_count + 1
         return output
 
     @property
@@ -193,7 +193,7 @@ class ControlLoop:
 
     def is_saturated(self) -> bool:
         """返回 PID 是否处于饱和状态。"""
-        return bool(self._pid.is_saturated())
+        return self._pid.is_saturated()
 
     def reset(self) -> None:
         """重置 PID 控制器内部状态（积分项、微分项等）。"""

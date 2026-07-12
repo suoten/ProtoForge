@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     no_auth: bool = False
     admin_password: str = ""  # FIXED: default empty; auto-generates random password if unset
     reset_admin_password: bool = False  # 设为 true 时，启动时用 PROTOFORGE_ADMIN_PASSWORD 重置 admin 密码
-    grpc_port: int = 0  # 0 means disabled; set PROTOFORGE_GRPC_PORT to a positive port (e.g. 50051) to enable gRPC
+    grpc_port: int = 0  # 0 = gRPC disabled; set to a positive port (e.g. 50051) to activate
     failover_role: str = ""
     failover_primary: str = ""
     failover_standby: str = ""
@@ -189,7 +189,7 @@ class Settings(BaseSettings):
 
 _settings: Settings | None = None
 _settings_overrides: dict[str, Any] = {}
-_settings_lock = threading.Lock()
+_settings_lock = threading.RLock()
 
 
 def get_settings() -> Settings:
@@ -289,39 +289,40 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
 
 
 def _save_env() -> None:
-    """Save settings overrides to .env file. Caller must hold _settings_lock."""
-    prefix = "PROTOFORGE_"
-    lines = []
-    try:
-        overrides_snapshot = dict(_settings_overrides)
-        if _ENV_FILE.exists():
-            content = _ENV_FILE.read_text(encoding="utf-8")
-            content = content.replace("\r\n", "\n")
-            for line in content.splitlines():
-                if "=" in line:
-                    key = line.split("=", 1)[0].strip()
-                    field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
-                    if field_name in overrides_snapshot:
-                        lines.append(f"{key}={overrides_snapshot[field_name]}")
+    """Save settings overrides to .env file."""
+    with _settings_lock:
+        prefix = "PROTOFORGE_"
+        lines = []
+        try:
+            overrides_snapshot = dict(_settings_overrides)
+            if _ENV_FILE.exists():
+                content = _ENV_FILE.read_text(encoding="utf-8")
+                content = content.replace("\r\n", "\n")
+                for line in content.splitlines():
+                    if "=" in line:
+                        key = line.split("=", 1)[0].strip()
+                        field_name = key[len(prefix):].lower() if key.startswith(prefix) else key.lower()
+                        if field_name in overrides_snapshot:
+                            lines.append(f"{key}={overrides_snapshot[field_name]}")
+                        else:
+                            lines.append(line)
                     else:
                         lines.append(line)
-                else:
-                    lines.append(line)
 
-        existing_keys = set()
-        for line in lines:
-            if "=" in line:
-                existing_keys.add(line.split("=", 1)[0].strip())
+            existing_keys = set()
+            for line in lines:
+                if "=" in line:
+                    existing_keys.add(line.split("=", 1)[0].strip())
 
-        for key, value in overrides_snapshot.items():
-            env_key = f"{prefix}{key.upper()}"
-            if env_key not in existing_keys:
-                lines.append(f"{env_key}={value}")
+            for key, value in overrides_snapshot.items():
+                env_key = f"{prefix}{key.upper()}"
+                if env_key not in existing_keys:
+                    lines.append(f"{env_key}={value}")
 
-        _ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    except (OSError, PermissionError) as e:
-        logger.warning("Failed to save .env file: %s", e)
+            _ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+            _ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        except (OSError, PermissionError) as e:
+            logger.warning("Failed to save .env file: %s", e)
 
 
 def get_protocol_port_map() -> dict[str, Any]:

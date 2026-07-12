@@ -1034,7 +1034,7 @@ class TestRunner:
             step.extracted_vars[var_name] = value
 
     async def _run_hook(self, hook: str, var_store: VariableStore,
-                        api_client=None) -> None:
+                        _api_client=None) -> None:
         if not hook:
             return
         try:

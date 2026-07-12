@@ -12,7 +12,9 @@ each Response model to its DB table, then compare field names vs column names.
 """
 
 import logging
+import threading
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from pydantic import BaseModel
 
@@ -63,11 +65,12 @@ class SchemaAuditResult:
 # should be listed in _VIRTUAL_FIELDS below.
 
 _MODEL_TABLE_MAP: dict[type[BaseModel], str] = {}
+_MODEL_TABLE_LOCK = threading.RLock()
 
 # Virtual fields: fields that exist in Response models but are NOT stored
 # as DB columns (they are computed at runtime).
 # Format: {("ModelName", "field_name"): reason}
-_VIRTUAL_FIELDS: dict[tuple[str, str], str] = {
+_VIRTUAL_FIELDS: MappingProxyType[tuple[str, str], str] = MappingProxyType({
     # DeviceInfo fields computed at runtime, not in DB
     ("DeviceInfo", "status"): "computed at runtime from protocol state",
     ("DeviceInfo", "points"): "loaded from JSON column 'points' and transformed to PointValue list",
@@ -91,10 +94,10 @@ _VIRTUAL_FIELDS: dict[tuple[str, str], str] = {
     ("ProtocolInfo", "description"): "virtual model, no DB table",
     ("ProtocolInfo", "version"): "virtual model, no DB table",
     ("ProtocolInfo", "config_schema"): "virtual model, no DB table",
-}
+})
 
 # Models that have NO corresponding DB table (purely virtual/computed)
-_VIRTUAL_MODELS: set[str] = {
+_VIRTUAL_MODELS: frozenset[str] = frozenset({
     "ProtocolInfo",
     "PointConfig",
     "PointValue",
@@ -121,25 +124,27 @@ _VIRTUAL_MODELS: set[str] = {
     "BatchPushResult",
     "MessageType",
     "AlarmReactionRule",
-}
+})
 
 
 def register_model_table(model_cls: type[BaseModel], table_name: str) -> None:
     """Register a Pydantic model <-> DB table mapping."""
-    _MODEL_TABLE_MAP[model_cls] = table_name
+    with _MODEL_TABLE_LOCK:
+        _MODEL_TABLE_MAP[model_cls] = table_name
 
 
 def _auto_register_models() -> None:
     """Auto-register known model-table mappings from protoforge.models."""
-    from protoforge.models.device import DeviceInfo
-    from protoforge.models.scenario import ScenarioDetail, ScenarioInfo
-    from protoforge.models.template import TemplateInfo
+    with _MODEL_TABLE_LOCK:
+        if not _MODEL_TABLE_MAP:
+            from protoforge.models.device import DeviceInfo
+            from protoforge.models.scenario import ScenarioDetail, ScenarioInfo
+            from protoforge.models.template import TemplateInfo
 
-    if not _MODEL_TABLE_MAP:
-        register_model_table(DeviceInfo, "devices")
-        register_model_table(ScenarioInfo, "scenarios")
-        register_model_table(ScenarioDetail, "scenarios")
-        register_model_table(TemplateInfo, "templates")
+            register_model_table(DeviceInfo, "devices")
+            register_model_table(ScenarioInfo, "scenarios")
+            register_model_table(ScenarioDetail, "scenarios")
+            register_model_table(TemplateInfo, "templates")
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +185,7 @@ async def audit_schema(db) -> SchemaAuditResult:
     _auto_register_models()
     result = SchemaAuditResult()
 
-    for model_cls, table_name in _MODEL_TABLE_MAP.items():
+    for model_cls, table_name in list(_MODEL_TABLE_MAP.items()):
         model_name = model_cls.__name__
 
         # Get model fields (only direct fields, not nested model fields)
@@ -243,7 +248,7 @@ def audit_schema_sync() -> SchemaAuditResult:
     _auto_register_models()
     result = SchemaAuditResult()
 
-    for model_cls, _table_name in _MODEL_TABLE_MAP.items():
+    for model_cls, _table_name in list(_MODEL_TABLE_MAP.items()):
         model_name = model_cls.__name__
         model_fields = set(model_cls.model_fields.keys())
 
@@ -256,7 +261,7 @@ def audit_schema_sync() -> SchemaAuditResult:
     for (model_name, field_name), _reason in _VIRTUAL_FIELDS.items():
         # Try to find the model class
         found = False
-        for model_cls in _MODEL_TABLE_MAP:
+        for model_cls in list(_MODEL_TABLE_MAP):
             if model_cls.__name__ == model_name:
                 if field_name not in model_cls.model_fields:
                     result.warnings.append(
@@ -303,7 +308,7 @@ def scan_all_response_models() -> list[tuple[str, str, set[str]]]:
                     and issubclass(attr, BaseModel)
                     and attr is not BaseModel
                     and attr.__name__ not in _VIRTUAL_MODELS
-                    and attr not in _MODEL_TABLE_MAP
+                    and attr not in list(_MODEL_TABLE_MAP)
                 ):
                     fields = set(attr.model_fields.keys())
                     unregistered.append((attr.__name__, modname, fields))

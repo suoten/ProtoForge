@@ -75,16 +75,17 @@ class FailoverManager:
             try:
                 await asyncio.sleep(self._health_check_interval)
                 if self._is_primary:
-                    healthy = await self._check_peer_health(self._standby_url)
-                    if not healthy:
-                        logger.debug("Standby peer %s is not reachable", self._standby_url)
-                else:
-                    primary_healthy = await self._check_peer_health(self._primary_url)
-                    if not primary_healthy:
-                        consecutive_failures += 1
-                        if consecutive_failures >= max_failures:
-                            await self._promote_to_primary()
-                            consecutive_failures = 0
+                    if self._standby_url:
+                        healthy = await self._check_peer_health(self._standby_url)
+                        if not healthy:
+                            logger.debug("Standby peer %s is not reachable", self._standby_url)
+                    if self._primary_url:
+                        primary_healthy = await self._check_peer_health(self._primary_url)
+                        if not primary_healthy:
+                            consecutive_failures += 1
+                            if consecutive_failures >= max_failures:
+                                await self._promote_to_primary()
+                                consecutive_failures = 0
                     else:
                         consecutive_failures = 0
             except asyncio.CancelledError:

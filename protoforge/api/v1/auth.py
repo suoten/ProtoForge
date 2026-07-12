@@ -28,7 +28,7 @@ def is_no_auth() -> bool:
                 host
             )
             _no_auth_warning_shown = True
-    return settings.no_auth
+    return True if settings.no_auth else False
 
 
 class RoleChecker:

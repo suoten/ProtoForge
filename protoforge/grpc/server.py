@@ -41,7 +41,7 @@ def _get_database():
 
 
 class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE else object):
-    async def GetHealth(self, request, context):
+    async def GetHealth(self, _request, _context):
         engine = _get_engine()
         db = _get_database()
         device_count = 0
@@ -336,7 +336,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
         except Exception as e:
             return pb2.OperationResponse(ok=False, error=str(e))
 
-    async def GetSettings(self, request, context):
+    async def GetSettings(self, _request, context):
         db = _get_database()
         if not db:
             context.set_code(grpc.StatusCode.UNAVAILABLE)
@@ -368,7 +368,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
 
 
 class _NullGrpcServer:  # FIXED: start_grpc_server返回None导致调用方None.stop()崩溃
-    async def stop(self, grace=None):
+    async def stop(self, _grace=None):
         pass
 
 

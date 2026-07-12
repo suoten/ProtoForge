@@ -392,7 +392,7 @@ class OpcDaServer(ProtocolServer):
                         continue
                     tags = sub_info.get("tags", [])
                     deadband = sub_info.get("deadband", 0.0)  # FIXED-P0: 读取deadband
-                    behavior = self._behaviors.get(self._default_device_id)
+                    behavior = self._behaviors.get(self._default_device_id or "")
                     if not behavior:
                         continue
                     prev = last_values.get(sub_id, {})

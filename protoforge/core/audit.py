@@ -3,6 +3,7 @@
 import logging
 import time
 from dataclasses import asdict, dataclass
+from types import MappingProxyType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class AuditLogger:
         for entry in reversed(self._entries):
             if username and entry.username != username:
                 continue
-            if action and not any(a in entry.action for a in action_aliases):
+            if action_aliases and not any(a in entry.action for a in action_aliases):
                 continue
             if resource_type and entry.resource_type != resource_type:
                 continue
@@ -190,7 +191,7 @@ audit_logger = AuditLogger()
 
 
 # key: 规范action名, value: 可能的旧格式变体列表
-_ACTION_ALIASES = {
+_ACTION_ALIASES: MappingProxyType[str, list[str]] = MappingProxyType({
     "run_test": ["run_test", "post_tests", "tests_quick-test", "tests_run"],
     "create_device": ["create_device", "post_devices", "devices_quick-create", "devices_batch-create"],
     "delete_device": ["delete_device", "delete_devices", "devices_batch-delete"],
@@ -222,10 +223,10 @@ _ACTION_ALIASES = {
     "push_edgelite": ["push_edgelite", "post_edgelite"],
     "test_edgelite": ["test_edgelite", "post_edgelite_test"],
     "import_edgelite": ["import_edgelite", "post_edgelite_import"],
-}
+})
 
 # FIXED-P1: 审计日志操作类型友好提示语映射
-_ACTION_LABELS = {
+_ACTION_LABELS: MappingProxyType[str, str] = MappingProxyType({
     "run_test": "运行测试",
     "create_device": "创建设备",
     "delete_device": "删除设备",
@@ -257,7 +258,7 @@ _ACTION_LABELS = {
     "push_edgelite": "推送至EdgeLite",
     "test_edgelite": "测试EdgeLite连接",
     "import_edgelite": "导入EdgeLite配置",
-}
+})
 
 
 def _get_action_aliases(action: str) -> list[str]:
@@ -295,7 +296,7 @@ def _normalize_action(action: str) -> str:
 
 
 # Action mapping: HTTP method + path pattern -> audit action + resource_type
-_AUDIT_ACTION_MAP = [
+_AUDIT_ACTION_MAP: tuple[tuple[str, str, str, str], ...] = (
     # Devices - specific paths first (longer path = higher priority)
     ("POST", "/devices/quick-create", "create_device", "device"),
     ("POST", "/devices/batch-create", "create_device", "device"),
@@ -344,13 +345,13 @@ _AUDIT_ACTION_MAP = [
     ("POST", "/edgelite/push", "push_edgelite", "edgelite"),
     ("DELETE", "/edgelite/push", "delete_device", "edgelite"),
     ("POST", "/edgelite/test", "test_edgelite", "edgelite"),
-]
+)
 
 # Paths to skip entirely
-_AUDIT_SKIP_PATHS = {
+_AUDIT_SKIP_PATHS: frozenset[str] = frozenset({
     "/health", "/api/v1/health", "/metrics", "/api/v1/metrics",
     "/docs", "/openapi.json", "/redoc",
-}
+})
 
 
 async def audit_middleware(request, call_next):

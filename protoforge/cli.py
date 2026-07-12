@@ -179,18 +179,22 @@ def _stop_command():
 def _daemonize():
     """Double-fork to fully detach from terminal (Linux/Unix only)."""
     import signal
+    import sys as _sys
+
+    if _sys.platform == "win32":
+        return  # Daemon mode not supported on Windows
 
     # First fork
-    pid = os.fork()
+    pid = os.fork()  # type: ignore[attr-defined]
     if pid > 0:
         # Parent exits immediately
         os._exit(0)
 
     # Child becomes session leader
-    os.setsid()
+    os.setsid()  # type: ignore[attr-defined]
 
     # Second fork
-    pid = os.fork()
+    pid = os.fork()  # type: ignore[attr-defined]
     if pid > 0:
         os._exit(0)
 
@@ -210,7 +214,7 @@ def _daemonize():
         os.dup2(se.fileno(), sys.stderr.fileno())
 
     # Ignore SIGHUP
-    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)  # type: ignore[attr-defined]
 
 
 def _init_command():
@@ -318,11 +322,11 @@ def _audit_command(args):
             if openapi_file:
                 cmd.extend(["--openapi-file", openapi_file])
             cmd.extend(["--web-dir", web_dir])
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            print(result.stdout)
-            if result.stderr:
-                print(result.stderr)
-            if result.returncode != 0:
+            layer2_result = subprocess.run(cmd, capture_output=True, text=True)
+            print(layer2_result.stdout)
+            if layer2_result.stderr:
+                print(layer2_result.stderr)
+            if layer2_result.returncode != 0:
                 has_errors = True
         except Exception as e:
             print(f"! Layer 2 failed: {e}")
@@ -336,11 +340,11 @@ def _audit_command(args):
             import subprocess
             cmd = [sys.executable, "-m", "protoforge.audit.exception_lint", "protoforge",
                    "--severity", severity, "--max-violations", "50"]
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            print(result.stdout)
-            if result.stderr:
-                print(result.stderr)
-            if result.returncode != 0:
+            layer3_result = subprocess.run(cmd, capture_output=True, text=True)
+            print(layer3_result.stdout)
+            if layer3_result.stderr:
+                print(layer3_result.stderr)
+            if layer3_result.returncode != 0:
                 has_errors = True
         except Exception as e:
             print(f"! Layer 3 failed: {e}")

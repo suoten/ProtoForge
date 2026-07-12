@@ -82,7 +82,7 @@ def get_secret_key() -> str:
     return _SECRET_KEY
 
 
-def create_token(user_id: str, username: str, role: str = "user", expires_in: int = None, token_version: int = 0) -> str:
+def create_token(user_id: str, username: str, role: str = "user", expires_in: int | None = None, token_version: int = 0) -> str:
     if expires_in is None:
         from protoforge.config import get_settings
         expires_in = get_settings().access_token_expires
@@ -100,7 +100,7 @@ def create_token(user_id: str, username: str, role: str = "user", expires_in: in
     return jwt.encode(payload, get_secret_key(), algorithm="HS256")
 
 
-def create_refresh_token(user_id: str, expires_in: int = None) -> str:
+def create_refresh_token(user_id: str, expires_in: int | None = None) -> str:
     if expires_in is None:
         from protoforge.config import get_settings
         expires_in = get_settings().refresh_token_expires
@@ -250,6 +250,7 @@ class UserManager:
         self._db = None
         # FIXED-P1: 添加异步锁保护 _users/_users_by_id 并发访问，防止 TOCTOU 竞态
         self._users_lock = asyncio.Lock()
+        default_password: str | None = None
         try:
             from protoforge.config import get_settings
             default_password = get_settings().admin_password

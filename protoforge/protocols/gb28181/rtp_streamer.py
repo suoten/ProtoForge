@@ -78,7 +78,7 @@ class SrtpContext:
         ssrc = struct.unpack(">I", rtp_packet[8:12])[0]
         roc = self._get_roc(seq)
         iv = self._compute_iv(ssrc, roc, seq)
-        cipher = self._aes_cipher(self._aes_algo.AES(self._enc_key), self._aes_mode.CTR(iv))
+        cipher = self._aes_cipher(self._aes_algo.AES(self._enc_key), self._aes_mode.CTR(iv))  # type: ignore[attr-defined]
         encryptor = cipher.encryptor()
         encrypted_payload = encryptor.update(payload) + encryptor.finalize()
         encrypted_packet = header + encrypted_payload
@@ -379,9 +379,9 @@ class RtpStreamer:
         self._fps = fps
         self._seq = 0
         self._rtp_timestamp = 0
-        self._transport = None
+        self._transport: asyncio.DatagramTransport | None = None
         self._running = False
-        self._task = None
+        self._task: asyncio.Task[None] | None = None
         self._h264_iframe = generate_h264_iframe(width, height)
         self._h264_pframe = generate_h264_pframe(width, height)  # FIXED-P1: 预生成P帧
         self._gop_size = max(1, gop_size)  # FIXED-P1: GOP间隔

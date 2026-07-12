@@ -349,7 +349,6 @@ class DeviceStateMachine:
         """检查指定事件是否可以触发状态转换。
 
         :param event: 触发事件名称
-        :param kwargs: 传递给条件回调的额外参数
         :return: 是否可以触发
         """
         with self._lock:
@@ -382,10 +381,10 @@ class DeviceStateMachine:
 
         查找匹配的转换规则，检查条件，执行状态转换，
         调用退出/进入/转换回调，记录历史日志。
+        额外的关键字参数传递给条件回调和动作回调，
+        ``reason`` 用于日志记录。
 
         :param event: 触发事件名称
-        :param kwargs: 传递给条件回调和动作回调的额外参数
-                       （``reason`` 用于日志记录）
         :return: 是否成功触发转换
         """
         reason = kwargs.pop("reason", "")

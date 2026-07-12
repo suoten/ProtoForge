@@ -403,7 +403,7 @@ class DataGenerator:
         self._random_walk_state[key] = new_value
         return self._cast_value(new_value, point.data_type)
 
-    def _generate_physical(self, point: PointConfig, elapsed: float) -> Any:
+    def _generate_physical(self, point: PointConfig, _elapsed: float) -> Any:
         """使用物理行为模型生成值。
 
         generator_config 支持两种格式:

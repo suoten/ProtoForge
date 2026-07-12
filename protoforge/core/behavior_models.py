@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import math
+from types import MappingProxyType
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ class BaseBehavior:
 
     def _restore_state(self, state: dict[str, Any]) -> None:
         """从状态字典恢复内部状态。子类应覆写。"""
-        pass
+        _ = state  # base class no-op; subclasses use state dict
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +193,7 @@ class ThermalBehavior(BaseBehavior):
 
         dT = (effective_power - self.heat_transfer_coeff * (self._temperature - self.ambient_temp)) / thermal_capacity * dt
         self._temperature += dT
-        self._total_energy += effective_power * dt
+        self._total_energy = self._total_energy + effective_power * dt
         self._time += dt
         return round(self._temperature, 6)
 
@@ -315,7 +316,7 @@ class MotorBehavior(BaseBehavior):
 
     def is_stalled(self) -> bool:
         """返回是否处于堵转状态。"""
-        return bool(self._stalled)
+        return self._stalled
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -530,7 +531,7 @@ class FlowBehavior(BaseBehavior):
         self._cumulative += delta_volume
 
         # 脉冲计数
-        self._pulse_count += int(delta_volume * self.pulse_factor)
+        self._pulse_count = self._pulse_count + int(delta_volume * self.pulse_factor)
 
         self._instant_flow = measured
         self._time += dt
@@ -675,11 +676,11 @@ class LevelBehavior(BaseBehavior):
 
     def is_overflow(self) -> bool:
         """返回是否溢出。"""
-        return bool(self._overflow)
+        return self._overflow
 
     def is_low_alarm(self) -> bool:
         """返回是否低液位报警。"""
-        return bool(self._low_alarm)
+        return self._low_alarm
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -939,7 +940,7 @@ class PIDController(BaseBehavior):
 
     def is_saturated(self) -> bool:
         """返回是否处于饱和状态。"""
-        return bool(self._saturated)
+        return self._saturated
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -989,7 +990,7 @@ class PIDController(BaseBehavior):
 # ---------------------------------------------------------------------------
 
 #: 行为模型类型注册表，名称 → 类对象
-BEHAVIOR_REGISTRY: dict[str, type[BaseBehavior]] = {
+BEHAVIOR_REGISTRY: MappingProxyType[str, type[BaseBehavior]] = MappingProxyType({
     "thermal": ThermalBehavior,
     "motor": MotorBehavior,
     "pressure": PressureBehavior,
@@ -997,7 +998,7 @@ BEHAVIOR_REGISTRY: dict[str, type[BaseBehavior]] = {
     "level": LevelBehavior,
     "valve": ValveBehavior,
     "pid": PIDController,
-}
+})
 
 
 def create_behavior(config: dict[str, Any] | str) -> BaseBehavior | None:

@@ -143,8 +143,8 @@ class NetworkSimulator:
             latency += random.gauss(0, self._profile.jitter_ms)
         latency = max(0, latency)
 
-        self._stats["total_delay_ms"] += latency
-        self._stats["total_requests"] += 1
+        self._stats["total_delay_ms"] = self._stats["total_delay_ms"] + latency
+        self._stats["total_requests"] = self._stats["total_requests"] + 1
 
         await asyncio.sleep(latency / 1000.0)
 
@@ -155,10 +155,10 @@ class NetworkSimulator:
         """
         if not self._enabled or self._profile.packet_loss_rate <= 0:
             return False
-        drop = random.random() < self._profile.packet_loss_rate
-        if drop:
-            self._stats["dropped_packets"] += 1
-        return drop
+        if random.random() < self._profile.packet_loss_rate:
+            self._stats["dropped_packets"] = self._stats["dropped_packets"] + 1
+            return True
+        return False
 
     def should_drop_connection(self) -> bool:
         """检查连接是否应被断开。
@@ -167,10 +167,10 @@ class NetworkSimulator:
         """
         if not self._enabled or self._profile.connection_drop_rate <= 0:
             return False
-        drop = random.random() < self._profile.connection_drop_rate
-        if drop:
-            self._stats["dropped_connections"] += 1
-        return drop
+        if random.random() < self._profile.connection_drop_rate:
+            self._stats["dropped_connections"] = self._stats["dropped_connections"] + 1
+            return True
+        return False
 
     def can_accept_connection(self) -> bool:
         """检查是否可以接受新连接。

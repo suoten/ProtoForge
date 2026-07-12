@@ -425,9 +425,11 @@ class Recorder:
     def get_stats(self) -> dict[str, Any]:
         active = self._active  # FIXED: 缓存引用，防止并发stop_recording导致None
         is_rec = active is not None
+        if is_rec:
+            assert active is not None  # type narrowing for mypy
         total_events = sum(len(r.messages) for r in self._recordings.values())
         if is_rec:
-            total_events += len(active.messages)
+            total_events = total_events + len(active.messages)
         total_bytes = 0
         for r in self._recordings.values():
             for msg in r.messages:
