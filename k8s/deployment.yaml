@@ -14,9 +14,20 @@ spec:
       labels:
         app: protoforge
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: protoforge
           image: suoten/protoforge:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8000
               name: http
@@ -113,8 +124,18 @@ spec:
       labels:
         app: protoforge-postgres
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
       containers:
         - name: postgres
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           image: postgres:16-alpine
           ports:
             - containerPort: 5432

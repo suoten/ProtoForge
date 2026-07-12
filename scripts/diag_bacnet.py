@@ -9,16 +9,16 @@ Usage:
     python scripts/diag_bacnet.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.bacnet.server import BACnetServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.bacnet.server import BACnetServer
 
 HOST = "127.0.0.1"
 PORT = 47808
@@ -429,7 +429,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
             else:
                 results.append(("Who-Is / I-Am", False,
                                 f"unexpected response: {iam}"))
-        except socket.timeout:
+        except TimeoutError:
             results.append(("Who-Is / I-Am", False, "timeout (5s)"))
         except Exception as exc:
             results.append(("Who-Is / I-Am", False, str(exc)))
@@ -467,7 +467,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                     False,
                     f"error response: {resp}",
                 ))
-        except socket.timeout:
+        except TimeoutError:
             results.append(("ReadProperty analogInput,1 presentValue",
                             False, "timeout (5s)"))
         except Exception as exc:
@@ -503,7 +503,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                     False,
                     f"error response: {resp}",
                 ))
-        except socket.timeout:
+        except TimeoutError:
             results.append(("ReadProperty analogInput,1 objectName",
                             False, "timeout (5s)"))
         except Exception as exc:
@@ -530,7 +530,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                     False,
                     f"unexpected response: {resp}",
                 ))
-        except socket.timeout:
+        except TimeoutError:
             results.append(("WriteProperty analogInput,1 presentValue=42.5",
                             False, "timeout (5s)"))
         except Exception as exc:
@@ -566,7 +566,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                     False,
                     f"error response: {resp}",
                 ))
-        except socket.timeout:
+        except TimeoutError:
             results.append(("ReadProperty verify (expect 42.5)",
                             False, "timeout (5s)"))
         except Exception as exc:

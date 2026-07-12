@@ -13,14 +13,12 @@ Can be run standalone or as part of CI.
 """
 
 import argparse
-import ast
 import json
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
-from urllib.parse import urlparse
+from typing import Any
 
 
 @dataclass
@@ -100,10 +98,7 @@ def parse_frontend_api(api_js_path: Path, base_path: str = "/api/v1") -> list[tu
             if not raw_path.startswith("/"):
                 raw_path = "/" + raw_path
             # Prepend base_path only if not already present
-            if raw_path.startswith(base_path):
-                full_path = raw_path
-            else:
-                full_path = base_path + raw_path
+            full_path = raw_path if raw_path.startswith(base_path) else base_path + raw_path
             # Normalize path (remove duplicate slashes)
             full_path = full_path.replace("//", "/")
             # Convert template literals like /devices/${id} to /devices/{id}
@@ -129,7 +124,7 @@ def parse_openapi_spec(spec: dict[str, Any]) -> set[tuple[str, str]]:
     return endpoints
 
 
-def load_openapi_from_file(openapi_path: Path) -> Optional[dict[str, Any]]:
+def load_openapi_from_file(openapi_path: Path) -> dict[str, Any] | None:
     """Load OpenAPI spec from a JSON file."""
     if not openapi_path.exists():
         return None
@@ -140,7 +135,7 @@ def load_openapi_from_file(openapi_path: Path) -> Optional[dict[str, Any]]:
         return None
 
 
-def fetch_openapi_from_app(app_url: str) -> Optional[dict[str, Any]]:
+def fetch_openapi_from_app(app_url: str) -> dict[str, Any] | None:
     """Fetch OpenAPI spec from a running FastAPI app."""
     try:
         import httpx
@@ -152,7 +147,7 @@ def fetch_openapi_from_app(app_url: str) -> Optional[dict[str, Any]]:
         return None
 
 
-def export_openapi_from_app() -> Optional[dict[str, Any]]:
+def export_openapi_from_app() -> dict[str, Any] | None:
     """Export OpenAPI spec by importing the FastAPI app directly."""
     try:
         from protoforge.main import app

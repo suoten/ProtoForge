@@ -10,18 +10,18 @@ Tests basic FOCAS2 operations against the ProtoForge FANUC server:
 Usage:  python scripts/diag_fanuc.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 import threading
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.fanuc.server import FanucServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.fanuc.server import FanucServer
 
 HOST = "127.0.0.1"
 PORT = 8193
@@ -84,12 +84,7 @@ def parse_focas2_frame(data: bytes):
     func_id = struct.unpack("<H", payload[0:2])[0]
     req_id = struct.unpack("<I", payload[2:6])[0]
     # Inner func_id + req_id (from the handler itself)
-    if len(payload) >= 12:
-        # handler_func_id = struct.unpack("<H", payload[6:8])[0]
-        # handler_req_id = struct.unpack("<I", payload[8:12])[0]
-        data_bytes = payload[12:]
-    else:
-        data_bytes = b""
+    data_bytes = payload[12:] if len(payload) >= 12 else b""
     return session_id, func_id, req_id, data_bytes
 
 
@@ -203,8 +198,8 @@ def test_statinfo(sock: socket.socket):
     raw = sock_send_recv(sock, frame)
     session_id, func_id, resp_req_id, result = parse_focas2_frame(raw)
 
-    assert resp_req_id == req_id, f"req_id mismatch"
-    assert func_id == FUNC_STATINFO, f"func_id mismatch"
+    assert resp_req_id == req_id, "req_id mismatch"
+    assert func_id == FUNC_STATINFO, "func_id mismatch"
 
     # StatInfo result: rc (4B LE) + alarm (2B LE) + mode (2B LE) + execution (2B LE) + motion (2B LE)
     if len(result) < 12:
@@ -229,8 +224,8 @@ def test_absolute(sock: socket.socket):
     raw = sock_send_recv(sock, frame)
     session_id, func_id, resp_req_id, result = parse_focas2_frame(raw)
 
-    assert resp_req_id == req_id, f"req_id mismatch"
-    assert func_id == FUNC_ABSOLUTE, f"func_id mismatch"
+    assert resp_req_id == req_id, "req_id mismatch"
+    assert func_id == FUNC_ABSOLUTE, "func_id mismatch"
 
     # Absolute result: rc (4B LE) + axis_count (2B LE) + positions (axis_count * 8B LE float64)
     if len(result) < 6:
@@ -268,8 +263,8 @@ def test_disconnect(sock: socket.socket):
     raw = sock_send_recv(sock, frame)
     session_id, func_id, resp_req_id, result = parse_focas2_frame(raw)
 
-    assert resp_req_id == req_id, f"req_id mismatch"
-    assert func_id == FUNC_DISCONNECT, f"func_id mismatch"
+    assert resp_req_id == req_id, "req_id mismatch"
+    assert func_id == FUNC_DISCONNECT, "func_id mismatch"
 
     # Disconnect result: rc (4B LE)
     if len(result) < 4:
@@ -322,7 +317,7 @@ def main():
             try:
                 ok, detail = test_fn(sock)
                 status = "PASS" if ok else "FAIL"
-            except (socket.timeout, TimeoutError):
+            except TimeoutError:
                 ok, status, detail = False, "FAIL", f"Timeout after {TIMEOUT}s"
             except ConnectionError as e:
                 ok, status, detail = False, "FAIL", f"Connection error: {e}"
@@ -338,7 +333,7 @@ def main():
 
         sock.close()
 
-    except (socket.timeout, TimeoutError):
+    except TimeoutError:
         print(f"\n[FAIL] Could not connect to server within {TIMEOUT}s")
         failed = len(tests)
     except ConnectionRefusedError:

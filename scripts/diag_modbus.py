@@ -9,16 +9,16 @@ Usage:
     python scripts/diag_modbus.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.modbus.server import ModbusTcpServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.modbus.server import ModbusTcpServer
 
 HOST = "127.0.0.1"
 PORT = 5020
@@ -62,10 +62,10 @@ def _send_recv(sock: socket.socket, unit_id: int, pdu: bytes) -> bytes:
 
     # Read MBAP header (7 bytes)
     header = _recv_exact(sock, 7)
-    resp_tx_id = struct.unpack(">H", header[0:2])[0]
-    resp_proto_id = struct.unpack(">H", header[2:4])[0]
+    struct.unpack(">H", header[0:2])[0]
+    struct.unpack(">H", header[2:4])[0]
     resp_length = struct.unpack(">H", header[4:6])[0]
-    resp_unit_id = header[6]
+    header[6]
 
     # Read remaining payload (Length field includes UnitID byte already read)
     payload_len = resp_length - 1
@@ -127,7 +127,7 @@ def fc01_read(sock: socket.socket, unit_id: int, start: int, count: int) -> list
     pdu = struct.pack(">BHH", 0x01, start, count)
     resp = _send_recv(sock, unit_id, pdu)
     _check_exception(resp, "FC01")
-    byte_count = resp[8]
+    resp[8]
     coils: list[bool] = []
     for i in range(count):
         byte_idx = i // 8
@@ -206,7 +206,7 @@ async def start_server() -> ModbusTcpServer:
     server._server_task = asyncio.create_task(server._serve_datastore_only())
 
     # Wait for the server to start accepting connections.
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         if server._server_task.done():
             exc = server._server_task.exception()

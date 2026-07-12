@@ -81,7 +81,7 @@ class DynamicValueGenerator:
             return self._generate_physical()
         return self._generate_fixed()
 
-    def _clamp(self, value: float) -> Any:
+    def _clamp(self, value: float | int | str) -> Any:
         if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
             value = self._last_value if hasattr(self, '_last_value') else 0
         dt = self._point.data_type.value

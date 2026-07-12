@@ -126,7 +126,7 @@ class ProtocolMapper:
         )
 
     def update_edgelite_protocols(self, protocols: list[str]) -> None:
-        self._edgelite_protocols: set[str] = set(protocols)
+        self._edgelite_protocols = set(protocols)
         logger.info("EdgeLite reported supported protocols: %s", protocols)
 
         # FIXED-P0: 自动检测 EdgeLite 版本并适配别名映射

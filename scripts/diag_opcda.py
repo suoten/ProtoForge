@@ -33,16 +33,16 @@ Usage:
     python scripts/diag_opcda.py
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
-import asyncio
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.opcda.server import OpcDaServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.opcda.server import OpcDaServer
 
 HOST = "127.0.0.1"
 PORT = 51340
@@ -219,7 +219,7 @@ async def start_server() -> OpcDaServer:
     server._sub_push_task = asyncio.create_task(server._subscription_push_loop())
 
     # Wait for the server to start accepting connections.
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         if server._server_task.done():
             exc = server._server_task.exception()

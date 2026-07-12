@@ -96,13 +96,13 @@ class TimeSeriesReplay:
             raise FileNotFoundError(f"Replay source file not found: {source}")
         ext = os.path.splitext(source)[1].lower()
         if ext == ".json":
-            with open(source, "r", encoding="utf-8") as f:
+            with open(source, encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, list):
                 raise ValueError(f"JSON replay source must be a list, got {type(data)}")
             return data
         if ext == ".csv":
-            with open(source, "r", encoding="utf-8", newline="") as f:
+            with open(source, encoding="utf-8", newline="") as f:
                 reader = csv.DictReader(f)
                 return [{k: _coerce(v) for k, v in row.items()} for row in reader]
         raise ValueError(f"Unsupported replay file extension: {ext} (use .json or .csv)")

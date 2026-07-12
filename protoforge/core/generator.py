@@ -93,6 +93,9 @@ class SafeEval:
                     for target in node.targets:
                         if isinstance(target, ast.Name):
                             local_vars[target.id] = value
+                            # FIXED: sync local assignments to _variables so subsequent
+                            # statements can reference them via _eval_node_inner
+                            self._variables[target.id] = value
                         else:
                             raise ValueError(f"Unsupported assignment target: {type(target).__name__}")
                 elif isinstance(node, ast.Expr):
@@ -128,7 +131,7 @@ class SafeEval:
                 return self._variables[node.id]
             raise NameError(f"Name '{node.id}' is not allowed")
         elif isinstance(node, ast.BinOp):
-            op = _SAFE_OPS.get(type(node.op))
+            op: Any = _SAFE_OPS.get(type(node.op))
             if op is None:
                 raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
             # FIXED: S4 - check Pow exponent before computing
@@ -143,20 +146,21 @@ class SafeEval:
             if isinstance(result, str) and len(result) > self._MAX_STR_LEN:
                 raise ValueError(f"String too long (max {self._MAX_STR_LEN})")
             # FIXED: S5 - check sequence multiplication size
-            if isinstance(node.op, (ast.Mult, ast.Repeat)) and isinstance(result, (list, tuple)) and len(result) > self._MAX_SEQ_MULTIPLY:
+            # Note: ast.Repeat was removed in Python 3.12; only ast.Mult is needed
+            if isinstance(node.op, ast.Mult) and isinstance(result, (list, tuple)) and len(result) > self._MAX_SEQ_MULTIPLY:
                 raise ValueError(f"Sequence too long after multiply (max {self._MAX_SEQ_MULTIPLY})")
             return result
         elif isinstance(node, ast.UnaryOp):
-            op = _SAFE_OPS.get(type(node.op))
-            if op is None:
+            op_u: Any = _SAFE_OPS.get(type(node.op))
+            if op_u is None:
                 raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-            return op(self._eval_node(node.operand))
+            return op_u(self._eval_node(node.operand))
         elif isinstance(node, ast.Compare):
             left = self._eval_node(node.left)
-            for op, comparator in zip(node.ops, node.comparators, strict=False):
-                op_func = _SAFE_OPS.get(type(op))
+            for op_c, comparator in zip(node.ops, node.comparators, strict=False):
+                op_func: Any = _SAFE_OPS.get(type(op_c))
                 if op_func is None:
-                    raise ValueError(f"Unsupported comparison: {type(op).__name__}")
+                    raise ValueError(f"Unsupported comparison: {type(op_c).__name__}")
                 right = self._eval_node(comparator)
                 if not op_func(left, right):
                     return False

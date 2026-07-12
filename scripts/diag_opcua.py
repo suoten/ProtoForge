@@ -15,16 +15,16 @@ Usage:
     python scripts/diag_opcua.py
 """
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import asyncio
 import traceback
 
-from protoforge.protocols.opcua.server import OpcUaServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.opcua.server import OpcUaServer
 
 # ---------------------------------------------------------------------------
 # Test counters

@@ -8,18 +8,18 @@ Usage:
     python scripts/diag_gb28181.py
 """
 
-import sys
-import os
-import socket
-import re
 import asyncio
 import hashlib
+import os
+import re
+import socket
+import sys
 import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.gb28181.server import GB28181Server
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.gb28181.server import GB28181Server
 
 HOST = "127.0.0.1"
 PORT = 5060
@@ -202,7 +202,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
                         results.append(("REGISTER with Auth -> 200 OK", False,
                                         f"expected 200, got {status_code2} "
                                         f"({status_text2})"))
-                except socket.timeout:
+                except TimeoutError:
                     results.append(("REGISTER with Auth -> 200 OK", False,
                                     "Timeout waiting for 200 OK"))
                 except Exception as exc:
@@ -213,7 +213,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
         else:
             results.append(("REGISTER -> 401 Challenge", False,
                             f"expected 401, got {status_code} ({status_text})"))
-    except socket.timeout:
+    except TimeoutError:
         results.append(("REGISTER -> 401 Challenge", False,
                         "Timeout waiting for 401 response"))
     except Exception as exc:
@@ -262,7 +262,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
         else:
             results.append(("MESSAGE Catalog -> 200 OK", False,
                             f"expected 200, got {status_code3} ({status_text3})"))
-    except socket.timeout:
+    except TimeoutError:
         results.append(("MESSAGE Catalog -> 200 OK", False,
                         "Timeout waiting for Catalog response"))
     except Exception as exc:
@@ -306,7 +306,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
         else:
             results.append(("MESSAGE Keepalive -> 200 OK", False,
                             f"expected 200, got {status_code4} ({status_text4})"))
-    except socket.timeout:
+    except TimeoutError:
         results.append(("MESSAGE Keepalive -> 200 OK", False,
                         "Timeout waiting for Keepalive response"))
     except Exception as exc:
@@ -328,7 +328,7 @@ def run_tests() -> list[tuple[str, bool, str]]:
         else:
             results.append(("Server responsiveness check", False,
                             "No valid SIP response received"))
-    except socket.timeout:
+    except TimeoutError:
         results.append(("Server responsiveness check", False,
                         "Timeout - server may have stopped"))
     except Exception as exc:

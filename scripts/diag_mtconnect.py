@@ -8,16 +8,16 @@ Usage:
     python scripts/diag_mtconnect.py
 """
 
-import sys
+import asyncio
 import os
 import socket
-import asyncio
+import sys
 import xml.etree.ElementTree as ET
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.mtconnect.server import MtConnectServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.mtconnect.server import MtConnectServer
 
 HOST = "127.0.0.1"
 PORT = 7878
@@ -45,7 +45,7 @@ def http_get(path: str) -> tuple[int, str]:
                 if not chunk:
                     break
                 data += chunk
-            except socket.timeout:
+            except TimeoutError:
                 break
 
         response = data.decode("utf-8", errors="replace")
@@ -89,7 +89,7 @@ async def start_server() -> MtConnectServer:
     await server.start({"host": HOST, "port": PORT})
 
     # Wait for the server to start accepting connections.
-    for attempt in range(20):
+    for _attempt in range(20):
         await asyncio.sleep(0.15)
         probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         probe.settimeout(0.5)

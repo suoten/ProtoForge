@@ -8,16 +8,16 @@ Usage:
     python scripts/diag_toledo.py
 """
 
-import sys
-import os
-import socket
 import asyncio
+import os
 import re
+import socket
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.toledo.server import ToledoServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.toledo.server import ToledoServer
 
 HOST = "127.0.0.1"
 PORT = 1701
@@ -279,7 +279,7 @@ async def main() -> None:
     print("ProtoForge Mettler-Toledo MT-SICS Diagnostic Test")
     print("=" * 60)
 
-    print("\n[Setup] Starting Toledo server on %s:%d ..." % (HOST, PORT))
+    print(f"\n[Setup] Starting Toledo server on {HOST}:{PORT} ...")
     try:
         _server_ref = await start_server()
     except Exception as e:

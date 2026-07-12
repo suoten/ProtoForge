@@ -5,12 +5,12 @@ Tests FINS TCP operations using raw TCP sockets against a locally
 started FINS server on 127.0.0.1:9600.
 """
 
-import sys
+import asyncio
 import os
 import socket
 import struct
+import sys
 import time
-import asyncio
 
 # Windows proactor event loop has issues with combined TCP+UDP servers;
 # use the selector policy for reliable operation.
@@ -20,8 +20,8 @@ if sys.platform == "win32":
 # Add project root so the protoforge package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from protoforge.protocols.fins.server import FinsServer
 from protoforge.models.device import DeviceConfig, PointConfig
+from protoforge.protocols.fins.server import FinsServer
 
 HOST = "127.0.0.1"
 PORT = 9600
@@ -41,7 +41,7 @@ def recv_frame(sock: socket.socket) -> bytes | None:
     """Receive a complete FINS TCP frame and return the body, or None."""
     try:
         header = _recv_exact(sock, 8)
-    except (socket.timeout, ConnectionError, OSError):
+    except (TimeoutError, ConnectionError, OSError):
         return None
     if header[:4] != b"FINS":
         return None
@@ -50,7 +50,7 @@ def recv_frame(sock: socket.socket) -> bytes | None:
         return b""
     try:
         return _recv_exact(sock, body_len)
-    except (socket.timeout, ConnectionError, OSError):
+    except (TimeoutError, ConnectionError, OSError):
         return None
 
 

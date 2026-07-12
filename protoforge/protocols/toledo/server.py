@@ -172,7 +172,7 @@ class ToledoServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
 
-    def _process_toledo(self, data: bytes, writer: asyncio.StreamWriter = None) -> bytes | None:
+    def _process_toledo(self, data: bytes, writer: asyncio.StreamWriter | None = None) -> bytes | None:
         if not data:
             return None
 
