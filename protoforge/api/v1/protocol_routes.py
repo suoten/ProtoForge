@@ -159,7 +159,7 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
 
 
 @router.post("/protocols/{protocol_name}/stop")
-async def stop_protocol(protocol_name: str, _user: dict[str, Any] = Depends(require_operator), request: Request | None = None):
+async def stop_protocol(protocol_name: str, request: Request, _user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request) if request else "zh"
