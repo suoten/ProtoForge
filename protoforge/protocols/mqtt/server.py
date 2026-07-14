@@ -127,12 +127,12 @@ class MqttBroker(ProtocolServer):
                 logger.warning("MQTT auth_users config parse error, ignoring")
 
         try:
-            auth_plugins = {}
+            auth_plugins: dict[str, Any] = {}
             if self._auth_required and (self._auth_username or self._auth_users):
                 auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
                     "allow_anonymous": False,
                 }
-                auth_plugin_config = {
+                auth_plugin_config: dict[str, Any] = {
                     "username": self._auth_username,
                     "password": self._auth_password,
                 }
@@ -143,7 +143,7 @@ class MqttBroker(ProtocolServer):
                 auth_plugins["amqtt.plugins.authentication.AnonymousAuthPlugin"] = {
                     "allow_anonymous": True,
                 }
-            broker_config = {
+            broker_config: dict[str, Any] = {
                 "listeners": {
                     "default": {
                         "type": "tcp",

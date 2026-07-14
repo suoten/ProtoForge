@@ -118,7 +118,7 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
     },
 }
 
-PROTOCOL_DEVICE_CONFIG = {
+PROTOCOL_DEVICE_CONFIG: dict[str, list[dict[str, Any]]] = {
     "modbus_tcp": [
         {"key": "slave_id", "label": "Slave Address (Unit ID)", "type": "number", "default": 1, "min": 1, "max": 247, "description": "Modbus slave address, i.e. Unit ID in function codes (1-247)"},
     ],

@@ -17,6 +17,7 @@ def import_edgelite_config(config_data: dict[str, Any] | str) -> list[DeviceConf
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in EdgeLite config: {e}") from e
 
+    assert isinstance(config_data, dict)
     devices = []
     device_list = config_data.get("devices", [])
     if not device_list and "device_id" in config_data:
@@ -73,11 +74,12 @@ def import_pygbsentry_config(config_data: dict[str, Any] | str) -> list[DeviceCo
         except (json.JSONDecodeError, TypeError) as e:
             raise ValueError(f"Invalid JSON in PyGBSentry config: {e}") from e
 
+    assert isinstance(config_data, dict)
     devices = []
     sip_servers = config_data.get("sip_servers", [])
     cameras = config_data.get("cameras", config_data.get("devices", []))
 
-    for cam in cameras:
+    for cam in (cameras or []):
         device_id = cam.get("device_id", cam.get("id", ""))
         device_name = cam.get("name", cam.get("device_name", f"Camera-{device_id}"))
         sip_server = cam.get("sip_server", sip_servers[0] if sip_servers else "127.0.0.1")

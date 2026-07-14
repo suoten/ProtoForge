@@ -796,7 +796,7 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     expires_in = 86400
     if isinstance(inner, dict):
         try:
-            expires_in = int(inner.get("expires_in", inner.get("exp", 86400)))
+            expires_in = int(inner.get("expires_in") or inner.get("exp") or 86400)
         except (ValueError, TypeError) as e:
             logger.debug("Invalid expires_in value, using default 86400: %s", e)
     refresh_token = (inner.get("refresh_token", "") if isinstance(inner, dict) else "") or data.get("refresh_token", "")
@@ -1072,6 +1072,13 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             }
 
         return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
+
+    # 首次请求非 401 响应处理（401 已在上方重试处理并返回）
+    if create_resp.status_code in (200, 201):
+        logger.info("Device %s registered to EdgeLite, auto-collecting started", payload["device_id"])
+        return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
+
+    return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
 
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:

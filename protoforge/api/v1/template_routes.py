@@ -78,7 +78,7 @@ async def create_template(template: TemplateDetail, _user: dict[str, Any] = Depe
             db_err_msg = str(db_err)
             logger.exception("Failed to persist template %s: %s", template.id, db_err)
     resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
-    if not db_ok:
+    if not db_ok and isinstance(resp, dict):
         resp["_persistence_warning"] = f"Template created, but persistence failed: {db_err_msg}. Data will be lost after restart."
     return resp
 

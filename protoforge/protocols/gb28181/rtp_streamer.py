@@ -35,7 +35,9 @@ class SrtpContext:
         self._enc_key = self._derive_key(0x00)
         self._auth_key = self._derive_key(0x01)
         self._salt = self._derive_key(0x02)
-        self._aes_cipher = None
+        self._aes_cipher: Any = None
+        self._aes_algo: Any = None
+        self._aes_mode: Any = None
         try:
             from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
             self._aes_cipher = Cipher

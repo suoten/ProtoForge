@@ -27,7 +27,7 @@ async def list_protocols(request: Request, _user: dict[str, Any] = Depends(requi
         name = entry.get("name", "")
         defaults = get_protocol_defaults(name, lang=lang)
         entry["description"] = desc(f"protocol.{name}.desc", lang, PROTOCOL_DEFAULTS.get(name, {}).get("description", ""))
-        entry["display_name"] = desc(f"protocol.{name}", lang, PROTOCOL_DEFAULTS.get(name, {}).get("display_name", name))
+        entry["display_name"] = desc(f"protocol.{name}", lang, str(PROTOCOL_DEFAULTS.get(name, {}).get("display_name", name)))
         entry["default_port"] = defaults.get("port", 0)
         result.append(entry)
     return {"protocols": result}
@@ -66,7 +66,7 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
     from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
-    results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
+    results: dict[str, Any] = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") == "running":
@@ -102,7 +102,7 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
 async def stop_all_protocols(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
-    results = {"stopped": [], "failed": [], "skipped": []}
+    results: dict[str, Any] = {"stopped": [], "failed": [], "skipped": []}
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") != "running":
@@ -137,7 +137,7 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
             port_changed = True
             config_original_port = original_port
         log_bus.emit(protocol_name, "system", "", "protocol_start", f"Protocol {protocol_name} started on port {actual_port}", config)
-        result = {"status": "ok"}
+        result: dict[str, Any] = {"status": "ok"}
 
         if port_changed:
             result["port_changed"] = True

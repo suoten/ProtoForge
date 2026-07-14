@@ -47,7 +47,7 @@ class GB28181Device:
         self.call_id = ""
         self.cseq = 1
         self.branch_prefix = "z9hG4bK"
-        self.rtp_streamer = None
+        self.rtp_streamer: Any = None
         self._protoforge_device_id = ""
         self._register_interval = 3600
         self._invite_call_id = ""

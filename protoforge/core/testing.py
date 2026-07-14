@@ -551,7 +551,7 @@ class AssertionEngine:
         if not path or not isinstance(data, dict):
             return data
         parts = path.replace("[", ".").replace("]", "").split(".")
-        current = data
+        current: Any = data
         for i, part in enumerate(parts):
             if not part:
                 continue

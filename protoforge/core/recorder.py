@@ -425,29 +425,27 @@ class Recorder:
     def get_stats(self) -> dict[str, Any]:
         active = self._active  # FIXED: 缓存引用，防止并发stop_recording导致None
         is_rec = active is not None
-        if is_rec:
-            assert active is not None  # type narrowing for mypy
         total_events = sum(len(r.messages) for r in self._recordings.values())
-        if is_rec:
+        if active is not None:
             total_events = total_events + len(active.messages)
         total_bytes = 0
         for r in self._recordings.values():
             for msg in r.messages:
                 total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
-        if is_rec:
+        if active is not None:
             for msg in active.messages:
                 total_bytes += len(json.dumps(msg.to_dict(), ensure_ascii=False).encode("utf-8"))
         avg_events = round(total_events / max(len(self._recordings), 1), 1)
         return {
             "is_recording": is_rec,
-            "active_name": active.name if is_rec else None,
-            "frames_captured": len(active.messages) if is_rec else 0,
+            "active_name": active.name if active is not None else None,
+            "frames_captured": len(active.messages) if active is not None else 0,
             "total_recordings": len(self._recordings),
             "total_events": total_events,
             "total_bytes": total_bytes,
             "avg_events_per_recording": avg_events,
             "encryption_enabled": self._encryption_key is not None,
-            "duration_seconds": (time.time() - active.start_time) if is_rec else 0,
+            "duration_seconds": (time.time() - active.start_time) if active is not None else 0,
         }
 
     def _encrypt_recording(self, data: dict[str, Any]) -> dict[str, Any]:

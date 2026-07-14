@@ -161,7 +161,7 @@ class FaultInjector:
 
         return Fault(
             fault_id=config.fault_id,
-            fault_type=config.fault_type,
+            fault_type=config.fault_type,  # type: ignore[arg-type]
             target=config.target_point,
             start_time=config.start_time or 0.0,
             duration=config.parameters.get("duration", -1.0),
@@ -216,7 +216,7 @@ class FaultInjector:
     def _convert_fault_to_config(fault: Fault) -> FaultConfig:
         """将 Fault 转换为旧版 FaultConfig。"""
         return FaultConfig(
-            fault_type=fault.fault_type,
+            fault_type=fault.fault_type,  # type: ignore[arg-type]
             target_point=fault.target,
             trigger_mode=TriggerMode.MANUAL,
             parameters=fault.parameters,

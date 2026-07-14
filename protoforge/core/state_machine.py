@@ -462,9 +462,9 @@ class DeviceStateMachine:
                     logger.exception("Enter callback error: %s", e)
 
             # 调用转换通知回调（用于 WebSocket 事件广播）
-            for cb in self._transition_callbacks:
+            for tcb in self._transition_callbacks:
                 try:
-                    cb(entry)
+                    tcb(entry)
                 except Exception as e:
                     logger.exception("Transition callback error: %s", e)
 

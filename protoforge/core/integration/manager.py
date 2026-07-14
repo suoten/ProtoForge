@@ -501,7 +501,7 @@ class IntegrationManager:
             driver_config=payload.get("config", {}),
         )
         if not report.compatible:
-            logger.warning("push_device skipped: compatibility check failed for %s: %s", payload.get("device_id"), report.issues)
+            logger.warning("push_device skipped: compatibility check failed for %s: %s", payload.get("device_id"), report.errors)
             return {"ok": False, "skipped": True, "reason": "Compatibility check failed", "report": report}
 
         # 检查协议服务器是否运行
@@ -1129,7 +1129,7 @@ class IntegrationManager:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
         semaphore = asyncio.Semaphore(concurrency)
-        results = {"total": len(devices), "success": 0, "failure": 0, "details": []}
+        results: dict[str, Any] = {"total": len(devices), "success": 0, "failure": 0, "details": []}
 
         async def _push_one(dev: Any) -> dict[str, Any]:
             async with semaphore:
@@ -1139,7 +1139,7 @@ class IntegrationManager:
         task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for r in task_results:
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 results["failure"] += 1
                 results["details"].append({"ok": False, "error": str(r)})
             elif r.get("ok"):
@@ -1614,7 +1614,7 @@ class IntegrationManager:
     def get_metrics(self) -> dict[str, Any]:
         return self._metrics.to_dict()
 
-    def get_protocol_map(self) -> dict[str, str]:
+    def get_protocol_map(self) -> dict[str, str | None]:
         return self._protocol_mapper.get_map()
 
     def map_protocol(self, protoforge_protocol: str):
