@@ -13,15 +13,26 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# FIXED: P4 - W19 环境变量覆盖 alembic.ini 中的硬编码 SQLite URL
-# 优先使用 PROTOFORGE_DB_PATH 环境变量，支持 PostgreSQL 和 SQLite 两种数据库
-# alembic.ini 中的 sqlalchemy.url 仅为占位默认值，生产环境必须设置环境变量
+# FIXED: P4 - W19 Environment variable overrides hardcoded SQLite URL in alembic.ini.
+# Prefer PROTOFORGE_DB_PATH env var, supporting both PostgreSQL and SQLite.
+# The sqlalchemy.url in alembic.ini is only a placeholder default; production must set the env var.
 db_path = os.environ.get("PROTOFORGE_DB_PATH", "")
 if db_path:
     if db_path.startswith("postgresql"):
         sqlalchemy_url = db_path.replace("postgresql://", "postgresql+asyncpg://")
     else:
         sqlalchemy_url = f"sqlite+aiosqlite:///{db_path}"
+    config.set_main_option("sqlalchemy.url", sqlalchemy_url)
+else:
+    # Ensure the default URL from alembic.ini uses an async driver,
+    # because env.py uses async_engine_from_config which requires async drivers.
+    default_url = config.get_main_option("sqlalchemy.url") or "sqlite:///data/protoforge.db"
+    if default_url.startswith("postgresql://"):
+        sqlalchemy_url = default_url.replace("postgresql://", "postgresql+asyncpg://")
+    elif default_url.startswith("sqlite:///") and "+" not in default_url:
+        sqlalchemy_url = default_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+    else:
+        sqlalchemy_url = default_url
     config.set_main_option("sqlalchemy.url", sqlalchemy_url)
 
 target_metadata = None
