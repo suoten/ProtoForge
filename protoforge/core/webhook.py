@@ -97,7 +97,8 @@ class WebhookManager:
                     rate_limit_seconds = settings.webhook_rate_limit_seconds
                 if auto_disable_threshold <= 0:
                     auto_disable_threshold = settings.webhook_auto_disable_threshold
-            except Exception:
+            except Exception as e:
+                logger.debug("加载webhook配置失败，使用默认值: %s", e)
                 queue_maxsize = queue_maxsize or 5000
                 rate_limit_seconds = rate_limit_seconds or 5.0
                 auto_disable_threshold = auto_disable_threshold or 50

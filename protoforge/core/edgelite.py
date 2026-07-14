@@ -294,7 +294,8 @@ def _get_protocol_status(protocol: str) -> str:
         from protoforge.core.registry import get_engine
         engine = get_engine()
         return "running" if engine.is_protocol_running(protocol) else "stopped"
-    except Exception:
+    except Exception as e:
+        logger.debug("获取协议状态失败: %s", e)
         return "unknown"
 
 
@@ -1023,7 +1024,8 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                     try:
                         err_data = create_resp2.json()
                         err_detail = err_data.get("detail", str(create_resp2.text[:200]))
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("解析重建设备错误响应失败: %s", e)
                         err_detail = str(create_resp2.text[:200])
                     return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
                 elif dev_resp.status_code == 200:
@@ -1188,7 +1190,8 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     if resp.status_code == 200:
         try:
             raw = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("解析设备状态响应JSON失败: %s", e)
             return {"ok": False, "error": "Invalid JSON response", "error_type": "parse_error"}
         data = raw.get("data", raw)
         return {"ok": True, "device_id": device_id, "status": data.get("status", "unknown"), "data": data}
@@ -1608,7 +1611,8 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
     if resp.status_code == 200:
         try:
             raw = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("解析EdgeLite状态响应JSON失败: %s", e)
             return {"ok": False, "error": "EdgeLite returned non-JSON response"}
         data = raw.get("data", raw)
         return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
@@ -1645,7 +1649,8 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
         if status_resp.status_code == 200:
             try:
                 raw = status_resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("解析EdgeLite认证后状态响应JSON失败: %s", e)
                 return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
             data = raw.get("data", raw)
             return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}

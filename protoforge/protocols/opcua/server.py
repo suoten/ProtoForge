@@ -623,12 +623,14 @@ class OpcUaServer(ProtocolServer):
                         node = await device_folder.add_variable(
                             parsed_ns, parsed_id, ua.Variant(value, variant_type)
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("添加OPC-UA变量失败(ns=%s, id=%s): %s", parsed_ns, parsed_id, e)
                         try:
                             node = await device_folder.add_variable(
                                 parsed_ns, point.name, ua.Variant(value, variant_type)
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("添加OPC-UA变量fallback失败(ns=%s, name=%s): %s", parsed_ns, point.name, e)
                             node = await device_folder.add_variable(
                                 device_idx, point.name, ua.Variant(value, variant_type)
                             )
@@ -640,12 +642,14 @@ class OpcUaServer(ProtocolServer):
                         node = await device_folder.add_variable(
                             parsed_ns, parsed_id, value
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("添加OPC-UA变量失败(ns=%s, id=%s): %s", parsed_ns, parsed_id, e)
                         try:
                             node = await device_folder.add_variable(
                                 parsed_ns, point.name, value
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("添加OPC-UA变量fallback失败(ns=%s, name=%s): %s", parsed_ns, point.name, e)
                             node = await device_folder.add_variable(
                                 device_idx, point.name, value
                             )

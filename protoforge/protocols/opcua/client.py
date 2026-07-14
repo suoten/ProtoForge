@@ -32,7 +32,8 @@ def parse_node_id(address: str):
     try:
         from asyncua import NodeId
         return NodeId.from_string(address)
-    except Exception:
+    except Exception as e:
+        logger.debug("asyncua NodeId解析失败，尝试opcua fallback: %s", e)
         try:
             from opcua import NodeId
             return NodeId.from_string(address)
@@ -112,7 +113,8 @@ class OpcUaClientProtocol(ProtocolServer):
                 if hasattr(self._client, 'session_timeout'):
                     self._client.session_timeout = self._session_timeout
                 self._connected = True
-        except Exception:
+        except Exception as e:
+            logger.debug("OPC-UA客户端连接失败: %s", e)
             self._client = None  # FIXED-N09: 连接失败时清理_client引用
             raise
 

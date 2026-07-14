@@ -292,7 +292,8 @@ class DataGenerator:
         if self._fault_injector is not None:
             try:
                 value, _quality = self._fault_injector.apply(point.name, value)
-            except Exception:
+            except Exception as e:
+                logger.debug("故障注入失败，向上传播: %s", e)
                 # DEVICE_FAILURE 等异常向上传播，由 device.py 处理
                 raise
 

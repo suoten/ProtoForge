@@ -306,7 +306,8 @@ class IntegrationManager:
         try:
             await self._connect_http()
             return self._state.state == ConnectionState.CONNECTED
-        except Exception:
+        except Exception as e:
+            logger.debug("连接EdgeLite失败: %s", e)
             return False
 
     async def _get_auth_headers(self) -> tuple[dict[str, str], Exception | None]:
@@ -701,7 +702,8 @@ class IntegrationManager:
                 try:
                     err_data = create_resp2.json()
                     err_detail = err_data.get("detail", str(create_resp2.text[:200]))
-                except Exception:
+                except Exception as e:
+                    logger.debug("解析重建设备错误响应失败: %s", e)
                     err_detail = str(create_resp2.text[:200])
                 self._metrics.record_push_failure()
                 return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
@@ -783,7 +785,8 @@ class IntegrationManager:
         if resp.status_code == 200:
             try:
                 raw = resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("解析EdgeLite状态响应JSON失败: %s", e)
                 return {"ok": False, "error": "EdgeLite returned non-JSON response"}
             data = raw.get("data", raw)
             return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
@@ -1024,7 +1027,8 @@ class IntegrationManager:
 
         try:
             dev_data_raw = dev_resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("解析设备注册响应JSON失败: %s", e)
             result["steps"]["register"] = {"ok": False, "error": "Invalid JSON response"}
             result["ok"] = False
             return result
@@ -1065,7 +1069,8 @@ class IntegrationManager:
                 try:
                     import json
                     driver_config = json.loads(driver_config)
-                except Exception:
+                except Exception as e:
+                    logger.debug("解析driver_config JSON失败: %s", e)
                     driver_config = {}
 
             connect_error = _build_connect_error(
@@ -1091,7 +1096,8 @@ class IntegrationManager:
         if points_resp.status_code == 200:
             try:
                 raw_points = points_resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("解析采集点响应JSON失败: %s", e)
                 result["steps"]["collect"] = {"ok": False, "error": "Invalid JSON"}
                 result["ok"] = False
                 return result
@@ -1374,7 +1380,8 @@ class IntegrationManager:
             try:
                 await self._ws_channel.send(msg)
                 self._metrics.record_sync_event()
-            except Exception:
+            except Exception as e:
+                logger.debug("WebSocket发送device_started事件失败: %s", e)
                 await self._enqueue_retry(msg)
         else:
             await self._enqueue_retry(msg)
@@ -1386,7 +1393,8 @@ class IntegrationManager:
             try:
                 await self._ws_channel.send(msg)
                 self._metrics.record_sync_event()
-            except Exception:
+            except Exception as e:
+                logger.debug("WebSocket发送device_stopped事件失败: %s", e)
                 await self._enqueue_retry(msg)
         else:
             await self._enqueue_retry(msg)
@@ -1407,7 +1415,8 @@ class IntegrationManager:
                 self._metrics.record_sync_event()
             else:
                 logger.warning("EdgeLite delete device %s returned HTTP %d", device_id, resp.status_code)
-        except Exception:
+        except Exception as e:
+            logger.debug("HTTP删除设备失败，回退到WebSocket: %s", e)
             # 回退到 WebSocket（使用规范化后的 device_id）
             msg = {"type": "delete_device", "payload": {"device_id": device_id}}
             await self._enqueue_retry(msg)
@@ -1492,7 +1501,8 @@ class IntegrationManager:
                             await self._enqueue_retry(message)
                     else:
                         await self._enqueue_retry(message)
-                except Exception:
+                except Exception as e:
+                    logger.debug("重试队列发送消息失败: %s", e)
                     await self._enqueue_retry(message)
             except asyncio.TimeoutError:
                 continue
@@ -1518,7 +1528,8 @@ class IntegrationManager:
                         result = await self._ws_channel.send(msg)
                         if result and not result.get("ok"):
                             await self._enqueue_retry(msg)
-                except Exception:
+                except Exception as e:
+                    logger.debug("flush重试队列发送消息失败: %s", e)
                     await self._enqueue_retry(msg)
 
     # ─── 定期状态同步 ────────────────────────────────────────
