@@ -199,7 +199,7 @@ def get_settings() -> Settings:
             _settings = Settings()
             if not _settings.jwt_secret:
                 _settings.jwt_secret = secrets.token_urlsafe(32)
-                logger.warning("JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.")
+                logger.warning("JWT secret not configured, auto-generated. Set the PROTOFORGE_JWT_SECRET environment variable for production use.")
             if _settings_overrides:
                 for key, value in _settings_overrides.items():
                     if hasattr(_settings, key):

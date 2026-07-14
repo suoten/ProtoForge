@@ -556,7 +556,8 @@ def get_protocol_defaults(protocol_name: str, lang: str = "zh") -> dict[str, Any
         from protoforge.config import get_protocol_port_map
         base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})
         port_map = get_protocol_port_map()
-    except Exception:
+    except Exception as e:
+        _defaults_logger.debug("get_protocol_defaults: config lookup failed: %s", e)
         base = PROTOCOL_DEFAULTS.get(protocol_name, {"host": "0.0.0.0", "port": 8000})
         port_map = {}
     if protocol_name in port_map:
@@ -578,7 +579,8 @@ def get_all_protocol_info(lang: str = "zh") -> list[dict]:
     try:
         from protoforge.config import get_protocol_port_map
         port_map = get_protocol_port_map()
-    except Exception:
+    except Exception as e:
+        _defaults_logger.debug("get_all_protocol_info: config lookup failed: %s", e)
         port_map = {}
     from protoforge.core.messages import desc
     result = []

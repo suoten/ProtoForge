@@ -63,7 +63,7 @@ class _TokenRedactingFilter(logging.Filter):
                         for a in record.args
                     )
             except Exception as e:
-                logger.debug("Token redaction failed for log args: %s", e)
+                logger.debug("Token redaction failed for log args; redaction skipped to avoid leaking sensitive data")
         return True
 
 
@@ -146,7 +146,7 @@ def _check_startup_security(settings: Any) -> None:
                     _EXAMPLE_SECRET = _line.strip().split("=", 1)[1].strip()
                     break
     except Exception as e:
-        logger.debug("Failed to read .env.example for JWT secret check: %s", e)
+        logger.debug("Failed to read .env.example for JWT secret check")
     if not settings.jwt_secret or (_EXAMPLE_SECRET and settings.jwt_secret == _EXAMPLE_SECRET):
         logger.warning(
             "SECURITY: JWT secret is empty or using example default. "

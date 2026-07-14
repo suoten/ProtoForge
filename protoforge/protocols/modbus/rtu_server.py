@@ -213,7 +213,8 @@ class ModbusRtuServer(ProtocolServer):
                     result = s.connect_ex(("127.0.0.1", port))
                     if result != 0:
                         return port  # 端口未被占用
-            except Exception:
+            except Exception as e:
+                logger.debug("Port probe failed for %d, assuming available: %s", port, e)
                 return port  # 无法检测，假设可用
         return start_port  # 全部被占用，返回原始端口让后续报错
 

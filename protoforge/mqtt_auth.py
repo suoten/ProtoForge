@@ -32,13 +32,13 @@ try:
                 if session.password is not None and session.password.decode("utf-8", errors="replace") == expected:
                     logger.info("MQTT auth: user '%s' authenticated", session.username)
                     return True
-                logger.warning("MQTT auth: user '%s' password mismatch", session.username)
+                logger.warning("MQTT auth failed: credentials mismatch")
                 return False
             if session.username == self._username:
                 if session.password is not None and session.password.decode("utf-8", errors="replace") == self._password:
                     logger.info("MQTT auth: user '%s' authenticated", session.username)
                     return True
-                logger.warning("MQTT auth: user '%s' password mismatch", session.username)
+                logger.warning("MQTT auth failed: credentials mismatch")
                 return False
             logger.warning("MQTT auth: unknown user '%s'", session.username)
             return False

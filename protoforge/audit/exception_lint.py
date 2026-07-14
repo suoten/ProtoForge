@@ -320,7 +320,8 @@ def quick_scan_file(file_path: Path) -> list[ExceptionLintViolation]:
     violations: list[dict[str, Any]] = []
     try:
         content = file_path.read_text(encoding="utf-8")
-    except Exception:
+    except Exception as e:
+        logger.debug("Cannot read file for lint scan %s: %s", file_path, e)
         return violations
 
     for match in _SWALLOW_PATTERN.finditer(content):
