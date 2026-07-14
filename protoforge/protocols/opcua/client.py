@@ -12,12 +12,12 @@ from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 logger = logging.getLogger(__name__)
 
 try:
-    from asyncua import Client, ua
+    from asyncua import Client
     ASYNCUA_AVAILABLE = True
     ASYNCUA_SYNC = False
 except ImportError:
     try:
-        from opcua import Client, ua
+        from opcua import Client
         ASYNCUA_AVAILABLE = True
         ASYNCUA_SYNC = True
     except ImportError:

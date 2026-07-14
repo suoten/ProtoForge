@@ -29,7 +29,7 @@ try:
 except ImportError:
     pass
 
-StartAsyncTcpServer = None  # type: ignore[assignment]
+StartAsyncTcpServer = None
 with contextlib.suppress(ImportError):
     from pymodbus.server import StartAsyncTcpServer  # type: ignore[assignment]
 

@@ -267,9 +267,14 @@ class FaultInjector:
                 config.fault_id, config.fault_type.value, config.target_point, self._device_id,
             )
 
+            # MANUAL 模式：添加后立即激活（可通过 deactivate_fault 停用）
             # SCHEDULED 模式：检查是否应该立即激活
-            if config.trigger_mode == TriggerMode.SCHEDULED and config.start_time and time.time() >= config.start_time:
-                    self._activate(rt)
+            if config.trigger_mode == TriggerMode.MANUAL or (
+                config.trigger_mode == TriggerMode.SCHEDULED
+                and config.start_time
+                and time.time() >= config.start_time
+            ):
+                self._activate(rt)
 
             return config.fault_id
 
@@ -947,7 +952,7 @@ class FaultScenario:
     @property
     def is_running(self) -> bool:
         """场景是否正在运行。"""
-        return True if self._started else False
+        return bool(self._started)
 
     # -- 序列化 -----------------------------------------------------------
 

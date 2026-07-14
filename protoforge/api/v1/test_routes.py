@@ -386,7 +386,7 @@ async def quick_test(request: Request, scope: str = "all", target_id: Optional[s
                 proto_steps.append(TestStep(
                     name=tmsg("step_verify_port_listening", lang, protocol=proto_name, port=running_port),
                     action="http_request",
-                    params={"method": "GET", "url": f"/api/v1/protocols"},
+                    params={"method": "GET", "url": "/api/v1/protocols"},
                     assertions=[Assertion(type=AssertionType.STATUS_CODE, expected=200)],
                 ))
                 if not port_reachable:

@@ -77,6 +77,12 @@ async def client() -> AsyncIterator:
     """
     from httpx import ASGITransport, AsyncClient
 
+    # Reset settings cache so PROTOFORGE_NO_AUTH=1 (set in conftest module level)
+    # is picked up even if get_settings() was already called by another module.
+    import protoforge.config as config_module
+    config_module._settings = None
+    config_module._settings_overrides.clear()
+
     import protoforge.main as main_module
     from protoforge.core.engine import SimulationEngine
     from protoforge.core.log_bus import LogBus

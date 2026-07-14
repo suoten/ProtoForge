@@ -36,8 +36,6 @@ logger = logging.getLogger(__name__)
 
 try:
     from amqtt.broker import Broker
-    from amqtt.contexts import Action
-    from amqtt.session import Session
     ASYNC_MQTT_AVAILABLE = True
 except ImportError:
     ASYNC_MQTT_AVAILABLE = False
