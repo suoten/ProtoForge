@@ -23,7 +23,8 @@ def _get_version() -> str:
     try:
         import protoforge
         return getattr(protoforge, "__version__", "0.1.0")
-    except Exception:
+    except Exception as e:
+        logger.debug("获取 protoforge 模块版本失败: %s", e)
         return "0.1.0"  # FIXED: 内联fallback版本号，删除冗余_FALLBACK_VERSION常量
 
 

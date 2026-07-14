@@ -1193,7 +1193,8 @@ class Database:
                 await self._db.commit()
             elif pg_txn:
                 await pg_txn.commit()
-        except Exception:
+        except Exception as e:
+            logger.exception("Failed to restore database from backup: %s", e)
             if not self._is_postgres:
                 assert self._db is not None, "SQLite database not connected"
                 await self._db.rollback()

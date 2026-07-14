@@ -684,7 +684,8 @@ class BACnetServer(ProtocolServer):
                         if self._sock:
                             try:
                                 await loop.sock_sendto(self._sock, bytes(resp), addr)  # type: ignore[attr-defined]
-                            except Exception:
+                            except Exception as e:
+                                logger.debug("BACnet COV send failed, marking subscriber %s dead: %s", sub_id, e)
                                 dead_subs.append(sub_id)
                 for sid in dead_subs:
                     self._cov_subscriptions.pop(sid, None)

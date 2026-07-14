@@ -96,7 +96,7 @@ def parse_sip_response(data: bytes) -> tuple[int, str, dict]:
         message = data.decode("utf-8", errors="replace")
     except Exception as e:
         print(f"[WARN] SIP decode failed: {e}")
-        return -1, "", {}
+        raise
 
     lines = message.split("\r\n")
     if not lines:

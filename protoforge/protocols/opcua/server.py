@@ -625,12 +625,14 @@ class OpcUaServer(ProtocolServer):
                         node = await device_folder.add_variable(
                             parsed_ns, parsed_id, ua.Variant(value, variant_type)
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("OPC-UA add_variable(parsed_id) failed, falling back to point.name: %s", e)
                         try:
                             node = await device_folder.add_variable(
                                 parsed_ns, point.name, ua.Variant(value, variant_type)
                             )
-                        except Exception:
+                        except Exception as exc:
+                            logger.debug("OPC-UA add_variable(point.name) failed, falling back to device_idx: %s", exc)
                             node = await device_folder.add_variable(
                                 device_idx, point.name, ua.Variant(value, variant_type)
                             )
@@ -642,12 +644,14 @@ class OpcUaServer(ProtocolServer):
                         node = await device_folder.add_variable(
                             parsed_ns, parsed_id, value
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("OPC-UA add_variable(parsed_id) failed, falling back to point.name: %s", e)
                         try:
                             node = await device_folder.add_variable(
                                 parsed_ns, point.name, value
                             )
-                        except Exception:
+                        except Exception as exc:
+                            logger.debug("OPC-UA add_variable(point.name) failed, falling back to device_idx: %s", exc)
                             node = await device_folder.add_variable(
                                 device_idx, point.name, value
                             )

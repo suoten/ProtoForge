@@ -32,7 +32,8 @@ def parse_node_id(address: str):
     try:
         from asyncua import NodeId
         return NodeId.from_string(address)
-    except Exception:
+    except Exception as e:
+        logger.debug("asyncua NodeId parse failed for '%s', trying opcua fallback: %s", address, e)
         try:
             from opcua import NodeId
             return NodeId.from_string(address)
