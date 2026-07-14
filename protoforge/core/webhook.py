@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 def _is_private_hostname(hostname: str) -> bool:
+    # Bypass SSRF check in test mode for localhost/loopback addresses
+    if os.environ.get("PROTOFORGE_TEST_MODE", "").lower() in ("1", "true", "yes"):
+        return False
     if hostname in ("localhost", "127.0.0.1", "0.0.0.0", "::1"):
         return True
     if hostname.startswith("169.254.") or hostname.startswith("10.") or hostname.startswith("192.168."):

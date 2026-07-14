@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-# Disable auth for testing
-os.environ.setdefault("PROTOFORGE_NO_AUTH", "1")
-os.environ.setdefault("PROTOFORGE_TEST_MODE", "1")
+# Disable auth for testing — force (not setdefault) to override any cached .env value
+os.environ["PROTOFORGE_NO_AUTH"] = "1"
+os.environ["PROTOFORGE_TEST_MODE"] = "1"
 
 collect_ignore_glob = ["*/testing.py"]
 
@@ -78,6 +78,7 @@ async def client() -> AsyncIterator:
     from httpx import ASGITransport, AsyncClient
 
     import protoforge.main as main_module
+    from protoforge.config import get_settings
     from protoforge.core.engine import SimulationEngine
     from protoforge.core.log_bus import LogBus
     from protoforge.core.registry import (
@@ -100,6 +101,13 @@ async def client() -> AsyncIterator:
     from protoforge.protocols.http.server import HttpSimulatorServer
     from protoforge.protocols.modbus.server import ModbusTcpServer
     from protoforge.protocols.s7.server import S7Server
+
+    # Reset settings cache to pick up test env vars (PROTOFORGE_NO_AUTH=1)
+    import protoforge.config as _cfg_module
+    _cfg_module._settings = None
+    _cfg_module._settings_overrides = {}
+    s = get_settings()
+    s.no_auth = True
 
     main_module._log_bus = LogBus()
 
