@@ -23,6 +23,11 @@ if db_path:
     else:
         sqlalchemy_url = f"sqlite+aiosqlite:///{db_path}"
     config.set_main_option("sqlalchemy.url", sqlalchemy_url)
+else:
+    # Ensure default sqlite URL uses async driver (aiosqlite) for async_engine_from_config
+    default_url = config.get_main_option("sqlalchemy.url") or "sqlite:///data/protoforge.db"
+    if default_url.startswith("sqlite:///") and "+aiosqlite" not in default_url:
+        config.set_main_option("sqlalchemy.url", default_url.replace("sqlite:///", "sqlite+aiosqlite:///"))
 
 target_metadata = None
 
