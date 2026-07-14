@@ -96,7 +96,7 @@ class DataTypeMappingResultModel(BaseModel):
 class CompatibilityReportModel(BaseModel):
     device_id: str = ""
     compatible: bool = True
-    protocol_result: ProtocolMappingResultModel = Field(default_factory=ProtocolMappingResultModel)
+    protocol_result: ProtocolMappingResultModel = Field(default_factory=ProtocolMappingResultModel)  # type: ignore[arg-type]
     data_type_results: list[DataTypeMappingResultModel] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

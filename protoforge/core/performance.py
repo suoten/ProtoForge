@@ -243,7 +243,7 @@ class ConnectionPoolManager:
             client = self._clients.get(base_url)
             if client is None or client.is_closed:
                 client = httpx.AsyncClient(
-                    base_url=base_url or None,
+                    base_url=base_url or "",
                     limits=httpx.Limits(
                         max_connections=self._max_connections,
                         max_keepalive_connections=self._max_keepalive,

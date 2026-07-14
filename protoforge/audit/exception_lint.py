@@ -22,7 +22,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +109,7 @@ class ExceptionLintVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self._current_function = old_function
 
-    visit_AsyncFunctionDef = visit_FunctionDef
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         self.total_except_blocks = self.total_except_blocks + 1
@@ -317,7 +316,7 @@ def quick_scan_file(file_path: Path) -> list[ExceptionLintViolation]:
     Less accurate than AST scan but catches patterns in files
     that might not parse correctly.
     """
-    violations: list[dict[str, Any]] = []
+    violations: list[ExceptionLintViolation] = []
     try:
         content = file_path.read_text(encoding="utf-8")
     except Exception:

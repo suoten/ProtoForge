@@ -90,15 +90,15 @@ class DynamicValueGenerator:
         if self._point.min_value is not None or self._point.max_value is not None:
             value = max(self._min, min(self._max, value))
         if dt == "int16":
-            value = int(max(-32768, min(32767, round(value))))
+            value = int(max(-32768, min(32767, round(float(value)))))
         elif dt == "int32":
-            value = int(max(-2147483648, min(2147483647, round(value))))
+            value = int(max(-2147483648, min(2147483647, round(float(value)))))
         elif dt == "uint16":
-            value = int(max(0, min(65535, round(value))))
+            value = int(max(0, min(65535, round(float(value)))))
         elif dt == "uint32":
-            value = int(max(0, min(4294967295, round(value))))
+            value = int(max(0, min(4294967295, round(float(value)))))
         elif dt in ("float32", "float64"):
-            value = round(value, 4)
+            value = round(float(value), 4)
         elif dt == "string":
             value = str(value)[:256]  # FIXED-L06: 限制字符串最大长度为256，防止超长字符串
         return value

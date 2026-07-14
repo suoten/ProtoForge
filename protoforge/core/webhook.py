@@ -298,7 +298,7 @@ class WebhookManager:
                 continue
 
             last_triggered = webhook.last_triggered or 0.0
-            if timestamp - last_triggered < self._rate_limit_seconds:
+            if timestamp is not None and timestamp - last_triggered < self._rate_limit_seconds:
                 continue
 
             # Auto-disable threshold: use lower threshold for client errors (4xx = misconfiguration)
