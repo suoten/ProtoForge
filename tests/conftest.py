@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-# Disable auth for testing
-os.environ.setdefault("PROTOFORGE_NO_AUTH", "1")
-os.environ.setdefault("PROTOFORGE_TEST_MODE", "1")
+# Disable auth for testing - force (not setdefault) to override any cached .env value
+os.environ["PROTOFORGE_NO_AUTH"] = "1"
+os.environ["PROTOFORGE_TEST_MODE"] = "1"
 
 collect_ignore_glob = ["*/testing.py"]
 
@@ -105,6 +105,14 @@ async def client() -> AsyncIterator:
 
     main_module._template_manager = TemplateManager()
     main_module._template_manager.load_builtin_templates()
+
+    # Reset settings cache to pick up test env vars (PROTOFORGE_NO_AUTH=1)
+    import protoforge.config as _cfg_module
+    _cfg_module._settings = None
+    _cfg_module._settings_overrides = {}
+    from protoforge.config import get_settings
+    s = get_settings()
+    s.no_auth = True
 
     from protoforge.db.session import Database
     main_module._database = Database()
