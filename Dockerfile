@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY README.md .
 COPY protoforge/ protoforge/
-# FIXED: 分开安装可选依赖和核心包，避免降级安装掩盖依赖错误
-RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
+# Install core package first (required), then optional extras (best-effort)
+RUN pip install --no-cache-dir . && \
+    for extras in opcua mqtt bacnet s7 postgres grpc; do \
+        pip install --no-cache-dir ".[$extras]" || echo "[WARN] Optional dependency '$extras' failed to install"; \
+    done
 
 # FIXED: 优化 npm 依赖缓存 — 先复制 package.json 安装依赖，再复制源码构建
 COPY web/package.json web/package-lock.json* web/
