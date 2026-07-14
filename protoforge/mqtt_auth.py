@@ -5,7 +5,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    from amqtt.contexts import Action
     from amqtt.plugins.authentication import BaseAuthPlugin
     from amqtt.session import Session
 

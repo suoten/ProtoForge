@@ -16,8 +16,8 @@ except ImportError:
     logger.debug("grpcio not installed, gRPC server will not be available")
 
 try:
-    from protoforge.grpc import protoforge_pb2 as pb2
-    from protoforge.grpc import protoforge_pb2_grpc as pb2_grpc
+    from protoforge.grpc import protoforge_pb2 as pb2  # type: ignore[attr-defined]
+    from protoforge.grpc import protoforge_pb2_grpc as pb2_grpc  # type: ignore[attr-defined]
     PB2_AVAILABLE = True
 except ImportError:
     PB2_AVAILABLE = False
@@ -40,7 +40,7 @@ def _get_database():
         return None
 
 
-class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE else object):
+class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE else object):  # type: ignore[misc]
     async def GetHealth(self, _request, _context):
         engine = _get_engine()
         db = _get_database()

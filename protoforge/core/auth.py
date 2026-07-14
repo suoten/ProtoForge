@@ -76,7 +76,6 @@ def set_secret_key(key: str) -> None:
 
 
 def get_secret_key() -> str:
-    global _SECRET_KEY
     if not _SECRET_KEY:
         _load_persistent_secret_key()
     return _SECRET_KEY

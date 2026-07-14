@@ -30,7 +30,7 @@ try:
 except ImportError:
     pass
 
-StartAsyncSerialServer = None  # type: ignore[assignment]
+StartAsyncSerialServer = None
 with contextlib.suppress(ImportError):
     from pymodbus.server import StartAsyncSerialServer  # type: ignore[assignment]
 

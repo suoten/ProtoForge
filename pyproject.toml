@@ -155,6 +155,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "smoke: smoke tests covering core API endpoints and application startup (run with: pytest -m smoke)",
+]
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",
 ]

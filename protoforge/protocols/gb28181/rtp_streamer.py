@@ -6,6 +6,7 @@ import hmac
 import logging
 import os
 import struct
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ class SrtpContext:
         ssrc = struct.unpack(">I", rtp_packet[8:12])[0]
         roc = self._get_roc(seq)
         iv = self._compute_iv(ssrc, roc, seq)
-        cipher = self._aes_cipher(self._aes_algo.AES(self._enc_key), self._aes_mode.CTR(iv))  # type: ignore[attr-defined]
+        cipher = self._aes_cipher(self._aes_algo.AES(self._enc_key), self._aes_mode.CTR(iv))
         encryptor = cipher.encryptor()
         encrypted_payload = encryptor.update(payload) + encryptor.finalize()
         encrypted_packet = header + encrypted_payload

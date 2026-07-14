@@ -256,7 +256,6 @@ class ConfigValidationError(Exception):
 
 
 def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
-    global _settings, _settings_overrides
     s = get_settings()
     changed = {}
     errors = []

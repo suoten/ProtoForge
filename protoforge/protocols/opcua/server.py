@@ -239,7 +239,6 @@ class OpcUaServer(ProtocolServer):
             # FIXED: 显式设置安全策略，避免 asyncua 内部注册非开放端点时发出警告
             if ASYNCUA_AVAILABLE:
                 try:
-                    from asyncua import ua
                     if security_mode == "None":
                         # 仅允许无安全策略，避免 asyncua 尝试注册加密端点
                         self._server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
@@ -601,7 +600,6 @@ class OpcUaServer(ProtocolServer):
         if not ASYNCUA_AVAILABLE:
             logger.warning("asyncua not available, cannot create OPC-UA device nodes")
             return
-        from asyncua import ua
         type_map = {
             "bool": ua.VariantType.Boolean,
             "int16": ua.VariantType.Int16,

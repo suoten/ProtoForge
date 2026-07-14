@@ -84,7 +84,6 @@ _globals_lock = threading.Lock()
 
 
 def get_engine() -> SimulationEngine:
-    global _engine
     with _globals_lock:
         if _engine is None:
             raise RuntimeError("Engine not initialized")
@@ -92,7 +91,6 @@ def get_engine() -> SimulationEngine:
 
 
 def get_template_manager() -> TemplateManager:
-    global _template_manager
     with _globals_lock:  # FIXED: 添加锁保护，与get_engine()一致
         if _template_manager is None:
             raise RuntimeError("Template manager not initialized")
@@ -100,7 +98,6 @@ def get_template_manager() -> TemplateManager:
 
 
 def get_database() -> Database:
-    global _database
     with _globals_lock:  # FIXED: 添加锁保护，与get_engine()一致
         if _database is None:
             raise RuntimeError("Database not initialized")
@@ -108,7 +105,6 @@ def get_database() -> Database:
 
 
 def get_log_bus() -> LogBus:
-    global _log_bus
     with _globals_lock:  # FIXED: 添加锁保护，与get_engine()一致
         if _log_bus is None:
             raise RuntimeError("Log bus not initialized")
@@ -116,7 +112,6 @@ def get_log_bus() -> LogBus:
 
 
 def get_event_bus() -> EventBus:
-    global _event_bus
     with _globals_lock:  # FIXED: 添加锁保护，与get_engine()一致
         if _event_bus is None:
             raise RuntimeError("Event bus not initialized")
@@ -124,7 +119,6 @@ def get_event_bus() -> EventBus:
 
 
 def get_integration_manager() -> IntegrationManager:
-    global _integration_manager
     with _globals_lock:  # FIXED: 添加锁保护，与get_engine()一致
         if _integration_manager is None:
             raise RuntimeError("Integration manager not initialized")
