@@ -233,7 +233,8 @@ class DeviceCollaboration:
 
             try:
                 current = self._on_read(action.target_device_id, action.target_point)
-            except Exception:
+            except Exception as e:
+                logger.debug("读取设备点失败 device=%s point=%s: %s", action.target_device_id, action.target_point, e)
                 current = None
 
             new_value = self._compute_action_value(action, current)

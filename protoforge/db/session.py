@@ -569,7 +569,8 @@ class Database:
             try:
                 await self._db.execute(sql, params)
                 await self._db.commit()
-            except Exception:
+            except Exception as e:
+                logger.debug("SQLite execute/commit失败，执行rollback: %s", e)
                 await self._db.rollback()
                 raise
 
@@ -1193,7 +1194,8 @@ class Database:
                 await self._db.commit()
             elif pg_txn:
                 await pg_txn.commit()
-        except Exception:
+        except Exception as e:
+            logger.debug("批量导入失败，执行rollback: %s", e)
             if not self._is_postgres:
                 assert self._db is not None, "SQLite database not connected"
                 await self._db.rollback()

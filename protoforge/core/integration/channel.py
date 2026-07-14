@@ -173,7 +173,8 @@ class HttpChannel(ChannelBase):
                         resp = await self._client.post("/api/v1/integration/message", json=message, headers=headers)
                 return {"ok": resp.status_code == 200, "data": self._safe_json(resp) if resp.status_code == 200 else None}
 
-        except Exception:
+        except Exception as e:
+            logger.debug("HTTP消息发送失败: %s", e)
             self._connected = False
             raise
 
@@ -284,7 +285,8 @@ class WebSocketChannel(ChannelBase):
         data = json.dumps(message)
         try:
             await self._ws.send(data)
-        except Exception:
+        except Exception as e:
+            logger.debug("WebSocket消息发送失败: %s", e)
             self._connected = False
             if msg_id and msg_id in self._pending_responses:
                 self._pending_responses.pop(msg_id, None)

@@ -40,8 +40,8 @@ def check_tcp(ip: str, port: int, timeout: float = 5.0) -> bool:
                     try:
                         text = banner.decode('ascii', errors='replace')
                         print(f"    -> 文本内容: {text[:100]}")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"    -> 解码失败: {e}")
                 print(f"    *** 该设备在端口 {port} 上运行的不是标准 S7 协议 ***")
             else:
                 print("    设备未主动发送数据 (符合 S7 PLC 行为)")

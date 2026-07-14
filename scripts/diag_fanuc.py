@@ -153,7 +153,8 @@ def start_server():
     try:
         thread.start()
         ready.wait(timeout=10)
-    except Exception:
+    except Exception as e:
+        print(f"启动FANUC服务器线程失败: {e}")
         thread.join(timeout=1)
         raise
     return server, loop
