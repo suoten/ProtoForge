@@ -796,7 +796,7 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     expires_in = 86400
     if isinstance(inner, dict):
         try:
-            expires_in = int(inner.get("expires_in", inner.get("exp", 86400)))
+            expires_in = int(inner.get("expires_in") or inner.get("exp") or 86400)
         except (ValueError, TypeError) as e:
             logger.debug("Invalid expires_in value, using default 86400: %s", e)
     refresh_token = (inner.get("refresh_token", "") if isinstance(inner, dict) else "") or data.get("refresh_token", "")
@@ -1072,6 +1072,31 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             }
 
         return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
+
+
+    # FIXED: Handle non-401 response from initial POST
+    if create_resp.status_code in (200, 201):
+        logger.info("Device %s registered to EdgeLite", payload["device_id"])
+        return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
+
+    if create_resp.status_code == 409:
+        # Handle conflict without 401 retry path
+        conflict_detail = ""
+        try:
+            conflict_data = create_resp.json()
+            if isinstance(conflict_data, dict):
+                conflict_detail = str(conflict_data.get("detail", ""))
+        except Exception:
+            pass
+        return {"ok": False, "error": f"Device already exists on EdgeLite: {conflict_detail}", "error_type": "conflict"}
+
+    if create_resp.status_code == 422:
+        return {"ok": False, "error": f"EdgeLite rejected push: {create_resp.text[:300]}", "error_type": "validation_error"}
+
+    if create_resp.status_code >= 500:
+        return {"ok": False, "error": f"EdgeLite server error: HTTP {create_resp.status_code}", "error_type": "edgelite_error"}
+
+    return {"ok": False, "error": f"Create failed: HTTP {create_resp.status_code}", "error_type": "create_failed"}
 
 
 async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:

@@ -26,8 +26,8 @@ async def list_protocols(request: Request, _user: dict[str, Any] = Depends(requi
         entry = dict(p)
         name = entry.get("name", "")
         defaults = get_protocol_defaults(name, lang=lang)
-        entry["description"] = desc(f"protocol.{name}.desc", lang, PROTOCOL_DEFAULTS.get(name, {}).get("description", ""))
-        entry["display_name"] = desc(f"protocol.{name}", lang, PROTOCOL_DEFAULTS.get(name, {}).get("display_name", name))
+        entry["description"] = desc(f"protocol.{name}.desc", lang, str(PROTOCOL_DEFAULTS.get(name, {}).get("description", "")))
+        entry["display_name"] = desc(f"protocol.{name}", lang, str(PROTOCOL_DEFAULTS.get(name, {}).get("display_name", name)))
         entry["default_port"] = defaults.get("port", 0)
         result.append(entry)
     return {"protocols": result}
@@ -54,7 +54,7 @@ async def get_protocol_config(protocol_name: str, _user: dict[str, Any] = Depend
 async def get_protocol_device_config(protocol_name: str, _user: dict[str, Any] = Depends(require_viewer)):
     from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
     from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
-    config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
+    config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))  # type: ignore[call-overload]
     if protocol_name != "gb28181":
         config.extend(EDGELITE_PUSH_FIELDS)
     return {"protocol": protocol_name, "fields": config}
@@ -66,7 +66,7 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
     from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
-    results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
+    results: dict[str, list[Any]] = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") == "running":
@@ -102,7 +102,7 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
 async def stop_all_protocols(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
-    results = {"stopped": [], "failed": [], "skipped": []}
+    results: dict[str, list[Any]] = {"stopped": [], "failed": [], "skipped": []}
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") != "running":
@@ -131,13 +131,13 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
     try:
         await engine.start_protocol(protocol_name, config)
         actual_port = config.get("port", original_port)
-        port_changed = config.pop("_port_changed", False)
-        config_original_port = config.pop("_original_port", None)
+        port_changed: bool = config.pop("_port_changed", False)
+        config_original_port: str | int | None = config.pop("_original_port", None)
         if not port_changed and original_port and actual_port != original_port:
             port_changed = True
             config_original_port = original_port
         log_bus.emit(protocol_name, "system", "", "protocol_start", f"Protocol {protocol_name} started on port {actual_port}", config)
-        result = {"status": "ok"}
+        result: dict[str, Any] = {"status": "ok"}
 
         if port_changed:
             result["port_changed"] = True

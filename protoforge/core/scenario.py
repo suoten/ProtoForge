@@ -77,8 +77,8 @@ class Scenario:
     def _sync_collaboration_rules(self) -> None:
         """将 config.rules 中 rule_type==COLLABORATION 的规则转换并注册到协同引擎。"""
         # 清空已注册规则
-        for rule in list(self._collaboration.rules):
-            self._collaboration.remove_rule(rule.id)
+        for existing_rule in list(self._collaboration.rules):
+            self._collaboration.remove_rule(existing_rule.id)
         for rule in self.config.rules:
             if rule.rule_type != RuleType.COLLABORATION or not rule.enabled:
                 continue
