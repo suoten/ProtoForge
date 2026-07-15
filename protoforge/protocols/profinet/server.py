@@ -680,7 +680,7 @@ class ProfinetServer(ProtocolServer):
 
         if len(payload) >= 4:
             cycle_counter = struct.unpack(">H", payload[0:2])[0]
-            data_status = payload[2]
+            _data_status = payload[2]
             transfer_status = payload[3]
 
         rt_payload = payload[4:] if len(payload) > 4 else b""

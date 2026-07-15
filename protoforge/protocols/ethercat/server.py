@@ -639,7 +639,7 @@ class EtherCATServer(ProtocolServer):
             return b"", 0x0001
 
         if address >= 0x10000000:
-            offset = address & 0x0FFFFFFF
+            _offset = address & 0x0FFFFFFF
             behavior = self._behaviors.get(self._default_device_id or "")
             config = self._device_configs.get(self._default_device_id or "")
             if behavior and config:

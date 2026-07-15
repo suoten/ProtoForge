@@ -119,7 +119,7 @@ class DeviceInstance:
             for name, safe_val in self._safe_values.items():
                 if name in self._point_values:
                     self._point_values[name] = safe_val
-            logger.warning("Device %s entered ERROR state: %s", self.config.id, context.get("reason", ""))
+            logger.warning("Device %s entered ERROR state", self.config.id)
 
         self._state_machine.on_enter_state(on_enter_starting)
         self._state_machine.on_enter_state(on_enter_run)
