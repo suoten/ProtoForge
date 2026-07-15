@@ -125,8 +125,7 @@ class OpcUaClientProtocol(ProtocolServer):
             # If already connected, just do keepalive check
             if self._connected and self._client:
                 try:
-                    if not ASYNCUA_SYNC and hasattr(self._client, 'uaclient'):
-                        if hasattr(self._client.uaclient, 'keepalive') and callable(self._client.uaclient.keepalive):
+                    if not ASYNCUA_SYNC and hasattr(self._client, 'uaclient') and hasattr(self._client.uaclient, 'keepalive') and callable(self._client.uaclient.keepalive):
                             await self._client.uaclient.keepalive()
                     continue
                 except Exception as ka_err:

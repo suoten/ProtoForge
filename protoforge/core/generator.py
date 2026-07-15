@@ -192,8 +192,7 @@ class SafeEval:
                 raise ValueError(f"Too many call arguments (max {self._MAX_CALL_ARGS})")
             args = [self._eval_node(a) for a in node.args]
             # FIXED: range/list无大小限制 — range(10**8)可导致内存耗尽
-            if isinstance(node.func, ast.Name) and node.func.id == "range":
-                if args and isinstance(args[0], int) and len(args) <= 3:
+            if isinstance(node.func, ast.Name) and node.func.id == "range" and args and isinstance(args[0], int) and len(args) <= 3:
                     size = args[0] if len(args) == 1 else (args[1] - args[0]) if len(args) == 2 else ((args[1] - args[0]) // args[2])
                     if abs(size) > self._MAX_RANGE_SIZE:
                         raise ValueError(f"range size {abs(size)} exceeds limit ({self._MAX_RANGE_SIZE})")
@@ -221,8 +220,7 @@ class SafeEval:
             slice_val = self._eval_node(node.slice) if isinstance(node.slice, ast.AST) else node.slice
             if not hasattr(value, '__getitem__'):
                 raise TypeError(f"Cannot subscript type '{type(value).__name__}'")
-            if isinstance(slice_val, int) and isinstance(value, (list, tuple, str)):
-                if not (-len(value) <= slice_val < len(value)):
+            if isinstance(slice_val, int) and isinstance(value, (list, tuple, str)) and not (-len(value) <= slice_val < len(value)):
                     raise IndexError(f"Index {slice_val} out of range for sequence of length {len(value)}")
             return value[slice_val]
         raise ValueError(f"Unsupported expression: {type(node).__name__}")

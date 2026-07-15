@@ -279,7 +279,7 @@ class UserManager:
                 )
             except Exception as e:
                 logger.warning("Could not save admin password to file: %s. Check the file manually after startup.", e)  # FIXED: 不再明文打印密码到日志
-        elif default_password == "admin":
+        elif default_password == "admin":  # noqa: S105
             logger.warning(
                 "SECURITY: Using default admin password 'admin'. "
                 "Set PROTOFORGE_ADMIN_PASSWORD environment variable to change it in production!"

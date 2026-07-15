@@ -215,7 +215,7 @@ def ttl_cache(
         async def wrapper(*args: Any, **kwargs: Any) -> T:
             # 生成缓存 key
             key_parts = [repr(args), repr(sorted(kwargs.items()))]
-            key = hashlib.md5("|".join(key_parts).encode()).hexdigest()
+            key = hashlib.sha256("|".join(key_parts).encode()).hexdigest()
             cached = await cache.get(key)
             if cached is not None:
                 return cached
@@ -506,9 +506,8 @@ class CircuitBreaker:
     @property
     def state(self) -> str:
         """当前熔断器状态."""
-        if self._state == "open":
-            if self._last_failure_time and \
-                    time.monotonic() - self._last_failure_time > self._recovery_timeout:
+        if self._state == "open" and self._last_failure_time and \
+                time.monotonic() - self._last_failure_time > self._recovery_timeout:
                 self._state = "half_open"
         return self._state
 

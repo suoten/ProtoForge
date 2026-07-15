@@ -1,0 +1,70 @@
+# Large directories that cause engine timeouts
+node_modules/
+web/node_modules/
+.git/
+htmlcov/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.convergeloop/
+.loopengine/
+.trae/
+.vite/
+chrome-debug/
+test_screenshots/
+.agent-browser-home/
+
+# Virtual environments
+.venv/
+venv/
+env/
+site-packages/
+
+# Build artifacts
+dist/
+build/
+.eggs/
+*.egg-info/
+vendor/
+target/
+
+# Data and logs
+data/
+logs/
+*.db
+*.sqlite3
+*.log
+
+# Binary files
+*.dll
+*.dylib
+*.exe
+*.bin
+*.so
+*.whl
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sensitive files
+.env
+.env.*
+.jwt_secret
+.recording_salt
+
+# Generated files
+openapi.json
+.coverage

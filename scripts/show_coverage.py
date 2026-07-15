@@ -1,7 +1,8 @@
 """Show coverage summary for core modules."""
 import json
 
-data = json.load(open("coverage.json"))
+with open("coverage.json") as f:
+    data = json.load(f)
 files = [
     (f, v)
     for f, v in data["files"].items()

@@ -302,11 +302,10 @@ def parse_read_property_response(data: bytes, expected_invoke_id: int) -> dict |
             value = bool(data[offset])
             value_type = "bool"
             offset += 1
-    elif tag == 0x34:  # Signed32
-        if offset + 4 <= len(data):
-            value = struct.unpack(">i", data[offset:offset + 4])[0]
-            value_type = "int32"
-            offset += 4
+    elif tag == 0x34 and offset + 4 <= len(data):  # Signed32
+        value = struct.unpack(">i", data[offset:offset + 4])[0]
+        value_type = "int32"
+        offset += 4
 
     return {
         "obj_type": resp_obj_type,
