@@ -69,6 +69,7 @@ _PUBLIC_PATHS = {
     "/redoc",
     "/health",
     "/api/v1/health",
+    "/metrics",
 }
 
 _PUBLIC_PREFIXES = (

@@ -1,0 +1,48 @@
+﻿........................................................................ [  9%]
+........................................................................ [ 19%]
+........................................................................ [ 29%]
+.......................................................................F [ 38%]
+........................................................................ [ 48%]
+.............s.......................................................... [ 58%]
+........................................................................ [ 68%]
+........................................................................ [ 77%]
+........................................................................ [ 87%]
+........................................................................ [ 97%]
+....................                                                     [100%]
+============================== warnings summary ===============================
+tests\test_smoke.py:15
+  E:\˶������\PyGBSentry\ProtoForge\tests\test_smoke.py:15: PytestUnknownMarkWarning: Unknown pytest.mark.smoke - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytestmark = pytest.mark.smoke
+
+tests/test_e2e_multi_protocol_real.py::test_opcua_client_reads_node_value
+tests/test_edgelite_point_translation.py::TestModbusAddressTranslation::test_empty_address_defaults_to_holding
+  D:\os\Python312\Lib\site-packages\_pytest\unraisableexception.py:67: PytestUnraisableExceptionWarning: Exception ignored in: <function StreamWriter.__del__ at 0x0000020316089EE0>
+  
+  Traceback (most recent call last):
+    File "D:\os\Python312\Lib\asyncio\streams.py", line 397, in __del__
+      self.close()
+    File "D:\os\Python312\Lib\asyncio\streams.py", line 343, in close
+      return self._transport.close()
+             ^^^^^^^^^^^^^^^^^^^^^^^
+    File "D:\os\Python312\Lib\asyncio\proactor_events.py", line 109, in close
+      self._loop.call_soon(self._call_connection_lost, None)
+    File "D:\os\Python312\Lib\asyncio\base_events.py", line 772, in call_soon
+      self._check_closed()
+    File "D:\os\Python312\Lib\asyncio\base_events.py", line 519, in _check_closed
+      raise RuntimeError('Event loop is closed')
+  RuntimeError: Event loop is closed
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+
+tests/test_production_hardening.py::test_auth_middleware_options_request_passes_through
+  D:\os\Python312\Lib\unittest\mock.py:2185: RuntimeWarning: coroutine 'sleep' was never awaited
+    def __init__(self, name, parent):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_noise
+1 failed, 738 passed, 1 skipped, 4 warnings in 320.33s (0:05:20)

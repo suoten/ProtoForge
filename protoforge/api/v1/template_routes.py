@@ -77,7 +77,7 @@ async def create_template(template: TemplateDetail, _user: dict[str, Any] = Depe
             db_ok = False
             db_err_msg = str(db_err)
             logger.exception("Failed to persist template %s: %s", template.id, db_err)
-    resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump) else template
     if not db_ok:
         resp["_persistence_warning"] = f"Template created, but persistence failed: {db_err_msg}. Data will be lost after restart."
     return resp
@@ -131,7 +131,7 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict[st
             db_ok = False
             db_err_msg = str(db_err)
             logger.exception("Failed to update template %s in DB: %s", template_id, db_err)
-    resp = updated.model_dump() if hasattr(updated, 'model_dump') and callable(updated.model_dump()) else updated
+    resp = updated.model_dump() if hasattr(updated, 'model_dump') and callable(updated.model_dump) else updated
     if not db_ok:
         resp["_persistence_warning"] = f"Template updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
     return resp
@@ -163,7 +163,7 @@ async def export_template(template_id: str, _user: dict[str, Any] = Depends(requ
         template = tm.get_template(template_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    data = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    data = template.model_dump() if hasattr(template, 'model_dump') else template.dict() if hasattr(template, 'dict') else dict(template)
     data["schema_version"] = "1.0"
     return JSONResponse(content=data, headers={"Content-Disposition": f'attachment; filename="template_{template_id}.json"'})
 
@@ -185,5 +185,5 @@ async def import_template(data: dict[str, Any], _user: dict[str, Any] = Depends(
             await db.save_template(template)
         except Exception as db_err:
             logger.exception("Failed to persist imported template %s: %s", template.id, db_err)
-    resp = template.model_dump() if hasattr(template, 'model_dump') and callable(template.model_dump()) else template
+    resp = template.model_dump() if hasattr(template, 'model_dump') else template.dict() if hasattr(template, 'dict') else dict(template)
     return resp

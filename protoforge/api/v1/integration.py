@@ -22,6 +22,11 @@ async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)
     try:
         manager = _get_integration_manager()
         return manager.get_status()
+    except RuntimeError as e:
+        if "not initialized" in str(e).lower():
+            return {"status": "not_configured", "message": "Integration manager not initialized"}
+        logger.exception("Failed to get integration status: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get integration status: {e}") from e
     except Exception as e:
         logger.exception("Failed to get integration status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get integration status: {e}") from e
