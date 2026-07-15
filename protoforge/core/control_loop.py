@@ -338,8 +338,7 @@ class ControlLoopManager:
         for _lid, loop, cfg in simple_loops:
             try:
                 output = self._execute_single(loop, cfg, device, dt)
-                if output is not None:
-                    outputs[cfg.output_point] = output
+                outputs[cfg.output_point] = output
             except Exception as e:
                 logger.warning("Control loop %s execution error: %s", cfg.loop_id, e)
 
@@ -349,9 +348,8 @@ class ControlLoopManager:
         for _lid, loop, cfg in cascade_primary:
             try:
                 output = self._execute_single(loop, cfg, device, dt)
-                if output is not None:
-                    outputs[cfg.output_point] = output
-                    primary_outputs[cfg.loop_id] = output
+                outputs[cfg.output_point] = output
+                primary_outputs[cfg.loop_id] = output
             except Exception as e:
                 logger.warning("Cascade primary loop %s execution error: %s", cfg.loop_id, e)
 
@@ -390,10 +388,10 @@ class ControlLoopManager:
         cfg: ControlLoopConfig,
         device: DeviceInstance,
         dt: float,
-    ) -> float | None:
+    ) -> float:
         """执行单个简单/前馈回路。
 
-        :return: 控制输出，None 表示跳过
+        :return: 控制输出 (CV)，已限幅
         """
         measurement = self._read_point(device, cfg.measurement_point)
         setpoint = self._read_point(device, cfg.setpoint_point) if cfg.setpoint_point else 0.0

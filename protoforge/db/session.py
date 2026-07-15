@@ -189,15 +189,14 @@ class Database:
 
         try:
             # Use sqlite3 CLI .recover if available
-            temp_db = None
+            temp_path = None
             try:
-                temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-                temp_db.close()
-                temp_path = temp_db.name
+                with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+                    temp_path = temp_db.name
 
                 # Try to recover using sqlite3 CLI
                 result = subprocess.run(
-                    ["sqlite3", db_path, ".recover", ".output", temp_path, ".quit"],
+                    ["sqlite3", db_path, ".recover", ".output", temp_path, ".quit"],  # noqa: S607
                     capture_output=True, timeout=60
                 )
                 if result.returncode == 0 and Path(temp_path).stat().st_size > 0:
@@ -219,7 +218,7 @@ class Database:
                         logger.debug("Failed to clean up temp database file: %s", e)
             except Exception as e:
                 logger.debug("sqlite3 .recover failed: %s", e)
-                if temp_db and Path(temp_path).exists():
+                if temp_path and Path(temp_path).exists():
                     try:
                         os.unlink(temp_path)
                     except Exception as e:

@@ -89,12 +89,12 @@ def main():
         if web_dir.exists():
             print("       安装前端依赖...")
             subprocess.run(
-                ["npm", "install", "--quiet"], cwd=str(web_dir),
+                ["npm", "install", "--quiet"], cwd=str(web_dir),  # noqa: S607
                 capture_output=True,
             )
             print("       构建前端页面...")
             build_result = subprocess.run(
-                ["npm", "run", "build"], cwd=str(web_dir),
+                ["npm", "run", "build"], cwd=str(web_dir),  # noqa: S607
                 capture_output=True, text=True,
             )
             if build_result.returncode != 0:

@@ -241,7 +241,7 @@ def _migrate_command(revision: str = "head"):
     print(f"Running database migration to revision: {revision}")
     try:
         result = subprocess.run(
-            ["alembic", "upgrade", revision],
+            ["alembic", "upgrade", revision],  # noqa: S607
             capture_output=True,
             text=True,
         )

@@ -562,8 +562,7 @@ class BACnetServer(ProtocolServer):
                     lifetime = struct.unpack(">H", data[offset + 1:offset + 3])[0]
                     offset += 3
             # covIncrement (context tag 4)
-            if offset + 4 < len(data) and (data[offset] & 0xF8) == 0xA0:
-                if offset + 5 <= len(data):  # FIXED-R05: 确保有足够字节读取float
+            if offset + 4 < len(data) and (data[offset] & 0xF8) == 0xA0 and offset + 5 <= len(data):  # FIXED-R05: 确保有足够字节读取float
                     cov_increment = struct.unpack(">f", data[offset + 1:offset + 5])[0]
 
         sub_id = self._cov_next_id

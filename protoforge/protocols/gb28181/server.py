@@ -226,9 +226,9 @@ class GB28181Device:
 
     def make_register_with_auth(self, nonce: str) -> str:
         import hashlib
-        ha1 = hashlib.md5(f"{self.username}:{self.realm}:{self.password}".encode()).hexdigest()
-        ha2 = hashlib.md5(f"REGISTER:sip:{self.server_id}".encode()).hexdigest()
-        response = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()
+        ha1 = hashlib.md5(f"{self.username}:{self.realm}:{self.password}".encode()).hexdigest()  # noqa: S324
+        ha2 = hashlib.md5(f"REGISTER:sip:{self.server_id}".encode()).hexdigest()  # noqa: S324
+        response = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()  # noqa: S324
 
         self.cseq += 1
         branch = f"{self.branch_prefix}{uuid.uuid4().hex[:12]}"
