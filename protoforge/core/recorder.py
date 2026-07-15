@@ -228,6 +228,15 @@ class Recorder:
         else:
             self._encryption_key = None
 
+    def get_stats(self) -> dict:
+        """Return recorder statistics."""
+        return {
+            "is_recording": self._running,
+            "total_recordings": len(self._recordings),
+            "active_recording_id": self._active.id if self._active else None,
+            "encryption_enabled": self._encryption_key is not None,
+        }
+
     async def start_recording(
         self, name: str, protocol: str | None = None,
         device_id: str | None = None, metadata: dict | None = None,
