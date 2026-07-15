@@ -7,9 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 
-# Disable auth for testing
+# Disable auth by default for testing; use the 'auth_enabled' fixture to opt-in
 os.environ.setdefault("PROTOFORGE_NO_AUTH", "1")
 os.environ.setdefault("PROTOFORGE_TEST_MODE", "1")
+
+# Track original auth state so the auth_enabled fixture can restore it
+_original_no_auth = os.environ.get("PROTOFORGE_NO_AUTH", "1")
 
 collect_ignore_glob = ["*/testing.py"]
 
@@ -61,6 +64,29 @@ async def engine():
         yield eng
     finally:
         await eng.stop()
+
+
+# ---------------------------------------------------------------------------
+# Auth-enabled testing fixture
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def auth_enabled(monkeypatch):
+    """Enable authentication for tests that need to verify auth/authorization.
+
+    Usage::
+
+        async def test_login_with_auth(auth_enabled, client):
+            resp = await client.post("/api/v1/auth/login", json={...})
+            assert resp.status_code == 200
+    """
+    monkeypatch.setenv("PROTOFORGE_NO_AUTH", "0")
+    # Re-evaluate the auth flag in the auth module
+    from protoforge.api.v1 import auth as auth_module
+    auth_module._no_auth_warning_shown = False
+    yield
+    monkeypatch.setenv("PROTOFORGE_NO_AUTH", _original_no_auth)
+    auth_module._no_auth_warning_shown = False
 
 
 # ---------------------------------------------------------------------------
