@@ -203,7 +203,7 @@ function svgIcon(pathD, color = 'currentColor') {
 const menuOptions = computed(() => [
   {
     type: 'group',
-    label: '核心',
+    label: t('nav.groupCore'),
     key: 'group-core',
     children: [
       { label: t('nav.dashboard'), key: '/', icon: svgIcon('M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10') },
@@ -213,7 +213,7 @@ const menuOptions = computed(() => [
   },
   {
     type: 'group',
-    label: '仿真',
+    label: t('nav.groupSimulation'),
     key: 'group-simulation',
     children: [
       { label: t('nav.scenarios'), key: '/scenarios', icon: svgIcon('M6 3v12 M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M18 6a9 9 0 0 1-9 9') },
@@ -224,7 +224,7 @@ const menuOptions = computed(() => [
   },
   {
     type: 'group',
-    label: '测试',
+    label: t('nav.groupTesting'),
     key: 'group-testing',
     children: [
       { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
@@ -233,7 +233,7 @@ const menuOptions = computed(() => [
   },
   {
     type: 'group',
-    label: '集成',
+    label: t('nav.groupIntegration'),
     key: 'group-integration',
     children: [
       { label: t('nav.integration'), key: '/integration', icon: svgIcon('M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3') },
@@ -453,6 +453,16 @@ async function loadSearchData() {
   --pf-bg: #f8fafc;
   --pf-sider-bg: #ffffff;
   --pf-header-bg: #ffffff;
+  --pf-text-primary: #1e293b;
+  --pf-text-secondary: #64748b;
+  --pf-text-muted: #94a3b8;
+  --pf-login-gradient-start: #667eea;
+  --pf-login-gradient-end: #764ba2;
+  --pf-success-dark: #059669;
+  --pf-warning-dark: #d97706;
+  --pf-danger-dark: #dc2626;
+  --pf-info: #3b82f6;
+  --pf-info-dark: #2563eb;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -484,7 +494,7 @@ body {
 .logo-text {
   font-size: 18px;
   font-weight: 700;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  background: linear-gradient(135deg, var(--pf-primary), var(--pf-accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -510,7 +520,7 @@ body {
 }
 .app-breadcrumb .n-breadcrumb-item:last-child {
   cursor: default;
-  color: #1e293b;
+  color: var(--pf-text-primary);
   font-weight: 500;
 }
 
@@ -525,7 +535,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--pf-login-gradient-start) 0%, var(--pf-login-gradient-end) 100%);
 }
 
 .n-menu .n-menu-item-content::before {
@@ -545,57 +555,57 @@ body {
 }
 
 .n-button--primary-type {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  background: linear-gradient(135deg, var(--pf-primary), var(--pf-accent)) !important;
   border: none !important;
   font-weight: 500 !important;
   color: #fff !important;
 }
 
 .n-button--success-type {
-  background: linear-gradient(135deg, #10b981, #059669) !important;
+  background: linear-gradient(135deg, var(--pf-success), var(--pf-success-dark)) !important;
   border: none !important;
   color: #fff !important;
 }
 
 .n-button--warning-type {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  background: linear-gradient(135deg, var(--pf-warning), var(--pf-warning-dark)) !important;
   border: none !important;
   color: #fff !important;
 }
 
 .n-button--error-type {
-  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  background: linear-gradient(135deg, var(--pf-danger), var(--pf-danger-dark)) !important;
   border: none !important;
   color: #fff !important;
 }
 
 .n-button--info-type {
-  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  background: linear-gradient(135deg, var(--pf-info), var(--pf-info-dark)) !important;
   border: none !important;
   color: #fff !important;
 }
 
 .n-tag--success-type {
   background: rgba(16,185,129,0.1) !important;
-  color: #059669 !important;
+  color: var(--pf-success-dark) !important;
   border-color: rgba(16,185,129,0.2) !important;
 }
 
 .n-tag--error-type {
   background: rgba(239,68,68,0.1) !important;
-  color: #dc2626 !important;
+  color: var(--pf-danger-dark) !important;
   border-color: rgba(239,68,68,0.2) !important;
 }
 
 .n-tag--warning-type {
   background: rgba(245,158,11,0.1) !important;
-  color: #d97706 !important;
+  color: var(--pf-warning-dark) !important;
   border-color: rgba(245,158,11,0.2) !important;
 }
 
 .n-tag--info-type {
   background: rgba(99,102,241,0.1) !important;
-  color: #6366f1 !important;
+  color: var(--pf-primary) !important;
   border-color: rgba(99,102,241,0.2) !important;
 }
 
@@ -604,7 +614,7 @@ body {
   font-size: 12px !important;
   text-transform: uppercase !important;
   letter-spacing: 0.5px !important;
-  color: #64748b !important;
+  color: var(--pf-text-secondary) !important;
 }
 
 .n-input, .n-select {
@@ -620,25 +630,26 @@ body {
 }
 
 .pf-gradient-card {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  background: linear-gradient(135deg, var(--pf-primary) 0%, var(--pf-accent) 100%) !important;
   color: white !important;
   border: none !important;
 }
 
 .pf-gradient-card-green {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  background: linear-gradient(135deg, var(--pf-success) 0%, var(--pf-success-dark) 100%) !important;
   color: white !important;
   border: none !important;
 }
 
 .pf-gradient-card-orange {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  background: linear-gradient(135deg, var(--pf-warning) 0%, var(--pf-warning-dark) 100%) !important;
   color: white !important;
   border: none !important;
 }
 
 .pf-gradient-card-rose {
   background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+  /* Rose is a distinct palette entry, kept as literal for design accuracy */
   color: white !important;
   border: none !important;
 }
@@ -653,13 +664,13 @@ body {
 .pf-section-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--pf-text-primary);
   letter-spacing: -0.3px;
 }
 
 .pf-section-desc {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--pf-text-muted);
   margin-top: 2px;
 }
 

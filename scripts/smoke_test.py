@@ -64,6 +64,10 @@ def run_smoke_tests(base_url: str) -> tuple[int, int]:
         ("GET /api/v1/devices", "GET", "/api/v1/devices", 200, None),
         ("GET /api/v1/logs", "GET", "/api/v1/logs", 200, None),
         ("GET /api/v1/protocols/info", "GET", "/api/v1/protocols/info", 200, None),
+        ("GET /api/v1/recorder/stats", "GET", "/api/v1/recorder/stats", 200, None),
+        ("GET /api/v1/settings", "GET", "/api/v1/settings", 200, None),
+        ("GET /api/v1/audit", "GET", "/api/v1/audit", 200, None),
+        ("GET /api/v1/audit/stats", "GET", "/api/v1/audit/stats", 200, None),
     ]
 
     for name, method, path, expected_status, json_body in tests:
@@ -165,6 +169,59 @@ def run_smoke_tests(base_url: str) -> tuple[int, int]:
     except Exception as e:
         print(f"  ❌ Scenario CRUD → ERROR: {e}")
         failed += 2
+
+    # Test auth login (demo mode should allow admin login)
+    try:
+        resp = client.post("/api/v1/auth/login", json={
+            "username": "admin",
+            "password": "smoke-test-admin",
+        })
+        if resp.status_code == 200 and "access_token" in resp.json():
+            print(f"  \u2705 POST /api/v1/auth/login (admin) \u2192 {resp.status_code}")
+            passed += 1
+        else:
+            print(f"  \u274c POST /api/v1/auth/login (admin) \u2192 {resp.status_code}")
+            failed += 1
+    except Exception as e:
+        print(f"  \u274c POST /api/v1/auth/login (admin) \u2192 ERROR: {e}")
+        failed += 1
+
+    # Test error response format (404 for non-existent device)
+    try:
+        resp = client.get("/api/v1/devices/non-existent-device-xyz")
+        if resp.status_code == 404:
+            body = resp.json()
+            if "detail" in body:
+                print(f"  \u2705 Error response format (404) \u2192 {resp.status_code}")
+                passed += 1
+            else:
+                print(f"  \u274c Error response format (404) \u2192 missing 'detail' field")
+                failed += 1
+        else:
+            print(f"  \u274c Error response format (404) \u2192 {resp.status_code} (expected 404)")
+            failed += 1
+    except Exception as e:
+        print(f"  \u274c Error response format (404) \u2192 ERROR: {e}")
+        failed += 1
+
+    # Test backup export
+    try:
+        resp = client.get("/api/v1/backup")
+        if resp.status_code == 200:
+            print(f"  \u2705 GET /api/v1/backup (export) \u2192 {resp.status_code}")
+            passed += 1
+        else:
+            print(f"  \u274c GET /api/v1/backup (export) \u2192 {resp.status_code}")
+            failed += 1
+    except Exception as e:
+        print(f"  \u274c GET /api/v1/backup (export) \u2192 ERROR: {e}")
+        failed += 1
+
+    # Cleanup smoke test scenario
+    try:
+        client.delete("/api/v1/scenarios/smoke-test-scenario")
+    except Exception:
+        pass
 
     client.close()
     return passed, failed

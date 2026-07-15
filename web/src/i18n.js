@@ -394,6 +394,11 @@ const messages = {
       forward: '数据转发',
       recorder: '录制回放',
       webhook: 'Webhook',
+      groupCore: '核心',
+      groupSimulation: '仿真',
+      groupTesting: '测试',
+      groupIntegration: '集成',
+      groupSystem: '系统',
     },
     header: {
       searchPlaceholder: '搜索设备、场景、模板...',
