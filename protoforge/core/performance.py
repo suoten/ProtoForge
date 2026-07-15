@@ -36,6 +36,11 @@ from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -554,14 +559,6 @@ class CircuitBreakerOpenError(Exception):
 
     def __str__(self) -> str:
         return self.message
-
-
-# 向后兼容: 确保 httpx 可用
-try:
-    import httpx
-except ImportError:
-    httpx = None  # type: ignore[assignment]
-    logger.warning("httpx not installed, ConnectionPoolManager will be unavailable")
 
 
 __all__ = [
