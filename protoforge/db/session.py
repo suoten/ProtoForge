@@ -49,7 +49,6 @@ class Database:
             await self._connect_sqlite()
 
     async def _connect_sqlite(self) -> None:
-        import shutil
         import sqlite3
 
         try:
@@ -181,8 +180,14 @@ class Database:
     async def _try_sqlite_recover(self, db_path: str, sqlite3) -> None:
         """Use SQLite's .recover command-line utility to recover data from corrupted database."""
         import os
+        import shutil as _shutil
         import subprocess
         import tempfile
+
+        # Check if sqlite3 CLI is available before attempting recovery
+        if not _shutil.which("sqlite3"):
+            logger.debug("sqlite3 CLI not found in PATH, skipping .recover strategy")
+            return
 
         db_file = Path(db_path)
         if not db_file.exists():

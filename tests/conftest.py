@@ -38,7 +38,7 @@ def template_manager():
 async def database():
     """Provide a connected in-memory database, cleaned up after test."""
     from protoforge.db.session import Database
-    db = Database()
+    db = Database(db_path=":memory:")
     await db.connect()
     try:
         yield db
@@ -107,7 +107,7 @@ async def client() -> AsyncIterator:
     main_module._template_manager.load_builtin_templates()
 
     from protoforge.db.session import Database
-    main_module._database = Database()
+    main_module._database = Database(db_path=":memory:")
     await main_module._database.connect()
 
     main_module._engine = SimulationEngine()

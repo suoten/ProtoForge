@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 
 _USERNAME_MAX_LENGTH = 63
 _SECRET_KEY_MIN_LENGTH = 32
-# Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)  # FIXED: 删除未使用的硬编码常量，统一从config读取
-_REFRESH_TOKEN_EXPIRE_SECONDS = 604800
+# Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -63,8 +62,7 @@ def _load_persistent_secret_key() -> str:
 
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
-    # 因 and 优先级高于 or，9~31字符密钥会绕过校验。添加显式括号并统一使用 _SECRET_KEY_MIN_LENGTH
-    if not key or (key.strip() == key[:8] and len(key) < _SECRET_KEY_MIN_LENGTH):
+    if not key or len(key.strip()) < _SECRET_KEY_MIN_LENGTH:
         _load_persistent_secret_key()
         if not _SECRET_KEY:
             logger.warning(
