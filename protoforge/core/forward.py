@@ -412,6 +412,8 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
         if not token:
             raise ValueError("InfluxDB target requires 'token' parameter")
         allowed, reason = _is_url_allowed(url, allow_private=True)  # FIXED-P1: InfluxDB默认允许内网
+        if not allowed:
+            raise ValueError(f"InfluxDB URL validation failed: {reason}")
         return InfluxDBTarget(
             url=url, token=token,
             org=config.get("org", "default"), bucket=config.get("bucket", "protoforge"),
@@ -421,6 +423,8 @@ def create_target(config: dict[str, Any]) -> ForwardTarget:
         if not url:
             raise ValueError("HTTP target requires 'url' parameter")
         allowed, reason = _is_url_allowed(url, allow_private=False)  # FIXED-P1: HTTP Webhook默认禁止内网
+        if not allowed:
+            raise ValueError(f"HTTP forward URL validation failed: {reason}")
         return HTTPTarget(
             url=url, headers=config.get("headers"),
             method=config.get("method", "POST"),
