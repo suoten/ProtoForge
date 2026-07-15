@@ -296,9 +296,12 @@ class ProfinetServer(ProtocolServer):
                     dest_mac = b"\x01\x80\xc2\x00\x0c\x0e"
                     src_mac = b"\x00\x00\x00\x00\x00\x01"
                     ethertype = b"\x88\xcc"
-                    dest_mac + src_mac + ethertype + bytes(lldp_frame)
+                    # Build complete LLDP ethernet frame and log it
+                    # Note: In TCP tunnel mode, LLDP frames are logged but not sent via raw socket
+                    # as PROFINET DCP/RT runs over TCP tunnel in this simulation
+                    complete_frame = dest_mac + src_mac + ethertype + bytes(lldp_frame)
                     self._log_debug("outbound", "lldp",
-                                    f"LLDP frame sent for {device_name}",
+                                    f"LLDP frame prepared for {device_name} ({len(complete_frame)} bytes)",
                                     device_id=device_id)
             except asyncio.CancelledError:
                 break
@@ -613,7 +616,9 @@ class ProfinetServer(ProtocolServer):
         alarm_seq = struct.unpack(">H", data[5:7])[0]
         alarm_spec = data[7] if len(data) > 7 else 0
 
-        self._active_ars.get(ar_id)
+        ar = self._active_ars.get(ar_id)
+        if ar is None:
+            logger.debug("PROFINET alarm received for unknown AR[%d]", ar_id)
 
         self._log_debug("inbound", "alarm_received",
                         f"PROFINET Alarm: AR[{ar_id}] type=0x{alarm_type:04X} seq={alarm_seq}",
@@ -675,7 +680,7 @@ class ProfinetServer(ProtocolServer):
 
         if len(payload) >= 4:
             cycle_counter = struct.unpack(">H", payload[0:2])[0]
-            payload[2]
+            data_status = payload[2]
             transfer_status = payload[3]
 
         rt_payload = payload[4:] if len(payload) > 4 else b""
