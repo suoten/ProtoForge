@@ -195,7 +195,7 @@ def run_smoke_tests(base_url: str) -> tuple[int, int]:
                 print(f"  \u2705 Error response format (404) \u2192 {resp.status_code}")
                 passed += 1
             else:
-                print(f"  \u274c Error response format (404) \u2192 missing 'detail' field")
+                print("  \u274c Error response format (404) \u2192 missing 'detail' field")
                 failed += 1
         else:
             print(f"  \u274c Error response format (404) \u2192 {resp.status_code} (expected 404)")
@@ -218,10 +218,9 @@ def run_smoke_tests(base_url: str) -> tuple[int, int]:
         failed += 1
 
     # Cleanup smoke test scenario
-    try:
+    import contextlib
+    with contextlib.suppress(Exception):
         client.delete("/api/v1/scenarios/smoke-test-scenario")
-    except Exception:
-        pass
 
     client.close()
     return passed, failed
