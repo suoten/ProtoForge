@@ -40,7 +40,7 @@ async def create_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depend
                 db_ok = False
                 db_err_msg = str(db_err)
                 logger.exception("Failed to persist scenario %s: %s", config.id, db_err)
-        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
@@ -124,7 +124,7 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
                 db_ok = False
                 db_err_msg = str(db_err)
                 logger.exception("Failed to persist scenario %s: %s", scenario_id, db_err)
-        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."  # FIXED: 中文→英文
         return resp
@@ -207,7 +207,7 @@ async def import_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depend
                 db_ok = False
                 db_err_msg = str(db_err)
                 logger.exception("Failed to persist imported scenario %s: %s", config.id, db_err)
-        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario imported to memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp

@@ -59,7 +59,7 @@ async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(re
         except Exception as start_err:
             logger.warning("Device %s created but auto-start failed: %s", config.id, start_err)
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {config.name} created", {"device_id": config.id})
-        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."
         return resp
@@ -125,7 +125,7 @@ async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = De
             logger.warning("quick-create: device %s created but start failed: %s", device_id, start_err)
         log_bus.emit(config.protocol, "system", config.id, "device_created", f"Device {device_name} created via quick-create", {"device_id": config.id})
 
-        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else result
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
         if not db_ok:
             resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."
         return resp
@@ -168,7 +168,7 @@ async def batch_create_devices(
                     await engine.start_device(config.id)
                 except Exception as start_err:
                     logger.warning("Device %s batch-created but auto-start failed: %s", config.id, start_err)
-                item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump()) else {"id": config.id, "name": config.name, "protocol": config.protocol}
+                item = info.model_dump() if hasattr(info, 'model_dump') and callable(info.model_dump) else {"id": config.id, "name": config.name, "protocol": config.protocol}
                 if not db_ok:
                     item["_persistence_warning"] = "Persistence failed, data will be lost after restart"
                 results.append(item)
@@ -421,7 +421,7 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, A
                 db_err_msg = str(db_err)
                 logger.exception("Failed to update device %s in DB: %s", device_id, db_err)
         log_bus.emit(config.protocol, "system", device_id, "device_updated", f"Device {config.name} updated")
-        response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump()) else {"id": device_id, "name": config.name, "protocol": config.protocol}
+        response = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else {"id": device_id, "name": config.name, "protocol": config.protocol}
         if not db_ok:
             response["_persistence_warning"] = f"Device updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
         return response

@@ -1,0 +1,1139 @@
+﻿..........FFFF.......F.........F......F...F.FFF...F..................... [  9%]
+........................................................................ [ 19%]
+........................................................................ [ 29%]
+.....................................FFF.F.........................F..FF [ 38%]
+F....................................................................... [ 48%]
+.............s.......................................................... [ 58%]
+........................................................................ [ 68%]
+........................................................................ [ 77%]
+.......................F................................................ [ 87%]
+........................................................................ [ 97%]
+....................
+ERROR: Coverage failure: total of 39 is less than fail-under=40
+                                                                         [100%]
+================================== FAILURES ===================================
+_____________________ TestWebhookAPI.test_create_webhook ______________________
+tests\test_api_extended_coverage.py:25: in test_create_webhook
+    assert resp.status_code in (200, 201)
+E   assert 400 in (200, 201)
+E    +  where 400 = <Response [400 Bad Request]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/webhooks "HTTP/1.1 400 Bad Request"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+_____________________ TestWebhookAPI.test_update_webhook ______________________
+tests\test_api_extended_coverage.py:41: in test_update_webhook
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/webhooks "HTTP/1.1 400 Bad Request"
+INFO     httpx:_client.py:1786 HTTP Request: PUT http://test/api/v1/webhooks/wh-update "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+_____________________ TestWebhookAPI.test_delete_webhook ______________________
+tests\test_api_extended_coverage.py:52: in test_delete_webhook
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/webhooks "HTTP/1.1 400 Bad Request"
+INFO     httpx:_client.py:1786 HTTP Request: DELETE http://test/api/v1/webhooks/wh-delete "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+______________________ TestWebhookAPI.test_test_webhook _______________________
+tests\test_api_extended_coverage.py:63: in test_test_webhook
+    assert resp.status_code in (200, 204, 500, 502)  # May fail to send
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   assert 404 in (200, 204, 500, 502)
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/webhooks "HTTP/1.1 400 Bad Request"
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/webhooks/wh-test-trigger/test "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+____________________ TestTemplateAPI.test_export_template _____________________
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\os\Python312\Lib\site-packages\starlette\_utils.py", line 85, in create_collapsing_task_group
+  |     async with anyio.create_task_group() as tg:
+  |   File "D:\os\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 353, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 245, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\logging.py", line 850, in pytest_runtest_call
+    |     yield
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\capture.py", line 900, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\skipping.py", line 268, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 179, in pytest_runtest_call
+    |     item.runtest()
+    |   File "D:\os\Python312\Lib\site-packages\pytest_asyncio\plugin.py", line 469, in runtest
+    |     super().runtest()
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\python.py", line 1720, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\_pytest\python.py", line 166, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\pytest_asyncio\plugin.py", line 716, in inner
+    |     runner.run(coro, context=context)
+    |   File "D:\os\Python312\Lib\asyncio\runners.py", line 118, in run
+    |     return self._loop.run_until_complete(task)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\asyncio\base_events.py", line 664, in run_until_complete
+    |     return future.result()
+    |            ^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\tests\test_api_extended_coverage.py", line 131, in test_export_template
+    |     resp = await client.get(f"/api/v1/templates/{template_id}/export")
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1814, in get
+    |     return await self.request(
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1585, in request
+    |     return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1674, in send
+    |     response = await self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1702, in _send_handling_auth
+    |     response = await self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1739, in _send_handling_redirects
+    |     response = await self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1776, in _send_single_request
+    |     response = await transport.handle_async_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\httpx\_transports\asgi.py", line 157, in handle_async_request
+    |     await self.app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    |     raise exc
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\rate_limit.py", line 116, in rate_limit_middleware
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\auth.py", line 101, in auth_middleware
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\core\audit.py", line 368, in audit_middleware
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    |     await route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    |     await self.original_router.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    |     await included_router._handle_selected(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1764, in _handle_selected
+    |     await route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    |     await self.original_router.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    |     await included_router._handle_selected(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    |     await original_route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    |     await app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 150, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 136, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 690, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\template_routes.py", line 167, in export_template
+    |     data["schema_version"] = "1.0"
+    |     ~~~~^^^^^^^^^^^^^^^^^^
+    | TypeError: 'TemplateDetail' object does not support item assignment
+    +------------------------------------
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "E:\˶������\PyGBSentry\ProtoForge\tests\test_api_extended_coverage.py", line 131, in test_export_template
+    resp = await client.get(f"/api/v1/templates/{template_id}/export")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1814, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1585, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1674, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1702, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1739, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_client.py", line 1776, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\httpx\_transports\asgi.py", line 157, in handle_async_request
+    await self.app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\applications.py", line 1163, in __call__
+    await super().__call__(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\applications.py", line 90, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\rate_limit.py", line 116, in rate_limit_middleware
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\auth.py", line 101, in auth_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\core\audit.py", line 368, in audit_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\os\Python312\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    await route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1764, in _handle_selected
+    await route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\template_routes.py", line 167, in export_template
+    data["schema_version"] = "1.0"
+    ~~~~^^^^^^^^^^^^^^^^^^
+TypeError: 'TemplateDetail' object does not support item assignment
+
+The above exception was the direct cause of the following exception:
+tests\test_api_extended_coverage.py:131: in test_export_template
+    resp = await client.get(f"/api/v1/templates/{template_id}/export")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1814: in get
+    return await self.request(
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1585: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1674: in send
+    response = await self._send_handling_auth(
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1702: in _send_handling_auth
+    response = await self._send_handling_redirects(
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1739: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\httpx\_client.py:1776: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\httpx\_transports\asgi.py:157: in handle_async_request
+    await self.app(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+protoforge\api\v1\rate_limit.py:116: in rate_limit_middleware
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+D:\os\Python312\Lib\site-packages\starlette\middleware\cors.py:88: in __call__
+    await self.app(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+protoforge\api\v1\auth.py:101: in auth_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+protoforge\core\audit.py:368: in audit_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+D:\os\Python312\Lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+D:\os\Python312\Lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+D:\os\Python312\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:2683: in app
+    await route.handle(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:1753: in handle
+    await self.original_router.handle(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:2738: in handle
+    await included_router._handle_selected(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:1764: in _handle_selected
+    await route.handle(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:1753: in handle
+    await self.original_router.handle(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:2738: in handle
+    await included_router._handle_selected(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:1773: in _handle_selected
+    await original_route.handle(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:1264: in handle
+    await app(scope, receive, send)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:150: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:136: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:690: in app
+    raw_response = await run_endpoint_function(
+D:\os\Python312\Lib\site-packages\fastapi\routing.py:344: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+protoforge\api\v1\template_routes.py:167: in export_template
+    data["schema_version"] = "1.0"
+    ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: 'TemplateDetail' object does not support item assignment
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/templates "HTTP/1.1 200 OK"
+ERROR    protoforge.api:common.py:167 Unhandled exception in API: 'TemplateDetail' object does not support item assignment
+  + Exception Group Traceback (most recent call last):
+  |   File "D:\os\Python312\Lib\site-packages\starlette\_utils.py", line 85, in create_collapsing_task_group
+  |     async with anyio.create_task_group() as tg:
+  |   File "D:\os\Python312\Lib\site-packages\anyio\_backends\_asyncio.py", line 772, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\rate_limit.py", line 116, in rate_limit_middleware
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\auth.py", line 101, in auth_middleware
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\core\audit.py", line 368, in audit_middleware
+    |     return await call_next(request)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    |     raise app_exc from app_exc.__cause__ or app_exc.__context__
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    |     await self.app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    |     await route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    |     await self.original_router.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    |     await included_router._handle_selected(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1764, in _handle_selected
+    |     await route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    |     await self.original_router.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    |     await included_router._handle_selected(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    |     await original_route.handle(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    |     await app(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 150, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     raise exc
+    |   File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 136, in app
+    |     response = await f(request)
+    |                ^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 690, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\template_routes.py", line 167, in export_template
+    |     data["schema_version"] = "1.0"
+    |     ~~~~^^^^^^^^^^^^^^^^^^
+    | TypeError: 'TemplateDetail' object does not support item assignment
+    +------------------------------------
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\rate_limit.py", line 116, in rate_limit_middleware
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\auth.py", line 101, in auth_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\core\audit.py", line 368, in audit_middleware
+    return await call_next(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "D:\os\Python312\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\os\Python312\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2683, in app
+    await route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1764, in _handle_selected
+    await route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1753, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 2738, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1773, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 1264, in handle
+    await app(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 150, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "D:\os\Python312\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 136, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 690, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\os\Python312\Lib\site-packages\fastapi\routing.py", line 344, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\api\v1\template_routes.py", line 167, in export_template
+    data["schema_version"] = "1.0"
+    ~~~~^^^^^^^^^^^^^^^^^^
+TypeError: 'TemplateDetail' object does not support item assignment
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+_____________________ TestSystemAPI.test_update_settings ______________________
+tests\test_api_extended_coverage.py:242: in test_update_settings
+    assert resp.status_code in (200, 422)
+E   assert 400 in (200, 422)
+E    +  where 400 = <Response [400 Bad Request]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: PUT http://test/api/v1/settings "HTTP/1.1 400 Bad Request"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+________________ TestDeviceAPIExtended.test_write_device_point ________________
+tests\test_api_extended_coverage.py:310: in test_write_device_point
+    assert resp.status_code == 200
+E   assert 405 == 200
+E    +  where 405 = <Response [405 Method Not Allowed]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     protoforge.core.engine:engine.py:329 Device created: write-dev-api (Write Test)
+INFO     protoforge.core.state_machine:state_machine.py:444 Device write-dev-api state transition: stop �� starting (trigger=start, reason=manual start)
+INFO     protoforge.core.device:device.py:104 Device write-dev-api entering STARTING state
+INFO     protoforge.core.device:device.py:108 Device write-dev-api entered RUN state
+INFO     protoforge.core.device:device.py:115 Device write-dev-api entered STOP state
+WARNING  protoforge.core.device:device.py:122 Device write-dev-api entered ERROR state: 
+INFO     protoforge.core.engine:engine.py:448 Device started: write-dev-api
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/devices "HTTP/1.1 200 OK"
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/devices/write-dev-api/start "HTTP/1.1 200 OK"
+INFO     httpx:_client.py:1786 HTTP Request: POST http://test/api/v1/devices/write-dev-api/points/setpoint "HTTP/1.1 405 Method Not Allowed"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.state_machine:state_machine.py:444 Device write-dev-api state transition: starting �� stopping (trigger=stop, reason=manual stop)
+INFO     protoforge.core.device:device.py:104 Device write-dev-api entering STARTING state
+INFO     protoforge.core.device:device.py:108 Device write-dev-api entered RUN state
+INFO     protoforge.core.device:device.py:115 Device write-dev-api entered STOP state
+WARNING  protoforge.core.device:device.py:122 Device write-dev-api entered ERROR state: 
+INFO     protoforge.core.state_machine:state_machine.py:444 Device write-dev-api state transition: stopping �� stop (trigger=stop_complete, reason=stop completed)
+INFO     protoforge.core.device:device.py:104 Device write-dev-api entering STARTING state
+INFO     protoforge.core.device:device.py:108 Device write-dev-api entered RUN state
+INFO     protoforge.core.device:device.py:115 Device write-dev-api entered STOP state
+WARNING  protoforge.core.device:device.py:122 Device write-dev-api entered ERROR state: 
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+__________________ TestProtocolAPI.test_get_protocol_detail ___________________
+tests\test_api_extended_coverage.py:363: in test_get_protocol_detail
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/protocols "HTTP/1.1 200 OK"
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/protocols/modbus_tcp "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+____________________ TestRecorderAPI.test_list_recordings _____________________
+tests\test_api_extended_coverage.py:379: in test_list_recordings
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/recordings "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+_____________________ TestRecorderAPI.test_recorder_stats _____________________
+tests\test_api_extended_coverage.py:384: in test_recorder_stats
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/recordings/stats "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+______________________ TestForwardAPI.test_list_forwards ______________________
+tests\test_api_extended_coverage.py:393: in test_list_forwards
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/forwards "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+__________________ TestIntegrationAPI.test_list_integrations __________________
+tests\test_api_extended_coverage.py:421: in test_list_integrations
+    assert resp.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+----------------------------- Captured log setup ------------------------------
+INFO     protoforge.core.template:template.py:43 Loaded 97 built-in templates
+INFO     protoforge.db.session:session.py:169 Database recovered after WAL checkpoint
+INFO     protoforge.db.session:session.py:89 Database integrity check passed
+INFO     protoforge.db.session:session.py:67 SQLite database connected: E:\˶������\PyGBSentry\ProtoForge\protoforge\data\protoforge.db
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: modbus_tcp
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: http
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: bacnet
+INFO     protoforge.core.engine:engine.py:121 Registered protocol: s7
+INFO     protoforge.core.engine:engine.py:747 Simulation engine started
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+CRITICAL protoforge.api.v1.auth:auth.py:24 SECURITY: PROTOFORGE_NO_AUTH is enabled but server is bound to 0.0.0.0 (non-localhost). Anyone on the network can access all APIs without authentication! Set PROTOFORGE_NO_AUTH=false or bind to 127.0.0.1 for development.
+INFO     httpx:_client.py:1786 HTTP Request: GET http://test/api/v1/integration "HTTP/1.1 404 Not Found"
+---------------------------- Captured log teardown ----------------------------
+INFO     protoforge.core.engine:engine.py:768 Simulation engine stopped
+_________________ TestWebhookManager.test_webhook_manager_add _________________
+tests\test_core_coverage.py:176: in test_webhook_manager_add
+    mgr.add_webhook(config)
+protoforge\core\webhook.py:188: in add_webhook
+    raise ValueError(f"Webhook URL points to private/internal address: {url}")
+E   ValueError: Webhook URL points to private/internal address: http://localhost:9000/hook
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+_______________ TestWebhookManager.test_webhook_manager_remove ________________
+tests\test_core_coverage.py:184: in test_webhook_manager_remove
+    mgr.add_webhook(config)
+protoforge\core\webhook.py:188: in add_webhook
+    raise ValueError(f"Webhook URL points to private/internal address: {url}")
+E   ValueError: Webhook URL points to private/internal address: http://localhost:9000/hook
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+_______________ TestWebhookManager.test_webhook_manager_update ________________
+tests\test_core_coverage.py:193: in test_webhook_manager_update
+    mgr.add_webhook(config)
+protoforge\core\webhook.py:188: in add_webhook
+    raise ValueError(f"Webhook URL points to private/internal address: {url}")
+E   ValueError: Webhook URL points to private/internal address: http://localhost:9000/hook
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+___________________ TestWebhookManager.test_webhook_trigger ___________________
+tests\test_core_coverage.py:211: in test_webhook_trigger
+    mgr.add_webhook(config)
+protoforge\core\webhook.py:188: in add_webhook
+    raise ValueError(f"Webhook URL points to private/internal address: {url}")
+E   ValueError: Webhook URL points to private/internal address: http://localhost:9000/hook
+------------------------------ Captured log call ------------------------------
+WARNING  protoforge.config:config.py:202 JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.
+_____________ TestFaultInjection.test_fault_injector_add_and_get ______________
+tests\test_core_coverage.py:462: in test_fault_injector_add_and_get
+    assert len(faults) >= 1
+E   assert 0 >= 1
+E    +  where 0 = len([])
+------------------------------ Captured log call ------------------------------
+INFO     protoforge.core.fault_injection:fault_injection.py:265 Fault added: id=19325e75f8be, type=sensor_stuck, target=temperature, device=test_device
+_____________ TestFaultInjection.test_fault_injector_apply_stuck ______________
+tests\test_core_coverage.py:502: in test_fault_injector_apply_stuck
+    assert val1 == val2 == 42.0
+E   assert 42.0 == 99.0
+------------------------------ Captured log call ------------------------------
+INFO     protoforge.core.fault_injection:fault_injection.py:265 Fault added: id=d91c42de877c, type=sensor_stuck, target=temperature, device=test_device
+_____________ TestFaultInjection.test_fault_injector_apply_noise ______________
+tests\test_core_coverage.py:514: in test_fault_injector_apply_noise
+    assert faulty is True
+E   assert False is True
+------------------------------ Captured log call ------------------------------
+INFO     protoforge.core.fault_injection:fault_injection.py:265 Fault added: id=6d10fb296f7f, type=sensor_noise, target=flow, device=test_device
+_____________ TestFaultInjection.test_fault_injector_apply_drift ______________
+tests\test_core_coverage.py:525: in test_fault_injector_apply_drift
+    assert faulty is True
+E   assert False is True
+------------------------------ Captured log call ------------------------------
+INFO     protoforge.core.fault_injection:fault_injection.py:265 Fault added: id=e47020f23312, type=sensor_drift, target=pressure, device=test_device
+________________________ test_is_public_path_whitelist ________________________
+tests\test_production_hardening.py:202: in test_is_public_path_whitelist
+    assert _is_public_path("/metrics") is True
+E   AssertionError: assert False is True
+E    +  where False = <function _is_public_path at 0x000001E210BF2480>('/metrics')
+============================== warnings summary ===============================
+tests\test_smoke.py:15
+  E:\˶������\PyGBSentry\ProtoForge\tests\test_smoke.py:15: PytestUnknownMarkWarning: Unknown pytest.mark.smoke - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    pytestmark = pytest.mark.smoke
+
+tests/test_engine_device_coverage.py::TestSimulationEngine::test_get_device
+  D:\os\Python312\Lib\site-packages\_pytest\unraisableexception.py:67: PytestUnraisableExceptionWarning: Exception ignored in: <function StreamWriter.__del__ at 0x000001E20C119EE0>
+  
+  Traceback (most recent call last):
+    File "D:\os\Python312\Lib\asyncio\streams.py", line 397, in __del__
+      self.close()
+    File "D:\os\Python312\Lib\asyncio\streams.py", line 343, in close
+      return self._transport.close()
+             ^^^^^^^^^^^^^^^^^^^^^^^
+    File "D:\os\Python312\Lib\asyncio\proactor_events.py", line 109, in close
+      self._loop.call_soon(self._call_connection_lost, None)
+    File "D:\os\Python312\Lib\asyncio\base_events.py", line 772, in call_soon
+      self._check_closed()
+    File "D:\os\Python312\Lib\asyncio\base_events.py", line 519, in _check_closed
+      raise RuntimeError('Event loop is closed')
+  RuntimeError: Event loop is closed
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+
+tests/test_production_hardening.py::test_auth_middleware_public_path_passes_through
+  D:\os\Python312\Lib\unittest\mock.py:2185: RuntimeWarning: coroutine 'sleep' was never awaited
+    def __init__(self, name, parent):
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.12.0-final-0 _______________
+
+Name                                           Stmts   Miss  Cover   Missing
+----------------------------------------------------------------------------
+protoforge\__init__.py                             1      0   100%
+protoforge\__main__.py                             3      3     0%   10-13
+protoforge\api\__init__.py                         0      0   100%
+protoforge\api\v1\__init__.py                      0      0   100%
+protoforge\api\v1\_helpers.py                     21      2    90%   33-34
+protoforge\api\v1\auth.py                         71     16    77%   42, 44-56, 121-135
+protoforge\api\v1\auth_routes.py                 173     96    45%   68-69, 71-76, 85-87, 92-120, 125-138, 147, 159-164, 169-194, 199-212, 222-224, 227-229, 234-243, 248-257
+protoforge\api\v1\common.py                      103     46    55%   15, 36, 38, 40, 45, 49, 53, 57-60, 64-67, 71, 75, 80-84, 89, 94, 99, 104, 109, 124, 131-141, 148-158
+protoforge\api\v1\device_routes.py               617    375    39%   28, 30, 32, 34, 48-56, 59-60, 64, 67-70, 75-133, 148, 164-166, 169-170, 173, 175-201, 206-221, 237-241, 243-244, 250-261, 266-276, 284-285, 290-296, 301-350, 375-376, 378, 389-394, 398, 400-403, 419-422, 426, 428-431, 448-449, 460-464, 474-478, 483-509, 533-587, 606-613, 623-637, 643-652, 670-698, 710-715, 725-730, 767-793, 806-817, 823-828, 838-842, 854-856, 862-863, 881-892, 898-899, 905-909, 930-945, 951-952, 958-962
+protoforge\api\v1\edgelite_routes.py             193    167    13%   23-30, 35-54, 60-76, 85-107, 113-127, 133-144, 150-164, 174-224, 230-241, 246-265
+protoforge\api\v1\fault_routes.py                109     70    36%   65-69, 74, 87-134, 147-157, 166-184, 193-208, 214-224, 230-240, 246
+protoforge\api\v1\forward_routes.py               86     62    28%   22-27, 32-37, 42-68, 73-79, 84-89, 94-99, 104-109
+protoforge\api\v1\integration.py                 202    169    16%   16-17, 22-27, 32-37, 42-80, 85-97, 102-114, 119-137, 142-166, 171-176, 181-189, 194-204, 209-238, 243-249, 254-274
+protoforge\api\v1\log_routes.py                  130    103    21%   28, 30, 36, 38, 44-46, 50-53, 58-95, 100-154, 159-194
+protoforge\api\v1\protocol_routes.py             146     80    45%   45-50, 55-60, 65-98, 103-118, 128, 137-138, 143-146, 150-158, 171-178
+protoforge\api\v1\rate_limit.py                   79     15    81%   42, 52, 57-62, 73-76, 84, 101-102
+protoforge\api\v1\recorder_routes.py             109     72    34%   32-44, 49-59, 64-69, 74-85, 90-97, 102-116, 121-133, 141-143
+protoforge\api\v1\router.py                       32      0   100%
+protoforge\api\v1\scenario_routes.py             199     81    59%   26, 28, 39-42, 45, 47-48, 56-57, 70-74, 88-92, 103, 106, 123-126, 129, 131-132, 143-147, 154-157, 160, 162-163, 175-176, 178, 180, 185-191, 196-218, 226-227, 229, 250-252
+protoforge\api\v1\system_routes.py               140     66    53%   21-27, 32-47, 65-67, 75-77, 96-130, 146, 148, 156-158, 166-168, 190, 203-205, 217-218, 221-223
+protoforge\api\v1\template_routes.py             149     69    54%   58-59, 68-69, 76-79, 82, 92-93, 96-97, 103-106, 109, 115-137, 148-156, 164-165, 168, 173-189
+protoforge\api\v1\test_routes.py                 294    141    52%   37-38, 54-55, 65-67, 70-78, 84-86, 92, 99-100, 122-138, 145, 157, 160, 186-191, 198, 206, 214-215, 230, 241-250, 255-256, 267-272, 280, 282-284, 291, 298-436, 441-487, 492-493, 518-519
+protoforge\api\v1\webhook_routes.py               89     30    66%   21-23, 32, 36, 38, 41, 43, 46-48, 58, 60, 65, 68-72, 81, 84-86, 96-97, 100-101, 109-111
+protoforge\audit\__init__.py                       0      0   100%
+protoforge\audit\exception_lint.py               194    194     0%   19-399
+protoforge\audit\schema_audit.py                 121    121     0%   14-319
+protoforge\cli.py                                322    322     0%   3-499
+protoforge\config.py                             254    100    61%   108, 115, 123, 130, 137, 139, 146, 148, 155, 157, 204-206, 211-235, 240-249, 254-255, 260-288, 293-325
+protoforge\core\__init__.py                        6      0   100%
+protoforge\core\_integration_legacy.py            53     53     0%   3-109
+protoforge\core\audit.py                         204     87    57%   41-43, 52, 71, 73-76, 86-99, 105, 107, 109, 111, 113, 130-134, 145-152, 155-168, 171-187, 269-273, 282, 285, 295, 387-393, 406-409, 412, 420, 432-433
+protoforge\core\auth.py                          389    172    56%   33, 48-64, 72-77, 83, 135, 137, 145, 147, 162-172, 176-180, 198-200, 207, 214-223, 261-263, 273-274, 280-283, 295, 298, 304-330, 339-341, 348-349, 357-358, 364-368, 372, 374, 379, 383, 386-387, 395-399, 406, 409, 411-413, 419-423, 427, 445, 448, 452-457, 461-471, 474-495, 500, 502, 504-506, 511-517, 521
+protoforge\core\behavior_models.py               436     58    87%   63, 106, 424, 435, 542, 546, 910, 938, 970, 1019-1039, 1049-1082, 1091-1099
+protoforge\core\collaboration.py                 154     24    84%   115, 122, 128-130, 195-197, 214-215, 236-237, 243-248, 256-260, 273-278, 295-296, 301-304
+protoforge\core\control_loop.py                  156    101    35%   94, 112, 141-151, 168-182, 187, 192, 196, 200-203, 207, 255-263, 271-276, 280, 284, 288, 292-293, 317-381, 396-403, 414-422, 430
+protoforge\core\defaults.py                       74     33    55%   445-450, 454-459, 463-468, 547-551, 559-561, 569-573, 581-582
+protoforge\core\demo.py                           50     50     0%   7-582
+protoforge\core\device.py                        312     95    70%   81, 113-114, 137-141, 148-154, 230, 233-234, 237-240, 300-312, 316-330, 354, 372, 375-385, 406, 428, 441-442, 451-455, 467, 502, 515-516, 529-533, 539, 544-550, 556-565, 572-583, 593, 597, 608, 613, 621, 625, 633, 637, 646, 666-668, 676-678, 682-684
+protoforge\core\edgelite.py                      978    733    25%   58-68, 74-77, 82-87, 92-97, 102-104, 114-116, 129, 145, 149-150, 154, 177-180, 213, 223-229, 242, 251-271, 276-288, 297-298, 303-326, 344-352, 357-368, 379-397, 426, 435-442, 457-458, 460-461, 466-557, 711-712, 722, 732, 755, 760-762, 767-806, 810-815, 822-832, 839-845, 854-1074, 1083-1126, 1135-1190, 1199-1249, 1278-1280, 1285, 1289-1290, 1292-1304, 1306-1319, 1321-1333, 1338-1339, 1350, 1355-1401, 1418-1571, 1580-1651
+protoforge\core\engine.py                        603    209    65%   35, 37, 66, 78-79, 90-94, 137-138, 141-143, 150, 189, 191-192, 200, 205-213, 224-227, 235, 237-246, 253-254, 256, 262-274, 279, 284-291, 309, 316-317, 320, 342, 346-349, 353-354, 372, 380, 384-387, 391-392, 398-401, 403-414, 422, 424, 432, 435-437, 440-443, 446, 453, 456-470, 506, 513, 516-529, 541, 551-555, 585, 588, 596, 599, 604, 620, 631-633, 637, 648, 654-656, 659-661, 667, 677-687, 693, 702-703, 726, 741-744, 761-762, 766-767, 786-791, 793-796, 804-821, 842-850, 900-901
+protoforge\core\event_bus.py                     109     48    56%   72-76, 79-82, 95-128, 132-135, 138-141
+protoforge\core\failover.py                      111    111     0%   3-146
+protoforge\core\fault\__init__.py                  5      0   100%
+protoforge\core\fault\injector.py                265    180    32%   84-85, 94-107, 115-140, 148-151, 160, 178-183, 185, 189-199, 203, 212-213, 250-259, 265-273, 280-323, 330-335, 340-345, 350-353, 358-361, 366-369, 374-377, 397-422, 432-441, 447-459, 465-466
+protoforge\core\fault\models.py                   63     16    75%   105, 119-123, 131-135, 145-147, 153, 169
+protoforge\core\fault\propagation.py              87     61    30%   89-106, 114-118, 125-129, 145-191, 203-228, 232-233
+protoforge\core\fault_injection.py               477    240    50%   62-68, 180, 214, 222, 272, 285, 287, 300, 302, 315, 318-319, 330, 347-349, 366-369, 373-383, 391-392, 394-398, 400, 405, 431, 445, 472-495, 510-514, 519-522, 527-530, 535-538, 543-546, 551-584, 635, 663-666, 670-672, 680-681, 691-726, 730-739, 743-749, 756-757, 786-794, 825-835, 854-865, 869-876, 880-888, 892-901, 905-932, 936-938, 950, 956-957, 967, 972-989, 994
+protoforge\core\forward.py                       323    218    33%   26-37, 44-65, 88, 92, 96, 100, 103-110, 113-165, 168-170, 182, 186, 189-191, 194-212, 215-217, 222-232, 236, 239-246, 249-257, 260-264, 292-295, 298-300, 304-305, 309-326, 330, 345-348, 352-391, 406-435
+protoforge\core\generator.py                     348     91    74%   100-104, 106-108, 116, 136, 142-143, 147, 151, 156, 163, 176, 183, 190, 192, 196-198, 200, 203-206, 208-226, 284-287, 293-295, 318, 330, 342, 352, 365, 371-372, 394, 424-459, 466-467, 469-470, 472, 474, 477-481
+protoforge\core\integration.py                    77     77     0%   3-135
+protoforge\core\integration\__init__.py           18      6    67%   21-22, 26-27, 31-32
+protoforge\core\integration\auth.py              164     70    57%   51, 53-57, 69-70, 72-77, 85-88, 107, 118-119, 124, 158-167, 177-178, 180-185, 193-196, 201-225, 228-235
+protoforge\core\integration\channel.py           334    199    40%   24, 28, 32, 37, 41, 50-51, 56-60, 64, 68, 71-78, 81-178, 182-186, 189-194, 197-200, 212-214, 218, 246, 250, 255-257, 281, 287-291, 293-299, 315-316, 325-327, 331, 334-337, 339-340, 343-345, 357-369, 374-384, 392-394, 398, 401-419, 422-424
+protoforge\core\integration\manager.py          1062    720    32%   62-68, 71-75, 86-92, 95, 98, 101, 105, 178-181, 185-186, 216-217, 222-223, 242-245, 257, 262-263, 269-270, 276-277, 287, 299-301, 306-310, 315, 322-323, 330, 334, 341-348, 396, 403, 420, 425-436, 439, 442, 445, 452-453, 465-466, 476-479, 492-495, 504-505, 511-512, 532-540, 546-547, 562, 566-595, 602-729, 735-758, 764-874, 880-907, 913-940, 951, 963, 976-978, 980-983, 990-993, 1008-1018, 1021-1023, 1027-1030, 1051-1061, 1065-1069, 1086-1089, 1094-1097, 1109-1112, 1116, 1121, 1128-1153, 1158, 1161, 1164, 1169-1197, 1200-1205, 1208-1230, 1233-1241, 1247-1254, 1258-1261, 1265-1340, 1346-1368, 1372-1380, 1384-1392, 1396-1413, 1422-1469, 1474-1482, 1488-1496, 1498, 1501-1502, 1507-1522, 1531-1548, 1551-1552, 1563-1586, 1590-1591, 1599, 1604, 1607, 1615, 1618, 1622, 1625, 1628, 1632-1658, 1662-1674
+protoforge\core\integration\metrics.py            45     12    73%   28, 31, 34, 37, 40, 47-48, 51, 55-57, 60
+protoforge\core\integration\protocol.py           91     23    75%   108, 115, 152-159, 173, 184-188, 194, 197, 200, 210, 227, 235-244, 258
+protoforge\core\integration\retry.py              72     39    46%   13-14, 19, 24, 29, 34, 56, 60, 63-64, 67-74, 77-80, 83-84, 87-101
+protoforge\core\integration\state.py              42     10    76%   41-42, 51, 54, 57-62
+protoforge\core\integration\validator.py          65     18    72%   49-53, 68, 71, 76, 109-110, 117-123, 125-126
+protoforge\core\log_bus.py                        71     18    75%   52-67, 103-104
+protoforge\core\messages.py                       43      9    79%   147-149, 169, 850-852, 863, 865
+protoforge\core\metrics.py                       126     59    53%   18-19, 26-31, 34-35, 38-39, 57-58, 63, 70-71, 87-88, 94-103, 107-128, 136-137, 143-150
+protoforge\core\network_sim.py                    84     39    54%   54, 65, 112, 118, 131, 138-149, 156-161, 168-173, 180-182, 186, 190, 194-203, 207, 215
+protoforge\core\performance.py                   309     42    86%   62, 64, 85-93, 97-109, 120-121, 131-133, 277-278, 300-304, 377, 459, 464-465, 478, 556, 562-564
+protoforge\core\quality.py                        81     23    72%   141, 154-163, 172, 177, 182, 187, 223, 225, 227, 229, 231, 250-252, 279
+protoforge\core\recorder.py                      379    254    33%   23-24, 31-40, 44-54, 64-90, 94-96, 110-117, 121-127, 145-146, 159-162, 165, 178-180, 189-191, 203-205, 214, 217-229, 245, 262, 271-275, 281-287, 292, 298-301, 304-314, 317-348, 351-382, 388-395, 398-434, 438-453, 466-480, 483-498
+protoforge\core\registry.py                       56      7    88%   68-69, 112-114, 123, 133
+protoforge\core\scenario.py                      333    176    47%   81, 101-102, 112-113, 129, 141, 147-150, 162-163, 184-186, 194-195, 199, 207-208, 213, 221, 229-230, 239-244, 249-255, 261-278, 281-304, 307-320, 323-342, 346, 349, 354-355, 358-402, 405-429, 436-437, 449-450
+protoforge\core\state_machine.py                 208     42    80%   310, 360-363, 365, 372-377, 400-407, 424-427, 451-454, 461-462, 468-469, 494-495, 510-513, 519, 534-535, 590-591, 606-607
+protoforge\core\template.py                       75     13    83%   69, 79-95, 99-100, 111, 128-129
+protoforge\core\testing.py                       673    233    65%   207, 298-299, 407, 410, 425-427, 443-445, 455-457, 467-468, 500-502, 512-514, 520-537, 548, 552, 557, 560-568, 581-583, 597-656, 711, 735-736, 747, 750, 766, 769, 773-777, 782-787, 790-794, 800, 802, 804, 811-819, 844, 853, 856-859, 865, 885-886, 897, 906-908, 918-925, 927-930, 932-934, 938-1010, 1020, 1022-1025, 1030, 1038-1047, 1050-1057
+protoforge\core\timeseries.py                    163    118    28%   102-130, 138-154, 158-161, 170-173, 179-187, 191-200, 204-215, 219-243, 250-257, 261-271, 276, 297, 337-338, 342-345, 357-364, 368, 372, 376, 379
+protoforge\core\timeseries_replay.py             112      8    93%   47, 50, 60-62, 94, 102, 185
+protoforge\core\webhook.py                       260    166    36%   26-46, 63, 79-81, 97-100, 111-124, 127-148, 151-165, 168-176, 182, 185, 189-204, 209-210, 214, 227-242, 248-255, 258-282, 285-325
+protoforge\db\__init__.py                          2      0   100%
+protoforge\db\session.py                         589    301    49%   47, 68-70, 92, 95-96, 100, 104-130, 149-159, 174-178, 182-227, 230-246, 250-251, 256-257, 394, 396, 398-399, 402-412, 415-546, 560-563, 570-572, 576-580, 589-593, 615, 625-626, 702-703, 931-935, 953-1016, 1019-1024, 1032-1044, 1047-1076, 1079-1080, 1089-1095, 1103-1104, 1111, 1126, 1134-1136, 1140-1142, 1146-1217
+protoforge\exceptions.py                         109    109     0%   7-228
+protoforge\grpc\__init__.py                        0      0   100%
+protoforge\grpc\server.py                        310    310     0%   3-384
+protoforge\installer.py                          110    110     0%   7-160
+protoforge\main.py                               464    257    45%   52-67, 90, 96-99, 104-107, 112-115, 120-123, 128-131, 148-149, 151, 166, 184-207, 215-328, 336-352, 357-367, 372-380, 392, 403-404, 410-411, 416-417, 426-476, 488-495, 507, 517-522, 531, 533-534, 594-595, 601-605, 643, 655-657, 665-666, 688-689, 694-695, 702-703, 721-722, 724, 727-737
+protoforge\models\__init__.py                      6      0   100%
+protoforge\models\device.py                       71      1    99%   52
+protoforge\models\integration.py                  96      0   100%
+protoforge\models\protocol.py                      8      0   100%
+protoforge\models\scenario.py                     52      0   100%
+protoforge\models\template.py                     22      0   100%
+protoforge\mqtt_auth.py                           41     41     0%   3-49
+protoforge\protocols\__init__.py                  21      4    81%   36, 42-44
+protoforge\protocols\ab\__init__.py                2      0   100%
+protoforge\protocols\ab\server.py                489    436    11%   32-40, 43-47, 50-51, 54-56, 59-60, 63, 66, 76-84, 87-103, 106-119, 122-132, 136-158, 161-181, 185-216, 220-228, 231-243, 247-269, 273-293, 298-316, 320-340, 344-347, 351-374, 377-406, 409-426, 430-451, 455-483, 487-508, 512-529, 533-538, 542-549, 552-565, 568-574, 579-584, 587-590, 593
+protoforge\protocols\bacnet\__init__.py            2      0   100%
+protoforge\protocols\bacnet\server.py            661    602     9%   46-82, 85-109, 112-126, 136-232, 235-240, 243-244, 248-253, 257-264, 268, 272-281, 284-289, 294-348, 353-432, 437-476, 484-505, 508-525, 530-591, 595-694, 704-742, 745-795, 798-804, 809-822, 825-855, 896-906
+protoforge\protocols\base.py                      88     21    76%   29, 59, 64, 72, 76, 80, 84, 88, 92, 95, 106, 109-110, 118-120, 124-126, 132, 136
+protoforge\protocols\behavior.py                 310    201    35%   51, 61-82, 85-104, 107-110, 113-117, 120-123, 126-135, 138-144, 147-153, 156-166, 169-177, 180-196, 217-271, 289-291, 299-300, 303-311, 318, 321-322, 331-333, 337-340, 367-369, 377-378, 382-390, 393-397, 411, 413-415, 419-422
+protoforge\protocols\ethercat\__init__.py          2      0   100%
+protoforge\protocols\ethercat\server.py          741    637    14%   82-84, 89-93, 96-97, 100-108, 111-129, 132-151, 154-184, 192-215, 218-246, 249-262, 265-308, 311-362, 365-374, 377-391, 394-405, 409-451, 454-485, 488-497, 500-510, 514-544, 547-552, 555-592, 596-620, 624-648, 652-654, 657-674, 677-699, 702-708, 711-720, 723-729, 732-739, 747-750, 753-756, 759-763, 766-770, 773-819, 824-851, 854-860, 865-874, 877-885, 888
+protoforge\protocols\fanuc\__init__.py             2      0   100%
+protoforge\protocols\fanuc\server.py             394    346    12%   23-24, 41-99, 109-118, 121-136, 139-152, 155-165, 169-188, 191-197, 200-222, 225-234, 237-254, 257-260, 263-274, 277-282, 285-299, 302-314, 317-329, 332-344, 347-359, 362-371, 374-383, 386-402, 405-416, 419-435, 438-442, 445-469, 472-478, 483-488, 491-494, 497
+protoforge\protocols\fins\__init__.py              2      0   100%
+protoforge\protocols\fins\server.py              463    410    11%   33-42, 54-71, 74-98, 101-105, 108-109, 112-120, 123-127, 130-136, 146-155, 158-173, 176-189, 192-210, 214-237, 240-249, 252-262, 265-284, 288-293, 296-320, 323-374, 377-407, 410-414, 417-436, 439-445, 450-455, 458-461, 464, 475-476, 479, 483-491, 494-503, 507-512, 515-529, 532-572, 575-589, 592
+protoforge\protocols\gb28181\__init__.py           2      0   100%
+protoforge\protocols\gb28181\rtp_streamer.py     396    396     0%   3-512
+protoforge\protocols\gb28181\server.py           603    501    17%   130-150, 154-172, 176-195, 199-213, 216-225, 228-235, 254, 259-262, 265, 268-275, 298-324, 327-355, 359, 362-404, 407-421, 424-435, 438-441, 465-485, 488-496, 499-522, 525-551, 554-577, 580-640, 643-664, 667-698, 703-821, 824-885, 888-936, 939-971, 976, 979, 982
+protoforge\protocols\http\__init__.py              2      0   100%
+protoforge\protocols\http\server.py              272    114    58%   81-84, 93-96, 111-113, 122-123, 128, 131, 138-142, 149-150, 159-160, 162-164, 169-170, 181-183, 188-189, 195, 208-215, 235-236, 245-286, 290-302, 323-335, 347, 357-364, 369-378, 381-384, 393-402
+protoforge\protocols\mc\__init__.py                2      0   100%
+protoforge\protocols\mc\server.py                589    535     9%   33-46, 57-73, 76-99, 102-106, 109-116, 119-124, 128-134, 137-143, 154-164, 167-185, 188-201, 204-214, 218-253, 256-293, 296-324, 327-382, 385-413, 416-450, 453-461, 464-472, 475-495, 498-504, 509-514, 517-520, 523, 535-540, 544, 548, 551-578, 581-609, 612-637, 640-671, 674-717, 720-725
+protoforge\protocols\modbus\__init__.py            3      0   100%
+protoforge\protocols\modbus\_common.py           127     50    61%   47, 104, 112, 121, 124, 128, 130, 133-134, 137-150, 154, 156, 159-162, 165-174, 177-188
+protoforge\protocols\modbus\rtu_server.py        500    435    13%   23-24, 30-31, 63-69, 72-82, 85-87, 90-104, 107-204, 209-218, 221-232, 236-269, 272-400, 403-417, 420-457, 460-468, 473-484, 487-510, 525-565, 568-591, 594-627
+protoforge\protocols\modbus\server.py            544    240    56%   22-23, 29-30, 70, 75-79, 82-92, 100-120, 132-134, 146, 149, 154, 158, 168-169, 191, 209, 213, 239, 243, 268, 272, 277, 299-319, 336, 341, 343, 369-384, 400-426, 445, 450, 457, 461, 465, 468-475, 485, 504-507, 516-521, 537, 559-567, 574, 577, 591, 598-599, 601-602, 615-616, 637, 639, 641-646, 654-676, 684-705, 717-743, 759-763, 772, 775, 778, 787-789, 797, 800, 807, 810-811
+protoforge\protocols\mqtt\__init__.py              2      0   100%
+protoforge\protocols\mqtt\server.py              303    151    50%   42-44, 54-57, 60, 67-69, 102, 106, 123-129, 134-143, 163-176, 189-198, 206-209, 221-222, 226, 239, 254-265, 270-281, 284-311, 314, 415, 424, 428, 439-446, 450-485, 490, 495-510, 519-527, 532, 539-542
+protoforge\protocols\mtconnect\__init__.py         2      0   100%
+protoforge\protocols\mtconnect\server.py         301    267    11%   19-24, 27, 36-50, 53-68, 71-84, 87-97, 101-127, 130-172, 175-229, 244-300, 318-376, 394-422, 433, 445-446, 456-474, 477-483, 488-493, 496-499, 502
+protoforge\protocols\opcda\__init__.py             2      0   100%
+protoforge\protocols\opcda\server.py             428    381    11%   37-45, 48-54, 57-58, 61, 64, 67, 70, 80-92, 95-111, 114-140, 143-153, 157-189, 192-198, 201-217, 220-226, 229-245, 249-268, 271-294, 297-319, 323-340, 343-368, 371-375, 378-455, 458-467, 470-472, 475-491, 494-500, 505-510, 513-516, 519
+protoforge\protocols\opcua\__init__.py             3      0   100%
+protoforge\protocols\opcua\client.py             226    199    12%   18-26, 30-41, 49-63, 66-101, 104-117, 120-162, 165-187, 190-209, 212-217, 220-253, 256-275, 278-280, 283
+protoforge\protocols\opcua\server.py             410    229    44%   47-49, 63, 67-137, 148-153, 156, 163-165, 200, 205-209, 213, 235-238, 252-288, 293-297, 301-305, 314-317, 328-329, 334-337, 341-344, 372-398, 403-423, 426-477, 496, 500-520, 530, 538-542, 545, 584, 591-595, 601-603, 606-607, 632-655, 667-668
+protoforge\protocols\profinet\__init__.py          2      0   100%
+protoforge\protocols\profinet\server.py          588    507    14%   66-71, 74, 84-96, 99-109, 112, 122, 127-130, 133, 136-143, 146-163, 166-196, 204-225, 228-255, 258-278, 281-307, 310-318, 321-330, 333-343, 347-380, 384-395, 398-411, 414-444, 447-459, 462-469, 473-489, 493-537, 540-560, 563-566, 569-572, 575-598, 601-605, 608-630, 634-656, 659-703, 706-739, 742-748, 753-762, 765-773, 776, 794-800
+protoforge\protocols\s7\__init__.py                2      0   100%
+protoforge\protocols\s7\server.py                736    428    42%   84-85, 88-91, 93-97, 101, 107, 109, 111, 113, 115, 117, 119-120, 126-127, 130-134, 137-138, 141-145, 149, 153, 157-181, 184-212, 249, 259, 262, 272-275, 284-287, 302-304, 316, 318, 320, 324, 329, 342-343, 347, 351, 354, 362, 366-371, 385-394, 407, 412, 414, 417, 430, 436-437, 478, 492, 494-496, 515-516, 538-649, 652-775, 800-860, 866-875, 880-889, 900-919, 932, 935, 960-970, 975-988, 991-1013, 1043-1051, 1054-1070
+protoforge\protocols\toledo\__init__.py            2      0   100%
+protoforge\protocols\toledo\server.py            304    260    14%   18-30, 33-42, 45-51, 54-59, 62-63, 66, 79-88, 91-106, 109-136, 139-149, 153-173, 176-200, 203-220, 223-227, 230-236, 239-246, 249-261, 264, 267, 270-275, 278-285, 288-313, 316-332, 335-340, 345-351, 354-358, 361
+protoforge\sdk\__init__.py                       691    154    78%   33-34, 163, 298, 308, 528-530, 550-551, 572, 575-579, 591, 600, 602, 607-610, 631, 635, 640, 645-652, 665, 668, 672-677, 680, 683-686, 690, 693, 696, 699, 702, 705-706, 709, 712, 715, 718-730, 733, 736, 739, 752, 755, 759, 762, 766, 770, 776, 779, 783-785, 791, 794, 797, 800, 803, 806, 809, 812, 815, 818, 821, 824, 827, 830, 833, 838, 840, 847, 850, 853, 859, 862, 865, 868, 871, 874, 877-880, 883, 886, 889, 892, 895, 899, 902, 905, 908, 911, 914, 917, 920, 923, 926, 929, 932, 935, 938, 941, 944, 947, 950, 953, 956, 959, 962, 965, 969, 972, 975-978, 981, 984, 987, 990, 993, 996
+----------------------------------------------------------------------------
+TOTAL                                          26082  15994    39%
+Coverage HTML written to dir htmlcov
+Coverage XML written to file coverage.xml
+Coverage JSON written to file coverage.json
+FAIL Required test coverage of 40% not reached. Total coverage: 38.68%
+=========================== short test summary info ===========================
+FAILED tests/test_api_extended_coverage.py::TestWebhookAPI::test_create_webhook
+FAILED tests/test_api_extended_coverage.py::TestWebhookAPI::test_update_webhook
+FAILED tests/test_api_extended_coverage.py::TestWebhookAPI::test_delete_webhook
+FAILED tests/test_api_extended_coverage.py::TestWebhookAPI::test_test_webhook
+FAILED tests/test_api_extended_coverage.py::TestTemplateAPI::test_export_template
+FAILED tests/test_api_extended_coverage.py::TestSystemAPI::test_update_settings
+FAILED tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_write_device_point
+FAILED tests/test_api_extended_coverage.py::TestProtocolAPI::test_get_protocol_detail
+FAILED tests/test_api_extended_coverage.py::TestRecorderAPI::test_list_recordings
+FAILED tests/test_api_extended_coverage.py::TestRecorderAPI::test_recorder_stats
+FAILED tests/test_api_extended_coverage.py::TestForwardAPI::test_list_forwards
+FAILED tests/test_api_extended_coverage.py::TestIntegrationAPI::test_list_integrations
+FAILED tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_add
+FAILED tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_remove
+FAILED tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_update
+FAILED tests/test_core_coverage.py::TestWebhookManager::test_webhook_trigger
+FAILED tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_add_and_get
+FAILED tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_stuck
+FAILED tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_noise
+FAILED tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_drift
+FAILED tests/test_production_hardening.py::test_is_public_path_whitelist - As...
+21 failed, 718 passed, 1 skipped, 3 warnings in 2572.69s (0:42:52)

@@ -85,6 +85,7 @@ _ALLOWED_SETTINGS_KEYS = {
     "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
     "protoforge_public_host", "protocol_ports",
     "forward_enabled", "forward_interval",
+    "tick_interval",
 }
 
 
