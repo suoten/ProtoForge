@@ -116,6 +116,7 @@ def main():
         return
 
     parser.print_help()
+    return
 
 
 def _get_pid_file():

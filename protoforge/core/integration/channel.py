@@ -61,7 +61,7 @@ class HttpChannel(ChannelBase):
 
     @property
     def is_connected(self) -> bool:
-        return self._connected
+        return bool(self._connected)
 
     @property
     def channel_type(self) -> str:
@@ -243,7 +243,7 @@ class WebSocketChannel(ChannelBase):
 
     @property
     def is_connected(self) -> bool:
-        return self._connected
+        return bool(self._connected)
 
     @property
     def channel_type(self) -> str:

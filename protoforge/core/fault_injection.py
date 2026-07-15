@@ -947,7 +947,7 @@ class FaultScenario:
     @property
     def is_running(self) -> bool:
         """场景是否正在运行。"""
-        return True if self._started else False
+        return bool(self._started)
 
     # -- 序列化 -----------------------------------------------------------
 

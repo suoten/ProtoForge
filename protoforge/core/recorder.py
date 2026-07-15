@@ -422,7 +422,8 @@ class Recorder:
         )
         self._active.messages.append(recorded)
 
-    def get_stats(self) -> dict[str, Any]:
+    def compute_stats(self) -> dict[str, Any]:
+        """计算并返回统计信息."""
         active = self._active  # FIXED: 缓存引用，防止并发stop_recording导致None
         is_rec = active is not None
         if is_rec:
