@@ -21,6 +21,11 @@ jobs:
         run: ruff check protoforge/ tests/ scripts/
       - name: MyPy check
         run: mypy protoforge/ --ignore-missing-imports
+      - name: Dependency security scan
+        run: |
+          pip install pip-audit
+          pip-audit --strict
+        continue-on-error: true
 
   unit-tests:
     runs-on: ubuntu-latest

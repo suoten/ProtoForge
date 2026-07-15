@@ -114,7 +114,7 @@ class DeviceInstance:
                     self._point_values[name] = 0
             logger.info("Device %s entered STOP state", self.config.id)
 
-        def on_enter_error(_state: DeviceState, _context: dict[str, Any]) -> None:
+        def on_enter_error(_state: DeviceState, context: dict[str, Any]) -> None:
             # 设置安全值
             for name, safe_val in self._safe_values.items():
                 if name in self._point_values:

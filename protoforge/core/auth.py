@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 
 _USERNAME_MAX_LENGTH = 63
 _SECRET_KEY_MIN_LENGTH = 32
-# Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)  # FIXED: 删除未使用的硬编码常量，统一从config读取
-_REFRESH_TOKEN_EXPIRE_SECONDS = 604800
+# Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -55,6 +54,10 @@ def _load_persistent_secret_key() -> str:
             os.makedirs(key_dir, exist_ok=True)
             with open(_SECRET_KEY_FILE, "w") as f:
                 f.write(new_key)
+            try:
+                os.chmod(_SECRET_KEY_FILE, 0o600)
+            except OSError as chmod_err:
+                logger.debug("Could not set JWT secret file permissions: %s", chmod_err)
             logger.info("Generated and saved new JWT secret to %s", _SECRET_KEY_FILE)
         except Exception as e:
             logger.warning("Could not persist JWT secret: %s. Tokens will invalidate on restart.", e)
@@ -63,8 +66,7 @@ def _load_persistent_secret_key() -> str:
 
 def set_secret_key(key: str) -> None:
     global _SECRET_KEY
-    # 因 and 优先级高于 or，9~31字符密钥会绕过校验。添加显式括号并统一使用 _SECRET_KEY_MIN_LENGTH
-    if not key or (key.strip() == key[:8] and len(key) < _SECRET_KEY_MIN_LENGTH):
+    if not key or len(key.strip()) < _SECRET_KEY_MIN_LENGTH:
         _load_persistent_secret_key()
         if not _SECRET_KEY:
             logger.warning(
@@ -266,6 +268,10 @@ class UserManager:
                 os.makedirs(os.path.dirname(pw_file), exist_ok=True)
                 with open(pw_file, "w") as f:
                     f.write(default_password)
+                try:
+                    os.chmod(pw_file, 0o600)
+                except OSError as chmod_err:
+                    logger.debug("Could not set admin password file permissions: %s", chmod_err)
                 logger.warning(
                     "SECURITY: No admin password configured. A random password has been generated "
                     "and saved to %s. Set PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control.",

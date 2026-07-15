@@ -268,7 +268,7 @@ class ModbusRtuServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Modbus RTU writer close error: %s", e)
 
-    def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:
+    def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:  # noqa: C901
         slave_id = unit_id if unit_id else 1
         store = self._data_stores.get(slave_id)
         if not store:  # FIXED-P1: 未注册的slave_id返回异常码02，而非自动创建存储

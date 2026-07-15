@@ -69,8 +69,6 @@ _PUBLIC_PATHS = {
     "/redoc",
     "/health",
     "/api/v1/health",
-    "/metrics",
-    "/api/v1/metrics",
 }
 
 _PUBLIC_PREFIXES = (
@@ -95,7 +93,7 @@ async def auth_middleware(request: Request, call_next):
     if _is_public_path(path):
         return await call_next(request)
 
-    if not path.startswith("/api/v1/"):
+    if not path.startswith("/api/v1/") and path != "/metrics":
         return await call_next(request)
 
     if is_no_auth():

@@ -49,4 +49,4 @@ EXPOSE 6000-6999/udp
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD curl -f http://localhost:8000/health || exit 1
 
 # FIXED: 迁移失败时终止启动，避免静默忽略导致数据不一致
-CMD ["sh", "-c", "alembic upgrade head && python -m protoforge.cli demo"]
+CMD ["sh", "-c", "alembic upgrade head && python -m protoforge.cli run"]
