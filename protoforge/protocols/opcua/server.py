@@ -110,6 +110,8 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
 
         with open(cert_path, "wb") as f:
             f.write(cert.public_bytes(serialization.Encoding.PEM))
+        # FIXED-P1: restrict certificate file permissions
+        os.chmod(cert_path, 0o644)
 
         with open(key_path, "wb") as f:
             f.write(key.private_bytes(
@@ -117,6 +119,8 @@ def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tu
                 serialization.PrivateFormat.TraditionalOpenSSL,
                 serialization.NoEncryption(),  # FIXED-L04: 仿真环境使用明文私钥，生产环境应使用password参数加密
             ))
+        # FIXED-P1: restrict private key file permissions to owner-only (0o600)
+        os.chmod(key_path, 0o600)
 
         logger.info("OPC-UA self-signed certificate generated at %s", cert_dir)
     except ImportError:

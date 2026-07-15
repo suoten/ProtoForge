@@ -19,7 +19,7 @@ def _get_version() -> str:
         from importlib.metadata import version as pkg_version
         return pkg_version("protoforge")
     except Exception as e:
-        logger.debug("获取包版本失败: %s", e)
+        logger.debug("Failed to get package version: %s", e)
     try:
         import protoforge
         return getattr(protoforge, "__version__", "0.1.0")
@@ -213,7 +213,7 @@ async def import_backup(payload: dict[str, Any], _user: dict[str, Any] = Depends
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Backup 'data' must be a dictionary")
         if not data:
-            raise HTTPException(status_code=400, detail="备份文件无数据。请先在系统中添加设备或场景配置（点击「设备管理」→「新建设备」），导出备份文件后重新上传。")
+            raise HTTPException(status_code=400, detail="Backup file contains no data. Please add devices or scenario configurations in the system first, then export and re-upload the backup file.")
         restored = await db.import_all(data)
         return {"status": "ok", "restored": restored}
     except HTTPException:

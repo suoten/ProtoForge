@@ -82,6 +82,8 @@ def _get_or_create_salt() -> bytes:
             os.makedirs(salt_dir, exist_ok=True)
             with open(_SALT_FILE, "wb") as f:
                 f.write(new_salt)
+            # FIXED-P1: restrict salt file permissions to owner-only (0o600)
+            os.chmod(_SALT_FILE, 0o600)
             logger.info("Generated and saved new recording salt")
         except Exception as e:
             logger.exception("Could not persist recording salt: %s. Encrypted recordings may not be decryptable after restart!", e)

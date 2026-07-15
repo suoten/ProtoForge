@@ -84,7 +84,7 @@ async def login(credentials: LoginRequest):
         raise
     except Exception as e:
         logger.exception("Login failed: %s", e)
-        raise HTTPException(status_code=500, detail="登录服务暂时不可用，请检查服务器状态后重试。若问题持续，请查看服务器日志排查数据库连接或JWT配置异常。") from e
+        raise HTTPException(status_code=500, detail="Login service temporarily unavailable. Please check server status and try again.") from e
 
 
 @router.post("/auth/refresh")
@@ -130,7 +130,7 @@ async def register(user_data: RegisterRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         logger.exception("User creation failed: %s", e)
-        raise HTTPException(status_code=500, detail="创建用户失败，用户名已存在或数据库写入异常。请更换用户名重试，若问题持续请检查数据库连接。") from e
+        raise HTTPException(status_code=500, detail="Failed to create user. The username may already exist or a database error occurred.") from e
 
     if not user:
         raise HTTPException(status_code=409, detail="Username already exists")
@@ -209,7 +209,7 @@ async def admin_reset_password(data: AdminResetPasswordRequest, _user: dict[str,
         raise
     except Exception as e:
         logger.exception("Admin reset password failed: %s", e)
-        raise HTTPException(status_code=500, detail="重置密码失败，数据库持久化异常。请确认目标用户存在且数据库连接正常后重试。") from e
+        raise HTTPException(status_code=500, detail="Failed to reset password due to a database error. Please verify the target user exists and the database connection is healthy.") from e
 
 
 @router.put("/auth/users/{username}/role")

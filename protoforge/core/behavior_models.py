@@ -316,7 +316,7 @@ class MotorBehavior(BaseBehavior):
 
     def is_stalled(self) -> bool:
         """返回是否处于堵转状态。"""
-        return self._stalled
+        return bool(self._stalled)
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -330,7 +330,7 @@ class MotorBehavior(BaseBehavior):
     def _restore_state(self, state: dict[str, Any]) -> None:
         self._omega = state.get("omega", 0.0)
         self._speed_rpm = state.get("speed_rpm", 0.0)
-        self._stalled = state.get("stalled", False)
+        self._stalled = bool(state.get("stalled", False))
         self._stall_timer = state.get("stall_timer", 0.0)
         self._time = state.get("time", 0.0)
 
@@ -676,11 +676,11 @@ class LevelBehavior(BaseBehavior):
 
     def is_overflow(self) -> bool:
         """返回是否溢出。"""
-        return self._overflow
+        return bool(self._overflow)
 
     def is_low_alarm(self) -> bool:
         """返回是否低液位报警。"""
-        return self._low_alarm
+        return bool(self._low_alarm)
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -692,8 +692,8 @@ class LevelBehavior(BaseBehavior):
 
     def _restore_state(self, state: dict[str, Any]) -> None:
         self._level = state.get("level", self.initial_level)
-        self._overflow = state.get("overflow", False)
-        self._low_alarm = state.get("low_alarm", False)
+        self._overflow = bool(state.get("overflow", False))
+        self._low_alarm = bool(state.get("low_alarm", False))
         self._time = state.get("time", 0.0)
 
 
@@ -892,7 +892,6 @@ class PIDController(BaseBehavior):
         # 积分项（抗积分饱和）
         # 仅当未饱和或饱和方向与误差方向相反时才累加积分
         prospective_integral = self._integral + error * dt
-        p_term + self.Ki * prospective_integral
 
         if self.output_limit is not None:
             out_min, out_max = self.output_limit
@@ -940,7 +939,7 @@ class PIDController(BaseBehavior):
 
     def is_saturated(self) -> bool:
         """返回是否处于饱和状态。"""
-        return self._saturated
+        return bool(self._saturated)
 
     def _state(self) -> dict[str, Any]:
         return {
@@ -959,7 +958,7 @@ class PIDController(BaseBehavior):
         self._output = state.get("output", self.initial_output)
         self._error = state.get("error", 0.0)
         self.setpoint = state.get("setpoint", self.setpoint)
-        self._saturated = state.get("saturated", False)
+        self._saturated = bool(state.get("saturated", False))
         self._time = state.get("time", 0.0)
 
     def to_dict(self) -> dict[str, Any]:
