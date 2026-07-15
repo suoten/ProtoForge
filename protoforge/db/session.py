@@ -202,10 +202,12 @@ class Database:
                 temp_path = temp_db.name
 
                 # Try to recover using sqlite3 CLI
-                result = subprocess.run(
-                    ["sqlite3", db_path, ".recover", ".output", temp_path, ".quit"],
-                    capture_output=True, timeout=60
-                )
+                # Use pipe: sqlite3 corrupted.db .recover > recovered.db
+                with open(temp_path, 'wb') as f:
+                    result = subprocess.run(
+                        ["sqlite3", db_path, ".recover"],
+                        stdout=f, capture_output=True, timeout=60
+                    )
                 if result.returncode == 0 and Path(temp_path).stat().st_size > 0:
                     # Verify recovered database
                     verify_conn = sqlite3.connect(temp_path)
@@ -626,6 +628,9 @@ class Database:
         return f"{column} = $1" if self._is_postgres else f"{column} = ?"
 
     async def save_device(self, config: DeviceConfig) -> None:
+        # Validate device ID doesn't contain path traversal characters
+        if "/" in config.id or "\\" in config.id or ".." in config.id:
+            raise ValueError(f"Device ID contains invalid path characters: {config.id}")
         points_json = json.dumps([p.model_dump() for p in config.points])
         config_dict = config.protocol_config
         if config.position:
