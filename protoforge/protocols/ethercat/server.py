@@ -128,7 +128,8 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
             else:
                 self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
 
-    def get_pd_input(self, config: DeviceConfig) -> bytes:
+    def build_pd_input(self, config: DeviceConfig) -> bytes:
+        """构建过程数据输入帧，不修改实例状态."""
         if self._pd_input:
             return bytes(self._pd_input)
         data = bytearray()
@@ -149,6 +150,10 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
             else:
                 data += struct.pack("<H", int(val) & 0xFFFF)
         return bytes(data)
+
+    def get_pd_input(self, config: DeviceConfig) -> bytes:
+        """返回已缓存的过程数据输入帧."""
+        return bytes(self._pd_input) if self._pd_input else self.build_pd_input(config)
 
     def set_pd_output(self, config: DeviceConfig, data: bytes) -> None:
         offset = 0
