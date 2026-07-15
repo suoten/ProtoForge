@@ -8,13 +8,28 @@ import pytest
 import pytest_asyncio
 
 # Disable auth by default for testing; use the 'auth_enabled' fixture to opt-in
-os.environ.setdefault("PROTOFORGE_NO_AUTH", "1")
+os.environ["PROTOFORGE_NO_AUTH"] = "1"
 os.environ.setdefault("PROTOFORGE_TEST_MODE", "1")
 
 # Track original auth state so the auth_enabled fixture can restore it
 _original_no_auth = os.environ.get("PROTOFORGE_NO_AUTH", "1")
 
 collect_ignore_glob = ["*/testing.py"]
+
+
+@pytest.fixture(autouse=True)
+def _ensure_no_auth():
+    """Ensure auth is disabled for every test unless auth_enabled is used."""
+    os.environ["PROTOFORGE_NO_AUTH"] = "1"
+    # Reset cached settings so is_no_auth() picks up the env var
+    import protoforge.config as cfg
+    old = cfg._settings
+    cfg._settings = None
+    # Reset auth module warning flag
+    from protoforge.api.v1 import auth as auth_module
+    auth_module._no_auth_warning_shown = False
+    yield
+    cfg._settings = old
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +96,16 @@ def auth_enabled(monkeypatch):
             assert resp.status_code == 200
     """
     monkeypatch.setenv("PROTOFORGE_NO_AUTH", "0")
+    # Reset cached settings so is_no_auth() picks up the env var change
+    import protoforge.config as cfg
+    old_settings = cfg._settings
+    cfg._settings = None
     # Re-evaluate the auth flag in the auth module
     from protoforge.api.v1 import auth as auth_module
     auth_module._no_auth_warning_shown = False
     yield
     monkeypatch.setenv("PROTOFORGE_NO_AUTH", _original_no_auth)
+    cfg._settings = old_settings
     auth_module._no_auth_warning_shown = False
 
 
