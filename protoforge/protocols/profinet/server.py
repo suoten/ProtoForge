@@ -632,6 +632,9 @@ class ProfinetServer(ProtocolServer):
     def _send_alarm(self, ar_id: int, alarm_type: int, alarm_detail: bytes = b"",
                      writers: set[asyncio.StreamWriter] | None = None) -> None:
         self._alarm_seq = (self._alarm_seq + 1) & 0xFFFF
+        ar = self._active_ars.get(ar_id)
+        if ar is None:
+            logger.debug("PROFINET alarm for unknown AR[%d]", ar_id)
         alarm_msg = bytearray()
         alarm_msg += struct.pack(">H", alarm_type)
         alarm_msg += struct.pack(">H", ar_id)

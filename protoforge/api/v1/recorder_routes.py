@@ -137,7 +137,7 @@ async def export_recording(rec_id: str, _user: dict[str, Any] = Depends(require_
 async def recorder_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         recorder = _get_recorder()
-        return recorder.get_stats()
+        return recorder.compute_stats()
     except Exception as e:
         logger.exception("Failed to get recorder stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get recorder stats: {e}") from e
