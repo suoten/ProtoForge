@@ -15,7 +15,10 @@ PROJECT_DIR = Path(__file__).parent.parent
 
 def run(cmd, **kwargs):
     """Run a command and return the result."""
-    return subprocess.run(cmd, shell=True, cwd=str(PROJECT_DIR), **kwargs)
+    if isinstance(cmd, str):
+        import shlex
+        cmd = shlex.split(cmd)
+    return subprocess.run(cmd, cwd=str(PROJECT_DIR), **kwargs)
 
 
 def main():
@@ -86,12 +89,12 @@ def main():
         if web_dir.exists():
             print("       安装前端依赖...")
             subprocess.run(
-                "npm install --quiet", shell=True, cwd=str(web_dir),
+                ["npm", "install", "--quiet"], cwd=str(web_dir),
                 capture_output=True,
             )
             print("       构建前端页面...")
             build_result = subprocess.run(
-                "npm run build", shell=True, cwd=str(web_dir),
+                ["npm", "run", "build"], cwd=str(web_dir),
                 capture_output=True, text=True,
             )
             if build_result.returncode != 0:
