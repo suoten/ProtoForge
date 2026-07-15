@@ -92,8 +92,8 @@ class TTLCache:
             self._evictions += 1
         return len(expired_keys)
 
-    def get_sync(self, key: str) -> Any | None:
-        """同步获取缓存值 (线程安全)."""
+    def fetch_sync(self, key: str) -> Any | None:
+        """同步获取缓存值 (线程安全)，自动清理过期项."""
         with self._sync_lock:
             entry = self._store.get(key)
             if entry is None:
@@ -103,6 +103,20 @@ class TTLCache:
             if self._is_expired(expiry):
                 del self._store[key]
                 self._evictions = self._evictions + 1
+                self._misses = self._misses + 1
+                return None
+            self._hits = self._hits + 1
+            return value
+
+    def get_sync(self, key: str) -> Any | None:
+        """同步获取缓存值 (线程安全)，不执行清理."""
+        with self._sync_lock:
+            entry = self._store.get(key)
+            if entry is None:
+                self._misses = self._misses + 1
+                return None
+            value, expiry = entry
+            if self._is_expired(expiry):
                 self._misses = self._misses + 1
                 return None
             self._hits = self._hits + 1

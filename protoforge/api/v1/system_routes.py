@@ -213,7 +213,7 @@ async def import_backup(payload: dict[str, Any], _user: dict[str, Any] = Depends
         if not isinstance(data, dict):
             raise HTTPException(status_code=400, detail="Backup 'data' must be a dictionary")
         if not data:
-            raise HTTPException(status_code=400, detail="备份文件无数据。请先在系统中添加设备或场景配置，再导出备份文件后重新上传。")
+            raise HTTPException(status_code=400, detail="备份文件无数据。请先在系统中添加设备或场景配置（点击「设备管理」→「新建设备」），导出备份文件后重新上传。")
         restored = await db.import_all(data)
         return {"status": "ok", "restored": restored}
     except HTTPException:

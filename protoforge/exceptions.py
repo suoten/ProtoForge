@@ -18,7 +18,7 @@ class ProtoForgeError(Exception):
     def __str__(self) -> str:
         if self.detail:
             return f"{self.message}: {self.detail}"
-        return self.message
+        return self.message or ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
