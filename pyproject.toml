@@ -97,7 +97,7 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "C901"]
 ignore = ["E501", "B008", "SIM102", "SIM115"]  # B008: FastAPI Depends(); SIM102: nested if in complex paths; SIM115: NamedTemporaryFile pattern
 
 [tool.ruff.lint.mccabe]
-max-complexity = 55
+max-complexity = 35
 
 [tool.ruff.lint.per-file-ignores]
 "protoforge/mqtt_auth.py" = ["F401"]  # Optional dependency imports
@@ -158,4 +158,4 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",
 ]
-addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-report=json --cov-fail-under=20"
+addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-report=json --cov-fail-under=40"

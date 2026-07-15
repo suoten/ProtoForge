@@ -119,7 +119,7 @@ class SafeEval:
         finally:
             self._depth -= 1
 
-    def _eval_node_inner(self, node: ast.AST) -> Any:
+    def _eval_node_inner(self, node: ast.AST) -> Any:  # noqa: C901
         if isinstance(node, ast.Constant):
             return node.value
         elif isinstance(node, ast.Name):

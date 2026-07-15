@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     protoforge_public_host: str = ""
     tick_interval: float = 1.0
 
-    access_token_expires: int = 86400
+    access_token_expires: int = 1800  # 30 minutes (security best practice)
     refresh_token_expires: int = 604800
     max_login_attempts: int = 5
     lockout_duration: int = 300

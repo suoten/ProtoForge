@@ -49,7 +49,6 @@ class Database:
             await self._connect_sqlite()
 
     async def _connect_sqlite(self) -> None:
-        import shutil
         import sqlite3
 
         try:
@@ -642,8 +641,12 @@ class Database:
             return None
         return self._row_to_device(row)
 
-    async def load_all_devices(self) -> list[DeviceConfig]:
-        rows = await self._fetchall("SELECT * FROM devices")
+    async def load_all_devices(self, limit: int = 0, offset: int = 0) -> list[DeviceConfig]:
+        if limit > 0:
+            limit_clause = f"LIMIT ${1} OFFSET ${2}" if self._is_postgres else "LIMIT ? OFFSET ?"
+            rows = await self._fetchall(f"SELECT * FROM devices {limit_clause}", (limit, offset))
+        else:
+            rows = await self._fetchall("SELECT * FROM devices")
         return [self._row_to_device(row) for row in rows]
 
     async def delete_device(self, device_id: str) -> None:
@@ -670,8 +673,12 @@ class Database:
             return None
         return self._row_to_scenario(row)
 
-    async def load_all_scenarios(self) -> list[ScenarioConfig]:
-        rows = await self._fetchall("SELECT * FROM scenarios")
+    async def load_all_scenarios(self, limit: int = 0, offset: int = 0) -> list[ScenarioConfig]:
+        if limit > 0:
+            limit_clause = f"LIMIT ${1} OFFSET ${2}" if self._is_postgres else "LIMIT ? OFFSET ?"
+            rows = await self._fetchall(f"SELECT * FROM scenarios {limit_clause}", (limit, offset))
+        else:
+            rows = await self._fetchall("SELECT * FROM scenarios")
         return [self._row_to_scenario(row) for row in rows]
 
     async def delete_scenario(self, scenario_id: str) -> None:
@@ -691,8 +698,12 @@ class Database:
              template.manufacturer, template.model, points_json, config_json, tags_json),
         )
 
-    async def load_all_templates(self) -> list[TemplateDetail]:
-        rows = await self._fetchall("SELECT * FROM templates")
+    async def load_all_templates(self, limit: int = 0, offset: int = 0) -> list[TemplateDetail]:
+        if limit > 0:
+            limit_clause = f"LIMIT ${1} OFFSET ${2}" if self._is_postgres else "LIMIT ? OFFSET ?"
+            rows = await self._fetchall(f"SELECT * FROM templates {limit_clause}", (limit, offset))
+        else:
+            rows = await self._fetchall("SELECT * FROM templates")
         return [self._row_to_template(row) for row in rows]
 
     async def load_template(self, template_id: str) -> TemplateDetail | None:

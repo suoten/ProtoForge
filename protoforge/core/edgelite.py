@@ -845,7 +845,7 @@ async def _relogin_on_401(
     return headers
 
 
-async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:
+async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dict[str, Any]:  # noqa: C901
     """推送设备到 EdgeLite。
 
     已弃用：请使用 IntegrationManager.push_device()。
