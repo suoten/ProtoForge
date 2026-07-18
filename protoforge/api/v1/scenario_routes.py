@@ -44,8 +44,13 @@ async def create_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depend
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
-    except Exception as e:
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to create scenario %s: %s", config.id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to create scenario: {e}") from e
 
 
 @router.get("/scenarios/{scenario_id}")  # FIXED: 移除response_model=ScenarioDetail，与create/update保持一致
@@ -67,11 +72,13 @@ async def start_scenario(scenario_id: str, _user: dict[str, Any] = Depends(requi
         log_bus.emit("", "system", "", "scenario_start", f"Scenario {scenario_id} started", {"scenario_id": scenario_id})
         await _trigger_webhook_safe("scenario_start", {"scenario_id": scenario_id})
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to start scenario %s: %s", scenario_id, e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=f"Failed to start scenario: {e}") from e
 
 
 @router.post("/scenarios/{scenario_id}/stop")
@@ -85,11 +92,13 @@ async def stop_scenario(scenario_id: str, _user: dict[str, Any] = Depends(requir
         log_bus.emit("", "system", "", "scenario_stop", f"Scenario {scenario_id} stopped", {"scenario_id": scenario_id})
         await _trigger_webhook_safe("scenario_stop", {"scenario_id": scenario_id})
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to stop scenario %s: %s", scenario_id, e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=f"Failed to stop scenario: {e}") from e
 
 
 @router.put("/scenarios/{scenario_id}")
@@ -128,8 +137,13 @@ async def update_scenario(scenario_id: str, update: ScenarioConfigUpdate, _user:
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."  # FIXED: 中文→英文
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to update scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to update scenario: {e}") from e
 
 
 @router.delete("/scenarios/{scenario_id}")
@@ -159,8 +173,13 @@ async def delete_scenario(scenario_id: str, _user: dict[str, Any] = Depends(requ
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario deleted from memory, but DB deletion failed: {db_err_msg}. Scenario may reappear after restart."  # FIXED: 中文→英文
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to delete scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to delete scenario: {e}") from e
 
 
 @router.get("/scenarios/{scenario_id}/export")
@@ -211,6 +230,8 @@ async def import_scenario(config: ScenarioConfig, _user: dict[str, Any] = Depend
         if not db_ok:
             resp["_persistence_warning"] = f"Scenario imported to memory, but persistence failed: {db_err_msg}. Data will be lost after restart."  # FIXED: 中文→英文
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:

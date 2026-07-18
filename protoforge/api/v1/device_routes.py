@@ -64,10 +64,13 @@ async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(re
             resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."
         return resp
 
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.exception("Failed to create device %s: %s", config.id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to create device: {e}") from e
 
 
 @router.post("/devices/quick-create")
@@ -129,8 +132,13 @@ async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = De
         if not db_ok:
             resp["_persistence_warning"] = f"Device created in memory, but persistence failed: {db_err_msg}. Data will be lost after restart."
         return resp
-    except Exception as e:
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to quick-create device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to quick-create device: {e}") from e
 
 
 @router.post("/devices/batch")
@@ -218,6 +226,9 @@ async def batch_create_devices(
                 except Exception as rollback_err:
                     logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
 
+        except HTTPException:
+            raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+        logger.exception("Batch creation failed unexpectedly")
         raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}") from e
 
 
@@ -397,10 +408,13 @@ async def delete_device(device_id: str, _user: dict[str, Any] = Depends(require_
         if not db_ok:
             resp["_persistence_warning"] = f"Device deleted from memory, but DB deletion failed: {db_err_msg}. Device may reappear after restart."
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.exception("Failed to delete device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to delete device: {e}") from e
 
 
 @router.put("/devices/{device_id}")
@@ -425,10 +439,13 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, A
         if not db_ok:
             response["_persistence_warning"] = f"Device updated in memory, but persistence failed: {db_err_msg}. Changes will be lost after restart."
         return response
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        logger.exception("Failed to update device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to update device: {e}") from e
 
 
 @router.get("/devices/{device_id}/points")
@@ -445,8 +462,13 @@ async def get_device_points(device_id: str, _user: dict[str, Any] = Depends(requ
             "points": points,
             "protocol_active": protocol_active,
         }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to read points for device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to read device points: {e}") from e
 
 
 @router.post("/devices/{device_id}/start")
@@ -457,11 +479,13 @@ async def start_device(device_id: str, _user: dict[str, Any] = Depends(require_o
         await engine.start_device(device_id)
         await _trigger_webhook_safe("device_online", {"device_id": device_id})
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to start device %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=f"Failed to start device: {e}") from e
 
 
 @router.post("/devices/{device_id}/stop")
@@ -471,11 +495,13 @@ async def stop_device(device_id: str, _user: dict[str, Any] = Depends(require_op
         await engine.stop_device(device_id)
         await _trigger_webhook_safe("device_offline", {"device_id": device_id})
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to stop device %s: %s", device_id, e)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=f"Failed to stop device: {e}") from e
 
 
 @router.put("/devices/{device_id}/points/{point_name}")  # FIXED: 添加try-except保护
@@ -486,14 +512,45 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
     if value is None:
         raise HTTPException(status_code=400, detail="Missing 'value' in request body")
 
+    # FIXED: 拒绝嵌套对象/数组等不可写入的值类型
+    if isinstance(value, (dict, list)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid value type: expected scalar (number/bool/string), got {type(value).__name__}",
+        )
+
     instance = engine.get_device_instance(device_id)
     if not instance:
         raise HTTPException(status_code=404, detail="Device not found")
 
+    # FIXED: 预检查设备状态、点位存在性和写入权限，提供有意义的错误信息
+    from protoforge.core.state_machine import DeviceState
+
+    device_state = instance.device_state
+    if device_state in (DeviceState.ERROR, DeviceState.MAINTENANCE, DeviceState.PROGRAM):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot write to device in {device_state.value} state",
+        )
+
+    # 检查点位是否存在和可写
+    point_config = None
+    for p in instance.points:
+        if p.name == point_name:
+            point_config = p
+            break
+    if point_config is None:
+        raise HTTPException(status_code=404, detail=f"Point '{point_name}' not found on device '{device_id}'")
+    if point_config.access not in ("w", "rw"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Point '{point_name}' is read-only (access='{point_config.access}')",
+        )
+
     try:
         success = await engine.write_device_point(device_id, point_name, value)
         if not success:
-            raise HTTPException(status_code=400, detail="Write failed")
+            raise HTTPException(status_code=400, detail="Write failed - protocol server rejected the write")
         log_bus.emit(instance.protocol if instance else "", "write", device_id, "point_write", f"Write {point_name}={value}", {"point": point_name, "value": value})
         await _trigger_webhook_safe("data_change", {"device_id": device_id, "point": point_name, "value": value})
         resp = {"status": "ok"}
@@ -503,7 +560,7 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
                 resp["warning"] = f"Protocol {instance.protocol} is not running - write only affects memory, not visible to external clients"
         return resp
     except HTTPException:
-        raise  # FIXED: 防止 HTTPException(400) 被 except Exception 吞掉重新包装为 500
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
