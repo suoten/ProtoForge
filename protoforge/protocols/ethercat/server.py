@@ -113,20 +113,32 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
         self._pd_input = bytearray()
         for point in self._config.points:
             val = self._values.get(point.name, 0)
-            if point.data_type.value in ("bool",):
-                self._pd_input.append(int(bool(val)))
-            elif point.data_type.value in ("int16",):
-                self._pd_input += struct.pack("<h", int(val))
-            elif point.data_type.value in ("uint16",):
-                self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
-            elif point.data_type.value in ("int32",):
-                self._pd_input += struct.pack("<i", int(val))
-            elif point.data_type.value in ("uint32",):
-                self._pd_input += struct.pack("<I", int(val) & 0xFFFFFFFF)
-            elif point.data_type.value in ("float32", "float"):
-                self._pd_input += struct.pack("<f", float(val))
-            else:
-                self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
+            try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0，避免ValueError导致周期数据同步失败
+                if point.data_type.value in ("bool",):
+                    self._pd_input.append(int(bool(val)))
+                elif point.data_type.value in ("int16",):
+                    self._pd_input += struct.pack("<h", int(val))
+                elif point.data_type.value in ("uint16",):
+                    self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
+                elif point.data_type.value in ("int32",):
+                    self._pd_input += struct.pack("<i", int(val))
+                elif point.data_type.value in ("uint32",):
+                    self._pd_input += struct.pack("<I", int(val) & 0xFFFFFFFF)
+                elif point.data_type.value in ("float32", "float"):
+                    self._pd_input += struct.pack("<f", float(val))
+                else:
+                    self._pd_input += struct.pack("<H", int(val) & 0xFFFF)
+            except (ValueError, TypeError, struct.error) as e:
+                logger.warning("EtherCAT _sync_values_to_pd_input conversion error for point %s: %s", point.name, e)
+                # 回退：用0填充，确保周期数据不会因单个点位转换失败而中断
+                if point.data_type.value in ("bool",):
+                    self._pd_input.append(0)
+                elif point.data_type.value in ("int16", "uint16"):
+                    self._pd_input += b"\x00\x00"
+                elif point.data_type.value in ("int32", "uint32", "float32", "float"):
+                    self._pd_input += b"\x00\x00\x00\x00"
+                else:
+                    self._pd_input += b"\x00\x00"
 
     def get_pd_input(self, config: DeviceConfig) -> bytes:
         if self._pd_input:
@@ -134,20 +146,32 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
         data = bytearray()
         for point in config.points:
             val = self._values.get(point.name, 0)
-            if point.data_type.value in ("bool",):
-                data.append(int(bool(val)))
-            elif point.data_type.value in ("int16",):
-                data += struct.pack("<h", int(val))
-            elif point.data_type.value in ("uint16",):
-                data += struct.pack("<H", int(val) & 0xFFFF)
-            elif point.data_type.value in ("int32",):
-                data += struct.pack("<i", int(val))
-            elif point.data_type.value in ("uint32",):
-                data += struct.pack("<I", int(val) & 0xFFFFFFFF)
-            elif point.data_type.value in ("float32", "float"):
-                data += struct.pack("<f", float(val))
-            else:
-                data += struct.pack("<H", int(val) & 0xFFFF)
+            try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0，避免ValueError导致协议响应构建失败
+                if point.data_type.value in ("bool",):
+                    data.append(int(bool(val)))
+                elif point.data_type.value in ("int16",):
+                    data += struct.pack("<h", int(val))
+                elif point.data_type.value in ("uint16",):
+                    data += struct.pack("<H", int(val) & 0xFFFF)
+                elif point.data_type.value in ("int32",):
+                    data += struct.pack("<i", int(val))
+                elif point.data_type.value in ("uint32",):
+                    data += struct.pack("<I", int(val) & 0xFFFFFFFF)
+                elif point.data_type.value in ("float32", "float"):
+                    data += struct.pack("<f", float(val))
+                else:
+                    data += struct.pack("<H", int(val) & 0xFFFF)
+            except (ValueError, TypeError, struct.error) as e:
+                logger.warning("EtherCAT get_pd_input conversion error for point %s: %s", point.name, e)
+                # 回退：用0填充，确保协议响应不会因单个点位转换失败而中断
+                if point.data_type.value in ("bool",):
+                    data.append(0)
+                elif point.data_type.value in ("int16", "uint16"):
+                    data += b"\x00\x00"
+                elif point.data_type.value in ("int32", "uint32", "float32", "float"):
+                    data += b"\x00\x00\x00\x00"
+                else:
+                    data += b"\x00\x00"
         return bytes(data)
 
     def set_pd_output(self, config: DeviceConfig, data: bytes) -> None:
@@ -536,6 +560,8 @@ class EtherCATServer(ProtocolServer):
                         await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常（如ValueError/struct.error），避免单个帧处理错误导致整个连接崩溃
+            logger.exception("EtherCAT connection handler unexpected error: %s", e)
         finally:
             writer.close()
             try:

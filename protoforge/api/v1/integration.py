@@ -37,6 +37,11 @@ async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer
     try:
         manager = _get_integration_manager()
         return manager.get_metrics()
+    except RuntimeError as e:
+        if "not initialized" in str(e).lower():
+            return {"status": "not_configured", "message": "Integration manager not initialized"}
+        logger.exception("Failed to get integration metrics: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get integration metrics: {e}") from e
     except Exception as e:
         logger.exception("Failed to get integration metrics: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get integration metrics: {e}") from e
@@ -80,6 +85,11 @@ async def batch_push(request: dict[str, Any], _user: dict[str, Any] = Depends(re
         return result
     except HTTPException:
         raise
+    except RuntimeError as e:
+        if "not initialized" in str(e).lower():
+            raise HTTPException(status_code=503, detail="Integration manager not initialized") from e
+        logger.exception("Batch push failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Batch push failed: {e}") from e
     except Exception as e:
         logger.exception("Batch push failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Batch push failed: {e}") from e

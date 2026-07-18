@@ -188,13 +188,11 @@ async def verify_edgelite_pipeline(
                     local_points = await engine.read_device_points(device_id)
                     local_map = {p.name: p.value for p in local_points}
                     edgelite_data = collect_step.get("data", {})
-                    if isinstance(edgelite_data, list):
-                        edgelite_map = {}
-                        for item in edgelite_data:
-                            if isinstance(item, dict) and "name" in item:
-                                edgelite_map[item["name"]] = item.get("value")
-                            elif isinstance(item, dict) and "point_name" in item:
-                                edgelite_map[item["point_name"]] = item.get("value")
+                    # FIXED: 使用统一归一化函数，确保 edgelite_data 为 dict[str, scalar]
+                    # 即使 verify_pipeline 已归一化，此处仍做防御性处理
+                    from protoforge.core.edgelite import _normalize_edgelite_points_data
+                    edgelite_map, _ = _normalize_edgelite_points_data(edgelite_data)
+                    if edgelite_map:
                         edgelite_data = edgelite_map
                     elif not isinstance(edgelite_data, dict):
                         edgelite_data = {}

@@ -201,6 +201,8 @@ async def export_backup(_user: dict[str, Any] = Depends(require_admin)):
             media_type="application/json",
             headers={"Content-Disposition": f"attachment; filename=protoforge_backup_{int(time.time())}.json"},
         )
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException(503) 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to export backup: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to export backup: {e}") from e
@@ -222,3 +224,29 @@ async def import_backup(payload: dict[str, Any], _user: dict[str, Any] = Depends
     except Exception as e:
         logger.exception("Failed to import backup: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to restore backup: {e}") from e
+
+
+@router.get("/error-stats")
+async def get_error_stats(_user: dict[str, Any] = Depends(require_admin)):
+    """获取 500 错误监控统计数据。
+
+    返回总请求数、500 错误数、4xx 错误数、错误率、Top 错误路径和最近错误列表。
+    """
+    try:
+        from protoforge.core.error_monitor import get_error_stats as _get_stats
+        return _get_stats().get_stats()
+    except Exception as e:
+        logger.exception("Failed to get error stats: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get error stats: {e}") from e
+
+
+@router.post("/error-stats/reset")
+async def reset_error_stats(_user: dict[str, Any] = Depends(require_admin)):
+    """重置 500 错误监控统计数据。"""
+    try:
+        from protoforge.core.error_monitor import get_error_stats as _get_stats
+        _get_stats().reset()
+        return {"status": "ok"}
+    except Exception as e:
+        logger.exception("Failed to reset error stats: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to reset error stats: {e}") from e

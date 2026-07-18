@@ -181,6 +181,8 @@ class HttpSimulatorServer(ProtocolServer):
                     break
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个请求处理错误导致整个连接崩溃
+            logger.exception("HTTP connection handler unexpected error: %s", e)
         finally:
             writer.close()
             try:

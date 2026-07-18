@@ -124,26 +124,33 @@ class ModbusDataStore:
         return self._discrete_inputs.get(address, 0)
 
     def set_point(self, fc: int, address: int, value: int) -> None:
-        if fc in (1, 5, 15):
-            self._coils[address] = int(bool(value))
-        elif fc == 2:
-            self._discrete_inputs[address] = int(bool(value))
-        elif fc in (3, 6, 16, 22, 23):
-            self._holding_regs[address] = int(value) & 0xFFFF  # FIXED-H01: FC=0x16(Mask Write)调用时传入的new_val已在server.py中完成掩码计算，此处&0xFFFF截断为16位寄存器是正确的
-        elif fc == 4:
-            self._input_regs[address] = int(value) & 0xFFFF
+        try:  # FIXED-P1: int()异常保护，非数字值时回退0
+            if fc in (1, 5, 15):
+                self._coils[address] = int(bool(value))
+            elif fc == 2:
+                self._discrete_inputs[address] = int(bool(value))
+            elif fc in (3, 6, 16, 22, 23):
+                self._holding_regs[address] = int(value) & 0xFFFF  # FIXED-H01: FC=0x16(Mask Write)调用时传入的new_val已在server.py中完成掩码计算，此处&0xFFFF截断为16位寄存器是正确的
+            elif fc == 4:
+                self._input_regs[address] = int(value) & 0xFFFF
+        except (ValueError, TypeError) as e:
+            logger.warning("Modbus set_point conversion error for fc=%d addr=%d: %s", fc, address, e)
 
     def set_32bit_point(self, fc: int, address: int, value: Any, data_type: str = "int32") -> None:
-        if data_type == "float32":
-            data = struct.pack(">f", float(value))
-        elif data_type == "int32":
-            data = struct.pack(">i", int(value))
-        elif data_type == "uint32":
-            data = struct.pack(">I", int(value))
-        elif data_type == "float64":
-            data = struct.pack(">d", float(value))
-        else:
-            self.set_point(fc, address, int(value))
+        try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0
+            if data_type == "float32":
+                data = struct.pack(">f", float(value))
+            elif data_type == "int32":
+                data = struct.pack(">i", int(value))
+            elif data_type == "uint32":
+                data = struct.pack(">I", int(value))
+            elif data_type == "float64":
+                data = struct.pack(">d", float(value))
+            else:
+                self.set_point(fc, address, int(value))
+                return
+        except (ValueError, TypeError, struct.error) as e:
+            logger.warning("Modbus set_32bit_point conversion error for fc=%d addr=%d type=%s: %s", fc, address, data_type, e)
             return
         regs = self._holding_regs if fc in (3, 6, 16, 22, 23) else self._input_regs
         for j in range(len(data) // 2):

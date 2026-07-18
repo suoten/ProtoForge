@@ -335,6 +335,8 @@ class S7Server(ProtocolServer):
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             logger.debug("S7 connection closed: %s", addr)
+        except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            logger.exception("S7 connection handler unexpected error: %s", e)
         finally:
             writer.close()
             try:
