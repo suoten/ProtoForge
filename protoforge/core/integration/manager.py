@@ -770,7 +770,19 @@ class IntegrationManager:
         test_user = username or self._username
         test_pass = password or self._password
 
+        # FIXED-P1: 跟踪是否创建了临时客户端，确保在方法结束时关闭，避免资源泄漏
+        _owns_client = self._http_client is None
         client = self._http_client or httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        try:
+            return await self._test_connection_inner(client, test_url, test_user, test_pass)
+        finally:
+            if _owns_client:
+                await client.aclose()
+
+    async def _test_connection_inner(
+        self, client: httpx.AsyncClient, test_url: str, test_user: str, test_pass: str
+    ) -> dict[str, Any]:
+        """test_connection 的内部实现，使用传入的 client。"""
         try:
             resp = await client.get(f"{test_url.rstrip('/')}/api/v1/system/status")
         except httpx.ConnectError:
@@ -859,14 +871,26 @@ class IntegrationManager:
                 except Exception as pwd_err:
                     logger.warning("自动修改EdgeLite密码失败: %s", pwd_err)
 
+            # FIXED-P0: 如果 client.get 抛出异常，status_resp 未定义，
+            # 原代码在 except 后访问 status_resp.status_code 会抛 UnboundLocalError。
+            # 修复：将 return 移入 try 块，except 中直接返回错误。
             try:
                 status_resp = await client.get(f"{test_url.rstrip('/')}/api/v1/system/status", headers=headers)
-                if status_resp.status_code == 200:
-                    raw = status_resp.json()
-                    data = raw.get("data", raw)
-                    return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
+            except httpx.ConnectError:
+                return {"ok": False, "error": desc("edgelite.error.cannot_connect")}
+            except httpx.TimeoutException:
+                return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
             except Exception as e:
                 logger.debug("Failed to get system status after login: %s", e)
+                return {"ok": False, "error": f"Status query failed after auth: {e}"}
+
+            if status_resp.status_code == 200:
+                try:
+                    raw = status_resp.json()
+                except Exception:
+                    return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
+                data = raw.get("data", raw)
+                return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
             return {"ok": False, "error": f"EdgeLite status returned HTTP {status_resp.status_code}"}
 
         if login_resp.status_code == 401:
