@@ -32,12 +32,16 @@ class GeneratorType(str, Enum):
 
 
 class PointConfig(BaseModel):
+    # FIXED: 支持 access_mode 别名，前端发送 access_mode 但后端字段名为 access
+    # populate_by_name=True 允许同时使用 access 和 access_mode
+    model_config = {"populate_by_name": True}
+
     name: str
     address: str
     data_type: DataType = DataType.FLOAT32
     unit: str = ""
     description: str = ""
-    access: Literal["r", "w", "rw"] = "rw"
+    access: Literal["r", "w", "rw"] = Field(default="rw", validation_alias="access_mode")
 
     generator_type: GeneratorType = GeneratorType.FIXED
     generator_config: dict[str, Any] = Field(default_factory=dict)
