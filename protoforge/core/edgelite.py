@@ -263,6 +263,18 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "ethercat": {"host", "port", "slave_address", "timeout"},
 }
 
+# EdgeLite plugin_name → ProtoForge 别名
+# EdgeLite 旧版 API 返回 plugin_name（如 siemens_s7），新版返回别名（如 s7），
+# _build_driver_config 和 _normalize_protocol_alias 统一使用此映射
+_PLUGIN_NAME_TO_ALIAS: dict[str, str] = {
+    "siemens_s7": "s7",
+    "mqtt_client": "mqtt",
+    "mitsubishi_mc": "mc",
+    "http_webhook": "http",
+    "omron_fins": "fins",
+    "allen_bradley": "ab",
+}
+
 
 def get_protoforge_host() -> str:
     s = get_settings()
@@ -432,7 +444,14 @@ async def _get_edgelite_protocol_port_from_existing_device(
     protocol: str,
     _protoforge_device_id: str,
 ) -> int | None:
-    """从 EdgeLite 已有的同协议设备中提取端口配置（EdgeLite 可能修改了默认端口）"""
+    """从 EdgeLite 已有的同协议设备中提取端口配置（EdgeLite 可能修改了默认端口）。
+
+    遍历所有同协议设备，返回首个有效端口。
+    不同协议在 EdgeLite 中存储端口的字段名可能不同：
+    - mqtt/sparkplug_b: config["port"]
+    - http: config["server_port"] 或 config["port"]
+    - 其他: config["port"]（通用回退）
+    """
     try:
         resp = await client.get(
             f"{el_url.rstrip('/')}/api/v1/devices",
@@ -440,33 +459,42 @@ async def _get_edgelite_protocol_port_from_existing_device(
             params={"protocol": PROTOCOL_MAP.get(protocol, protocol), "limit": 10},
             timeout=HTTP_TIMEOUT_SHORT,
         )
-        if resp.status_code == 200:
-            data = resp.json()
-            devices = data.get("data", data.get("devices", []))
-            for dev in devices:
-                config = dev.get("config", {})
-                if protocol == "mqtt" or protocol in ("modbus_tcp", "s7", "mc", "opcua", "fins", "ab"):
-                    return config.get("port")
-                elif protocol == "http":
-                    return config.get("server_port") or config.get("port")
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        devices = data.get("data", data.get("devices", []))
+        if not isinstance(devices, list):
+            return None
+        # FIXED-P1: 遍历所有设备，返回首个非 None 端口
+        for dev in devices:
+            if not isinstance(dev, dict):
+                continue
+            config = dev.get("config", {})
+            if not isinstance(config, dict):
+                continue
+            port: int | None = None
+            if protocol == "http":
+                port = config.get("server_port") or config.get("port")
+            else:
+                # mqtt, sparkplug_b, modbus_tcp, s7, mc, opcua, fins, ab,
+                # 以及所有其他协议统一使用 config["port"]
+                port = config.get("port")
+            if port is not None:
+                try:
+                    return int(port)
+                except (ValueError, TypeError):
+                    logger.debug("Invalid port value %r in EdgeLite device config, skipping", port)
+                    continue
     except Exception as e:
         logger.debug("Failed to get EdgeLite existing devices for port detection: %s", e)
     return None
 
 
 def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protoforge_host: str = "", el_config: dict[str, str] | None = None) -> dict[str, Any]:
-    # FIXED-P0: 将 EdgeLite plugin_name 规范化为别名，确保配置构建逻辑正确
+    # FIXED-P2: 使用模块级 _PLUGIN_NAME_TO_ALIAS（避免重复定义）
     # EdgeLite 旧版 API 返回 plugin_name（如 siemens_s7），新版返回别名（如 s7），
     # 但 _build_driver_config 内部分支使用别名（s7/mqtt/mc/http/fins/ab），
     # 所以需要将 plugin_name 转回别名
-    _PLUGIN_NAME_TO_ALIAS: dict[str, str] = {
-        "siemens_s7": "s7",
-        "mqtt_client": "mqtt",
-        "mitsubishi_mc": "mc",
-        "http_webhook": "http",
-        "omron_fins": "fins",
-        "allen_bradley": "ab",
-    }
     normalized_protocol = _PLUGIN_NAME_TO_ALIAS.get(protocol, protocol)
 
     if not protoforge_host:
@@ -623,16 +651,6 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
 
     return base
 
-
-# EdgeLite plugin_name → ProtoForge 别名（与 _build_driver_config 内部一致）
-_PLUGIN_NAME_TO_ALIAS: dict[str, str] = {
-    "siemens_s7": "s7",
-    "mqtt_client": "mqtt",
-    "mitsubishi_mc": "mc",
-    "http_webhook": "http",
-    "omron_fins": "fins",
-    "allen_bradley": "ab",
-}
 
 # ProtoForge S7 地址: DB1.DBD2 / DB1.DBX0.0 / DB1.DBB5 / DB1.DBW10
 # EdgeLite   S7 地址: DB1.D2  / DB1.X0.0  / DB1.B5   / DB1.W10   (s7.py:_parse_address)
@@ -1521,7 +1539,9 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["ok"] = False
         return result
 
-    # FIXED: 缓存 token 失效时自动重新登录重试
+    # FIXED-P0: 缓存 token 失效时自动重新登录重试
+    # 注意：重试块只负责重新获取响应，后续处理逻辑必须在 if 块之外执行，
+    # 否则正常情况(200)下所有 register/connect/collect 验证步骤都会被跳过。
     if dev_resp.status_code == 401:
         headers = await _relogin_on_401(client, el_config.get("url", ""), el_config.get("username", ""), el_config.get("password", ""))
         try:
@@ -1529,97 +1549,101 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
-        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            result["steps"]["register"] = {"ok": False, "error": str(e)}
+            result["ok"] = False
+            return result
+        except Exception as e:
             result["steps"]["register"] = {"ok": False, "error": str(e)}
             result["ok"] = False
             return result
 
-        if dev_resp.status_code == 404:
-            result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
-            result["ok"] = False
-            return result
-        if dev_resp.status_code != 200:
-            result["steps"]["register"] = {"ok": False, "error": f"HTTP {dev_resp.status_code}"}
-            result["ok"] = False
-            return result
+    if dev_resp.status_code == 404:
+        result["steps"]["register"] = {"ok": False, "error": "Device not registered on EdgeLite"}
+        result["ok"] = False
+        return result
+    if dev_resp.status_code != 200:
+        result["steps"]["register"] = {"ok": False, "error": f"HTTP {dev_resp.status_code}"}
+        result["ok"] = False
+        return result
 
-        try:
-            dev_data_raw = dev_resp.json()
-        except Exception as e:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
-            result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)}
-            result["ok"] = False
-            return result
-        dev_data = dev_data_raw.get("data", dev_data_raw)
-        el_status = dev_data.get("status", "unknown")
-        result["steps"]["register"] = {"ok": True, "status": el_status}
+    try:
+        dev_data_raw = dev_resp.json()
+    except Exception as e:
+        result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)}
+        result["ok"] = False
+        return result
+    dev_data = dev_data_raw.get("data", dev_data_raw)
+    el_status = dev_data.get("status", "unknown")
+    result["steps"]["register"] = {"ok": True, "status": el_status}
 
-        if el_status == "offline":
-            driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
-            if isinstance(driver_config, str):
-                try:
-                    import json
-                    driver_config = json.loads(driver_config)
-                except Exception as e:
-                    logger.debug("Failed to parse driver_config JSON: %s", e)
-                    driver_config = {}
-            device_protocol = getattr(device, "protocol", "") or ""
-            protoforge_running = False
+    if el_status == "offline":
+        driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
+        if isinstance(driver_config, str):
             try:
-                from protoforge.core.registry import get_engine
-                engine = get_engine()
-                protoforge_running = engine.is_protocol_running(device_protocol)
+                import json
+                driver_config = json.loads(driver_config)
             except Exception as e:
-                logger.debug("Failed to check protocol running status for %s: %s", device_protocol, e)
-            same_server = _is_edgelite_local(el_config)
-            connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running, same_server)
-            result["steps"]["connect"] = connect_error
-            result["ok"] = False
-            return result
-        result["steps"]["connect"] = {"ok": True, "status": el_status}
-
+                logger.debug("Failed to parse driver_config JSON: %s", e)
+                driver_config = {}
+        device_protocol = getattr(device, "protocol", "") or ""
+        protoforge_running = False
         try:
-            points_resp = await client.get(
-                f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
-                headers=headers,
-            )
-        except httpx.ConnectError:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_connection")}
-            result["ok"] = False
-            return result
-        except httpx.TimeoutException:
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_timeout")}
-            result["ok"] = False
-            return result
+            from protoforge.core.registry import get_engine
+            engine = get_engine()
+            protoforge_running = engine.is_protocol_running(device_protocol)
         except Exception as e:
-            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)}
+            logger.debug("Failed to check protocol running status for %s: %s", device_protocol, e)
+        same_server = _is_edgelite_local(el_config)
+        connect_error = _build_connect_error(driver_config if isinstance(driver_config, dict) else {}, device_protocol, protoforge_running, same_server)
+        result["steps"]["connect"] = connect_error
+        result["ok"] = False
+        return result
+    result["steps"]["connect"] = {"ok": True, "status": el_status}
+
+    try:
+        points_resp = await client.get(
+            f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
+            headers=headers,
+        )
+    except httpx.ConnectError:
+        result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_connection")}
+        result["ok"] = False
+        return result
+    except httpx.TimeoutException:
+        result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_timeout")}
+        result["ok"] = False
+        return result
+    except Exception as e:
+        result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)}
+        result["ok"] = False
+        return result
+    if points_resp.status_code == 200:
+        try:
+            raw_points = points_resp.json()
+        except Exception as e:
+            result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)}
             result["ok"] = False
             return result
-        if points_resp.status_code == 200:
-            try:
-                raw_points = points_resp.json()
-            except Exception as e:  # FIXED-P0: 字典字面量末尾多余逗号创建tuple而非dict
-                result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)}
-                result["ok"] = False
-                return result
-            points_data = raw_points.get("data", raw_points)
-            # FIXED: EdgeLite 返回 dict[str, PointValue_dict] 格式，需提取标量 value
-            # 使用统一归一化函数处理 list/dict/PointValue 嵌套结构
-            points_dict, has_data = _normalize_edgelite_points_data(points_data)
-            if points_dict:
-                points_data = points_dict
-            result["steps"]["collect"] = {
-                "ok": True,
-                "data": points_data,
-                "has_real_data": has_data,
-            }
-        else:
-            result["steps"]["collect"] = {"ok": False, "error": f"HTTP {points_resp.status_code}"}
+        points_data = raw_points.get("data", raw_points)
+        # FIXED: EdgeLite 返回 dict[str, PointValue_dict] 格式，需提取标量 value
+        # 使用统一归一化函数处理 list/dict/PointValue 嵌套结构
+        points_dict, has_data = _normalize_edgelite_points_data(points_data)
+        if points_dict:
+            points_data = points_dict
+        result["steps"]["collect"] = {
+            "ok": True,
+            "data": points_data,
+            "has_real_data": has_data,
+        }
+    else:
+        result["steps"]["collect"] = {"ok": False, "error": f"HTTP {points_resp.status_code}"}
 
-        all_ok = all(s.get("ok", False) for s in result["steps"].values())
-        collect_step = result["steps"].get("collect", {})
-        if all_ok and not collect_step.get("has_real_data"):
-            all_ok = False
-        result["ok"] = all_ok
+    all_ok = all(s.get("ok", False) for s in result["steps"].values())
+    collect_step = result["steps"].get("collect", {})
+    if all_ok and not collect_step.get("has_real_data"):
+        all_ok = False
+    result["ok"] = all_ok
 
     return result
 
