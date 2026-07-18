@@ -169,8 +169,6 @@ async def read_edgelite_device_points(device_id: str, _user: dict[str, Any] = De
 
     try:
         result = await mgr.read_device_points(instance)
-        if result.get("ok"):
-            return result
         return result
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502

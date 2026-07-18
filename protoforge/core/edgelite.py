@@ -907,13 +907,78 @@ async def _get_auth_headers(
     return headers, None
 
 
+def _get_cached_refresh_token(url: str) -> str:
+    """从缓存中获取 refresh_token"""
+    url_key = url.rstrip("/")
+    with _token_cache_lock:
+        entry = _token_cache.get(url_key)
+        if entry:
+            return entry.get("refresh_token", "")
+    return ""
+
+
+async def _try_refresh_token(client: httpx.AsyncClient, url: str) -> str | None:
+    """尝试使用 refresh_token 刷新 access_token。
+
+    成功时返回新的 access_token 并更新缓存；失败返回 None。
+    """
+    refresh_token = _get_cached_refresh_token(url)
+    if not refresh_token:
+        return None
+    try:
+        resp = await client.post(
+            f"{url.rstrip('/')}/api/v1/auth/refresh",
+            json={"refresh": refresh_token},
+            timeout=HTTP_TIMEOUT_SHORT,
+        )
+    except httpx.ConnectError as e:
+        logger.debug("refresh_token request connection failed: %s", e)
+        return None
+    except httpx.TimeoutException as e:
+        logger.debug("refresh_token request timeout: %s", e)
+        return None
+    except Exception as e:
+        logger.debug("refresh_token request failed: %s", e)
+        return None
+    if resp.status_code != 200:
+        logger.debug("refresh_token failed: HTTP %d, falling back to login", resp.status_code)
+        return None
+    try:
+        data = resp.json()
+    except Exception as e:
+        logger.debug("refresh_token response JSON parse failed: %s", e)
+        return None
+    inner = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(inner, dict):
+        inner = data if isinstance(data, dict) else {}
+    new_token = inner.get("access_token", "")
+    if not new_token:
+        return None
+    new_refresh = inner.get("refresh_token", refresh_token)
+    new_csrf = inner.get("csrf_token", "")
+    try:
+        expires_in = int(inner.get("expires_in", inner.get("exp", 86400)))
+    except (ValueError, TypeError):
+        expires_in = 86400
+    _cache_token(url, new_token, expires_in, new_refresh, new_csrf)
+    logger.info("EdgeLite token refreshed via refresh_token")
+    return new_token
+
+
 async def _relogin_on_401(
     client: httpx.AsyncClient, url: str, username: str, password: str
 ) -> dict[str, str]:
-    """当缓存的 token 失效（API 返回 401）时，清除缓存并重新登录。返回新的 headers。"""
-    _invalidate_token(url)
-    token = await _login_edgelite(client, url, username, password)
-    headers = {"Authorization": f"Bearer {token}"}
+    """当缓存的 token 失效（API 返回 401）时，清除缓存并重新登录。返回新的 headers。
+
+    FIXED-P2: 优先尝试使用 refresh_token 刷新（避免全量登录开销），
+    失败再清除缓存走全量登录流程。
+    """
+    # 优先尝试 refresh_token 刷新（不清除缓存，refresh 失败再清除）
+    new_token = await _try_refresh_token(client, url)
+    if not new_token:
+        _invalidate_token(url)
+        new_token = await _login_edgelite(client, url, username, password)
+    headers = {"Authorization": f"Bearer {new_token}"}
     csrf_token = _get_cached_csrf_token(url)
     if csrf_token:
         headers["X-CSRF-Token"] = csrf_token
@@ -1003,7 +1068,11 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/integration/push-device",
                 json=payload, headers=headers,
             )
-        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+        except httpx.ConnectError:
+            return {"ok": False, "error": "Cannot connect to EdgeLite during retry", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "Device creation retry timed out", "error_type": "timeout"}
+        except Exception as e:
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
         if create_resp.status_code in (200, 201):
@@ -1089,7 +1158,11 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                             f"{el_config.get('url', '').rstrip('/')}/api/v1/integration/push-device",
                             json=payload, headers=headers,
                         )
-                    except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+                    except httpx.ConnectError:
+                        return {"ok": False, "error": "Cannot connect to EdgeLite during re-create", "error_type": "connection"}
+                    except httpx.TimeoutException:
+                        return {"ok": False, "error": "Re-create request timed out", "error_type": "timeout"}
+                    except Exception as e:
                         return {"ok": False, "error": str(e), "error_type": "unknown"}
                     if create_resp2.status_code in (200, 201):
                         logger.info("Device %s re-created on EdgeLite", payload["device_id"])
@@ -1193,7 +1266,11 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}",
                 headers=headers,
             )
-        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+        except httpx.ConnectError:
+            return {"ok": False, "error": "Cannot connect to EdgeLite during removal retry", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "Removal retry timed out", "error_type": "timeout"}
+        except Exception as e:
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code in (200, 204, 404):
@@ -1309,7 +1386,11 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
                 f"{el_config.get('url', '').rstrip('/')}/api/v1/devices/{quote(str(device_id), safe='')}/points",
                 headers=headers,
             )
-        except (httpx.ConnectError, httpx.TimeoutException, Exception) as e:
+        except httpx.ConnectError:
+            return {"ok": False, "error": "Cannot connect to EdgeLite while reading points (retry)", "error_type": "connection"}
+        except httpx.TimeoutException:
+            return {"ok": False, "error": "Read points retry timed out", "error_type": "timeout"}
+        except Exception as e:
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code == 200:
