@@ -50,7 +50,12 @@ async def import_edgelite(config: dict[str, Any], _user: dict[str, Any] = Depend
         if errors:
             resp["errors"] = errors
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 400
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to import edgelite config: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -71,6 +76,8 @@ async def push_device_to_edgelite(device_id: str, _user: dict[str, Any] = Depend
         if result.get("ok") is False and not result.get("skipped"):
             logger.warning("EdgeLite push failed for %s: %s", device_id, result.get("error", ""))
         return result
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite push exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite push failed: {e}") from e
@@ -102,6 +109,8 @@ async def batch_push_devices(
         if not_found:
             result["not_found"] = not_found
         return result
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("Batch push exception: %s", e)
         raise HTTPException(status_code=502, detail=f"Batch push failed: {e}") from e
@@ -122,6 +131,8 @@ async def test_edgelite_connection(config: dict[str, Any] | None = Body(default=
         raise HTTPException(status_code=400, detail="EdgeLite address is required")
     try:
         return await mgr.test_connection(url, username, password)
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite connection test failed: %s", e)
         raise HTTPException(status_code=502, detail=f"EdgeLite connection test failed: {e}") from e
@@ -139,6 +150,8 @@ async def get_edgelite_device_status(device_id: str, _user: dict[str, Any] = Dep
 
     try:
         return await mgr.get_device_status(instance)
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite status check exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite status query failed: {e}") from e
@@ -159,6 +172,8 @@ async def read_edgelite_device_points(device_id: str, _user: dict[str, Any] = De
         if result.get("ok"):
             return result
         return result
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite read points exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite point read failed: {e}") from e
@@ -217,6 +232,8 @@ async def verify_edgelite_pipeline(
                 except Exception as exc:
                     logger.debug("Data comparison failed: %s", exc)
         return result
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite pipeline verification exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite pipeline verification failed: {e}") from e
@@ -234,6 +251,8 @@ async def remove_device_from_edgelite(device_id: str, _user: dict[str, Any] = De
 
     try:
         return await mgr.delete_device(instance)
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 502
     except Exception as e:
         logger.exception("EdgeLite remove device exception for %s: %s", device_id, e)
         raise HTTPException(status_code=502, detail=f"EdgeLite device removal failed: {e}") from e
@@ -259,7 +278,12 @@ async def import_pygbsentry(config: dict[str, Any], _user: dict[str, Any] = Depe
         if errors:
             resp["errors"] = errors
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 400
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to import pygbsentry config: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 

@@ -42,7 +42,10 @@ async def setup_demo(_user: dict[str, Any] = Depends(require_admin)):
             "device_count": len(devices),
             "scenario_count": len(scenarios),
         }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
+        logger.exception("Failed to setup demo: %s", e)
         from protoforge.core.defaults import get_friendly_error
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e))) from e
 
@@ -62,6 +65,8 @@ async def setup_status(_user: dict[str, Any] = Depends(require_viewer)):
             "protocols_running": protocols_running,
             "templates_available": len(_get_template_manager().list_templates()),
         }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get setup status: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get system status: {e}") from e
@@ -72,6 +77,8 @@ async def get_settings(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.config import get_all_settings_dict
         return get_all_settings_dict()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get settings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get settings: {e}") from e
@@ -124,6 +131,8 @@ async def update_settings(updates: dict[str, Any], _user: dict[str, Any] = Depen
                 logger.warning("Failed to hot-reload IntegrationManager: %s", e)
 
         return {"status": "ok", "changed": changed, "current": get_all_settings_dict()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ConfigValidationError as e:
         raise HTTPException(status_code=422, detail="; ".join(e.errors)) from e
     except Exception as e:
@@ -154,6 +163,8 @@ async def query_audit_log(
             limit=limit, offset=offset,
         )
         return {"entries": entries, "total": total}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to query audit log: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to query audit log: {e}") from e
@@ -164,6 +175,8 @@ async def get_audit_stats(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.audit import audit_logger
         return await audit_logger.get_stats()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get audit stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get audit stats: {e}") from e
@@ -235,6 +248,8 @@ async def get_error_stats(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.error_monitor import get_error_stats as _get_stats
         return _get_stats().get_stats()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get error stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get error stats: {e}") from e
@@ -247,6 +262,8 @@ async def reset_error_stats(_user: dict[str, Any] = Depends(require_admin)):
         from protoforge.core.error_monitor import get_error_stats as _get_stats
         _get_stats().reset()
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to reset error stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to reset error stats: {e}") from e

@@ -126,6 +126,8 @@ async def register(user_data: RegisterRequest):
 
     try:
         user = await user_manager.create_user(user_data.username, user_data.password, role="user")
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
@@ -159,6 +161,8 @@ async def list_users(_user: dict[str, Any] = Depends(require_admin)):
     try:
         from protoforge.core.auth import user_manager
         return {"users": user_manager.list_users()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to list users: %s", e)
         raise HTTPException(status_code=500, detail="Failed to list users") from e
