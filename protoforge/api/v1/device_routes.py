@@ -502,6 +502,8 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
             if not resp["protocol_active"]:
                 resp["warning"] = f"Protocol {instance.protocol} is not running - write only affects memory, not visible to external clients"
         return resp
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException(400) 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

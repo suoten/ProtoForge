@@ -880,7 +880,11 @@ class IntegrationManager:
         if not self._enabled:
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
-        from protoforge.core.edgelite import _normalize_device_id, get_edgelite_config_from_device
+        from protoforge.core.edgelite import (
+            _normalize_device_id,
+            _normalize_edgelite_points_data,
+            get_edgelite_config_from_device,
+        )
 
         el_config = get_edgelite_config_from_device(device)
         if not el_config.get("url"):
@@ -895,6 +899,10 @@ class IntegrationManager:
             if resp.status_code == 200:
                 raw = resp.json()
                 data = raw.get("data", raw)
+                # FIXED: 归一化 EdgeLite 返回的 PointValue 嵌套结构为标量值
+                points_dict, _ = _normalize_edgelite_points_data(data)
+                if points_dict:
+                    data = points_dict
                 return {"ok": True, "device_id": device_id, "points": data}
             if resp.status_code == 404:
                 return {"ok": False, "error": desc("edgelite.error.query_device_connection"), "error_type": "not_found"}
@@ -955,6 +963,7 @@ class IntegrationManager:
             _get_protocol_status,
             _is_edgelite_local,
             _normalize_device_id,
+            _normalize_edgelite_points_data,
             get_edgelite_config_from_device,
         )
 
@@ -1097,20 +1106,11 @@ class IntegrationManager:
                 return result
 
             points_data = raw_points.get("data", raw_points)
-            if isinstance(points_data, list):
-                has_data = len(points_data) > 0
-                points_dict = {}
-                for item in points_data:
-                    if isinstance(item, dict):
-                        key = item.get("name") or item.get("point_name") or item.get("id", "")
-                        points_dict[key] = item.get("value")
-                if points_dict:
-                    points_data = points_dict
-            elif isinstance(points_data, dict):
-                has_data = any(v is not None for v in points_data.values())
-            else:
-                has_data = False
-
+            # FIXED: EdgeLite 返回 dict[str, PointValue_dict] 格式，需提取标量 value
+            # 使用统一归一化函数处理 list/dict/PointValue 嵌套结构
+            points_dict, has_data = _normalize_edgelite_points_data(points_data)
+            if points_dict:
+                points_data = points_dict
             result["steps"]["collect"] = {"ok": True, "data": points_data, "has_real_data": has_data}
         else:
             result["steps"]["collect"] = {"ok": False, "error": f"HTTP {points_resp.status_code}"}

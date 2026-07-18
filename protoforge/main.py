@@ -622,6 +622,10 @@ def create_app() -> FastAPI:
     from protoforge.api.v1.rate_limit import rate_limit_middleware
     app.middleware("http")(rate_limit_middleware)
 
+    # FIXED: 注册 500 错误监控中间件，自动捕获并记录所有 HTTP 500 响应
+    from protoforge.core.error_monitor import ErrorMonitorMiddleware
+    app.add_middleware(ErrorMonitorMiddleware)
+
     app.include_router(router)
 
     @app.get("/health")

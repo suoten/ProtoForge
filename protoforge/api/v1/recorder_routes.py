@@ -27,6 +27,23 @@ def _get_recorder():
     return _recorder
 
 
+def reset_recorder() -> None:
+    """重置 Recorder 单例。
+
+    用于测试环境清理：pytest-asyncio 为每个测试创建新的事件循环，
+    而 Recorder 单例的 asyncio.Queue 绑定到创建时的事件循环。
+    在测试 teardown 时调用此函数可避免跨事件循环 RuntimeError。
+    """
+    global _recorder
+    with _recorder_lock:
+        if _recorder is not None:
+            try:
+                _recorder._running = False
+            except Exception:
+                pass
+        _recorder = None
+
+
 @router.post("/recorder/start")
 async def start_recording(config: dict[str, Any] | None = None, _user: dict[str, Any] = Depends(require_operator)):
     try:

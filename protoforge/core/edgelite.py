@@ -116,6 +116,63 @@ def _invalidate_token(url: str) -> None:
         _token_cache.pop(url_key, None)
 
 
+def _extract_point_value(raw: Any) -> Any:
+    """从 EdgeLite 返回的测点值中提取标量值。
+
+    EdgeLite 的 PointValue 是一个 dataclass，序列化为 JSON 后形如：
+        {"value": 36.86, "quality": "good", "timestamp": "...",
+         "source": "cache", "latency_ms": 0}
+    ProtoForge 数据对比只需要标量 value 字段。
+
+    兼容以下格式：
+    - 标量值（int/float/bool/str）→ 原样返回
+    - PointValue 字典（含 "value" 键）→ 返回 value 字段
+    - 其他字典 → 原样返回（供上层进一步处理）
+    """
+    if isinstance(raw, dict):
+        # EdgeLite PointValue 序列化后的字典结构
+        if "value" in raw:
+            return raw["value"]
+        return raw
+    return raw
+
+
+def _normalize_edgelite_points_data(points_data: Any) -> tuple[dict[str, Any], bool]:
+    """归一化 EdgeLite /points 接口返回的测点数据。
+
+    EdgeLite 返回格式可能为：
+    1. dict[str, PointValue_dict] — 如 {"temperature": {"value": 36.86, "quality": "good", ...}}
+    2. list[dict] — 如 [{"name": "temperature", "value": 36.86}, ...]
+    3. dict[str, scalar] — 如 {"temperature": 36.86}（旧版本或简化格式）
+
+    统一归一化为 dict[str, scalar]，并返回是否有真实数据。
+
+    Returns:
+        (points_dict, has_real_data)
+    """
+    points_dict: dict[str, Any] = {}
+    has_real_data = False
+
+    if isinstance(points_data, list):
+        for item in points_data:
+            if isinstance(item, dict):
+                key = item.get("name") or item.get("point_name") or item.get("id", "")
+                if not key:
+                    continue
+                val = _extract_point_value(item.get("value"))
+                points_dict[key] = val
+                if val is not None:
+                    has_real_data = True
+    elif isinstance(points_data, dict):
+        for key, raw_val in points_data.items():
+            val = _extract_point_value(raw_val)
+            points_dict[key] = val
+            if val is not None:
+                has_real_data = True
+
+    return points_dict, has_real_data
+
+
 def _normalize_device_id(device_id: str) -> str:
     """Convert device_id to EdgeLite-compatible format.
 
@@ -1243,6 +1300,10 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         except Exception as e:
             return {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}", "error_type": "parse_error"}
         data = raw.get("data", raw)
+        # FIXED: 归一化 EdgeLite 返回的 PointValue 嵌套结构为标量值
+        points_dict, _ = _normalize_edgelite_points_data(data)
+        if points_dict:
+            data = points_dict
         return {"ok": True, "device_id": device_id, "points": data}
     if resp.status_code == 404:
         return {"ok": False, "error": "Device not found on EdgeLite", "error_type": "not_found"}
@@ -1541,19 +1602,11 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
                 result["ok"] = False
                 return result
             points_data = raw_points.get("data", raw_points)
-            if isinstance(points_data, list):
-                has_data = len(points_data) > 0
-                points_dict = {}
-                for item in points_data:
-                    if isinstance(item, dict):
-                        key = item.get("name") or item.get("point_name") or item.get("id", "")
-                        points_dict[key] = item.get("value")
-                if points_dict:
-                    points_data = points_dict
-            elif isinstance(points_data, dict):
-                has_data = any(v is not None for v in points_data.values())
-            else:
-                has_data = False
+            # FIXED: EdgeLite 返回 dict[str, PointValue_dict] 格式，需提取标量 value
+            # 使用统一归一化函数处理 list/dict/PointValue 嵌套结构
+            points_dict, has_data = _normalize_edgelite_points_data(points_data)
+            if points_dict:
+                points_data = points_dict
             result["steps"]["collect"] = {
                 "ok": True,
                 "data": points_data,

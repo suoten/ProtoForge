@@ -175,6 +175,13 @@ async def client() -> AsyncIterator:
     await main_module._engine.stop()
     await main_module._database.close()
 
+    # FIXED: 重置 Recorder 单例，避免跨测试事件循环导致 Queue 绑定失效
+    try:
+        from protoforge.api.v1.recorder_routes import reset_recorder
+        reset_recorder()
+    except Exception:
+        pass
+
     main_module._engine = None
     main_module._template_manager = None
     main_module._database = None

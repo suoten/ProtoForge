@@ -25,9 +25,12 @@ class ToledoDeviceBehavior(StandardDeviceBehavior):
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 if name == "weight":
-                    self._weight = float(self._values.get(name, 0))
+                    # FIXED-P1: float()异常保护，非数字值时回退0，避免设备创建失败
+                    with contextlib.suppress(ValueError, TypeError):
+                        self._weight = float(self._values.get(name, 0))
                 elif name == "tare":
-                    self._tare = float(self._values.get(name, 0))
+                    with contextlib.suppress(ValueError, TypeError):
+                        self._tare = float(self._values.get(name, 0))
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
@@ -164,6 +167,8 @@ class ToledoServer(ProtocolServer):
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            logger.exception("Toledo connection handler unexpected error: %s", e)
         finally:
             self._continuous_writers.discard(writer)
             writer.close()

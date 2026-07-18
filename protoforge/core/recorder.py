@@ -203,12 +203,42 @@ class Recorder:
         except Exception as e:
             logger.debug("Failed to read recorder_queue_size from config, using default: %s", e)  # FIXED: log the exception instead of silently swallowing
             queue_size = 50000
+        self._queue_size = queue_size
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._task: asyncio.Task | None = None
         self._running = False
         self._database = None
         self._encryption_key: bytes | None = None
         self._max_warned_active: bool = False
+        self._event_loop: asyncio.AbstractEventLoop | None = None
+
+    def _ensure_event_loop(self) -> bool:
+        """检测事件循环变化并重建 Queue。
+
+        asyncio.Queue 绑定到创建时的事件循环，跨事件循环使用会抛 RuntimeError。
+        此方法在 start_recording / stop_recording 等关键路径上检测事件循环变化，
+        重建 Queue 以适配当前事件循环。
+
+        :return: True 表示事件循环已变化（Queue 已重建）
+        """
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        if self._event_loop is not current_loop:
+            old_queue = self._queue
+            self._event_loop = current_loop
+            self._queue = asyncio.Queue(maxsize=self._queue_size)
+            # 尝试从旧 log_bus 取消订阅旧 queue（可能跨事件循环失败，忽略即可）
+            try:
+                self._log_bus.unsubscribe(old_queue)
+            except Exception:
+                pass
+            self._task = None
+            self._running = False
+            logger.debug("Recorder event loop changed, queue rebuilt")
+            return True
+        return False
 
     def set_database(self, database) -> None:
         self._database = database
@@ -241,6 +271,7 @@ class Recorder:
         self, name: str, protocol: str | None = None,
         device_id: str | None = None, metadata: dict | None = None,
     ) -> Recording:
+        self._ensure_event_loop()
         if self._active:
             await self.stop_recording()
         rec_id = f"rec-{uuid.uuid4().hex[:12]}"
@@ -260,18 +291,30 @@ class Recorder:
     async def stop_recording(self) -> Recording | None:
         if not self._active:
             return None
+        # FIXED: 检测事件循环变化——若跨事件循环，旧 task/queue 已失效，
+        # _ensure_event_loop 会重建 queue 并清除 task，避免跨循环 await 导致 RuntimeError
+        self._ensure_event_loop()
         self._running = False
         if self._task:
             self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            # FIXED: suppress RuntimeError too — Queue bound to a different event loop
+            # raises RuntimeError instead of CancelledError when the task is cancelled
+            # across event loop boundaries (common in test environments).
+            with contextlib.suppress(asyncio.CancelledError, RuntimeError):
                 await self._task
             self._task = None
-        self._log_bus.unsubscribe(self._queue)
+        try:
+            self._log_bus.unsubscribe(self._queue)
+        except Exception as e:
+            logger.debug("Failed to unsubscribe queue from log bus: %s", e)
         while not self._queue.empty():
             try:
                 msg = self._queue.get_nowait()
                 self._process_message(msg)
             except asyncio.QueueEmpty:
+                break
+            except RuntimeError:
+                # Queue bound to a different event loop — skip draining
                 break
         self._active.end_time = time.time()
         self._recordings[self._active.id] = self._active
