@@ -29,6 +29,8 @@ class IntegrationAuth:
         self._token_expires: float = 0.0
         self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
         self._lock = asyncio.Lock()  # 防止并发刷新 Token
+        # FIXED-P3: 密码变更回调，通知 IntegrationManager 同步更新其 _password
+        self._on_password_changed = None
 
     @property
     def token(self) -> str:
@@ -37,6 +39,15 @@ class IntegrationAuth:
     @property
     def csrf_token(self) -> str:
         return self._csrf_token
+
+    def set_password_changed_callback(self, callback) -> None:
+        """设置密码变更回调函数。
+
+        FIXED-P3: 当 _handle_must_change_password 修改密码后，
+        通过此回调通知 IntegrationManager 同步更新其 _password 字段，
+        避免 IntegrationManager 被重新配置时使用旧密码。
+        """
+        self._on_password_changed = callback
 
     @property
     def is_authenticated(self) -> bool:
@@ -147,7 +158,14 @@ class IntegrationAuth:
             if change_resp.status_code in (200, 204):
                 logger.info("EdgeLite must_change_password flag cleared successfully")
                 # 更新本地密码为新密码，以便后续 refresh 使用
+                old_password = self._password
                 self._password = new_password
+                # FIXED-P3: 通过回调通知 IntegrationManager 同步更新密码
+                if self._on_password_changed is not None:
+                    try:
+                        self._on_password_changed(old_password, new_password)
+                    except Exception as cb_err:
+                        logger.warning("password_changed callback failed: %s", cb_err)
                 # change-password 后 token 可能失效，需要重新登录
                 self._token = ""
                 self._refresh_token = ""

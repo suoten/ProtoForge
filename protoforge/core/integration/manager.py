@@ -191,6 +191,9 @@ class IntegrationManager:
             username=self._username,
             password=self._password,
         )
+        # FIXED-P3: 注册密码变更回调，当 auth 自动修改密码后同步更新本地的 _password
+        # 避免 configure() 重新配置或 test_connection 使用旧密码
+        self._auth.set_password_changed_callback(self._on_auth_password_changed)
 
         # 初始化 HTTP 客户端
         self._http_client = httpx.AsyncClient(
@@ -308,6 +311,18 @@ class IntegrationManager:
             return self._state.state == ConnectionState.CONNECTED
         except Exception:
             return False
+
+    def _on_auth_password_changed(self, old_password: str, new_password: str) -> None:
+        """密码变更回调 — 当 IntegrationAuth 自动修改密码后同步更新本地密码。
+
+        FIXED-P3: 避免 configure() 重新配置或 test_connection 使用过期的旧密码。
+        """
+        if self._password == old_password:
+            self._password = new_password
+            logger.info("IntegrationManager password synced after auth auto-change")
+        else:
+            # 本地密码已通过 configure() 更新为其他值，不覆盖
+            logger.debug("IntegrationManager password already changed, skipping sync")
 
     async def _get_auth_headers(self) -> tuple[dict[str, str], Exception | None]:
         """获取认证头，返回 (headers, error)。包含 CSRF token 以通过 EdgeLite 的 CSRF 中间件。"""
@@ -1085,8 +1100,23 @@ class IntegrationManager:
                     from protoforge.core.registry import get_engine
                     engine = get_engine()
                     if engine:
-                        # FIX: start_protocol 需要 config 参数，从引擎配置中获取协议端口
-                        protocol_config = engine.config.dict() if hasattr(engine, 'config') and hasattr(engine.config, 'dict') else {}
+                        # FIXED-P2: 传递协议特定的配置，而非整个 engine config
+                        # 1. 从端口映射表获取协议默认配置（host/port 等）
+                        from protoforge.config import get_protocol_port_map
+                        port_map = get_protocol_port_map()
+                        protocol_config: dict[str, Any] = {}
+                        proto_info = port_map.get(protocol, {})
+                        if isinstance(proto_info, dict):
+                            protocol_config.update(proto_info)
+                        # 2. 合并设备实例的 protocol_config（如果可获取）
+                        try:
+                            device_instance = engine.get_device_instance(getattr(device, "id", ""))
+                            if device_instance is not None:
+                                dev_proto_config = getattr(device_instance.config, "protocol_config", None) or {}
+                                if isinstance(dev_proto_config, dict):
+                                    protocol_config.update(dev_proto_config)
+                        except Exception as dev_cfg_err:
+                            logger.debug("Failed to get device protocol_config for %s: %s", protocol, dev_cfg_err)
                         await engine.start_protocol(protocol, protocol_config)
                         protoforge_running = True
                         result["auto_fixes"].append({"step": "connect", "action": "start_protocol", "result": "success"})
@@ -1328,7 +1358,8 @@ class IntegrationManager:
 
                     # FIXED: 将数据转换为 EdgeLite 期望的格式
                     # EdgeLite 期望: {"data": {"point_name": {"value": xxx, "quality": "good", "timestamp": "..."}}}
-                    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                    # FIXED-P3: 使用 timezone-aware 的 datetime（utcnow() 在 Python 3.12+ 已弃用）
+                    now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                     push_payload = {
                         "data": {
                             pt_name: {
