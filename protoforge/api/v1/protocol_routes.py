@@ -147,6 +147,8 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
 
         return result
 
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
@@ -168,6 +170,8 @@ async def stop_protocol(protocol_name: str, request: Request, _user: dict[str, A
         await engine.stop_protocol(protocol_name)
         log_bus.emit(protocol_name, "system", "", "protocol_stop", f"Protocol {protocol_name} stopped")
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except RuntimeError as e:
@@ -175,4 +179,5 @@ async def stop_protocol(protocol_name: str, request: Request, _user: dict[str, A
         friendly = get_friendly_error(error_detail, lang=lang)
         raise HTTPException(status_code=503, detail=friendly) from e
     except Exception as e:
+        logger.exception("Failed to stop protocol %s: %s", protocol_name, e)
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e), lang=lang)) from e
