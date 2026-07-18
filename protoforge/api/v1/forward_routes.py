@@ -32,6 +32,8 @@ async def list_forward_targets(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         engine = _get_forward_engine()
         return {"targets": engine.list_targets()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to list forward targets: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list forward targets: {e}") from e
@@ -74,6 +76,10 @@ async def remove_forward_target(name: str, _user: dict[str, Any] = Depends(requi
         engine = _get_forward_engine()
         engine.remove_target(name)
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Forward target '{name}' not found") from None
     except Exception as e:
         logger.exception("Failed to remove forward target: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to remove forward target: {e}") from e
@@ -85,7 +91,10 @@ async def start_forward(_user: dict[str, Any] = Depends(require_operator)):
     try:
         await engine.start()
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
+        logger.exception("Failed to start data forwarding: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to start data forwarding: {str(e)}") from e
 
 
@@ -95,7 +104,10 @@ async def stop_forward(_user: dict[str, Any] = Depends(require_operator)):
     try:
         await engine.stop()
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
+        logger.exception("Failed to stop data forwarding: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to stop data forwarding: {str(e)}") from e
 
 
@@ -104,6 +116,8 @@ async def forward_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         engine = _get_forward_engine()
         return engine.get_stats()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get forward stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get forward stats: {e}") from e

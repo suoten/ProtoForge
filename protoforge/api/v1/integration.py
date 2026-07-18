@@ -22,6 +22,8 @@ async def get_integration_status(_user: dict[str, Any] = Depends(require_viewer)
     try:
         manager = _get_integration_manager()
         return manager.get_status()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except RuntimeError as e:
         if "not initialized" in str(e).lower():
             return {"status": "not_configured", "message": "Integration manager not initialized"}
@@ -37,6 +39,8 @@ async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer
     try:
         manager = _get_integration_manager()
         return manager.get_metrics()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except RuntimeError as e:
         if "not initialized" in str(e).lower():
             return {"status": "not_configured", "message": "Integration manager not initialized"}
@@ -147,6 +151,8 @@ async def get_protocol_mappings(_user: dict[str, Any] = Depends(require_viewer))
             "protocol_map": protocol_map,
             "supported_source_protocols": manager.get_supported_source_protocols(),
         }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get protocol mappings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get protocol mappings: {e}") from e
@@ -176,6 +182,8 @@ async def validate_device_compatibility(request: dict[str, Any], _user: dict[str
             "warnings": report.warnings,
             "errors": report.errors,
         }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Device compatibility validation failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Device compatibility validation failed: {e}") from e
@@ -186,6 +194,8 @@ async def get_backhaul_data(device_id: str = "", limit: int = 100, _user: dict[s
     try:
         manager = _get_integration_manager()
         return {"data": manager.get_backhaul_data(device_id=device_id, limit=limit)}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get backhaul data: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get backhaul data: {e}") from e
@@ -199,6 +209,8 @@ async def get_device_status_cache(_user: dict[str, Any] = Depends(require_viewer
         if isinstance(status, dict):
             return {"devices": [{"device_id": did, "status": s} for did, s in status.items()]}
         return {"devices": status if isinstance(status, list) else []}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get device status cache: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get device status: {e}") from e
@@ -212,8 +224,10 @@ async def get_alarm_reaction_rules(_user: dict[str, Any] = Depends(require_viewe
             {"rule_id": r.rule_id, "source_device_id": r.source_device_id,
              "alarm_severity": r.alarm_severity, "action": r.action,
              "target_device_id": r.target_device_id, "enabled": r.enabled}
-            for r in manager.get_alarm_reaction_rules()
+             for r in manager.get_alarm_reaction_rules()
         ]}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get alarm rules: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get alarm rules: {e}") from e
@@ -259,6 +273,8 @@ async def delete_alarm_reaction_rule(rule_id: str, _user: dict[str, Any] = Depen
         manager = _get_integration_manager()
         manager.remove_alarm_reaction_rule(rule_id)
         return {"status": "ok"}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Delete alarm rule failed: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to delete alarm rule: {e}") from e

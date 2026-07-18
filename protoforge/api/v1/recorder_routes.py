@@ -56,6 +56,8 @@ async def start_recording(config: dict[str, Any] | None = None, _user: dict[str,
             metadata=cfg.get("metadata"),
         )
         return rec.to_dict()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to start recording: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to start recording: {e}") from e
@@ -81,6 +83,8 @@ async def list_recordings(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         recorder = _get_recorder()
         return {"recordings": recorder.list_recordings()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to list recordings: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list recordings: {e}") from e
@@ -155,6 +159,8 @@ async def recorder_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         recorder = _get_recorder()
         return recorder.get_stats()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get recorder stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get recorder stats: {e}") from e

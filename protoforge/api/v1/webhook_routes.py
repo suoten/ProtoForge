@@ -18,6 +18,8 @@ async def list_webhooks(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         from protoforge.core.webhook import webhook_manager
         return {"webhooks": webhook_manager.list_webhooks()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to list webhooks: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to list webhooks: {e}") from e
@@ -106,6 +108,8 @@ async def webhook_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
         from protoforge.core.webhook import webhook_manager
         return webhook_manager.get_stats()
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to get webhook stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get webhook stats: {e}") from e  # FIXED: 中文→英文 from e

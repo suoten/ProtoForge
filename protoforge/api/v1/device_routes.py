@@ -211,6 +211,8 @@ async def batch_create_devices(
         created_count = sum(1 for r in results if "error" not in r)
         return {"status": "ok", "created": created_count, "total": len(results), "devices": results}
 
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         # 捕获意外错误，确保回滚
         if atomic and created_devices:
@@ -226,8 +228,6 @@ async def batch_create_devices(
                 except Exception as rollback_err:
                     logger.exception("Failed to rollback device %s: %s", dev_id, rollback_err)
 
-        except HTTPException:
-            raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
         logger.exception("Batch creation failed unexpectedly")
         raise HTTPException(status_code=500, detail=f"Batch creation failed: {str(e)}") from e
 
@@ -627,32 +627,38 @@ async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: di
         description=req.description or f"{fault_type.value} on {req.target}",
     )
 
-    fault_id = instance.inject_fault(config)
+    try:
+        fault_id = instance.inject_fault(config)
 
-    # FaultInjector 默认将故障添加为活跃状态。
-    # 如果 auto_activate=False，需要显式停用。
-    if not req.auto_activate:
-        instance.deactivate_fault(fault_id)
+        # FaultInjector 默认将故障添加为活跃状态。
+        # 如果 auto_activate=False，需要显式停用。
+        if not req.auto_activate:
+            instance.deactivate_fault(fault_id)
 
-    await _trigger_webhook_safe("fault.activated", {
-        "device_id": device_id,
-        "fault_id": fault_id,
-        "fault_type": fault_type.value,
-        "target_point": req.target,
-    })
+        await _trigger_webhook_safe("fault.activated", {
+            "device_id": device_id,
+            "fault_id": fault_id,
+            "fault_type": fault_type.value,
+            "target_point": req.target,
+        })
 
-    logger.info("Fault injected: device=%s, fault_id=%s, type=%s", device_id, fault_id, fault_type.value)
+        logger.info("Fault injected: device=%s, fault_id=%s, type=%s", device_id, fault_id, fault_type.value)
 
-    return {
-        "fault_id": fault_id,
-        "device_id": device_id,
-        "fault_type": fault_type.value,
-        "target": req.target,
-        "severity": req.severity,
-        "trigger_mode": trigger_mode.value,
-        "active": req.auto_activate,
-        "parameters": params,
-    }
+        return {
+            "fault_id": fault_id,
+            "device_id": device_id,
+            "fault_type": fault_type.value,
+            "target": req.target,
+            "severity": req.severity,
+            "trigger_mode": trigger_mode.value,
+            "active": req.auto_activate,
+            "parameters": params,
+        }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to inject fault to device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to inject fault: {e}") from e
 
 
 @router.get("/devices/{device_id}/faults")
@@ -667,13 +673,16 @@ async def list_device_faults(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    faults = instance.get_active_faults() if active_only else instance.get_all_faults()
-
-    return {
-        "device_id": device_id,
-        "faults": [f.to_dict() for f in faults],
-        "count": len(faults),
-    }
+    try:
+        faults = instance.get_active_faults() if active_only else instance.get_all_faults()
+        return {
+            "device_id": device_id,
+            "faults": [f.to_dict() for f in faults],
+            "count": len(faults),
+        }
+    except Exception as e:
+        logger.exception("Failed to list faults for device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to list device faults: {e}") from e
 
 
 @router.delete("/devices/{device_id}/faults/{fault_id}")
@@ -684,16 +693,22 @@ async def remove_device_fault(device_id: str, fault_id: str, _user: dict[str, An
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    success = instance.remove_fault(fault_id)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Fault not found: {fault_id}")
+    try:
+        success = instance.remove_fault(fault_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Fault not found: {fault_id}")
 
-    await _trigger_webhook_safe("fault.deactivated", {
-        "device_id": device_id,
-        "fault_id": fault_id,
-    })
+        await _trigger_webhook_safe("fault.deactivated", {
+            "device_id": device_id,
+            "fault_id": fault_id,
+        })
 
-    return {"status": "ok", "fault_id": fault_id, "device_id": device_id}
+        return {"status": "ok", "fault_id": fault_id, "device_id": device_id}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to remove fault %s for %s: %s", fault_id, device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to remove fault: {e}") from e
 
 
 @router.delete("/devices/{device_id}/faults")
@@ -704,11 +719,15 @@ async def clear_device_faults(device_id: str, _user: dict[str, Any] = Depends(re
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    count = instance.clear_all_faults()
-
-    await _trigger_webhook_safe("fault.cleared", {"device_id": device_id, "count": count})
-
-    return {"status": "ok", "device_id": device_id, "cleared": count}
+    try:
+        count = instance.clear_all_faults()
+        await _trigger_webhook_safe("fault.cleared", {"device_id": device_id, "count": count})
+        return {"status": "ok", "device_id": device_id, "cleared": count}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to clear faults for device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to clear faults: {e}") from e
 
 
 # ===========================================================================
@@ -731,36 +750,42 @@ async def trigger_state_transition(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    old_state = instance.device_state.value
-    success = instance.state_machine.trigger(req.event, reason=req.reason)
+    try:
+        old_state = instance.device_state.value
+        success = instance.state_machine.trigger(req.event, reason=req.reason)
 
-    if not success:
-        raise HTTPException(
-            status_code=409,
-            detail=f"State transition '{req.event}' not allowed from state '{old_state}'",
-        )
+        if not success:
+            raise HTTPException(
+                status_code=409,
+                detail=f"State transition '{req.event}' not allowed from state '{old_state}'",
+            )
 
-    new_state = instance.device_state.value
-    log_bus = _get_log_bus()
-    log_bus.emit(instance.protocol, "system", device_id, "state_transition",
-                 f"State transition: {old_state} → {new_state} (event={req.event})",
-                 {"event": req.event, "from": old_state, "to": new_state, "reason": req.reason})
+        new_state = instance.device_state.value
+        log_bus = _get_log_bus()
+        log_bus.emit(instance.protocol, "system", device_id, "state_transition",
+                     f"State transition: {old_state} → {new_state} (event={req.event})",
+                     {"event": req.event, "from": old_state, "to": new_state, "reason": req.reason})
 
-    await _trigger_webhook_safe("device.state_changed", {
-        "device_id": device_id,
-        "event": req.event,
-        "from_state": old_state,
-        "to_state": new_state,
-        "reason": req.reason,
-    })
+        await _trigger_webhook_safe("device.state_changed", {
+            "device_id": device_id,
+            "event": req.event,
+            "from_state": old_state,
+            "to_state": new_state,
+            "reason": req.reason,
+        })
 
-    return {
-        "device_id": device_id,
-        "event": req.event,
-        "from_state": old_state,
-        "to_state": new_state,
-        "reason": req.reason,
-    }
+        return {
+            "device_id": device_id,
+            "event": req.event,
+            "from_state": old_state,
+            "to_state": new_state,
+            "reason": req.reason,
+        }
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("State transition failed for device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"State transition failed: {e}") from e
 
 
 @router.get("/devices/{device_id}/state")
@@ -771,7 +796,11 @@ async def get_device_state(device_id: str, _user: dict[str, Any] = Depends(requi
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    return instance.get_state_info()
+    try:
+        return instance.get_state_info()
+    except Exception as e:
+        logger.exception("Failed to get device state for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to get device state: {e}") from e
 
 
 @router.get("/devices/{device_id}/state/history")
@@ -786,11 +815,16 @@ async def get_device_state_history(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    return {
-        "device_id": device_id,
-        "history": instance.get_state_history(count),
-        "count": len(instance.get_state_history(count)),
-    }
+    try:
+        history = instance.get_state_history(count)  # FIXED: 避免重复调用两次 get_state_history
+        return {
+            "device_id": device_id,
+            "history": history,
+            "count": len(history),
+        }
+    except Exception as e:
+        logger.exception("Failed to get state history for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to get state history: {e}") from e
 
 
 # ===========================================================================
@@ -867,13 +901,19 @@ async def remove_device_control_loop(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    success = instance.remove_control_loop(loop_id)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Control loop not found: {loop_id}")
+    try:
+        success = instance.remove_control_loop(loop_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Control loop not found: {loop_id}")
 
-    logger.info("Control loop removed: device=%s, loop_id=%s", device_id, loop_id)
+        logger.info("Control loop removed: device=%s, loop_id=%s", device_id, loop_id)
 
-    return {"status": "ok", "device_id": device_id, "loop_id": loop_id}
+        return {"status": "ok", "device_id": device_id, "loop_id": loop_id}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to remove control loop %s for %s: %s", loop_id, device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to remove control loop: {e}") from e
 
 
 @router.get("/devices/{device_id}/control-loops")
@@ -884,7 +924,11 @@ async def list_device_control_loops(device_id: str, _user: dict[str, Any] = Depe
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    return instance.get_control_loop_info()
+    try:
+        return instance.get_control_loop_info()
+    except Exception as e:
+        logger.exception("Failed to list control loops for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to list control loops: {e}") from e
 
 
 # ---------------------------------------------------------------------------
@@ -897,8 +941,13 @@ async def get_device_detail(device_id: str, _user: dict[str, Any] = Depends(requ
     engine = _get_engine()
     try:
         return engine.get_device_detail(device_id)
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to get device detail for %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to get device detail: {e}") from e
 
 
 class ConfigureNetworkRequest(BaseModel):
@@ -911,15 +960,27 @@ class ConfigureNetworkRequest(BaseModel):
 async def configure_network(req: ConfigureNetworkRequest, _user: dict[str, Any] = Depends(require_operator)):
     """配置网络仿真参数。"""
     engine = _get_engine()
-    engine.configure_network(req.profile, req.enabled)
-    return {"status": "ok", "network_sim": engine.network_simulator.to_dict()}
+    try:
+        engine.configure_network(req.profile, req.enabled)
+        return {"status": "ok", "network_sim": engine.network_simulator.to_dict()}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid network configuration: {e}") from e
+    except Exception as e:
+        logger.exception("Failed to configure network: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to configure network: {e}") from e
 
 
 @router.get("/network/status")
 async def get_network_status(_user: dict[str, Any] = Depends(require_viewer)):
     """获取网络仿真状态。"""
     engine = _get_engine()
-    return engine.network_simulator.to_dict()
+    try:
+        return engine.network_simulator.to_dict()
+    except Exception as e:
+        logger.exception("Failed to get network status: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to get network status: {e}") from e
 
 
 class AddFaultPropagationRuleRequest(BaseModel):
@@ -938,34 +999,52 @@ class AddFaultPropagationRuleRequest(BaseModel):
 async def add_fault_propagation_rule(req: AddFaultPropagationRuleRequest, _user: dict[str, Any] = Depends(require_operator)):
     """添加故障传播规则。"""
     engine = _get_engine()
-    idx = engine.fault_propagation.add_rule(
-        source=req.source_point,
-        target=req.target_point,
-        condition=req.condition,
-        delay=req.delay,
-        effect_type=req.effect_type,
-        effect_params=req.effect_params,
-        severity=req.severity,
-        duration=req.duration,
-    )
-    return {"status": "ok", "rule_index": idx}
+    try:
+        idx = engine.fault_propagation.add_rule(
+            source=req.source_point,
+            target=req.target_point,
+            condition=req.condition,
+            delay=req.delay,
+            effect_type=req.effect_type,
+            effect_params=req.effect_params,
+            severity=req.severity,
+            duration=req.duration,
+        )
+        return {"status": "ok", "rule_index": idx}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid propagation rule: {e}") from e
+    except Exception as e:
+        logger.exception("Failed to add fault propagation rule: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to add fault propagation rule: {e}") from e
 
 
 @router.get("/faults/propagation/rules")
 async def list_fault_propagation_rules(_user: dict[str, Any] = Depends(require_viewer)):
     """列出故障传播规则。"""
     engine = _get_engine()
-    return engine.fault_propagation.to_dict()
+    try:
+        return engine.fault_propagation.to_dict()
+    except Exception as e:
+        logger.exception("Failed to list fault propagation rules: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to list fault propagation rules: {e}") from e
 
 
 @router.delete("/faults/propagation/rules/{index}")
 async def remove_fault_propagation_rule(index: int, _user: dict[str, Any] = Depends(require_operator)):
     """移除故障传播规则。"""
     engine = _get_engine()
-    success = engine.fault_propagation.remove_rule(index)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Propagation rule {index} not found")
-    return {"status": "ok", "removed_index": index}
+    try:
+        success = engine.fault_propagation.remove_rule(index)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Propagation rule {index} not found")
+        return {"status": "ok", "removed_index": index}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to remove fault propagation rule %s: %s", index, e)
+        raise HTTPException(status_code=500, detail=f"Failed to remove fault propagation rule: {e}") from e
 
 
 class AddTimeSeriesPatternRequest(BaseModel):
@@ -988,34 +1067,52 @@ async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict[s
     """添加时间序列模式。"""
     engine = _get_engine()
     from protoforge.core.timeseries import TimeSeriesPattern
-    pattern = TimeSeriesPattern(
-        pattern_type=req.pattern_type,
-        production_value=req.production_value,
-        standby_value=req.standby_value,
-        base_value=req.base_value,
-        work_start_hour=req.work_start_hour,
-        work_end_hour=req.work_end_hour,
-        weekend_production=req.weekend_production,
-        seasonal_amplitude=req.seasonal_amplitude,
-        aging_rate=req.aging_rate,
-        offset_mode=req.offset_mode,
-    )
-    engine.timeseries_manager.add_pattern(req.point_name, pattern)
-    return {"status": "ok", "point_name": req.point_name, "pattern_type": req.pattern_type}
+    try:
+        pattern = TimeSeriesPattern(
+            pattern_type=req.pattern_type,
+            production_value=req.production_value,
+            standby_value=req.standby_value,
+            base_value=req.base_value,
+            work_start_hour=req.work_start_hour,
+            work_end_hour=req.work_end_hour,
+            weekend_production=req.weekend_production,
+            seasonal_amplitude=req.seasonal_amplitude,
+            aging_rate=req.aging_rate,
+            offset_mode=req.offset_mode,
+        )
+        engine.timeseries_manager.add_pattern(req.point_name, pattern)
+        return {"status": "ok", "point_name": req.point_name, "pattern_type": req.pattern_type}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid time series pattern: {e}") from e
+    except Exception as e:
+        logger.exception("Failed to add time series pattern: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to add time series pattern: {e}") from e
 
 
 @router.get("/timeseries/patterns")
 async def list_timeseries_patterns(_user: dict[str, Any] = Depends(require_viewer)):
     """列出所有时间序列模式。"""
     engine = _get_engine()
-    return engine.timeseries_manager.to_dict()
+    try:
+        return engine.timeseries_manager.to_dict()
+    except Exception as e:
+        logger.exception("Failed to list time series patterns: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to list time series patterns: {e}") from e
 
 
 @router.delete("/timeseries/patterns/{point_name}")
 async def remove_timeseries_pattern(point_name: str, _user: dict[str, Any] = Depends(require_operator)):
     """移除时间序列模式。"""
     engine = _get_engine()
-    success = engine.timeseries_manager.remove_pattern(point_name)
-    if not success:
-        raise HTTPException(status_code=404, detail=f"Pattern for point '{point_name}' not found")
-    return {"status": "ok", "removed_point": point_name}
+    try:
+        success = engine.timeseries_manager.remove_pattern(point_name)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Pattern for point '{point_name}' not found")
+        return {"status": "ok", "removed_point": point_name}
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
+    except Exception as e:
+        logger.exception("Failed to remove time series pattern %s: %s", point_name, e)
+        raise HTTPException(status_code=500, detail=f"Failed to remove time series pattern: {e}") from e
