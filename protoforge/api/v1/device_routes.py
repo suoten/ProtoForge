@@ -918,14 +918,28 @@ async def remove_device_control_loop(
 
 @router.get("/devices/{device_id}/control-loops")
 async def list_device_control_loops(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
-    """列出设备上的控制回路。"""
+    """列出设备上的控制回路。
+
+    返回控制回路数组（与 ``/devices/{device_id}/detail`` 的 ``control_loops`` 字段格式一致），
+    每个元素为回路配置字典，并合并运行时状态信息（如存在）。
+    """
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
     try:
-        return instance.get_control_loop_info()
+        info = instance.get_control_loop_info()
+        loops = list(info.get("loops", []))
+        states = info.get("loop_states", {}) or {}
+        # 将运行时状态合并进每个回路配置，保持数组结构以与 detail 接口一致
+        for loop in loops:
+            lid = loop.get("loop_id")
+            if lid and lid in states:
+                loop.update(states[lid])
+        return loops
+    except HTTPException:
+        raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to list control loops for %s: %s", device_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to list control loops: {e}") from e
