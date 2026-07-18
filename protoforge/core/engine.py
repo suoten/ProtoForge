@@ -555,7 +555,12 @@ class SimulationEngine:
                 return False
         else:
             # 协议 server 未运行：直接写入 DeviceInstance 内存
-            success = await instance.write_point(point_name, value)
+            # FIXED: 添加 try-except 保护，防止 instance.write_point() 抛出异常导致 500
+            try:
+                success = await instance.write_point(point_name, value)
+            except Exception as e:
+                logger.warning("Instance write error for %s/%s: %s", device_id, point_name, e)
+                return False
             if success:
                 logger.warning(
                     "Write to device %s/%s succeeded in memory, but protocol %s is not running - change not visible to external clients",
