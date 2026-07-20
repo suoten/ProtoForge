@@ -1669,6 +1669,11 @@ class IntegrationManager:
     def get_metrics(self) -> dict[str, Any]:
         return self._metrics.to_dict()
 
+    @property
+    def validator(self):
+        """Expose the MappingValidator for API routes."""
+        return self._validator
+
     def get_protocol_map(self) -> dict[str, str]:
         return self._protocol_mapper.get_map()
 

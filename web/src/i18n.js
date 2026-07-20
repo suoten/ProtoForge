@@ -1513,6 +1513,7 @@ const messages = {
     },
     templates: {
       title: '设备模板',
+      subtitle: '共 {n} 个模板，支持按协议和标签筛选',
       createTemplate: '创建模板',
       importTemplate: '导入模板',
       exportTemplate: '导出模板',
@@ -3615,6 +3616,7 @@ const messages = {
     },
     templates: {
       title: 'Device Templates',
+      subtitle: '{n} templates, filter by protocol and tag',
       createTemplate: 'Create Template',
       importTemplate: 'Import Template',
       exportTemplate: 'Export Template',

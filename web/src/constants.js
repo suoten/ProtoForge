@@ -142,8 +142,8 @@ export const directionTagTypeMap = {
 }
 
 export const directionLabelMap = {  // FIXED: 硬编码英文标签改为i18n key
-  in: 'logs.directionLabels.in', out: 'logs.directionLabels.out', system: 'logs.directionLabels.system', write: 'logs.directionLabels.write',
-  recv: 'logs.directionLabels.recv', send: 'logs.directionLabels.send', inbound: 'logs.directionLabels.inbound', outbound: 'logs.directionLabels.outbound',
+  in: 'directionLabels.in', out: 'directionLabels.out', system: 'directionLabels.system', write: 'directionLabels.write',
+  recv: 'directionLabels.recv', send: 'directionLabels.send', inbound: 'directionLabels.inbound', outbound: 'directionLabels.outbound',
 }
 
 export function getProtocolLabel(name) {
