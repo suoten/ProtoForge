@@ -600,7 +600,7 @@ class ModbusTcpServer(ProtocolServer):
                 logger.warning("Modbus write_point: point '%s' not found on device %s", point_name, device_id)
                 return False
             if point.access not in ("w", "rw"):
-                logger.warning("Modbus write_point: point '%s' is read-only on device %s", point_name, device_id)
+                logger.debug("Modbus write_point: point '%s' is read-only on device %s", point_name, device_id)
                 return False
 
         # 更新协议层 behavior 内部状态
