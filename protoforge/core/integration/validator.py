@@ -19,6 +19,11 @@ class CompatibilityReport:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+    @property
+    def issues(self) -> list[str]:
+        """FIX: 合并 warnings + errors，供 manager.py 中 report.issues 访问。"""
+        return self.warnings + self.errors
+
 
 class MappingValidator:
     def __init__(

@@ -587,6 +587,13 @@ class IntegrationManager:
                 return await self._handle_push_conflict(resp, payload, el_config, start_time)
 
             if resp.status_code == 422:
+                # FIX: EdgeLite 旧版本可能因 ERR_REPO_DEVICE_EXISTS 不匹配 "already exists"
+                # 而错误返回 422 而非 409。检测到此错误码时路由到冲突处理。
+                resp_text = resp.text or ""
+                if "err_repo_device_exists" in resp_text.lower():
+                    logger.info("EdgeLite returned 422 with ERR_REPO_DEVICE_EXISTS for %s, treating as conflict",
+                                payload["device_id"])
+                    return await self._handle_push_conflict(resp, payload, el_config, start_time)
                 logger.warning("EdgeLite rejected push for %s (422): %s", payload["device_id"], resp.text[:300])
                 return {
                     "ok": False,
@@ -740,7 +747,8 @@ class IntegrationManager:
                 logger.info("Device %s updated on EdgeLite", payload["device_id"])
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
             self._metrics.record_push_failure()
-            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code}", "error_type": "update_failed"}
+            logger.warning("PUT update failed for %s (HTTP %d): %s", payload["device_id"], update_resp.status_code, update_resp.text[:500])
+            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code} - {update_resp.text[:300]}", "error_type": "update_failed"}
         except httpx.ConnectError:
             self._metrics.record_push_failure()
             return {"ok": False, "error": desc("edgelite.error.push_connection"), "error_type": "connection"}

@@ -329,6 +329,14 @@ class WebSocketChannel(ChannelBase):
                     msg_type = message.get("type", "")
                     if msg_type == "heartbeat_ack":
                         self._missed_heartbeats = 0
+                    # FIX: EdgeLite 发送 {"type": "ping"} 应用层心跳，期望客户端回 {"type": "pong"}。
+                    # 原代码不响应 ping，导致 EdgeLite 60s 内未收到 pong → close(1011, "Heartbeat timeout")。
+                    elif msg_type == "ping":
+                        try:
+                            await self._ws.send(json.dumps({"type": "pong", "timestamp": time.time()}))
+                        except Exception as pong_err:
+                            logger.debug("Failed to send pong: %s", pong_err)
+                        continue
                     resp_id = message.get("id") or message.get("request_id")
                     if resp_id and resp_id in self._pending_responses:
                         future = self._pending_responses.pop(resp_id)
