@@ -525,6 +525,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             import re
             user_url = re.sub(r':(\d+)(/?)$', f':{ua_port}\\2', user_url)
         base = {"server_url": user_url or f"opc.tcp://{host}:{ua_port}",
+                "endpoint": user_url or f"opc.tcp://{host}:{ua_port}",
                 "username": protocol_config.get("username", ""),
                 "password": protocol_config.get("password", ""),
                 "security_mode": protocol_config.get("security_mode", "None"),
@@ -546,7 +547,12 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             base["tls_insecure"] = protocol_config.get("tls_insecure", False)
     elif normalized_protocol == "http":
         http_port = port or 8080
-        base = {"push_url": f"http://{host}:{http_port}/webhook/data",
+        # FIX: EdgeLite HTTP 驱动期望 config.url 或 config.endpoint，
+        # 原代码仅发送 push_url，导致 EdgeLite 驱动启动失败 "Missing required field: url"
+        _http_url = f"http://{host}:{http_port}/webhook/data"
+        base = {"url": _http_url,
+                "endpoint": _http_url,
+                "push_url": _http_url,
                 "timeout": timeout}
     elif normalized_protocol == "s7":
         s7_port = port or 102
@@ -760,10 +766,15 @@ def _build_points(
         max_val = p.get("max_value")
         if max_val is None:
             max_val = p.get("max")
-        if min_val is not None:
-            point_def["min"] = min_val
-        if max_val is not None:
-            point_def["max"] = max_val
+        # FIX: EdgeLite PointDef 校验要求 min < max（两者都存在时），相等会返回 422。
+        # 当 min == max 时不发送这两个字段（它们对 EdgeLite 采集无影响，仅用于 UI 显示范围）。
+        if min_val is not None and max_val is not None and float(min_val) >= float(max_val):
+            logger.debug("Skipping min/max for point %s: min=%s >= max=%s", p.get("name", ""), min_val, max_val)
+        else:
+            if min_val is not None:
+                point_def["min"] = min_val
+            if max_val is not None:
+                point_def["max"] = max_val
         result.append(point_def)
     return result
 

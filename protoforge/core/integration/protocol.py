@@ -21,7 +21,9 @@ PROTOCOL_MAP_BASE: dict[str, str | None] = {
     "ab": "allen_bradley",
     # FIXED: EdgeLite 实际有这些驱动（plugin_name 已核对），原映射为 None 导致无法推送
     "bacnet": "bacnet_ip",        # bacnet.py plugin_name="bacnet_ip"
+    "bacnet_ip": "bacnet_ip",     # FIX: 设备可能直接使用 bacnet_ip 作为协议名
     "fanuc": "fanuc_cnc",         # fanuc.py plugin_name="fanuc_cnc"
+    "fanuc_cnc": "fanuc_cnc",     # FIX: 设备可能直接使用 fanuc_cnc 作为协议名
     "mtconnect": "mtconnect",     # mtconnect.py plugin_name="mtconnect"
     "toledo": "toledo",           # toledo.py plugin_name="toledo"
     "opcda": "opc_da",
