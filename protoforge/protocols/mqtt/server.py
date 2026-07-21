@@ -178,6 +178,10 @@ class MqttBroker(ProtocolServer):
                         "TLS will not be activated. Provide both paths to enable TLS."
                     )
             self._broker = Broker(broker_config)
+            # Re-suppress amqtt loggers after Broker init (may reset logging config)
+            import logging as _logging
+            _logging.getLogger("amqtt.broker").setLevel(_logging.CRITICAL)
+            _logging.getLogger("amqtt").setLevel(_logging.CRITICAL)
             await self._broker.start()
 
             self._status = ProtocolStatus.RUNNING

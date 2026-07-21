@@ -187,6 +187,22 @@ class DeviceStateMachine:
             guard="设备从停止状态启动",
         ))
 
+        # STARTING → STARTING（trigger="start"，幂等：重复 start 不报警告）
+        self.add_transition(StateTransition(
+            from_state=DeviceState.STARTING,
+            to_state=DeviceState.STARTING,
+            trigger="start",
+            guard="设备已在启动中，忽略重复 start 事件",
+        ))
+
+        # RUN → RUN（trigger="start"，幂等：已运行时重复 start 不报警告）
+        self.add_transition(StateTransition(
+            from_state=DeviceState.RUN,
+            to_state=DeviceState.RUN,
+            trigger="start",
+            guard="设备已在运行，忽略重复 start 事件",
+        ))
+
         # STARTING → RUN（trigger="startup_complete"，条件：启动时间 > 最小启动时间）
         self.add_transition(StateTransition(
             from_state=DeviceState.STARTING,

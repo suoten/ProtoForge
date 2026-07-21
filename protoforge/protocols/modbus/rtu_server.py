@@ -34,6 +34,12 @@ StartAsyncSerialServer = None  # type: ignore[assignment]
 with contextlib.suppress(ImportError):
     from pymodbus.server import StartAsyncSerialServer  # type: ignore[assignment]
 
+# Check pyserial availability (required by StartAsyncSerialServer for actual serial ports)
+_SERIAL_AVAILABLE = False
+with contextlib.suppress(ImportError):
+    import serial  # noqa: F401  # type: ignore[assignment]
+    _SERIAL_AVAILABLE = True
+
 
 class ModbusRtuServer(ProtocolServer):
     protocol_name = "modbus_rtu"
@@ -124,6 +130,23 @@ class ModbusRtuServer(ProtocolServer):
 
         if not StartAsyncSerialServer:
             raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
+
+        # If pyserial is not installed, serial port access will fail at runtime.
+        # Fall back to TCP bridge mode instead of crashing.
+        if not _SERIAL_AVAILABLE:
+            tcp_bridge_port = config.get("tcp_bridge_port", 5021)
+            self._validate_port(tcp_bridge_port)
+            tcp_bridge_port = self._find_available_port(tcp_bridge_port)
+            logger.warning(
+                "pyserial not installed, Modbus RTU starting in TCP bridge mode on port %d "
+                "(install pyserial for real serial port support)",
+                tcp_bridge_port,
+            )
+            self._status = ProtocolStatus.RUNNING
+            self._server_task = asyncio.create_task(self._serve_datastore_only(tcp_bridge_port))
+            self._log_debug("system", "server_start",
+                            f"Modbus RTU pyserial unavailable, TCP bridge mode on port {tcp_bridge_port}")
+            return
 
         if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
             logger.info("Non-standard serial port path %s, attempting direct connection", self._port)
