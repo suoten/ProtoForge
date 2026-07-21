@@ -159,6 +159,11 @@ class IntegrationManager:
         self._token_cache_lock = asyncio.Lock()
         self._TOKEN_REFRESH_MARGIN = 30
 
+    @property
+    def validator(self) -> MappingValidator:
+        """Expose _validator for API layer access."""
+        return self._validator
+
         # 运行状态
         self._running = False
         self._retry_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)  # FIXED-R07: 限制重试队列最大1000条，防止内存无限增长
