@@ -361,8 +361,10 @@ def _suppress_noisy_loggers() -> None:
         "asyncua.client.ua_client.UaClient",
         "asyncua.client.client",
         "asyncua.server.binary_server_asyncio",
+        "asyncua.server.server",  # Suppress "No encrypting policy" warnings in demo mode
     ):
         logging.getLogger(name).setLevel(logging.CRITICAL)
+    logging.getLogger("amqtt").setLevel(logging.CRITICAL)
     logging.getLogger("amqtt.broker").setLevel(logging.CRITICAL)
     logging.getLogger("transitions.core").setLevel(logging.WARNING)
 

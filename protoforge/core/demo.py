@@ -154,6 +154,10 @@ _DEMO_DEVICES: list[dict[str, Any]] = [
             {"name": "ptz_pan", "address": "ptz_pan", "data_type": "float32", "generator_type": "random", "min_value": -180, "max_value": 180},
             {"name": "ptz_tilt", "address": "ptz_tilt", "data_type": "float32", "generator_type": "random", "min_value": -90, "max_value": 90},
         ],
+        "protocol_config": {
+            "sip_server_addr": "127.0.0.1",
+            "sip_server_port": 5060,
+        },
     },
     {
         "id": "demo-opcua-motor",
@@ -491,6 +495,7 @@ async def _create_demo_device(engine: Any, dev_config: dict[str, Any]) -> None:
             protocol=dev_config["protocol"],
             template_id=dev_config.get("template_id", ""),
             points=points,
+            protocol_config=dev_config.get("protocol_config", {}),
         )
         await engine.create_device(config)
         await engine.start_device(dev_config["id"])
