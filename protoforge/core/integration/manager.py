@@ -201,6 +201,9 @@ class IntegrationManager:
         self._auth.set_password_changed_callback(self._on_auth_password_changed)
 
         # 初始化 HTTP 客户端
+        # FIX: 使用更长的超时（30秒），因为 EdgeLite push-device API 需要启动驱动+连接设备+采集数据
+        # 原 10 秒超时在本地联调时频繁导致 push 超时失败
+        from protoforge.core.defaults import HTTP_TIMEOUT_LONG
         self._http_client = httpx.AsyncClient(
             base_url=self._edgelite_url.rstrip("/"),
             limits=httpx.Limits(
@@ -208,7 +211,12 @@ class IntegrationManager:
                 max_keepalive_connections=20,
                 keepalive_expiry=30.0,
             ),
-            timeout=HTTP_TIMEOUT_DEFAULT,
+            timeout=httpx.Timeout(
+                connect=10.0,    # 连接超时 10 秒
+                read=60.0,        # 读取超时 60 秒（push-device 需要启动驱动+连接设备+采集数据）
+                write=10.0,        # 写入超时 10 秒
+                pool=5.0,          # 连接池等待超时 5 秒
+            ),
         )
 
         # 订阅事件
