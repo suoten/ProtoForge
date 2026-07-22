@@ -262,10 +262,13 @@ class WebSocketChannel(ChannelBase):
 
         self._ws = await websockets.connect(
             connect_url,
-            ping_interval=60,    # 每 60 秒发送协议级 ping，保持连接活跃（防止反向代理空闲超时断开）
-            ping_timeout=20,     # 等待 pong 响应超时 20 秒
-            close_timeout=5.0,
-            open_timeout=10.0,
+            # FIX: 当 EdgeLite 处理 push-device 等耗时操作时，事件循环被阻塞，
+            # 无法及时回复 ping，导致 WebSocket 断线。
+            # 增加 ping_interval 和 ping_timeout，使其更容忍事件循环阻塞。
+            ping_interval=120,   # 从 60 秒增加到 120 秒
+            ping_timeout=60,     # 从 20 秒增加到 60 秒
+            close_timeout=10.0,
+            open_timeout=30.0,   # FIX: 从10秒增加到30秒，当EdgeLite处理push-device时事件循环可能繁忙
         )
         self._connected = True
         self._missed_heartbeats = 0
