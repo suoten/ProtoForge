@@ -551,6 +551,10 @@ class GB28181Server(ProtocolServer):
         return result
 
     def handle_message(self, data: bytes, addr: tuple) -> None:
+        # 网络仿真：检查是否应丢弃帧
+        if self.should_drop_frame():
+            return
+
         try:
             message = data.decode("utf-8", errors="replace")
             first_line = message.split("\r\n")[0]

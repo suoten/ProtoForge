@@ -199,6 +199,25 @@ class OpcUaServer(ProtocolServer):
         """返回用户配置的端口"""
         return self._requested_port
 
+    async def read_point_history(self, device_id: str, point_name: str) -> list[dict]:
+        """读取点位历史数据（HistoricalAccess）。
+
+        :param device_id: 设备 ID
+        :param point_name: 点位名称
+        :return: 历史数据列表，每项包含 timestamp 和 value
+        """
+        try:
+            from protoforge.core.registry import get_database
+            db = get_database()
+            if db is None:
+                return []
+            return await db.load_timeseries(device_id, point_name)
+        except RuntimeError:
+            return []
+        except Exception as e:
+            logger.warning("read_point_history failed for %s/%s: %s", device_id, point_name, e)
+            return []
+
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
             task.result()

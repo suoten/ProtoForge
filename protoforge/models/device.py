@@ -49,6 +49,7 @@ class PointConfig(BaseModel):
     min_value: float | None = None
     max_value: float | None = None
     fixed_value: Any | None = None
+    deadband: float = 0.0
 
     @model_validator(mode="after")
     def validate_min_max(self):

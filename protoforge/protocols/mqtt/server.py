@@ -26,6 +26,7 @@
 import asyncio
 import logging
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from protoforge.core.messages import desc
@@ -90,6 +91,7 @@ class MqttBroker(ProtocolServer):
         self._registered_client_ids: set[str] = set()
         self._default_qos: int = 0
         self._default_retain: bool = False
+        self._qos_tracker: QoSMessageTracker | None = None
 
     @property
     def actual_port(self) -> int:
@@ -401,6 +403,16 @@ class MqttBroker(ProtocolServer):
                     "default": True,
                     "description": desc("mqtt_clean_session", "Clean session flag (True=no persistent state, False=persistent session)"),
                 },
+                "retransmit_timeout": {
+                    "type": "number",
+                    "default": 15.0,
+                    "description": desc("mqtt_retransmit_timeout", "QoS 1/2 retransmission timeout (seconds)"),
+                },
+                "max_retries": {
+                    "type": "integer",
+                    "default": 3,
+                    "description": desc("mqtt_max_retries", "Maximum retransmission attempts for QoS 1/2"),
+                },
             },
         }
 
@@ -509,6 +521,24 @@ class MqttBroker(ProtocolServer):
         except Exception as e:
             logger.warning("MQTT will message publish failed for %s: %s", device_id, e)
 
+    def get_qos_stats(self) -> dict[str, Any]:
+        """返回 QoS 消息追踪统计信息。"""
+        if self._qos_tracker is None:
+            return {"total_published": 0, "total_acked": 0, "in_flight": 0}
+        return self._qos_tracker.stats
+
+    def get_in_flight_messages(self) -> list[dict[str, Any]]:
+        """返回当前正在传输的 QoS 1/2 消息列表。"""
+        if self._qos_tracker is None:
+            return []
+        return self._qos_tracker.get_in_flight_info()
+
+    def restore_qos_session(self) -> list[dict[str, Any]]:
+        """返回未 ACK 的 QoS 1/2 消息列表用于会话恢复。"""
+        if self._qos_tracker is None:
+            return []
+        return self._qos_tracker.restore_session()
+
     def _get_actual_port(self) -> int | None:
         """检测 MQTT Broker 实际监听的端口（可能与配置不同，如果端口被占用会自动更换）"""
         import socket
@@ -540,3 +570,128 @@ class MqttBroker(ProtocolServer):
                 logger.debug("Port probe failed for %d: %s", port, e)
 
         return self._port  # 返回配置的端口作为默认值
+
+
+@dataclass
+class InFlightMessage:
+    """QoS 1/2 正在传输的消息。"""
+
+    topic: str
+    payload: bytes
+    qos: int
+    packet_id: int
+    publish_time: float
+    retry_count: int = 0
+    state: str = "wait_puback"  # wait_puback / wait_pubrec / wait_pubcomp
+
+
+class QoSMessageTracker:
+    """QoS 1/2 消息追踪与重传管理器。
+
+    :param broker: MQTT Broker 实例
+    :param retransmit_timeout: 重传超时（秒）
+    :param max_retries: 最大重传次数
+    """
+
+    def __init__(
+        self,
+        broker: Any = None,
+        retransmit_timeout: float = 15.0,
+        max_retries: int = 3,
+    ):
+        self._broker = broker
+        self._retransmit_timeout = retransmit_timeout
+        self._max_retries = max_retries
+        self._in_flight: dict[int, InFlightMessage] = {}
+        self._next_packet_id: int = 1
+        self._stats: dict[str, Any] = {
+            "total_published": 0,
+            "total_qoS1": 0,
+            "total_qoS2": 0,
+            "total_acked": 0,
+            "total_failed": 0,
+        }
+
+    @property
+    def in_flight_count(self) -> int:
+        return len(self._in_flight)
+
+    @property
+    def stats(self) -> dict[str, Any]:
+        s = dict(self._stats)
+        s["in_flight"] = len(self._in_flight)
+        return s
+
+    async def track_publish(self, topic: str, payload: bytes, qos: int) -> int | None:
+        """追踪 QoS 1/2 消息发布。
+
+        :return: packet_id（QoS 0 返回 None）
+        """
+        if qos == 0:
+            return None
+
+        packet_id = self._next_packet_id
+        self._next_packet_id += 1
+
+        state = "wait_puback" if qos == 1 else "wait_pubrec"
+        msg = InFlightMessage(
+            topic=topic,
+            payload=payload,
+            qos=qos,
+            packet_id=packet_id,
+            publish_time=time.time(),
+            state=state,
+        )
+        self._in_flight[packet_id] = msg
+
+        self._stats["total_published"] += 1
+        if qos == 1:
+            self._stats["total_qoS1"] += 1
+        elif qos == 2:
+            self._stats["total_qoS2"] += 1
+
+        return packet_id
+
+    async def on_puback(self, packet_id: int) -> None:
+        """QoS 1 PUBACK 收到。"""
+        if packet_id in self._in_flight:
+            del self._in_flight[packet_id]
+            self._stats["total_acked"] += 1
+
+    async def on_pubrec(self, packet_id: int) -> None:
+        """QoS 2 PUBREC 收到。"""
+        if packet_id in self._in_flight:
+            self._in_flight[packet_id].state = "wait_pubcomp"
+
+    async def on_pubcomp(self, packet_id: int) -> None:
+        """QoS 2 PUBCOMP 收到。"""
+        if packet_id in self._in_flight:
+            del self._in_flight[packet_id]
+            self._stats["total_acked"] += 1
+
+    def get_in_flight_info(self) -> list[dict[str, Any]]:
+        """返回当前正在传输的消息信息列表。"""
+        now = time.time()
+        result = []
+        for msg in self._in_flight.values():
+            result.append({
+                "packet_id": msg.packet_id,
+                "topic": msg.topic,
+                "qos": msg.qos,
+                "state": msg.state,
+                "retry_count": msg.retry_count,
+                "age_seconds": round(now - msg.publish_time, 3),
+            })
+        return result
+
+    def restore_session(self) -> list[dict[str, Any]]:
+        """返回未 ACK 的消息列表用于会话恢复。"""
+        return [
+            {
+                "packet_id": msg.packet_id,
+                "topic": msg.topic,
+                "payload": msg.payload,
+                "qos": msg.qos,
+            }
+            for msg in self._in_flight.values()
+        ]

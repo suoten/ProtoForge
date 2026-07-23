@@ -174,6 +174,20 @@ class ModbusTcpServer(ProtocolServer):
     _EX_ILLEGAL_FUNCTION = 0x01
     _EX_ILLEGAL_DATA_ADDRESS = 0x02
     _EX_ILLEGAL_DATA_VALUE = 0x03
+    _EX_SLAVE_DEVICE_FAILURE = 0x04
+    _EX_ACKNOWLEDGE = 0x05
+    _EX_SLAVE_DEVICE_BUSY = 0x06
+    _EX_GATEWAY_PATH_UNAVAILABLE = 0x0A
+
+    # 设备状态 → Modbus 异常码映射
+    _STATE_EXCEPTION_CODES: dict[str, int] = {
+        "error": 0x04,       # Slave Device Failure
+        "starting": 0x05,   # Acknowledge (启动中，请稍后重试)
+        "stopping": 0x05,   # Acknowledge (停机中，请稍后重试)
+        "maintenance": 0x06, # Slave Device Busy (维护中)
+        "program": 0x0A,    # Gateway Path Unavailable (编程模式)
+        "stop": 0x04,       # Slave Device Failure (已停机)
+    }
 
     _FC_NAMES: dict[int, str] = {
         0x01: "Read Coils", 0x02: "Read Discrete Inputs",
@@ -191,6 +205,23 @@ class ModbusTcpServer(ProtocolServer):
         :return: 异常响应字节
         """
         return bytes([fc | 0x80, code])
+
+    def _check_device_state_for_exception(self, slave_id: int) -> int | None:
+        """检查设备状态，返回对应的 Modbus 异常码（如果在非 RUN 状态）。
+
+        :param slave_id: Modbus 从站 ID
+        :return: 异常码 (如 0x04)，或 None (设备在 RUN 状态)
+        """
+        # 反查 device_id
+        device_id = None
+        for did, sid in self._slave_map.items():
+            if sid == slave_id:
+                device_id = did
+                break
+        if device_id is None:
+            return None  # 未知从站，不拦截
+        state_str = self.get_device_state_string(device_id)
+        return self._STATE_EXCEPTION_CODES.get(state_str)
 
     def _read_bits(
         self, fc: int, data: bytes, store: ModbusDataStore,
@@ -445,6 +476,12 @@ class ModbusTcpServer(ProtocolServer):
         # 广播读操作不返回响应
         if is_broadcast and fc in (0x01, 0x02, 0x03, 0x04):
             return None
+
+        # 设备状态检查：非 RUN 状态返回异常码
+        if not is_broadcast:
+            exc_code = self._check_device_state_for_exception(slave_id)
+            if exc_code is not None:
+                return self._err_response(fc, exc_code)
 
         # 广播写入时遍历所有从站
         target_stores = list(self._data_stores.values()) if is_broadcast else [self._get_data_store(slave_id)]

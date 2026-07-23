@@ -54,6 +54,8 @@ class DeviceInstance:
             device_id=config.id,
         )
         self._start_time: float | None = None
+        self._stopping_enter_time: float | None = None
+        self._stopping_sequence_duration: float = config.protocol_config.get("stopping_sequence_duration", 0.0)
 
         # 配置：STOP 状态下输出是否归零
         self._zero_output_on_stop: bool = config.protocol_config.get("zero_output_on_stop", False)
@@ -226,16 +228,23 @@ class DeviceInstance:
     def stop(self) -> None:
         """停止设备：触发状态机停止流程。
 
-        如果设备在 RUN/STARTING 状态，先转为 STOPPING，
-        然后立即完成停止转为 STOP。
+        如果设备在 RUN/STARTING 状态，先转为 STOPPING。
+        - 如果 ``stopping_sequence_duration > 0``，保持 STOPPING 状态，
+          由 ``tick()`` 在超时后自动完成停机。
+        - 如果 ``stopping_sequence_duration == 0``，立即完成停止转为 STOP。
         """
         current = self._state_machine.get_state()
         if current in (DeviceState.RUN, DeviceState.STARTING):
             self._state_machine.trigger("stop", reason="manual stop")
-            # 立即完成停止过程
-            self._state_machine.trigger("stop_complete", reason="stop completed")
+            if self._stopping_sequence_duration > 0:
+                # 记录进入 STOPPING 的时间，由 tick() 自动完成
+                self._stopping_enter_time = time.time()
+            else:
+                # 立即完成停止过程
+                self._state_machine.trigger("stop_complete", reason="stop completed")
         elif current == DeviceState.STOPPING:
-            self._state_machine.trigger("stop_complete", reason="stop completed")
+            if self._stopping_sequence_duration <= 0:
+                self._state_machine.trigger("stop_complete", reason="stop completed")
         elif current == DeviceState.ERROR:
             # 错误状态下直接归位 STOP
             self._state_machine.set_fault_cleared(True)
@@ -296,6 +305,14 @@ class DeviceInstance:
             self._state_machine.trigger("startup_complete", reason="startup time reached")
             current = DeviceState.RUN
 
+        # STOPPING → STOP 自动转换（停机序列超时后）
+        if current == DeviceState.STOPPING and self._stopping_enter_time is not None:
+            elapsed = time.time() - self._stopping_enter_time
+            if elapsed >= self._stopping_sequence_duration:
+                self._state_machine.trigger("stop_complete", reason="stopping sequence duration elapsed")
+                self._stopping_enter_time = None
+                current = DeviceState.STOP
+
         # 只有 RUN 状态下才生成数据
         if not DeviceStateMachine.should_generate_data(current):
             return
@@ -336,6 +353,11 @@ class DeviceInstance:
                             )
                 except Exception as e:
                     logger.warning("Device %s: control loop tick error: %s", self.config.id, e)
+
+    def set_point_value_internal(self, point_name: str, value: Any) -> None:
+        """直接设置点位值（内部方法，用于时序模式覆盖等）。"""
+        if point_name in self._point_values:
+            self._point_values[point_name] = value
 
     def read_point(self, point_name: str) -> PointValue | None:
         """读取单个点位值。
