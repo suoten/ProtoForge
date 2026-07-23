@@ -38,6 +38,12 @@ class ProtocolServer(ABC):
         self._behaviors_sync_lock = threading.Lock()  # FIXED: 同步方法用的锁（asyncio.Lock不能在同步上下文使用）
         # 写回调：当外部客户端通过协议写入时，通过此回调传播到 DeviceInstance
         self._on_write: Callable[[str, str, Any], Awaitable[bool]] | None = None
+        # 网络仿真器：用于模拟网络通信错误
+        self._network_sim = None
+        # 设备状态提供者：用于查询设备当前状态
+        self._device_state_provider: Callable[[str], str] | None = None
+        # 连接计数器
+        self._active_connections: int = 0
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
@@ -62,6 +68,71 @@ class ProtocolServer(ABC):
                    device_id: str = "", detail: dict | None = None):
         if self._debug_callback:
             self._debug_callback(direction, msg_type, summary, device_id, detail)
+
+    # -- 网络仿真集成 -------------------------------------------------------
+
+    def set_network_sim(self, sim) -> None:
+        """设置网络仿真器。"""
+        self._network_sim = sim
+
+    def should_drop_frame(self) -> bool:
+        """检查当前帧是否应被丢弃（CRC错误或丢包）。"""
+        if self._network_sim is None:
+            return False
+        # 优先检查 CRC 错误
+        if hasattr(self._network_sim, 'should_inject_crc_error'):
+            if self._network_sim.should_inject_crc_error():
+                return True
+        # 其次检查丢包
+        if hasattr(self._network_sim, 'should_drop'):
+            if self._network_sim.should_drop():
+                return True
+        return False
+
+    def should_simulate_half_open(self) -> bool:
+        """检查是否应模拟半开连接。"""
+        if self._network_sim is None:
+            return False
+        if hasattr(self._network_sim, 'is_half_open'):
+            return self._network_sim.is_half_open()
+        return False
+
+    # -- 设备状态提供者 -----------------------------------------------------
+
+    def set_device_state_provider(self, provider: Callable[[str], str]) -> None:
+        """设置设备状态查询回调。
+
+        :param provider: 回调函数，接受 device_id，返回状态字符串
+                        ("run"/"stop"/"starting"/"stopping"/"error"/"maintenance"/"program")
+        """
+        self._device_state_provider = provider
+
+    def get_device_state_string(self, device_id: str) -> str:
+        """获取设备的当前状态字符串。
+
+        无状态提供者时默认返回 "run"（不阻止正常请求）。
+        """
+        if self._device_state_provider is None:
+            return "run"
+        try:
+            return self._device_state_provider(device_id)
+        except Exception:
+            return "run"
+
+    # -- 连接追踪 -----------------------------------------------------------
+
+    @property
+    def active_connections(self) -> int:
+        """返回当前活跃连接数。"""
+        return self._active_connections
+
+    def on_client_connect(self) -> None:
+        """客户端连接时的回调，递增连接计数。"""
+        self._active_connections += 1
+
+    def on_client_disconnect(self) -> None:
+        """客户端断开时的回调，递减连接计数。"""
+        self._active_connections = max(0, self._active_connections - 1)
 
     @property
     def status(self) -> ProtocolStatus:

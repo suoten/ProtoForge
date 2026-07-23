@@ -168,6 +168,14 @@ async def client() -> AsyncIterator:
     _register_log_bus(main_module._log_bus)
     _register_template_manager(main_module._template_manager)
 
+    # Reset rate limiter state to avoid cross-test contamination
+    try:
+        from protoforge.api.v1.rate_limit import _default_limiter, _auth_limiter
+        _default_limiter._requests.clear()
+        _auth_limiter._requests.clear()
+    except Exception:
+        pass
+
     transport = ASGITransport(app=main_module.app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

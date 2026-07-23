@@ -31,6 +31,7 @@ import logging
 import struct
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from protoforge.core.messages import desc, msg
@@ -38,6 +39,16 @@ from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class S7ConnectionState:
+    """S7 连接状态 — 记录 PDU 协商结果."""
+
+    pdu_size: int = 480
+    max_amq_caller: int = 8
+    max_amq_callee: int = 8
+    setup_completed: bool = False
 
 
 class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBehavior，复用_points/_values/_generators初始化
@@ -497,7 +508,7 @@ class S7Server(ProtocolServer):
             logger.debug("S7 COTP CR parse error: %s", e)
         return self._default_device_id
 
-    def _make_s7_connect_response(self, data: bytes) -> bytes:
+    def _make_s7_connect_response(self, data: bytes, conn_state: S7ConnectionState | None = None) -> bytes:
         pdu_size_req = self._DEFAULT_PDU_SIZE
         max_amq_caller = self._DEFAULT_AMQ
         max_amq_callee = self._DEFAULT_AMQ
@@ -534,6 +545,14 @@ class S7Server(ProtocolServer):
         resp += struct.pack(">H", max_amq_callee)  # FIXED: AMQ Called在PDU Size之前
         resp += struct.pack(">H", pdu_size)         # FIXED: PDU Size在最后
         resp[2:4] = struct.pack(">H", len(resp))   # Dynamic TPKT length
+
+        # 如果提供了 conn_state，存储协商结果
+        if conn_state is not None:
+            conn_state.pdu_size = pdu_size
+            conn_state.max_amq_caller = max_amq_caller
+            conn_state.max_amq_callee = max_amq_callee
+            conn_state.setup_completed = True
+
         return bytes(resp)
 
     def _make_s7_read_response(self, data: bytes, device_id: str | None = None) -> bytes:

@@ -5,6 +5,7 @@ import contextlib
 import logging
 import re
 import socket
+import time
 from typing import Any
 
 from protoforge.core.device import DeviceInstance
@@ -19,6 +20,7 @@ from protoforge.core.event_bus import (
 from protoforge.core.fault.propagation import FaultPropagation
 from protoforge.core.generator import DataGenerator
 from protoforge.core.network_sim import NetworkSimulator
+from protoforge.core.state_machine import DeviceState
 from protoforge.core.scenario import Scenario
 from protoforge.core.timeseries import TimeSeriesManager
 from protoforge.models.device import DeviceConfig, DeviceInfo, DeviceStatus, GeneratorType, PointValue
@@ -111,14 +113,184 @@ class SimulationEngine:
         self._fault_propagation = FaultPropagation()
         self._timeseries_manager = TimeSeriesManager()
         self._network_sim = NetworkSimulator(enabled=False)
+        # P4: 时序模式 & 事件驱动记录
+        self._device_ts_patterns: dict[str, dict[str, Any]] = {}
+        self._event_driven_record: bool = False
+        self._event_record_threshold: float = 0.0
+        self._last_recorded_values: dict[str, dict[str, float]] = {}
+        # 仿真真实度: 扫描周期跟踪 & 时序记录
+        self._device_last_tick: dict[str, float] = {}
+        self._timeseries_record_interval: float = 0.0
+        self._device_snapshots: dict[str, dict[str, Any]] = {}
 
     def register_protocol(self, server: ProtocolServer) -> None:
         if server.protocol_name in self._protocol_servers:
             logger.warning("Protocol %s already registered, overwriting", server.protocol_name)
         # 设置写回调：当外部客户端通过协议写入时，传播到 DeviceInstance
         server.set_write_callback(self._on_protocol_write)
+        # 设置设备状态查询回调
+        server.set_device_state_provider(self._get_device_state_for_protocol)
         self._protocol_servers[server.protocol_name] = server
         logger.info("Registered protocol: %s", server.protocol_name)
+
+    def _get_device_state_for_protocol(self, device_id: str) -> str:
+        """获取设备状态字符串（供协议服务器查询）。
+
+        :param device_id: 设备 ID
+        :return: 状态字符串 ("run"/"stop"/"starting"/"stopping"/"error"/...)
+        """
+        instance = self._devices.get(device_id)
+        if not instance:
+            return "run"  # 未知设备默认返回 run，不阻止正常请求
+        state = instance.device_state
+        # 映射 DeviceState 到状态字符串
+        mapping = {
+            DeviceState.RUN: "run",
+            DeviceState.STOP: "stop",
+            DeviceState.STARTING: "starting",
+            DeviceState.STOPPING: "stopping",
+            DeviceState.ERROR: "error",
+            DeviceState.MAINTENANCE: "maintenance",
+            DeviceState.PROGRAM: "program",
+        }
+        return mapping.get(state, "run")
+
+    async def _restore_device_states(self) -> None:
+        """引擎启动时从数据库恢复设备状态快照。"""
+        try:
+            from protoforge.core.registry import get_database
+            db = get_database()
+            if db is None:
+                return
+            snapshots = await db.load_device_snapshots()
+            for snapshot in snapshots:
+                device_id = snapshot.get("device_id") or snapshot.get("id")
+                if device_id and device_id in self._devices:
+                    await self.import_device_snapshot(device_id, snapshot)
+                    logger.info("Restored device state for %s", device_id)
+                else:
+                    # 快照没有匹配的 device_id，应用到所有设备
+                    for did in self._devices:
+                        await self.import_device_snapshot(did, snapshot)
+                    logger.debug("Applied snapshot to all devices")
+        except RuntimeError:
+            logger.debug("Database not available, skipping device state restore")
+        except Exception as e:
+            logger.warning("Failed to restore device states: %s", e)
+
+    async def import_device_snapshot(self, device_id: str, snapshot: dict[str, Any]) -> bool:
+        """导入设备状态快照。"""
+        instance = self._devices.get(device_id)
+        if not instance:
+            return False
+        point_values = snapshot.get("point_values", {})
+        for name, value in point_values.items():
+            if name in instance._point_values:
+                instance._point_values[name] = value
+        return True
+
+    # -- P4: 时序模式管理 -------------------------------------------------
+
+    def configure_device_ts_patterns(self, device_id: str, patterns: dict[str, Any]) -> None:
+        """配置设备的时间序列模式。"""
+        self._device_ts_patterns[device_id] = patterns
+        logger.info("Configured TS patterns for device %s: %d patterns", device_id, len(patterns))
+
+    def clear_device_ts_patterns(self, device_id: str) -> None:
+        """清除设备的时间序列模式。"""
+        self._device_ts_patterns.pop(device_id, None)
+        logger.debug("Cleared TS patterns for device %s", device_id)
+
+    # -- P4: 事件驱动记录 -------------------------------------------------
+
+    def configure_timeseries_recording(self, interval: float) -> None:
+        """配置时序数据记录间隔。
+
+        :param interval: 记录间隔（秒），0 表示禁用
+        """
+        self._timeseries_record_interval = interval
+        logger.info("Timeseries recording interval set to %.2fs", interval)
+
+    async def save_device_snapshot(self, device_id: str, name: str = "default") -> str | None:
+        """保存设备状态快照。
+
+        :param device_id: 设备 ID
+        :param name: 快照名称
+        :return: 快照 ID，失败返回 None
+        """
+        instance = self._devices.get(device_id)
+        if not instance:
+            return None
+        snapshot_id = f"{device_id}_{name}_{int(time.time())}"
+        point_values = {}
+        for p in instance.read_all_points():
+            point_values[p.name] = p.value
+        self._device_snapshots[snapshot_id] = {
+            "device_id": device_id,
+            "name": name,
+            "point_values": point_values,
+            "timestamp": time.time(),
+        }
+        logger.info("Saved snapshot %s for device %s", snapshot_id, device_id)
+        return snapshot_id
+
+    def configure_event_driven_recording(self, enabled: bool, threshold: float = 0.0) -> None:
+        """配置事件驱动时序记录。
+
+        :param enabled: 是否启用
+        :param threshold: 值变化阈值（Deadband），变化超过此值才记录
+        """
+        self._event_driven_record = enabled
+        self._event_record_threshold = threshold
+        if not enabled:
+            self._last_recorded_values.clear()
+        logger.info("Event-driven recording %s (threshold=%.4f)", "enabled" if enabled else "disabled", threshold)
+
+    async def _check_event_driven_record(self, instance: DeviceInstance, timestamp: float) -> None:
+        """检查设备点位值变化，超过阈值时记录到数据库。"""
+        if not self._event_driven_record:
+            return
+        device_id = instance.config.id
+        prev_values = self._last_recorded_values.get(device_id)
+        records = []
+        for pv in instance.read_all_points():
+            if not isinstance(pv.value, (int, float)):
+                continue
+            val = float(pv.value)
+            if prev_values is None:
+                # 首次记录所有点位
+                records.append({
+                    "device_id": device_id,
+                    "point_name": pv.name,
+                    "value": val,
+                    "timestamp": timestamp,
+                })
+            else:
+                prev_val = prev_values.get(pv.name)
+                if prev_val is None or abs(val - prev_val) > self._event_record_threshold:
+                    records.append({
+                        "device_id": device_id,
+                        "point_name": pv.name,
+                        "value": val,
+                        "timestamp": timestamp,
+                    })
+        # 更新上次记录值
+        current_values = {}
+        for pv in instance.read_all_points():
+            if isinstance(pv.value, (int, float)):
+                current_values[pv.name] = float(pv.value)
+        self._last_recorded_values[device_id] = current_values
+        # 写入数据库
+        if records:
+            try:
+                from protoforge.core.registry import get_database
+                db = get_database()
+                if db is not None:
+                    await db.save_timeseries_batch(records)
+            except RuntimeError:
+                logger.debug("Database not available for event-driven recording")
+            except Exception as e:
+                logger.warning("Event-driven recording failed for %s: %s", device_id, e)
 
     async def _on_protocol_write(self, device_id: str, point_name: str, value: Any) -> bool:
         """协议层写回调：将外部客户端的写入操作传播到 DeviceInstance。
@@ -374,11 +546,79 @@ class SimulationEngine:
         logger.info("Device removed: %s", device_id)
 
     async def update_device(self, device_id: str, config: DeviceConfig) -> DeviceInfo:
-        async with self._devices_lock:  # FIXED-P0: 添加锁保护，防止并发update_device导致设备丢失
+        async with self._devices_lock:
             instance = self._devices.get(device_id)
             if not instance:
                 raise ValueError(f"Device not found: {device_id}")
             old_config = instance.config
+
+        config.id = device_id
+
+        # ── 热更新路径：协议不变时，优先就地更新 ──
+        if config.protocol == old_config.protocol:
+            points_unchanged = (
+                len(config.points) == len(old_config.points)
+                and all(
+                    p1.name == p2.name and p1.address == p2.address and p1.data_type == p2.data_type
+                    for p1, p2 in zip(config.points, old_config.points)
+                )
+            )
+            if points_unchanged:
+                # 情况 A：仅 protocol_config 和可变点位参数变更
+                instance.config = config
+                for new_point in config.points:
+                    instance._point_configs[new_point.name] = new_point
+                server = self._protocol_servers.get(config.protocol)
+                if server and server.status == ProtocolStatus.RUNNING:
+                    try:
+                        if hasattr(server, '_device_configs'):
+                            server._device_configs[device_id] = config
+                        for pv in instance.read_all_points():
+                            try:
+                                await server.write_point(device_id, pv.name, pv.value)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        logger.warning("Hot-update sync to protocol failed for %s: %s", device_id, e)
+                logger.info("Device %s hot-updated (protocol_config only)", device_id)
+                info = self._get_device_info(instance)
+                info.protocol_active = bool(server and server.status == ProtocolStatus.RUNNING)
+                return info
+            else:
+                # 情况 B：同协议但点位增删
+                old_point_names = {p.name for p in old_config.points}
+                new_point_names = {p.name for p in config.points}
+                added = new_point_names - old_point_names
+                removed = old_point_names - new_point_names
+                instance.config = config
+                for new_point in config.points:
+                    instance._point_configs[new_point.name] = new_point
+                    if new_point.name not in instance._point_values:
+                        instance._point_values[new_point.name] = (
+                            new_point.fixed_value if new_point.fixed_value is not None
+                            else self._generator.generate(new_point)
+                        )
+                for rm_name in removed:
+                    instance._point_configs.pop(rm_name, None)
+                    instance._point_values.pop(rm_name, None)
+                server = self._protocol_servers.get(config.protocol)
+                if server and server.status == ProtocolStatus.RUNNING:
+                    try:
+                        if hasattr(server, '_device_configs'):
+                            server._device_configs[device_id] = config
+                        for pv in instance.read_all_points():
+                            try:
+                                await server.write_point(device_id, pv.name, pv.value)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        logger.warning("Hot-update sync to protocol failed for %s: %s", device_id, e)
+                logger.info("Device %s hot-updated (points changed: +%d -%d)", device_id, len(added), len(removed))
+                info = self._get_device_info(instance)
+                info.protocol_active = bool(server and server.status == ProtocolStatus.RUNNING)
+                return info
+
+        # ── 全量重建路径：协议变更时 ──
         was_running = instance.status == DeviceStatus.ONLINE
         if was_running:
             try:
@@ -391,7 +631,6 @@ class SimulationEngine:
         except Exception as e:
             logger.exception("Failed to remove old device %s during update: %s, attempting to continue", device_id, e)
             # FIXED-H06: remove失败不直接raise，继续尝试创建新设备，避免设备丢失
-        config.id = device_id
         try:
             result = await self.create_device(config)
             if was_running:
@@ -511,6 +750,16 @@ class SimulationEngine:
         instance = self._devices.get(device_id)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
+
+        # 网络仿真: 延迟
+        await self._network_sim.delay()
+        # 网络仿真: 丢包 -> 回退到内存值
+        if self._network_sim.should_drop():
+            memory_points = instance.read_all_points()
+            for p in memory_points:
+                p.simulated = True
+            return memory_points
+
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:
             try:
@@ -539,6 +788,13 @@ class SimulationEngine:
         instance = self._devices.get(device_id)
         if not instance:
             raise ValueError(f"Device not found: {device_id}")
+
+        # 网络仿真: 延迟
+        await self._network_sim.delay()
+        # 网络仿真: 丢包 -> 写入失败
+        if self._network_sim.should_drop():
+            logger.debug("Write to %s/%s dropped by network simulator", device_id, point_name)
+            return False
 
         server = self._protocol_servers.get(instance.protocol)
         if server and server.status == ProtocolStatus.RUNNING:

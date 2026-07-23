@@ -41,6 +41,8 @@ class NetworkProfile:
     :param bandwidth_kbps: 带宽限制 (kbps)，0 表示不限
     :param connection_drop_rate: 连接断开率 (0-1)，每次连接检查时评估
     :param max_connections: 最大并发连接数，0 表示不限
+    :param crc_error_rate: CRC 错误率 (0-1)，模拟通信错误
+    :param half_open_rate: 半开连接率 (0-1)，模拟 TCP 半开连接
     """
 
     latency_ms: float = 0.0
@@ -49,6 +51,8 @@ class NetworkProfile:
     bandwidth_kbps: float = 0.0
     connection_drop_rate: float = 0.0
     max_connections: int = 0
+    crc_error_rate: float = 0.0
+    half_open_rate: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -58,6 +62,8 @@ class NetworkProfile:
             "bandwidth_kbps": self.bandwidth_kbps,
             "connection_drop_rate": self.connection_drop_rate,
             "max_connections": self.max_connections,
+            "crc_error_rate": self.crc_error_rate,
+            "half_open_rate": self.half_open_rate,
         }
 
     @classmethod
@@ -69,6 +75,8 @@ class NetworkProfile:
             bandwidth_kbps=float(data.get("bandwidth_kbps", 0.0)),
             connection_drop_rate=float(data.get("connection_drop_rate", 0.0)),
             max_connections=int(data.get("max_connections", 0)),
+            crc_error_rate=float(data.get("crc_error_rate", 0.0)),
+            half_open_rate=float(data.get("half_open_rate", 0.0)),
         )
 
 
@@ -77,9 +85,18 @@ PRESET_PROFILES: dict[str, NetworkProfile] = {
     "ideal": NetworkProfile(latency_ms=0, jitter_ms=0, packet_loss_rate=0),
     "lan": NetworkProfile(latency_ms=1.0, jitter_ms=0.5, packet_loss_rate=0.0001),
     "wan": NetworkProfile(latency_ms=20.0, jitter_ms=5.0, packet_loss_rate=0.001),
-    "wireless": NetworkProfile(latency_ms=50.0, jitter_ms=15.0, packet_loss_rate=0.005),
-    "satellite": NetworkProfile(latency_ms=300.0, jitter_ms=50.0, packet_loss_rate=0.01),
-    "degraded": NetworkProfile(latency_ms=100.0, jitter_ms=30.0, packet_loss_rate=0.02, connection_drop_rate=0.001),
+    "wireless": NetworkProfile(
+        latency_ms=50.0, jitter_ms=15.0, packet_loss_rate=0.005,
+        crc_error_rate=0.001, half_open_rate=0.002,
+    ),
+    "satellite": NetworkProfile(
+        latency_ms=300.0, jitter_ms=50.0, packet_loss_rate=0.01,
+        crc_error_rate=0.005, half_open_rate=0.005,
+    ),
+    "degraded": NetworkProfile(
+        latency_ms=100.0, jitter_ms=30.0, packet_loss_rate=0.02,
+        connection_drop_rate=0.001, crc_error_rate=0.01, half_open_rate=0.01,
+    ),
 }
 
 
@@ -105,6 +122,8 @@ class NetworkSimulator:
             "dropped_packets": 0,
             "dropped_connections": 0,
             "total_delay_ms": 0.0,
+            "crc_errors": 0,
+            "half_open_connections": 0,
         }
 
     @property
@@ -160,6 +179,30 @@ class NetworkSimulator:
             return True
         return False
 
+    def should_inject_crc_error(self) -> bool:
+        """检查是否应注入 CRC 错误。
+
+        :return: True 表示应注入 CRC 错误
+        """
+        if not self._enabled or self._profile.crc_error_rate <= 0:
+            return False
+        if random.random() < self._profile.crc_error_rate:
+            self._stats["crc_errors"] = self._stats["crc_errors"] + 1
+            return True
+        return False
+
+    def is_half_open(self) -> bool:
+        """检查连接是否处于半开状态。
+
+        :return: True 表示连接半开
+        """
+        if not self._enabled or self._profile.half_open_rate <= 0:
+            return False
+        if random.random() < self._profile.half_open_rate:
+            self._stats["half_open_connections"] = self._stats["half_open_connections"] + 1
+            return True
+        return False
+
     def should_drop_connection(self) -> bool:
         """检查连接是否应被断开。
 
@@ -209,6 +252,8 @@ class NetworkSimulator:
             "dropped_packets": 0,
             "dropped_connections": 0,
             "total_delay_ms": 0.0,
+            "crc_errors": 0,
+            "half_open_connections": 0,
         }
 
     def to_dict(self) -> dict[str, Any]:

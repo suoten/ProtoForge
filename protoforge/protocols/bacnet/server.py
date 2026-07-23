@@ -133,6 +133,10 @@ class BACnetServer(ProtocolServer):
           NPDU: Version(1)=0x01 + Control(1) + [可选路由字段]
           APDU: PDU类型 + 服务选择 + 服务请求数据
         """
+        # 网络仿真：检查是否应丢弃帧
+        if self.should_drop_frame():
+            return None
+
         if len(data) < 4:
             return None
         if data[0] != 0x81:  # BVLC Version必须为0x81
