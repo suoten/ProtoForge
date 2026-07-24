@@ -86,7 +86,7 @@
         <div v-if="newTemplate.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" :scroll-x="1000" />
+        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" :scroll-x="1120" />
       </n-space>
       <template #action>
         <n-space>
@@ -129,7 +129,7 @@
         <div v-if="editForm.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" :scroll-x="1000" />
+        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" :scroll-x="1120" />
       </n-space>
       <template #action>
         <n-space>
@@ -163,7 +163,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h, unref } from 'vue'
 import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -287,8 +287,8 @@ const pointEditColumns = computed(() => [
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', newTemplate, dataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', newTemplate, accessModeOpts) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', newTemplate, generatorOptions) },
-  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeEditRenderer('min_value', newTemplate, NInputNumber) },
-  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeEditRenderer('max_value', newTemplate, NInputNumber) },
+  { title: t('common.minValue'), key: 'min_value', width: 110, render: makeEditRenderer('min_value', newTemplate, NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 110, render: makeEditRenderer('max_value', newTemplate, NInputNumber) },
   { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeEditRenderer('fixed_value', newTemplate, NInput) },
   { title: t('common.unit'), key: 'unit', width: 70, render: makeEditRenderer('unit', newTemplate, NInput) },
   { title: t('common.description'), key: 'description', width: 100, render: makeEditRenderer('description', newTemplate, NInput) },
@@ -302,8 +302,8 @@ const editPointColumns = computed(() => [
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', editForm, dataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', editForm, accessModeOpts) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', editForm, generatorOptions) },
-  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeEditRenderer('min_value', editForm, NInputNumber) },
-  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeEditRenderer('max_value', editForm, NInputNumber) },
+  { title: t('common.minValue'), key: 'min_value', width: 110, render: makeEditRenderer('min_value', editForm, NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 110, render: makeEditRenderer('max_value', editForm, NInputNumber) },
   { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeEditRenderer('fixed_value', editForm, NInput) },
   { title: t('common.unit'), key: 'unit', width: 70, render: makeEditRenderer('unit', editForm, NInput) },
   { title: t('common.description'), key: 'description', width: 100, render: makeEditRenderer('description', editForm, NInput) },
@@ -324,7 +324,7 @@ function makeSelectRenderer(key, sourceRef, options) {
   return (_row, idx) => h(NSelect, {
     value: sourceRef.value.points[idx]?.[key],
     size: 'tiny',
-    options,
+    options: unref(options),
     style: 'width:100%',
     onUpdateValue: (v) => { const p = sourceRef.value.points[idx]; if (p) p[key] = v },
   })

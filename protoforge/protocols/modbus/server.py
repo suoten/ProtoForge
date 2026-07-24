@@ -180,13 +180,16 @@ class ModbusTcpServer(ProtocolServer):
     _EX_GATEWAY_PATH_UNAVAILABLE = 0x0A
 
     # 设备状态 → Modbus 异常码映射
+    # FIXED: 移除 "stop" 状态的异常映射。在真实 Modbus 设备中，即使 PLC 程序处于 STOP 模式，
+    # 通信模块仍会响应 Modbus 请求（返回寄存器最后已知值）。异常码 0x04 (Slave Device Failure)
+    # 应仅用于真正的硬件故障，不应在设备未启动时阻止读写。
+    # 之前 "stop" → 0x04 导致未启动的设备（slave_id != 1 的设备）无法被 pymodbus/EdgeLite 采集。
     _STATE_EXCEPTION_CODES: dict[str, int] = {
-        "error": 0x04,       # Slave Device Failure
+        "error": 0x04,       # Slave Device Failure (硬件故障)
         "starting": 0x05,   # Acknowledge (启动中，请稍后重试)
         "stopping": 0x05,   # Acknowledge (停机中，请稍后重试)
         "maintenance": 0x06, # Slave Device Busy (维护中)
         "program": 0x0A,    # Gateway Path Unavailable (编程模式)
-        "stop": 0x04,       # Slave Device Failure (已停机)
     }
 
     _FC_NAMES: dict[int, str] = {
@@ -577,6 +580,12 @@ class ModbusTcpServer(ProtocolServer):
                 f"Modbus slave_id must be between 1 and 247 (got {slave_id}). "
                 "0 is broadcast, 248-255 are reserved per Modbus specification."
             )
+        # FIXED: 将分配的 slave_id 写回 protocol_config，确保 _build_driver_config 推送到
+        # EdgeLite 时使用相同的 slave_id。之前未写回导致 EdgeLite 默认用 slave_id=1 读取，
+        # 而 ProtoForge 内部用自增 slave_id 存数据，造成读写存储区不匹配。
+        if "slave_id" not in proto_config:
+            proto_config["slave_id"] = slave_id
+            device_config.protocol_config = proto_config
         async with self._behaviors_lock:
             self._slave_map[device_config.id] = slave_id
             self._next_slave_id = max(self._next_slave_id, slave_id + 1)
@@ -769,35 +778,53 @@ class ModbusTcpServer(ProtocolServer):
         try:
             address, area = parse_modbus_address(point.address)
             dt = point.data_type.value
-            if dt in ("bool",):
-                return bool(store.coils.get(address, 0))
+
+            # FIXED: 根据 area 选择正确的寄存器存储区，与 _write_point_to_store 保持一致。
+            # 之前 bool 始终读 coils、其他类型始终读 holding_regs，
+            # 导致 input register (IR/3x) 和 discrete input (DI/1x) 地址的数据无法读取。
+            if area == "coil":
+                regs_store = store.coils
+                is_bit_area = True
+            elif area == "discrete":
+                regs_store = store.discrete_inputs
+                is_bit_area = True
+            elif area == "input":
+                regs_store = store.input_regs
+                is_bit_area = False
+            else:  # holding or auto
+                # auto 区域：bool→coils，其他→holding_regs（与 _write_point_to_store 一致）
+                regs_store = store.coils if dt in ("bool",) else store.holding_regs
+                is_bit_area = dt in ("bool",)
+
+            if is_bit_area or dt in ("bool",):
+                return bool(regs_store.get(address, 0))
             elif dt in ("float32",):
-                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                regs = [regs_store.get(address + i, 0) for i in range(2)]
                 return struct.unpack(">f", struct.pack(">HH", *regs))[0]
             elif dt in ("float64",):
-                regs = [store.holding_regs.get(address + i, 0) for i in range(4)]
+                regs = [regs_store.get(address + i, 0) for i in range(4)]
                 return struct.unpack(">d", struct.pack(">HHHH", *regs))[0]
             elif dt in ("int32",):
-                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                regs = [regs_store.get(address + i, 0) for i in range(2)]
                 return struct.unpack(">i", struct.pack(">HH", *regs))[0]
             elif dt in ("uint32",):
-                regs = [store.holding_regs.get(address + i, 0) for i in range(2)]
+                regs = [regs_store.get(address + i, 0) for i in range(2)]
                 return struct.unpack(">I", struct.pack(">HH", *regs))[0]
             elif dt in ("int16",):
-                raw = store.holding_regs.get(address, 0)
+                raw = regs_store.get(address, 0)
                 return struct.unpack(">h", struct.pack(">H", raw & 0xFFFF))[0]
             elif dt in ("uint16",):
-                return store.holding_regs.get(address, 0)
+                return regs_store.get(address, 0)
             elif dt in ("string",):
                 result = bytearray()
                 for i in range(32):
-                    w = store.holding_regs.get(address + i, 0)
+                    w = regs_store.get(address + i, 0)
                     result += struct.pack(">H", w)
                     if w & 0xFF == 0:
                         break
                 return result.rstrip(b'\x00').decode("utf-8", errors="replace")
             else:
-                return store.holding_regs.get(address, 0)
+                return regs_store.get(address, 0)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("Failed to read register %s: %s", point.address, e)
             return None
