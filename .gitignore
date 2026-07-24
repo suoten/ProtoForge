@@ -101,3 +101,6 @@ target/
 *.dylib
 *.exe
 *.bin
+
+# Playwright test results
+web/test-results/

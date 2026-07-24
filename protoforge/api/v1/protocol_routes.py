@@ -1,5 +1,6 @@
 """Protocol server management API routes (start/stop/config)."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -67,6 +68,9 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
     lang = get_lang_from_request(request)
     from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
     results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
+
+    # 筛选需要启动的协议（已运行的跳过）
+    to_start: list[tuple[str, dict[str, Any], Any]] = []
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") == "running":
@@ -74,6 +78,13 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
             continue
         config = get_protocol_defaults(name, lang=lang)
         original_port = config.get("port")
+        to_start.append((name, config, original_port))
+
+    if not to_start:
+        return results
+
+    async def _start_one(name: str, config: dict[str, Any], original_port: Any) -> dict[str, Any]:
+        """启动单个协议，返回结果字典。"""
         try:
             await engine.start_protocol(name, config)
             actual_port = config.get("port", original_port)
@@ -83,18 +94,33 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
                 port_changed = True
                 config_original_port = original_port
             log_bus.emit(name, "system", "", "protocol_start", f"Protocol {name} started on port {actual_port}", config)
-            results["started"].append(name)
+            entry: dict[str, Any] = {"ok": True, "name": name}
             if port_changed:
-                results["port_warnings"].append({
+                entry["port_warning"] = {
                     "protocol": name,
                     "original_port": config_original_port or original_port,
                     "actual_port": actual_port,
                     "message": f"Port {config_original_port or original_port} is in use, automatically switched to {actual_port}",
-                })
+                }
+            return entry
         except Exception as e:
             friendly = get_friendly_error(str(e), lang=lang)
-            results["failed"].append({"protocol": name, "error": friendly})
             logger.warning("Failed to start protocol %s in start-all: %s", name, e)
+            return {"ok": False, "name": name, "error": friendly}
+
+    # 并行启动所有协议（每个协议的 server.start 互相独立，config 也是各自独立的 dict）
+    batch_results = await asyncio.gather(
+        *[_start_one(name, config, original_port) for name, config, original_port in to_start]
+    )
+
+    for r in batch_results:
+        if r.get("ok"):
+            results["started"].append(r["name"])
+            if "port_warning" in r:
+                results["port_warnings"].append(r["port_warning"])
+        else:
+            results["failed"].append({"protocol": r["name"], "error": r.get("error", "Unknown error")})
+
     return results
 
 
@@ -103,18 +129,38 @@ async def stop_all_protocols(_user: dict[str, Any] = Depends(require_operator)):
     engine = _get_engine()
     log_bus = _get_log_bus()
     results = {"stopped": [], "failed": [], "skipped": []}
+
+    # 筛选需要停止的协议（已停止的跳过）
+    to_stop: list[str] = []
     for p in engine.get_protocols():
         name = p.get("name", "")
         if p.get("status") != "running":
             results["skipped"].append(name)
             continue
+        to_stop.append(name)
+
+    if not to_stop:
+        return results
+
+    async def _stop_one(name: str) -> dict[str, Any]:
+        """停止单个协议，返回结果字典。"""
         try:
             await engine.stop_protocol(name)
             log_bus.emit(name, "system", "", "protocol_stop", f"Protocol {name} stopped")
-            results["stopped"].append(name)
+            return {"ok": True, "name": name}
         except Exception as e:
-            results["failed"].append({"protocol": name, "error": str(e)})
             logger.warning("Failed to stop protocol %s in stop-all: %s", name, e)
+            return {"ok": False, "name": name, "error": str(e)}
+
+    # 并行停止所有协议
+    batch_results = await asyncio.gather(*[_stop_one(name) for name in to_stop])
+
+    for r in batch_results:
+        if r.get("ok"):
+            results["stopped"].append(r["name"])
+        else:
+            results["failed"].append({"protocol": r["name"], "error": r.get("error", "Unknown error")})
+
     return results
 
 

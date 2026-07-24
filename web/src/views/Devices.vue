@@ -191,7 +191,7 @@
         <div v-if="!editDevice.points || editDevice.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="950" style="margin-top:8px" />
+        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="1070" style="margin-top:8px" />
         <template #action>
           <n-space>
             <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
@@ -463,7 +463,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted, h, unref } from 'vue'
 import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
   NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
@@ -837,7 +837,13 @@ const columns = computed(() => [
 // FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
 const pointColumns = computed(() => [
   { title: t('devices.name'), key: 'name', width: 120 },
-  { title: t('devices.value'), key: 'value', width: 120 },
+  { title: t('devices.value'), key: 'value', width: 120, render: (row) => {
+    const v = row.value
+    if (v === null || v === undefined) return '-'
+    if (typeof v === 'boolean') return v ? 'true' : 'false'
+    if (typeof v === 'number' && isNaN(v)) return '-'
+    return String(v)
+  } },
   { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? formatDate(row.timestamp) : '-' },
   { title: t('devices.quality'), key: 'quality', width: 80 },
 ])
@@ -908,7 +914,7 @@ function makeDevSelectRenderer(key, options) {
   return (_row, idx) => h(NSelect, {
     value: editDevice.value.points?.[idx]?.[key],
     size: 'tiny',
-    options,
+    options: unref(options),
     style: 'width:100%',
     onUpdateValue: (v) => { const p = editDevice.value.points?.[idx]; if (p) p[key] = v },
   })
@@ -921,8 +927,8 @@ const editDevicePointColumns = computed(() => [
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeDevSelectRenderer('data_type', devDataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeDevSelectRenderer('access', devAccessModeOptions) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeDevSelectRenderer('generator_type', devGeneratorOptions) },
-  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeDevEditRenderer('min_value', NInputNumber) },
-  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeDevEditRenderer('max_value', NInputNumber) },
+  { title: t('common.minValue'), key: 'min_value', width: 110, render: makeDevEditRenderer('min_value', NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 110, render: makeDevEditRenderer('max_value', NInputNumber) },
   { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeDevEditRenderer('fixed_value', NInput) },
   { title: t('common.unit'), key: 'unit', width: 70, render: makeDevEditRenderer('unit', NInput) },
   { title: t('common.description'), key: 'description', width: 100, render: makeDevEditRenderer('description', NInput) },

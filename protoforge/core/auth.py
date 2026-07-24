@@ -11,8 +11,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,8 @@ _USERNAME_MAX_LENGTH = 63
 _SECRET_KEY_MIN_LENGTH = 32
 # Token过期时间从config读取(get_settings().access_token_expires / refresh_token_expires)
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 直接使用 bcrypt 库，不再依赖 passlib（passlib 已停止维护且与 bcrypt>=4.1 不兼容）
+_BCRYPT_ROUNDS = 12
 
 _VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USERNAME_MAX_LENGTH) + r'}$')
 
@@ -189,12 +190,14 @@ class User:
 
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    """使用 bcrypt 对密码进行哈希，返回 str 类型的哈希值。"""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    """验证密码是否与 bcrypt 哈希匹配。"""
     try:
-        return _pwd_context.verify(password, password_hash)
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except Exception as e:
         logger.debug("Password verification failed: %s", e)
         return False
