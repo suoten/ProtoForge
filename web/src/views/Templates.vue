@@ -53,7 +53,7 @@
       </div>
     </n-space>
 
-    <n-modal v-model:show="showCreateModal" preset="card" :title="t('templates.createTitle')" style="width: 750px">
+    <n-modal v-model:show="showCreateModal" preset="card" :title="t('templates.createTitle')" style="width: 1000px">
       <n-space vertical>
         <n-form :model="newTemplate" label-placement="left" label-width="80">
           <n-form-item :label="t('templates.templateId')">
@@ -86,7 +86,7 @@
         <div v-if="newTemplate.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" />
+        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" :scroll-x="1000" />
       </n-space>
       <template #action>
         <n-space>
@@ -96,7 +96,7 @@
       </template>
     </n-modal>
 
-    <n-modal v-model:show="showEditModal" preset="card" :title="t('templates.editTitle')" style="width: 750px">
+    <n-modal v-model:show="showEditModal" preset="card" :title="t('templates.editTitle')" style="width: 1000px">
       <n-space vertical>
         <n-form :model="editForm" label-placement="left" label-width="80">
           <n-form-item :label="t('templates.templateId')">
@@ -129,7 +129,7 @@
         <div v-if="editForm.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" />
+        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" :scroll-x="1000" />
       </n-space>
       <template #action>
         <n-space>
@@ -167,7 +167,7 @@ import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescriptions, NDescriptionsItem, NModal, NForm, NFormItem, NInputNumber, NDivider, NDataTable, NDynamicTags, NSpin, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
-import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions } from '../constants.js'
+import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions, generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -228,26 +228,85 @@ const filteredTemplates = computed(() => {
 
 const i18nDataTypeOptions = computed(() => _dataTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
 const i18nGeneratorOptions = computed(() => _generatorTypeOptions.map(o => ({ ...o, label: t(o.label) })))  // FIXED: 通过t()解析i18n key
+const i18nAccessModeOptions = computed(() => _accessModeOptions.map(o => ({ ...o, label: t(o.label) })))
 const dataTypeOptions = i18nDataTypeOptions
 const generatorOptions = i18nGeneratorOptions
+const accessModeOpts = i18nAccessModeOptions
+const generatorConfigSchema = _generatorConfigSchema
+
+// 生成器配置参数展开渲染
+function renderGenConfigExpand(row) {
+  const genType = row.generator_type || 'random'
+  const params = generatorConfigSchema[genType] || []
+  if (params.length === 0) return h('span', { style: 'color:#999;padding:8px' }, t('common.noConfigurableParams'))
+  if (!row.generator_config) row.generator_config = {}
+  return h('div', { style: 'padding:8px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center' }, [
+    h('span', { style: 'font-weight:600;color:#666' }, t('common.generatorConfig') + ':'),
+    ...params.map(param => {
+      const val = row.generator_config[param.key] ?? param.default
+      if (param.type === 'boolean') {
+        return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+          t('common.' + param.label),
+          h(NSelect, {
+            size: 'tiny',
+            style: 'width:80px',
+            value: val ? 'true' : 'false',
+            options: [{ label: 'True', value: 'true' }, { label: 'False', value: 'false' }],
+            onUpdateValue: (v) => { row.generator_config[param.key] = v === 'true' },
+          }),
+        ])
+      }
+      if (param.type === 'text') {
+        return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+          t('common.' + param.label),
+          h(NInput, {
+            size: 'tiny',
+            style: 'width:200px',
+            value: String(val || ''),
+            onUpdateValue: (v) => { row.generator_config[param.key] = v },
+          }),
+        ])
+      }
+      return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+        t('common.' + param.label),
+        h(NInputNumber, {
+          size: 'tiny',
+          style: 'width:90px',
+          value: Number(val) || 0,
+          onUpdateValue: (v) => { row.generator_config[param.key] = v },
+        }),
+      ])
+    }),
+  ])
+}
 
 const pointEditColumns = computed(() => [
-  { title: t('common.name'), key: 'name', width: 100, render: makeEditRenderer('name', newTemplate, NInput) },
+  { type: 'expand', renderExpand: renderGenConfigExpand },
+  { title: t('common.name'), key: 'name', width: 110, render: makeEditRenderer('name', newTemplate, NInput) },
   { title: t('common.address'), key: 'address', width: 80, render: makeEditRenderer('address', newTemplate, NInput) },
-  { title: t('common.dataType'), key: 'data_type', width: 90, render: makeSelectRenderer('data_type', newTemplate, dataTypeOptions) },
-  { title: t('common.generator'), key: 'generator_type', width: 90, render: makeSelectRenderer('generator_type', newTemplate, generatorOptions) },
-  { title: t('common.minValue'), key: 'min_value', width: 80, render: makeEditRenderer('min_value', newTemplate, NInputNumber) },
-  { title: t('common.maxValue'), key: 'max_value', width: 80, render: makeEditRenderer('max_value', newTemplate, NInputNumber) },
+  { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', newTemplate, dataTypeOptions) },
+  { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', newTemplate, accessModeOpts) },
+  { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', newTemplate, generatorOptions) },
+  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeEditRenderer('min_value', newTemplate, NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeEditRenderer('max_value', newTemplate, NInputNumber) },
+  { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeEditRenderer('fixed_value', newTemplate, NInput) },
+  { title: t('common.unit'), key: 'unit', width: 70, render: makeEditRenderer('unit', newTemplate, NInput) },
+  { title: t('common.description'), key: 'description', width: 100, render: makeEditRenderer('description', newTemplate, NInput) },
   { title: t('common.action'), key: 'actions', width: 60, render: (_row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => newTemplate.value.points.splice(idx, 1) }, () => t('common.delete')) },
 ])
 
 const editPointColumns = computed(() => [
-  { title: t('common.name'), key: 'name', width: 100, render: makeEditRenderer('name', editForm, NInput) },
+  { type: 'expand', renderExpand: renderGenConfigExpand },
+  { title: t('common.name'), key: 'name', width: 110, render: makeEditRenderer('name', editForm, NInput) },
   { title: t('common.address'), key: 'address', width: 80, render: makeEditRenderer('address', editForm, NInput) },
-  { title: t('common.dataType'), key: 'data_type', width: 90, render: makeSelectRenderer('data_type', editForm, dataTypeOptions) },
-  { title: t('common.generator'), key: 'generator_type', width: 90, render: makeSelectRenderer('generator_type', editForm, generatorOptions) },
-  { title: t('common.minValue'), key: 'min_value', width: 80, render: makeEditRenderer('min_value', editForm, NInputNumber) },
-  { title: t('common.maxValue'), key: 'max_value', width: 80, render: makeEditRenderer('max_value', editForm, NInputNumber) },
+  { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', editForm, dataTypeOptions) },
+  { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', editForm, accessModeOpts) },
+  { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', editForm, generatorOptions) },
+  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeEditRenderer('min_value', editForm, NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeEditRenderer('max_value', editForm, NInputNumber) },
+  { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeEditRenderer('fixed_value', editForm, NInput) },
+  { title: t('common.unit'), key: 'unit', width: 70, render: makeEditRenderer('unit', editForm, NInput) },
+  { title: t('common.description'), key: 'description', width: 100, render: makeEditRenderer('description', editForm, NInput) },
   { title: t('common.action'), key: 'actions', width: 60, render: (_row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editForm.value.points.splice(idx, 1) }, () => t('common.delete')) },
 ])
 
@@ -306,11 +365,11 @@ async function doSearch() {
 }
 
 function addNewPoint() {
-  newTemplate.value.points.push({ name: 'point_' + (newTemplate.value.points.length + 1), address: String(newTemplate.value.points.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
+  newTemplate.value.points.push({ name: 'point_' + (newTemplate.value.points.length + 1), address: String(newTemplate.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 function addEditPoint() {
-  editForm.value.points.push({ name: 'point_' + (editForm.value.points.length + 1), address: String(editForm.value.points.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
+  editForm.value.points.push({ name: 'point_' + (editForm.value.points.length + 1), address: String(editForm.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 async function createTemplate() {
@@ -343,6 +402,7 @@ async function openEdit(tpl) {
         data_type: p.data_type || 'float32', generator_type: p.generator_type || 'random',
         min_value: p.min_value ?? 0, max_value: p.max_value ?? 100,
         fixed_value: p.fixed_value ?? null, unit: p.unit || '', access: p.access || 'rw',
+        description: p.description || '', generator_config: p.generator_config || {},
       })),
       tags: detail.tags || [], protocol_config: detail.protocol_config || {},
     }

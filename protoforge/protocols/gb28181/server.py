@@ -258,6 +258,7 @@ class GB28181DeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standard
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             return True
         return False
 
@@ -269,6 +270,8 @@ class GB28181DeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standard
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 return value

@@ -162,9 +162,14 @@ export const defaultPointConfig = {
   name: 'value',
   address: '0',
   data_type: 'float32',
+  access: 'rw',
   generator_type: 'random',
   min_value: 0,
   max_value: 100,
+  fixed_value: null,
+  unit: '',
+  description: '',
+  generator_config: {},
 }
 
 export const popularTemplateIds = [
@@ -177,25 +182,77 @@ export const defaultProtocol = 'modbus_tcp'
 
 export const PASSWORD_MASK = '***'
 
-export const dataTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
-  { label: 'points.dataTypes.bool', value: 'bool' },
-  { label: 'points.dataTypes.int16', value: 'int16' },
-  { label: 'points.dataTypes.int32', value: 'int32' },
-  { label: 'points.dataTypes.uint16', value: 'uint16' },
-  { label: 'points.dataTypes.uint32', value: 'uint32' },
-  { label: 'points.dataTypes.float32', value: 'float32' },
-  { label: 'points.dataTypes.float64', value: 'float64' },
-  { label: 'points.dataTypes.string', value: 'string' },
+export const dataTypeOptions = [
+  { label: 'dataTypes.bool', value: 'bool' },
+  { label: 'dataTypes.int16', value: 'int16' },
+  { label: 'dataTypes.int32', value: 'int32' },
+  { label: 'dataTypes.uint16', value: 'uint16' },
+  { label: 'dataTypes.uint32', value: 'uint32' },
+  { label: 'dataTypes.float32', value: 'float32' },
+  { label: 'dataTypes.float64', value: 'float64' },
+  { label: 'dataTypes.string', value: 'string' },
 ]
 
-export const generatorTypeOptions = [  // FIXED: 硬编码英文标签改为i18n key
-  { label: 'points.generatorTypes.fixed', value: 'fixed' },
-  { label: 'points.generatorTypes.random', value: 'random' },
-  { label: 'points.generatorTypes.random_walk', value: 'random_walk' },  // FIXED-P1: 补充random_walk
-  { label: 'points.generatorTypes.sine', value: 'sine' },
-  { label: 'points.generatorTypes.triangle', value: 'triangle' },
-  { label: 'points.generatorTypes.sawtooth', value: 'sawtooth' },
-  { label: 'points.generatorTypes.square', value: 'square' },
-  { label: 'points.generatorTypes.increment', value: 'increment' },
-  { label: 'points.generatorTypes.script', value: 'script' },
+export const generatorTypeOptions = [
+  { label: 'generatorTypes.fixed', value: 'fixed' },
+  { label: 'generatorTypes.random', value: 'random' },
+  { label: 'generatorTypes.random_walk', value: 'random_walk' },
+  { label: 'generatorTypes.sine', value: 'sine' },
+  { label: 'generatorTypes.triangle', value: 'triangle' },
+  { label: 'generatorTypes.sawtooth', value: 'sawtooth' },
+  { label: 'generatorTypes.square', value: 'square' },
+  { label: 'generatorTypes.increment', value: 'increment' },
+  { label: 'generatorTypes.script', value: 'script' },
+  { label: 'generatorTypes.physical', value: 'physical' },
 ]
+
+export const accessModeOptions = [
+  { label: 'accessModes.r', value: 'r' },
+  { label: 'accessModes.w', value: 'w' },
+  { label: 'accessModes.rw', value: 'rw' },
+]
+
+// 生成器配置参数schema：每种生成器支持的可配置参数
+// 注意：参数key必须与后端 DynamicValueGenerator._config 读取的key一致
+export const generatorConfigSchema = {
+  fixed: [],
+  constant: [],
+  random: [],
+  random_walk: [
+    { key: 'step_size', label: 'stepSize', type: 'number', default: 1.0 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  sine: [
+    { key: 'frequency', label: 'frequency', type: 'number', default: 0.1 },
+    { key: 'phase', label: 'phase', type: 'number', default: 0.0 },
+    { key: 'amplitude', label: 'amplitude', type: 'number', default: 50.0 },
+    { key: 'offset', label: 'offset', type: 'number', default: 50.0 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  triangle: [
+    { key: 'frequency', label: 'frequency', type: 'number', default: 0.1 },
+    { key: 'phase', label: 'phase', type: 'number', default: 0.0 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  sawtooth: [
+    { key: 'frequency', label: 'frequency', type: 'number', default: 0.1 },
+    { key: 'phase', label: 'phase', type: 'number', default: 0.0 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  square: [
+    { key: 'frequency', label: 'frequency', type: 'number', default: 0.1 },
+    { key: 'phase', label: 'phase', type: 'number', default: 0.0 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  increment: [
+    { key: 'step', label: 'step', type: 'number', default: 1 },
+    { key: 'frequency', label: 'frequency', type: 'number', default: 0.1 },
+    { key: 'noise', label: 'noise', type: 'number', default: 0.0 },
+  ],
+  script: [
+    { key: 'script', label: 'script', type: 'text', default: 'result = value + 0' },
+  ],
+  physical: [
+    { key: 'config_string', label: 'configString', type: 'text', default: '' },
+  ],
+}

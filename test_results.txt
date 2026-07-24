@@ -1,148 +1,650 @@
-﻿........................................................................ [ 28%]
-........................................................................ [ 56%]
-........................................................................ [ 85%]
-......................................
-ERROR: Coverage failure: total of 25 is less than fail-under=40
-                                                                         [100%]
-=============================== tests coverage ================================
-_______________ coverage: platform win32, python 3.12.0-final-0 _______________
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.0, pytest-9.0.3, pluggy-1.6.0 -- D:\os\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: E:\˶������\PyGBSentry\ProtoForge
+configfile: pyproject.toml
+plugins: anyio-4.9.0, asyncio-1.3.0, cov-7.1.0, mock-3.15.1, timeout-2.4.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+timeout: 30.0s
+timeout method: thread
+timeout func_only: False
+collecting ... collected 1011 items
 
-Name                                           Stmts   Miss  Cover   Missing
-----------------------------------------------------------------------------
-protoforge\__init__.py                             1      0   100%
-protoforge\__main__.py                             3      3     0%   10-13
-protoforge\api\__init__.py                         0      0   100%
-protoforge\api\v1\__init__.py                      0      0   100%
-protoforge\api\v1\_helpers.py                     21      2    90%   33-34
-protoforge\api\v1\auth.py                         71     24    66%   44-56, 92, 104-136
-protoforge\api\v1\auth_routes.py                 177    107    40%   38, 48, 68-69, 71-76, 85-87, 99-109, 118-120, 125-140, 145-150, 161-168, 173-198, 203-216, 221-233, 238-247, 252-261
-protoforge\api\v1\common.py                      103     35    66%   15, 36, 38, 40, 45, 49, 53, 57-60, 64-67, 71, 75, 80-84, 89, 94, 99, 104, 109, 124, 136, 138, 153, 165-168
-protoforge\api\v1\device_routes.py               769    439    43%   34, 54-55, 59-60, 64, 71-73, 81, 86, 90, 100-141, 172-174, 177-178, 181, 183-209, 214-232, 245-253, 261-272, 277-287, 301-307, 312-361, 386-387, 389, 400-405, 409, 411-417, 433-436, 440, 442-448, 466, 469-471, 482-488, 498-504, 517, 531, 545, 553, 563, 565, 615-661, 676-685, 691-711, 717-730, 748-788, 794-803, 813-827, 860-886, 899-916, 926-945, 955-964, 976-986, 992-997, 1015-1034, 1040-1045, 1051-1061, 1082-1105, 1111-1116, 1122-1132
-protoforge\api\v1\edgelite_routes.py             213    168    21%   30, 43-48, 51, 53-59, 66-83, 93-116, 122-138, 144-157, 163-179, 189-239, 245-258, 263-287
-protoforge\api\v1\fault_routes.py                109     45    59%   74, 105-134, 147-157, 170-176, 179-182, 197-201, 204-205, 214-224, 230-240, 246
-protoforge\api\v1\forward_routes.py              100     46    54%   35-39, 54-60, 62-63, 68-70, 79-85, 90-98, 103-111, 119-123
-protoforge\api\v1\integration.py                 233    178    24%   24, 26, 30-34, 41, 43, 47-51, 61-89, 91, 95-99, 104-116, 121-133, 138-158, 163-189, 194-201, 206-216, 221-233, 238-267, 272-280, 285-305
-protoforge\api\v1\log_routes.py                  130     98    25%   36, 38, 50-53, 58-95, 100-154, 159-194
-protoforge\api\v1\protocol_routes.py             151     43    72%   38-40, 55-60, 73-74, 83-84, 88-97, 111-117, 137-138, 143-146, 151, 158-160, 174, 177-183
-protoforge\api\v1\rate_limit.py                   79     20    75%   24-28, 42, 52, 57-62, 73-76, 84, 101-102
-protoforge\api\v1\recorder_routes.py             123     55    55%   42-43, 59-63, 73, 76-78, 86-90, 101, 104-106, 114-118, 123-137, 142-154, 162-166
-protoforge\api\v1\router.py                       32      0   100%
-protoforge\api\v1\scenario_routes.py             220    104    53%   39-42, 45, 47-53, 76, 79-81, 96, 99-101, 112, 115, 132-135, 138, 140-146, 157-161, 168-171, 174, 176-182, 194-195, 197, 199, 204-210, 215-239, 244-280
-protoforge\api\v1\system_routes.py               176     86    51%   21-27, 32-50, 68-72, 80-84, 112-131, 134-140, 166-170, 178-182, 187, 195, 219-221, 237-239, 248-255, 261-269
-protoforge\api\v1\template_routes.py             149     67    55%   36, 68-69, 76-79, 82, 92-93, 96-97, 103-106, 109, 115-137, 148-156, 164-165, 173-189
-protoforge\api\v1\test_routes.py                 294    203    31%   37-38, 45-79, 84-86, 93-100, 117, 130-138, 146, 151-174, 191, 196-199, 204-221, 226-236, 241-250, 255-256, 261-262, 267-272, 277-292, 298-436, 441-487, 492-493, 518-519
-protoforge\api\v1\webhook_routes.py               93     26    72%   21-25, 46-50, 60, 62, 70-74, 86-88, 99, 111-115
-protoforge\audit\__init__.py                       0      0   100%
-protoforge\audit\exception_lint.py               194    194     0%   19-399
-protoforge\audit\schema_audit.py                 121    121     0%   14-319
-protoforge\cli.py                                322    322     0%   3-499
-protoforge\config.py                             254     68    73%   108, 115, 123, 130, 137, 139, 146, 148, 155, 157, 204-206, 211-235, 240-249, 254-255, 273-284, 286, 306, 318-320, 324-325
-protoforge\core\__init__.py                        6      0   100%
-protoforge\core\_integration_legacy.py            53     38    28%   15-18, 23, 26-52, 58-66, 70-109
-protoforge\core\audit.py                         204     86    58%   41-43, 52, 71, 73-76, 86-99, 105, 107, 109, 111, 113, 130-134, 145-152, 155-168, 171-187, 269-273, 282, 285, 387-393, 406-409, 412, 420, 432-433
-protoforge\core\auth.py                          389    272    30%   33, 48-64, 69-77, 88-102, 106-117, 123, 125-126, 133-139, 146-148, 162-172, 176-180, 196-200, 204-224, 233-236, 241-244, 261-263, 273-274, 280-283, 295, 298, 301, 304-330, 338-359, 362-368, 371-402, 405-427, 430, 443-458, 461-471, 474-495, 498-518, 521
-protoforge\core\behavior_models.py               436    361    17%   52-53, 59, 63, 69, 73-75, 79, 91-96, 102, 106, 148-154, 164-167, 177-198, 202, 205, 213-216, 257-263, 273-277, 287-315, 319, 322, 331-335, 369-374, 383-386, 395-431, 435, 438, 446-449, 483-489, 499-502, 512-538, 542, 546, 549, 557-560, 604-612, 624-627, 642-675, 679, 683, 686, 694-697, 727-731, 739-743, 752-796, 799, 808-812, 853-859, 869-874, 883-934, 938, 942, 945, 956-962, 966-971, 976-984, 1019-1039, 1049-1082, 1091-1099
-protoforge\core\collaboration.py                 154    110    29%   102-133, 163-164, 167-168, 179-217, 221-248, 255-278, 286-304
-protoforge\core\control_loop.py                  156    101    35%   94, 112, 141-151, 168-182, 187, 192, 196, 200-203, 207, 255-263, 271-276, 280, 284, 288, 292-293, 317-381, 396-403, 414-422, 430
-protoforge\core\defaults.py                       74     38    49%   445-450, 454-459, 463-468, 550, 559-561, 569-573, 578-594
-protoforge\core\demo.py                           50     50     0%   7-582
-protoforge\core\device.py                        312    104    67%   81, 113-114, 134-141, 148-154, 213, 230, 233-234, 237-240, 288-289, 293, 300-312, 316-330, 354, 372, 375-385, 406, 428, 441-442, 451-455, 467, 481, 491, 502, 515-516, 529-533, 539, 556-565, 572-583, 593, 597, 607-609, 613, 617, 621, 625, 629, 633, 637, 646, 666-668, 676-678, 682-684
-protoforge\core\edgelite.py                      998    998     0%   3-1704
-protoforge\core\engine.py                        607    243    60%   35, 37, 78-79, 90-94, 135-143, 150, 191-192, 205-213, 224-227, 235, 237-246, 249-254, 256, 266-271, 284-291, 309, 313-317, 320, 335, 346-349, 353-354, 372, 380, 384-387, 391-392, 398-401, 403-414, 422, 424, 432, 435-437, 440-443, 446, 453, 456-470, 499, 506, 516-529, 541, 548-555, 561-563, 570, 590, 593, 601, 604, 609, 632-638, 641-645, 652-661, 664-666, 672, 682-692, 705-708, 746-749, 764-767, 771-772, 783-796, 798-801, 805-826, 847-855, 905-906
-protoforge\core\error_monitor.py                 103     23    78%   81, 85, 89-98, 104-106, 109, 124-129, 138, 169-170, 180-182, 214, 216-217
-protoforge\core\event_bus.py                     109     60    45%   64-69, 72-76, 79-82, 85-86, 89-92, 95-128, 132-135, 138-141
-protoforge\core\failover.py                      111    111     0%   3-146
-protoforge\core\fault\__init__.py                  5      0   100%
-protoforge\core\fault\injector.py                265    202    24%   70-86, 94-107, 115-140, 148-151, 158-162, 174-185, 189-199, 203, 207-208, 212-213, 218, 250-259, 265-273, 280-323, 330-335, 340-345, 350-353, 358-361, 366-369, 374-377, 397-422, 432-441, 447-459, 465-466
-protoforge\core\fault\models.py                   63     21    67%   104-109, 119-123, 131-135, 145-147, 153, 169
-protoforge\core\fault\propagation.py              87     66    24%   89-106, 114-118, 125-129, 140-193, 203-228, 232-233
-protoforge\core\fault_injection.py               477    343    28%   62-68, 155-160, 164, 180, 212-214, 219-222, 248-252, 262-274, 282-289, 297-304, 312-319, 326-333, 337-338, 342-343, 347-349, 355-369, 373-383, 387-400, 404-405, 421-458, 465-495, 502-505, 510-514, 519-522, 527-530, 535-538, 543-546, 551-584, 590-597, 635, 663-666, 670-672, 680-681, 691-726, 730-739, 743-749, 756-757, 786-794, 825-835, 854-865, 869-876, 880-888, 892-901, 905-932, 936-938, 950, 956-957, 967, 972-989, 994
-protoforge\core\forward.py                       323    240    26%   26-37, 44-65, 80-84, 88, 92, 96, 100, 103-110, 113-165, 168-170, 175-178, 182, 186, 189-191, 194-212, 215-217, 222-232, 236, 239-246, 249-257, 260-264, 285-286, 291-305, 311-325, 329-335, 338-349, 352-391, 408-415, 423-435
-protoforge\core\generator.py                     348    262    25%   70-72, 75-82, 85-108, 111-120, 123-226, 234-239, 267, 272-287, 293-295, 300-305, 318, 326-335, 338-345, 348-357, 360-373, 376-385, 389-402, 424-459, 464, 466-467, 469-470, 472, 474, 477-481
-protoforge\core\integration.py                    77     77     0%   3-135
-protoforge\core\integration\__init__.py           18      4    78%   26-27, 31-32
-protoforge\core\integration\auth.py              164    143    13%   22-31, 35, 39, 43, 46-59, 62-96, 106-167, 171-198, 201-225, 228-235, 238
-protoforge\core\integration\channel.py           334    268    20%   17, 20, 24, 28, 32, 37, 41, 44-51, 56-60, 64, 68, 71-78, 81-178, 182-186, 189-194, 197-200, 212-214, 218, 232-242, 246, 250, 253-277, 280-300, 303-318, 321-345, 349-351, 354-371, 374-384, 392-394, 398, 401-419, 422-424
-protoforge\core\integration\manager.py          1056    973     8%   62-68, 71-75, 82-83, 86-92, 95, 98, 101, 105, 129-173, 178-181, 184-230, 233-280, 286-301, 304-310, 314-323, 329-350, 355-403, 406-410, 414-436, 439, 442, 445, 451-595, 602-729, 735-758, 764-874, 880-915, 921-948, 958-1123, 1128-1153, 1158, 1161, 1164, 1169-1197, 1200-1205, 1208-1230, 1233-1241, 1247-1254, 1258-1261, 1265-1340, 1346-1368, 1372-1380, 1384-1392, 1396-1413, 1422-1469, 1474-1482, 1485-1502, 1505-1522, 1528-1552, 1560-1591, 1596-1599, 1604, 1607, 1615, 1618, 1622, 1625, 1628, 1632-1658, 1662-1674
-protoforge\core\integration\metrics.py            45     28    38%   12-21, 24-28, 31, 34, 37, 40, 43-44, 47-48, 51, 55-57, 60
-protoforge\core\integration\protocol.py           91     53    42%   96-97, 100-122, 129-137, 145-173, 184-188, 194, 197, 200, 205, 210, 220-222, 225-251, 258
-protoforge\core\integration\retry.py              72     46    36%   13-14, 19, 24, 29, 34, 46-52, 56, 60, 63-64, 67-74, 77-80, 83-84, 87-101
-protoforge\core\integration\state.py              42     22    48%   30-32, 36, 39-48, 51, 54, 57-62
-protoforge\core\integration\validator.py          65     47    28%   29-30, 39-79, 82-127
-protoforge\core\log_bus.py                        71     21    70%   50-67, 71, 79, 87
-protoforge\core\log_config_500.py                 28     28     0%   24-264
-protoforge\core\messages.py                       43     15    65%   147-149, 844-853, 863, 865
-protoforge\core\metrics.py                       126     59    53%   18-19, 26-31, 34-35, 38-39, 57-58, 63, 70-71, 87-88, 94-103, 107-128, 136-137, 143-150
-protoforge\core\network_sim.py                    84     39    54%   54, 65, 112, 118, 131, 138-149, 156-161, 168-173, 180-182, 186, 190, 194-203, 207, 215
-protoforge\core\performance.py                   309    309     0%   24-567
-protoforge\core\quality.py                        81     23    72%   141, 154-163, 172, 177, 182, 187, 223, 225, 227, 229, 231, 250-252, 279
-protoforge\core\recorder.py                      406    280    31%   23-24, 31-40, 44-54, 64-90, 94-96, 110-117, 121-127, 159-162, 165, 174-181, 185-192, 203-205, 226-227, 235-236, 241, 244, 247-259, 276, 296-332, 341-344, 347-357, 360-391, 394-425, 434, 436, 441-477, 481-496, 509-523, 526-541
-protoforge\core\registry.py                       56      6    89%   68-69, 93, 114, 123, 133
-protoforge\core\scenario.py                      333    270    19%   42-43, 52, 56, 59, 62, 73, 75, 81, 83-87, 97-114, 127-131, 139-151, 160-186, 192-195, 198-208, 212-230, 233-244, 247-255, 258-278, 281-304, 307-320, 323-342, 345-355, 358-402, 405-429, 433-451
-protoforge\core\state_machine.py                 208     63    70%   300, 310, 317-318, 327-328, 336-338, 354-365, 372-377, 400-407, 412-416, 424-427, 451-454, 461-462, 466-469, 494-495, 505-506, 510-513, 519, 534-535, 590-591, 606-607
-protoforge\core\template.py                       75     13    83%   50, 79-95, 99-100, 111, 128-129
-protoforge\core\testing.py                       673    507    25%   57, 67, 96, 111-112, 141, 153-156, 178, 206-208, 212, 216-224, 265-325, 385, 388, 391, 394-401, 404, 407, 410, 415-541, 544-548, 551-569, 577-584, 597-656, 659-665, 673, 678-684, 688-694, 703-711, 716-727, 730-808, 811-819, 823-850, 853, 856-859, 862-865, 868-869, 885-886, 890-1010, 1013-1025, 1029-1034, 1038-1047, 1050-1057
-protoforge\core\timeseries.py                    163    118    28%   102-130, 138-154, 158-161, 170-173, 179-187, 191-200, 204-215, 219-243, 250-257, 261-271, 276, 297, 337-338, 342-345, 357-364, 368, 372, 376, 379
-protoforge\core\timeseries_replay.py             112     91    19%   46-62, 81-88, 91-108, 115-133, 137-151, 155-157, 164-177, 181, 185, 189
-protoforge\core\webhook.py                       260    121    53%   25, 27, 29, 31-38, 42-43, 97-100, 123-124, 127-148, 151-165, 168-176, 182, 185, 188, 199-202, 232, 235, 248-255, 260-282, 285-325
-protoforge\db\__init__.py                          2      0   100%
-protoforge\db\session.py                         589    352    40%   22-24, 47, 68-70, 92, 95-130, 144-159, 174-178, 182-227, 230-246, 250-251, 256-257, 394, 396, 398-399, 402-412, 415-546, 560-563, 570-572, 576-580, 589-593, 615, 625-626, 635-641, 644-649, 672, 676-681, 701-706, 709-715, 724-730, 752-753, 766-767, 775-781, 789-790, 798, 804-805, 813-814, 821, 827-833, 840-841, 853-859, 869, 875-881, 891-892, 900-901, 910-916, 925, 931-935, 953-1016, 1019-1024, 1032-1044, 1047-1076, 1079-1080, 1089-1095, 1103-1104, 1111, 1126, 1134-1136, 1140-1142, 1161-1162, 1176-1179, 1189-1197, 1204-1212, 1216
-protoforge\exceptions.py                         109    109     0%   7-228
-protoforge\grpc\__init__.py                        0      0   100%
-protoforge\grpc\server.py                        310    310     0%   3-384
-protoforge\installer.py                          110    110     0%   7-160
-protoforge\main.py                               466    296    36%   52-67, 90, 96-99, 104-107, 112-115, 120-123, 128-131, 140-171, 184-207, 215-328, 336-352, 357-367, 372-380, 385-418, 426-476, 488-495, 507, 517-522, 531, 533-534, 594-595, 601-605, 647, 659-661, 669-670, 692-693, 698-699, 706-707, 725-726, 728, 731-741
-protoforge\models\__init__.py                      6      0   100%
-protoforge\models\device.py                       72      1    99%   56
-protoforge\models\integration.py                  96      0   100%
-protoforge\models\protocol.py                      8      0   100%
-protoforge\models\scenario.py                     52      0   100%
-protoforge\models\template.py                     22      0   100%
-protoforge\mqtt_auth.py                           41     41     0%   3-49
-protoforge\protocols\__init__.py                  21      4    81%   36, 42-44
-protoforge\protocols\ab\__init__.py                2      0   100%
-protoforge\protocols\ab\server.py                491    438    11%   32-40, 43-47, 50-51, 54-56, 59-60, 63, 66, 76-84, 87-103, 106-119, 122-132, 136-160, 163-183, 187-218, 222-230, 233-245, 249-271, 275-295, 300-318, 322-342, 346-349, 353-376, 379-408, 411-428, 432-453, 457-485, 489-510, 514-531, 535-540, 544-551, 554-567, 570-576, 581-586, 589-592, 595
-protoforge\protocols\bacnet\__init__.py            2      0   100%
-protoforge\protocols\bacnet\server.py            661    550    17%   55-62, 79-82, 96-97, 101-102, 104-105, 116-121, 124-126, 136-232, 235-240, 243-244, 248-253, 257-264, 268, 272-281, 284-289, 294-348, 353-432, 437-476, 484-505, 508-525, 530-591, 600-687, 689-693, 704-742, 745-795, 798-804, 809-822, 825-855, 896-906
-protoforge\protocols\base.py                      88     23    74%   59, 64, 72, 76, 80, 84, 88, 92, 95, 103, 106, 109-110, 114-115, 118-120, 124-126, 132, 136
-protoforge\protocols\behavior.py                 310    266    14%   23-43, 51, 58, 61-82, 85-104, 107-110, 113-117, 120-123, 126-135, 138-144, 147-153, 156-166, 169-177, 180-196, 217-271, 276-285, 289-291, 299-300, 303-311, 314-318, 321-322, 325-334, 337-340, 351-363, 367-369, 377-378, 382-390, 393-397, 400-401, 404-416, 419-422
-protoforge\protocols\ethercat\__init__.py          2      0   100%
-protoforge\protocols\ethercat\server.py          763    659    14%   82-84, 89-93, 96-97, 100-108, 111-141, 144-175, 178-208, 216-239, 242-270, 273-286, 289-332, 335-386, 389-398, 401-415, 418-429, 433-475, 478-509, 512-521, 524-534, 538-570, 573-578, 581-618, 622-646, 650-674, 678-680, 683-700, 703-725, 728-734, 737-746, 749-755, 758-765, 773-776, 779-782, 785-789, 792-796, 799-845, 850-877, 880-886, 891-900, 903-911, 914
-protoforge\protocols\fanuc\__init__.py             2      0   100%
-protoforge\protocols\fanuc\server.py             396    348    12%   23-24, 41-99, 109-118, 121-136, 139-152, 155-165, 169-190, 193-199, 202-224, 227-236, 239-256, 259-262, 265-276, 279-284, 287-301, 304-316, 319-331, 334-346, 349-361, 364-373, 376-385, 388-404, 407-418, 421-437, 440-444, 447-471, 474-480, 485-490, 493-496, 499
-protoforge\protocols\fins\__init__.py              2      0   100%
-protoforge\protocols\fins\server.py              465    412    11%   33-42, 54-71, 74-98, 101-105, 108-109, 112-120, 123-127, 130-136, 146-155, 158-173, 176-189, 192-210, 214-239, 242-251, 254-264, 267-286, 290-295, 298-322, 325-376, 379-409, 412-416, 419-438, 441-447, 452-457, 460-463, 466, 477-478, 481, 485-493, 496-505, 509-514, 517-531, 534-574, 577-591, 594
-protoforge\protocols\gb28181\__init__.py           2      0   100%
-protoforge\protocols\gb28181\rtp_streamer.py     396    396     0%   3-512
-protoforge\protocols\gb28181\server.py           603    546     9%   37-59, 62-65, 83-111, 114-123, 130-150, 154-172, 176-195, 199-213, 216-225, 228-235, 254, 259-262, 265, 268-275, 283-295, 298-324, 327-355, 359, 362-404, 407-421, 424-435, 438-441, 444, 465-485, 488-496, 499-522, 525-551, 554-577, 580-640, 643-664, 667-698, 703-821, 824-885, 888-936, 939-971, 976, 979, 982
-protoforge\protocols\http\__init__.py              2      0   100%
-protoforge\protocols\http\server.py              274    205    25%   44, 47, 81-84, 93-96, 111-113, 117-191, 195-217, 223-288, 292-304, 307-322, 325-337, 340-356, 359-366, 371-380, 383-386, 395-404
-protoforge\protocols\mc\__init__.py                2      0   100%
-protoforge\protocols\mc\server.py                591    537     9%   33-46, 57-73, 76-99, 102-106, 109-116, 119-124, 128-134, 137-143, 154-164, 167-185, 188-201, 204-214, 218-255, 258-295, 298-326, 329-384, 387-415, 418-452, 455-463, 466-474, 477-497, 500-506, 511-516, 519-522, 525, 537-542, 546, 550, 553-580, 583-611, 614-639, 642-673, 676-719, 722-727
-protoforge\protocols\modbus\__init__.py            3      0   100%
-protoforge\protocols\modbus\_common.py           134    104    22%   46-83, 88, 93-96, 100, 104, 108, 112, 115, 118, 121, 124, 127-137, 140-157, 160-169, 172-181, 184-195
-protoforge\protocols\modbus\rtu_server.py        502    452    10%   23-24, 30-31, 47-60, 63-69, 72-82, 85-87, 90-104, 107-204, 209-218, 221-232, 236-271, 274-402, 405-419, 422-459, 462-470, 475-486, 489-512, 515, 527-567, 570-593, 596-629
-protoforge\protocols\modbus\server.py            546    430    21%   22-23, 29-30, 70, 75-79, 82-92, 95-97, 100-120, 132-134, 140-171, 193, 210-223, 240-253, 269-285, 301-321, 337-356, 371-386, 402-428, 441-477, 487, 506-509, 518-523, 530-558, 561-569, 574-588, 591-619, 631-681, 684-707, 710-745, 756-765, 772-791, 798-804, 808-813
-protoforge\protocols\mqtt\__init__.py              2      0   100%
-protoforge\protocols\mqtt\server.py              303    266    12%   42-44, 49, 54-57, 60, 63-70, 78-92, 97, 102, 105-209, 212-230, 233-251, 254-265, 270-281, 284-311, 314, 408-447, 450-485, 488-510, 514-542
-protoforge\protocols\mtconnect\__init__.py         2      0   100%
-protoforge\protocols\mtconnect\server.py         303    269    11%   19-24, 27, 36-50, 53-68, 71-84, 87-97, 101-129, 132-174, 177-231, 246-302, 320-378, 396-424, 435, 447-448, 458-476, 479-485, 490-495, 498-501, 504
-protoforge\protocols\opcda\__init__.py             2      0   100%
-protoforge\protocols\opcda\server.py             430    383    11%   37-45, 48-54, 57-58, 61, 64, 67, 70, 80-92, 95-111, 114-140, 143-153, 157-191, 194-200, 203-219, 222-228, 231-247, 251-270, 273-296, 299-321, 325-342, 345-370, 373-377, 380-457, 460-469, 472-474, 477-493, 496-502, 507-512, 515-518, 521
-protoforge\protocols\opcua\__init__.py             3      0   100%
-protoforge\protocols\opcua\client.py             226    199    12%   18-26, 30-41, 49-63, 66-101, 104-117, 120-162, 165-187, 190-209, 212-217, 220-253, 256-275, 278-280, 283
-protoforge\protocols\opcua\server.py             410    365    11%   47-49, 60-63, 67-137, 142-143, 148-153, 156, 159-166, 174-190, 195, 200, 203-209, 212-317, 321-348, 351-368, 372-398, 403-423, 426-477, 480-521, 530, 538-542, 545, 583-669
-protoforge\protocols\profinet\__init__.py          2      0   100%
-protoforge\protocols\profinet\server.py          600    519    14%   66-71, 74, 84-96, 99-109, 112, 122, 127-130, 133, 136-143, 146-175, 178-208, 216-237, 240-267, 270-290, 293-319, 322-330, 333-342, 345-355, 359-394, 398-409, 412-425, 428-458, 461-473, 476-483, 487-503, 507-551, 554-574, 577-580, 583-586, 589-612, 615-619, 622-644, 648-670, 673-717, 720-753, 756-762, 767-776, 779-787, 790, 808-814
-protoforge\protocols\s7\__init__.py                2      0   100%
-protoforge\protocols\s7\server.py                738    630    15%   52-68, 72-97, 100-127, 130-134, 137-138, 141-145, 148-154, 157-181, 184-212, 249, 259, 262, 272-275, 284-287, 302-304, 308-345, 348-419, 424-468, 474-498, 501-537, 540-651, 654-777, 780-792, 802-862, 868-877, 882-891, 902-921, 924-959, 962-972, 977-990, 993-1015, 1045-1053, 1056-1072
-protoforge\protocols\toledo\__init__.py            2      0   100%
-protoforge\protocols\toledo\server.py            308    264    14%   18-33, 36-45, 48-54, 57-62, 65-66, 69, 82-91, 94-109, 112-139, 142-152, 156-178, 181-205, 208-225, 228-232, 235-241, 244-251, 254-266, 269, 272, 275-280, 283-290, 293-318, 321-337, 340-345, 350-356, 359-363, 366
-protoforge\sdk\__init__.py                       691    691     0%   3-996
-----------------------------------------------------------------------------
-TOTAL                                          26627  19982    25%
-Coverage HTML written to dir htmlcov
-Coverage XML written to file coverage.xml
-Coverage JSON written to file coverage.json
-FAIL Required test coverage of 40% not reached. Total coverage: 24.96%
-254 passed in 180.52s (0:03:00)
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_empty_id PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_empty_name PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_null_id PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_super_long_id PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_special_chars_in_id PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_invalid_protocol PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_missing_points PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_null_points PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceCreateBoundary::test_create_device_malformed_points PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceReadBoundary::test_get_nonexistent_device PASSED [  0%]
+tests/test_500_boundary.py::TestDeviceReadBoundary::test_get_device_empty_id PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceReadBoundary::test_get_device_special_chars PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceReadBoundary::test_get_device_points_nonexistent PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_missing_value PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_null_body PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_nonexistent_device PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_nonexistent_point PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_value_string_for_numeric PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceWritePointBoundary::test_write_point_value_extreme_float PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceBatchBoundary::test_batch_create_empty_list PASSED [  1%]
+tests/test_500_boundary.py::TestDeviceBatchBoundary::test_batch_create_with_invalid_device PASSED [  2%]
+tests/test_500_boundary.py::TestDeviceBatchBoundary::test_batch_delete_empty_list PASSED [  2%]
+tests/test_500_boundary.py::TestDeviceBatchBoundary::test_batch_delete_nonexistent_ids PASSED [  2%]
+tests/test_500_boundary.py::TestScenarioBoundary::test_create_scenario_empty_name PASSED [  2%]
+tests/test_500_boundary.py::TestScenarioBoundary::test_create_scenario_empty_id PASSED [  2%]
+tests/test_500_boundary.py::TestScenarioBoundary::test_get_nonexistent_scenario PASSED [  2%]
+tests/test_500_boundary.py::TestScenarioBoundary::test_start_nonexistent_scenario PASSED [  2%]
+tests/test_500_boundary.py::TestScenarioBoundary::test_stop_nonexistent_scenario PASSED [  2%]
+tests/test_500_boundary.py::TestSystemBoundary::test_backup_restore_empty_data PASSED [  2%]
+tests/test_500_boundary.py::TestSystemBoundary::test_backup_restore_null_data PASSED [  2%]
+tests/test_500_boundary.py::TestSystemBoundary::test_backup_restore_non_dict_data PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_backup_restore_malformed_data PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_update_settings_invalid_key PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_update_settings_empty PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_audit_query_invalid_limit PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_audit_query_huge_limit PASSED [  3%]
+tests/test_500_boundary.py::TestSystemBoundary::test_audit_query_negative_offset PASSED [  3%]
+tests/test_500_boundary.py::TestTemplateBoundary::test_get_nonexistent_template PASSED [  3%]
+tests/test_500_boundary.py::TestTemplateBoundary::test_quick_create_nonexistent_template PASSED [  3%]
+tests/test_500_boundary.py::TestTemplateBoundary::test_quick_create_empty_template_id PASSED [  3%]
+tests/test_500_boundary.py::TestTemplateBoundary::test_quick_create_empty_name PASSED [  4%]
+tests/test_500_boundary.py::TestFaultInjectionBoundary::test_inject_fault_nonexistent_device PASSED [  4%]
+tests/test_500_boundary.py::TestFaultInjectionBoundary::test_inject_fault_invalid_type PASSED [  4%]
+tests/test_500_boundary.py::TestFaultInjectionBoundary::test_inject_fault_invalid_trigger_mode PASSED [  4%]
+tests/test_500_boundary.py::TestFaultInjectionBoundary::test_list_faults_nonexistent_device PASSED [  4%]
+tests/test_500_boundary.py::TestConcurrencyBoundary::test_concurrent_create_same_device PASSED [  4%]
+tests/test_500_boundary.py::TestConcurrencyBoundary::test_concurrent_read_points PASSED [  4%]
+tests/test_500_boundary.py::TestConcurrencyBoundary::test_concurrent_start_stop PASSED [  4%]
+tests/test_500_boundary.py::TestConcurrencyBoundary::test_concurrent_write_same_point PASSED [  4%]
+tests/test_500_boundary.py::TestConcurrencyBoundary::test_concurrent_backup_export PASSED [  4%]
+tests/test_500_boundary.py::TestExternalDependencyFailure::test_create_device_db_failure PASSED [  5%]
+tests/test_500_boundary.py::TestExternalDependencyFailure::test_get_device_engine_failure PASSED [  5%]
+tests/test_500_boundary.py::TestExternalDependencyFailure::test_backup_export_db_none PASSED [  5%]
+tests/test_500_boundary.py::TestExternalDependencyFailure::test_write_point_engine_exception PASSED [  5%]
+tests/test_500_boundary.py::TestExternalDependencyFailure::test_webhook_failure_does_not_cause_500 PASSED [  5%]
+tests/test_500_boundary.py::TestMalformedRequestBody::test_create_device_invalid_json PASSED [  5%]
+tests/test_500_boundary.py::TestMalformedRequestBody::test_create_device_wrong_content_type PASSED [  5%]
+tests/test_500_boundary.py::TestMalformedRequestBody::test_write_point_array_body PASSED [  5%]
+tests/test_500_boundary.py::TestMalformedRequestBody::test_write_point_string_body PASSED [  5%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_get_nonexistent_protocol_config PASSED [  5%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_nonexistent_protocol PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_stop_nonexistent_protocol PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_protocol_with_null_config PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_protocol_with_empty_config PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_protocol_with_invalid_port PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_protocol_with_negative_port PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_protocol_with_huge_port PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_start_all_protocols PASSED [  6%]
+tests/test_500_boundary.py::TestProtocolBoundary::test_stop_all_protocols PASSED [  6%]
+tests/test_500_boundary.py::TestLogBoundary::test_get_logs_negative_count PASSED [  6%]
+tests/test_500_boundary.py::TestLogBoundary::test_get_logs_huge_count PASSED [  7%]
+tests/test_500_boundary.py::TestLogBoundary::test_get_logs_zero_count PASSED [  7%]
+tests/test_500_boundary.py::TestLogBoundary::test_get_logs_with_special_chars_protocol PASSED [  7%]
+tests/test_500_boundary.py::TestLogBoundary::test_clear_logs PASSED      [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_list_webhooks PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_missing_url PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_null_url PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_empty_url PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_invalid_url_scheme PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_non_string_url PASSED [  7%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_add_webhook_super_long_url PASSED [  8%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_update_nonexistent_webhook PASSED [  8%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_delete_nonexistent_webhook PASSED [  8%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_test_nonexistent_webhook PASSED [  8%]
+tests/test_500_boundary.py::TestWebhookBoundary::test_webhook_stats PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_list_forward_targets PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_add_forward_target_empty_config PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_add_forward_target_null_config PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_add_forward_target_invalid_port PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_add_forward_target_negative_port PASSED [  8%]
+tests/test_500_boundary.py::TestForwardBoundary::test_add_forward_target_huge_port PASSED [  9%]
+tests/test_500_boundary.py::TestForwardBoundary::test_remove_nonexistent_forward_target PASSED [  9%]
+tests/test_500_boundary.py::TestForwardBoundary::test_forward_stats PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_list_recordings PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_get_nonexistent_recording PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_delete_nonexistent_recording PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_start_recording_null_config PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_start_recording_empty_config PASSED [  9%]
+tests/test_500_boundary.py::TestRecorderBoundary::test_stop_recording_when_none_active PASSED [  9%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_empty_username PASSED [  9%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_empty_password PASSED [  9%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_null_username PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_missing_fields PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_wrong_credentials PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_super_long_username PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_login_special_chars_in_username PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_refresh_empty_token PASSED [ 10%]
+tests/test_500_boundary.py::TestAuthBoundary::test_refresh_invalid_token PASSED [ 10%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_get_integration_status PASSED [ 10%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_get_integration_metrics PASSED [ 10%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_empty_device_ids PASSED [ 10%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_null_device_ids PASSED [ 11%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_non_array_device_ids PASSED [ 11%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_non_string_elements PASSED [ 11%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_nonexistent_devices PASSED [ 11%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_invalid_concurrency PASSED [ 11%]
+tests/test_500_boundary.py::TestIntegrationBoundary::test_batch_push_negative_concurrency PASSED [ 11%]
+tests/test_500_boundary.py::TestEdgeliteBoundary::test_import_edgelite_empty_config PASSED [ 11%]
+tests/test_500_boundary.py::TestEdgeliteBoundary::test_import_edgelite_null_config PASSED [ 11%]
+tests/test_500_boundary.py::TestEdgeliteBoundary::test_push_nonexistent_device_to_edgelite PASSED [ 11%]
+tests/test_500_boundary.py::TestEdgeliteBoundary::test_batch_push_empty_device_ids PASSED [ 11%]
+tests/test_500_boundary.py::TestEdgeliteBoundary::test_batch_push_nonexistent_devices PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_list_test_cases PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_get_nonexistent_test_case PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_create_test_case_empty_body PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_create_test_case_null_body PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_delete_nonexistent_test_case PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_update_nonexistent_test_case PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_list_test_suites PASSED [ 12%]
+tests/test_500_boundary.py::TestTestRoutesBoundary::test_get_nonexistent_test_suite PASSED [ 12%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_nonexistent_device PASSED [ 12%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_missing_device_id PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_null_device_id PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_empty_device_id PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_invalid_type PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_create_fault_invalid_trigger_mode PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_list_faults PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_clear_faults PASSED [ 13%]
+tests/test_500_boundary.py::TestFaultRoutesBoundary::test_list_fault_scenarios PASSED [ 13%]
+tests/test_500_boundary.py::TestConcurrencyStress::test_concurrent_list_devices PASSED [ 13%]
+tests/test_500_boundary.py::TestConcurrencyStress::test_concurrent_list_protocols PASSED [ 13%]
+tests/test_500_boundary.py::TestConcurrencyStress::test_concurrent_get_logs PASSED [ 14%]
+tests/test_500_boundary.py::TestConcurrencyStress::test_concurrent_create_and_delete PASSED [ 14%]
+tests/test_500_boundary.py::TestConcurrencyStress::test_concurrent_settings_read PASSED [ 14%]
+tests/test_500_boundary.py::TestHttpMethodMisuse::test_patch_device_not_allowed PASSED [ 14%]
+tests/test_500_boundary.py::TestHttpMethodMisuse::test_put_protocols_not_allowed PASSED [ 14%]
+tests/test_500_boundary.py::TestHttpMethodMisuse::test_delete_logs_with_body PASSED [ 14%]
+tests/test_500_boundary.py::TestHttpMethodMisuse::test_post_to_get_endpoint PASSED [ 14%]
+tests/test_500_boundary.py::TestHttpMethodMisuse::test_get_to_post_endpoint PASSED [ 14%]
+tests/test_api.py::test_root PASSED                                      [ 14%]
+tests/test_api.py::test_health PASSED                                    [ 14%]
+tests/test_api.py::test_list_protocols PASSED                            [ 15%]
+tests/test_api.py::test_list_templates PASSED                            [ 15%]
+tests/test_api.py::test_create_and_get_device PASSED                     [ 15%]
+tests/test_api.py::test_scenario_crud PASSED                             [ 15%]
+tests/test_api.py::test_scenario_export PASSED                           [ 15%]
+tests/test_api.py::test_logs_endpoint PASSED                             [ 15%]
+tests/test_api.py::test_http_protocol_device PASSED                      [ 15%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_list_webhooks PASSED [ 15%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_create_webhook PASSED [ 15%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_update_webhook PASSED [ 15%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_delete_webhook PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_test_webhook PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestWebhookAPI::test_webhook_stats PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_list_templates PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_search_templates PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_template_tags PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_get_template PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_create_template PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_delete_template PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_export_template PASSED [ 16%]
+tests/test_api_extended_coverage.py::TestTemplateAPI::test_instantiate_template PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_list_scenarios PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_create_scenario PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_get_scenario PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_start_stop_scenario PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_update_scenario PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestScenarioAPI::test_delete_scenario PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_setup_status PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_get_settings PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_update_settings PASSED [ 17%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_audit_logs PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_audit_stats PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestSystemAPI::test_backup PASSED   [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_list_devices PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_create_device_with_multiple_points PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_start_stop_device FAILED [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_write_device_point FAILED [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_get_device_detail FAILED [ 18%]
+tests/test_api_extended_coverage.py::TestDeviceAPIExtended::test_update_device FAILED [ 18%]
+tests/test_api_extended_coverage.py::TestProtocolAPI::test_list_protocols PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestProtocolAPI::test_get_protocol_detail PASSED [ 18%]
+tests/test_api_extended_coverage.py::TestProtocolAPI::test_start_stop_protocol PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestRecorderAPI::test_list_recordings PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestRecorderAPI::test_recorder_stats PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestForwardAPI::test_list_forwards PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestForwardAPI::test_forward_stats PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestMetricsEndpoint::test_metrics_endpoint PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestMetricsEndpoint::test_api_v1_metrics PASSED [ 19%]
+tests/test_api_extended_coverage.py::TestIntegrationAPI::test_list_integrations PASSED [ 19%]
+tests/test_auth_security.py::test_login_success PASSED                   [ 19%]
+tests/test_auth_security.py::test_login_empty_username_rejected PASSED   [ 19%]
+tests/test_auth_security.py::test_login_empty_password_rejected PASSED   [ 20%]
+tests/test_auth_security.py::test_login_missing_fields_rejected FAILED   [ 20%]
+tests/test_auth_security.py::test_login_whitespace_stripped PASSED       [ 20%]
+tests/test_auth_security.py::test_health_endpoint_no_auth_required PASSED [ 20%]
+tests/test_auth_security.py::test_docs_endpoint_no_auth_required PASSED  [ 20%]
+tests/test_auth_security.py::test_protected_endpoint_accessible_in_no_auth_mode PASSED [ 20%]
+tests/test_auth_security.py::test_register_user_validation FAILED        [ 20%]
+tests/test_auth_security.py::test_refresh_token_empty_rejected PASSED    [ 20%]
+tests/test_auth_security.py::test_change_password_validation FAILED      [ 20%]
+tests/test_auth_security.py::test_invalid_role_update_rejected PASSED    [ 20%]
+tests/test_auth_security.py::test_audit_log_query PASSED                 [ 21%]
+tests/test_auth_security.py::test_audit_stats_endpoint PASSED            [ 21%]
+tests/test_auth_security.py::test_audit_entry_delete_forbidden PASSED    [ 21%]
+tests/test_auth_security.py::test_audit_clear_forbidden PASSED           [ 21%]
+tests/test_auth_security.py::test_backup_export_structure PASSED         [ 21%]
+tests/test_auth_security.py::test_backup_import_empty_data_rejected PASSED [ 21%]
+tests/test_auth_security.py::test_backup_import_invalid_data_type_rejected PASSED [ 21%]
+tests/test_auth_security.py::test_settings_endpoint PASSED               [ 21%]
+tests/test_auth_security.py::test_recorder_stats_endpoint PASSED         [ 21%]
+tests/test_behavior_models.py::TestBaseBehavior::test_cannot_instantiate_directly PASSED [ 21%]
+tests/test_behavior_models.py::TestBaseBehavior::test_base_to_dict_returns_params PASSED [ 22%]
+tests/test_behavior_models.py::TestBaseBehavior::test_base_from_dict_roundtrip PASSED [ 22%]
+tests/test_behavior_models.py::TestBaseBehavior::test_reset_calls_init_state PASSED [ 22%]
+tests/test_behavior_models.py::TestBaseBehavior::test_get_state_adds_type PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_initial_temperature_defaults_to_ambient PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_initial_temperature_custom PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_temperature_rises_with_power PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_temperature_cools_without_power PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_overheat_protection PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_overheat_hysteresis PASSED [ 22%]
+tests/test_behavior_models.py::TestThermalBehavior::test_thermal_state_dict PASSED [ 23%]
+tests/test_behavior_models.py::TestThermalBehavior::test_thermal_serialization_roundtrip PASSED [ 23%]
+tests/test_behavior_models.py::TestThermalBehavior::test_thermal_reset PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_starts_from_zero PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_accelerates_with_torque PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_steady_state PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_torque_limit PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_stall_detection PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_state_dict PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_serialization_roundtrip PASSED [ 23%]
+tests/test_behavior_models.py::TestMotorBehavior::test_motor_reset PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_initial PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_responds_to_target PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_converges_to_target PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_state_dict PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_reset PASSED [ 24%]
+tests/test_behavior_models.py::TestPressureBehavior::test_pressure_serialization_roundtrip PASSED [ 24%]
+tests/test_behavior_models.py::TestFlowBehavior::test_flow_initial PASSED [ 24%]
+tests/test_behavior_models.py::TestFlowBehavior::test_flow_responds_to_target PASSED [ 24%]
+tests/test_behavior_models.py::TestFlowBehavior::test_flow_state_dict PASSED [ 24%]
+tests/test_behavior_models.py::TestFlowBehavior::test_flow_reset PASSED  [ 25%]
+tests/test_behavior_models.py::TestFlowBehavior::test_flow_cumulative_increases PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_initial PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_rises_with_inflow PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_falls_with_outflow PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_overflow_protection PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_low_alarm PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_state_dict PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_reset PASSED [ 25%]
+tests/test_behavior_models.py::TestLevelBehavior::test_level_serialization_roundtrip PASSED [ 25%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_initial PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_opens PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_closes PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_position_clamped PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_dead_zone PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_state_dict PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_reset PASSED [ 26%]
+tests/test_behavior_models.py::TestValveBehavior::test_valve_serialization_roundtrip PASSED [ 26%]
+tests/test_behavior_models.py::TestPIDController::test_pid_initial_output_zero PASSED [ 26%]
+tests/test_behavior_models.py::TestPIDController::test_pid_proportional_response PASSED [ 26%]
+tests/test_behavior_models.py::TestPIDController::test_pid_integral_accumulates PASSED [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_derivative_response PASSED [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_output_clamping PASSED [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_reset PASSED  [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_state_dict PASSED [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_serialization_roundtrip PASSED [ 27%]
+tests/test_behavior_models.py::TestPIDController::test_pid_anti_windup PASSED [ 27%]
+tests/test_behavior_models_coverage.py::TestBaseBehavior::test_base_init_raises PASSED [ 27%]
+tests/test_behavior_models_coverage.py::TestBaseBehavior::test_base_from_dict_no_state PASSED [ 27%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_init_defaults PASSED [ 27%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_init_custom PASSED [ 27%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_update_returns_float PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_update_heats_up PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_update_cools_down PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_overheat_protection PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_overheat_recovery PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_reset PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_get_state PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_to_dict PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_from_dict PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_total_energy_accumulates PASSED [ 28%]
+tests/test_behavior_models_coverage.py::TestThermalBehavior::test_zero_thermal_capacity PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_init_defaults PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_update_returns_float PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_acceleration PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_torque_limit PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_speed_saturation PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_stall_detection PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_reset PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_get_state PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestMotorBehavior::test_to_dict_and_from_dict PASSED [ 29%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_init_defaults PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_update_returns_float PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_pressure_converges PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_overshoot_effect PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_reset PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_get_state PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_to_dict_and_from_dict PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestPressureBehavior::test_noise_effect PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_init_defaults PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_update_returns_float PASSED [ 30%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_flow_clamping PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_cumulative_accumulation PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_pulse_effect PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_reset PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_get_state PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_to_dict_and_from_dict PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestFlowBehavior::test_pulse_count PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_init_defaults PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_update_returns_float PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_level_rises PASSED [ 31%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_level_falls PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_overflow_detection PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_low_alarm PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_wave_effect PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_reset PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_get_state PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_to_dict_and_from_dict PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestLevelBehavior::test_custom_flows PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_init_defaults PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_update_returns_float PASSED [ 32%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_valve_opens PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_dead_zone PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_response_delay PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_clamping PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_reset PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_get_state PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_to_dict_and_from_dict PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestValveBehavior::test_hysteresis_direction_change PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_init_defaults PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_update_returns_float PASSED [ 33%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_proportional_response PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_integral_accumulation PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_derivative_response PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_output_limit PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_anti_windup PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_no_output_limit PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_reset PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_get_state PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_to_dict_and_from_dict PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_dt_zero_protection PASSED [ 34%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_is_saturated PASSED [ 35%]
+tests/test_behavior_models_coverage.py::TestPIDController::test_zero_error_no_output PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[90->-80-True] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[70->-80-False] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[80->=-80-True] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[79->=-80-False] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[80-==-80-True] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[81-==-80-False] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[81-!=-80-True] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[30-between-target7-True] PASSED [ 35%]
+tests/test_collaboration.py::test_evaluate_condition_operators[60-between-target8-False] PASSED [ 36%]
+tests/test_collaboration.py::test_evaluate_condition_operators[2-in-target9-True] PASSED [ 36%]
+tests/test_collaboration.py::test_evaluate_condition_operators[5-in-target10-False] PASSED [ 36%]
+tests/test_collaboration.py::test_evaluate_condition_operators[5-not_in-target11-True] PASSED [ 36%]
+tests/test_collaboration.py::test_evaluate_condition_operators[None->-80-False] PASSED [ 36%]
+tests/test_collaboration.py::test_evaluate_condition_empty_and_unknown PASSED [ 36%]
+tests/test_collaboration.py::test_set_action_writes_value PASSED         [ 36%]
+tests/test_collaboration.py::test_toggle_action_flips_bool PASSED        [ 36%]
+tests/test_collaboration.py::test_increment_and_decrement_actions PASSED [ 36%]
+tests/test_collaboration.py::test_increment_defaults_to_step_one PASSED  [ 36%]
+tests/test_collaboration.py::test_chain_with_delay_action PASSED         [ 36%]
+tests/test_collaboration.py::test_pure_delay_action_does_not_write PASSED [ 37%]
+tests/test_collaboration.py::test_cooldown_suppresses_rapid_retrigger PASSED [ 37%]
+tests/test_collaboration.py::test_disabled_rule_not_triggered PASSED     [ 37%]
+tests/test_collaboration.py::test_condition_not_met_does_not_trigger PASSED [ 37%]
+tests/test_collaboration.py::test_read_none_does_not_trigger PASSED      [ 37%]
+tests/test_collaboration.py::test_remove_rule PASSED                     [ 37%]
+tests/test_collaboration.py::test_multiple_rules_independent PASSED      [ 37%]
+tests/test_collaboration_scenario.py::test_collaboration_rule_triggers_set_action PASSED [ 37%]
+tests/test_collaboration_scenario.py::test_collaboration_multi_action_chain PASSED [ 37%]
+tests/test_collaboration_scenario.py::test_collaboration_toggle_action PASSED [ 37%]
+tests/test_collaboration_scenario.py::test_collaboration_cooldown_suppresses_retrigger PASSED [ 38%]
+tests/test_collaboration_scenario.py::test_collaboration_disabled_rule_not_triggered PASSED [ 38%]
+tests/test_collaboration_scenario.py::test_collaboration_falls_back_to_memory_write PASSED [ 38%]
+tests/test_collaboration_scenario.py::test_collaboration_synthesizes_action_from_target_fields PASSED [ 38%]
+tests/test_collaboration_scenario.py::test_collaboration_condition_not_met_no_action PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_initialization PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_list_recordings PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_get_stats PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_start_stop PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_max_messages_config PASSED [ 38%]
+tests/test_core_coverage.py::TestRecorder::test_recorder_max_message_size_config PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_forward_engine_initialization PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_forward_engine_add_remove_target PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_forward_engine_stats PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_forward_engine_start_stop PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_influxdb_target_creation PASSED [ 39%]
+tests/test_core_coverage.py::TestForwardEngine::test_http_target_creation PASSED [ 39%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_initialization PASSED [ 39%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_add PASSED [ 39%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_remove PASSED [ 39%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_update PASSED [ 40%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_manager_stats PASSED [ 40%]
+tests/test_core_coverage.py::TestWebhookManager::test_webhook_trigger PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generator_initialization PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_fixed PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_random PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_sine PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_square PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_triangle PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_increment PASSED [ 40%]
+tests/test_core_coverage.py::TestDataGenerator::test_generate_with_fault_injector PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_hash_and_verify_password PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_create_and_verify_token PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_verify_invalid_token PASSED  [ 41%]
+tests/test_core_coverage.py::TestAuth::test_verify_expired_token PASSED  [ 41%]
+tests/test_core_coverage.py::TestAuth::test_create_and_verify_refresh_token PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_initialization PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_authenticate PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_create_user PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_wrong_password PASSED [ 41%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_change_password PASSED [ 42%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_delete_user PASSED [ 42%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_update_role PASSED [ 42%]
+tests/test_core_coverage.py::TestAuth::test_user_manager_list_users PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_type_values PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_trigger_mode_values PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_config_creation PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_initialization PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_add_and_get PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_remove PASSED [ 42%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_clear_all PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_stuck PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_noise PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_apply_drift PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_no_fault PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_get_all_faults PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_activate_deactivate PASSED [ 43%]
+tests/test_core_coverage.py::TestFaultInjection::test_fault_injector_to_dict PASSED [ 43%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_creation PASSED [ 43%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_initial_running PASSED [ 43%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_trigger_start PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_trigger_stop PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_trigger_error PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_history PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_state_duration PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_machine_can_trigger PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_device_state_enum PASSED [ 44%]
+tests/test_core_coverage.py::TestDeviceStateMachine::test_state_transition_dataclass PASSED [ 44%]
+tests/test_d1_scenario_enhancement.py::test_replay_drives_device_points PASSED [ 44%]
+tests/test_d1_scenario_enhancement.py::test_replay_triggers_collaboration_rule PASSED [ 44%]
+tests/test_d1_scenario_enhancement.py::test_replay_exhausted_scenario_continues PASSED [ 45%]
+tests/test_d1_scenario_enhancement.py::test_replay_loop_continuously_feeds PASSED [ 45%]
+tests/test_d1_scenario_enhancement.py::test_collaboration_inject_fault_action PASSED [ 45%]
+tests/test_d1_scenario_enhancement.py::test_collaboration_inject_fault_without_target_point PASSED [ 45%]
+tests/test_d1_scenario_enhancement.py::test_collaboration_inject_fault_chain_with_set PASSED [ 45%]
+tests/test_db_session_coverage.py::TestSafeJsonLoads::test_valid_json PASSED [ 45%]
+tests/test_db_session_coverage.py::TestSafeJsonLoads::test_invalid_json PASSED [ 45%]
+tests/test_db_session_coverage.py::TestSafeJsonLoads::test_invalid_json_with_default PASSED [ 45%]
+tests/test_db_session_coverage.py::TestSafeJsonLoads::test_none_input PASSED [ 45%]
+tests/test_db_session_coverage.py::TestSafeJsonLoads::test_list_input PASSED [ 45%]
+tests/test_db_session_coverage.py::TestDatabaseConnection::test_connect_sqlite_memory PASSED [ 45%]
+tests/test_db_session_coverage.py::TestDatabaseConnection::test_connect_sqlite_file PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDatabaseConnection::test_close PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDatabaseConnection::test_is_postgresql_url PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_save_and_load_device PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_load_nonexistent_device PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_load_all_devices PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_load_all_devices_with_pagination PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_delete_device PASSED [ 46%]
+tests/test_db_session_coverage.py::TestDeviceCRUD::test_update_device PASSED [ 46%]
+tests/test_db_session_coverage.py::TestScenarioCRUD::test_save_and_load_scenario PASSED [ 46%]
+tests/test_db_session_coverage.py::TestScenarioCRUD::test_load_nonexistent_scenario PASSED [ 47%]
+tests/test_db_session_coverage.py::TestScenarioCRUD::test_load_all_scenarios PASSED [ 47%]
+tests/test_db_session_coverage.py::TestScenarioCRUD::test_load_all_scenarios_with_pagination PASSED [ 47%]
+tests/test_db_session_coverage.py::TestScenarioCRUD::test_delete_scenario PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTemplateCRUD::test_save_and_load_template PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTemplateCRUD::test_load_nonexistent_template PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTemplateCRUD::test_load_all_templates PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTemplateCRUD::test_delete_template PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTestCaseCRUD::test_save_and_load_test_case PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTestCaseCRUD::test_load_nonexistent_test_case PASSED [ 47%]
+tests/test_db_session_coverage.py::TestTestCaseCRUD::test_load_all_test_cases PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestCaseCRUD::test_delete_test_case PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestSuiteCRUD::test_save_and_load_test_suite PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestSuiteCRUD::test_load_nonexistent_test_suite PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestSuiteCRUD::test_load_all_test_suites PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestSuiteCRUD::test_delete_test_suite PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestReportCRUD::test_save_and_load_test_report PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestReportCRUD::test_load_nonexistent_test_report PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestReportCRUD::test_load_test_reports PASSED [ 48%]
+tests/test_db_session_coverage.py::TestTestReportCRUD::test_delete_test_report PASSED [ 48%]
+tests/test_db_session_coverage.py::TestUserCRUD::test_save_and_load_user PASSED [ 49%]
+tests/test_db_session_coverage.py::TestUserCRUD::test_load_nonexistent_user PASSED [ 49%]
+tests/test_db_session_coverage.py::TestUserCRUD::test_load_all_users PASSED [ 49%]
+tests/test_db_session_coverage.py::TestUserCRUD::test_delete_user PASSED [ 49%]
+tests/test_db_session_coverage.py::TestAuditLog::test_save_and_load_audit_logs PASSED [ 49%]
+tests/test_e2e_edgelite_joint.py::test_convert_device_to_edgelite_produces_valid_payload PASSED [ 49%]
+tests/test_e2e_edgelite_joint.py::test_push_device_to_mocked_edgelite_succeeds PASSED [ 49%]
+tests/test_e2e_edgelite_joint.py::test_verify_pipeline_all_steps_pass PASSED [ 49%]
+tests/test_e2e_edgelite_joint.py::test_verify_pipeline_auto_fixes_unregistered_device PASSED [ 49%]
+tests/test_e2e_edgelite_joint.py::test_verify_pipeline_detects_offline_device PASSED [ 49%]
+tests/test_e2e_modbus_real.py::test_real_modbus_bool_reads_from_coil FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_real_modbus_float32_reads_from_holding FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_real_modbus_coil_not_in_holding FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_edgelite_config_has_correct_register_types PASSED [ 50%]
+tests/test_e2e_modbus_real.py::test_edgelite_config_driver_connects_to_protoforge PASSED [ 50%]
+tests/test_e2e_modbus_real.py::test_real_modbus_write_coil_reflects_in_protoforge FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_real_modbus_write_holding_reflects_in_protoforge FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_external_modbus_write_propagates_to_device_instance FAILED [ 50%]
+tests/test_e2e_modbus_real.py::test_consecutive_modbus_writes_consistent FAILED [ 50%]
+tests/test_e2e_multi_protocol_real.py::test_http_get_points_returns_values PASSED [ 50%]
+tests/test_e2e_multi_protocol_real.py::test_http_post_writes_value PASSED [ 51%]
+tests/test_e2e_multi_protocol_real.py::test_http_health_endpoint PASSED  [ 51%]
+tests/test_e2e_multi_protocol_real.py::test_mqtt_subscribe_receives_device_data PASSED [ 51%]
+tests/test_e2e_multi_protocol_real.py::test_mqtt_broker_accepts_connection PASSED [ 51%]
+tests/test_e2e_multi_protocol_real.py::test_opcua_client_reads_node_value +++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+~~~~~~~~~~~~~~~~~~~~~~~~~ Stack of Thread-1285 (2104) ~~~~~~~~~~~~~~~~~~~~~~~~~
+  File "D:\os\Python312\Lib\threading.py", line 1009, in _bootstrap
+    self._bootstrap_inner()
+  File "D:\os\Python312\Lib\threading.py", line 1052, in _bootstrap_inner
+    self.run()
+  File "D:\os\Python312\Lib\site-packages\aiosqlite\core.py", line 107, in run
+    tx_item = self._tx.get()
+~~~~~~~~~~~~~~~~~~~~~~~~~ Stack of MainThread (17952) ~~~~~~~~~~~~~~~~~~~~~~~~~
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\os\Python312\Lib\site-packages\pytest\__main__.py", line 9, in <module>
+    raise SystemExit(pytest.console_main())
+  File "D:\os\Python312\Lib\site-packages\_pytest\config\__init__.py", line 223, in console_main
+    code = main()
+  File "D:\os\Python312\Lib\site-packages\_pytest\config\__init__.py", line 199, in main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "D:\os\Python312\Lib\site-packages\_pytest\main.py", line 365, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "D:\os\Python312\Lib\site-packages\_pytest\main.py", line 318, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File "D:\os\Python312\Lib\site-packages\_pytest\main.py", line 372, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "D:\os\Python312\Lib\site-packages\_pytest\main.py", line 396, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 131, in runtestprotocol
+    rep = call_and_report(item, "setup", log)
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 244, in call_and_report
+    call = CallInfo.from_call(
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 353, in from_call
+    result: TResult | None = func()
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 245, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+  File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 165, in pytest_runtest_setup
+    item.session._setupstate.setup(item)
+  File "D:\os\Python312\Lib\site-packages\_pytest\runner.py", line 523, in setup
+    col.setup()
+  File "D:\os\Python312\Lib\site-packages\pytest_asyncio\plugin.py", line 458, in setup
+    return super().setup()
+  File "D:\os\Python312\Lib\site-packages\_pytest\python.py", line 1723, in setup
+    self._request._fillfixtures()
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 707, in _fillfixtures
+    item.funcargs[argname] = self.getfixturevalue(argname)
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 539, in getfixturevalue
+    fixturedef = self._get_active_fixturedef(argname)
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 627, in _get_active_fixturedef
+    fixturedef.execute(request=subrequest)
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 1110, in execute
+    result: FixtureValue = ihook.pytest_fixture_setup(
+  File "D:\os\Python312\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "D:\os\Python312\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    res = hook_impl.function(*args)
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 1202, in pytest_fixture_setup
+    result = call_fixture_func(fixturefunc, request, kwargs)
+  File "D:\os\Python312\Lib\site-packages\_pytest\fixtures.py", line 915, in call_fixture_func
+    fixture_result = fixturefunc(**kwargs)
+  File "D:\os\Python312\Lib\site-packages\pytest_asyncio\plugin.py", line 313, in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+  File "D:\os\Python312\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "D:\os\Python312\Lib\asyncio\base_events.py", line 651, in run_until_complete
+    self.run_forever()
+  File "D:\os\Python312\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "D:\os\Python312\Lib\asyncio\base_events.py", line 618, in run_forever
+    self._run_once()
+  File "D:\os\Python312\Lib\asyncio\base_events.py", line 1951, in _run_once
+    handle._run()
+  File "D:\os\Python312\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "D:\os\Python312\Lib\site-packages\pytest_asyncio\plugin.py", line 309, in setup
+    res = await gen_obj.__anext__()
+  File "E:\˶������\PyGBSentry\ProtoForge\tests\test_e2e_multi_protocol_real.py", line 362, in opcua_server
+    await engine.start_protocol("opcua", {"host": "127.0.0.1", "port": OPCUA_TEST_PORT})
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\core\engine.py", line 353, in start_protocol
+    await server.start(config)
+  File "E:\˶������\PyGBSentry\ProtoForge\protoforge\protocols\opcua\server.py", line 247, in start
+    await self._server.init()
+  File "D:\os\Python312\Lib\site-packages\asyncua\server\server.py", line 126, in init
+    await self.iserver.init(shelf_file)
+  File "D:\os\Python312\Lib\site-packages\asyncua\server\internal_server.py", line 80, in init
+    await self.load_standard_address_space(shelffile)
+  File "D:\os\Python312\Lib\site-packages\asyncua\server\internal_server.py", line 145, in load_standard_address_space
+    standard_address_space.fill_address_space(self.node_mgt_service)
+  File "D:\os\Python312\Lib\site-packages\asyncua\server\standard_address_space\standard_address_space.py", line 35, in fill_address_space
+    create_standard_address_space_Services(server)
+  File "D:\os\Python312\Lib\site-packages\asyncua\server\standard_address_space\standard_address_space_services.py", line 40640, in create_standard_address_space_Services
+    ParentNodeId=NumericNodeId(12581, 0),
+  File "<string>", line 15, in __init__
++++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++

@@ -40,6 +40,7 @@ class FanucDeviceBehavior(StandardDeviceBehavior):
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             if point_name == "spindle_speed":
                 self._cnc_status["spindle_speed"] = value
             elif point_name == "feed_rate":
@@ -494,6 +495,43 @@ class FanucServer(ProtocolServer):
         if not behavior:
             return False
         return behavior.on_write(point_name, value)
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新 Fanuc CNC 状态数据，绕过访问控制检查。
+
+        直接更新 _values 和 _cnc_status，不设置 _written_values，
+        避免冻结生成器。
+        """
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior._values[point_name] = value
+        # 同步到 _cnc_status（协议处理器从这里读取数据）
+        if point_name == "spindle_speed":
+            behavior._cnc_status["spindle_speed"] = value
+        elif point_name == "feed_rate":
+            behavior._cnc_status["feed_rate"] = value
+        elif point_name == "x_pos":
+            behavior._cnc_status["absolute_pos"][0] = value
+            behavior._cnc_status["machine_pos"][0] = value
+        elif point_name == "y_pos":
+            behavior._cnc_status["absolute_pos"][1] = value
+            behavior._cnc_status["machine_pos"][1] = value
+        elif point_name == "z_pos":
+            behavior._cnc_status["absolute_pos"][2] = value
+            behavior._cnc_status["machine_pos"][2] = value
+        elif point_name in ("alarm", "mode", "execution", "motion", "speed_override", "feed_override"):
+            behavior._cnc_status[point_name] = value
+        elif point_name == "program":
+            behavior._cnc_status["program"] = str(value)
+        elif point_name.startswith("abs_pos_"):
+            try:
+                idx = int(point_name.split("_")[-1])
+                if idx < len(behavior._cnc_status["absolute_pos"]):
+                    behavior._cnc_status["absolute_pos"][idx] = value
+                    behavior._cnc_status["machine_pos"][idx] = value
+            except (ValueError, IndexError):
+                pass
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

@@ -717,6 +717,10 @@ class SimulationEngine:
     def get_device_instance(self, device_id: str) -> DeviceInstance | None:
         return self._devices.get(device_id)
 
+    def get_protocol_server(self, protocol_name: str) -> ProtocolServer | None:
+        """获取协议服务器实例。"""
+        return self._protocol_servers.get(protocol_name)
+
     def get_all_device_instances(self) -> dict[str, DeviceInstance]:
         return dict(self._devices)
 
@@ -1039,13 +1043,15 @@ class SimulationEngine:
                 try:
                     await instance.tick()
                     # FIXED-P0: tick后将动态值同步到协议服务器，否则上位机读到的是创建时的静态值
+                    # FIXED: 使用 sync_point_value 替代 write_point，绕过访问控制检查，
+                    # 避免将值写入 _written_values 导致生成器冻结
                     server = self._protocol_servers.get(instance.protocol)
                     if server and server.status == ProtocolStatus.RUNNING:
                         for pv in instance.read_all_points():
                             point_cfg = instance.get_point_config(pv.name)  # FIXED-M07: 使用公开方法而非直接访问私有属性
                             if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
                                 try:
-                                    await server.write_point(instance.id, pv.name, pv.value)
+                                    await server.sync_point_value(instance.id, pv.name, pv.value)
                                 except Exception as sync_err:
                                     logger.debug("同步点位值到协议服务器失败 (device=%s, point=%s): %s", instance.id, pv.name, sync_err)
                 except Exception as e:

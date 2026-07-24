@@ -3,6 +3,12 @@
     <div class="pf-section-title">{{ t('integration.title') }}</div>
     <div class="pf-section-desc">{{ t('integration.subtitle') }}</div>
 
+    <!-- EdgeLite 离线提示横幅 -->
+    <n-alert v-if="edgeLiteOffline" type="warning" :bordered="false" closable>
+      <div style="font-weight:600;margin-bottom:4px">{{ t('integration.edgeliteOfflineTitle') }}</div>
+      <div style="font-size:13px">{{ t('integration.edgeliteOfflineDesc') }}</div>
+    </n-alert>
+
     <n-tabs type="card">
       <n-tab-pane name="edgelite-pipeline" :tab="t('integration.edgelitePipeline')">
         <n-space vertical size="large">
@@ -456,6 +462,7 @@ const allDevices = ref([])
 
 const intStatus = ref({ connection_state: 'disconnected' })
 const intMetrics = ref({})
+const edgeLiteOffline = ref(false)  // EdgeLite 离线标志，用于降级处理
 const loadingStatusCache = ref(false)
 const deviceStatusCache = ref([])
 const loadingBackhaul = ref(false)
@@ -677,8 +684,11 @@ let _batchPollTimer = null
 async function loadIntStatus() {
   try {
     intStatus.value = await api.getIntegrationStatus()
+    // 更新离线标志：连接状态为 disconnected 时标记离线
+    edgeLiteOffline.value = intStatus.value.connection_state !== 'connected'
   } catch (e) {
-    message.error(t('integration.loadIntStatusFailed') + ': ' + (e.response?.data?.detail || e.message))
+    // 静默失败：EdgeLite 离线时不弹错误提示
+    edgeLiteOffline.value = true
   }
 }
 
@@ -686,7 +696,7 @@ async function loadIntMetrics() {
   try {
     intMetrics.value = await api.getIntegrationMetrics()
   } catch (e) {
-    message.error(t('integration.loadIntMetricsFailed') + ': ' + (e.response?.data?.detail || e.message))
+    // 静默失败：EdgeLite 离线时不弹错误提示
   }
 }
 
@@ -711,7 +721,8 @@ async function loadDeviceStatusCache() {
       deviceStatusCache.value = []
     }
   } catch (e) {
-    message.error(t('integration.loadStatusCacheFailed') + ': ' + (e.response?.data?.detail || e.message))
+    // 静默失败：EdgeLite 离线时状态缓存为空是正常的
+    deviceStatusCache.value = []
   } finally { loadingStatusCache.value = false }
 }
 
@@ -729,7 +740,8 @@ async function loadBackhaulData() {
       backhaulData.value = []
     }
   } catch (e) {
-    message.error(t('integration.loadBackhaulFailed') + ': ' + (e.response?.data?.detail || e.message))
+    // 静默失败：EdgeLite 离线时无回传数据是正常的
+    backhaulData.value = []
   } finally { loadingBackhaul.value = false }
 }
 
@@ -752,7 +764,8 @@ async function loadProtocolMappings() {
       protocolMappings.value = []
     }
   } catch (e) {
-    message.error(t('integration.loadProtocolMappingsFailed') + ': ' + (e.response?.data?.detail || e.message))
+    // 静默失败：EdgeLite 离线时协议映射为空是正常的
+    protocolMappings.value = []
   } finally { loadingProtocols.value = false }
 }
 

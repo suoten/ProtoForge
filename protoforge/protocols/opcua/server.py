@@ -147,6 +147,7 @@ class OpcUaDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDe
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             logger.debug("OpcUaDeviceBehavior.on_write success: %s = %s", point_name, value)
             return True
         logger.warning("OpcUaDeviceBehavior.on_write failed: point '%s' not found in _values. Available keys: %s", point_name, list(self._values.keys()))
@@ -160,6 +161,8 @@ class OpcUaDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDe
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 return value

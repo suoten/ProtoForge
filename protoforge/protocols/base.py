@@ -162,6 +162,22 @@ class ProtocolServer(ABC):
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
         raise NotImplementedError
 
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新协议数据存储中的点位值，**绕过访问控制检查**。
+
+        引擎 tick 循环调用此方法将动态生成的值同步到协议服务器的数据存储，
+        确保非固定生成器（random/sine/random_walk 等）的值能被外部客户端读到。
+
+        与 ``write_point`` 的区别：
+        - 不检查 ``access`` 权限（内部同步，非外部写入）
+        - 不将值写入 ``_written_values``（避免冻结生成器）
+        - 直接更新协议特定的数据存储
+
+        子类应根据自身数据存储机制覆写此方法。
+        默认实现为空操作，适用于直接从 behavior.get_value() 读取的协议。
+        """
+        pass
+
     def get_config_schema(self) -> dict[str, Any]:  # FIXED: 空实现→子类应覆写提供协议配置schema
         return {
             "type": "object",

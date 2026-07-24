@@ -664,57 +664,78 @@ class ModbusTcpServer(ProtocolServer):
             },
         }
 
+    def _write_point_to_store(self, point: PointConfig, value: Any, store: ModbusDataStore) -> None:
+        """将单个点位的值写入 Modbus 数据存储（提取自 _apply_device_to_context）。"""
+        try:
+            addr, area = parse_modbus_address(point.address)
+            if area == "coil":
+                store.coils[addr] = int(bool(value))
+            elif area == "discrete":
+                store.discrete_inputs[addr] = int(bool(value))
+            elif area == "input":
+                if point.data_type.value in ("float32",):
+                    data = struct.pack(">f", float(value))
+                    store.input_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                    store.input_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                else:
+                    store.input_regs[addr] = int(value) & 0xFFFF
+            else:  # holding or auto
+                if point.data_type.value in ("bool",):
+                    store.coils[addr] = int(bool(value))
+                elif point.data_type.value in ("float32",):
+                    data = struct.pack(">f", float(value))
+                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("float64",):
+                    data = struct.pack(">d", float(value))
+                    for j in range(4):
+                        store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+                elif point.data_type.value in ("int32",):
+                    data = struct.pack(">i", int(value))
+                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("uint32",):
+                    data = struct.pack(">I", int(value))
+                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+                elif point.data_type.value in ("string",):
+                    encoded = str(value).encode("utf-8")
+                    if len(encoded) % 2:
+                        encoded += b'\x00'
+                    for j in range(0, len(encoded), 2):
+                        word = encoded[j:j + 2]
+                        store.holding_regs[addr + j // 2] = struct.unpack(">H", word)[0]
+                else:
+                    store.holding_regs[addr] = int(value) & 0xFFFF
+        except (ValueError, TypeError) as e:
+            logger.warning("Failed to write register %s: %s", point.address, e)
+
     def _apply_device_to_context(self, config: DeviceConfig) -> None:
         behavior = self._behaviors.get(config.id)
         slave_id = self._slave_map.get(config.id, 1)
         store = self._get_data_store(slave_id)
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
-            try:
-                addr, area = parse_modbus_address(point.address)
-                if area == "coil":
-                    store.coils[addr] = int(bool(value))
-                elif area == "discrete":
-                    store.discrete_inputs[addr] = int(bool(value))
-                elif area == "input":
-                    if point.data_type.value in ("float32",):
-                        data = struct.pack(">f", float(value))
-                        store.input_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                        store.input_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                    else:
-                        store.input_regs[addr] = int(value) & 0xFFFF
-                else:  # holding or auto
-                    if point.data_type.value in ("bool",):
-                        store.coils[addr] = int(bool(value))
-                    elif point.data_type.value in ("float32",):
-                        data = struct.pack(">f", float(value))
-                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                    elif point.data_type.value in ("float64",):
-                        data = struct.pack(">d", float(value))
-                        for j in range(4):
-                            store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
-                    elif point.data_type.value in ("int32",):
-                        data = struct.pack(">i", int(value))
-                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                    elif point.data_type.value in ("uint32",):
-                        data = struct.pack(">I", int(value))
-                        store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                        store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                    elif point.data_type.value in ("string",):
-                        encoded = str(value).encode("utf-8")
-                        if len(encoded) % 2:
-                            encoded += b'\x00'
-                        for j in range(0, len(encoded), 2):
-                            word = encoded[j:j + 2]
-                            store.holding_regs[addr + j // 2] = struct.unpack(">H", word)[0]
-                    else:
-                        store.holding_regs[addr] = int(value) & 0xFFFF
-            except (ValueError, TypeError) as e:
-                logger.warning("Failed to write register %s: %s", point.address, e)
+            self._write_point_to_store(point, value, store)
         # FIXED: 原生帧处理器直接读写 _data_stores，无需同步到 pymodbus context/SimData。
         # _sync_to_pymodbus_context 仅对 OldAPI 路径有效（self._context 为 None 时是空操作）。
+        self._sync_to_pymodbus_context(slave_id, store)
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：直接更新 Modbus 数据存储，绕过访问控制检查。
+
+        引擎 tick 循环调用此方法将动态生成的值同步到 Modbus 寄存器/线圈存储，
+        确保非固定生成器（random/sine 等）的值能被外部 Modbus 客户端读到。
+        """
+        config = self._device_configs.get(device_id)
+        if not config:
+            return
+        point = next((p for p in config.points if p.name == point_name), None)
+        if not point:
+            return
+        slave_id = self._slave_map.get(device_id, 1)
+        store = self._get_data_store(slave_id)
+        self._write_point_to_store(point, value, store)
         self._sync_to_pymodbus_context(slave_id, store)
 
     def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:

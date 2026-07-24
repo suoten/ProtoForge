@@ -214,6 +214,8 @@ export default {
   }),
   getDeviceConnectionGuide: (id) => d(api.get(`/devices/${id}/connection-guide`)),
   writeDevicePoint: (id, point, value) => d(api.put(`/devices/${id}/points/${point}`, { value })),
+resetDevicePoint: (id, point) => d(api.post(`/devices/${id}/points/${point}/reset`)),
+resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   batchCreateDevices: (configs) => d(api.post('/devices/batch', configs)),
   batchDeleteDevices: (ids) => d(api.post('/devices/batch/delete', { device_ids: ids })),  // FIXED: changed from DELETE to POST
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
