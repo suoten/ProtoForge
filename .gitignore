@@ -57,12 +57,20 @@ chrome-debug/
 # Temporary test/output files
 *_out.txt
 *_result.txt
+*_results.txt
 _test_*.py
 .git_commit_msg.txt
-test_output.txt
+test_output*.txt
 test_proto.txt
 test_*.py
 test_screenshots/
+p4_*.txt
+test_*.txt
+test_results*.txt
+backend_log.txt
+temp_login.json
+web/build_output.txt
+web/frontend_log.txt
 
 # OpenAPI spec (generated)
 openapi.json

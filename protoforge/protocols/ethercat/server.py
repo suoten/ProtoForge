@@ -910,6 +910,13 @@ class EtherCATServer(ProtocolServer):
                             device_id=device_id)
         return success
 
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：直接更新 EtherCAT 过程数据区，绕过访问控制检查。"""
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior.set_value(point_name, value)
+
     def get_config_schema(self) -> dict[str, Any]:
         return {
             "type": "object",

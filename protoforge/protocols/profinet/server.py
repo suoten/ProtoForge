@@ -126,6 +126,7 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             return True
         return False
 
@@ -137,6 +138,8 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 return value
@@ -785,6 +788,13 @@ class ProfinetServer(ProtocolServer):
                             f"PROFINET write point: {point_name}={value}",
                             device_id=device_id)
         return success
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新 PROFINET 过程数据，绕过访问控制检查。"""
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior._values[point_name] = value
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

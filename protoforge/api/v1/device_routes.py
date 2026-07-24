@@ -569,6 +569,58 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
 
 
 # ===========================================================================
+#  测点重置 API — 清除外部写入缓存，恢复生成器动态输出
+# ===========================================================================
+
+@router.post("/devices/{device_id}/points/{point_name}/reset", response_model=dict)
+async def reset_device_point(device_id: str, point_name: str):
+    """清除点位的外部写入缓存，恢复生成器动态输出。
+
+    当用户通过 API 写入点位值后，该点位会被"冻结"在写入值上
+    （模拟物理覆盖）。调用此接口可解除冻结，让生成器重新接管。
+    """
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    server = engine.get_protocol_server(instance.protocol)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Protocol server '{instance.protocol}' not found")
+
+    behavior = server._behaviors.get(device_id)
+    if not behavior:
+        raise HTTPException(status_code=404, detail=f"Behavior not found for device '{device_id}'")
+
+    if hasattr(behavior, 'clear_written'):
+        behavior.clear_written(point_name)
+        return {"status": "ok", "message": f"Point '{point_name}' reset - generator resumed"}
+    else:
+        return {"status": "ok", "message": f"Point '{point_name}' reset (no clear_written method)"}
+
+
+@router.post("/devices/{device_id}/points/reset-all", response_model=dict)
+async def reset_all_device_points(device_id: str):
+    """清除设备所有点位的外部写入缓存，恢复全部生成器动态输出。"""
+    instance = engine.get_device_instance(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+
+    server = engine.get_protocol_server(instance.protocol)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Protocol server '{instance.protocol}' not found")
+
+    behavior = server._behaviors.get(device_id)
+    if not behavior:
+        raise HTTPException(status_code=404, detail=f"Behavior not found for device '{device_id}'")
+
+    if hasattr(behavior, 'clear_written'):
+        behavior.clear_written()
+        return {"status": "ok", "message": "All points reset - generators resumed"}
+    else:
+        return {"status": "ok", "message": "All points reset (no clear_written method)"}
+
+
+# ===========================================================================
 #  故障注入 API
 # ===========================================================================
 

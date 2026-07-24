@@ -318,8 +318,8 @@ class DefaultDeviceBehavior(DeviceBehavior):
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
+        """内部同步：更新值但不冻结生成器。"""
         self._values[point_name] = value
-        self._written_values[point_name] = value
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)
@@ -397,17 +397,21 @@ class StandardDeviceBehavior(DeviceBehavior):
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
+        """内部同步：更新值但不冻结生成器。
+
+        与 on_write 的区别：不设置 _written_values，
+        因此不会冻结生成器的动态输出。
+        引擎 tick 循环和 sync_point_value 应使用此方法。
+        """
         self._values[point_name] = value
-        self._written_values[point_name] = value
 
     def get_value(self, point_name: str) -> Any:
         gen = self._generators.get(point_name)
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type"):
-                # PHYSICAL 类型：优先返回引擎同步的写入值，
-                # 避免每次读取都推进物理模型
-                if pt.generator_type == GeneratorType.PHYSICAL and point_name in self._written_values:
+                # 外部写入冻结：检查 _written_values，覆盖所有非 fixed 生成器
+                if pt.generator_type.value != "fixed" and point_name in self._written_values:
                     return self._written_values[point_name]
                 if pt.generator_type.value != "fixed":
                     value = gen.generate()

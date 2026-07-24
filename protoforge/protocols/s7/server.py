@@ -140,6 +140,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             self._sync_value_to_db(point_name, value)
             return True
         return False
@@ -1032,6 +1033,17 @@ class S7Server(ProtocolServer):
             except Exception as e:
                 logger.warning("S7 write_point: on_write callback error for %s.%s: %s", device_id, point_name, e)
         return success
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：直接更新 S7 DB 数据区，绕过访问控制检查。
+
+        引擎 tick 循环调用此方法将动态生成的值同步到 S7 数据块，
+        确保非固定生成器的值能被外部 S7 客户端读到。
+        """
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior.set_value(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

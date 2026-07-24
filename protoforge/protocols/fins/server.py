@@ -113,6 +113,8 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         if gen:
             pt = self._points.get(point_name)
             if pt and pt.generator_type.value != "fixed":
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 self._sync_value_to_area(point_name, value)
@@ -461,6 +463,14 @@ class FinsServer(ProtocolServer):
         if not behavior:
             return False
         return behavior.on_write(point_name, value)
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新 FINS 内存区，绕过访问控制检查。"""
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior._values[point_name] = value
+        behavior._sync_value_to_area(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

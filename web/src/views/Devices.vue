@@ -162,7 +162,7 @@
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showEditModal" preset="card" :title="t('devices.editDevice')" style="width:min(640px, 90vw)">
+      <n-modal v-model:show="showEditModal" preset="card" :title="t('devices.editDevice')" style="width:min(900px, 95vw)">
         <n-form ref="editFormRef" :model="editDevice" :rules="editRules" label-placement="left" label-width="80">
           <n-form-item :label="t('devices.deviceName')" path="name"><n-input v-model:value="editDevice.name" /></n-form-item>
           <n-form-item :label="t('devices.protocol')"><n-input :value="editDevice.protocol" disabled /></n-form-item>
@@ -183,6 +183,15 @@
             </n-form-item>
           </n-form>
         </div>
+        <n-divider />
+        <n-space justify="space-between" align="center">
+          <n-text strong>{{ t('templates.pointConfigCount', { n: (editDevice.points || []).length }) }}</n-text>
+          <n-button size="small" type="primary" @click="addEditDevicePoint">{{ t('scenarioEditor.addPoint') }}</n-button>
+        </n-space>
+        <div v-if="!editDevice.points || editDevice.points.length === 0" style="text-align:center;padding:20px">
+          <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
+        </div>
+        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="950" style="margin-top:8px" />
         <template #action>
           <n-space>
             <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
@@ -203,6 +212,8 @@
             <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:160px" size="small" />
             <n-input v-model:value="writePointValue" :placeholder="t('devices.inputValue')" style="width:120px" size="small" />
             <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">{{ t('devices.write') }}</n-button>
+            <n-button size="small" @click="resetDevicePointQuick" :loading="resetLoading">{{ t('devices.resetPoint') }}</n-button>
+            <n-button size="small" @click="resetAllPointsQuick" :loading="resetLoading">{{ t('devices.resetAllPoints') }}</n-button>
           </n-space>
         </n-space>
       </n-modal>
@@ -454,11 +465,13 @@
 <script setup>
 import { ref, computed, onMounted, h } from 'vue'
 import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
-  NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, useMessage, useDialog } from 'naive-ui'
+  NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
-import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol } from '../constants.js'
+import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol,
+  dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions,
+  generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
 import EmptyState from '../components/EmptyState.vue'
 
 const router = useRouter()
@@ -510,6 +523,7 @@ const batchForm = ref({ templateId: null, count: 5, namePrefix: '', idPrefix: ''
 const writePointName = ref('')
 const writePointValue = ref('')
 const writeLoading = ref(false)
+const resetLoading = ref(false)
 const currentViewDeviceId = ref('')
 const currentViewDeviceInfo = ref(null)
 const togglingIds = ref(new Set())
@@ -828,6 +842,98 @@ const pointColumns = computed(() => [
   { title: t('devices.quality'), key: 'quality', width: 80 },
 ])
 
+// 设备编辑模态框中的测点编辑列
+const devDataTypeOptions = computed(() => _dataTypeOptions.map(o => ({ ...o, label: t(o.label) })))
+const devGeneratorOptions = computed(() => _generatorTypeOptions.map(o => ({ ...o, label: t(o.label) })))
+const devAccessModeOptions = computed(() => _accessModeOptions.map(o => ({ ...o, label: t(o.label) })))
+const devGenConfigSchema = _generatorConfigSchema
+
+// 设备编辑：生成器配置参数展开渲染
+function renderDevGenConfigExpand(row) {
+  const genType = row.generator_type || 'random'
+  const params = devGenConfigSchema[genType] || []
+  if (params.length === 0) return h('span', { style: 'color:#999;padding:8px' }, t('common.noConfigurableParams'))
+  if (!row.generator_config) row.generator_config = {}
+  return h('div', { style: 'padding:8px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center' }, [
+    h('span', { style: 'font-weight:600;color:#666' }, t('common.generatorConfig') + ':'),
+    ...params.map(param => {
+      const val = row.generator_config[param.key] ?? param.default
+      if (param.type === 'boolean') {
+        return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+          t('common.' + param.label),
+          h(NSelect, {
+            size: 'tiny',
+            style: 'width:80px',
+            value: val ? 'true' : 'false',
+            options: [{ label: 'True', value: 'true' }, { label: 'False', value: 'false' }],
+            onUpdateValue: (v) => { row.generator_config[param.key] = v === 'true' },
+          }),
+        ])
+      }
+      if (param.type === 'text') {
+        return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+          t('common.' + param.label),
+          h(NInput, {
+            size: 'tiny',
+            style: 'width:200px',
+            value: String(val || ''),
+            onUpdateValue: (v) => { row.generator_config[param.key] = v },
+          }),
+        ])
+      }
+      return h('label', { style: 'display:flex;align-items:center;gap:4px;font-size:13px' }, [
+        t('common.' + param.label),
+        h(NInputNumber, {
+          size: 'tiny',
+          style: 'width:90px',
+          value: Number(val) || 0,
+          onUpdateValue: (v) => { row.generator_config[param.key] = v },
+        }),
+      ])
+    }),
+  ])
+}
+
+function makeDevEditRenderer(key, Component) {
+  return (_row, idx) => h(Component, {
+    value: editDevice.value.points?.[idx]?.[key],
+    size: 'tiny',
+    placeholder: key,
+    style: 'width:100%',
+    onUpdateValue: (v) => { const p = editDevice.value.points?.[idx]; if (p) p[key] = v },
+  })
+}
+
+function makeDevSelectRenderer(key, options) {
+  return (_row, idx) => h(NSelect, {
+    value: editDevice.value.points?.[idx]?.[key],
+    size: 'tiny',
+    options,
+    style: 'width:100%',
+    onUpdateValue: (v) => { const p = editDevice.value.points?.[idx]; if (p) p[key] = v },
+  })
+}
+
+const editDevicePointColumns = computed(() => [
+  { type: 'expand', renderExpand: renderDevGenConfigExpand },
+  { title: t('common.name'), key: 'name', width: 110, render: makeDevEditRenderer('name', NInput) },
+  { title: t('common.address'), key: 'address', width: 80, render: makeDevEditRenderer('address', NInput) },
+  { title: t('common.dataType'), key: 'data_type', width: 100, render: makeDevSelectRenderer('data_type', devDataTypeOptions) },
+  { title: t('common.accessMode'), key: 'access', width: 90, render: makeDevSelectRenderer('access', devAccessModeOptions) },
+  { title: t('common.generator'), key: 'generator_type', width: 100, render: makeDevSelectRenderer('generator_type', devGeneratorOptions) },
+  { title: t('common.minValue'), key: 'min_value', width: 75, render: makeDevEditRenderer('min_value', NInputNumber) },
+  { title: t('common.maxValue'), key: 'max_value', width: 75, render: makeDevEditRenderer('max_value', NInputNumber) },
+  { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeDevEditRenderer('fixed_value', NInput) },
+  { title: t('common.unit'), key: 'unit', width: 70, render: makeDevEditRenderer('unit', NInput) },
+  { title: t('common.description'), key: 'description', width: 100, render: makeDevEditRenderer('description', NInput) },
+  { title: t('common.action'), key: 'actions', width: 60, render: (_row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editDevice.value.points.splice(idx, 1) }, () => t('common.delete')) },
+])
+
+function addEditDevicePoint() {
+  if (!editDevice.value.points) editDevice.value.points = []
+  editDevice.value.points.push({ name: 'point_' + (editDevice.value.points.length + 1), address: String(editDevice.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+}
+
 function openQuickCreate() {
   qcTemplateId.value = null; qcDeviceName.value = ''
   qcProtocolConfig.value = {}; qcDeviceConfigFields.value = []; qcProtocol.value = ''
@@ -1080,7 +1186,23 @@ async function createDevice() {
 async function openEditDevice(row) {
   try {
     const config = await api.getDeviceConfig(row.id)
-    editDevice.value = { id: config.id, name: config.name, protocol: config.protocol, protocol_config: config.protocol_config || {}, points: config.points || [] }
+    editDevice.value = {
+      id: config.id, name: config.name, protocol: config.protocol,
+      protocol_config: config.protocol_config || {},
+      points: (config.points || []).map(p => ({
+        name: p.name || '',
+        address: p.address || '0',
+        data_type: p.data_type || 'float32',
+        access: p.access || 'rw',
+        generator_type: p.generator_type || 'random',
+        min_value: p.min_value ?? 0,
+        max_value: p.max_value ?? 100,
+        fixed_value: p.fixed_value ?? null,
+        unit: p.unit || '',
+        description: p.description || '',
+        generator_config: p.generator_config || {},
+      })),
+    }
     const { fields, defaults } = await loadDeviceConfig(row.protocol)
     editConfigFields.value = fields
     editProtocolConfig.value = { ...defaults, ...(config.protocol_config || {}) }
@@ -1179,6 +1301,35 @@ async function writeDevicePointQuick() {
   } catch (e) {
     message.error(t('devices.writeFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { writeLoading.value = false }
+}
+
+async function resetDevicePointQuick() {
+  if (!currentViewDeviceId.value || !writePointName.value) {
+    message.warning(t('devices.pleaseSelectPoint'))
+    return
+  }
+  resetLoading.value = true
+  try {
+    await api.resetDevicePoint(currentViewDeviceId.value, writePointName.value)
+    message.success(t('devices.pointResetSuccess', { name: writePointName.value }))
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = Array.isArray(res?.points) ? res.points : (Array.isArray(res) ? res : [])
+  } catch (e) {
+    message.error(t('devices.resetFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { resetLoading.value = false }
+}
+
+async function resetAllPointsQuick() {
+  if (!currentViewDeviceId.value) return
+  resetLoading.value = true
+  try {
+    await api.resetAllDevicePoints(currentViewDeviceId.value)
+    message.success(t('devices.allPointsResetSuccess'))
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = Array.isArray(res?.points) ? res.points : (Array.isArray(res) ? res : [])
+  } catch (e) {
+    message.error(t('devices.resetFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { resetLoading.value = false }
 }
 
 function openBatchCreateModal() {

@@ -42,6 +42,7 @@ class AbDeviceBehavior(StandardDeviceBehavior):
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value
             self._tags[point_name] = value
             return True
         return False
@@ -590,6 +591,13 @@ class AbServer(ProtocolServer):
         if not behavior:
             return False
         return behavior.on_write(point_name, value)
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新 AB 标签数据，绕过访问控制检查。"""
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior.set_value(point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

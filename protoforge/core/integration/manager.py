@@ -167,6 +167,10 @@ class IntegrationManager:
         self._ws_reconnect_task: asyncio.Task | None = None
         self._sync_interval = 60.0  # 状态同步间隔（秒）
         self._ws_reconnect_interval = 10.0  # WebSocket 重连间隔（秒）
+        self._ws_reconnect_max_interval = 120.0  # 最大重连间隔（秒）
+        self._ws_reconnect_current_delay = 10.0  # 当前实际重连延迟（秒，指数退避）
+        self._ws_reconnect_fail_count = 0  # 连续失败计数
+        self._ws_reconnect_last_error = ""  # 上一次错误消息（日志去重）
 
         # HTTP Webhook 数据推送（被动协议需要 ProtoForge 主动推送模拟数据到 EdgeLite）
         self._http_push_tasks: dict[str, asyncio.Task] = {}  # device_id -> task
@@ -423,7 +427,8 @@ class IntegrationManager:
         except ImportError:
             logger.warning("websockets library not installed, WebSocket integration channel unavailable")
         except Exception as e:
-            logger.warning("WebSocket integration channel connection failed: %s", e)
+            # 降为 debug：由 _ws_reconnect_loop 统一报告重连失败，避免重复 warning 刷屏
+            logger.debug("WebSocket integration channel connection failed: %s", e)
 
         # 无论 WebSocket 是否连接成功，都通过 REST API 获取 EdgeLite 支持的协议列表
         # 这样即使 WebSocket 不可用，推送时也能正确过滤不支持的协议
@@ -454,12 +459,14 @@ class IntegrationManager:
                     # FIXED-P0: 协议列表为空时，保守地使用 plugin_name 格式
                     self._protocol_mapper.adapt_for_unknown_edgelite()
             else:
-                logger.warning("Failed to fetch EdgeLite protocols via REST API: HTTP %d", resp.status_code)
+                # 降为 debug：由 _ws_reconnect_loop 统一报告连接失败，避免重复 warning 刷屏
+                logger.debug("Failed to fetch EdgeLite protocols via REST API: HTTP %d", resp.status_code)
                 # FIXED-P0: 获取失败时，保守地使用 plugin_name 格式
                 # EdgeLite 新旧版本都支持 plugin_name，这是最安全的选择
                 self._protocol_mapper.adapt_for_unknown_edgelite()
         except Exception as e:
-            logger.warning("Failed to fetch EdgeLite protocols via REST API: %s", e)
+            # 降为 debug：由 _ws_reconnect_loop 统一报告连接失败，避免重复 warning 刷屏
+            logger.debug("Failed to fetch EdgeLite protocols via REST API: %s", e)
             # FIXED-P0: 异常时也保守地使用 plugin_name 格式
             self._protocol_mapper.adapt_for_unknown_edgelite()
 
@@ -1631,20 +1638,28 @@ class IntegrationManager:
         """WebSocket 断线自动重连循环。
 
         检测 WebSocket 连接断开后，定期尝试重连。
-        重连成功后自动刷新重试队列中的消息。
+        使用指数退避策略（10s → 20s → 40s → 80s → 120s上限）减少日志噪声。
+        重连成功后自动刷新重试队列中的消息，并重置退避延迟。
         """
         while self._running:
             try:
-                await asyncio.sleep(self._ws_reconnect_interval)
+                # 使用当前退避延迟（而非固定间隔）
+                await asyncio.sleep(self._ws_reconnect_current_delay)
                 if not self._running:
                     break
 
                 # 检查 WebSocket 是否需要重连
                 if self._ws_channel and self._ws_channel.is_connected:
+                    # 连接正常，重置退避
+                    if self._ws_reconnect_fail_count > 0:
+                        self._ws_reconnect_fail_count = 0
+                        self._ws_reconnect_current_delay = self._ws_reconnect_interval
+                        self._ws_reconnect_last_error = ""
                     continue  # 连接正常，无需重连
 
                 # 尝试重连
-                logger.info("WebSocket disconnected, attempting reconnect...")
+                if self._ws_reconnect_fail_count == 0:
+                    logger.info("WebSocket disconnected, attempting reconnect...")
                 try:
                     # 先关闭旧连接
                     if self._ws_channel:
@@ -1655,11 +1670,37 @@ class IntegrationManager:
                         self._ws_channel = None
 
                     await self._connect_websocket()
+                    # 重连成功，重置退避
+                    self._ws_reconnect_fail_count = 0
+                    self._ws_reconnect_current_delay = self._ws_reconnect_interval
+                    self._ws_reconnect_last_error = ""
                     logger.info("WebSocket reconnected successfully")
                     # 重连成功后刷新重试队列
                     await self._flush_retry_queue()
                 except Exception as e:
-                    logger.debug("WebSocket reconnect failed: %s", e)
+                    error_msg = str(e)
+                    self._ws_reconnect_fail_count += 1
+                    # 指数退避：延迟翻倍，上限 120 秒
+                    self._ws_reconnect_current_delay = min(
+                        self._ws_reconnect_current_delay * 2,
+                        self._ws_reconnect_max_interval,
+                    )
+                    # 日志去重：只在错误消息变化时记录 warning，否则用 debug
+                    if error_msg != self._ws_reconnect_last_error:
+                        logger.warning(
+                            "WebSocket reconnect failed (attempt #%d, next retry in %.0fs): %s",
+                            self._ws_reconnect_fail_count,
+                            self._ws_reconnect_current_delay,
+                            error_msg,
+                        )
+                        self._ws_reconnect_last_error = error_msg
+                    else:
+                        logger.debug(
+                            "WebSocket reconnect still failing (attempt #%d, next retry in %.0fs): %s",
+                            self._ws_reconnect_fail_count,
+                            self._ws_reconnect_current_delay,
+                            error_msg,
+                        )
 
             except asyncio.CancelledError:
                 break
