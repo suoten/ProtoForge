@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import struct
 import time
 from typing import Any
 
@@ -256,6 +257,9 @@ class DeviceInstance:
                 self._state_machine.trigger("maintenance_complete", reason="maintenance ended on stop")
             else:
                 self._state_machine.trigger("program_exit", reason="program exit on stop")
+
+        # FIX: 停止设备时清除外部写入标记，确保重新启动后生成器恢复正常输出
+        self._written_points.clear()
 
     def fault(self, reason: str = "") -> None:
         """触发设备故障：触发状态机 "fault" 事件。
@@ -593,6 +597,23 @@ class DeviceInstance:
             except (ValueError, TypeError):
                 logger.debug("Range check skipped for point %s: value=%s is not numeric", point_name, value)
         async with self._lock:
+            # FIX: 按 data_type 截断值精度，确保 _point_values 与协议存储（如 Modbus float32）一致
+            # 避免 ProtoForge API 显示 77.7 而 EdgeLite 采集到 77.69999694824219 的精度差异
+            dt_val = point.data_type.value if hasattr(point.data_type, 'value') else str(point.data_type)
+            if dt_val == "float32" and isinstance(value, (int, float)):
+                try:
+                    value = struct.unpack(">f", struct.pack(">f", float(value)))[0]
+                except (ValueError, OverflowError):
+                    pass
+            elif dt_val in ("int16",) and isinstance(value, (int, float)):
+                value = max(-32768, min(32767, int(value)))
+            elif dt_val in ("uint16",) and isinstance(value, (int, float)):
+                value = int(abs(value)) & 0xFFFF
+            elif dt_val in ("int32",) and isinstance(value, (int, float)):
+                value = max(-2147483648, min(2147483647, int(value)))
+            elif dt_val in ("uint32",) and isinstance(value, (int, float)):
+                value = int(abs(value)) & 0xFFFFFFFF
+
             self._point_values[point_name] = value
             self._written_points.add(point_name)  # FIX: 标记为外部写入，tick 不再覆盖
 
