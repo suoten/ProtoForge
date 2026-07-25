@@ -46,7 +46,8 @@ class DeviceInstance:
         self._generator = generator
         self._point_values: dict[str, Any] = {}
         self._point_configs: dict[str, PointConfig] = {}
-        self._written_points: set[str] = set()  # FIX: 记录外部写入的点位，tick 时跳过
+        # FIX: 定时冻结 — 写入后冻结 WRITE_FREEZE_SECONDS 秒，到期后自动解冻恢复生成器
+        self._written_points: dict[str, float] = {}  # point_name -> expiry_timestamp
         self._lock = asyncio.Lock()
 
         # 初始化状态机
@@ -323,8 +324,13 @@ class DeviceInstance:
             return
 
         async with self._lock:
+            # FIX: 定时冻结 — 清除已过期的写入标记，让生成器恢复动态输出
+            now = time.time()
+            expired = [n for n, exp in self._written_points.items() if exp <= now]
+            for n in expired:
+                del self._written_points[n]
             for name, point in self._point_configs.items():
-                # FIX: 跳过外部写入的点位，防止 tick 循环覆盖用户写入的值
+                # 跳过仍在冻结期的外部写入点位
                 if name in self._written_points:
                     continue
                 if point.generator_type != GeneratorType.FIXED:
@@ -373,7 +379,7 @@ class DeviceInstance:
         :param point_name: 指定点位名，空字符串表示清除全部
         """
         if point_name:
-            self._written_points.discard(point_name)
+            self._written_points.pop(point_name, None)
         else:
             self._written_points.clear()
 
@@ -615,7 +621,9 @@ class DeviceInstance:
                 value = int(abs(value)) & 0xFFFFFFFF
 
             self._point_values[point_name] = value
-            self._written_points.add(point_name)  # FIX: 标记为外部写入，tick 不再覆盖
+            # FIX: 定时冻结 — 写入后冻结 30 秒，确保 EdgeLite 有足够时间采集写入值，
+            # 到期后自动解冻，生成器恢复动态输出（避免永久冻结）
+            self._written_points[point_name] = time.time() + 30.0
 
             # 如果有物理模型（PHYSICAL 生成器），更新输入参数
             if point.generator_type == GeneratorType.PHYSICAL:

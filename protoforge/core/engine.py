@@ -1050,9 +1050,13 @@ class SimulationEngine:
                         for pv in instance.read_all_points():
                             point_cfg = instance.get_point_config(pv.name)  # FIXED-M07: 使用公开方法而非直接访问私有属性
                             if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
-                                # FIX: 跳过外部写入的点位，避免 tick 同步覆盖用户写入的值
+                                # FIX: 定时冻结 — 跳过仍在冻结期的点位，冻结到期后自动恢复同步
                                 if pv.name in instance._written_points:
                                     continue
+                                # 冻结刚到期：清除 behavior._written_values 以解冻协议层 get_value()
+                                behavior = getattr(server, '_behaviors', {}).get(instance.id)
+                                if behavior and hasattr(behavior, '_written_values') and pv.name in behavior._written_values:
+                                    behavior.clear_written(pv.name)
                                 try:
                                     await server.sync_point_value(instance.id, pv.name, pv.value)
                                 except Exception as sync_err:
