@@ -1298,8 +1298,23 @@ async function writeDevicePointQuick() {
   }
   writeLoading.value = true
   try {
-    const numVal = Number(writePointValue.value)
-    const value = isNaN(numVal) ? writePointValue.value : numVal
+    // FIX: 根据点位 data_type 正确转换写入值，避免 bool("false")=true 的 Python 陷阱
+    const selectedPoint = currentPoints.value.find(p => p.name === writePointName.value)
+    const dt = selectedPoint?.data_type || selectedPoint?.dataType || ''
+    let value
+    const raw = String(writePointValue.value).trim()
+    if (dt === 'bool') {
+      value = ['true', '1', 'on', 'yes'].includes(raw.toLowerCase())
+    } else if (['int16', 'int32', 'uint16', 'uint32'].includes(dt)) {
+      value = parseInt(raw, 10)
+      if (isNaN(value)) { message.warning(t('devices.invalidValue')); return }
+    } else if (['float32', 'float64'].includes(dt)) {
+      value = parseFloat(raw)
+      if (isNaN(value)) { message.warning(t('devices.invalidValue')); return }
+    } else {
+      const numVal = Number(raw)
+      value = isNaN(numVal) ? raw : numVal
+    }
     await api.writeDevicePoint(currentViewDeviceId.value, writePointName.value, value)
     message.success(t('devices.pointWriteSuccess', { name: writePointName.value }))
     const res = await api.getDevicePoints(currentViewDeviceId.value)

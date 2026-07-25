@@ -45,6 +45,7 @@ class DeviceInstance:
         self._generator = generator
         self._point_values: dict[str, Any] = {}
         self._point_configs: dict[str, PointConfig] = {}
+        self._written_points: set[str] = set()  # FIX: 记录外部写入的点位，tick 时跳过
         self._lock = asyncio.Lock()
 
         # 初始化状态机
@@ -319,6 +320,9 @@ class DeviceInstance:
 
         async with self._lock:
             for name, point in self._point_configs.items():
+                # FIX: 跳过外部写入的点位，防止 tick 循环覆盖用户写入的值
+                if name in self._written_points:
+                    continue
                 if point.generator_type != GeneratorType.FIXED:
                     try:
                         self._point_values[name] = self._generator.generate(point)
@@ -358,6 +362,16 @@ class DeviceInstance:
         """直接设置点位值（内部方法，用于时序模式覆盖等）。"""
         if point_name in self._point_values:
             self._point_values[point_name] = value
+
+    def clear_written_points(self, point_name: str = "") -> None:
+        """清除外部写入标记，恢复生成器动态输出。
+
+        :param point_name: 指定点位名，空字符串表示清除全部
+        """
+        if point_name:
+            self._written_points.discard(point_name)
+        else:
+            self._written_points.clear()
 
     def read_point(self, point_name: str) -> PointValue | None:
         """读取单个点位值。
@@ -580,6 +594,7 @@ class DeviceInstance:
                 logger.debug("Range check skipped for point %s: value=%s is not numeric", point_name, value)
         async with self._lock:
             self._point_values[point_name] = value
+            self._written_points.add(point_name)  # FIX: 标记为外部写入，tick 不再覆盖
 
             # 如果有物理模型（PHYSICAL 生成器），更新输入参数
             if point.generator_type == GeneratorType.PHYSICAL:
