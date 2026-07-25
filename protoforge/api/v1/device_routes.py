@@ -547,6 +547,21 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
             detail=f"Point '{point_name}' is read-only (access='{point_config.access}')",
         )
 
+    # FIX: 根据点位 data_type 强制转换值类型，防止前端传入字符串 "false" 导致 bool("false")=True
+    dt = point_config.data_type.value if hasattr(point_config.data_type, 'value') else str(point_config.data_type)
+    if dt == "bool" and isinstance(value, str):
+        value = value.strip().lower() in ("true", "1", "on", "yes")
+    elif dt in ("float32", "float64") and isinstance(value, (int, str)):
+        try:
+            value = float(value)
+        except (ValueError, TypeError):
+            pass
+    elif dt in ("int16", "int32", "uint16", "uint32") and isinstance(value, str):
+        try:
+            value = int(value)
+        except (ValueError, TypeError):
+            pass
+
     try:
         success = await engine.write_device_point(device_id, point_name, value)
         if not success:
@@ -579,6 +594,7 @@ async def reset_device_point(device_id: str, point_name: str):
     当用户通过 API 写入点位值后，该点位会被"冻结"在写入值上
     （模拟物理覆盖）。调用此接口可解除冻结，让生成器重新接管。
     """
+    engine = _get_engine()
     instance = engine.get_device_instance(device_id)
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
@@ -593,14 +609,17 @@ async def reset_device_point(device_id: str, point_name: str):
 
     if hasattr(behavior, 'clear_written'):
         behavior.clear_written(point_name)
+        instance.clear_written_points(point_name)  # FIX: 同步清除 DeviceInstance 的写入标记
         return {"status": "ok", "message": f"Point '{point_name}' reset - generator resumed"}
     else:
+        instance.clear_written_points(point_name)
         return {"status": "ok", "message": f"Point '{point_name}' reset (no clear_written method)"}
 
 
 @router.post("/devices/{device_id}/points/reset-all", response_model=dict)
 async def reset_all_device_points(device_id: str):
     """清除设备所有点位的外部写入缓存，恢复全部生成器动态输出。"""
+    engine = _get_engine()
     instance = engine.get_device_instance(device_id)
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
@@ -615,8 +634,10 @@ async def reset_all_device_points(device_id: str):
 
     if hasattr(behavior, 'clear_written'):
         behavior.clear_written()
+        instance.clear_written_points()  # FIX: 同步清除 DeviceInstance 的全部写入标记
         return {"status": "ok", "message": "All points reset - generators resumed"}
     else:
+        instance.clear_written_points()
         return {"status": "ok", "message": "All points reset (no clear_written method)"}
 
 
