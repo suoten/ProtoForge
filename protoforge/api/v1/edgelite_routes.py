@@ -211,13 +211,36 @@ async def verify_edgelite_pipeline(
                         edgelite_data = {}
                     comparison = []
 
+                    # 获取测点配置，用于判断生成器类型
+                    device_points = getattr(instance, "points", []) or []
+                    point_configs = {p.name: p for p in device_points} if device_points else {}
+
                     for name, local_val in local_map.items():
                         el_val = edgelite_data.get(name)
-                        # 浮点数比较：容差 0.01
                         match = None
                         if el_val is not None:
+                            pt_cfg = point_configs.get(name)
+                            gen_type = getattr(pt_cfg, "generator_type", None)
+                            gen_type_val = gen_type.value if gen_type else "fixed"
+
                             try:
-                                match = abs(float(local_val) - float(el_val)) < 0.01
+                                lv = float(local_val)
+                                ev = float(el_val)
+                                if gen_type_val in ("fixed", "constant"):
+                                    # 固定值：精确比较（容差 0.01）
+                                    match = abs(lv - ev) < 0.01
+                                elif gen_type_val in ("random", "random_walk"):
+                                    # 随机值：每次读取都不同，验证值域范围即可
+                                    lo = float(getattr(pt_cfg, "min_value", None) or 0)
+                                    hi = float(getattr(pt_cfg, "max_value", None) or 100)
+                                    match = lo <= ev <= hi
+                                else:
+                                    # 时序值（sine/triangle/sawtooth/square/increment）：
+                                    # 值随时间变化，用宽松容差（取值域范围的 10%）
+                                    lo = float(getattr(pt_cfg, "min_value", None) or 0)
+                                    hi = float(getattr(pt_cfg, "max_value", None) or 100)
+                                    tolerance = max(0.01, (hi - lo) * 0.1)
+                                    match = abs(lv - ev) < tolerance
                             except (ValueError, TypeError):
                                 match = str(local_val) == str(el_val)
                         comparison.append({
