@@ -253,18 +253,39 @@ class AbServer(ProtocolServer):
 
         session = struct.unpack("<I", data[4:8])[0]
 
-        cip_offset = 30
-        if len(data) <= cip_offset + 2:
+        # FIX: 正确解析 SendRRData 的 CIP 数据偏移量
+        # 结构: EIP Header(24) + Interface Handle(4) + Timeout(2) + Item Count(2) + Items
+        # Item 1 (Null Address): Type(2) + Length(2) + Data(Length bytes)
+        # Item 2 (Unconnected Data 0x00B2): Type(2) + Length(2) + Data(CIP message)
+        offset = self.EIP_HEADER_SIZE + 4 + 2  # Skip Interface Handle + Timeout
+        item_count = struct.unpack("<H", data[offset:offset + 2])[0] if offset + 2 <= len(data) else 0
+        offset += 2
+        cip_data = b""
+        for _ in range(item_count):
+            if offset + 4 > len(data):
+                break
+            item_type = struct.unpack("<H", data[offset:offset + 2])[0]
+            item_len = struct.unpack("<H", data[offset + 2:offset + 4])[0]
+            offset += 4
+            if offset + item_len > len(data):
+                break
+            if item_type == 0x00B2:  # Unconnected Data item
+                cip_data = data[offset:offset + item_len]
+                break
+            offset += item_len
+
+        if not cip_data:
             return self._make_eip_error(0x006F, session, 0x01, sender_context)
 
-        cip_service = data[cip_offset]
-        cip_data = data[cip_offset:]
+        cip_service = cip_data[0]
 
-        if cip_service == 0x0E:
+        # FIX: 使用正确的 CIP Service Code
+        # 0x54=Forward Open, 0x4E=Forward Close, 0x4C=Read Tag, 0x4D=Write Tag
+        if cip_service == 0x54:
             return self._handle_cip_forward_open(session, cip_data, sender_context)
-        elif cip_service == 0x4C:
+        elif cip_service == 0x4E:
             return self._handle_cip_forward_close(session, cip_data, sender_context)
-        elif cip_service == 0x52:
+        elif cip_service == 0x4C:
             return self._handle_cip_read_tag(session, cip_data, sender_context)
         elif cip_service == 0x4D:
             return self._handle_cip_write_tag(session, cip_data, sender_context)
@@ -320,18 +341,43 @@ class AbServer(ProtocolServer):
 
     def _handle_cip_forward_open(self, session: int, cip_data: bytes,
                                  sender_context: bytes = bytes(8)) -> bytes:
-        o_t_rpi = struct.unpack("<I", cip_data[6:10])[0] if len(cip_data) >= 10 else 0x00010000
-        t_o_rpi = struct.unpack("<I", cip_data[10:14])[0] if len(cip_data) >= 14 else 0x00010000
-        o_t_params = struct.unpack("<H", cip_data[14:16])[0] if len(cip_data) >= 16 else 0x4302
-        t_o_params = struct.unpack("<H", cip_data[16:18])[0] if len(cip_data) >= 18 else 0x4302
-        conn_serial = struct.unpack("<H", cip_data[18:20])[0] if len(cip_data) >= 20 else 0x0001
-        vendor_id = struct.unpack("<H", cip_data[20:22])[0] if len(cip_data) >= 22 else 0x0001
-        orig_serial = struct.unpack("<I", cip_data[22:26])[0] if len(cip_data) >= 26 else 0x00000001
+        # FIX: 正确解析 Forward Open 请求
+        # 格式: Service(1) + PathSize(1) + Path(N*2) + Priority/Timeout(1) +
+        #        O->T ConnID(4) + T->O ConnID(4) + ConnSerial(2) + VendorID(2) +
+        #        OrigSerial(4) + O->T RPI(4) + T->O RPI(4) + O->T Params(2) +
+        #        T->O Params(2) + TransportType(1) + ConnPathSize(1) + ConnPath(N*2)
+        path_size_words = cip_data[1] if len(cip_data) > 1 else 0
+        path_end = 2 + path_size_words * 2  # 跳过 Service(1) + PathSize(1) + Path
+        p = path_end
+        if p + 1 > len(cip_data):
+            p = 2  # fallback
+        priority_timeout = cip_data[p] if p < len(cip_data) else 0
+        p += 1
+        o_t_conn_id = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00000001
+        p += 4
+        t_o_conn_id = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00000002
+        p += 4
+        conn_serial = struct.unpack("<H", cip_data[p:p+2])[0] if p+2 <= len(cip_data) else 0x0001
+        p += 2
+        vendor_id = struct.unpack("<H", cip_data[p:p+2])[0] if p+2 <= len(cip_data) else 0x0001
+        p += 2
+        orig_serial = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00000001
+        p += 4
+        o_t_rpi = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00010000
+        p += 4
+        t_o_rpi = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00010000
+        p += 4
+        o_t_params = struct.unpack("<H", cip_data[p:p+2])[0] if p+2 <= len(cip_data) else 0x4302
+        p += 2
+        t_o_params = struct.unpack("<H", cip_data[p:p+2])[0] if p+2 <= len(cip_data) else 0x4302
+        p += 2
+
+        # FIX: Forward Open Response service = 0xD4 (0x54 | 0x80)
         cip_resp = bytearray()
-        cip_resp += bytes([0xD6, 0x00])
-        cip_resp += bytes([0x00, 0x00])
-        cip_resp += struct.pack("<I", 0x00000001)
-        cip_resp += struct.pack("<I", 0x00000002)
+        cip_resp += bytes([0xD4, 0x00])       # Service Response + Reserved
+        cip_resp += bytes([0x00, 0x00])       # Status=Success + Additional Status Size=0
+        cip_resp += struct.pack("<I", o_t_conn_id)   # O->T Connection ID (echo from request)
+        cip_resp += struct.pack("<I", t_o_conn_id)   # T->O Connection ID (echo from request)
         cip_resp += struct.pack("<H", conn_serial)
         cip_resp += struct.pack("<H", vendor_id)
         cip_resp += struct.pack("<I", orig_serial)
@@ -339,14 +385,17 @@ class AbServer(ProtocolServer):
         cip_resp += struct.pack("<I", t_o_rpi)
         cip_resp += struct.pack("<H", o_t_params)
         cip_resp += struct.pack("<H", t_o_params)
-        cip_resp += bytes([0xA3])
+        cip_resp += bytes([0x00])  # Connection Path Size = 0 (no path echoed)
         return self._wrap_cip_response(session, cip_resp, sender_context)
 
     def _handle_cip_forward_close(self, session: int, cip_data: bytes,
                                   sender_context: bytes = bytes(8)) -> bytes:
+        # FIX: Forward Close Response service = 0xCE (0x4E | 0x80)
         cip_resp = bytearray()
         cip_resp += bytes([0xCE])
-        cip_resp += bytes([0x00, 0x00])
+        cip_resp += bytes([0x00])       # Reserved
+        cip_resp += bytes([0x00])       # Status = Success
+        cip_resp += bytes([0x00])       # Additional Status Size = 0
         return self._wrap_cip_response(session, cip_resp, sender_context)
 
     @staticmethod
@@ -437,7 +486,7 @@ class AbServer(ProtocolServer):
         if tag_name and behavior:
             # Bug 6 fix: 检查tag是否存在，不存在时返回CIP错误(0x04=路径段错误)
             if tag_name not in behavior._tags and tag_name not in behavior._data_types:
-                return self._make_cip_error_response(session, 0x52, 0x04, sender_context)
+                return self._make_cip_error_response(session, 0x4C, 0x04, sender_context)
             tag_value = behavior.get_tag(tag_name)
             if tag_value is None:
                 tag_value = behavior.get_value(tag_name)
@@ -447,9 +496,13 @@ class AbServer(ProtocolServer):
                 data_type = "dint"
                 tag_value = 0
 
+        # FIX: Read Tag Response service = 0xCC (0x4C | 0x80)
+        # CIP 响应格式: Service(1) + Reserved(1) + Status(1) + AddStatusSize(1) + Data
         cip_resp = bytearray()
-        cip_resp += bytes([0xD2])
-        cip_resp += bytes([0x00, 0x00])
+        cip_resp += bytes([0xCC])
+        cip_resp += bytes([0x00])       # Reserved
+        cip_resp += bytes([0x00])       # Status = Success
+        cip_resp += bytes([0x00])       # Additional Status Size = 0
         cip_resp += self._pack_cip_value(data_type, tag_value)
         return self._wrap_cip_response(session, cip_resp, sender_context)
 
@@ -477,12 +530,17 @@ class AbServer(ProtocolServer):
                                     f"Write tag {tag_name}={write_value}",
                                     detail={"tag": tag_name, "value": write_value})
 
+        # FIX: Write Tag Response service = 0xCD (0x4D | 0x80)
+        # CIP 响应格式: Service(1) + Reserved(1) + Status(1) + AddStatusSize(1)
         cip_resp = bytearray()
         cip_resp += bytes([0xCD])
-        if not (tag_name and behavior):  # FIXED-L03: tag不存在或behavior为None时返回CIP错误码0x04(Path destination unknown)
-            cip_resp += bytes([0x04, 0x00])
+        cip_resp += bytes([0x00])  # Reserved
+        if not (tag_name and behavior):  # FIXED-L03: tag不存在或behavior为None时返回CIP错误码0x04
+            cip_resp += bytes([0x04])  # Status = Path destination unknown
+            cip_resp += bytes([0x00])  # Additional Status Size = 0
         else:
-            cip_resp += bytes([0x00, 0x00])
+            cip_resp += bytes([0x00])  # Status = Success
+            cip_resp += bytes([0x00])  # Additional Status Size = 0
         return self._wrap_cip_response(session, cip_resp, sender_context)
 
     @staticmethod
@@ -512,9 +570,11 @@ class AbServer(ProtocolServer):
 
     def _wrap_cip_response(self, session: int, cip_data: bytes,
                            sender_context: bytes = bytes(8)) -> bytes:
+        # FIX: Unconnected Data (0x00B2) 不应有 sequence number 前缀
+        # (那属于 Connected Data 0x00B1 的格式)
         resp = bytearray()
-        resp += struct.pack("<H", 0x006F)
-        resp += struct.pack("<H", len(cip_data) + 22)
+        resp += struct.pack("<H", 0x006F)              # Command: SendRRData
+        resp += struct.pack("<H", 0)                    # Length (updated below)
         resp += struct.pack("<I", session)
         resp += struct.pack("<I", 0x00000000)
         resp += sender_context
@@ -523,12 +583,11 @@ class AbServer(ProtocolServer):
         resp += struct.pack("<H", 0x0000)              # Timeout: 2 bytes
         resp += struct.pack("<H", 0x0002)              # Item Count: 2 bytes
         resp += struct.pack("<H", 0x0000)              # Item1 Type (Null Address): 2 bytes
-        resp += struct.pack("<H", 0x0004)              # Item1 Length: 2 bytes
-        resp += struct.pack("<I", 0x00000000)          # Item1 Data: 4 bytes
+        resp += struct.pack("<H", 0x0000)              # Item1 Length: 0 (no data)
         resp += struct.pack("<H", 0x00B2)              # Item2 Type (Unconnected Data): 2 bytes
-        resp += struct.pack("<H", len(cip_data) + 2)   # Item2 Length: 2 bytes
-        resp += struct.pack("<H", 0x0000)              # Item2 Data prefix: 2 bytes
+        resp += struct.pack("<H", len(cip_data))       # Item2 Length: CIP data only
         resp += cip_data
+        resp[2:4] = struct.pack("<H", len(resp) - 24)  # Update EIP length
         return bytes(resp)
 
     def _make_cip_error_response(self, session: int, service: int, error: int,

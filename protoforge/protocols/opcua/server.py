@@ -49,18 +49,33 @@ except ImportError:
     logger.warning("asyncua not installed, OPC-UA protocol will not be available")
 
 
-def _parse_node_id(address: str, default_ns: int) -> tuple[int, str]:
-    """Bug2-FIX: 解析point.address中的ns=X;s=Y格式，返回(namespace_index, identifier)。
+def _parse_node_id(address: str, default_ns: int) -> tuple[int, Any, bool]:
+    """解析 point.address 中的 NodeID 格式，返回 (namespace_index, identifier, is_numeric)。
 
     支持的格式:
-      - "ns=2;s=Node1"  -> (2, "Node1")
-      - "ns=3;i=100"    -> (3, "100")
-      - "Node1"          -> (default_ns, "Node1")
+      - "ns=2;s=Node1"   -> (2, "Node1", False)   字符串标识符
+      - "ns=3;i=100"     -> (3, 100, True)        数字标识符
+      - "Node1"           -> (default_ns, "Node1", False)
+      - "100"             -> (default_ns, 100, True)
+
+    Args:
+        address: OPC UA 地址字符串
+        default_ns: 默认命名空间索引
+
+    Returns:
+        (namespace_index, identifier, is_numeric) 三元组
+        is_numeric=True 时 identifier 为 int，否则为 str
     """
-    m = re.match(r'^ns=(\d+);[si]=(.+)$', address)
+    m = re.match(r'^ns=(\d+);s=(.+)$', address)
     if m:
-        return int(m.group(1)), m.group(2)
-    return default_ns, address
+        return int(m.group(1)), m.group(2), False
+    m = re.match(r'^ns=(\d+);i=(\d+)$', address)
+    if m:
+        return int(m.group(1)), int(m.group(2)), True
+    # 无 ns= 前缀的纯数字 → 数字标识符
+    if address.isdigit():
+        return default_ns, int(address), True
+    return default_ns, address, False
 
 
 def _ensure_certificates(cert_dir: str | None = None, force: bool = False) -> tuple[str, str]:
@@ -606,15 +621,21 @@ class OpcUaServer(ProtocolServer):
             return
         behavior = self._behaviors.get(config.id)
 
-        # Bug1-FIX: 根据设备配置的namespace注册独立命名空间索引，而非使用全局self._idx
+        # FIX: 使用全局命名空间索引 self._idx 作为默认值，避免注册额外命名空间导致索引不匹配
+        # 模板地址通常写 ns=2（因为 start() 中注册的第一个命名空间索引为 2）
+        # 只有当用户显式配置了不同的 namespace URI 时才注册新命名空间
         ns_uri = self._device_namespaces.get(config.id, "protoforge")
-        try:
-            device_idx = await self._server.register_namespace(ns_uri)
-        except AttributeError:
+        if ns_uri == "protoforge" or ns_uri == "urn:protoforge:simulation":
+            device_idx = self._idx
+        else:
             try:
-                device_idx = await self._server.nodes.namespace.add(ns_uri)
+                device_idx = await self._server.register_namespace(ns_uri)
             except AttributeError:
-                device_idx = await self._server.get_namespace_index(ns_uri)
+                try:
+                    device_idx = await self._server.nodes.namespace.add(ns_uri)
+                except AttributeError:
+                    device_idx = await self._server.get_namespace_index(ns_uri)
+        logger.info("OPC-UA device %s using namespace index %d (uri=%s)", config.id, device_idx, ns_uri)
 
         try:
             device_folder = await self._server.nodes.objects.add_object(
@@ -643,35 +664,58 @@ class OpcUaServer(ProtocolServer):
                 value = behavior.get_value(point.name) if behavior else 0
                 variant_type = type_map.get(point.data_type.value)
                 if variant_type:
-                    # FIXED-P1: 优先使用point.address作为NodeId，客户端可按模板定义的NodeId寻址
                     node_id_str = point.address if point.address else point.name
-                    # Bug2-FIX: 解析point.address中的ns=X;s=Y格式
-                    parsed_ns, parsed_id = _parse_node_id(node_id_str, device_idx)
+                    parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
+                    # FIX: 使用显式 ua.NodeId + ua.QualifiedName 创建节点，确保 NodeId 格式与地址一致
+                    # asyncua 的 add_variable(ns_idx, string, val) 会自动分配数字 NodeId，
+                    # 字符串只用作 BrowseName 而非 NodeId，导致客户端按 ns=X;s=Y 无法找到节点
+                    if is_numeric:
+                        ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
+                    else:
+                        ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
+                    ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
                     try:
-                        node = await device_folder.add_variable(
-                            parsed_ns, parsed_id, ua.Variant(value, variant_type)
-                        )
-                    except Exception:
+                        if variant_type:
+                            node = await device_folder.add_variable(
+                                ua_node_id, ua_bname, ua.Variant(value, variant_type)
+                            )
+                        else:
+                            node = await device_folder.add_variable(
+                                ua_node_id, ua_bname, value
+                            )
+                    except Exception as create_err:
+                        # fallback: 用 point.name 作为 BrowseName，但保持相同的 NodeId
+                        logger.warning("OPC-UA add_variable failed for %s.%s (ns=%d, id=%s): %s, trying point.name as bname",
+                                       config.id, point.name, parsed_ns, parsed_id, create_err)
+                        ua_bname_fb = ua.QualifiedName(point.name, parsed_ns)
                         try:
                             node = await device_folder.add_variable(
-                                parsed_ns, point.name, ua.Variant(value, variant_type)
+                                ua_node_id, ua_bname_fb, ua.Variant(value, variant_type)
                             )
                         except Exception:
+                            # 最终 fallback: 自动分配 NodeId，用 point.name 作为标识符
                             node = await device_folder.add_variable(
                                 device_idx, point.name, ua.Variant(value, variant_type)
                             )
                 else:
                     node_id_str = point.address if point.address else point.name
-                    # Bug2-FIX: 解析point.address中的ns=X;s=Y格式
-                    parsed_ns, parsed_id = _parse_node_id(node_id_str, device_idx)
+                    parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
+                    if is_numeric:
+                        ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
+                    else:
+                        ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
+                    ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
                     try:
                         node = await device_folder.add_variable(
-                            parsed_ns, parsed_id, value
+                            ua_node_id, ua_bname, value
                         )
-                    except Exception:
+                    except Exception as create_err:
+                        logger.warning("OPC-UA add_variable failed for %s.%s (ns=%d, id=%s): %s, trying point.name as bname",
+                                       config.id, point.name, parsed_ns, parsed_id, create_err)
+                        ua_bname_fb = ua.QualifiedName(point.name, parsed_ns)
                         try:
                             node = await device_folder.add_variable(
-                                parsed_ns, point.name, value
+                                ua_node_id, ua_bname_fb, value
                             )
                         except Exception:
                             node = await device_folder.add_variable(
@@ -680,12 +724,16 @@ class OpcUaServer(ProtocolServer):
                 if point.access and "w" in point.access:
                     await node.set_writable()
                 try:
-                    await node.set_historized(True)  # FIXED-P1: 启用历史数据存储，客户端可通过HistoryRead读取
+                    await node.set_historized(True)
                 except Exception as hist_err:
-                    logger.debug("启用 OPC-UA 历史数据存储失败 (point=%s): %s", point.name, hist_err)
+                    logger.debug("OPC-UA set_historized failed (point=%s): %s", point.name, hist_err)
                 point_nodes[point.name] = node
                 self._point_nodes[f"{config.id}.{point.name}"] = node
-                self._point_types[f"{config.id}.{point.name}"] = point.data_type.value  # FIXED: 保存点位数据类型
+                self._point_types[f"{config.id}.{point.name}"] = point.data_type.value
+                # FIX: 记录实际创建的 NodeId，方便用户排查
+                id_type = "i" if is_numeric else "s"
+                logger.info("OPC-UA node created: %s.%s -> ns=%d;%s=%s",
+                            config.id, point.name, parsed_ns, id_type, parsed_id)
             except Exception as e:
                 logger.warning("Failed to create OPC-UA point %s.%s: %s", config.id, point.name, e)
         self._device_nodes[config.id] = {"folder": device_folder, "points": point_nodes}
