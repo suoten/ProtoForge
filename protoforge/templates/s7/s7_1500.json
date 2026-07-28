@@ -82,7 +82,8 @@
   ],
   "protocol_config": {
     "rack": 0,
-    "slot": 1
+    "slot": 1,
+    "optimized_db": true
   },
   "tags": [
     "PLC",

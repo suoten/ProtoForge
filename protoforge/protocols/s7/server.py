@@ -59,7 +59,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
     S7_AREA_TIMERS = 0x1D
     S7_AREA_COUNTERS = 0x1C
 
-    def __init__(self, points: list | None = None):
+    def __init__(self, points: list | None = None, db_header_size: int = 0):
         super().__init__(points)  # FIXED: 调用super().__init__()初始化_points/_values/_generators
         self._db_data: dict[int, bytearray] = {1: bytearray(1024)}
         self._marker_data: bytearray = bytearray(256)
@@ -68,20 +68,66 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._timer_data: bytearray = bytearray(512)  # FIXED-P1: Timer区域内存
         self._counter_data: bytearray = bytearray(512)  # FIXED-P1: Counter区域内存
         self._area_lock = threading.Lock()  # FIXED-C03: 保护Timer/Counter区域的并发读写
-        self._point_addresses: dict[str, tuple[int, int]] = {}
+        # 存储点位的 (area, db_number, offset) 三元组，支持 I/Q/M/DB/T/C 全区域
+        self._point_addresses: dict[str, tuple[int, int, int]] = {}
+        # FIX: S7-1200/1500 优化块访问时，DB 数据区开头有 2 字节系统头
+        # 真实设备上用户变量从 byte 2 开始，ProtoForge 模板地址从 byte 0 开始
+        # 解决方案：解析模板地址时加 db_header_size，使内部偏移与真实设备一致
+        self._db_header_size = db_header_size
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 address = getattr(p, 'address', '0') or '0'
-                db_number, offset = self._parse_s7_address(str(address))
-                self._point_addresses[name] = (db_number, offset)
+                area, db_number, offset = self._parse_s7_address(str(address), self._db_header_size)
+                self._point_addresses[name] = (area, db_number, offset)
                 if name in self._values:
-                    self._sync_value_to_db(name, self._values[name])
+                    self._sync_value_to_area(name, self._values[name])
 
     @staticmethod
-    def _parse_s7_address(address: str) -> tuple[int, int]:
+    def _parse_s7_address(address: str, db_header_size: int = 0) -> tuple[int, int, int]:
+        """解析 S7 地址字符串，返回 (area_code, db_number, byte_offset)。
+
+        支持的地址格式:
+          DB 区域:
+            DB1.DBD0   - DB1 的双字(byte 0-3)
+            DB1.DBW2   - DB1 的字(byte 2-3)
+            DB1.DBB4   - DB1 的字节(byte 4)
+            DB1.DBX0.0 - DB1 的位(byte 0, bit 0)
+            DB2.DBD10  - DB2 的双字(byte 10-13)
+          M 区域(标记位/中间存储器):
+            M0.0       - 位(byte 0, bit 0)
+            MB0        - 字节(byte 0)
+            MW2        - 字(byte 2-3)
+            MD4        - 双字(byte 4-7)
+          I 区域(输入):
+            I0.0       - 位
+            IB0        - 字节
+            IW0        - 字
+            ID4        - 双字
+          Q 区域(输出):
+            Q0.0       - 位
+            QB0        - 字节
+            QW0        - 字
+            QD4        - 双字
+          T 区域(定时器):
+            T1         - 定时器 1
+          C 区域(计数器):
+            C1         - 计数器 1
+
+        Args:
+            address: S7 地址字符串
+            db_header_size: 优化块访问时的 DB 头偏移(仅影响 DB 区域)
+
+        Returns:
+            (area_code, db_number, byte_offset) 三元组
+            area_code: 0x84=DB, 0x83=M, 0x81=I, 0x82=Q, 0x1D=T, 0x1C=C
+            db_number: DB 号(非 DB 区域为 0)
+            byte_offset: 字节偏移量
+        """
         try:
             addr_upper = address.upper().replace(' ', '')
+
+            # --- DB 区域 ---
             if addr_upper.startswith('DB'):
                 parts = addr_upper.split('.')
                 db_number = int(parts[0].replace('DB', '') or '1')
@@ -100,17 +146,96 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                         offset = int(offset_part[3:] or '0')
                     else:
                         offset = int(''.join(c for c in offset_part if c.isdigit()) or '0')
-                    return (db_number, offset)
-                return (db_number, 0)
-            return (1, int(''.join(c for c in address if c.isdigit()) or '0'))
-        except (ValueError, IndexError):
-            logger.warning("S7 address parse failed for '%s', defaulting to DB1 offset 0", address)  # FIXED-M04: 解析失败时记录警告
-            return (1, 0)
+                    # FIX: 优化块访问时，用户变量在真实设备上偏移 +db_header_size
+                    offset += db_header_size
+                    return (S7DeviceBehavior.S7_AREA_DB, db_number, offset)
+                # DB 号但无偏移
+                return (S7DeviceBehavior.S7_AREA_DB, db_number, db_header_size)
 
-    def _sync_value_to_db(self, point_name: str, value: Any) -> None:
+            # --- M 区域(标记位/中间存储器) ---
+            # 格式: M0.0, MB0, MW2, MD4
+            if addr_upper.startswith('M'):
+                if len(addr_upper) > 1 and addr_upper[1] == 'B':
+                    # MB0 - 字节
+                    offset = int(addr_upper[2:] or '0')
+                elif len(addr_upper) > 1 and addr_upper[1] == 'W':
+                    # MW2 - 字
+                    offset = int(addr_upper[2:] or '0')
+                elif len(addr_upper) > 1 and addr_upper[1] == 'D':
+                    # MD4 - 双字
+                    offset = int(addr_upper[2:] or '0')
+                else:
+                    # M0.0 - 位
+                    rest = addr_upper[1:]
+                    if '.' in rest:
+                        byte_str, _ = rest.split('.')
+                        offset = int(byte_str or '0')
+                    else:
+                        offset = int(rest or '0')
+                return (S7DeviceBehavior.S7_AREA_MARKERS, 0, offset)
+
+            # --- I 区域(输入) ---
+            # 格式: I0.0, IB0, IW0, ID4
+            if addr_upper.startswith('I') or addr_upper.startswith('E'):
+                # S7 中 E(德语 Eingang) = I(英语 Input)
+                prefix = addr_upper[0]
+                rest = addr_upper[1:]
+                if rest.startswith('B'):
+                    offset = int(rest[1:] or '0')
+                elif rest.startswith('W'):
+                    offset = int(rest[1:] or '0')
+                elif rest.startswith('D'):
+                    offset = int(rest[1:] or '0')
+                elif '.' in rest:
+                    byte_str, _ = rest.split('.')
+                    offset = int(byte_str or '0')
+                else:
+                    offset = int(rest or '0')
+                return (S7DeviceBehavior.S7_AREA_INPUTS, 0, offset)
+
+            # --- Q 区域(输出) ---
+            # 格式: Q0.0, QB0, QW0, QD4
+            # S7 中 A(德语 Ausgang) = Q(英语 Output)
+            if addr_upper.startswith('Q') or addr_upper.startswith('A'):
+                rest = addr_upper[1:]
+                if rest.startswith('B'):
+                    offset = int(rest[1:] or '0')
+                elif rest.startswith('W'):
+                    offset = int(rest[1:] or '0')
+                elif rest.startswith('D'):
+                    offset = int(rest[1:] or '0')
+                elif '.' in rest:
+                    byte_str, _ = rest.split('.')
+                    offset = int(byte_str or '0')
+                else:
+                    offset = int(rest or '0')
+                return (S7DeviceBehavior.S7_AREA_OUTPUTS, 0, offset)
+
+            # --- T 区域(定时器) ---
+            # 格式: T1, T2, ...
+            if addr_upper.startswith('T'):
+                timer_num = int(addr_upper[1:] or '0')
+                return (S7DeviceBehavior.S7_AREA_TIMERS, 0, timer_num)
+
+            # --- C 区域(计数器) ---
+            # 格式: C1, C2, ...
+            # 注意: S7 中 Z(德语 Zähler) = C(英语 Counter)
+            if addr_upper.startswith('C') or addr_upper.startswith('Z'):
+                counter_num = int(addr_upper[1:] or '0')
+                return (S7DeviceBehavior.S7_AREA_COUNTERS, 0, counter_num)
+
+            # 无法识别的格式，默认到 DB1 offset 0
+            logger.warning("S7 address '%s' not recognized, defaulting to DB1 offset 0", address)
+            return (S7DeviceBehavior.S7_AREA_DB, 1, db_header_size)
+        except (ValueError, IndexError) as e:
+            logger.warning("S7 address parse failed for '%s': %s, defaulting to DB1 offset 0", address, e)
+            return (S7DeviceBehavior.S7_AREA_DB, 1, db_header_size)
+
+    def _sync_value_to_area(self, point_name: str, value: Any) -> None:
+        """将点位值同步到对应的 S7 数据区域(DB/M/I/Q/T/C)。"""
         if point_name not in self._point_addresses:
             return
-        db_number, offset = self._point_addresses[point_name]
+        area, db_number, offset = self._point_addresses[point_name]
         try:
             point = self._points.get(point_name)
             dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
@@ -133,21 +258,28 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 data = struct.pack("<?", value)
             else:
                 data = struct.pack(">i", int(value))
-            self.write_db_area(db_number, offset, data)
+            # 根据 area 写入对应的数据区域
+            if area == self.S7_AREA_DB:
+                self.write_db_area(db_number, offset, data)
+            else:
+                self.write_area(area, db_number, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("S7 on_write value conversion error for %s: %s", point_name, e)
+
+    # 向后兼容: 保留旧方法名
+    _sync_value_to_db = _sync_value_to_area
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
             self._written_values[point_name] = value
-            self._sync_value_to_db(point_name, value)
+            self._sync_value_to_area(point_name, value)
             return True
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
-        self._sync_value_to_db(point_name, value)
+        self._sync_value_to_area(point_name, value)
 
     def get_db_area(self, db_number: int, size: int) -> bytearray:
         if db_number not in self._db_data:
@@ -381,7 +513,9 @@ class S7Server(ProtocolServer):
                 if device_config:
                     with self._behaviors_sync_lock:
                         if resolved_id not in self._behaviors:
-                            self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points)
+                            pc = device_config.protocol_config or {}
+                            db_hdr = 2 if pc.get("optimized_db", False) else 0
+                            self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points, db_header_size=db_hdr)
                             logger.debug("S7 pre-registered device from COTP CR: %s", resolved_id)
             return self._make_cotp_cr_response(data), resolved_id
 
@@ -450,14 +584,14 @@ class S7Server(ProtocolServer):
         except (IndexError, struct.error):
             pass
 
-        # COTP CC: TPKT header + COTP DT + TSAP parameters
-        # ISO 8073: CC Called TSAP(0xC1) = CR Called TSAP(0xC2) = server TSAP
-        #           CC Calling TSAP(0xC2) = CR Calling TSAP(0xC1) = client TSAP
+        # FIX: COTP CC 响应应正确回显 TSAP，不应交换
+        # CR 请求: 0xC1=Called TSAP(服务器), 0xC2=Calling TSAP(客户端)
+        # CC 响应: 0xC1=Called TSAP(回显服务器TSAP=remote_tsap), 0xC2=Calling TSAP(回显客户端TSAP=local_tsap)
         tsap_payload = bytes([
-            0xC1, len(local_tsap),   # Called TSAP = server TSAP (from CR's 0xC2)
-        ]) + local_tsap + bytes([
-            0xC2, len(remote_tsap),  # Calling TSAP = client TSAP (from CR's 0xC1)
+            0xC1, len(remote_tsap),   # Called TSAP = 服务器 TSAP (来自 CR 的 0xC1)
         ]) + remote_tsap + bytes([
+            0xC2, len(local_tsap),    # Calling TSAP = 客户端 TSAP (来自 CR 的 0xC2)
+        ]) + local_tsap + bytes([
             0xC0, 0x01, 0x07,       # TPDU size = 0x07 (2048)
         ])
 
@@ -728,8 +862,8 @@ class S7Server(ProtocolServer):
             behavior = self._behaviors.get(device_id or self._default_device_id or "")
             if behavior:
                 behavior.write_area(area, db_number, offset, write_data)
-                for name, (p_db, p_offset) in behavior._point_addresses.items():
-                    if area == behavior.S7_AREA_DB and db_number == p_db and offset == p_offset:
+                for name, (p_area, p_db, p_offset) in behavior._point_addresses.items():
+                    if area == p_area and (area != behavior.S7_AREA_DB or db_number == p_db) and offset == p_offset:
                         try:
                             pt = behavior._points.get(name)
                             dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
@@ -942,7 +1076,10 @@ class S7Server(ProtocolServer):
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
-        behavior = S7DeviceBehavior(device_config.points)
+        proto_config = device_config.protocol_config or {}
+        # FIX: S7-1200/1500 优化块访问时启用 2 字节 DB 系统头
+        db_header_size = 2 if proto_config.get("optimized_db", False) else 0
+        behavior = S7DeviceBehavior(device_config.points, db_header_size=db_header_size)
         async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors[device_id] = behavior
             self._device_configs[device_id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
