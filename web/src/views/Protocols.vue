@@ -78,13 +78,13 @@
       <n-modal v-model:show="showAdvanced" preset="card" :title="t('protocols.advancedConfigTitle', { name: advancedProtocol.display_name || advancedProtocol.name })" style="width:min(560px, 90vw)">
         <n-alert type="info" :bordered="false" style="margin-bottom: 12px">{{ t('protocols.advancedConfigHint') }}</n-alert>
         <!-- GB28181 专属配置引导 -->
-        <n-alert v-if="advancedProtocol.name === 'gb28181'" type="warning" :bordered="false" style="margin-bottom: 12px" title="GB28181 配置说明">
+        <n-alert v-if="advancedProtocol.name === 'gb28181'" type="warning" :bordered="false" style="margin-bottom: 12px" :title="t('protocols.gb28181ConfigTitle')">
           <div style="font-size: 13px; line-height: 1.8">
-            <div style="font-weight: 600; margin-bottom: 4px">GB28181 与其他协议不同，采用「客户端注册」模式：</div>
-            <div>1. 此处配置的是 <b>SIP 监听端口</b>（默认 5060），用于接收上游平台的响应消息</div>
-            <div>2. 要连接您的视频平台，需在 <b>设备管理</b> 页面创建 GB28181 设备，填写 <b>上游 SIP 服务器地址 (sip_server_addr)</b></div>
-            <div>3. 设备创建后会自动向您的平台发起 SIP REGISTER 注册</div>
-            <div style="margin-top: 4px; color: #d97706">⚠ 上游 SIP 服务器地址为空时，设备不会发起注册</div>
+            <div style="font-weight: 600; margin-bottom: 4px">{{ t('protocols.gb28181ConfigMode') }}</div>
+            <div>{{ t('protocols.gb28181ConfigStep1') }}</div>
+            <div>{{ t('protocols.gb28181ConfigStep2') }}</div>
+            <div>{{ t('protocols.gb28181ConfigStep3') }}</div>
+            <div style="margin-top: 4px; color: #d97706">{{ t('protocols.gb28181ConfigWarning') }}</div>
           </div>
         </n-alert>
         <n-form :model="advancedConfig" label-placement="left" label-width="120">

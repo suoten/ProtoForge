@@ -360,7 +360,10 @@
           <div style="white-space:pre-line">{{ pipelineResult?.steps?.connect?.error || t('integration.connectionFailed') }}</div>
           <div v-if="pipelineResult?.steps?.connect?.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
             <div style="font-weight:500;margin-bottom:4px">{{ t('integration.driverConfigLabel') }}</div>
-            <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+            <div v-for="(val, key) in pipelineResult.steps.connect.driver_config" :key="key" style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+              <n-text depth="3">{{ key }}</n-text>
+              <n-text code>{{ val }}</n-text>
+            </div>
           </div>
           <div v-if="!pipelineResult.steps.connect.driver_host || pipelineResult.steps.connect.driver_host === ''" style="margin-top:8px">
             <n-button size="small" type="primary" @click="$router.push('/settings')">{{ t('integration.goToSettingsProtoforge') }}</n-button>
