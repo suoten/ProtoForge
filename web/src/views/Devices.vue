@@ -132,12 +132,12 @@
           <!-- GB28181 设备配置引导 -->
           <n-alert v-if="newDevice.protocol === 'gb28181'" type="warning" :bordered="false" style="margin-bottom:8px">
             <div style="font-size:13px;line-height:1.6">
-              <div style="font-weight:600;margin-bottom:4px">GB28181 设备注册到视频平台，必须填写以下关键字段：</div>
-              <div>• <b>Upstream SIP Server Address</b>：您的视频平台 IP 地址（必填，否则不会注册）</div>
-              <div>• <b>Upstream SIP Port</b>：视频平台 SIP 信令端口（默认 5060）</div>
-              <div>• <b>Upstream SIP Server ID</b>：视频平台的 20 位国标编码</div>
-              <div>• <b>Device National Standard Code</b>：本设备的 20 位国标编码（类型 132=IPC）</div>
-              <div>• <b>SIP Password</b>：如果平台启用了 Digest 认证，填写认证密码</div>
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.gb28181GuideTitle') }}</div>
+              <div>{{ t('devices.gb28181GuideSipAddr') }}</div>
+              <div>{{ t('devices.gb28181GuideSipPort') }}</div>
+              <div>{{ t('devices.gb28181GuideSipServerId') }}</div>
+              <div>{{ t('devices.gb28181GuideDeviceCode') }}</div>
+              <div>{{ t('devices.gb28181GuideSipPassword') }}</div>
             </div>
           </n-alert>
           <n-form :model="advancedProtocolConfig" label-placement="left" label-width="140">
@@ -368,7 +368,10 @@
             <div style="white-space:pre-line">{{ pipelineResult.steps.connect.error }}</div>
             <div v-if="pipelineResult.steps.connect.driver_config" style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:12px">
               <div style="font-weight:500;margin-bottom:4px">{{ t('devices.driverConfigLabel') }}</div>
-              <code style="white-space:pre-wrap">{{ JSON.stringify(pipelineResult.steps.connect.driver_config, null, 2) }}</code>
+              <div v-for="(val, key) in pipelineResult.steps.connect.driver_config" :key="key" style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <n-text depth="3">{{ key }}</n-text>
+                <n-text code>{{ val }}</n-text>
+              </div>
             </div>
           </n-alert>
           <n-alert v-else-if="pipelineResult.steps?.collect?.ok === false" type="warning" :bordered="false">
