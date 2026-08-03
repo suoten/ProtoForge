@@ -217,6 +217,19 @@ class OpcUaServer(ProtocolServer):
         """返回用户配置的端口"""
         return self._requested_port
 
+    @staticmethod
+    def _get_local_ip() -> str:
+        """获取本机局域网IP地址，用于OPC UA endpoint广播。"""
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return ""
+
     async def read_point_history(self, device_id: str, point_name: str) -> list[dict]:
         """读取点位历史数据（HistoricalAccess）。
 
@@ -256,8 +269,13 @@ class OpcUaServer(ProtocolServer):
         port = self._requested_port
         self._host = host
         self._port = port
-        # Bug3-FIX: 当host为0.0.0.0时，endpoint使用127.0.0.1替代，避免部分客户端拒绝连接
-        endpoint_host = "127.0.0.1" if host == "0.0.0.0" else host
+        # FIX: 当host为0.0.0.0时，获取本机实际IP作为endpoint，避免远程客户端收到127.0.0.1后无法连接
+        if host == "0.0.0.0":
+            endpoint_host = self._get_local_ip()
+            if not endpoint_host:
+                endpoint_host = "127.0.0.1"  # fallback
+        else:
+            endpoint_host = host
         self._endpoint = f"opc.tcp://{endpoint_host}:{port}/protoforge"
 
         try:
@@ -545,12 +563,15 @@ class OpcUaServer(ProtocolServer):
                             # 获取质量码，默认 GOOD
                             qcode_int = self._point_qualities.get(point_node_key, int(QualityCode.GOOD))
                             # 使用 DataValue 设置值和 OPC UA StatusCode
+                            # FIX: 使用 set_value 而非 write_value，确保触发 OPC UA 订阅通知
+                            # asyncua 的 write_value 不会触发 MonitoredItem 通知，
+                            # 导致 Kepware 等订阅客户端收不到数据变更
                             dv = asyncua_ua.DataValue(
                                 asyncua_ua.Variant(value, variant_type),
                                 StatusCode=asyncua_ua.StatusCode(qcode_int),
                                 SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
                             )
-                            await node.write_value(dv)
+                            await node.set_value(dv)
                         except Exception as e:
                             logger.debug("OPC-UA sync value error for %s.%s: %s", device_id, point.name, e)
             except Exception as e:
@@ -577,6 +598,46 @@ class OpcUaServer(ProtocolServer):
             return
         for point in config.points:
             self._point_qualities[f"{device_id}.{point.name}"] = quality_code
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：将引擎 tick 生成的值同步到 OPC-UA 节点，绕过访问控制检查。
+
+        引擎 tick 循环调用此方法将动态生成的值写入 OPC-UA 节点，
+        确保非固定生成器的值能被 Kepware 等订阅客户端实时读到。
+        使用 set_value 确保触发 OPC UA 订阅通知（MonitoredItem 通知）。
+        """
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        # 更新 behavior 内部值（不冻结生成器）
+        behavior.set_value(point_name, value)
+        # 同步写入到 OPC-UA 节点
+        point_node_key = f"{device_id}.{point_name}"
+        node = self._point_nodes.get(point_node_key)
+        if node:
+            try:
+                from asyncua import ua as asyncua_ua
+                data_type = self._point_types.get(point_node_key, "float32")
+                type_map = {
+                    "bool": asyncua_ua.VariantType.Boolean,
+                    "int16": asyncua_ua.VariantType.Int16,
+                    "uint16": asyncua_ua.VariantType.UInt16,
+                    "int32": asyncua_ua.VariantType.Int32,
+                    "uint32": asyncua_ua.VariantType.UInt32,
+                    "float32": asyncua_ua.VariantType.Float,
+                    "float64": asyncua_ua.VariantType.Double,
+                    "string": asyncua_ua.VariantType.String,
+                }
+                variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
+                qcode_int = self._point_qualities.get(point_node_key, int(QualityCode.GOOD))
+                dv = asyncua_ua.DataValue(
+                    asyncua_ua.Variant(value, variant_type),
+                    StatusCode=asyncua_ua.StatusCode(qcode_int),
+                    SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
+                )
+                await node.set_value(dv)
+            except Exception as e:
+                logger.debug("OPC-UA sync_point_value error for %s.%s: %s", device_id, point_name, e)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -666,14 +727,18 @@ class OpcUaServer(ProtocolServer):
                 if variant_type:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
-                    # FIX: 使用显式 ua.NodeId + ua.QualifiedName 创建节点，确保 NodeId 格式与地址一致
-                    # asyncua 的 add_variable(ns_idx, string, val) 会自动分配数字 NodeId，
-                    # 字符串只用作 BrowseName 而非 NodeId，导致客户端按 ns=X;s=Y 无法找到节点
-                    if is_numeric:
-                        ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
+                    # FIX: NodeId 唯一化 - 如果是纯数字/简单标识符，加设备名前缀避免多设备冲突
+                    # 仅当用户显式使用 ns=X;s=Y 格式时保持原样（用户显式指定唯一ID）
+                    if not node_id_str.startswith('ns='):
+                        unique_id = f"{config.id}.{point.name}"
+                        ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
+                        ua_bname = ua.QualifiedName(point.name, parsed_ns)
                     else:
-                        ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
-                    ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
+                        if is_numeric:
+                            ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
+                        else:
+                            ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
+                        ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
                     try:
                         if variant_type:
                             node = await device_folder.add_variable(
@@ -684,19 +749,12 @@ class OpcUaServer(ProtocolServer):
                                 ua_node_id, ua_bname, value
                             )
                     except Exception as create_err:
-                        # fallback: 用 point.name 作为 BrowseName，但保持相同的 NodeId
-                        logger.warning("OPC-UA add_variable failed for %s.%s (ns=%d, id=%s): %s, trying point.name as bname",
-                                       config.id, point.name, parsed_ns, parsed_id, create_err)
-                        ua_bname_fb = ua.QualifiedName(point.name, parsed_ns)
-                        try:
-                            node = await device_folder.add_variable(
-                                ua_node_id, ua_bname_fb, ua.Variant(value, variant_type)
-                            )
-                        except Exception:
-                            # 最终 fallback: 自动分配 NodeId，用 point.name 作为标识符
-                            node = await device_folder.add_variable(
-                                device_idx, point.name, ua.Variant(value, variant_type)
-                            )
+                        # fallback: 自动分配 NodeId，用 point.name 作为 BrowseName
+                        logger.warning("OPC-UA add_variable failed for %s.%s (id=%s): %s, auto-assigning NodeId",
+                                       config.id, point.name, parsed_id, create_err)
+                        node = await device_folder.add_variable(
+                            device_idx, point.name, ua.Variant(value, variant_type)
+                        )
                 else:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
@@ -731,9 +789,9 @@ class OpcUaServer(ProtocolServer):
                 self._point_nodes[f"{config.id}.{point.name}"] = node
                 self._point_types[f"{config.id}.{point.name}"] = point.data_type.value
                 # FIX: 记录实际创建的 NodeId，方便用户排查
-                id_type = "i" if is_numeric else "s"
-                logger.info("OPC-UA node created: %s.%s -> ns=%d;%s=%s",
-                            config.id, point.name, parsed_ns, id_type, parsed_id)
+                actual_nid = node.nodeid
+                logger.info("OPC-UA node created: %s.%s -> NodeId=%s (BrowseName=%s)",
+                            config.id, point.name, actual_nid, point.name)
             except Exception as e:
                 logger.warning("Failed to create OPC-UA point %s.%s: %s", config.id, point.name, e)
         self._device_nodes[config.id] = {"folder": device_folder, "points": point_nodes}
