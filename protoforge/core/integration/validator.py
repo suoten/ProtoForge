@@ -87,12 +87,12 @@ class MappingValidator:
         result: dict[str, Any] = {"valid": True, "fields_checked": 0, "issues": []}
         # FIXED: 字段映射与edgelite.py _build_driver_config() 实际输出保持一致
         # s7/mc/fins/ab/kuka/abb_robot 使用 "ip" 而非 "host"
-        # opcua 使用 "server_url" 而非 "endpoint"
+        # opcua 同时包含 "endpoint" 和 "server_url"
         # FIXED-P0: 同时支持别名和 plugin_name 两种协议格式
         required_fields_map = {
             "modbus_tcp": ["host", "port", "slave_id"],
             "modbus_rtu": ["port", "baudrate", "slave_id"],
-            "opcua": ["server_url"],
+            "opcua": ["endpoint"],
             "mqtt": ["broker", "port"],
             "mqtt_client": ["broker", "port"],       # plugin_name 格式
             "bacnet": ["device_id"],

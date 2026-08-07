@@ -239,7 +239,7 @@ def is_edgelite_enabled_for_device(device: Any) -> bool:
 _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "modbus_tcp": {"host", "port", "slave_id", "timeout"},
     "modbus_rtu": {"port", "baudrate", "slave_id", "parity", "stopbits", "timeout"},
-    "opcua": {"server_url", "username", "password", "security_mode", "use_subscription", "timeout"},
+    "opcua": {"endpoint", "server_url", "username", "password", "security_mode", "security_policy", "use_subscription", "timeout"},
     "mqtt": {"broker", "port", "subscribe_topic", "publish_topic", "client_id", "username", "password", "tls_enabled", "tls_insecure", "timeout"},
     "http": {"push_url", "timeout"},
     "s7": {"ip", "rack", "slot"},
@@ -521,15 +521,33 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
         # 优先使用用户配置的 server_url/endpoint，但需要更新端口（可能因冲突自动切换）
         user_url = protocol_config.get("server_url") or protocol_config.get("endpoint") or ""
         if user_url:
-            # 替换 URL 中的端口号
+            # 替换 URL 中的端口号（兼容带路径的 URL，如 opc.tcp://host:4840/protoforge）
             import re
-            user_url = re.sub(r':(\d+)(/?)$', f':{ua_port}\\2', user_url)
-        base = {"server_url": user_url or f"opc.tcp://{host}:{ua_port}",
-                "endpoint": user_url or f"opc.tcp://{host}:{ua_port}",
+            user_url = re.sub(r':(\d+)(/.*)?$', f':{ua_port}\\2', user_url)
+        # FIX: 默认 endpoint 需包含 /protoforge 路径，与 OPC UA 服务器的 set_endpoint() 一致
+        # EdgeLite 驱动的 config_schema 要求 endpoint 字段；server_url 作为备用
+        default_url = f"opc.tcp://{host}:{ua_port}/protoforge"
+        url = user_url or default_url
+        # FIX: security_policy 处理
+        # EdgeLite sqlite_repo 验证 security_policy 只接受: Basic256/Basic256Sha256/Basic128Rsa15/
+        # Aes128_Sha256_RsaOaep/Aes256_Sha256_RsaPss，不接受 "None" 字符串。
+        # 当 security_mode 为 None 时，不发送 security_policy 字段（验证跳过，驱动内部默认处理）。
+        # 当 security_mode 非 None 时，发送用户配置或默认 Basic256Sha256。
+        security_mode_val = protocol_config.get("security_mode", "None")
+        base = {"endpoint": url,
+                "server_url": url,
                 "username": protocol_config.get("username", ""),
                 "password": protocol_config.get("password", ""),
-                "security_mode": protocol_config.get("security_mode", "None"),
+                "security_mode": security_mode_val,
                 "use_subscription": protocol_config.get("use_subscription", True)}
+        if security_mode_val != "None":
+            user_policy = protocol_config.get("security_policy", "Basic256Sha256")
+            # 将 ProtoForge 的策略名映射到 EdgeLite 接受的名称
+            policy_alias_map = {
+                "Aes128Sha256RsaOaep": "Aes128_Sha256_RsaOaep",
+                "Aes256Sha256RsaPss": "Aes256_Sha256_RsaPss",
+            }
+            base["security_policy"] = policy_alias_map.get(user_policy, user_policy)
     elif normalized_protocol == "mqtt":
         mqtt_port = port or 1883
         base = {
@@ -1474,7 +1492,7 @@ def _extract_driver_host_port(driver_config: dict[str, Any], protocol: str = "")
             host = str(driver_config.get("host", driver_config.get("ip", "")))
             port = str(driver_config.get("port", ""))
     elif protocol == "opcua":
-        server_url = driver_config.get("server_url", driver_config.get("endpoint", ""))
+        server_url = driver_config.get("endpoint") or driver_config.get("server_url", "")
         if server_url:
             try:
                 import re
