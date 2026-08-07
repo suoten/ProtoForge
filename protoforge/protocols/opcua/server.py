@@ -269,14 +269,10 @@ class OpcUaServer(ProtocolServer):
         port = self._requested_port
         self._host = host
         self._port = port
-        # FIX: 当host为0.0.0.0时，获取本机实际IP作为endpoint，避免远程客户端收到127.0.0.1后无法连接
-        if host == "0.0.0.0":
-            endpoint_host = self._get_local_ip()
-            if not endpoint_host:
-                endpoint_host = "127.0.0.1"  # fallback
-        else:
-            endpoint_host = host
-        self._endpoint = f"opc.tcp://{endpoint_host}:{port}/protoforge"
+        # FIX: 始终使用 0.0.0.0 作为 endpoint host，确保 asyncua 绑定到所有网卡接口
+        # asyncua 的 set_endpoint() 会解析 URL 中的 host 作为绑定地址
+        # 使用 0.0.0.0 可避免与已运行实例的端口冲突，同时允许远程客户端通过任意 IP 连接
+        self._endpoint = f"opc.tcp://{host}:{port}/protoforge"
 
         try:
             self._server = Server()
@@ -303,18 +299,18 @@ class OpcUaServer(ProtocolServer):
                         # 仅允许无安全策略，避免 asyncua 尝试注册加密端点
                         self._server.set_security_policy([ua.SecurityPolicyType.NoSecurity])
                     else:
-                        # FIXED-P0: 增强安全策略支持 Modern 级别策略（兼容 OPC Foundation 最新规范）
-                        policy_map = {
-                            "None": ua.SecurityPolicyType.NoSecurity,
-                            "Basic128Rsa15": ua.SecurityPolicyType.Basic128Rsa15,
-                            "Basic256Sha256": ua.SecurityPolicyType.Basic256Sha256,
-                            "Aes128Sha256RsaOaep": ua.SecurityPolicyType.Aes128Sha256RsaOaep,
-                            "Aes256Sha256RsaPss": ua.SecurityPolicyType.Aes256Sha256RsaPss,
-                        }
-                        mode_map = {
-                            "None": ua.MessageSecurityMode.None_,
-                            "Sign": ua.MessageSecurityMode.Sign,
-                            "SignAndEncrypt": ua.MessageSecurityMode.SignAndEncrypt,
+                        # FIXED: 兼容 asyncua 1.1.8 的 SecurityPolicyType 枚举值
+                        # asyncua 1.1.8 将 policy 和 mode 合并为单一枚举值，如 Basic256Sha256_SignAndEncrypt
+                        # 旧版 Basic256Sha256 / Basic128Rsa15 等不再存在
+                        policy_mode_map = {
+                            ("Basic128Rsa15", "Sign"): ua.SecurityPolicyType.Basic128Rsa15_Sign,
+                            ("Basic128Rsa15", "SignAndEncrypt"): ua.SecurityPolicyType.Basic128Rsa15_SignAndEncrypt,
+                            ("Basic256Sha256", "Sign"): ua.SecurityPolicyType.Basic256Sha256_Sign,
+                            ("Basic256Sha256", "SignAndEncrypt"): ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
+                            ("Aes128Sha256RsaOaep", "Sign"): ua.SecurityPolicyType.Aes128Sha256RsaOaep_Sign,
+                            ("Aes128Sha256RsaOaep", "SignAndEncrypt"): ua.SecurityPolicyType.Aes128Sha256RsaOaep_SignAndEncrypt,
+                            ("Aes256Sha256RsaPss", "Sign"): ua.SecurityPolicyType.Aes256Sha256RsaPss_Sign,
+                            ("Aes256Sha256RsaPss", "SignAndEncrypt"): ua.SecurityPolicyType.Aes256Sha256RsaPss_SignAndEncrypt,
                         }
                         try:
                             cert_path = proto_config.get("certificate_path", "")
@@ -327,14 +323,12 @@ class OpcUaServer(ProtocolServer):
                                 await self._server.load_certificate(cert_path)
                                 await self._server.load_private_key(key_path)
                                 logger.info("OPC-UA certificates loaded")
-                            # FIXED-P1: 同时注册NoSecurity和用户选择的策略，让客户端选择兼容的策略连接
-                            selected_policy = policy_map.get(security_policy, ua.SecurityPolicyType.NoSecurity)
+                            # 同时注册 NoSecurity 和用户选择的策略，让客户端选择兼容的策略连接
                             policies = [ua.SecurityPolicyType.NoSecurity]
-                            if selected_policy != ua.SecurityPolicyType.NoSecurity:
-                                policies.append(selected_policy)
+                            selected = policy_mode_map.get((security_policy, security_mode))
+                            if selected is not None:
+                                policies.append(selected)
                             self._server.set_security_policy(policies)
-                            if security_policy != "None":
-                                self._server.set_security_mode(mode_map.get(security_mode, ua.MessageSecurityMode.SignAndEncrypt))
                             logger.info("OPC-UA security: mode=%s, policy=%s", security_mode, security_policy)
                         except Exception as se:
                             logger.warning("Failed to set OPC-UA security policy: %s, falling back to None", se)
@@ -568,7 +562,7 @@ class OpcUaServer(ProtocolServer):
                             # 导致 Kepware 等订阅客户端收不到数据变更
                             dv = asyncua_ua.DataValue(
                                 asyncua_ua.Variant(value, variant_type),
-                                StatusCode=asyncua_ua.StatusCode(qcode_int),
+                                StatusCode_=asyncua_ua.StatusCode(qcode_int),
                                 SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
                             )
                             await node.set_value(dv)
@@ -632,7 +626,7 @@ class OpcUaServer(ProtocolServer):
                 qcode_int = self._point_qualities.get(point_node_key, int(QualityCode.GOOD))
                 dv = asyncua_ua.DataValue(
                     asyncua_ua.Variant(value, variant_type),
-                    StatusCode=asyncua_ua.StatusCode(qcode_int),
+                    StatusCode_=asyncua_ua.StatusCode(qcode_int),
                     SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
                 )
                 await node.set_value(dv)
@@ -782,9 +776,9 @@ class OpcUaServer(ProtocolServer):
                 if point.access and "w" in point.access:
                     await node.set_writable()
                 try:
-                    await node.set_historized(True)
+                    await self._server.historize_node_data_change(node)
                 except Exception as hist_err:
-                    logger.debug("OPC-UA set_historized failed (point=%s): %s", point.name, hist_err)
+                    logger.debug("OPC-UA historize_node_data_change failed (point=%s): %s", point.name, hist_err)
                 point_nodes[point.name] = node
                 self._point_nodes[f"{config.id}.{point.name}"] = node
                 self._point_types[f"{config.id}.{point.name}"] = point.data_type.value
