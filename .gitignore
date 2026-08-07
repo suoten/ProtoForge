@@ -68,9 +68,30 @@ p4_*.txt
 test_*.txt
 test_results*.txt
 backend_log.txt
+backend_stdout.txt
+backend_stderr.txt
 temp_login.json
 web/build_output.txt
 web/frontend_log.txt
+web/check_i18n_keys.py
+web/check_missing_keys.py
+web/find_hardcoded.py
+web/find_hardcoded2.py
+
+# Temporary analysis/OCR scripts
+analyze_img.py
+ocr_easy.py
+ocr_img.ps1
+
+# Temporary screenshots
+11.png
+11_body1.png
+11_body2.png
+11_bot.png
+11_mid.png
+11_nav.png
+11_thumb.jpg
+11_top.png
 
 # OpenAPI spec (generated)
 openapi.json
