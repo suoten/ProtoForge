@@ -175,6 +175,7 @@ class IntegrationManager:
         # HTTP Webhook 数据推送（被动协议需要 ProtoForge 主动推送模拟数据到 EdgeLite）
         self._http_push_tasks: dict[str, asyncio.Task] = {}  # device_id -> task
         self._http_push_interval = 5.0  # 推送间隔（秒）
+        self._push_locks: dict[str, asyncio.Lock] = {}  # FIXED: per-device push lock, prevents concurrent push of same device causing 409
 
     @property
     def validator(self) -> MappingValidator:
@@ -487,6 +488,21 @@ class IntegrationManager:
             logger.debug("push_device skipped: Integration not enabled")
             return {"ok": False, "skipped": True, "reason": "Integration not enabled"}
 
+        # FIXED: per-device push lock, prevents concurrent push of same device
+        # (event handler + protocol restart handler may push simultaneously, causing 409)
+        device_id = getattr(device, "id", "") or str(device)
+        if device_id not in self._push_locks:
+            self._push_locks[device_id] = asyncio.Lock()
+        lock = self._push_locks[device_id]
+        if lock.locked():
+            logger.info("push_device: device %s already being pushed, skipping", device_id)
+            return {"ok": False, "skipped": True, "reason": "Push already in progress"}
+        async with lock:
+            return await self._push_device_impl(device, protoforge_host)
+
+    async def _push_device_impl(self, device: Any, protoforge_host: str = "") -> dict[str, Any]:
+        """推送设备到 EdgeLite 的实际实现。"""
+
         from protoforge.core.edgelite import (
             _get_protocol_status,
             _is_edgelite_local,
@@ -519,6 +535,9 @@ class IntegrationManager:
             }
 
         # 兼容性校验
+        # FIXED: validator 应使用 ProtoForge 协议名（如 "opcda"），而非 EdgeLite 协议名（如 "opc_da"）
+        # payload["protocol"] 是 EdgeLite 协议名，validator 的 _protocol_mapper.map() 需要 ProtoForge 协议名
+        pf_protocol = getattr(device, "protocol", "") or ""
         points_data = getattr(device, "points", []) or []
         points_list = []
         for p in points_data:
@@ -531,7 +550,7 @@ class IntegrationManager:
 
         report = self._validator.validate(
             device_id=payload.get("device_id", ""),
-            protocol=payload.get("protocol", ""),
+            protocol=pf_protocol,
             points=points_list,
             driver_config=payload.get("config", {}),
         )
@@ -539,18 +558,46 @@ class IntegrationManager:
             logger.warning("push_device skipped: compatibility check failed for %s: %s", payload.get("device_id"), report.issues)
             return {"ok": False, "skipped": True, "reason": "Compatibility check failed", "report": report}
 
-        # 检查协议服务器是否运行
+        # 检查协议服务器是否运行，未运行则自动启动
+        # FIXED: 原代码仅警告不启动，导致 EdgeLite 驱动无法连接 ProtoForge 协议服务器
+        # 现在自动启动协议服务器，确保 EdgeLite 驱动可以连接
         protocol = getattr(device, "protocol", "") or ""
         protocol_status = _get_protocol_status(protocol)
         if protocol_status != "running":
-            logger.warning("push_device blocked: protocol %s is not running (status: %s)", protocol, protocol_status)
-            return {
-                "ok": False,
-                "error": f"Protocol {protocol} is not running (status: {protocol_status})",
-                "error_type": "protocol_not_running",
-                "suggestion": desc("edgelite.suggestion.protocol_not_running"),
-                "driver_config": payload.get("config", {}),
-            }
+            logger.info(
+                "push_device: protocol %s is not running (status: %s), auto-starting...",
+                protocol, protocol_status,
+            )
+            try:
+                from protoforge.core.registry import get_engine as _get_pf_engine
+                pf_engine = _get_pf_engine()
+                if pf_engine:
+                    from protoforge.config import get_protocol_port_map
+                    port_map = get_protocol_port_map()
+                    protocol_config: dict[str, Any] = {}
+                    proto_info = port_map.get(protocol, {})
+                    if isinstance(proto_info, dict):
+                        protocol_config.update(proto_info)
+                    # 合并设备实例的 protocol_config
+                    try:
+                        device_instance = pf_engine.get_device_instance(getattr(device, "id", ""))
+                        if device_instance is not None:
+                            dev_proto_config = getattr(device_instance.config, "protocol_config", None) or {}
+                            if isinstance(dev_proto_config, dict):
+                                protocol_config.update(dev_proto_config)
+                    except Exception as dev_cfg_err:
+                        logger.debug("Failed to get device protocol_config for %s: %s", protocol, dev_cfg_err)
+                    await pf_engine.start_protocol(protocol, protocol_config)
+                    logger.info("Auto-started protocol %s for device push (port=%s)",
+                                protocol, protocol_config.get("port", "default"))
+                else:
+                    logger.warning("push_device: engine not available, cannot auto-start protocol %s", protocol)
+            except Exception as e:
+                logger.warning(
+                    "push_device: failed to auto-start protocol %s: %s — "
+                    "push will proceed but EdgeLite may not be able to connect",
+                    protocol, e,
+                )
 
         # 检测私有 IP 问题：EdgeLite 远程部署时，ProtoForge 的局域网 IP 无法被 EdgeLite 访问
         driver_config = payload.get("config", {})
@@ -646,7 +693,12 @@ class IntegrationManager:
         try:
             conflict_data = create_resp.json()
             if isinstance(conflict_data, dict):
-                conflict_detail = str(conflict_data.get("detail", ""))
+                # FIXED: EdgeLite 返回错误信息在 message/error_code 字段，不是 detail
+                conflict_detail = str(
+                    conflict_data.get("detail", "") or
+                    conflict_data.get("message", "") or
+                    conflict_data.get("error_code", "")
+                )
         except Exception as e:
             logger.debug("Failed to parse conflict detail: %s", e)
 
@@ -727,30 +779,11 @@ class IntegrationManager:
                 "suggested_host": get_protoforge_host() if is_private_ip_timeout else None,
             }
 
-        # 设备已存在，尝试 GET 确认 + PUT 更新
+        # 设备已存在或被删除后的残留状态
+        # 策略：先尝试 PUT 更新（设备可能还在），再尝试 DELETE + POST 重新创建
         device_id = payload["device_id"]
-        try:
-            dev_resp = await self._request_with_auth(
-                "get", f"/api/v1/devices/{quote(str(device_id), safe='')}"
-            )
-            if dev_resp.status_code == 404:
-                # 设备已被服务器删除，重新推送
-                create_resp2 = await self._request_with_auth("post", "/api/v1/integration/push-device", json=payload)
-                if create_resp2.status_code in (200, 201):
-                    latency_ms = (time.time() - start_time) * 1000
-                    self._metrics.record_push_success(latency_ms)
-                    return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
-                try:
-                    err_data = create_resp2.json()
-                    err_detail = err_data.get("detail", str(create_resp2.text[:200]))
-                except Exception:
-                    err_detail = str(create_resp2.text[:200])
-                self._metrics.record_push_failure()
-                return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
-        except (httpx.ConnectError, httpx.TimeoutException) as e:
-            logger.debug("Network error checking device existence: %s", e)
 
-        # PUT 更新
+        # 1. 尝试 PUT 更新（无论设备是否存在，PUT 可能成功或返回 404）
         update_payload = {k: v for k, v in payload.items() if k != "device_id"}
         try:
             update_resp = await self._request_with_auth(
@@ -759,11 +792,42 @@ class IntegrationManager:
             if update_resp.status_code == 200:
                 latency_ms = (time.time() - start_time) * 1000
                 self._metrics.record_push_success(latency_ms)
-                logger.info("Device %s updated on EdgeLite", payload["device_id"])
+                logger.info("Device %s updated on EdgeLite (PUT after 409)", payload["device_id"])
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            logger.debug("Network error during PUT update: %s", e)
+
+        # 2. PUT 失败（设备可能被 EdgeLite 删除了），尝试 DELETE + POST 重新创建
+        try:
+            await self._request_with_auth("delete", f"/api/v1/devices/{quote(str(device_id), safe='')}")
+            logger.info("Cleaned up stale device %s on EdgeLite before re-create", device_id)
+        except Exception:
+            pass  # 404 也正常，说明设备已被 EdgeLite 删除
+
+        try:
+            create_resp2 = await self._request_with_auth("post", "/api/v1/integration/push-device", json=payload)
+            if create_resp2.status_code in (200, 201):
+                latency_ms = (time.time() - start_time) * 1000
+                self._metrics.record_push_success(latency_ms)
+                return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
+            try:
+                err_data = create_resp2.json()
+                err_detail = str(err_data.get("detail", "") or err_data.get("message", "") or err_data.get("error_code", ""))
+            except Exception:
+                err_detail = str(create_resp2.text[:200])
             self._metrics.record_push_failure()
-            logger.warning("PUT update failed for %s (HTTP %d): %s", payload["device_id"], update_resp.status_code, update_resp.text[:500])
-            return {"ok": False, "error": f"Update failed: HTTP {update_resp.status_code} - {update_resp.text[:300]}", "error_type": "update_failed"}
+            # FIXED: re-create 也失败时，说明是 EdgeLite 驱动连接问题（创建→启动驱动→失败→删除→409 循环）
+            # 关键字匹配同时支持空格和下划线变体
+            driver_keywords = ("already_exists", "already exists", "driver", "start failed", "start_failed", "connection")
+            if any(kw in err_detail.lower() for kw in driver_keywords):
+                return {
+                    "ok": False,
+                    "error": f"EdgeLite cannot start driver for {payload.get('protocol', '')}: {err_detail}",
+                    "error_type": "driver_failed",
+                    "suggestion": f"EdgeLite 驱动可能无法连接到 ProtoForge。请检查: 1) 协议服务是否已启动 2) EdgeLite 是否安装了对应驱动的依赖库",
+                    "driver_config": payload.get("config", {}),
+                }
+            return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
         except httpx.ConnectError:
             self._metrics.record_push_failure()
             return {"ok": False, "error": desc("edgelite.error.push_connection"), "error_type": "connection"}

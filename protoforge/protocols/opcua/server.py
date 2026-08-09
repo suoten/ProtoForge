@@ -721,8 +721,9 @@ class OpcUaServer(ProtocolServer):
                 if variant_type:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
-                    # FIX: NodeId 唯一化 - 如果是纯数字/简单标识符，加设备名前缀避免多设备冲突
-                    # 仅当用户显式使用 ns=X;s=Y 格式时保持原样（用户显式指定唯一ID）
+                    # FIX: NodeId 唯一化 - 所有字符串标识符都加设备ID前缀避免多设备冲突
+                    # 当多个设备使用相同的 ns=X;s=Y 地址时，NodeId 会冲突导致后续设备节点创建失败
+                    # 解决方案：字符串 NodeId 统一加 device_id 前缀，数字 NodeId 保持原样
                     if not node_id_str.startswith('ns='):
                         unique_id = f"{config.id}.{point.name}"
                         ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
@@ -731,7 +732,8 @@ class OpcUaServer(ProtocolServer):
                         if is_numeric:
                             ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
                         else:
-                            ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
+                            unique_id = f"{config.id}.{parsed_id}"
+                            ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
                         ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
                     try:
                         if variant_type:
