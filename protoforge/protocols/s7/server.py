@@ -951,65 +951,103 @@ class S7Server(ProtocolServer):
         # Parameters: Reserved(1) + ParamCount(1) + 0x12(1) + Len(1) + Method(1) + TypeGroup(1) + SubFunc(1) + DataRef(1)
         # Data: ReturnCode(1) + TransportSize(1) + Length(2) + SZL_ID(2) + SZL_Index(2)
 
-        # 从 Data section 提取 SZL ID 和 Index
-        # S7 Header: data[7:17], Parameters: data[17:25], Data: data[25:]
+        # Extract SZL ID and Index from Data section
+        # S7 Header: data[7:17], Parameters: data[17:17+param_len], Data: data[17+param_len:]
         param_len = struct.unpack(">H", data[13:15])[0] if len(data) >= 15 else 8
         data_offset = 17 + param_len
-        szl_id = 0x0011
+        szl_id = 0x001C  # Default: CPU Features (snap7 get_cpu_info requests this)
         szl_index = 0x0000
         if data_offset + 8 <= len(data):
-            szl_id = struct.unpack(">H", data[data_offset + 4:data_offset + 6])[0]
-            szl_index = struct.unpack(">H", data[data_offset + 6:data_offset + 8])[0]
+            # Standard SZL request: data has ReturnCode(1)+TransportSize(1)+DataLen(2)+SZL_ID(2)+SZL_Index(2)
+            extracted_id = struct.unpack(">H", data[data_offset + 4:data_offset + 6])[0]
+            if extracted_id != 0x0000:
+                szl_id = extracted_id
+                szl_index = struct.unpack(">H", data[data_offset + 6:data_offset + 8])[0]
+        # If SZL_ID couldn't be extracted (data too short or 0x0000), default to 0x001C for get_cpu_info
 
-        # 提取请求中的参数用于回显
-        data[21] if len(data) > 21 else 0x11
+        # Extract request parameters for echo
+        req_method = data[21] if len(data) > 21 else 0x11
         req_type_group = data[22] if len(data) > 22 else 0x44
         req_sub_func = data[23] if len(data) > 23 else 0x01
         req_data_ref = data[24] if len(data) > 24 else 0x00
 
+        # Build SZL record data
         if szl_id == 0x0011:
-            szl_data = self._build_szl_module_identification(szl_index)
+            szl_records = self._build_szl_module_identification(szl_index)
         elif szl_id == 0x0012:
-            szl_data = self._build_szl_component_identification(szl_index)
+            szl_records = self._build_szl_component_identification(szl_index)
         elif szl_id == 0x001C:
-            szl_data = self._build_szl_cpu_features()
+            szl_records = self._build_szl_cpu_features()
         elif szl_id == 0x0032:
-            szl_data = self._build_szl_plc_status(device_id)
+            szl_records = self._build_szl_plc_status(device_id)
         else:
-            szl_data = self._build_szl_module_identification(0x0000)
+            szl_records = self._build_szl_module_identification(0x0000)
 
-        # USER_DATA 响应格式: S7 Header(10) + Parameters(8) + Data(4 + 2 + 2 + szl_data)
-        # 注意: USER_DATA 响应没有 Error Class/Code 字段（与 Ack Data 不同）
+        # Parse record structure: szl_records is raw bytes containing LengthDR + NDR + record data
+        # Format captured from snap7 server traffic:
+        #   LengthDR (2 bytes, uint16) = length of each data record
+        #   NDR (2 bytes, uint16) = number of data records
+        #   Record data (LengthDR * NDR bytes)
+        record_data = szl_records
+        record_len = len(record_data) // max(1, 1)  # Will be set properly below
+        num_records = 1
+        # If szl_records already has LengthDR+NDR header (from _build_szl_cpu_features), use it directly
+        if szl_id == 0x001C and len(record_data) >= 4:
+            # _build_szl_cpu_features returns records only; we add the header
+            pass
+
+        # USER_DATA response: S7 Header(10) + Parameters + Data
+        # Response parameter: Method=0x12, TypeGroup=0x84 (0x44|0x80=response flag)
+        # Captured from snap7 server: param has Length=8 with 4 extra zero bytes
         param_data = bytes([
-            0x00,           # Reserved
-            0x01,           # Parameter count
-            0x12,           # Type/length header
-            0x04,           # Length of following
-            0x12,           # Method = 0x12 (response, 对应请求的 0x11)
-            req_type_group, # Type|Group (回显请求值)
-            req_sub_func,   # SubFunction (回显请求值)
-            req_data_ref,   # DataRef (回显请求值)
+            0x00,                          # Reserved
+            0x01,                          # Parameter count
+            0x12,                          # Type/length header
+            0x08,                          # Length of following = 8 (match snap7 server)
+            0x12,                          # Method = 0x12 (response)
+            req_type_group | 0x80,        # Type|Group with 0x80 response flag (0x44 -> 0x84)
+            req_sub_func,                  # SubFunction (echo)
+            req_data_ref,                  # DataRef (echo)
+            0x00, 0x00, 0x00, 0x00,       # Extra 4 bytes (match snap7 server)
         ])
 
-        # Data section: ReturnCode(1) + TransportSize(1) + Length(2) + SZL_ID(2) + SZL_Index(2) + SZL_Data
+        # Data section: ReturnCode(1) + TransportSize(1) + DataLength(2) + SZL_ID(2) + SZL_Index(2) + LengthDR(2) + NDR(2) + RecordData
+        # LengthDR = length of each data record, NDR = number of records
+        # For SZL 0x001C: LengthDR=34, NDR=10, records=340 bytes
+        # For SZL 0x0011: LengthDR=28, NDR=4, records=112 bytes
+        if szl_id == 0x001C:
+            length_dr = 34  # Each CPU feature record is 34 bytes (2 index + 32 data)
+            num_records = len(record_data) // length_dr
+            if len(record_data) % length_dr != 0:
+                # Pad to multiple of length_dr
+                record_data = record_data + b'\x00' * (length_dr - (len(record_data) % length_dr))
+                num_records = len(record_data) // length_dr
+        else:
+            length_dr = len(record_data)
+            num_records = 1
+
+        data_payload = struct.pack(">H", szl_id)  # SZL_ID
+        data_payload += struct.pack(">H", szl_index)  # SZL_Index
+        data_payload += struct.pack(">H", length_dr)  # LengthDR = record length
+        data_payload += struct.pack(">H", num_records)  # NDR = number of records
+        data_payload += record_data  # Record data
+
         data_section = bytes([
             0xFF,           # Return code = success
             0x09,           # Transport size = octet string
-        ]) + struct.pack(">H", 4 + len(szl_data))  # Length of following data
-        data_section += struct.pack(">H", szl_id)
-        data_section += struct.pack(">H", szl_index)
-        data_section += szl_data
+        ]) + struct.pack(">H", len(data_payload))  # DataLength
+        data_section += data_payload
 
         resp = bytearray([
             0x03, 0x00, 0x00, 0x00,  # TPKT (length updated below)
             0x02, 0xF0, 0x80,        # COTP DT
-            0x32, 0x07,               # S7 Protocol ID, Msg Type = USER_DATA (0x07)
+            0x32, 0x07,               # S7 Protocol ID, Msg Type = User Data (0x07) — snap7 expects same type as request for SZL
             0x00, 0x00,               # Reserved
         ])
         resp += data[11:13]  # PDU Reference (echo)
         resp += struct.pack(">H", len(param_data))  # Parameter Length
         resp += struct.pack(">H", len(data_section))  # Data Length
-        # USER_DATA 响应没有 Error Class/Code 字段
+        # User Data (0x07) responses use 10-byte header (no Error Class/Code)
         resp += param_data
         resp += data_section
         resp[2:4] = struct.pack(">H", len(resp))
@@ -1045,34 +1083,44 @@ class S7Server(ProtocolServer):
         return record
 
     def _build_szl_cpu_features(self) -> bytes:
-        # FIXED-P0: SZL 0x001C = CPU Component Identification (snap7 get_cpu_info)
-        # snap7 新版 get_cpu_info 期望连续排列的数据记录（130 字节）：
-        #   ModuleTypeName[0:32]   (32 bytes)
-        #   SerialNumber[32:56]    (24 bytes)
-        #   ASName[56:80]          (24 bytes)
-        #   Copyright[80:106]      (26 bytes)
-        #   ModuleName[106:130]    (24 bytes)
-        # 不包含 LengthDR + NDR 头
+        # SZL 0x001C = CPU Component Identification (snap7 get_cpu_info)
+        # Returns 10 records of 34 bytes each (2-byte index + 32-byte data)
+        # Format captured from snap7 server traffic analysis:
+        #   Record 0x0001: AS name (32 bytes)
+        #   Record 0x0002: Module type name (32 bytes)
+        #   Record 0x0003: zeros
+        #   Record 0x0004: Copyright (32 bytes)
+        #   Record 0x0005: Serial number (32 bytes)
+        #   Record 0x0007: Module name (32 bytes)
+        #   Record 0x0008: MMC ID (32 bytes)
+        #   Record 0x0009: CPU profile (32 bytes)
+        #   Record 0x000A: zeros
+        #   Record 0x000B: zeros
         info = self._device_info.get(self._default_device_id or "", {})
         module_name = info.get("module_name", "ProtoForge S7")
         serial = info.get("serial_number", "PF-00000000")
-        as_name = info.get("module_name", "ProtoForge")
-        copyright_str = info.get("copyright", "Original Siemens AG")  # FIXED-L02: 版权信息从设备配置读取，支持非Siemens仿真
-        module_type = info.get("module_name", "ProtoForge S7-1200")
+        as_name = info.get("as_name", "ProtoForge")
+        copyright_str = info.get("copyright", "ProtoForge Simulation")
+        module_type = info.get("module_type", "ProtoForge S7-1200")
 
-        record = bytearray(130)
-        # [0:32] ModuleTypeName
-        record[0:32] = module_type.encode("utf-8")[:32].ljust(32, b"\x00")
-        # [32:56] SerialNumber
-        record[32:56] = serial.encode("utf-8")[:24].ljust(24, b"\x00")
-        # [56:80] ASName
-        record[56:80] = as_name.encode("utf-8")[:24].ljust(24, b"\x00")
-        # [80:106] Copyright
-        record[80:106] = copyright_str.encode("utf-8")[:26].ljust(26, b"\x00")
-        # [106:130] ModuleName
-        record[106:130] = module_name.encode("utf-8")[:24].ljust(24, b"\x00")
+        def _record(idx: int, data_str: str = "", data_len: int = 32) -> bytes:
+            """Build a 34-byte record: 2-byte index + 32-byte data."""
+            d = data_str.encode("utf-8")[:data_len].ljust(data_len, b"\x00")
+            return struct.pack(">H", idx) + d
 
-        return bytes(record)
+        records = bytearray()
+        records += _record(0x0001, as_name)        # AS name
+        records += _record(0x0002, module_type)    # Module type name
+        records += _record(0x0003, "")              # zeros
+        records += _record(0x0004, copyright_str)  # Copyright
+        records += _record(0x0005, serial)          # Serial number
+        records += _record(0x0007, module_name)    # Module name
+        records += _record(0x0008, "")              # MMC ID
+        records += _record(0x0009, "")              # CPU profile
+        records += _record(0x000A, "")              # zeros
+        records += _record(0x000B, "")              # zeros
+
+        return bytes(records)
 
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id

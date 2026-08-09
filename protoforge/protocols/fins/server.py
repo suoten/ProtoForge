@@ -241,51 +241,109 @@ class FinsServer(ProtocolServer):
                 logger.debug("Writer wait_closed error: %s", e)
 
     def _process_fins(self, data: bytes) -> bytes | None:
-        if len(data) < 8:
+        """处理 FINS/TCP 帧。
+
+        支持两种帧格式:
+        1. 标准 FINS/TCP: body = Command(4) + ErrorCode(4) + Data
+           - Command=0x00000000: Node address data send (client→server)
+           - Command=0x00000002: FINS frame send (client→server)
+        2. 非标准 EdgeLite 握手: body = FINS frame (无 Command/ErrorCode 前缀)
+           EdgeLite 驱动在 connect() 后直接发送 FINS 帧（Controller Read）做节点握手
+        """
+        if len(data) < 4:
             return None
 
-        command = struct.unpack(">H", data[0:2])[0]
-        if command == 0x0000 or command == 0x0001:
-            return self._handle_fins_init(data)
-        elif command == 0x0002 or command == 0x0003:
-            return self._handle_fins_send(data)
+        # 尝试读取 4 字节 command 判断是否为标准 FINS/TCP 帧
+        command = struct.unpack(">I", data[0:4])[0]
 
-        return self._make_fins_error(0x0204)
+        if command == 0x00000000 or command == 0x00000001:
+            # 标准 FINS/TCP: Node address data send
+            return self._handle_fins_init(data)
+        elif command == 0x00000002 or command == 0x00000003:
+            # 标准 FINS/TCP: FINS frame send
+            return self._handle_fins_send(data)
+        else:
+            # 非标准 EdgeLite 握手: body 直接就是 FINS 帧
+            return self._handle_fins_frame_direct(data)
 
     def _handle_fins_init(self, data: bytes) -> bytes:
+        """处理标准 FINS/TCP 节点地址协商。
+
+        请求 body: Command(4) + ErrorCode(4) + ClientNodeAddr(4)
+        响应 body: Command(4)=0x00000001 + ErrorCode(4)=0 + SrceNodeAddr(4) + DestNodeAddr(4)
+
+        fins 库的 node_address_data_send() 发送 command=0, data=\x00*4
+        并从 response.data[0:4] 读取 srce_node_add, [4:8] 读取 dest_node_add
+        """
         client_node = 0
-        if len(data) >= 8:
-            client_node = data[7]
+        if len(data) >= 12:
+            client_node = struct.unpack(">I", data[8:12])[0]
 
         server_node = 1
         resp = bytearray()
-        resp += struct.pack(">H", 0x0001)
-        resp += struct.pack(">H", 0x0000)
-        resp += struct.pack(">I", 0x00000000)
-        resp += bytes([client_node, server_node])
+        resp += struct.pack(">I", 0x00000001)  # Command: node address data send response
+        resp += struct.pack(">I", 0x00000000)  # Error code: success
+        resp += struct.pack(">I", server_node)  # Srce node address (server)
+        resp += struct.pack(">I", client_node)  # Dest node address (client)
         return bytes(resp)
 
     def _handle_fins_send(self, data: bytes) -> bytes:
-        if len(data) < 12:
-            return self._make_fins_error(0x0204)
+        """处理标准 FINS/TCP 帧发送。
 
-        # FINS TCP命令帧body: Command(2)+Reserved(2)+Error(4)+DestAddr(2)=10字节前缀
-        # FINS帧从data[10]开始，帧头10字节: ICF+RSV+GW+DNA+DA1+DA2+SNA+SA1+SA2+SID
-        fins_frame = data[10:]
+        请求 body: Command(4) + ErrorCode(4) + FINS frame(N)
+        响应 body: Command(4)=0x00000002 + ErrorCode(4)=0 + FINS response frame(N)
+        """
+        # FINS 帧从 data[8] 开始（跳过 Command(4) + ErrorCode(4)）
+        fins_frame = data[8:]
         if len(fins_frame) < 12:
             return self._make_fins_error(0x0204)
 
         mrc = fins_frame[10]
         src = fins_frame[11]
 
-        if mrc == 0x01 and src == 0x01:  # FIXED-P1: 同时检查MRC和SRC，0x0101=内存区读取
-            return self._handle_memory_read(data, fins_frame)
-        elif mrc == 0x01 and src == 0x02 or mrc == 0x02 and src == 0x01:  # FIXED-P1: 0x0102=内存区写入
-            return self._handle_memory_write(data, fins_frame)
-        elif mrc == 0x05 and src == 0x01:  # 0x0501=控制器读取
-            return self._handle_controller_read(data, fins_frame)
+        fins_response = self._build_fins_response(fins_frame, mrc, src)
+        if fins_response is None:
+            return self._make_fins_error(0x0204)
 
-        return self._make_fins_error(0x0204)
+        # 用标准 FINS/TCP Command(4) + ErrorCode(4) 包装
+        resp = bytearray()
+        resp += struct.pack(">I", 0x00000002)  # Command: FINS frame send response
+        resp += struct.pack(">I", 0x00000000)  # Error code: success
+        resp += fins_response
+        return bytes(resp)
+
+    def _handle_fins_frame_direct(self, data: bytes) -> bytes | None:
+        """处理 EdgeLite 非标准握手帧。
+
+        EdgeLite 驱动在 TCPFinsConnection.connect() 完成节点地址协商后，
+        直接发送 FINS 帧（不带 Command/ErrorCode 前缀）做 Controller Read 握手。
+        响应也直接返回 FINS 响应帧（不带 Command/ErrorCode 前缀）。
+        """
+        fins_frame = data
+        if len(fins_frame) < 12:
+            return None
+
+        mrc = fins_frame[10]
+        src = fins_frame[11]
+
+        fins_response = self._build_fins_response(fins_frame, mrc, src)
+        if fins_response is None:
+            # 返回 FINS 错误帧（无 Command/ErrorCode 包装）
+            fins_response = self._build_fins_error_frame(fins_frame, 0x0204)
+        return fins_response
+
+    def _build_fins_response(self, fins_frame: bytes, mrc: int, src: int) -> bytes | None:
+        """构建 FINS 响应帧（不含 FINS/TCP Command/ErrorCode 前缀）。
+
+        FINS 响应帧格式: SwappedHeader(10) + MRC(1) + SRC(1) + EndCode(2) + Data(N)
+        """
+        if mrc == 0x01 and src == 0x01:  # 0x0101=内存区读取
+            return self._build_memory_read_response(fins_frame)
+        elif mrc == 0x01 and src == 0x02:  # 0x0102=内存区写入
+            return self._build_memory_write_response(fins_frame)
+        elif mrc == 0x05 and src == 0x01:  # 0x0501=控制器读取
+            return self._build_controller_read_response(fins_frame)
+        return None
 
     def _swap_fins_header(self, fins_header: bytes) -> bytearray:
         """交换FINS帧头中的源/目标地址，用于构造响应帧"""
@@ -296,16 +354,19 @@ class FinsServer(ProtocolServer):
         resp_header[5], resp_header[8] = resp_header[8], resp_header[5]  # DA2 <-> SA2
         return resp_header
 
-    def _handle_memory_read(self, data: bytes, fins_frame: bytes) -> bytes:
+    def _build_memory_read_response(self, fins_frame: bytes) -> bytes:
+        """构建内存区读取 FINS 响应帧。
+
+        FINS 响应帧: SwappedHeader(10) + MRC(1) + SRC(1) + EndCode(2) + Data(N)
+        """
         if len(fins_frame) < 16:
-            return self._make_fins_error(0x0204)
+            return self._build_fins_error_frame(fins_frame, 0x0204)
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
-        if word_count == 0 or word_count > 1000:  # FIXED-N13: word_count上限校验，防止恶意请求导致大量内存分配
-            return self._make_fins_error(0x0204)
+        if word_count == 0 or word_count > 1000:
+            return self._build_fins_error_frame(fins_frame, 0x0204)
 
         read_size = word_count * 2
         read_data = bytearray(read_size)
@@ -314,25 +375,22 @@ class FinsServer(ProtocolServer):
             read_data = behavior.read_area(area, word_addr * 2, read_size)
 
         resp = bytearray()
-        resp += struct.pack(">H", 0x0002)
-        resp += struct.pack(">H", 0x0000)
-        resp += struct.pack(">I", 0x00000000)
-        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
-        resp += struct.pack(">H", 0x0000)
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))  # 10 bytes swapped header
+        resp += bytes([fins_frame[10], fins_frame[11]])  # MRC + SRC (echo)
+        resp += struct.pack(">H", 0x0000)  # End code: success
         resp += read_data
-
         return bytes(resp)
 
-    def _handle_memory_write(self, data: bytes, fins_frame: bytes) -> bytes:
+    def _build_memory_write_response(self, fins_frame: bytes) -> bytes:
+        """构建内存区写入 FINS 响应帧。"""
         if len(fins_frame) < 16:
-            return self._make_fins_error(0x0204)
+            return self._build_fins_error_frame(fins_frame, 0x0204)
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
-        fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
-        if word_count == 0 or word_count > 1000:  # FIXED-N14: word_count上限校验
-            return self._make_fins_error(0x0204)
+        if word_count == 0 or word_count > 1000:
+            return self._build_fins_error_frame(fins_frame, 0x0204)
 
         write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
         behavior = self._behaviors.get(self._default_device_id or "")
@@ -363,21 +421,18 @@ class FinsServer(ProtocolServer):
                             behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
                     except (struct.error, IndexError) as e:
                         logger.warning("FINS write value sync error for %s: %s", name, e)
-                    # FIXED-C05: 移除break，遍历所有匹配点而非只更新第一个
             self._log_debug("recv", "fins_write",
                             f"Write area {area} offset {word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
 
         resp = bytearray()
-        resp += struct.pack(">H", 0x0002)
-        resp += struct.pack(">H", 0x0000)
-        resp += struct.pack(">I", 0x00000000)
-        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
-        resp += struct.pack(">H", 0x0000)
-
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))  # 10 bytes swapped header
+        resp += bytes([fins_frame[10], fins_frame[11]])  # MRC + SRC (echo)
+        resp += struct.pack(">H", 0x0000)  # End code: success
         return bytes(resp)
 
-    def _handle_controller_read(self, data: bytes, fins_frame: bytes) -> bytes:
+    def _build_controller_read_response(self, fins_frame: bytes) -> bytes:
+        """构建控制器读取 FINS 响应帧。"""
         device_config = self._device_configs.get(self._default_device_id or "")
         # FINS控制器读取响应数据布局(End Code之后):
         # Controller Model(1) + Controller Version(1) + System Version(2) + Controller Name(20) + Status(2) = 26 bytes
@@ -401,20 +456,25 @@ class FinsServer(ProtocolServer):
         controller_data[24:26] = struct.pack(">H", 0x0000)  # Controller Status: Normal
 
         resp = bytearray()
-        resp += struct.pack(">H", 0x0002)
-        resp += struct.pack(">H", 0x0000)
-        resp += struct.pack(">I", 0x00000000)
-        resp += bytes(self._swap_fins_header(fins_frame[0:10]))
-        resp += struct.pack(">H", 0x0000)
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))  # 10 bytes swapped header
+        resp += bytes([fins_frame[10], fins_frame[11]])  # MRC + SRC (echo)
+        resp += struct.pack(">H", 0x0000)  # End code: success
         resp += controller_data
+        return bytes(resp)
 
+    def _build_fins_error_frame(self, fins_frame: bytes, error_code: int) -> bytes:
+        """构建 FINS 错误响应帧（不含 FINS/TCP Command/ErrorCode 前缀）。"""
+        resp = bytearray()
+        resp += bytes(self._swap_fins_header(fins_frame[0:10]))  # 10 bytes swapped header
+        resp += bytes([fins_frame[10], fins_frame[11]])  # MRC + SRC (echo)
+        resp += struct.pack(">H", error_code)  # End code: error
         return bytes(resp)
 
     def _make_fins_error(self, error_code: int) -> bytes:
+        """构建标准 FINS/TCP 错误响应（Command(4) + ErrorCode(4)）。"""
         resp = bytearray()
-        resp += struct.pack(">H", 0x0002)
-        resp += struct.pack(">H", 0x0000)
-        resp += struct.pack(">I", error_code)
+        resp += struct.pack(">I", 0x00000002)  # Command: FINS frame send response
+        resp += struct.pack(">I", error_code)  # Error code
         return bytes(resp)
 
     async def create_device(self, device_config: DeviceConfig) -> str:

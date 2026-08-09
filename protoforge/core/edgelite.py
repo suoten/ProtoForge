@@ -243,9 +243,9 @@ _DRIVER_CONFIG_KNOWN_KEYS: dict[str, set[str]] = {
     "mqtt": {"broker", "port", "subscribe_topic", "publish_topic", "client_id", "username", "password", "tls_enabled", "tls_insecure", "timeout"},
     "http": {"push_url", "timeout"},
     "s7": {"ip", "rack", "slot"},
-    "mc": {"ip", "port", "plc_type", "timeout"},
-    "fins": {"ip", "port", "timeout"},
-    "ab": {"ip", "slot", "micrologix", "timeout"},
+    "mc": {"host", "ip", "port", "plc_type", "timeout", "backup_host", "backup_port", "batch_size"},
+    "fins": {"host", "ip", "port", "transport", "timeout", "source_node", "dest_node", "network_no", "unit_no", "plc_series", "backup_host", "backup_port", "batch_size", "udp_retries", "command_code", "direct_mode"},
+    "ab": {"ip", "port", "slot", "micrologix", "timeout", "connection_type", "plc_model"},
     "fanuc": {"ip", "port", "timeout"},
     "mtconnect": {"url", "timeout"},
     "toledo": {"ip", "port", "serial_port", "baudrate", "protocol", "timeout"},
@@ -579,9 +579,9 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
                 "rack": protocol_config.get("rack", 0),
                 "slot": protocol_config.get("slot", 1)}
     elif normalized_protocol == "mc":
-        base = {"ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": timeout}
+        base = {"host": host, "ip": host, "port": port or 5000, "plc_type": protocol_config.get("plc_type", "iQ-R"), "timeout": timeout}
     elif normalized_protocol == "fins":
-        base = {"ip": host, "port": port or 9600, "timeout": timeout}
+        base = {"host": host, "ip": host, "port": port or 9600, "transport": "tcp", "timeout": timeout}
     elif normalized_protocol == "ab":
         ab_port = port or 44818
         base = {"ip": host, "port": ab_port, "slot": protocol_config.get("slot", 0),
@@ -690,6 +690,7 @@ def _translate_point_address(
     protocol: str,
     address: Any,
     data_type: str = "float32",
+    device_id: str = "",
 ) -> dict[str, Any]:
     """将 ProtoForge 点位地址翻译为 EdgeLite 驱动所需格式。
 
@@ -752,7 +753,13 @@ def _translate_point_address(
         # 已是 EdgeLite 格式（DB1.D2）或非 DB 地址（I0.0 等），透传
         return {"address": addr_str}
 
-    # OPC-UA/MQTT/HTTP/其他：address 即 node_id/topic/path，透传
+    # OPC-UA: 字符串 NodeId 加设备 ID 前缀确保唯一性
+    # OPC UA 服务器为每个设备的字符串 NodeId 加了 device_id 前缀
+    # 推送到 EdgeLite 时也需要同步使用带前缀的地址
+    if norm == "opcua" and device_id and addr_str.startswith("ns=") and ";s=" in addr_str:
+        parts = addr_str.split(";s=", 1)
+        return {"address": f"{parts[0]};s={device_id}.{parts[1]}"}
+    # MQTT/HTTP/其他：address 即 topic/path，透传
     return {"address": addr_str}
 
 
@@ -760,13 +767,14 @@ def _build_points(
     points: list[dict[str, Any]],
     data_type_mapper: DataTypeMapper | None = None,
     protocol: str = "",
+    device_id: str = "",
 ) -> list[dict[str, Any]]:
     mapper = data_type_mapper or DataTypeMapper()
     result = []
     for p in points:
         source_dt = p.get("data_type", "float32")
         dt_result = mapper.map(source_dt)
-        addr_info = _translate_point_address(protocol, p.get("address", "0"), source_dt)
+        addr_info = _translate_point_address(protocol, p.get("address", "0"), source_dt, device_id=device_id)
         point_def: dict[str, Any] = {
             "name": p.get("name", ""),
             "data_type": dt_result.target_type,
@@ -828,12 +836,13 @@ def convert_device_to_edgelite(
             points_data.append(p)
 
     driver_config = _build_driver_config(protocol, config, protoforge_host, el_config)
-    edgelite_points = _build_points(points_data, data_type_mapper, protocol=protocol)
 
     raw_device_id = getattr(device, "id", "")
     normalized_id = _normalize_device_id(raw_device_id)
     if raw_device_id != normalized_id:
         logger.info("Device ID normalized for EdgeLite: %s -> %s", raw_device_id, normalized_id)
+
+    edgelite_points = _build_points(points_data, data_type_mapper, protocol=protocol, device_id=normalized_id)
 
     return {
         "device_id": normalized_id,
