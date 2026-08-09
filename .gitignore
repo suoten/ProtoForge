@@ -125,3 +125,24 @@ target/
 
 # Playwright test results
 web/test-results/
+
+# EdgeLite integration debug scripts (contain credentials, not for repo)
+scripts/debug_*.py
+scripts/check_el_*.py
+scripts/check_pf_*.py
+scripts/check_protoforge_*.py
+scripts/check_push_*.py
+scripts/clean_el_*.py
+scripts/cleanup_*.py
+scripts/clear_el_*.py
+scripts/fix_el_*.py
+scripts/quick_check_*.py
+scripts/reset_el_*.py
+scripts/snap7_*.py
+scripts/stage3_*.py
+scripts/verify_el_*.py
+scripts/test_fins_*.py
+scripts/test_ab_*.py
+scripts/test_all_*.py
+scripts/test_auto_*.py
+scripts/test_s7_*.py
