@@ -148,7 +148,7 @@ class McServer(ProtocolServer):
     protocol_name = "mc"
     protocol_display_name = "Mitsubishi MC"
 
-    SLMP_3E_BIN_SUBHEADER = 0x0054
+    SLMP_3E_BIN_SUBHEADER = 0x5000
     SLMP_3E_ASCII_SUBHEADER = b"5000"
 
     def __init__(self):
@@ -257,13 +257,16 @@ class McServer(ProtocolServer):
 
     def _process_slmp(self, data: bytes) -> bytes | None:
         if len(data) < 11:
+            print(f"[DEBUG MC] data too short: {len(data)} bytes", flush=True)
             return None
 
         if data[:4] == self.SLMP_3E_ASCII_SUBHEADER:
             return self._process_slmp_ascii(data)
 
-        subheader = struct.unpack("<H", data[0:2])[0]
+        subheader = struct.unpack(">H", data[0:2])[0]
+        print(f"[DEBUG MC] subheader=0x{subheader:04X} expected=0x{self.SLMP_3E_BIN_SUBHEADER:04X} match={subheader == self.SLMP_3E_BIN_SUBHEADER}", flush=True)
         if subheader != self.SLMP_3E_BIN_SUBHEADER:
+            print(f"[DEBUG MC] subheader mismatch!", flush=True)
             return self._make_error_response(data, 0xC059)
 
         network = data[2]
@@ -273,14 +276,15 @@ class McServer(ProtocolServer):
         struct.unpack("<H", data[7:9])[0]
         struct.unpack("<H", data[9:11])[0]
 
-        # FIXED-P1: 根据network/station/pc路由到匹配设备
         routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
 
         if len(data) < 15:
+            print(f"[DEBUG MC] data < 15: {len(data)}", flush=True)
             return self._make_error_response(data, 0xC059)
 
         cmd = struct.unpack("<H", data[11:13])[0]
         subcmd = struct.unpack("<H", data[13:15])[0]
+        print(f"[DEBUG MC] cmd=0x{cmd:04X} subcmd=0x{subcmd:04X} data_len={len(data)} device_id={routed_device_id}", flush=True)
 
         if cmd == 0x0401:
             return self._handle_read(data, subcmd, routed_device_id)
@@ -307,7 +311,7 @@ class McServer(ProtocolServer):
         start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
         word_count = struct.unpack("<H", data[19:21])[0]
 
-        if subcmd == 0x0000:
+        if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
             read_len = word_count * 2
         elif subcmd == 0x0001:
             read_len = word_count
@@ -320,7 +324,7 @@ class McServer(ProtocolServer):
             read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
 
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -339,7 +343,7 @@ class McServer(ProtocolServer):
         start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
         word_count = struct.unpack("<H", data[19:21])[0]
 
-        if subcmd == 0x0000:
+        if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
             write_len = word_count * 2
         elif subcmd == 0x0001:
             write_len = word_count
@@ -380,7 +384,7 @@ class McServer(ProtocolServer):
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
 
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -406,12 +410,12 @@ class McServer(ProtocolServer):
             device_code = data[offset + 2]
             offset += 3
             if behavior:
-                if subcmd == 0x0000:
+                if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
                     read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 使用read_memory_offset避免越界
                 elif subcmd == 0x0001:
                     read_data += behavior.read_memory_offset(device_code, start_addr, 1)  # FIXED-N06: 使用read_memory_offset避免越界
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -430,7 +434,7 @@ class McServer(ProtocolServer):
             return self._make_error_response(data, 0xC059)
         offset = 17
         for _ in range(min(point_count, 64)):
-            if subcmd == 0x0000:
+            if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
                 if offset + 5 > len(data):
                     break
                 start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
@@ -449,7 +453,7 @@ class McServer(ProtocolServer):
                     behavior.write_memory(device_code, start_addr, write_val)
                 offset += 4
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -459,7 +463,7 @@ class McServer(ProtocolServer):
 
     def _handle_self_test(self, data: bytes) -> bytes:
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         if len(data) >= 7:
             resp += data[2:7]
         else:
@@ -470,7 +474,7 @@ class McServer(ProtocolServer):
 
     def _make_error_response(self, data: bytes, error_code: int) -> bytes:
         resp = bytearray()
-        resp += struct.pack("<H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
         if len(data) >= 7:
             resp += data[2:7]
         else:
@@ -603,7 +607,7 @@ class McServer(ProtocolServer):
         except (ValueError, IndexError):
             return self._make_ascii_error_response(data, 0xC059)
 
-        if subcmd == 0x0000:
+        if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
             read_len = word_count * 2
         elif subcmd == 0x0001:
             read_len = word_count
@@ -672,7 +676,7 @@ class McServer(ProtocolServer):
                 break
             offset += 6
             if behavior:
-                if subcmd == 0x0000:
+                if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
                     mem = behavior.read_memory(device_code, start_addr + 2)
                     read_data += mem[start_addr:start_addr + 2]
                 elif subcmd == 0x0001:
@@ -696,7 +700,7 @@ class McServer(ProtocolServer):
             return self._make_ascii_error_response(data, 0xC059)
         offset = 40
         for _ in range(min(point_count, 64)):
-            if subcmd == 0x0000:
+            if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
                 if offset + 10 > len(data):
                     break
                 try:
