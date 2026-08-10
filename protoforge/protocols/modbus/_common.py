@@ -38,6 +38,10 @@ def parse_modbus_address(address: str) -> tuple[int, str]:
         "300100"     → (100, "input")      6-digit PLC notation (300001-399999)
         "000100"     → (100, "coil")       6-digit PLC notation (000001-099999)
         "100100"     → (100, "discrete")   6-digit PLC notation (100001-199999)
+        "40001"      → (0, "holding")      5-digit PLC notation (40001-49999)
+        "30001"      → (0, "input")        5-digit PLC notation (30001-39999)
+        "10001"      → (0, "discrete")     5-digit PLC notation (10001-19999)
+        "00001"      → (0, "coil")         5-digit PLC notation (00001-09999)
 
     :param address: 地址字符串
     :return: (偏移地址, 区域类型) 元组
@@ -46,6 +50,19 @@ def parse_modbus_address(address: str) -> tuple[int, str]:
     if not address:
         raise ValueError("Empty address")
     addr_str = str(address).strip().upper().replace(' ', '')
+
+    # 5-digit PLC address notation: 40001-49999, 30001-39999, 10001-19999, 00001-09999
+    if len(addr_str) == 5 and addr_str.isdigit():
+        addr_num = int(addr_str)
+        if 40001 <= addr_num <= 49999:
+            return addr_num - 40001, "holding"  # 40001 → address 0
+        elif 30001 <= addr_num <= 39999:
+            return addr_num - 30001, "input"
+        elif 10001 <= addr_num <= 19999:
+            return addr_num - 10001, "discrete"
+        elif 1 <= addr_num <= 9999:  # 00001-09999 (leading zeros)
+            return addr_num - 1, "coil"
+        # 5-digit numbers outside standard ranges (e.g. 50000-99999) fall through
 
     # 6-digit PLC address notation: 4xxxxx, 3xxxxx, 0xxxxx, 1xxxxx
     if len(addr_str) >= 6 and addr_str.isdigit():
