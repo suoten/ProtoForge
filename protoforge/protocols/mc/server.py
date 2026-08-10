@@ -299,9 +299,13 @@ class McServer(ProtocolServer):
         if len(data) < 21:
             return self._make_error_response(data, 0xC059)
 
-        start_addr = struct.unpack("<H", data[15:17])[0]
-        device_code = data[17]
-        word_count = struct.unpack("<H", data[18:20])[0]
+        # FIXED: MC 3E batch read request format:
+        # data[15] = device code (1 byte, e.g., 0xA8='D')
+        # data[16:19] = device number (3 bytes, little-endian)
+        # data[19:21] = number of points (2 bytes, little-endian)
+        device_code = data[15]
+        start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
+        word_count = struct.unpack("<H", data[19:21])[0]
 
         if subcmd == 0x0000:
             read_len = word_count * 2
@@ -330,9 +334,10 @@ class McServer(ProtocolServer):
         if len(data) < 21:
             return self._make_error_response(data, 0xC059)
 
-        start_addr = struct.unpack("<H", data[15:17])[0]
-        device_code = data[17]
-        word_count = struct.unpack("<H", data[18:20])[0]
+        # FIXED: Same parsing fix as _handle_read
+        device_code = data[15]
+        start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
+        word_count = struct.unpack("<H", data[19:21])[0]
 
         if subcmd == 0x0000:
             write_len = word_count * 2
