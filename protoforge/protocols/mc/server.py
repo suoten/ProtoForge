@@ -257,16 +257,13 @@ class McServer(ProtocolServer):
 
     def _process_slmp(self, data: bytes) -> bytes | None:
         if len(data) < 11:
-            print(f"[DEBUG MC] data too short: {len(data)} bytes", flush=True)
             return None
 
         if data[:4] == self.SLMP_3E_ASCII_SUBHEADER:
             return self._process_slmp_ascii(data)
 
         subheader = struct.unpack(">H", data[0:2])[0]
-        print(f"[DEBUG MC] subheader=0x{subheader:04X} expected=0x{self.SLMP_3E_BIN_SUBHEADER:04X} match={subheader == self.SLMP_3E_BIN_SUBHEADER}", flush=True)
         if subheader != self.SLMP_3E_BIN_SUBHEADER:
-            print(f"[DEBUG MC] subheader mismatch!", flush=True)
             return self._make_error_response(data, 0xC059)
 
         network = data[2]
@@ -279,13 +276,10 @@ class McServer(ProtocolServer):
         routed_device_id = self._find_device_by_params(network, req_dest_station, pc)
 
         if len(data) < 15:
-            print(f"[DEBUG MC] data < 15: {len(data)}", flush=True)
             return self._make_error_response(data, 0xC059)
 
         cmd = struct.unpack("<H", data[11:13])[0]
         subcmd = struct.unpack("<H", data[13:15])[0]
-        print(f"[DEBUG MC] cmd=0x{cmd:04X} subcmd=0x{subcmd:04X} data_len={len(data)} device_id={routed_device_id}", flush=True)
-
         if cmd == 0x0401:
             return self._handle_read(data, subcmd, routed_device_id)
         elif cmd == 0x0402:
