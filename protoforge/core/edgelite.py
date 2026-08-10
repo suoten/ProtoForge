@@ -753,6 +753,21 @@ def _translate_point_address(
         # 已是 EdgeLite 格式（DB1.D2）或非 DB 地址（I0.0 等），透传
         return {"address": addr_str}
 
+    # FINS: EdgeLite driver's _parse_address defaults to data_type="w" (word),
+    # which returns raw bytes b'\x00\x00' instead of a parsed value.
+    # Append the correct FINS data_type suffix based on the point's data_type
+    # so the driver reads using the correct type (r=float, i=int16, etc.).
+    if norm == "fins" and addr_str:
+        _FINS_DT_MAP = {
+            "float32": "r", "float64": "r",
+            "int16": "i", "uint16": "w",
+            "int32": "dw", "uint32": "dw",
+            "bool": "b", "string": "str",
+        }
+        fins_dt = _FINS_DT_MAP.get(data_type, "")
+        if fins_dt and "," not in addr_str:
+            return {"address": f"{addr_str},{fins_dt}"}
+
     # OPC-UA: 字符串 NodeId 加设备 ID 前缀确保唯一性
     # OPC UA 服务器为每个设备的字符串 NodeId 加了 device_id 前缀
     # 推送到 EdgeLite 时也需要同步使用带前缀的地址
