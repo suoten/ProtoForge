@@ -215,7 +215,7 @@ class FinsServer(ProtocolServer):
                                   writer: asyncio.StreamWriter) -> None:
         addr = writer.get_extra_info("peername")
         logger.debug("FINS connection from %s", addr)
-        _READ_TIMEOUT = 30  # FIXED: Slowloris防护—无超时reader.readexactly可被恶意连接永久阻塞
+        _READ_TIMEOUT = 120  # FIXED: Increase from 30s to 120s to prevent premature connection close when multiple devices share the FINS driver
         try:
             while self._server_running:
                 header = await asyncio.wait_for(reader.readexactly(8), timeout=_READ_TIMEOUT)
