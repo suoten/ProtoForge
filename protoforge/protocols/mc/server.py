@@ -25,7 +25,7 @@ from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, Standa
 
 logger = logging.getLogger(__name__)
 
-_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+_READ_TIMEOUT = 120  # FIXED: Increase from 30s to 120s to prevent idle connection close when multiple devices share the scheduler
 
 
 class McDeviceBehavior(StandardDeviceBehavior):
