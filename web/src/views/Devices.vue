@@ -442,22 +442,41 @@
             </n-card>
 
             <!-- 网络仿真状态 -->
-            <n-card v-if="detailData.network_sim" size="small" :title="t('devices.networkSimulation')">
+            <n-card size="small" :title="t('devices.networkSimulation')">
               <n-space align="center" size="small">
-                <n-tag :type="detailData.network_sim.enabled ? 'success' : 'default'" size="small" :bordered="false">
+                <n-tag v-if="detailData.network_sim" :type="detailData.network_sim.enabled ? 'success' : 'default'" size="small" :bordered="false">
                   {{ detailData.network_sim.enabled ? t('devices.networkEnabled') : t('devices.networkDisabled') }}
                 </n-tag>
-                <n-text v-if="detailData.network_sim.enabled && detailData.network_sim.profile" depth="3" style="font-size:12px">
+                <n-text v-if="detailData.network_sim && detailData.network_sim.enabled && detailData.network_sim.profile" depth="3" style="font-size:12px">
                   {{ t('devices.networkLatency') }}: {{ detailData.network_sim.profile.latency_ms }}ms |
                   {{ t('devices.networkJitter') }}: {{ detailData.network_sim.profile.jitter_ms }}ms |
                   {{ t('devices.networkPacketLoss') }}: {{ (detailData.network_sim.profile.packet_loss_rate * 100).toFixed(1) }}%
                 </n-text>
+                <n-button size="tiny" @click="showNetworkModal = true">{{ t('devices.configureNetwork') }}</n-button>
               </n-space>
             </n-card>
           </n-space>
         </n-spin>
         <template #action>
           <n-button @click="showDetailModal = false">{{ t('common.close') }}</n-button>
+        </template>
+      </n-modal>
+
+      <!-- 网络仿真配置弹窗 -->
+      <n-modal v-model:show="showNetworkModal" preset="card" :title="t('devices.configureNetwork')" style="width:min(480px, 90vw)">
+        <n-space vertical size="medium">
+          <n-form-item :label="t('devices.networkProfile')">
+            <n-select v-model:value="networkForm.profile" :options="networkProfileOptions" />
+          </n-form-item>
+          <n-form-item :label="t('devices.networkEnabled')">
+            <n-switch v-model:value="networkForm.enabled" />
+          </n-form-item>
+        </n-space>
+        <template #action>
+          <n-space>
+            <n-button @click="showNetworkModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="doConfigureNetwork" :loading="networkConfigLoading">{{ t('common.confirm') }}</n-button>
+          </n-space>
         </template>
       </n-modal>
 
@@ -547,6 +566,19 @@ const stateEventValue = ref('')
 const stateReasonValue = ref('')
 const faultInjectLoading = ref(false)
 const loopAddLoading = ref(false)
+
+// 网络仿真
+const showNetworkModal = ref(false)
+const networkConfigLoading = ref(false)
+const networkForm = ref({ profile: 'wan', enabled: false })
+const networkProfileOptions = computed(() => [
+  { label: 'Ideal', value: 'ideal' },
+  { label: 'LAN', value: 'lan' },
+  { label: 'WAN', value: 'wan' },
+  { label: t('devices.wireless') || 'Wireless', value: 'wireless' },
+  { label: 'Satellite', value: 'satellite' },
+  { label: t('devices.degraded') || 'Degraded', value: 'degraded' },
+])
 const faultForm = ref({ fault_type: 'sensor_drift', target: '*', duration: -1, severity: 'medium', trigger_mode: 'manual' })
 const loopForm = ref({ loop_id: '', loop_type: 'simple', setpoint_point: '', measurement_point: '', output_point: '' })
 
@@ -1529,6 +1561,18 @@ async function openDeviceDetail(id) {
   } catch (e) {
     message.error(t('devices.loadDetailFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { detailLoading.value = false }
+}
+
+async function doConfigureNetwork() {
+  networkConfigLoading.value = true
+  try {
+    await api.configureNetwork(networkForm.value.profile, networkForm.value.enabled)
+    message.success(t('devices.networkConfigured'))
+    showNetworkModal.value = false
+    if (detailDeviceId.value) await refreshDetail()
+  } catch (e) {
+    message.error(t('devices.networkConfigFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { networkConfigLoading.value = false }
 }
 
 async function refreshDetail() {
