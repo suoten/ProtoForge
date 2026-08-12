@@ -365,7 +365,7 @@ class S7Server(ProtocolServer):
     _MAX_PDU_SIZE = 960
     _DEFAULT_AMQ = 8
     _MAX_AMQ = 64
-    _CONNECTION_TIMEOUT = 30  # 与modbus保持一致
+    _CONNECTION_TIMEOUT = 120  # FIXED: Increase from 30s to 120s to prevent idle connection close when multiple devices share the scheduler
 
     def __init__(self):
         super().__init__()
