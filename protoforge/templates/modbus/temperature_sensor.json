@@ -19,7 +19,7 @@
     },
     {
       "name": "humidity",
-      "address": "1",
+      "address": "2",
       "data_type": "float32",
       "unit": "%RH",
       "description": "环境湿度",
@@ -30,7 +30,7 @@
     },
     {
       "name": "alarm_temp_high",
-      "address": "2",
+      "address": "4",
       "data_type": "bool",
       "description": "高温报警",
       "access": "rw",
@@ -39,7 +39,7 @@
     },
     {
       "name": "alarm_humidity_high",
-      "address": "3",
+      "address": "5",
       "data_type": "bool",
       "description": "高湿报警",
       "access": "rw",
