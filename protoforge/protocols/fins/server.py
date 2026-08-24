@@ -24,6 +24,7 @@ from typing import Any
 from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.fins.value_codec import FinsValueCodec
 
 logger = logging.getLogger(__name__)
 
@@ -60,70 +61,6 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         0x33: 0xB3,  # AR bit -> AR word
         0x02: 0x82,  # DM bit -> DM word
     }
-
-    @staticmethod
-    def _data_type_name(point: Any) -> str:
-        data_type = getattr(point, "data_type", "") if point else ""
-        return str(getattr(data_type, "value", data_type) or "").lower()
-
-    @classmethod
-    def _type_width(cls, point: Any) -> int:
-        """返回点位在 FINS 字节内存中的宽度。"""
-        dt = cls._data_type_name(point)
-        if dt in ("int32", "uint32", "dint", "float32"):
-            return 4
-        if dt == "float64":
-            return 8
-        return 2
-
-    @classmethod
-    def _encode_value(cls, point: Any, value: Any) -> bytes:
-        """统一把点位值编码为 FINS 内存中的大端字节。"""
-        dt = cls._data_type_name(point)
-        if dt == "bool":
-            return struct.pack(">H", 1 if bool(value) else 0)
-        if dt == "float32":
-            return struct.pack(">f", float(value))
-        if dt == "float64":
-            return struct.pack(">d", float(value))
-        if dt == "int16":
-            return struct.pack(">h", int(value))
-        if dt == "uint16":
-            return struct.pack(">H", int(value) & 0xFFFF)
-        if dt in ("int32", "dint"):
-            return struct.pack(">i", int(value))
-        if dt == "uint32":
-            return struct.pack(">I", int(value) & 0xFFFFFFFF)
-        if dt == "string" or isinstance(value, str):
-            return str(value).encode("utf-8")
-        return struct.pack(">h", int(value) & 0xFFFF)
-
-    @classmethod
-    def _decode_value(cls, point: Any, data: bytes) -> Any:
-        """统一把 FINS 内存字节解码为点位值。数据不足时不解码。"""
-        dt = cls._data_type_name(point)
-        if dt == "string":
-            if not data:
-                return None
-            return data.rstrip(b"\x00").decode("utf-8", errors="replace")
-        width = cls._type_width(point)
-        if len(data) < width:
-            return None
-        if dt == "bool":
-            return int.from_bytes(data[:2], byteorder="big") != 0
-        if dt == "float32":
-            return struct.unpack(">f", data[:4])[0]
-        if dt == "float64":
-            return struct.unpack(">d", data[:8])[0]
-        if dt == "int16":
-            return struct.unpack(">h", data[:2])[0]
-        if dt == "uint16":
-            return struct.unpack(">H", data[:2])[0]
-        if dt in ("int32", "dint"):
-            return struct.unpack(">i", data[:4])[0]
-        if dt == "uint32":
-            return struct.unpack(">I", data[:4])[0]
-        return struct.unpack(">h", data[:2])[0]
 
     @staticmethod
     def _parse_fins_address(address: str) -> tuple[int, int]:
@@ -165,7 +102,6 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         area, offset = self._point_addresses[point_name]
         try:
             point = self._points.get(point_name)
-            dt = self._data_type_name(point)
             if point_name in self._point_bit_addresses:
                 word_area, word_address, bit_address = self._point_bit_addresses[point_name]
                 current = int.from_bytes(
@@ -180,7 +116,7 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                     current.to_bytes(2, byteorder="big"),
                 )
                 return
-            data = self._encode_value(point, value)
+            data = FinsValueCodec.encode(point, value)
             self.write_area(area, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("FINS on_write value conversion error for %s: %s", point_name, e)
@@ -297,8 +233,8 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
             if name in self._point_bit_addresses or point_area != word_area:
                 continue
             point = self._points.get(name)
-            width = self._type_width(point)
-            dt = self._data_type_name(point)
+            width = FinsValueCodec.width(point)
+            dt = FinsValueCodec.type_name(point)
             point_end = point_offset + width
             if dt == "string":
                 # 字符串长度由本次写入和下一个点位的地址共同确定，避免按旧值长度截断。
@@ -315,7 +251,7 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                 continue
             start = point_offset - write_start
             chunk_end = min(point_end, write_end)
-            value = self._decode_value(point, data[start:chunk_end - write_start])
+            value = FinsValueCodec.decode(point, data[start:chunk_end - write_start])
             if value is not None:
                 self._values[name] = value
                 self._written_values[name] = value

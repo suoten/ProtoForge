@@ -1,4 +1,5 @@
 from protoforge.protocols.fins.server import FinsDeviceBehavior
+from protoforge.protocols.fins.value_codec import FinsValueCodec
 from protoforge.models.device import DataType, PointConfig
 
 
@@ -43,7 +44,7 @@ def test_word_write_syncs_all_supported_point_types() -> None:
     # 模拟客户端将每个点的原始字节写入 FINS DM 区域，再同步回页面点位。
     for name, value in values.items():
         point = next(point for point in points if point.name == name)
-        raw = behavior._encode_value(point, value)
+        raw = FinsValueCodec.encode(point, value)
         word_address = int(point.address[2:])
         behavior.write_area(0x82, word_address * 2, raw)
         behavior.sync_word_write_to_points(0x82, word_address, raw)
@@ -60,7 +61,7 @@ def test_word_write_syncs_all_supported_point_types() -> None:
 def test_word_write_can_sync_point_when_write_starts_before_it() -> None:
     point = PointConfig(name="f32", address="DM101", data_type=DataType.FLOAT32)
     behavior = FinsDeviceBehavior([point])
-    raw = behavior._encode_value(point, 3.5)
+    raw = FinsValueCodec.encode(point, 3.5)
 
     behavior.write_area(0x82, 100 * 2, b"\x00\x00" + raw)
     behavior.sync_word_write_to_points(0x82, 100, b"\x00\x00" + raw)
