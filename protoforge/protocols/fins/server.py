@@ -33,12 +33,16 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         super().__init__(points)
         self._memory_areas: dict[int, bytearray] = {}
         self._point_addresses: dict[str, tuple[int, int]] = {}
+        self._point_bit_addresses: dict[str, tuple[int, int, int]] = {}
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 address = getattr(p, 'address', '0') or '0'
                 area, offset = self._parse_fins_address(str(address))
                 self._point_addresses[name] = (area, offset)
+                bit_address = self._parse_fins_bit_address(str(address))
+                if bit_address:
+                    self._point_bit_addresses[name] = bit_address
                 self._sync_value_to_area(name, self._values.get(name, 0))
 
     # FIXED-P0: FINS标准符号地址到区域代码映射
@@ -48,6 +52,78 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         'EM': 0x90, 'E': 0x90, 'TIM': 0x09, 'T': 0x09,
         'CNT': 0x08, 'C': 0x08,
     }
+
+    _FINS_BIT_AREA_MAP = {
+        0x30: 0xB0,  # CIO bit -> CIO word
+        0x31: 0xB1,  # WR bit -> WR word
+        0x32: 0xB2,  # HR bit -> HR word
+        0x33: 0xB3,  # AR bit -> AR word
+        0x02: 0x82,  # DM bit -> DM word
+    }
+
+    @staticmethod
+    def _data_type_name(point: Any) -> str:
+        data_type = getattr(point, "data_type", "") if point else ""
+        return str(getattr(data_type, "value", data_type) or "").lower()
+
+    @classmethod
+    def _type_width(cls, point: Any) -> int:
+        """返回点位在 FINS 字节内存中的宽度。"""
+        dt = cls._data_type_name(point)
+        if dt in ("int32", "uint32", "dint", "float32"):
+            return 4
+        if dt == "float64":
+            return 8
+        return 2
+
+    @classmethod
+    def _encode_value(cls, point: Any, value: Any) -> bytes:
+        """统一把点位值编码为 FINS 内存中的大端字节。"""
+        dt = cls._data_type_name(point)
+        if dt == "bool":
+            return struct.pack(">H", 1 if bool(value) else 0)
+        if dt == "float32":
+            return struct.pack(">f", float(value))
+        if dt == "float64":
+            return struct.pack(">d", float(value))
+        if dt == "int16":
+            return struct.pack(">h", int(value))
+        if dt == "uint16":
+            return struct.pack(">H", int(value) & 0xFFFF)
+        if dt in ("int32", "dint"):
+            return struct.pack(">i", int(value))
+        if dt == "uint32":
+            return struct.pack(">I", int(value) & 0xFFFFFFFF)
+        if dt == "string" or isinstance(value, str):
+            return str(value).encode("utf-8")
+        return struct.pack(">h", int(value) & 0xFFFF)
+
+    @classmethod
+    def _decode_value(cls, point: Any, data: bytes) -> Any:
+        """统一把 FINS 内存字节解码为点位值。数据不足时不解码。"""
+        dt = cls._data_type_name(point)
+        if dt == "string":
+            if not data:
+                return None
+            return data.rstrip(b"\x00").decode("utf-8", errors="replace")
+        width = cls._type_width(point)
+        if len(data) < width:
+            return None
+        if dt == "bool":
+            return int.from_bytes(data[:2], byteorder="big") != 0
+        if dt == "float32":
+            return struct.unpack(">f", data[:4])[0]
+        if dt == "float64":
+            return struct.unpack(">d", data[:8])[0]
+        if dt == "int16":
+            return struct.unpack(">h", data[:2])[0]
+        if dt == "uint16":
+            return struct.unpack(">H", data[:2])[0]
+        if dt in ("int32", "dint"):
+            return struct.unpack(">i", data[:4])[0]
+        if dt == "uint32":
+            return struct.unpack(">I", data[:4])[0]
+        return struct.unpack(">h", data[:2])[0]
 
     @staticmethod
     def _parse_fins_address(address: str) -> tuple[int, int]:
@@ -70,29 +146,41 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         except (ValueError, IndexError):
             return (0x82, 0)
 
+    @staticmethod
+    def _parse_fins_bit_address(address: str) -> tuple[int, int, int] | None:
+        match = re.match(r'^([A-Za-z]+)(\d+)\.(\d+)$', address.strip())
+        if not match:
+            return None
+        prefix = match.group(1).upper()
+        word_address = int(match.group(2))
+        bit_address = int(match.group(3))
+        if not 0 <= bit_address <= 15:
+            return None
+        word_area = FinsDeviceBehavior._FINS_AREA_MAP.get(prefix, 0x82)
+        return word_area, word_address, bit_address
+
     def _sync_value_to_area(self, point_name: str, value: Any) -> None:
         if point_name not in self._point_addresses:
             return
         area, offset = self._point_addresses[point_name]
         try:
             point = self._points.get(point_name)
-            dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
-            if dt in ("float32",) or (not dt and isinstance(value, float)):
-                data = struct.pack(">f", float(value))
-            elif dt in ("float64",):
-                data = struct.pack(">d", float(value))
-            elif dt in ("int16",):
-                data = struct.pack(">h", int(value))
-            elif dt in ("uint16",):
-                data = struct.pack(">H", int(value) & 0xFFFF)
-            elif dt in ("int32", "dint"):
-                data = struct.pack(">i", int(value))
-            elif dt in ("uint32",):
-                data = struct.pack(">I", int(value) & 0xFFFFFFFF)
-            elif dt in ("string",) or isinstance(value, str):
-                data = str(value).encode("utf-8")
-            else:
-                data = struct.pack(">h", int(value) & 0xFFFF)
+            dt = self._data_type_name(point)
+            if point_name in self._point_bit_addresses:
+                word_area, word_address, bit_address = self._point_bit_addresses[point_name]
+                current = int.from_bytes(
+                    self.read_area(word_area, word_address * 2, 2),
+                    byteorder="big",
+                )
+                mask = 1 << bit_address
+                current = (current | mask) if bool(value) else (current & ~mask)
+                self.write_area(
+                    word_area,
+                    word_address * 2,
+                    current.to_bytes(2, byteorder="big"),
+                )
+                return
+            data = self._encode_value(point, value)
             self.write_area(area, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("FINS on_write value conversion error for %s: %s", point_name, e)
@@ -136,6 +224,101 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         if end > len(buf):
             buf.extend(bytearray(end - len(buf)))
         buf[offset:offset + len(data)] = data
+
+    def read_bits(self, bit_area: int, word_address: int,
+                  bit_address: int, count: int) -> bytes:
+        word_area = self._FINS_BIT_AREA_MAP.get(bit_area)
+        if word_area is None:
+            return bytes(count)
+
+        result = bytearray(count)
+        for index in range(count):
+            absolute_bit = bit_address + index
+            current_word = word_address + absolute_bit // 16
+            current_bit = absolute_bit % 16
+            raw = self.read_area(word_area, current_word * 2, 2)
+            word = int.from_bytes(raw, byteorder="big")
+            result[index] = 1 if word & (1 << current_bit) else 0
+        return bytes(result)
+
+    def write_bits(self, bit_area: int, word_address: int,
+                   bit_address: int, values: bytes) -> None:
+        word_area = self._FINS_BIT_AREA_MAP.get(bit_area)
+        if word_area is None:
+            return
+
+        changed_bits: list[tuple[int, int, bool]] = []
+        for index, value in enumerate(values):
+            absolute_bit = bit_address + index
+            current_word = word_address + absolute_bit // 16
+            current_bit = absolute_bit % 16
+            raw = self.read_area(word_area, current_word * 2, 2)
+            word = int.from_bytes(raw, byteorder="big")
+            mask = 1 << current_bit
+            is_on = value != 0
+            word = (word | mask) if is_on else (word & ~mask)
+            self.write_area(
+                word_area,
+                current_word * 2,
+                word.to_bytes(2, byteorder="big"),
+            )
+            changed_bits.append((current_word, current_bit, is_on))
+
+        for name, (point_area, point_word, point_bit) in self._point_bit_addresses.items():
+            if point_area != word_area:
+                continue
+            for changed_word, changed_bit, is_on in changed_bits:
+                if point_word == changed_word and point_bit == changed_bit:
+                    self._values[name] = is_on
+                    self._written_values[name] = is_on
+
+    def sync_word_bits_to_points(self, word_area: int, word_address: int,
+                                 data: bytes) -> None:
+        """字写入后，同步覆盖范围内的位测点。"""
+        word_count = len(data) // 2
+        for name, (point_area, point_word, point_bit) in self._point_bit_addresses.items():
+            if point_area != word_area:
+                continue
+            relative_word = point_word - word_address
+            if not 0 <= relative_word < word_count:
+                continue
+            start = relative_word * 2
+            word = int.from_bytes(data[start:start + 2], byteorder="big")
+            value = bool(word & (1 << point_bit))
+            self._values[name] = value
+            self._written_values[name] = value
+
+    def sync_word_write_to_points(self, word_area: int, word_address: int,
+                                  data: bytes) -> None:
+        """把协议层的字写入统一同步回所有重叠的非位点位。"""
+        write_start = word_address * 2
+        write_end = write_start + len(data)
+        for name, (point_area, point_offset) in self._point_addresses.items():
+            if name in self._point_bit_addresses or point_area != word_area:
+                continue
+            point = self._points.get(name)
+            width = self._type_width(point)
+            dt = self._data_type_name(point)
+            point_end = point_offset + width
+            if dt == "string":
+                # 字符串长度由本次写入和下一个点位的地址共同确定，避免按旧值长度截断。
+                next_offsets = [
+                    other_offset
+                    for other_name, (other_area, other_offset) in self._point_addresses.items()
+                    if other_name != name
+                    and other_name not in self._point_bit_addresses
+                    and other_area == word_area
+                    and other_offset > point_offset
+                ]
+                point_end = min(min(next_offsets, default=write_end), write_end)
+            if point_offset < write_start or point_end > write_end:
+                continue
+            start = point_offset - write_start
+            chunk_end = min(point_end, write_end)
+            value = self._decode_value(point, data[start:chunk_end - write_start])
+            if value is not None:
+                self._values[name] = value
+                self._written_values[name] = value
 
 
 class FinsServer(ProtocolServer):
@@ -364,15 +547,20 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
+        bit_addr = fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
         if word_count == 0 or word_count > 1000:
             return self._build_fins_error_frame(fins_frame, 0x0204)
 
-        read_size = word_count * 2
+        is_bit_access = area in FinsDeviceBehavior._FINS_BIT_AREA_MAP
+        read_size = word_count if is_bit_access else word_count * 2
         read_data = bytearray(read_size)
         behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
-            read_data = behavior.read_area(area, word_addr * 2, read_size)
+            if is_bit_access:
+                read_data = behavior.read_bits(area, word_addr, bit_addr, word_count)
+            else:
+                read_data = behavior.read_area(area, word_addr * 2, read_size)
 
         resp = bytearray()
         resp += bytes(self._swap_fins_header(fins_frame[0:10]))  # 10 bytes swapped header
@@ -388,39 +576,22 @@ class FinsServer(ProtocolServer):
 
         area = fins_frame[12]
         word_addr = struct.unpack(">H", fins_frame[13:15])[0]
+        bit_addr = fins_frame[15]
         word_count = struct.unpack(">H", fins_frame[16:18])[0] if len(fins_frame) >= 18 else 1
         if word_count == 0 or word_count > 1000:
             return self._build_fins_error_frame(fins_frame, 0x0204)
 
-        write_data = fins_frame[18:18 + word_count * 2] if len(fins_frame) >= 18 + word_count * 2 else b""
+        is_bit_access = area in FinsDeviceBehavior._FINS_BIT_AREA_MAP
+        data_size = word_count if is_bit_access else word_count * 2
+        write_data = fins_frame[18:18 + data_size] if len(fins_frame) >= 18 + data_size else b""
         behavior = self._behaviors.get(self._default_device_id or "")
         if behavior:
-            behavior.write_area(area, word_addr * 2, write_data)
-            for name, (p_area, p_offset) in behavior._point_addresses.items():
-                if p_area == area and p_offset == word_addr * 2:
-                    try:
-                        pt = behavior._points.get(name)
-                        dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
-                        if dt in ("float32",) and len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
-                        elif dt in ("float64",) and len(write_data) >= 8:
-                            behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
-                        elif dt in ("int16",) and len(write_data) >= 2:
-                            behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
-                        elif dt in ("uint16",) and len(write_data) >= 2:
-                            behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
-                        elif dt in ("int32", "dint") and len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
-                        elif dt in ("uint32",) and len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
-                        elif dt in ("bool",) and len(write_data) >= 1:
-                            behavior._values[name] = bool(write_data[0])
-                        elif len(write_data) >= 4:
-                            behavior._values[name] = struct.unpack(">f", write_data[:4])[0]
-                        elif len(write_data) >= 2:
-                            behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
-                    except (struct.error, IndexError) as e:
-                        logger.warning("FINS write value sync error for %s: %s", name, e)
+            if is_bit_access:
+                behavior.write_bits(area, word_addr, bit_addr, write_data)
+            else:
+                behavior.write_area(area, word_addr * 2, write_data)
+                behavior.sync_word_bits_to_points(area, word_addr, write_data)
+                behavior.sync_word_write_to_points(area, word_addr, write_data)
             self._log_debug("recv", "fins_write",
                             f"Write area {area} offset {word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
@@ -614,33 +785,8 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         behavior = server._behaviors.get(server._default_device_id or "")
         if behavior:
             behavior.write_area(area, word_addr * 2, write_data)
-            # FIXED-H10: UDP写入后同步更新点值，与TCP写入保持一致
-            for name, (p_area, p_offset) in behavior._point_addresses.items():
-                if area == p_area:
-                    try:
-                        pt = behavior._points.get(name)
-                        dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
-                        byte_offset = p_offset - word_addr * 2
-                        if 0 <= byte_offset < len(write_data):
-                            chunk = write_data[byte_offset:]
-                            if dt in ("float32",) and len(chunk) >= 4:
-                                behavior._values[name] = struct.unpack(">f", chunk[:4])[0]
-                            elif dt in ("float64",) and len(chunk) >= 8:
-                                behavior._values[name] = struct.unpack(">d", chunk[:8])[0]
-                            elif dt in ("int16",) and len(chunk) >= 2:
-                                behavior._values[name] = struct.unpack(">h", chunk[:2])[0]
-                            elif dt in ("uint16",) and len(chunk) >= 2:
-                                behavior._values[name] = struct.unpack(">H", chunk[:2])[0]
-                            elif dt in ("int32", "dint") and len(chunk) >= 4:
-                                behavior._values[name] = struct.unpack(">i", chunk[:4])[0]
-                            elif dt in ("uint32",) and len(chunk) >= 4:
-                                behavior._values[name] = struct.unpack(">I", chunk[:4])[0]
-                            elif dt in ("bool",):
-                                behavior._values[name] = bool(chunk[0]) if chunk else False
-                            elif len(chunk) >= 4:
-                                behavior._values[name] = struct.unpack(">i", chunk[:4])[0]
-                    except (struct.error, IndexError) as e:
-                        logger.warning("FINS UDP write value sync error for %s: %s", name, e)
+            behavior.sync_word_bits_to_points(area, word_addr, write_data)
+            behavior.sync_word_write_to_points(area, word_addr, write_data)
         return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:

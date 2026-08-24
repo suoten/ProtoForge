@@ -63,6 +63,7 @@ _test_*.py
 test_output*.txt
 test_proto.txt
 test_*.py
+!tests/test_fins_bits.py
 test_screenshots/
 p4_*.txt
 test_*.txt
