@@ -291,7 +291,12 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
 async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
     try:
-        return engine.get_device(device_id)
+        # 设备详情和测点接口必须使用同一份实时数据。
+        # 仅调用 engine.get_device() 会返回 DeviceInstance 缓存，
+        # FINS 等协议的外部写入可能已经更新协议内存，但缓存仍是旧值。
+        device = engine.get_device(device_id)
+        device.points = await engine.read_device_points(device_id)
+        return device
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
