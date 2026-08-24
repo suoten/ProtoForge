@@ -485,7 +485,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, h, unref } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, h, unref } from 'vue'
 import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
   NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
@@ -548,6 +548,8 @@ const writeLoading = ref(false)
 const resetLoading = ref(false)
 const currentViewDeviceId = ref('')
 const currentViewDeviceInfo = ref(null)
+let pointsPollingTimer = null
+let pointsPollingInFlight = false
 const togglingIds = ref(new Set())
 const deletingIds = ref(new Set())
 
@@ -1326,6 +1328,41 @@ async function viewPoints(id) {
   } catch (e) { message.error(t('devices.readPointsFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }
 
+async function refreshCurrentPoints() {
+  if (!currentViewDeviceId.value || pointsPollingInFlight) return
+
+  pointsPollingInFlight = true
+  try {
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = Array.isArray(res?.points) ? res.points : (Array.isArray(res) ? res : [])
+  } catch (e) {
+    // 轮询失败时保留上一次数据显示，避免弹窗每秒弹出错误提示。
+    console.debug('Failed to refresh device points:', e.message)
+  } finally {
+    pointsPollingInFlight = false
+  }
+}
+
+function stopPointsPolling() {
+  if (pointsPollingTimer !== null) {
+    window.clearInterval(pointsPollingTimer)
+    pointsPollingTimer = null
+  }
+}
+
+function startPointsPolling() {
+  stopPointsPolling()
+  pointsPollingTimer = window.setInterval(refreshCurrentPoints, 1000)
+}
+
+watch(showPointsModal, (visible) => {
+  if (visible) {
+    startPointsPolling()
+  } else {
+    stopPointsPolling()
+  }
+})
+
 async function writeDevicePointQuick() {
   if (!currentViewDeviceId.value || !writePointName.value) {
     message.warning(t('devices.pleaseSelectPoint'))
@@ -1657,4 +1694,5 @@ async function doRemoveControlLoop(loopId) {
 }
 
 onMounted(loadData)
+onBeforeUnmount(stopPointsPolling)
 </script>
