@@ -186,6 +186,7 @@ class ModbusTcpServer(ProtocolServer):
     # 之前 "stop" → 0x04 导致未启动的设备（slave_id != 1 的设备）无法被 pymodbus/EdgeLite 采集。
     _STATE_EXCEPTION_CODES: dict[str, int] = {
         "error": 0x04,       # Slave Device Failure (硬件故障)
+        "stop": 0x04,        # Slave Device Failure (设备已停止)
         "starting": 0x05,   # Acknowledge (启动中，请稍后重试)
         "stopping": 0x05,   # Acknowledge (停机中，请稍后重试)
         "maintenance": 0x06, # Slave Device Busy (维护中)
@@ -688,34 +689,33 @@ class ModbusTcpServer(ProtocolServer):
                     store.input_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
                 else:
                     store.input_regs[addr] = int(value) & 0xFFFF
-            else:  # holding or auto
-                if point.data_type.value in ("bool",):
-                    store.coils[addr] = int(bool(value))
-                elif point.data_type.value in ("float32",):
-                    data = struct.pack(">f", float(value))
-                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("float64",):
-                    data = struct.pack(">d", float(value))
-                    for j in range(4):
-                        store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
-                elif point.data_type.value in ("int32",):
-                    data = struct.pack(">i", int(value))
-                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("uint32",):
-                    data = struct.pack(">I", int(value))
-                    store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
-                    store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
-                elif point.data_type.value in ("string",):
-                    encoded = str(value).encode("utf-8")
-                    if len(encoded) % 2:
-                        encoded += b'\x00'
-                    for j in range(0, len(encoded), 2):
-                        word = encoded[j:j + 2]
-                        store.holding_regs[addr + j // 2] = struct.unpack(">H", word)[0]
-                else:
-                    store.holding_regs[addr] = int(value) & 0xFFFF
+            elif point.data_type.value in ("bool",):
+                store.coils[addr] = int(bool(value))
+            elif point.data_type.value in ("float32",):
+                data = struct.pack(">f", float(value))
+                store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+            elif point.data_type.value in ("float64",):
+                data = struct.pack(">d", float(value))
+                for j in range(4):
+                    store.holding_regs[addr + j] = struct.unpack(">H", data[j * 2:j * 2 + 2])[0]
+            elif point.data_type.value in ("int32",):
+                data = struct.pack(">i", int(value))
+                store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+            elif point.data_type.value in ("uint32",):
+                data = struct.pack(">I", int(value))
+                store.holding_regs[addr] = struct.unpack(">H", data[0:2])[0]
+                store.holding_regs[addr + 1] = struct.unpack(">H", data[2:4])[0]
+            elif point.data_type.value in ("string",):
+                encoded = str(value).encode("utf-8")
+                if len(encoded) % 2:
+                    encoded += b'\x00'
+                for j in range(0, len(encoded), 2):
+                    word = encoded[j:j + 2]
+                    store.holding_regs[addr + j // 2] = struct.unpack(">H", word)[0]
+            else:
+                store.holding_regs[addr] = int(value) & 0xFFFF
         except (ValueError, TypeError) as e:
             logger.warning("Failed to write register %s: %s", point.address, e)
 

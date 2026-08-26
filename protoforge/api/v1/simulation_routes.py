@@ -9,7 +9,7 @@ import math
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from protoforge.api.v1._helpers import _get_database, _get_engine
@@ -1343,7 +1343,6 @@ async def auto_calibrate_device(
         snapshot = snapshots[0]
 
     real_values = snapshot.get("point_values", {})
-    max_iterations = int(body.get("max_iterations", 10))
     tolerance_pct = float(body.get("tolerance_pct", 5.0)) / 100.0
     auto_apply = bool(body.get("auto_apply", False))
 

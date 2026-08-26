@@ -1063,17 +1063,16 @@ class Database:
                 )
                 await self._db.commit()
                 return cursor.rowcount
+        elif self._is_postgres:
+            count_result = await self._fetchone("SELECT COUNT(*) as cnt FROM audit_log")
+            count = count_result["cnt"] if count_result else 0
+            await self._execute("DELETE FROM audit_log")
+            return count
         else:
-            if self._is_postgres:
-                count_result = await self._fetchone("SELECT COUNT(*) as cnt FROM audit_log")
-                count = count_result["cnt"] if count_result else 0
-                await self._execute("DELETE FROM audit_log")
-                return count
-            else:
-                assert self._db is not None, "SQLite database not connected"
-                cursor = await self._db.execute("DELETE FROM audit_log")
-                await self._db.commit()
-                return cursor.rowcount
+            assert self._db is not None, "SQLite database not connected"
+            cursor = await self._db.execute("DELETE FROM audit_log")
+            await self._db.commit()
+            return cursor.rowcount
 
     async def save_recording(self, recording_data: dict[str, Any]) -> None:
         sql = self._upsert_sql("recordings", ["id", "name", "protocol", "start_time", "end_time", "messages", "metadata"])

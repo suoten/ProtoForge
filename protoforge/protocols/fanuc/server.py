@@ -70,28 +70,28 @@ class FanucDeviceBehavior(StandardDeviceBehavior):
                 self._cnc_status["feed_override"] = value
             elif point_name.startswith("abs_pos_"):
                 try:
-                    idx = int(point_name.split("_")[-1])
+                    idx = int(point_name.rsplit("_", maxsplit=1)[-1])
                     if 0 <= idx < len(self._cnc_status["absolute_pos"]):
                         self._cnc_status["absolute_pos"][idx] = value
                 except (ValueError, IndexError) as e:
                     logger.debug("FANUC on_write abs_pos index error for %s: %s", point_name, e)
             elif point_name.startswith("machine_pos_"):
                 try:
-                    idx = int(point_name.split("_")[-1])
+                    idx = int(point_name.rsplit("_", maxsplit=1)[-1])
                     if 0 <= idx < len(self._cnc_status["machine_pos"]):
                         self._cnc_status["machine_pos"][idx] = value
                 except (ValueError, IndexError) as e:
                     logger.debug("FANUC on_write machine_pos index error for %s: %s", point_name, e)
             elif point_name.startswith("rel_pos_"):
                 try:
-                    idx = int(point_name.split("_")[-1])
+                    idx = int(point_name.rsplit("_", maxsplit=1)[-1])
                     if 0 <= idx < len(self._cnc_status["relative_pos"]):
                         self._cnc_status["relative_pos"][idx] = value
                 except (ValueError, IndexError) as e:
                     logger.debug("FANUC on_write rel_pos index error for %s: %s", point_name, e)
             elif point_name.startswith("dist_pos_"):
                 try:
-                    idx = int(point_name.split("_")[-1])
+                    idx = int(point_name.rsplit("_", maxsplit=1)[-1])
                     if 0 <= idx < len(self._cnc_status["distance_pos"]):
                         self._cnc_status["distance_pos"][idx] = value
                 except (ValueError, IndexError) as e:
@@ -526,7 +526,7 @@ class FanucServer(ProtocolServer):
             behavior._cnc_status["program"] = str(value)
         elif point_name.startswith("abs_pos_"):
             try:
-                idx = int(point_name.split("_")[-1])
+                idx = int(point_name.rsplit("_", maxsplit=1)[-1])
                 if idx < len(behavior._cnc_status["absolute_pos"]):
                     behavior._cnc_status["absolute_pos"][idx] = value
                     behavior._cnc_status["machine_pos"][idx] = value

@@ -31,7 +31,7 @@ import logging
 import struct
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from protoforge.core.messages import desc, msg
@@ -178,13 +178,8 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             # 格式: I0.0, IB0, IW0, ID4
             if addr_upper.startswith('I') or addr_upper.startswith('E'):
                 # S7 中 E(德语 Eingang) = I(英语 Input)
-                prefix = addr_upper[0]
                 rest = addr_upper[1:]
-                if rest.startswith('B'):
-                    offset = int(rest[1:] or '0')
-                elif rest.startswith('W'):
-                    offset = int(rest[1:] or '0')
-                elif rest.startswith('D'):
+                if rest.startswith('B') or rest.startswith('W') or rest.startswith('D'):
                     offset = int(rest[1:] or '0')
                 elif '.' in rest:
                     byte_str, _ = rest.split('.')
@@ -198,11 +193,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             # S7 中 A(德语 Ausgang) = Q(英语 Output)
             if addr_upper.startswith('Q') or addr_upper.startswith('A'):
                 rest = addr_upper[1:]
-                if rest.startswith('B'):
-                    offset = int(rest[1:] or '0')
-                elif rest.startswith('W'):
-                    offset = int(rest[1:] or '0')
-                elif rest.startswith('D'):
+                if rest.startswith('B') or rest.startswith('W') or rest.startswith('D'):
                     offset = int(rest[1:] or '0')
                 elif '.' in rest:
                     byte_str, _ = rest.split('.')
@@ -748,8 +739,7 @@ class S7Server(ProtocolServer):
 
             if read_size <= 0:
                 read_size = 1
-            if read_size > 65535:
-                read_size = 65535
+            read_size = min(read_size, 65535)
 
             value_bytes = b"\x00" * read_size
             behavior = self._behaviors.get(device_id or self._default_device_id or "")
@@ -966,7 +956,6 @@ class S7Server(ProtocolServer):
         # If SZL_ID couldn't be extracted (data too short or 0x0000), default to 0x001C for get_cpu_info
 
         # Extract request parameters for echo
-        req_method = data[21] if len(data) > 21 else 0x11
         req_type_group = data[22] if len(data) > 22 else 0x44
         req_sub_func = data[23] if len(data) > 23 else 0x01
         req_data_ref = data[24] if len(data) > 24 else 0x00
@@ -989,7 +978,6 @@ class S7Server(ProtocolServer):
         #   NDR (2 bytes, uint16) = number of data records
         #   Record data (LengthDR * NDR bytes)
         record_data = szl_records
-        record_len = len(record_data) // max(1, 1)  # Will be set properly below
         num_records = 1
         # If szl_records already has LengthDR+NDR header (from _build_szl_cpu_features), use it directly
         if szl_id == 0x001C and len(record_data) >= 4:

@@ -188,14 +188,17 @@ class ModbusDataStore:
     def set_values(self, fc: int, address: int, values: list[Any]) -> None:
         for i, v in enumerate(values):
             addr = address + i
-            if fc in (1, 5, 15):
-                self._coils[addr] = int(bool(v))
-            elif fc == 2:
-                self._discrete_inputs[addr] = int(bool(v))
-            elif fc in (3, 6, 16, 22, 23):
-                self._holding_regs[addr] = int(v) & 0xFFFF
-            elif fc == 4:
-                self._input_regs[addr] = int(v) & 0xFFFF
+            try:
+                if fc in (1, 5, 15):
+                    self._coils[addr] = int(bool(v))
+                elif fc == 2:
+                    self._discrete_inputs[addr] = int(bool(v))
+                elif fc in (3, 6, 16, 22, 23):
+                    self._holding_regs[addr] = int(v) & 0xFFFF
+                elif fc == 4:
+                    self._input_regs[addr] = int(v) & 0xFFFF
+            except (ValueError, TypeError) as e:
+                logger.warning("Modbus set_values conversion error for fc=%d addr=%d: %s", fc, addr, e)
 
     def get_values(self, fc: int, address: int, count: int = 1) -> list[Any]:
         result = []

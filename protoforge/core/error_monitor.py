@@ -23,7 +23,6 @@ from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 
 logger = logging.getLogger("protoforge.error_monitor")
 
@@ -177,7 +176,7 @@ class ErrorMonitorMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status = response.status_code
             return response
-        except Exception as exc:
+        except Exception:
             exc_info = traceback.format_exc()
             raise
         finally:

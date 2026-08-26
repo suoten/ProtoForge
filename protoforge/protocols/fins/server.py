@@ -696,15 +696,19 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + b"\x00\x00"
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        data[3]
+        bit_addr = data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         if word_count == 0 or word_count > 1000:  # FIXED-N17: UDP读取word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0x0204)
         behavior = server._behaviors.get(server._default_device_id or "")
-        read_size = word_count * 2
+        is_bit_access = area in FinsDeviceBehavior._FINS_BIT_AREA_MAP
+        read_size = word_count if is_bit_access else word_count * 2
         resp_data = bytearray(read_size)
         if behavior:
-            resp_data = behavior.read_area(area, word_addr * 2, read_size)
+            if is_bit_access:
+                resp_data = behavior.read_bits(area, word_addr, bit_addr, word_count)
+            else:
+                resp_data = behavior.read_area(area, word_addr * 2, read_size)
         return bytes(self._swap_fins_header(header)) + bytes([0x01, 0x01]) + struct.pack(">H", 0) + bytes(resp_data)
 
     def _handle_memory_write_udp(self, data: bytes, header: bytes) -> bytes:
@@ -713,16 +717,21 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
         server = self._server
         area = data[0]
         word_addr = struct.unpack(">H", data[1:3])[0]
-        data[3]
+        bit_addr = data[3]
         word_count = struct.unpack(">H", data[4:6])[0]
         if word_count == 0 or word_count > 1000:  # FIXED-N18: UDP写入word_count上限校验
             return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0x0204)
-        write_data = data[6:6 + word_count * 2] if len(data) >= 6 + word_count * 2 else data[6:]
         behavior = server._behaviors.get(server._default_device_id or "")
+        is_bit_access = area in FinsDeviceBehavior._FINS_BIT_AREA_MAP
+        data_size = word_count if is_bit_access else word_count * 2
+        write_data = data[6:6 + data_size] if len(data) >= 6 + data_size else data[6:]
         if behavior:
-            behavior.write_area(area, word_addr * 2, write_data)
-            behavior.sync_word_bits_to_points(area, word_addr, write_data)
-            behavior.sync_word_write_to_points(area, word_addr, write_data)
+            if is_bit_access:
+                behavior.write_bits(area, word_addr, bit_addr, write_data)
+            else:
+                behavior.write_area(area, word_addr * 2, write_data)
+                behavior.sync_word_bits_to_points(area, word_addr, write_data)
+                behavior.sync_word_write_to_points(area, word_addr, write_data)
         return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:

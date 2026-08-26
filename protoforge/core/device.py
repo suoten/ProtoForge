@@ -368,11 +368,6 @@ class DeviceInstance:
                 except Exception as e:
                     logger.warning("Device %s: control loop tick error: %s", self.config.id, e)
 
-    def set_point_value_internal(self, point_name: str, value: Any) -> None:
-        """直接设置点位值（内部方法，用于时序模式覆盖等）。"""
-        if point_name in self._point_values:
-            self._point_values[point_name] = value
-
     def clear_written_points(self, point_name: str = "") -> None:
         """清除外部写入标记，恢复生成器动态输出。
 

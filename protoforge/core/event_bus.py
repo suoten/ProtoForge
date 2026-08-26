@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Event:
-    timestamp: float = field(default_factory=lambda: time.time())
+    timestamp: float = field(default_factory=time.time)
 
 
 @dataclass

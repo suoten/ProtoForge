@@ -208,7 +208,6 @@ class IntegrationManager:
         # 初始化 HTTP 客户端
         # FIX: 使用更长的超时（30秒），因为 EdgeLite push-device API 需要启动驱动+连接设备+采集数据
         # 原 10 秒超时在本地联调时频繁导致 push 超时失败
-        from protoforge.core.defaults import HTTP_TIMEOUT_LONG
         self._http_client = httpx.AsyncClient(
             base_url=self._edgelite_url.rstrip("/"),
             limits=httpx.Limits(
@@ -824,7 +823,7 @@ class IntegrationManager:
                     "ok": False,
                     "error": f"EdgeLite cannot start driver for {payload.get('protocol', '')}: {err_detail}",
                     "error_type": "driver_failed",
-                    "suggestion": f"EdgeLite 驱动可能无法连接到 ProtoForge。请检查: 1) 协议服务是否已启动 2) EdgeLite 是否安装了对应驱动的依赖库",
+                    "suggestion": "EdgeLite 驱动可能无法连接到 ProtoForge。请检查: 1) 协议服务是否已启动 2) EdgeLite 是否安装了对应驱动的依赖库",
                     "driver_config": payload.get("config", {}),
                 }
             return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}

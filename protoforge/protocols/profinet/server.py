@@ -205,10 +205,9 @@ class ProfinetDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
                 if offset + 4 <= len(data):
                     self._values[point.name] = struct.unpack(">f", data[offset:offset + 4])[0]
                     offset += 4
-            else:
-                if offset + 2 <= len(data):
-                    self._values[point.name] = struct.unpack(">H", data[offset:offset + 2])[0]
-                    offset += 2
+            elif offset + 2 <= len(data):
+                self._values[point.name] = struct.unpack(">H", data[offset:offset + 2])[0]
+                offset += 2
 
 
 class ProfinetServer(ProtocolServer):

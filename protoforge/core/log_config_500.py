@@ -21,6 +21,8 @@
       access.log              # 访问日志
 """
 
+import json
+import logging
 import os
 from pathlib import Path
 
@@ -233,7 +235,6 @@ class _JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
-        import json as _json
         log_entry = {
             "ts": self.formatTime(record, "%Y-%m-%d %H:%M:%S"),
             "level": record.levelname,
@@ -261,4 +262,4 @@ class _JsonFormatter(logging.Formatter):
         if hasattr(record, "duration_ms"):
             log_entry["duration_ms"] = record.duration_ms
 
-        return self._json.dumps(log_entry, ensure_ascii=False)
+        return json.dumps(log_entry, ensure_ascii=False)

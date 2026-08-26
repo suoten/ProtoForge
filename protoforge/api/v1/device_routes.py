@@ -292,8 +292,9 @@ async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_vie
     engine = _get_engine()
     try:
         # 设备详情和测点接口必须使用同一份实时数据。
-        # 仅调用 engine.get_device() 会返回 DeviceInstance 缓存，
-        # FINS 等协议的外部写入可能已经更新协议内存，但缓存仍是旧值。
+        # engine.get_device() 内部调用 instance.read_all_points() 读取内存值，
+        # 但 FINS 等协议的外部写入可能已经更新协议层内存，内存值未必同步。
+        # 因此额外调用 read_device_points() 从协议服务器获取实时值。
         device = engine.get_device(device_id)
         device.points = await engine.read_device_points(device_id)
         return device
@@ -593,7 +594,7 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
 # ===========================================================================
 
 @router.post("/devices/{device_id}/points/{point_name}/reset", response_model=dict)
-async def reset_device_point(device_id: str, point_name: str):
+async def reset_device_point(device_id: str, point_name: str, _user: dict[str, Any] = Depends(require_operator)):
     """清除点位的外部写入缓存，恢复生成器动态输出。
 
     当用户通过 API 写入点位值后，该点位会被"冻结"在写入值上
@@ -622,7 +623,7 @@ async def reset_device_point(device_id: str, point_name: str):
 
 
 @router.post("/devices/{device_id}/points/reset-all", response_model=dict)
-async def reset_all_device_points(device_id: str):
+async def reset_all_device_points(device_id: str, _user: dict[str, Any] = Depends(require_operator)):
     """清除设备所有点位的外部写入缓存，恢复全部生成器动态输出。"""
     engine = _get_engine()
     instance = engine.get_device_instance(device_id)

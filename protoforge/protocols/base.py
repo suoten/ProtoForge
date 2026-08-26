@@ -79,15 +79,10 @@ class ProtocolServer(ABC):
         """检查当前帧是否应被丢弃（CRC错误或丢包）。"""
         if self._network_sim is None:
             return False
-        # 优先检查 CRC 错误
-        if hasattr(self._network_sim, 'should_inject_crc_error'):
-            if self._network_sim.should_inject_crc_error():
-                return True
-        # 其次检查丢包
-        if hasattr(self._network_sim, 'should_drop'):
-            if self._network_sim.should_drop():
-                return True
-        return False
+        # 优先检查 CRC 错误，其次检查丢包
+        if hasattr(self._network_sim, 'should_inject_crc_error') and self._network_sim.should_inject_crc_error():
+            return True
+        return hasattr(self._network_sim, 'should_drop') and self._network_sim.should_drop()
 
     def should_simulate_half_open(self) -> bool:
         """检查是否应模拟半开连接。"""

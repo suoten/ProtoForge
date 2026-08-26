@@ -1566,52 +1566,50 @@ def _build_connect_error(driver_config: dict[str, Any], protocol: str, protoforg
             parts.append(desc("edgelite.connect.address_not_specified_same_server"))
         else:
             parts.append(desc("edgelite.connect.ip_not_specified"))
-    else:
-        if protocol == "s7":
-            parts.append(desc("edgelite.connect.cannot_connect_no_port").format(proto=proto_name, host=driver_host))
-            parts.append(desc("edgelite.connect.s7_fixed_port"))
-            parts.append(desc("edgelite.connect.s7_check_port"))
-            if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(desc("edgelite.connect.same_server_set_localhost"))
-        elif protocol == "http":
-            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
-            parts.append(desc("edgelite.connect.http_passive_mode"))
-            parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
-            if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(desc("edgelite.connect.same_server_set_localhost"))
-        elif protocol == "mqtt":
-            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
-            if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
-            parts.append(desc("edgelite.connect.confirm_mqtt_broker"))
-            if driver_port and default_port and str(driver_port) != str(default_port):
-                parts.append(desc("edgelite.connect.port_not_default").format(port=driver_port, default_port=default_port))
-            else:
-                parts.append(desc("edgelite.connect.confirm_mqtt_port").format(port=driver_port or 1883))
-            parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
-            if same_server:
-                parts.append(desc("edgelite.connect.check_process"))
-        elif protocol == "sparkplug_b":
-            parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
-            if same_server and driver_host not in ("127.0.0.1", "localhost"):
-                parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
-            parts.append(desc("edgelite.connect.sparkplug_b_mqtt"))
-            parts.append(desc("edgelite.connect.confirm_port").format(port=driver_port or 1883))
-            parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
+    elif protocol == "s7":
+        parts.append(desc("edgelite.connect.cannot_connect_no_port").format(proto=proto_name, host=driver_host))
+        parts.append(desc("edgelite.connect.s7_fixed_port"))
+        parts.append(desc("edgelite.connect.s7_check_port"))
+        if same_server and driver_host not in ("127.0.0.1", "localhost"):
+            parts.append(desc("edgelite.connect.same_server_set_localhost"))
+    elif protocol == "http":
+        parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+        parts.append(desc("edgelite.connect.http_passive_mode"))
+        parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
+        if same_server and driver_host not in ("127.0.0.1", "localhost"):
+            parts.append(desc("edgelite.connect.same_server_set_localhost"))
+    elif protocol == "mqtt":
+        parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+        if same_server and driver_host not in ("127.0.0.1", "localhost"):
+            parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
+        parts.append(desc("edgelite.connect.confirm_mqtt_broker"))
+        if driver_port and default_port and str(driver_port) != str(default_port):
+            parts.append(desc("edgelite.connect.port_not_default").format(port=driver_port, default_port=default_port))
         else:
-            if same_server:
-                parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
-                if driver_host not in ("127.0.0.1", "localhost"):
-                    parts.append(desc("edgelite.connect.same_server_set_localhost_current").format(host=driver_host))
-                if driver_port and default_port and str(driver_port) != str(default_port):
-                    parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
-                parts.append(desc("edgelite.connect.check_service_port").format(proto=proto_name, port=driver_port))
-            else:
-                parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
-                if driver_port and default_port and str(driver_port) != str(default_port):
-                    parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
-                parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
-                parts.append(desc("edgelite.connect.enter_reachable_ip"))
+            parts.append(desc("edgelite.connect.confirm_mqtt_port").format(port=driver_port or 1883))
+        parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
+        if same_server:
+            parts.append(desc("edgelite.connect.check_process"))
+    elif protocol == "sparkplug_b":
+        parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+        if same_server and driver_host not in ("127.0.0.1", "localhost"):
+            parts.append(desc("edgelite.connect.important_same_server").format(host=driver_host))
+        parts.append(desc("edgelite.connect.sparkplug_b_mqtt"))
+        parts.append(desc("edgelite.connect.confirm_port").format(port=driver_port or 1883))
+        parts.append(desc("edgelite.connect.test_network_telnet").format(host=driver_host, port=driver_port or 1883))
+    elif same_server:
+        parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+        if driver_host not in ("127.0.0.1", "localhost"):
+            parts.append(desc("edgelite.connect.same_server_set_localhost_current").format(host=driver_host))
+        if driver_port and default_port and str(driver_port) != str(default_port):
+            parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
+        parts.append(desc("edgelite.connect.check_service_port").format(proto=proto_name, port=driver_port))
+    else:
+        parts.append(desc("edgelite.connect.cannot_connect").format(proto=proto_name, host=driver_host, port=driver_port))
+        if driver_port and default_port and str(driver_port) != str(default_port):
+            parts.append(desc("edgelite.connect.port_not_default_proto").format(port=driver_port, proto=proto_name, default_port=default_port))
+        parts.append(desc("edgelite.connect.check_service_ip_port").format(proto=proto_name, host=driver_host, port=driver_port))
+        parts.append(desc("edgelite.connect.enter_reachable_ip"))
 
     return {
         "ok": False,

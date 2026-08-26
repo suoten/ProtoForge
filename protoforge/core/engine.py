@@ -560,7 +560,7 @@ class SimulationEngine:
                 len(config.points) == len(old_config.points)
                 and all(
                     p1.name == p2.name and p1.address == p2.address and p1.data_type == p2.data_type
-                    for p1, p2 in zip(config.points, old_config.points)
+                    for p1, p2 in zip(config.points, old_config.points, strict=False)
                 )
             )
             if points_unchanged:

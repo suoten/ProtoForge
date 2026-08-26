@@ -154,8 +154,7 @@ async def query_audit_log(
     try:
         if limit < 1 or limit > 10000:
             limit = min(max(limit, 1), 10000)
-        if offset < 0:
-            offset = 0
+        offset = max(offset, 0)
         from protoforge.core.audit import audit_logger
         entries, total = await audit_logger.query(
             username=username, action=action, resource_type=resource_type,

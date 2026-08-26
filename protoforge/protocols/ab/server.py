@@ -351,7 +351,7 @@ class AbServer(ProtocolServer):
         p = path_end
         if p + 1 > len(cip_data):
             p = 2  # fallback
-        priority_timeout = cip_data[p] if p < len(cip_data) else 0
+        # Skip priority/timeout byte
         p += 1
         o_t_conn_id = struct.unpack("<I", cip_data[p:p+4])[0] if p+4 <= len(cip_data) else 0x00000001
         p += 4
