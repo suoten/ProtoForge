@@ -63,6 +63,17 @@ async def test_create_and_get_device(client: AsyncClient):
     assert data["id"] == "test-device-001"
     assert data["name"] == "test-sensor"
 
+    write_response = await client.put(
+        "/api/v1/devices/test-device-001/points/temperature",
+        json={"value": 23.5},
+    )
+    assert write_response.status_code == 200
+
+    # 设备详情必须读取协议实时值，不能返回 DeviceInstance 的旧缓存。
+    response = await client.get("/api/v1/devices/test-device-001")
+    assert response.status_code == 200
+    assert response.json()["points"][0]["value"] == 23.5
+
     response = await client.get("/api/v1/devices/test-device-001/points")
     assert response.status_code == 200
     assert len(response.json()) >= 1
