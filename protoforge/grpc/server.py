@@ -26,7 +26,7 @@ except ImportError:
 
 def _get_engine():
     try:
-        from protoforge.core.registry import get_engine
+        from protoforge.engine.registry import get_engine
         return get_engine()
     except RuntimeError:
         return None
@@ -34,7 +34,7 @@ def _get_engine():
 
 def _get_database():
     try:
-        from protoforge.core.registry import get_database
+        from protoforge.engine.registry import get_database
         return get_database()
     except RuntimeError:
         return None
@@ -146,7 +146,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             points = []
             if request.template_id:
                 try:
-                    from protoforge.core.template import TemplateManager
+                    from protoforge.engine.template import TemplateManager
                     tm = TemplateManager()
                     template = tm.get_template(request.template_id)
                     if template and hasattr(template, 'points'):

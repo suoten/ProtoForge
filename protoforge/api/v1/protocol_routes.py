@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from protoforge.api.v1._helpers import _get_engine, _get_log_bus
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.core.defaults import get_friendly_error
-from protoforge.core.messages import get_lang_from_request
+from protoforge.engine.defaults import get_friendly_error
+from protoforge.observability.messages import get_lang_from_request
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,8 +20,8 @@ async def list_protocols(request: Request, _user: dict[str, Any] = Depends(requi
     engine = _get_engine()
     lang = get_lang_from_request(request)
     protocols = engine.get_protocols()
-    from protoforge.core.defaults import PROTOCOL_DEFAULTS, get_protocol_defaults
-    from protoforge.core.messages import desc
+    from protoforge.engine.defaults import PROTOCOL_DEFAULTS, get_protocol_defaults
+    from protoforge.observability.messages import desc
     result = []
     for p in protocols:
         entry = dict(p)
@@ -36,7 +36,7 @@ async def list_protocols(request: Request, _user: dict[str, Any] = Depends(requi
 
 @router.get("/protocols/info")
 async def get_protocols_info(request: Request, _user: dict[str, Any] = Depends(require_viewer)):
-    from protoforge.core.defaults import get_all_protocol_info
+    from protoforge.engine.defaults import get_all_protocol_info
     lang = get_lang_from_request(request)
     return {"protocols": get_all_protocol_info(lang=lang)}
 
@@ -53,8 +53,8 @@ async def get_protocol_config(protocol_name: str, _user: dict[str, Any] = Depend
 
 @router.get("/protocols/{protocol_name}/device-config")
 async def get_protocol_device_config(protocol_name: str, _user: dict[str, Any] = Depends(require_viewer)):
-    from protoforge.core.defaults import PROTOCOL_DEVICE_CONFIG
-    from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
+    from protoforge.engine.defaults import PROTOCOL_DEVICE_CONFIG
+    from protoforge.integrations.edgelite import EDGELITE_PUSH_FIELDS
     config = list(PROTOCOL_DEVICE_CONFIG.get(protocol_name, []))
     if protocol_name != "gb28181":
         config.extend(EDGELITE_PUSH_FIELDS)
@@ -66,7 +66,7 @@ async def start_all_protocols(request: Request, _user: dict[str, Any] = Depends(
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
-    from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
+    from protoforge.engine.defaults import get_friendly_error, get_protocol_defaults
     results = {"started": [], "failed": [], "skipped": [], "port_warnings": []}
 
     # 筛选需要启动的协议（已运行的跳过）
@@ -169,7 +169,7 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
     engine = _get_engine()
     log_bus = _get_log_bus()
     lang = get_lang_from_request(request)
-    from protoforge.core.defaults import get_friendly_error, get_protocol_defaults
+    from protoforge.engine.defaults import get_friendly_error, get_protocol_defaults
     if config is None:
         config = get_protocol_defaults(protocol_name, lang=lang)
     original_port = config.get("port")

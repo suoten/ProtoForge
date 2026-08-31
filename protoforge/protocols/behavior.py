@@ -7,13 +7,14 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from protoforge.core.behavior_models import BaseBehavior, create_behavior, get_behavior_input
 from protoforge.models.device import GeneratorType, PointConfig
 from protoforge.protocols.base import (  # noqa: F401  # re-exported for protocol modules
     DeviceBehavior,
+    ProtocolErrorCategory,
     ProtocolServer,
     ProtocolStatus,
 )
+from protoforge.simulation.behavior_models import BaseBehavior, create_behavior, get_behavior_input
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,7 @@ class DynamicValueGenerator:
         if not self._script_code:
             return self._last_value
         try:
-            from protoforge.core.generator import SafeEval
+            from protoforge.engine.generator import SafeEval
             evaluator = SafeEval({
                 "t": time.time() - self._start_time,
                 "value": self._last_value,

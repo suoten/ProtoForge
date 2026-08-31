@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 @router.get("/webhooks")
 async def list_webhooks(_user: dict[str, Any] = Depends(require_viewer)):
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         return {"webhooks": webhook_manager.list_webhooks()}
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
@@ -28,7 +28,7 @@ async def list_webhooks(_user: dict[str, Any] = Depends(require_viewer)):
 @router.post("/webhooks")
 async def add_webhook(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
 
         if "url" not in config:
             raise HTTPException(status_code=400, detail="url is required")
@@ -53,7 +53,7 @@ async def add_webhook(config: dict[str, Any], _user: dict[str, Any] = Depends(re
 @router.put("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
 async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
 
         url = config.get("url", "")
         if url is not None and not isinstance(url, str):
@@ -77,7 +77,7 @@ async def update_webhook(webhook_id: str, config: dict[str, Any], _user: dict[st
 @router.delete("/webhooks/{webhook_id}")  # FIXED: wh_id→webhook_id 命名统一
 async def delete_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         if not webhook_manager.remove_webhook(webhook_id):  # FIXED: wh_id→webhook_id 命名统一
             raise HTTPException(status_code=404, detail="Webhook not found")
         return {"status": "ok"}
@@ -91,7 +91,7 @@ async def delete_webhook(webhook_id: str, _user: dict[str, Any] = Depends(requir
 @router.post("/webhooks/{webhook_id}/test")  # FIXED: wh_id→webhook_id 命名统一
 async def test_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_operator)):  # FIXED: wh_id→webhook_id 命名统一
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         webhook = webhook_manager.get_webhook(webhook_id)  # FIXED: wh_id→webhook_id 命名统一
         if not webhook:
             raise HTTPException(status_code=404, detail="Webhook not found")
@@ -106,7 +106,7 @@ async def test_webhook(webhook_id: str, _user: dict[str, Any] = Depends(require_
 @router.get("/webhooks/stats")
 async def webhook_stats(_user: dict[str, Any] = Depends(require_viewer)):
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         return webhook_manager.get_stats()
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500

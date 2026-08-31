@@ -31,7 +31,7 @@ def _get_version() -> str:
 async def setup_demo(_user: dict[str, Any] = Depends(require_admin)):
     engine = _get_engine()
     tm = _get_template_manager()
-    from protoforge.core.demo import seed_demo_data
+    from protoforge.engine.demo import seed_demo_data
     try:
         await seed_demo_data(engine, tm)
         devices = engine.get_all_device_ids()
@@ -46,7 +46,7 @@ async def setup_demo(_user: dict[str, Any] = Depends(require_admin)):
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except Exception as e:
         logger.exception("Failed to setup demo: %s", e)
-        from protoforge.core.defaults import get_friendly_error
+        from protoforge.engine.defaults import get_friendly_error
         raise HTTPException(status_code=500, detail=get_friendly_error(str(e))) from e
 
 
@@ -111,7 +111,7 @@ async def update_settings(updates: dict[str, Any], _user: dict[str, Any] = Depen
         if edgelite_keys & set(filtered.keys()):
             try:
                 from protoforge.config import get_settings
-                from protoforge.core.registry import get_integration_manager
+                from protoforge.engine.registry import get_integration_manager
                 mgr = get_integration_manager()
                 settings = get_settings()
                 # 先停止旧连接
@@ -155,7 +155,7 @@ async def query_audit_log(
         if limit < 1 or limit > 10000:
             limit = min(max(limit, 1), 10000)
         offset = max(offset, 0)
-        from protoforge.core.audit import audit_logger
+        from protoforge.observability.audit import audit_logger
         entries, total = await audit_logger.query(
             username=username, action=action, resource_type=resource_type,
             start_time=start_time, end_time=end_time,
@@ -172,7 +172,7 @@ async def query_audit_log(
 @router.get("/audit/stats")
 async def get_audit_stats(_user: dict[str, Any] = Depends(require_admin)):
     try:
-        from protoforge.core.audit import audit_logger
+        from protoforge.observability.audit import audit_logger
         return await audit_logger.get_stats()
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
@@ -245,7 +245,7 @@ async def get_error_stats(_user: dict[str, Any] = Depends(require_admin)):
     返回总请求数、500 错误数、4xx 错误数、错误率、Top 错误路径和最近错误列表。
     """
     try:
-        from protoforge.core.error_monitor import get_error_stats as _get_stats
+        from protoforge.observability.error_monitor import get_error_stats as _get_stats
         return _get_stats().get_stats()
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
@@ -258,7 +258,7 @@ async def get_error_stats(_user: dict[str, Any] = Depends(require_admin)):
 async def reset_error_stats(_user: dict[str, Any] = Depends(require_admin)):
     """重置 500 错误监控统计数据。"""
     try:
-        from protoforge.core.error_monitor import get_error_stats as _get_stats
+        from protoforge.observability.error_monitor import get_error_stats as _get_stats
         _get_stats().reset()
         return {"status": "ok"}
     except HTTPException:

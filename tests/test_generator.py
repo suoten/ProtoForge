@@ -1,10 +1,10 @@
-"""Unit tests for protoforge.core.generator DataGenerator and SafeEval."""
+"""Unit tests for protoforge.engine.generator DataGenerator and SafeEval."""
 
 import math
 
 import pytest
 
-from protoforge.core.generator import SafeEval, ScriptEngine, DataGenerator
+from protoforge.engine.generator import SafeEval, ScriptEngine, DataGenerator
 from protoforge.models.device import DataType, GeneratorType, PointConfig
 
 

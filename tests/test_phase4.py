@@ -7,10 +7,10 @@ os.environ["PROTOFORGE_NO_AUTH"] = "1"
 
 from httpx import ASGITransport, AsyncClient
 
-from protoforge.core.engine import SimulationEngine
-from protoforge.core.log_bus import LogBus
-from protoforge.core.template import TemplateManager
-from protoforge.core.testing import (
+from protoforge.engine.engine import SimulationEngine
+from protoforge.observability.log_bus import LogBus
+from protoforge.engine.template import TemplateManager
+from protoforge.simulation.testing import (
     AssertionEngine, Assertion, AssertionType, VariableStore,
     TestCase, TestStep, TestSuite, TestRunner, TestStatus,
 )
@@ -20,7 +20,7 @@ from protoforge.protocols.modbus.rtu_server import ModbusRtuServer
 from protoforge.protocols.bacnet.server import BACnetServer
 from protoforge.protocols.s7.server import S7Server
 import protoforge.main as main_module
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     clear_all as _clear_registry,
     register_database as _register_database,
     register_engine as _register_engine,
@@ -265,7 +265,7 @@ class TestTestReportHTML:
         tc.start_time = 1000.0
         tc.end_time = 1001.0
 
-        from protoforge.core.testing import TestReport
+        from protoforge.simulation.testing import TestReport
         report = TestReport(id="r-1", name="HTML Report", test_cases=[tc],
                             start_time=1000.0, end_time=1001.0, total=1, passed=1)
         html = report.to_html()
@@ -275,7 +275,7 @@ class TestTestReportHTML:
 
     def test_report_trend(self):
         runner = TestRunner()
-        from protoforge.core.testing import TestReport
+        from protoforge.simulation.testing import TestReport
         for i in range(3):
             report = TestReport(id=f"r-{i}", name=f"Report {i}",
                                 start_time=1000.0 + i, end_time=1001.0 + i,

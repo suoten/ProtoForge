@@ -1,5 +1,6 @@
 """Data recorder API routes for recording sessions and export."""
 
+import contextlib
 import logging
 import math
 import threading
@@ -22,7 +23,7 @@ def _get_recorder():
     if _recorder is None:
         with _recorder_lock:
             if _recorder is None:
-                from protoforge.core.recorder import Recorder
+                from protoforge.observability.recorder import Recorder
                 _recorder = Recorder(_get_log_bus())
     return _recorder
 
@@ -37,10 +38,8 @@ def reset_recorder() -> None:
     global _recorder
     with _recorder_lock:
         if _recorder is not None:
-            try:
+            with contextlib.suppress(Exception):
                 _recorder._running = False
-            except Exception:
-                pass
         _recorder = None
 
 

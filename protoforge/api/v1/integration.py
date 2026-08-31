@@ -13,7 +13,7 @@ router = APIRouter(prefix="/integration", tags=["integration"])
 
 
 def _get_integration_manager():
-    from protoforge.core.registry import get_integration_manager
+    from protoforge.engine.registry import get_integration_manager
     return get_integration_manager()
 
 
@@ -54,7 +54,7 @@ async def get_integration_metrics(_user: dict[str, Any] = Depends(require_viewer
 @router.post("/batch-push")
 async def batch_push(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
-        from protoforge.core.registry import get_engine
+        from protoforge.engine.registry import get_engine
         engine = get_engine()
         manager = _get_integration_manager()
 
@@ -236,7 +236,7 @@ async def get_alarm_reaction_rules(_user: dict[str, Any] = Depends(require_viewe
 @router.post("/alarm-rules")
 async def add_alarm_reaction_rule(request: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
-        from protoforge.core.integration.manager import AlarmReactionRule
+        from protoforge.integrations.integration.manager import AlarmReactionRule
         manager = _get_integration_manager()
         rule_id = request.get("rule_id", "")
         source_device_id = request.get("source_device_id", "")

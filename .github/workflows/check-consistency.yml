@@ -23,7 +23,7 @@ jobs:
         run: pip install -e ".[all]"
 
       - name: Export OpenAPI spec
-        run: python scripts/export-openapi.py || true
+        run: python scripts/export-openapi.py
 
       - name: Set up Node.js 18
         uses: actions/setup-node@v4
@@ -35,11 +35,18 @@ jobs:
         run: npm install
 
       - name: Copy OpenAPI spec to web directory
-        run: cp openapi.json web/openapi.json || true
+        run: cp openapi.json web/openapi.json
+
+      - name: Fail on OpenAPI drift (contract gate)
+        run: |
+          git diff --exit-code openapi.json || {
+            echo '::error::openapi.json is out of date. Run `python scripts/export-openapi.py` locally and commit the result.'
+            exit 1
+          }
 
       - name: Validate API consistency (existing check)
         working-directory: web
-        run: npm run validate-api || true
+        run: npm run validate-api
 
       - name: Layer 2 - API type consistency audit
         run: python scripts/audit_api_types.py --openapi-file openapi.json --web-dir web

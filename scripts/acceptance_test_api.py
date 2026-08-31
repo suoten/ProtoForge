@@ -1,7 +1,6 @@
 """Automated acceptance test script for ProtoForge API endpoints."""
+
 import requests
-import json
-import sys
 
 BASE = 'http://localhost:8000/api/v1'
 
@@ -66,7 +65,7 @@ def main():
     ok_count = sum(1 for _, s, _ in results if s == 200)
     fail_count = sum(1 for _, s, _ in results if s != 200)
     print(f'\nTotal: {len(results)}, OK: {ok_count}, FAIL: {fail_count}')
-    
+
     # Also test some specific device operations
     print('\n--- Device Operations ---')
     r = requests.get(f'{BASE}/devices', headers=headers, timeout=10)
@@ -74,19 +73,19 @@ def main():
     if isinstance(devices, list) and len(devices) > 0:
         device_id = devices[0].get('id', '')
         print(f'First device: {device_id}')
-        
+
         # Test get device detail
         r = requests.get(f'{BASE}/devices/{device_id}', headers=headers, timeout=10)
         print(f'Get device: {r.status_code}')
-        
+
         # Test get device points
         r = requests.get(f'{BASE}/devices/{device_id}/points', headers=headers, timeout=10)
         print(f'Get device points: {r.status_code}')
-        
+
         # Test get device config
         r = requests.get(f'{BASE}/devices/{device_id}/config', headers=headers, timeout=10)
         print(f'Get device config: {r.status_code}')
-        
+
         # Test get device connection guide
         r = requests.get(f'{BASE}/devices/{device_id}/connection-guide', headers=headers, timeout=10)
         print(f'Get connection guide: {r.status_code}')
@@ -95,7 +94,7 @@ def main():
     print('\n--- Protocol Operations ---')
     r = requests.get(f'{BASE}/protocols/modbus_tcp/config', headers=headers, timeout=10)
     print(f'Modbus TCP config: {r.status_code}')
-    
+
     r = requests.get(f'{BASE}/protocols/modbus_tcp/device-config', headers=headers, timeout=10)
     print(f'Modbus TCP device config: {r.status_code}')
 

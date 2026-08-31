@@ -39,14 +39,14 @@ def _ensure_no_auth():
 @pytest.fixture
 def log_bus():
     """Provide a fresh LogBus instance."""
-    from protoforge.core.log_bus import LogBus
+    from protoforge.observability.log_bus import LogBus
     return LogBus()
 
 
 @pytest.fixture
 def template_manager():
     """Provide a TemplateManager with built-in templates loaded."""
-    from protoforge.core.template import TemplateManager
+    from protoforge.engine.template import TemplateManager
     tm = TemplateManager()
     tm.load_builtin_templates()
     return tm
@@ -67,7 +67,7 @@ async def database():
 @pytest_asyncio.fixture
 async def engine():
     """Provide a started SimulationEngine with common protocols, cleaned up after test."""
-    from protoforge.core.engine import SimulationEngine
+    from protoforge.engine.engine import SimulationEngine
     from protoforge.protocols.http.server import HttpSimulatorServer
     from protoforge.protocols.modbus.server import ModbusTcpServer
 
@@ -124,24 +124,24 @@ async def client() -> AsyncIterator:
     from httpx import ASGITransport, AsyncClient
 
     import protoforge.main as main_module
-    from protoforge.core.engine import SimulationEngine
-    from protoforge.core.log_bus import LogBus
-    from protoforge.core.registry import (
+    from protoforge.engine.engine import SimulationEngine
+    from protoforge.engine.registry import (
         clear_all as _clear_registry,
     )
-    from protoforge.core.registry import (
+    from protoforge.engine.registry import (
         register_database as _register_database,
     )
-    from protoforge.core.registry import (
+    from protoforge.engine.registry import (
         register_engine as _register_engine,
     )
-    from protoforge.core.registry import (
+    from protoforge.engine.registry import (
         register_log_bus as _register_log_bus,
     )
-    from protoforge.core.registry import (
+    from protoforge.engine.registry import (
         register_template_manager as _register_template_manager,
     )
-    from protoforge.core.template import TemplateManager
+    from protoforge.engine.template import TemplateManager
+    from protoforge.observability.log_bus import LogBus
     from protoforge.protocols.bacnet.server import BACnetServer
     from protoforge.protocols.http.server import HttpSimulatorServer
     from protoforge.protocols.modbus.server import ModbusTcpServer
@@ -170,7 +170,7 @@ async def client() -> AsyncIterator:
 
     # Reset rate limiter state to avoid cross-test contamination
     try:
-        from protoforge.api.v1.rate_limit import _default_limiter, _auth_limiter
+        from protoforge.api.v1.rate_limit import _auth_limiter, _default_limiter
         _default_limiter._requests.clear()
         _auth_limiter._requests.clear()
     except Exception:

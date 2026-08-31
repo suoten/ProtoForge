@@ -23,9 +23,9 @@ import uuid
 from enum import IntEnum
 from typing import Any
 
-from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.observability.messages import desc, msg
+from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -377,8 +377,10 @@ class ProfinetServer(ProtocolServer):
                     writer.write(resp_len + response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常（如ValueError/struct.error），避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("PROFINET connection handler unexpected error: %s", e)
         finally:
             self._connections.discard(writer)

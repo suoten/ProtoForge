@@ -1,9 +1,8 @@
 """Full acceptance test for ProtoForge frontend using Playwright."""
+import io
 import subprocess
 import sys
-import json
 import time
-import io
 
 # Fix Windows console encoding
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
@@ -53,7 +52,7 @@ def test_page(page, route, name, menu_name):
         'buttons_found': 0,
         'details': ''
     }
-    
+
     try:
         # Collect console errors
         console_errors = []
@@ -62,72 +61,72 @@ def test_page(page, route, name, menu_name):
             console_errors.append(msg.text) if msg.type == 'error' else
             console_warnings.append(msg.text) if msg.type == 'warning' else None
         ))
-        
+
         # Collect page errors (uncaught exceptions)
         page_errors = []
         page.on('pageerror', lambda err: page_errors.append(str(err)))
-        
+
         # Navigate to the page
         url = f'{BASE_URL}{route}'
         start_time = time.time()
-        response = page.goto(url, wait_until='networkidle', timeout=15000)
+        page.goto(url, wait_until='networkidle', timeout=15000)
         load_time = time.time() - start_time
         result['load_time'] = round(load_time, 2)
-        
+
         if load_time > 3:
             result['warnings'].append(f'Load time {load_time:.2f}s > 3s')
             result['status'] = 'WARN'
-        
+
         # Check for white screen
         body_text = page.inner_text('body')
         if not body_text or len(body_text.strip()) < 10:
             result['errors'].append('White screen detected')
             result['status'] = 'FAIL'
             return result
-        
+
         # Check for 404 resources
         failed_requests = []
         page.on('requestfailed', lambda req: failed_requests.append(f'{req.method} {req.url}'))
-        
+
         # Wait a bit for any async errors
         page.wait_for_timeout(1000)
-        
+
         # Check page errors
         if page_errors:
             result['errors'].extend(page_errors[:3])
             result['status'] = 'FAIL'
-        
+
         # Check console errors (filter out irrelevant ones)
-        relevant_errors = [e for e in console_errors 
+        relevant_errors = [e for e in console_errors
                           if 'localhost:5173' in e or 'localhost:8000' in e or 'protoforge' in e.lower()]
         if relevant_errors:
             result['errors'].extend(relevant_errors[:3])
             result['status'] = 'FAIL'
-        
+
         # Count interactive elements
         buttons = page.query_selector_all('button')
         links = page.query_selector_all('a')
         inputs = page.query_selector_all('input, textarea, select')
         result['buttons_found'] = len(buttons) + len(links)
         result['details'] = f'{len(buttons)} buttons, {len(links)} links, {len(inputs)} inputs'
-        
+
         # Check if the menu name appears in the page (breadcrumb)
         if menu_name:
             try:
                 breadcrumb = page.inner_text('.app-breadcrumb')
                 if menu_name not in breadcrumb and route != '/':
                     result['warnings'].append(f'Menu name "{menu_name}" not in breadcrumb')
-            except:
+            except Exception:
                 pass  # Breadcrumb might not exist on some pages
-        
+
         # Take screenshot
         screenshot_path = f'e:/硕腾网络/PyGBSentry/ProtoForge/.convergeloop/screenshots/{name.lower()}.png'
         page.screenshot(path=screenshot_path, full_page=True)
-        
+
     except Exception as e:
         result['errors'].append(str(e)[:200])
         result['status'] = '❌'
-    
+
     return result
 
 def test_login(page):
@@ -136,11 +135,11 @@ def test_login(page):
     try:
         page.goto(f'{BASE_URL}/', wait_until='networkidle', timeout=15000)
         page.wait_for_timeout(1000)
-        
+
         # Check if login form is visible
         username_input = page.query_selector('input[placeholder*="用户名"]')
         password_input = page.query_selector('input[placeholder*="密码"]')
-        
+
         if not username_input or not password_input:
             # Maybe already logged in
             if page.query_selector('.app-layout'):
@@ -149,11 +148,11 @@ def test_login(page):
             result['errors'].append('Login form not found')
             result['status'] = 'FAIL'
             return result
-        
+
         # Fill login form
         username_input.fill('admin')
         password_input.fill('admin')
-        
+
         # Click login button
         login_btn = page.query_selector('button:has-text("登")')
         if login_btn:
@@ -161,20 +160,20 @@ def test_login(page):
         else:
             # Try pressing Enter
             password_input.press('Enter')
-        
+
         page.wait_for_timeout(3000)
-        
+
         # Check if login succeeded
         if page.query_selector('.app-layout') or page.query_selector('.n-layout-sider'):
             result['details'] = 'Login successful'
         else:
             result['errors'].append('Login failed - no app layout after login')
             result['status'] = 'FAIL'
-            
+
     except Exception as e:
         result['errors'].append(str(e)[:200])
         result['status'] = '❌'
-    
+
     return result
 
 def test_form_validation(page):
@@ -184,13 +183,13 @@ def test_form_validation(page):
         # Go to devices page
         page.goto(f'{BASE_URL}/devices', wait_until='networkidle', timeout=15000)
         page.wait_for_timeout(1000)
-        
+
         # Try to find and click "快速创建" button
         quick_create = page.query_selector('button:has-text("快速创建")')
         if quick_create:
             quick_create.click()
             page.wait_for_timeout(1000)
-            
+
             # Check if modal appeared
             modal = page.query_selector('.n-modal, .n-drawer')
             if modal:
@@ -206,7 +205,7 @@ def test_form_validation(page):
                         result['details'] += ', validation works'
                     else:
                         result['warnings'].append('No validation error shown for empty form')
-                
+
                 # Close modal
                 close_btn = page.query_selector('.n-modal .n-button:has-text("取消"), .n-drawer .n-button:has-text("取消")')
                 if close_btn:
@@ -215,11 +214,11 @@ def test_form_validation(page):
                 result['warnings'].append('Quick create modal did not appear')
         else:
             result['details'] = 'No quick create button found'
-            
+
     except Exception as e:
         result['errors'].append(str(e)[:200])
         result['status'] = '❌'
-    
+
     return result
 
 def test_search(page):
@@ -228,31 +227,31 @@ def test_search(page):
     try:
         page.goto(f'{BASE_URL}/', wait_until='networkidle', timeout=15000)
         page.wait_for_timeout(1000)
-        
+
         search_input = page.query_selector('input[placeholder*="搜索"]')
         if search_input:
             search_input.fill('modbus')
             page.wait_for_timeout(1000)
-            
+
             # Check for search results
             options = page.query_selector_all('.n-auto-complete .n-auto-complete-menu__content, .n-auto-complete__menu')
             if options:
-                result['details'] = f'Search returned results'
+                result['details'] = 'Search returned results'
             else:
                 # Check if any dropdown appeared
-                dropdown = page.query_selector('.n-auto-complete__menu')
+                page.query_selector('.n-auto-complete__menu')
                 result['details'] = 'Search triggered, dropdown may or may not have results'
-            
+
             # Clear search
             search_input.fill('')
             result['details'] += ', cleared'
         else:
             result['warnings'].append('Search input not found')
-            
+
     except Exception as e:
         result['errors'].append(str(e)[:200])
         result['status'] = '❌'
-    
+
     return result
 
 def test_route_guard(page):
@@ -262,14 +261,14 @@ def test_route_guard(page):
         # Clear localStorage to simulate logged out state
         page.goto(f'{BASE_URL}/', wait_until='networkidle', timeout=15000)
         page.evaluate('localStorage.clear()')
-        
+
         # Try to access a protected route
         page.goto(f'{BASE_URL}/devices', wait_until='networkidle', timeout=15000)
         page.wait_for_timeout(1000)
-        
+
         url = page.url
         # Should be redirected to / (login page)
-        if url.endswith('/') or url.endswith('/devices') == False:
+        if url.endswith('/') or not url.endswith('/devices'):
             result['details'] = f'Redirected to {url} (route guard works)'
         else:
             # Check if login form is shown
@@ -278,11 +277,11 @@ def test_route_guard(page):
                 result['details'] = 'Login form shown (route guard works)'
             else:
                 result['warnings'].append(f'Accessed /devices without auth, URL: {url}')
-                
+
     except Exception as e:
         result['errors'].append(str(e)[:200])
         result['status'] = '❌'
-    
+
     return result
 
 def main():
@@ -290,11 +289,11 @@ def main():
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(viewport={'width': 1920, 'height': 1080})
         page = context.new_page()
-        
+
         # Ensure screenshots directory exists
         import os
         os.makedirs('e:/硕腾网络/PyGBSentry/ProtoForge/.convergeloop/screenshots', exist_ok=True)
-        
+
         # Test login first
         print('=== Testing Login ===')
         login_result = test_login(page)
@@ -302,7 +301,7 @@ def main():
         print(f"Login: {login_result['status']} - {login_result.get('details', '')}")
         if login_result['errors']:
             print(f"  Errors: {login_result['errors']}")
-        
+
         # Test each page
         print('\n=== Testing Pages ===')
         for route, name, menu_name in ROUTES:
@@ -320,7 +319,7 @@ def main():
             if warnings:
                 for w in warnings:
                     print(f"  WARN: {w}")
-        
+
         # Test form validation
         print('\n=== Testing Form Validation ===')
         # Re-login first since route guard test cleared localStorage
@@ -330,24 +329,24 @@ def main():
         print(f"{form_result['status']} {form_result['page']} - {form_result.get('details', '')}")
         if form_result['errors']:
             print(f"  Errors: {form_result['errors']}")
-        
+
         # Test search
         print('\n=== Testing Search ===')
         search_result = test_search(page)
         results.append(search_result)
         print(f"{search_result['status']} {search_result['page']} - {search_result.get('details', '')}")
-        
+
         # Test route guard
         print('\n=== Testing Route Guard ===')
         guard_result = test_route_guard(page)
         results.append(guard_result)
         print(f"{guard_result['status']} {guard_result['page']} - {guard_result.get('details', '')}")
-        
+
         # Re-login for any further tests
         test_login(page)
-        
+
         browser.close()
-    
+
     # Summary
     print('\n' + '='*80)
     print('SUMMARY')
@@ -356,13 +355,13 @@ def main():
     warn = sum(1 for r in results if r['status'] == 'WARN')
     fail = sum(1 for r in results if r['status'] == 'FAIL')
     print(f'Total: {len(results)}, PASS: {ok}, WARN: {warn}, FAIL: {fail}')
-    
+
     if fail > 0:
         print('\nFailed items:')
         for r in results:
             if r['status'] == 'FAIL':
                 print(f"  - {r['page']}: {r.get('errors', [])}")
-    
+
     if warn > 0:
         print('\nWarnings:')
         for r in results:

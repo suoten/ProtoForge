@@ -24,8 +24,8 @@ import uuid
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.observability.messages import desc, msg
 from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)

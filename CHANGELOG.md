@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.0.0 — 2026-08-31
+
+**Architecture refactor (core split):**
+
+- Split the former `protoforge/core` catch-all namespace into four domain packages:
+  `protoforge/engine` (simulation engine, devices, registry, event bus),
+  `protoforge/simulation` (scenarios, fault injection, behavior models, time series),
+  `protoforge/integrations` (EdgeLite, forward, webhook), and
+  `protoforge/observability` (log bus, metrics, audit, error monitor). `protoforge/core` now only contains `auth` plus backward-compatible re-exports.
+- Updated all 376 internal imports (90 files) to the new layout; ruff per-file-ignores updated accordingly.
+
+**Protocol layer hardening:**
+
+- Fixed Modbus TCP server wrongly rejecting reads on stopped devices: removed the stale `"stop" → 0x04` exception mapping so stopped devices respond with last-known values (matches real PLC behaviour and the EdgeLite collection path); updated outdated adversarial unit tests accordingly.
+- Added concurrency contract documentation to `ProtocolServer` base class (event-loop discipline, lifecycle idempotency, connection-handler robustness, write propagation, error reporting).
+- Added `ProtocolErrorCategory` enum and `record_protocol_error()` hook; wired all 13 protocol servers' fallback exception handlers to emit `protoforge_protocol_errors_total{protocol, category}` metrics (NETWORK vs INTERNAL), exposed via `/metrics` in Prometheus format.
+
+**CI & contract gating:**
+
+- Removed `|| true` soft-fail from OpenAPI export/validation steps; added an OpenAPI drift gate that fails CI when `openapi.json` is not regenerated after API changes.
+- Fixed all remaining ruff findings (bare except, SIM105/SIM108, B027, E402/E722/F841/E712); `ruff check protoforge/ tests/ scripts/` now passes clean.
+
+**Housekeeping & storage:**
+
+- Version aligned to 1.0.0 across `pyproject.toml`, `protoforge.__version__`, and `web/package.json`.
+- Root directory cleaned: test outputs, coverage artifacts, screenshots, and OCR experiment files removed; `.gitignore` hardened against re-entry.
+- `scripts/` triaged: 68 one-off debug/verification scripts removed; 35 operational tools retained (protocol `diag_*`, acceptance tests, CI-referenced scripts).
+- Verified storage is already consolidated on a single SQLite database (`data/protoforge.db`) with Alembic migrations; archived 15 stale integration-test databases (43 files) from `data/` to `data/backups/stale-dbs/`.
+- Confirmed `k8s/secrets.yaml` / Helm secrets contain only `CHANGE_ME` placeholders (no real credentials in repo).
+
 ## v0.1.7 — 2026-05-10
 
 **Protocol startup port conflict fix:**

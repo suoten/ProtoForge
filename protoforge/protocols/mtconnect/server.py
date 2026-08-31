@@ -7,9 +7,9 @@ import uuid
 from typing import Any
 from xml.sax.saxutils import escape
 
-from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.observability.messages import desc
+from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +118,10 @@ class MtConnectServer(ProtocolServer):
                     await writer.drain()
                 break
         except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("MTConnect connection handler unexpected error: %s", e)
         finally:
             writer.close()

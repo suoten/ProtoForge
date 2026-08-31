@@ -1,6 +1,6 @@
+from protoforge.models.device import DataType, PointConfig
 from protoforge.protocols.fins.server import FinsDeviceBehavior
 from protoforge.protocols.fins.value_codec import FinsValueCodec
-from protoforge.models.device import DataType, PointConfig
 
 
 def test_dm_bit_read_write_round_trip() -> None:

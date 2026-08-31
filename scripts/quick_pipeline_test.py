@@ -1,5 +1,10 @@
 """Quick pipeline test for smoke detector."""
-import requests, json, time, sys, io
+import io
+import sys
+import time
+
+import requests
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 BASE = 'http://localhost:8000/api/v1'

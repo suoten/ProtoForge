@@ -1,6 +1,7 @@
 """Module: base."""
 
 import asyncio
+import logging
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
@@ -8,6 +9,9 @@ from enum import Enum
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.observability.metrics import metrics
+
+logger = logging.getLogger(__name__)
 
 
 class ProtocolStatus(str, Enum):
@@ -17,7 +21,42 @@ class ProtocolStatus(str, Enum):
     ERROR = "error"
 
 
+class ProtocolErrorCategory(str, Enum):
+    """协议层错误分类（配合 ``record_protocol_error`` 使用）。"""
+
+    FRAME_PARSE = "frame_parse"    # 协议帧解析失败（长度/校验/格式）
+    DATA_TYPE = "data_type"        # 点位值类型转换失败
+    NETWORK = "network"            # 网络 IO 错误（连接重置/超时）
+    INTERNAL = "internal"          # 其他未预期内部异常
+
+
 class ProtocolServer(ABC):
+    """协议服务器基类 — 所有 17 种协议实现的统一契约。
+
+    并发契约（Concurrency Contract）：
+
+    1. 事件循环纪律：所有协议服务器默认运行在主 asyncio 事件循环上。
+       禁止在协程中执行阻塞操作（同步磁盘 IO、DNS 解析、sleep、
+       同步协议库调用等）。同步三方库（如 python-snap7、bacpypes）
+       必须通过 ``asyncio.to_thread()`` / ``loop.run_in_executor()``
+       桥接到线程池，否则会阻塞 API 与其他协议。
+
+    2. 生命周期：``start()``/``stop()`` 必须是幂等协程；
+       ``stop()`` 后必须释放全部端口、任务与客户端连接，
+       不得向调用方抛出未捕获异常（应记入状态 ERROR 并返回）。
+
+    3. 连接处理健壮性：``_handle_connection`` 的帧解析循环必须以
+       ``except Exception`` 兜底，单个协议帧解析失败只记录日志
+       （经 ``_log_debug``），不得终止 accept 循环或其他连接。
+
+    4. 写入传播：外部客户端写入经 ``set_write_callback`` 回调传播到
+       DeviceInstance；引擎侧动态值经 ``sync_point_value``（可选覆写）
+       同步到协议数据存储，绕过访问控制。
+
+    5. 错误上报：协议层异常应通过 ``record_protocol_error`` 上报分类
+       计数（见 ``protoforge.observability.metrics``），供监控与告警。
+    """
+
     protocol_name: str
     protocol_display_name: str
     protocol_description: str = ""
@@ -68,6 +107,23 @@ class ProtocolServer(ABC):
                    device_id: str = "", detail: dict | None = None):
         if self._debug_callback:
             self._debug_callback(direction, msg_type, summary, device_id, detail)
+
+    def record_protocol_error(self, category: ProtocolErrorCategory, detail: str = "") -> None:
+        """上报协议层分类错误计数（并发契约第 5 条）。
+
+        计数键：``protoforge_protocol_errors_total{protocol, category}``，
+        经 /metrics 以 Prometheus 格式暴露。永不抛出异常。
+        """
+        try:
+            metrics.inc_counter(
+                "protoforge_protocol_errors_total",
+                labels={
+                    "protocol": getattr(self, "protocol_name", "unknown"),
+                    "category": category.value if isinstance(category, ProtocolErrorCategory) else str(category),
+                },
+            )
+        except Exception:
+            logger.debug("Failed to record protocol error metric", exc_info=True)
 
     # -- 网络仿真集成 -------------------------------------------------------
 
@@ -157,7 +213,7 @@ class ProtocolServer(ABC):
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
         raise NotImplementedError
 
-    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:  # noqa: B027 — 有意提供的可选覆写钩子，非强制实现
         """内部同步：更新协议数据存储中的点位值，**绕过访问控制检查**。
 
         引擎 tick 循环调用此方法将动态生成的值同步到协议服务器的数据存储，

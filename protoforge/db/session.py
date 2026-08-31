@@ -962,7 +962,7 @@ class Database:
             idx += 1
         if action:
             # 同时支持别名映射，搜索run_test也能匹配post_tests等旧格式
-            from protoforge.core.audit import _get_action_aliases
+            from protoforge.observability.audit import _get_action_aliases
             aliases = _get_action_aliases(action)
             if len(aliases) == 1:
                 conditions.append(f"action LIKE ${idx}" if self._is_postgres else "action LIKE ?")
@@ -998,7 +998,7 @@ class Database:
             f"FROM audit_log {where_clause} ORDER BY timestamp DESC {limit_clause} {offset_clause}",
             tuple(params),
         )
-        from protoforge.core.audit import _normalize_action
+        from protoforge.observability.audit import _normalize_action
         entries = [{
             "id": r["id"], "timestamp": r["timestamp"], "action": _normalize_action(r["action"]),
             "username": r["username"], "resource_type": r["resource_type"],

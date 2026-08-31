@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Full diagnostic: check services, devices, data collection, protocol reads."""
-import httpx
-import json
 import socket
 import struct
 import time
+
+import httpx
 
 PF = "http://127.0.0.1:8000"
 EL = "http://127.0.0.1:8180"
@@ -144,7 +144,7 @@ except Exception as e:
 # Try time-series range query
 try:
     now_ts = int(time.time())
-    r = client.get(f"{EL}/api/v1/data/query", headers=el_headers, 
+    r = client.get(f"{EL}/api/v1/data/query", headers=el_headers,
                    params={"start": now_ts - 3600, "end": now_ts, "limit": 20})
     print(f"  GET /api/v1/data/query: {r.status_code}")
     if r.status_code == 200:
@@ -217,6 +217,7 @@ print("=" * 60)
 
 # Check EdgeLite logs
 import os
+
 log_paths = [
     r"e:\硕腾网络\PyGBSentry\ProtoForge\data\logs\edgelite.log",
     r"e:\硕腾网络\PyGBSentry\EdgeLite\EdgeLite-v1.0-Community\data\logs\edgelite.log",
@@ -224,7 +225,7 @@ log_paths = [
 for lp in log_paths:
     if os.path.exists(lp) and os.path.getsize(lp) > 0:
         print(f"  Log: {lp} ({os.path.getsize(lp)} bytes)")
-        with open(lp, 'r', encoding='utf-8', errors='replace') as f:
+        with open(lp, encoding='utf-8', errors='replace') as f:
             lines = f.readlines()
             for line in lines[-10:]:
                 print(f"    {line.rstrip()[:200]}")

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from protoforge.api.v1.auth import require_user, require_viewer
 from protoforge.api.v1._helpers import _get_engine, _get_database, _trigger_webhook_safe
-from protoforge.core.messages import tmsg, get_lang_from_request
+from protoforge.observability.messages import tmsg, get_lang_from_request
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def _get_test_runner():
 
     with _test_globals_lock:  # FIXED: 添加锁保护，避免并发初始化竞态
         if _test_runner is None:
-            from protoforge.core.testing import TestRunner
+            from protoforge.simulation.testing import TestRunner
             _test_runner = TestRunner()
 
             try:
@@ -90,7 +90,7 @@ async def _close_internal_client():
 async def create_test_case(case_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
     if not isinstance(case_def, dict) or not case_def:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty object")
-    from protoforge.core.testing import TestCase
+    from protoforge.simulation.testing import TestCase
     runner = _get_test_runner()
     try:
         tc = TestCase.from_dict(case_def)
@@ -119,7 +119,7 @@ async def get_test_case(case_id: str, _user: dict[str, Any] = Depends(require_vi
 
 @router.put("/tests/cases/{case_id}")
 async def update_test_case(case_id: str, case_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
-    from protoforge.core.testing import TestCase
+    from protoforge.simulation.testing import TestCase
 
     runner = _get_test_runner()
     existing = runner.get_test_case(case_id)
@@ -149,7 +149,7 @@ async def delete_test_case(case_id: str, _user: dict[str, Any] = Depends(require
 @router.post("/tests/suites")  # FIXED: 添加test_case_ids和tags的类型校验
 async def create_test_suite(suite_def: dict[str, Any], _user: dict[str, Any] = Depends(require_user)):
     import time as _time
-    from protoforge.core.testing import TestSuite
+    from protoforge.simulation.testing import TestSuite
 
     # FIXED: 类型校验，确保test_case_ids和tags是列表类型
     test_case_ids = suite_def.get("test_case_ids", [])
@@ -204,7 +204,7 @@ async def run_test(request: Request, payload: dict[str, Any] = Body(...), _user:
     test_cases = payload.get("test_cases", payload) if isinstance(payload, dict) else payload
     if not isinstance(test_cases, list) or not test_cases:
         raise HTTPException(status_code=400, detail="Request body must be a non-empty array of test cases")
-    from protoforge.core.testing import TestCase
+    from protoforge.simulation.testing import TestCase
     runner = _get_test_runner()
     cases = []
     try:
@@ -300,7 +300,7 @@ async def quick_test(request: Request, scope: str = "all", target_id: Optional[s
         raise HTTPException(status_code=400, detail=f"Invalid scope '{scope}'. Valid values: {sorted(valid_scopes)}")
 
     engine = _get_engine()
-    from protoforge.core.testing import TestCase, TestStep, Assertion, AssertionType
+    from protoforge.simulation.testing import TestCase, TestStep, Assertion, AssertionType
     lang = get_lang_from_request(request) if request else "zh"
     cases = []
 

@@ -1,5 +1,6 @@
 """Device management API routes (CRUD, start/stop, config)."""
 
+import contextlib
 import logging
 import re
 import uuid
@@ -320,9 +321,9 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
-    from protoforge.core.defaults import PROTOCOL_USAGE, get_protocol_defaults
-    from protoforge.core.edgelite import get_protoforge_host
-    from protoforge.core.messages import desc, get_lang_from_request
+    from protoforge.engine.defaults import PROTOCOL_USAGE, get_protocol_defaults
+    from protoforge.integrations.edgelite import get_protoforge_host
+    from protoforge.observability.messages import desc, get_lang_from_request
     lang = get_lang_from_request(request)
     usage = PROTOCOL_USAGE.get(device.protocol, {})
     defaults = get_protocol_defaults(device.protocol, lang=lang)
@@ -530,7 +531,7 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         raise HTTPException(status_code=404, detail="Device not found")
 
     # FIXED: 预检查设备状态、点位存在性和写入权限，提供有意义的错误信息
-    from protoforge.core.state_machine import DeviceState
+    from protoforge.engine.state_machine import DeviceState
 
     device_state = instance.device_state
     if device_state in (DeviceState.ERROR, DeviceState.MAINTENANCE, DeviceState.PROGRAM):
@@ -558,15 +559,11 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
     if dt == "bool" and isinstance(value, str):
         value = value.strip().lower() in ("true", "1", "on", "yes")
     elif dt in ("float32", "float64") and isinstance(value, (int, str)):
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             value = float(value)
-        except (ValueError, TypeError):
-            pass
     elif dt in ("int16", "int32", "uint16", "uint32") and isinstance(value, str):
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             value = int(value)
-        except (ValueError, TypeError):
-            pass
 
     try:
         success = await engine.write_device_point(device_id, point_name, value)
@@ -673,7 +670,7 @@ async def inject_device_fault(device_id: str, req: InjectFaultRequest, _user: di
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    from protoforge.core.fault_injection import FaultConfig, FaultType, TriggerMode
+    from protoforge.simulation.fault_injection import FaultConfig, FaultType, TriggerMode
 
     try:
         fault_type = FaultType(req.fault_type)
@@ -941,7 +938,7 @@ async def add_device_control_loop(
     if not instance:
         raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
 
-    from protoforge.core.control_loop import ControlLoopConfig
+    from protoforge.simulation.control_loop import ControlLoopConfig
 
     loop_data = req.model_dump()
     if loop_data.get("output_limit") and isinstance(loop_data["output_limit"], list):
@@ -1159,7 +1156,7 @@ class AddTimeSeriesPatternRequest(BaseModel):
 async def add_timeseries_pattern(req: AddTimeSeriesPatternRequest, _user: dict[str, Any] = Depends(require_operator)):
     """添加时间序列模式。"""
     engine = _get_engine()
-    from protoforge.core.timeseries import TimeSeriesPattern
+    from protoforge.simulation.timeseries import TimeSeriesPattern
     try:
         pattern = TimeSeriesPattern(
             pattern_type=req.pattern_type,

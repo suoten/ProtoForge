@@ -34,9 +34,9 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.observability.messages import desc, msg
+from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -469,8 +469,10 @@ class S7Server(ProtocolServer):
                     writer.write(response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK)
             logger.debug("S7 connection closed: %s", addr)
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("S7 connection handler unexpected error: %s", e)
         finally:
             writer.close()

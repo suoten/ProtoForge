@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 
-from protoforge.core.log_bus import LogBus
+from protoforge.observability.log_bus import LogBus
 
 
 @pytest.fixture

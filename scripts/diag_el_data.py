@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Diagnose EdgeLite data collection: check device points, driver status, and data."""
-import httpx
 import json
-import time
+
+import httpx
 
 EL = "http://127.0.0.1:8180"
 EL_USER = "admin"

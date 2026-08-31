@@ -8,9 +8,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from protoforge.core.messages import desc, msg  # FIXED: i18n消息常量
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+from protoforge.observability.messages import desc, msg  # FIXED: i18n消息常量
+from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
 from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior, parse_modbus_address
 
 logger = logging.getLogger(__name__)
@@ -162,6 +162,7 @@ class ModbusTcpServer(ProtocolServer):
         except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError):
             pass
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("Modbus TCP connection handler unexpected error: %s", e)
         finally:
             writer.close()
@@ -180,13 +181,11 @@ class ModbusTcpServer(ProtocolServer):
     _EX_GATEWAY_PATH_UNAVAILABLE = 0x0A
 
     # 设备状态 → Modbus 异常码映射
-    # FIXED: 移除 "stop" 状态的异常映射。在真实 Modbus 设备中，即使 PLC 程序处于 STOP 模式，
-    # 通信模块仍会响应 Modbus 请求（返回寄存器最后已知值）。异常码 0x04 (Slave Device Failure)
-    # 应仅用于真正的硬件故障，不应在设备未启动时阻止读写。
-    # 之前 "stop" → 0x04 导致未启动的设备（slave_id != 1 的设备）无法被 pymodbus/EdgeLite 采集。
+    # 设计意图（与真实 PLC 行为一致）：设备处于 stop 时通信模块仍会响应
+    # Modbus 请求（返回寄存器最后已知值），因此 stop 不映射任何异常码。
+    # 0x04 (Slave Device Failure) 仅用于真正的硬件故障 (error)。
     _STATE_EXCEPTION_CODES: dict[str, int] = {
         "error": 0x04,       # Slave Device Failure (硬件故障)
-        "stop": 0x04,        # Slave Device Failure (设备已停止)
         "starting": 0x05,   # Acknowledge (启动中，请稍后重试)
         "stopping": 0x05,   # Acknowledge (停机中，请稍后重试)
         "maintenance": 0x06, # Slave Device Busy (维护中)

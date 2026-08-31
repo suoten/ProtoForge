@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from protoforge.api.v1.auth import require_admin, require_guest
-from protoforge.core.messages import desc
+from protoforge.observability.messages import desc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

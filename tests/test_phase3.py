@@ -7,16 +7,16 @@ os.environ["PROTOFORGE_NO_AUTH"] = "1"
 
 from httpx import ASGITransport, AsyncClient
 
-from protoforge.core.engine import SimulationEngine
-from protoforge.core.log_bus import LogBus
-from protoforge.core.template import TemplateManager
+from protoforge.engine.engine import SimulationEngine
+from protoforge.observability.log_bus import LogBus
+from protoforge.engine.template import TemplateManager
 from protoforge.protocols.http.server import HttpSimulatorServer
 from protoforge.protocols.modbus.server import ModbusTcpServer
 from protoforge.protocols.modbus.rtu_server import ModbusRtuServer
 from protoforge.protocols.bacnet.server import BACnetServer
 from protoforge.protocols.s7.server import S7Server
 import protoforge.main as main_module
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     clear_all as _clear_registry,
     register_database as _register_database,
     register_engine as _register_engine,

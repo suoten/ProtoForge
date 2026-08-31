@@ -29,8 +29,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.observability.messages import desc
 from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)

@@ -26,9 +26,10 @@ import logging
 import time
 from typing import Any
 
-from protoforge.core.messages import desc, msg
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.observability.messages import desc, msg
 from protoforge.protocols.behavior import (  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
+    ProtocolErrorCategory,
     ProtocolServer,
     ProtocolStatus,
     StandardDeviceBehavior,
@@ -180,8 +181,10 @@ class HttpSimulatorServer(ProtocolServer):
                 if not keep_alive:
                     break
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个请求处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("HTTP connection handler unexpected error: %s", e)
         finally:
             writer.close()

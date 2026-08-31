@@ -23,9 +23,9 @@ import struct
 import time
 from typing import Any
 
-from protoforge.core.messages import desc
 from protoforge.models.device import DeviceConfig, PointValue
-from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.observability.messages import desc
+from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
 
@@ -176,8 +176,10 @@ class OpcDaServer(ProtocolServer):
                 if sub_id:
                     client_sub_ids.append(sub_id)
         except (ConnectionResetError, asyncio.IncompleteReadError, asyncio.CancelledError, asyncio.TimeoutError, BrokenPipeError, ConnectionAbortedError) as e:
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("OPC-DA connection handler unexpected error: %s", e)
         finally:
             async with self._subs_lock:  # FIXED-P0: 保护_subscriptions/_sub_clients并发pop
@@ -446,6 +448,7 @@ class OpcDaServer(ProtocolServer):
                         writer.write(msg_header + bytes(resp))
                         await writer.drain()
                     except (ConnectionResetError, OSError):
+                        self.record_protocol_error(ProtocolErrorCategory.NETWORK)
                         dead_subs.append(sub_id)
                 for sid in dead_subs:
                     async with self._subs_lock:  # FIXED-P0: 保护_subscriptions/_sub_clients并发pop

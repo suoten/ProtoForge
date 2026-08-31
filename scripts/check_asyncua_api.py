@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Check asyncua 1.1.8 API compatibility."""
 import asyncio
+
 from asyncua import Server, ua
+
 
 async def check():
     s = Server()

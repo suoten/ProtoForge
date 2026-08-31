@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def _get_integration_manager():
     """获取 IntegrationManager 实例。"""
-    from protoforge.core.registry import get_integration_manager
+    from protoforge.engine.registry import get_integration_manager
     try:
         mgr = get_integration_manager()
     except RuntimeError:
@@ -32,7 +32,7 @@ def _get_integration_manager():
 
 @router.post("")
 async def import_edgelite(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
-    from protoforge.core.integration import import_edgelite_config
+    from protoforge.integrations.integration import import_edgelite_config
     engine = _get_engine()
 
     try:
@@ -203,7 +203,7 @@ async def verify_edgelite_pipeline(
                     edgelite_data = collect_step.get("data", {})
                     # FIXED: 使用统一归一化函数，确保 edgelite_data 为 dict[str, scalar]
                     # 即使 verify_pipeline 已归一化，此处仍做防御性处理
-                    from protoforge.core.edgelite import _normalize_edgelite_points_data
+                    from protoforge.integrations.edgelite import _normalize_edgelite_points_data
                     edgelite_map, _ = _normalize_edgelite_points_data(edgelite_data)
                     if edgelite_map:
                         edgelite_data = edgelite_map
@@ -281,7 +281,7 @@ async def remove_device_from_edgelite(device_id: str, _user: dict[str, Any] = De
 
 @router.post("/pygbsentry")
 async def import_pygbsentry(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
-    from protoforge.core.integration import import_pygbsentry_config
+    from protoforge.integrations.integration import import_pygbsentry_config
     engine = _get_engine()
 
     try:

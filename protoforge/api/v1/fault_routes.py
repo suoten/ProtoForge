@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from protoforge.api.v1._helpers import _get_engine, _trigger_webhook_safe
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.core.fault_injection import (
+from protoforge.simulation.fault_injection import (
     FaultConfig,
     FaultType,
     TriggerMode,

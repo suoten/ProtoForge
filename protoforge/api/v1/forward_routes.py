@@ -22,7 +22,7 @@ def _get_forward_engine():
     if _forward_engine is None:
         with _forward_engine_lock:
             if _forward_engine is None:
-                from protoforge.core.forward import ForwardEngine
+                from protoforge.integrations.forward import ForwardEngine
                 _forward_engine = ForwardEngine(_get_log_bus())
     return _forward_engine
 
@@ -42,7 +42,7 @@ async def list_forward_targets(_user: dict[str, Any] = Depends(require_viewer)):
 @router.post("/forward/targets")
 async def add_forward_target(config: dict[str, Any], _user: dict[str, Any] = Depends(require_operator)):
     try:
-        from protoforge.core.forward import create_target
+        from protoforge.integrations.forward import create_target
 
         engine = _get_forward_engine()
         name = config.get("name", f"target-{int(time.time())}")

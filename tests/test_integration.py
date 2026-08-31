@@ -1,6 +1,6 @@
 import pytest
 
-from protoforge.core.testing import TestCase, TestStep, TestRunner, TestStatus
+from protoforge.simulation.testing import TestCase, TestStep, TestRunner, TestStatus
 
 
 def test_test_runner_create_case():
@@ -43,7 +43,7 @@ async def test_test_runner_suite():
 
 
 def test_test_report_to_dict():
-    from protoforge.core.testing import TestReport
+    from protoforge.simulation.testing import TestReport
     report = TestReport(id="r1", name="Test", total=5, passed=3, failed=1, errors=1)
     d = report.to_dict()
     assert d["total"] == 5
@@ -52,9 +52,9 @@ def test_test_report_to_dict():
 
 
 def test_edgelite_protocol_mapping():
-    from protoforge.core.edgelite import PROTOCOL_MAP
-    from protoforge.core.integration.protocol import DATA_TYPE_MAP, ACCESS_MODE_MAP
-    # FIXED: DATA_TYPE_MAP and ACCESS_MODE_MAP are in protoforge.core.integration.protocol, not edgelite
+    from protoforge.integrations.edgelite import PROTOCOL_MAP
+    from protoforge.integrations.integration.protocol import DATA_TYPE_MAP, ACCESS_MODE_MAP
+    # FIXED: DATA_TYPE_MAP and ACCESS_MODE_MAP are in protoforge.integrations.integration.protocol, not edgelite
     assert PROTOCOL_MAP["modbus_tcp"] == "modbus_tcp"
     # PROTOCOL_MAP uses EdgeLite plugin_name for protocol aliases
     # "ab" maps to "allen_bradley" (EdgeLite plugin_name) for compatibility with old and new EdgeLite versions
@@ -77,7 +77,7 @@ def test_edgelite_protocol_mapping():
 
 
 def test_edgelite_push_fields():
-    from protoforge.core.edgelite import EDGELITE_PUSH_FIELDS
+    from protoforge.integrations.edgelite import EDGELITE_PUSH_FIELDS
     assert len(EDGELITE_PUSH_FIELDS) == 2
     keys = [f["key"] for f in EDGELITE_PUSH_FIELDS]
     assert "edgelite_enabled" in keys
@@ -85,7 +85,7 @@ def test_edgelite_push_fields():
 
 
 def test_edgelite_global_config():
-    from protoforge.core.edgelite import get_global_edgelite_config
+    from protoforge.integrations.edgelite import get_global_edgelite_config
     config = get_global_edgelite_config()
     assert "url" in config
     assert "username" in config
@@ -93,7 +93,7 @@ def test_edgelite_global_config():
 
 
 def test_edgelite_convert_device():
-    from protoforge.core.edgelite import convert_device_to_edgelite
+    from protoforge.integrations.edgelite import convert_device_to_edgelite
     from dataclasses import dataclass, field
 
     @dataclass
@@ -117,7 +117,7 @@ def test_edgelite_convert_device():
 
 
 def test_edgelite_convert_gb28181_skipped():
-    from protoforge.core.edgelite import convert_device_to_edgelite
+    from protoforge.integrations.edgelite import convert_device_to_edgelite
     from dataclasses import dataclass
 
     @dataclass

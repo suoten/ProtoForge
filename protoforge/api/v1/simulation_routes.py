@@ -1,6 +1,7 @@
 """Simulation enhancement API routes: snapshot, timeseries, replay, script test."""
 
 import asyncio
+import contextlib
 import csv
 import io
 import json
@@ -260,7 +261,7 @@ async def replay_from_database(
             "value": _coerce_value(row.get("value", "")),
         })
 
-    from protoforge.core.timeseries_replay import TimeSeriesReplay
+    from protoforge.simulation.timeseries_replay import TimeSeriesReplay
     replay = TimeSeriesReplay(
         source=records,
         speed=cfg.get("speed", 1.0),
@@ -326,7 +327,7 @@ async def test_generator_script(
             "point_address": "HR100"
         }
     """
-    from protoforge.core.generator import ScriptEngine
+    from protoforge.engine.generator import ScriptEngine
 
     script = body.get("script", "result = 0")
     if not script or not isinstance(script, str):
@@ -960,10 +961,8 @@ async def stop_drift_monitor(
     task = monitor.get("task")
     if task and not task.done():
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
     return {"status": "stopped", "device_id": device_id}
 
 
@@ -1267,10 +1266,7 @@ async def generate_config_from_recording(
         if all(isinstance(v, bool) or v in (0, 1) for v in values):
             data_type = "bool"
         elif all(v == int(v) for v in values):
-            if all(-32768 <= v <= 32767 for v in values):
-                data_type = "int16"
-            else:
-                data_type = "int32"
+            data_type = "int16" if all(-32768 <= v <= 32767 for v in values) else "int32"
         else:
             data_type = "float32"
 

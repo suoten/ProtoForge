@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
-from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
 from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior, parse_modbus_address
 
 logger = logging.getLogger(__name__)
@@ -262,6 +262,7 @@ class ModbusRtuServer(ProtocolServer):
         except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError, BrokenPipeError, ConnectionAbortedError) as e:
             logger.debug("Modbus RTU connection handler error: %s", e)
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("Modbus RTU connection handler unexpected error: %s", e)
         finally:
             writer.close()

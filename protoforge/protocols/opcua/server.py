@@ -33,11 +33,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from protoforge.core.messages import desc, msg
-from protoforge.core.quality import QualityCode, QualitySystem
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.observability.messages import desc, msg
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
 from protoforge.protocols.behavior import StandardDeviceBehavior
+from protoforge.simulation.quality import QualityCode, QualitySystem
 
 logger = logging.getLogger(__name__)
 
@@ -238,7 +238,7 @@ class OpcUaServer(ProtocolServer):
         :return: 历史数据列表，每项包含 timestamp 和 value
         """
         try:
-            from protoforge.core.registry import get_database
+            from protoforge.engine.registry import get_database
             db = get_database()
             if db is None:
                 return []

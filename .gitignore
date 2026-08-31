@@ -82,6 +82,26 @@ web/find_hardcoded2.py
 # Temporary analysis/OCR scripts
 analyze_img.py
 ocr_easy.py
+
+# Coverage / test artifacts (never commit)
+coverage.json
+coverage.xml
+pytest_summary.txt
+
+# Local screenshots / OCR / misc experiment outputs
+/11*.png
+/11*.jpg
+ocr_*.txt
+ocr_*.ps1
+docker_build_result.txt
+backend_fresh.log
+
+# AI tooling workspace state
+.convergeloop/
+.loopengine/
+.mypy_cache/
+.ruff_cache/
+.trae/
 ocr_img.ps1
 
 # Temporary screenshots

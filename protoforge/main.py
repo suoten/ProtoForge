@@ -16,30 +16,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
 from protoforge.api.v1.router import router
-from protoforge.core.engine import SimulationEngine
-from protoforge.core.event_bus import EventBus
-from protoforge.core.integration.manager import IntegrationManager
-from protoforge.core.log_bus import LogBus
-from protoforge.core.registry import (
+from protoforge.db.session import Database
+from protoforge.engine.engine import SimulationEngine
+from protoforge.engine.event_bus import EventBus
+from protoforge.engine.registry import (
     clear_all as _clear_registry,
 )
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     register_database as _register_database,
 )
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     register_engine as _register_engine,
 )
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     register_integration_manager as _register_integration_manager,
 )
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     register_log_bus as _register_log_bus,
 )
-from protoforge.core.registry import (
+from protoforge.engine.registry import (
     register_template_manager as _register_template_manager,
 )
-from protoforge.core.template import TemplateManager
-from protoforge.db.session import Database
+from protoforge.engine.template import TemplateManager
+from protoforge.integrations.integration.manager import IntegrationManager
+from protoforge.observability.log_bus import LogBus
 from protoforge.protocols import PROTOCOL_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -283,7 +283,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
 
     # Start webhook manager
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         await webhook_manager.start()
         logger.info("Webhook manager started")
     except Exception as e:
@@ -292,7 +292,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
 
     # Initialize audit logger
     try:
-        from protoforge.core.audit import audit_logger
+        from protoforge.observability.audit import audit_logger
         audit_logger.set_database(database)
         await audit_logger.restore_from_db()
         logger.info("Audit logger initialized")
@@ -313,7 +313,7 @@ async def _restore_persisted_data(engine: Any, database: Any, template_manager: 
 
     # Start failover manager
     try:
-        from protoforge.core.failover import failover_manager
+        from protoforge.engine.failover import failover_manager
         primary_url = settings.failover_primary
         standby_url = settings.failover_standby
         is_primary = settings.failover_role != "standby"
@@ -335,7 +335,7 @@ async def _start_optional_services(engine: Any, template_manager: Any, settings:
     """
     if settings.demo_mode:
         try:
-            from protoforge.core.demo import seed_demo_data
+            from protoforge.engine.demo import seed_demo_data
             await seed_demo_data(engine, template_manager)
             logger.info("Demo data seeded")
         except Exception as e:
@@ -398,7 +398,7 @@ async def _shutdown_services(grpc_server: Any, integration_manager: Any, engine:
 
     await _stop_with_timeout(integration_manager.stop(), "integration manager")
     try:
-        from protoforge.core.webhook import webhook_manager
+        from protoforge.integrations.webhook import webhook_manager
         await _stop_with_timeout(webhook_manager.stop(), "webhook manager")
     except Exception as e:
         logger.warning("Error loading webhook manager: %s", e)
@@ -410,7 +410,7 @@ async def _shutdown_services(grpc_server: Any, integration_manager: Any, engine:
     except Exception as e:
         logger.debug("Error loading internal client: %s", e)
     try:
-        from protoforge.core.edgelite import _close_http_client
+        from protoforge.integrations.edgelite import _close_http_client
         await _stop_with_timeout(_close_http_client(), "HTTP client", timeout=5)
         logger.info("HTTP client closed")
     except Exception as e:
@@ -582,7 +582,7 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
 
     # FastAPI中间件是后注册先执行(洋葱模型)，所以audit要先注册才能在auth之后执行
-    from protoforge.core.audit import audit_middleware
+    from protoforge.observability.audit import audit_middleware
     app.middleware("http")(audit_middleware)
 
     from protoforge.api.v1.auth import auth_middleware, require_viewer  # FIXED: 导入require_viewer用于/metrics认证
@@ -623,7 +623,7 @@ def create_app() -> FastAPI:
     app.middleware("http")(rate_limit_middleware)
 
     # FIXED: 注册 500 错误监控中间件，自动捕获并记录所有 HTTP 500 响应
-    from protoforge.core.error_monitor import ErrorMonitorMiddleware
+    from protoforge.observability.error_monitor import ErrorMonitorMiddleware
     app.add_middleware(ErrorMonitorMiddleware)
 
     app.include_router(router)
@@ -685,7 +685,7 @@ def create_app() -> FastAPI:
     @app.get("/metrics", response_class=PlainTextResponse)
     @app.get("/api/v1/metrics", response_class=PlainTextResponse)
     async def prometheus_metrics(_user: dict[str, Any] = Depends(require_viewer)):  # FIXED: 添加认证保护，防止内部指标泄露
-        from protoforge.core.metrics import metrics
+        from protoforge.observability.metrics import metrics
         try:
             engine = get_engine()
             metrics.collect_from_engine(engine)
