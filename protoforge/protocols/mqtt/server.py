@@ -31,7 +31,12 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.observability.messages import desc
-from protoforge.protocols.behavior import ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.behavior import (
+    ProtocolErrorCategory,
+    ProtocolServer,
+    ProtocolStatus,
+    StandardDeviceBehavior,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -416,6 +421,41 @@ class MqttBroker(ProtocolServer):
             },
         }
 
+    async def _broker_publish(self, topic: str, data: bytes, qos: int = 0, retain: bool = False) -> bool:
+        """跨 amqtt 版本的内部分发（兼容层）。
+
+        - amqtt >= 0.11：``internal_publish`` 已改名 ``internal_message_broadcast``
+          （且不再支持 retain 参数）；retain 用公开 API ``retain_message()`` 补写。
+        - amqtt <= 0.10：继续使用 ``internal_publish(topic, data, qos, retain)``。
+        - 两者都不存在时必须记录 ERROR 并计入协议错误指标，
+          **禁止静默跳过**——否则表现为主 broker 连接正常但订阅者永远收不到数据。
+
+        Returns: True = 已分发给 broker；False = 无法分发。
+        """
+        if not self._broker:
+            return False
+        broadcast = getattr(self._broker, "internal_message_broadcast", None)
+        if callable(broadcast):  # amqtt >= 0.11 / 0.12
+            await broadcast(topic=topic, data=data, qos=qos)
+            if retain:
+                try:
+                    await self._broker.retain_message(None, topic, data, qos)
+                except Exception as e:
+                    logger.debug("MQTT retain store failed for %s: %s", topic, e)
+            return True
+        legacy = getattr(self._broker, "internal_publish", None)
+        if callable(legacy):  # amqtt <= 0.10
+            await legacy(topic=topic, data=data, qos=qos, retain=retain)
+            return True
+        logger.error(
+            "MQTT broker publish API unavailable (neither internal_message_broadcast "
+            "for amqtt>=0.11 nor internal_publish for amqtt<=0.10); message to %s DROPPED. "
+            "Check the installed amqtt version against protoforge's requirements.",
+            topic,
+        )
+        self.record_protocol_error(ProtocolErrorCategory.INTERNAL, "broker publish API missing")
+        return False
+
     async def _publish_loop(self, interval: int) -> None:
         import json as json_lib
 
@@ -446,14 +486,8 @@ class MqttBroker(ProtocolServer):
                         "unit": point.unit,
                     })
                     try:
-                        if self._broker and hasattr(self._broker, 'internal_publish'):
-                            # FIXED-P0: 添加qos和retain参数，支持MQTT QoS 0/1/2 和 Retain 消息
-                            await self._broker.internal_publish(
-                                topic=topic,
-                                data=payload.encode("utf-8"),
-                                qos=qos,
-                                retain=retain,
-                            )
+                        # FIXED-P0: 兼容 amqtt 0.11+ API 改名，支持 QoS 与 Retain
+                        await self._broker_publish(topic, payload.encode("utf-8"), qos=qos, retain=retain)
                     except Exception as e:
                         logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
             await asyncio.sleep(interval)
@@ -486,13 +520,8 @@ class MqttBroker(ProtocolServer):
                 "unit": point.unit,
             })
             try:
-                if self._broker and hasattr(self._broker, 'internal_publish'):
-                    await self._broker.internal_publish(
-                        topic=topic,
-                        data=payload.encode("utf-8"),
-                        qos=qos,
-                        retain=retain,
-                    )
+                # FIXED-P0: 兼容 amqtt 0.11+ API 改名，支持 QoS 与 Retain
+                await self._broker_publish(topic, payload.encode("utf-8"), qos=qos, retain=retain)
             except Exception as e:
                 logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
 
@@ -510,14 +539,9 @@ class MqttBroker(ProtocolServer):
         will_topic = will_topic.replace("{device_id}", device_id)
         will_message = will_message.replace("{device_id}", device_id)
         try:
-            if self._broker and hasattr(self._broker, 'internal_publish'):
-                await self._broker.internal_publish(
-                    topic=will_topic,
-                    data=will_message.encode("utf-8"),
-                    qos=will_qos,
-                    retain=will_retain,
-                )
-                logger.info("MQTT will message published for device %s to %s", device_id, will_topic)
+            # FIXED-P0: 兼容 amqtt 0.11+ API 改名（遗嘱消息）
+            await self._broker_publish(will_topic, will_message.encode("utf-8"), qos=will_qos, retain=will_retain)
+            logger.info("MQTT will message published for device %s to %s", device_id, will_topic)
         except Exception as e:
             logger.warning("MQTT will message publish failed for %s: %s", device_id, e)
 

@@ -13,6 +13,7 @@
 
 **Protocol layer hardening:**
 
+- Fixed silent MQTT data loss with amqtt >= 0.11: `Broker.internal_publish()` was renamed to `internal_message_broadcast()` (without a retain parameter), and the old `hasattr(internal_publish)` guard silently skipped every publish — broker connections worked but subscribers never received data. Added a version-tolerant `_broker_publish()` shim (uses `internal_message_broadcast` + public `retain_message()` on amqtt >= 0.11, falls back to `internal_publish` on older versions) and made a missing broker API log an ERROR plus a protocol-error metric instead of failing silently. Verified end-to-end on amqtt 0.11.3 (real broker + real client subscribe, retain stored).
 - Fixed Modbus TCP server wrongly rejecting reads on stopped devices: removed the stale `"stop" → 0x04` exception mapping so stopped devices respond with last-known values (matches real PLC behaviour and the EdgeLite collection path); updated outdated adversarial unit tests accordingly.
 - Added concurrency contract documentation to `ProtocolServer` base class (event-loop discipline, lifecycle idempotency, connection-handler robustness, write propagation, error reporting).
 - Added `ProtocolErrorCategory` enum and `record_protocol_error()` hook; wired all 13 protocol servers' fallback exception handlers to emit `protoforge_protocol_errors_total{protocol, category}` metrics (NETWORK vs INTERNAL), exposed via `/metrics` in Prometheus format.
