@@ -6,11 +6,11 @@
 <p><b>一台电脑 = 17 种工业设备</b></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-green?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Vue](https://img.shields.io/badge/Vue-3.x-brightgreen?logo=vuedotjs&logoColor=white)](https://vuejs.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow?logo=opensourceinitiative&logoColor=white)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-极速部署-blue?logo=docker&logoColor=white)](https://hub.docker.com/r/suoten/protoforge)
+[![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/static/v1?label=FastAPI&message=0.115%2B&color=green&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Vue](https://img.shields.io/static/v1?label=Vue&message=3.x&color=brightgreen&logo=vuedotjs&logoColor=white)](https://vuejs.org)
+[![License](https://img.shields.io/static/v1?label=License&message=MIT&color=yellow&logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![Docker](https://img.shields.io/static/v1?label=Docker&message=%E6%9E%81%E9%80%9F%E9%83%A8%E7%BD%B2&color=blue&logo=docker&logoColor=white)](https://hub.docker.com/r/suoten/protoforge)
 
 [🚀 在线体验](https://protoforge.jjtt.net) · [📖 5分钟上手](#-5分钟上手) · [💬 加入QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) · [English](README_EN.md)
 
