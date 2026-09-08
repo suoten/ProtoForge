@@ -1411,3 +1411,25 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 [![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-866599071-eb1923?logo=tencentqq&logoColor=white)](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) **进群答案：ProtoForge**
 
+***
+
+## ☕ 赞助作者
+
+> ProtoForge 是一个开源项目，如果你觉得它对你有帮助，可以考虑请作者喝杯咖啡 ☕
+> 你的支持是项目持续维护的动力！
+
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="docs/images/weixin.jpg" width="200" />
+      <br /><b>微信赞赏</b>
+    </td>
+    <td align="center">
+      <img src="docs/images/zfb.jpg" width="200" />
+      <br /><b>支付宝赞赏</b>
+    </td>
+  </tr>
+</table>
+
+> 💝 感谢每一位支持者！如果在企业项目中使用了 ProtoForge，欢迎反馈使用场景，也欢迎在 [GitHub Issues](https://github.com/suoten/ProtoForge/issues) 留言。
+
