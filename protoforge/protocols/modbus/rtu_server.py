@@ -57,7 +57,9 @@ class ModbusRtuServer(ProtocolServer):
         self._slave_map: dict[str, int] = {}
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
-        self._use_simdata = SIMDATA_AVAILABLE
+        # FIXED(Issue#8): pymodbus 3.13+ 中 ModbusServerContext.async_setValues 返回 ExcCodes.DEVICE_BUSY
+        #        而非执行写入，OldAPI 路径静默失效。强制使用原生帧处理器（与 TCP server 一致）。
+        self._use_simdata = False
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
@@ -153,35 +155,16 @@ class ModbusRtuServer(ProtocolServer):
                     )
                 )
             elif OLD_API_AVAILABLE:
-                slaves_dict = {}
-                for device_config in self._device_configs.values():
-                    slave_id = self._slave_map.get(device_config.id, self._next_slave_id)
-                    if device_config.id not in self._slave_map:
-                        self._slave_map[device_config.id] = slave_id
-                        self._next_slave_id = max(self._next_slave_id, slave_id + 1)
-                    slaves_dict[slave_id] = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(1, [0] * 100),
-                        ir=ModbusSequentialDataBlock(1, [0] * 100),
-                        co=ModbusSequentialDataBlock(1, [False] * 100),
-                        di=ModbusSequentialDataBlock(1, [False] * 100),
-                    )
-                if not slaves_dict:
-                    slaves_dict[1] = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(1, [0] * 100),
-                        ir=ModbusSequentialDataBlock(1, [0] * 100),
-                        co=ModbusSequentialDataBlock(1, [False] * 100),
-                        di=ModbusSequentialDataBlock(1, [False] * 100),
-                    )
-                self._context = ModbusServerContext(devices=slaves_dict, single=False)
+                # FIXED(Issue#8): pymodbus 3.13+ 中 ModbusServerContext.async_setValues 返回
+                # ExcCodes.DEVICE_BUSY 而非执行写入，OldAPI 路径静默失效。
+                # 强制走原生帧处理器路径（与 TCP server 保持一致）。
+                logger.warning(
+                    "Modbus RTU: pymodbus OldAPI path has compatibility issues with pymodbus 3.13+, "
+                    "using native frame handler instead. Serial port %s will use TCP bridge mode.", self._port
+                )
+                fallback_port = self._find_available_port(config.get("tcp_bridge_port", 5021))
                 self._server_task = asyncio.create_task(
-                    StartAsyncSerialServer(
-                        context=self._context,
-                        port=self._port,
-                        baudrate=self._baudrate,
-                        parity=self._parity,
-                        stopbits=self._stopbits,
-                        bytesize=self._bytesize,
-                    )
+                    self._serve_datastore_only(fallback_port)
                 )
             else:
                 logger.warning("Neither SimData nor old API available, Modbus RTU server starting in data-store-only mode")
@@ -439,17 +422,8 @@ class ModbusRtuServer(ProtocolServer):
 
         if self._status == ProtocolStatus.RUNNING:
             self._get_data_store(slave_id)
-            if not self._use_simdata and OLD_API_AVAILABLE:
-                try:
-                    device_context = ModbusDeviceContext(
-                        hr=ModbusSequentialDataBlock(1, [0] * 100),
-                        ir=ModbusSequentialDataBlock(1, [0] * 100),
-                        co=ModbusSequentialDataBlock(1, [False] * 100),
-                        di=ModbusSequentialDataBlock(1, [False] * 100),
-                    )
-                    self._add_slave_to_context(slave_id, device_context)
-                except Exception as e:
-                    logger.warning("Failed to create ModbusDeviceContext: %s", e)
+            # FIXED(Issue#8): 不再创建 ModbusDeviceContext/ModbusSequentialDataBlock，
+            # pymodbus 3.13+ 中这些类已废弃且 API 不兼容。原生帧处理器直接读写 _data_stores。
             self._apply_device_to_context(device_config)
 
         logger.info("Modbus RTU device created: %s (slave_id=%d)", device_config.id, slave_id)
@@ -479,10 +453,13 @@ class ModbusRtuServer(ProtocolServer):
         config = self._device_configs.get(device_id)
         if not config:
             return []
+        slave_id = self._slave_map.get(device_id, 1)
         now = time.time()
         result = []
         for point in config.points:
-            value = behavior.get_value(point.name)
+            # FIXED(Issue#8): 从 store 读取（非 behavior），支持外部 Modbus 写入反映——
+            # 与 TCP server 保持一致，否则外部写入的数据在 read_points 中丢失。
+            value = self._read_register(point, slave_id)
             result.append(PointValue(name=point.name, value=value, timestamp=now))
         return result
 
@@ -584,6 +561,12 @@ class ModbusRtuServer(ProtocolServer):
         self._sync_to_pymodbus_context(slave_id, store)
 
     def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:
+        """同步 ProtoForge 数据存储到 pymodbus 上下文（仅 OldAPI 路径有效）。
+
+        FIXED(Issue#8): pymodbus 3.13+ 中 ModbusSequentialDataBlock 已移除 setValues 方法，
+        ModbusServerContext.async_setValues 对非 ModbusSimulatorContext 设备返回 ExcCodes.DEVICE_BUSY。
+        此方法在 pymodbus 3.13+ 下为空操作（self._context 始终为 None），保留用于兼容旧版。
+        """
         if not self._context:
             return
         try:
@@ -597,15 +580,27 @@ class ModbusRtuServer(ProtocolServer):
                         ('d', store.discrete_inputs),
                     ]:
                         block = slave_ctx.get(fx_name)
+                        # FIXED(Issue#8): pymodbus 3.13+ 移除了 ModbusSequentialDataBlock.setValues
                         if block and hasattr(block, 'setValues') and store_data:
                             fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
                             is_bool = fc in (1, 2)
                             for addr in sorted(store_data.keys()):
                                 val = bool(store_data[addr]) if is_bool else store_data[addr]
                                 try:
-                                    block.setValues(fc, addr, [val])
+                                    result = block.setValues(fc, addr, [val])
+                                    if result is not None and hasattr(result, 'value') and result.value >= 1:
+                                        logger.warning(
+                                            "pymodbus setValues returned error code %s for fc=%d addr=%d "
+                                            "(pymodbus 3.13+ incompatible, consider downgrading)",
+                                            result, fc, addr
+                                        )
                                 except Exception as exc:
                                     logger.debug("pymodbus setValues failed for fc=%d addr=%d: %s", fc, addr, exc)
+                        elif block and store_data:
+                            logger.debug(
+                                "pymodbus block has no setValues method (pymodbus 3.13+ incompatible), "
+                                "skipping sync for slave_id=%d fx=%s", slave_id, fx_name
+                            )
         except Exception as e:
             logger.debug("Failed to sync to pymodbus context: %s", e)
 

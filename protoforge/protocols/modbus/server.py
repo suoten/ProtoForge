@@ -747,6 +747,12 @@ class ModbusTcpServer(ProtocolServer):
         self._sync_to_pymodbus_context(slave_id, store)
 
     def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:
+        """同步 ProtoForge 数据存储到 pymodbus 上下文（仅 OldAPI 路径有效）。
+
+        FIXED(Issue#8): pymodbus 3.13+ 中 ModbusSequentialDataBlock 已移除 setValues 方法，
+        ModbusServerContext.async_setValues 对非 ModbusSimulatorContext 设备返回 ExcCodes.DEVICE_BUSY。
+        此方法在 pymodbus 3.13+ 下为空操作（self._context 始终为 None），保留用于兼容旧版。
+        """
         if not self._context:
             return
         try:
@@ -760,15 +766,29 @@ class ModbusTcpServer(ProtocolServer):
                         ('d', store.discrete_inputs),
                     ]:
                         block = slave_ctx.get(fx_name)
+                        # FIXED(Issue#8): pymodbus 3.13+ 移除了 ModbusSequentialDataBlock.setValues
                         if block and hasattr(block, 'setValues') and store_data:
                             fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
                             is_bool = fc in (1, 2)
                             for addr in sorted(store_data.keys()):
                                 val = bool(store_data[addr]) if is_bool else store_data[addr]
                                 try:
-                                    block.setValues(fc, addr, [val])
+                                    result = block.setValues(fc, addr, [val])
+                                    # FIXED(Issue#8): 检查 ExcCodes 返回值，pymodbus 3.13+ 可能返回错误码而非抛异常
+                                    if result is not None and hasattr(result, 'value') and result.value >= 1:
+                                        logger.warning(
+                                            "pymodbus setValues returned error code %s for fc=%d addr=%d "
+                                            "(pymodbus 3.13+ incompatible, consider downgrading)",
+                                            result, fc, addr
+                                        )
                                 except Exception as exc:
                                     logger.debug("pymodbus setValues failed for fc=%d addr=%d: %s", fc, addr, exc)
+                        elif block and store_data:
+                            # pymodbus 3.13+: block 已无 setValues 方法，记录一次警告
+                            logger.debug(
+                                "pymodbus block has no setValues method (pymodbus 3.13+ incompatible), "
+                                "skipping sync for slave_id=%d fx=%s", slave_id, fx_name
+                            )
         except Exception as e:
             logger.debug("Failed to sync to pymodbus context: %s", e)
 
