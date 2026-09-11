@@ -328,6 +328,8 @@ pip install -e ".[s7]"        # Siemens S7
 
 > ⚠️ **页面空白？** Docker 部署检查 `docker logs protoforge`。源码部署执行：`cd web && npm install && npm run build`，然后重启后端。
 
+> 📖 **需要更详细的操作指引？** 请阅读完整的 [操作手册](docs/USER_GUIDE.md)，涵盖设备创建、协议连接、场景编排、故障注入、数据转发、调试排障等全流程。
+
 ***
 
 ## 🔗 与第三方系统对接
