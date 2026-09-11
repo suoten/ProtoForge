@@ -261,6 +261,22 @@ pip install -e ".[s7]"        # Siemens S7
 
 ---
 
+## 🏢 Enterprise Service & Professional Support
+
+> ProtoForge open-source is free forever. If your team needs deeper support, we offer:
+
+| Service | Description | Use Case |
+|---------|-------------|----------|
+| 🔧 **Protocol Debug Service** | Expert assistance for protocol integration testing | Pre-launch testing |
+| 🎨 **Custom Protocol Development** | Custom non-standard protocols, private extensions | When standard protocols aren't enough |
+| 🚀 **Private Deployment** | ProtoForge + EdgeLite private deployment & training | Enterprise intranet |
+| 📊 **Enterprise License** | SSO/LDAP, multi-tenant, audit log, SLA support | Production-grade use |
+| 🎓 **Technical Training** | Industrial protocol training + ProtoForge hands-on | Team skill building |
+
+> 💬 Contact: [QQ Group](https://qm.qq.com/q/ProtoForge) (Group Owner) or email `suoten@jjtt.net`
+
+---
+
 ## 📄 License
 
 MIT

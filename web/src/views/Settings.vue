@@ -126,6 +126,56 @@
           </n-space>
         </n-spin>
       </n-tab-pane>
+
+      <n-tab-pane name="enterprise" :tab="t('settings.enterprise')">
+        <n-card style="max-width: 680px; margin-top: 16px">
+          <template #header>
+            <n-space align="center">
+              <span>🏢 {{ t('settings.enterpriseService') }}</span>
+            </n-space>
+          </template>
+          <n-space vertical size="large">
+            <n-alert type="info" :bordered="false">
+              {{ t('settings.enterpriseDesc') }}
+            </n-alert>
+            <n-table :bordered="false" :single-line="false" size="small">
+              <thead>
+                <tr>
+                  <th style="width: 30%">{{ t('settings.serviceItem') }}</th>
+                  <th>{{ t('settings.serviceDesc') }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>🔧 {{ t('settings.svcProtocolDebug') }}</td>
+                  <td>{{ t('settings.svcProtocolDebugDesc') }}</td>
+                </tr>
+                <tr>
+                  <td>🎨 {{ t('settings.svcCustomProtocol') }}</td>
+                  <td>{{ t('settings.svcCustomProtocolDesc') }}</td>
+                </tr>
+                <tr>
+                  <td>🚀 {{ t('settings.svcDeploy') }}</td>
+                  <td>{{ t('settings.svcDeployDesc') }}</td>
+                </tr>
+                <tr>
+                  <td>📊 {{ t('settings.svcEnterpriseLicense') }}</td>
+                  <td>{{ t('settings.svcEnterpriseLicenseDesc') }}</td>
+                </tr>
+                <tr>
+                  <td>🎓 {{ t('settings.svcTraining') }}</td>
+                  <td>{{ t('settings.svcTrainingDesc') }}</td>
+                </tr>
+              </tbody>
+            </n-table>
+            <n-space justify="center">
+              <n-button type="primary" size="large" @click="contactEnterprise">
+                💬 {{ t('settings.contactUs') }}
+              </n-button>
+            </n-space>
+          </n-space>
+        </n-card>
+      </n-tab-pane>
     </n-tabs>
 
     <n-modal v-model:show="showAddUser" :title="t('settings.addUserTitle')" preset="card" style="width:min(420px, 90vw)" :mask-closable="false">
@@ -485,6 +535,10 @@ async function deleteUser(row) {
 
 function openChangePassword() {
   showChangePassword.value = true
+}
+
+function contactEnterprise() {
+  window.open('https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK', '_blank')
 }
 
 async function setupDemo() {
