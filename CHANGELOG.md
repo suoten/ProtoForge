@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.1.1 — 2026-09-11
+
+**UI/UX fixes (deep testing):**
+
+- Fixed i18n `directionLabels` keys not translating in Debug Logs page — `logs.directionLabels.system` showed as raw key instead of "系统"/"System". Root cause: `directionLabels` object existed in i18n.js but was outside the `logs` namespace. Fix: moved `directionLabels` into `logs` object in both zh and en.
+- Fixed NDropdown menus not responding to click — language switcher, user menu, and device "更多" dropdown used default `hover` trigger which was unreliable. Fix: added `trigger="click"` to all NDropdown components in App.vue and Devices.vue for consistent click-to-open behavior.
+
+**Deep testing results (all passed):**
+
+- Dashboard: 7 devices, 4 running protocols, 122 templates, 22 protocol categories ✅
+- Device Management: batch start/stop, edit, data points, quick create, CSV import/export ✅
+- Protocol Services: 22 protocols with start/stop/configure/detail ✅
+- Template Marketplace: 122 templates with category filter and search ✅
+- Simulation Testing: single device test passed (100% pass rate, 0.02s), test case editor ✅
+- Debug Logs: real-time WebSocket logs, protocol/direction filter, search, export ✅
+- Recorder: start/stop recording, recording list with detail/replay/export/delete ✅
+- Integration: EdgeLite connection config, per-device push/start-collect/read-points/verify ✅
+- Data Forward: add target, start/stop forward ✅
+- Webhook: CRUD, test webhook ✅
+- Settings: EdgeLite URL, CORS config, save ✅
+- Audit Log: search, delete, clear ✅
+- Backup & Restore: export backup, restore from file ✅
+- Scenario Editor: drag-and-drop canvas, save layout, add device ✅
+- i18n: Chinese/English switch works correctly ✅
+- Fault Injection API: sensor_drift, sensor_stuck, comm_loss, etc. (9 types) ✅
+- CSV Export API: returns valid CSV with all device points ✅
+
 ## v1.1.0 — 2026-09-11
 
 **New Protocols (17 → 21):**

@@ -26,7 +26,7 @@
                 <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></template>
                 {{ t('devices.batchDelete') }}
               </n-button>
-              <n-dropdown :options="batchMoreOptions" @select="onBatchMoreSelect" placement="bottom-end">
+              <n-dropdown :options="batchMoreOptions" trigger="click" @select="onBatchMoreSelect" placement="bottom-end">
                 <n-button size="small" tertiary :title="t('common.more')">
                   <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></template>
                 </n-button>
@@ -889,6 +889,7 @@ const columns = computed(() => [
       ]),
       // 更多：仅保留低频的指南/链路验证
       h(NDropdown, {
+        trigger: 'click',
         options: [
           { label: t('devices.deviceDetail'), key: 'detail' },
           { label: t('devices.guide'), key: 'guide' },
