@@ -18,6 +18,18 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 
 **Simply put: Install it, click a few buttons, and get real-time simulated device data.**
 
+## 🔥 Real Developer Pain Points
+
+| # | Pain Point | How Bad Is It | ProtoForge Solution |
+|---|-----------|---------------|---------------------|
+| 1 | **Protocol bytes don't match, can't find the bug** | Client says "no data", you stare at hex dump for 3 days | WebSocket real-time debug logs, filter by protocol/direction/keyword, click to inspect frame details |
+| 2 | **Simulator too well-behaved, breaks in production** | Test env always returns perfect values, real PLC disconnects/timeouts/returns error codes | 9 fault injection types: sensor stuck/drift/noise/failure, intermittent disconnect/delay/packet loss, device failure/actuator stuck |
+| 3 | **Testing is all manual, regression takes all afternoon** | Every code change: create device→start→read→verify manually | Automated test engine: 13 assertion types, variable extraction, test suites, HTML reports + trend analysis |
+| 4 | **Can't reproduce customer site issues** | Client says "data was wrong at 3pm yesterday", no recording, can only guess | Protocol recording & replay: record→replay→verify fix, with Gzip compression |
+| 5 | **New hires don't understand protocols, takes a week** | Address offset, function codes, byte order all confused | 4-language code examples (Python/C#/Java/Go) per protocol, 122 ready-to-use templates |
+| 6 | **Multi-protocol testing, takes a week to set up** | Testing Modbus+S7+MQTT simultaneously, find 3 different vendor devices | 21 protocols on one computer, Docker 30-second startup, generate 100 virtual devices with one click |
+| 7 | **Protocol security can't be tested** | OPC-UA certs/TLS/GB28181 SRTP, can't touch production, no test env | Auto certificate generation, TLS encryption, SRTP support, test security freely |
+
 ## ✨ Features
 
 - **21 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS
