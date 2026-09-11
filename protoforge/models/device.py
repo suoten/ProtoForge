@@ -81,6 +81,7 @@ class DeviceStatus(str, Enum):
     OFFLINE = "offline"
     ONLINE = "online"
     ERROR = "error"
+    STARTING = "starting"
 
 
 class DeviceInfo(BaseModel):

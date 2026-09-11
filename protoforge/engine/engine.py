@@ -424,6 +424,13 @@ class SimulationEngine:
                             logger.info("Re-registered device %s to newly started protocol %s", dev_id, protocol_name)
                         except Exception as reg_err:
                             logger.debug("Device %s already registered or registration failed: %s", dev_id, reg_err)
+                        # FIXED: 协议启动后自动启动该协议下的设备（如果设备未在线）
+                        if instance.status != DeviceStatus.ONLINE:
+                            try:
+                                instance.start()
+                                logger.info("Auto-started device %s after protocol %s start", dev_id, protocol_name)
+                            except Exception as start_err:
+                                logger.warning("Failed to auto-start device %s: %s", dev_id, start_err)
                 if self._event_bus:
                     await self._event_bus.publish_safe(ProtocolStatusEvent(
                         protocol_name=protocol_name,
@@ -657,11 +664,14 @@ class SimulationEngine:
             raise ValueError(f"Device not found: {device_id}")
         if instance.status == DeviceStatus.ONLINE:
             return
-        # FIXED: Check if device is already in STARTING state (maps to OFFLINE)
+        # FIXED: Check if device is already in STARTING state
         # to prevent double-start which causes ERROR state transition failure
         from protoforge.engine.state_machine import DeviceState
         if instance.state_machine.get_state() == DeviceState.STARTING:
             logger.debug("Device %s already in STARTING state, skipping start", device_id)
+            return
+        if instance.status == DeviceStatus.STARTING:
+            logger.debug("Device %s already starting, skipping", device_id)
             return
         if instance.status == DeviceStatus.ERROR:
             instance.stop()
@@ -671,11 +681,20 @@ class SimulationEngine:
             logger.exception("Failed to start device %s: %s", device_id, e)
             raise
         server = self._protocol_servers.get(instance.protocol)
-        if server and server.status == ProtocolStatus.RUNNING:
-            try:
-                await server.create_device(instance.config)
-            except Exception as e:
-                logger.warning("Failed to sync device %s to protocol server: %s", device_id, e)
+        if server:
+            if server.status != ProtocolStatus.RUNNING:
+                # FIXED: 设备启动时如果协议未运行，自动启动协议
+                try:
+                    protocol_config = dict(instance.config.protocol_config)
+                    logger.info("Auto-starting protocol %s for device %s", instance.protocol, device_id)
+                    await self.start_protocol(instance.protocol, protocol_config)
+                except Exception as proto_err:
+                    logger.warning("Failed to auto-start protocol %s: %s", instance.protocol, proto_err)
+            if server.status == ProtocolStatus.RUNNING:
+                try:
+                    await server.create_device(instance.config)
+                except Exception as e:
+                    logger.warning("Failed to sync device %s to protocol server: %s", device_id, e)
 
         if self._event_bus:
             await self._event_bus.publish_safe(DeviceStartedEvent(device_id=device_id))

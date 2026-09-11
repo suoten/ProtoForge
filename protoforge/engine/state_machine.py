@@ -638,7 +638,7 @@ def device_state_to_status(state: DeviceState):
         DeviceState.RUN: DeviceStatus.ONLINE,
         DeviceState.ERROR: DeviceStatus.ERROR,
         DeviceState.STOP: DeviceStatus.OFFLINE,
-        DeviceState.STARTING: DeviceStatus.OFFLINE,
+        DeviceState.STARTING: DeviceStatus.STARTING,
         DeviceState.STOPPING: DeviceStatus.OFFLINE,
         DeviceState.MAINTENANCE: DeviceStatus.OFFLINE,
         DeviceState.PROGRAM: DeviceStatus.OFFLINE,

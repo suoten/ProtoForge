@@ -145,6 +145,7 @@ export async function fetchDefaultPorts() {
 export const deviceStatusMap = {  // FIXED: 硬编码英文标签改为i18n key
   online: ['success', 'common.online'],
   running: ['success', 'common.running'],
+  starting: ['warning', 'common.starting'],
   error: ['error', 'common.error'],
   stopped: ['default', 'common.stopped'],
   offline: ['default', 'common.offline'],
