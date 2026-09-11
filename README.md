@@ -3,7 +3,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <h1>🖥️ ProtoForge</h1>
-<p><b>一台电脑 = 17 种工业设备</b></p>
+<p><b>一台电脑 = 21 种工业设备</b></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
 [![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
@@ -16,7 +16,7 @@
 
 > ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
 >
-> 🔥 **V1.0.0 正式发布** · 90+ 设备模板 · 全链路仿真 · EdgeLite 生态对接
+> 🔥 **V1.1.0 升级发布** · 122 设备模板 · 21 种工业协议 · CSV 批量导入导出 · EdgeLite 生态对接
 
 ![仪表盘](docs/images/1.png)
 
@@ -68,9 +68,9 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 ![设备管理](docs/images/2.png)
 
-### 🌐 协议服务 — 17 种工业协议一键启停
+### 🌐 协议服务 — 21 种工业协议一键启停
 
-Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT，全部支持独立配置端口和高级参数。
+Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS，全部支持独立配置端口和高级参数。
 
 ![协议服务](docs/images/3.png)
 
@@ -86,9 +86,9 @@ Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubis
 
 ![场景编排器](docs/images/5.png)
 
-### 📦 模板市场 — 90+ 设备模板开箱即用
+### 📦 模板市场 — 122 设备模板开箱即用
 
-PLC、传感器、数控机床、IoT 设备、摄像头、楼宇设备等分类筛选，选择模板一键创建仿真设备。
+PLC、传感器、数控机床、IoT 设备、摄像头、楼宇设备、电力保护装置、IED、环境传感器等分类筛选，选择模板一键创建仿真设备。
 
 ![模板市场](docs/images/6.png)
 
@@ -132,9 +132,9 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 ## ✨ 核心特性
 
-- **17 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT
+- **21 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
-- **90+ 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器，选模板→起名字→一键创建
+- **122 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器、保护继电器、IED、环境传感器、微电网，选模板→起名字→一键创建
 - **实时调试日志** — WebSocket 实时推送协议交互报文，按协议/方向/关键词筛选，点击查看详情，快速定位开发问题
 - **可视化场景编排** — 可视化设备联动规则编辑器，支持阈值/值变化/定时/脚本四种规则类型
 - **一键仿真测试** — 自动生成测试用例，智能诊断问题
@@ -148,6 +148,8 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 - **可视化系统设置** — 前端直接修改端口和配置，无需改代码
 - **多语言 SDK** — Python（同步/异步 90+ 方法，覆盖全部 API）、Java / Go / C#（核心方法：设备/场景/协议管理）
 - **gRPC 远程管理** — 15 个 RPC 方法，支持跨语言远程调用
+- **CSV 批量导入导出** — 设备配置一键导出 CSV，批量导入快速创建多台设备，跨环境迁移效率倍增
+- **录制回放压缩** — Gzip 压缩存储，节省磁盘空间
 - **数据库备份恢复** — 一键导出/导入全库数据 JSON
 - **协议安全增强** — OPC-UA 证书自动生成、MQTT TLS 加密、GB28181 SRTP、录制报文加密
 - **K8s/Helm 部署** — 完整 Kubernetes 部署方案 + Helm Chart
@@ -282,10 +284,10 @@ protoforge demo
 
 #### 📦 可选：安装更多协议
 
-`pip install -e .` 只安装核心协议（Modbus TCP/RTU、HTTP、GB28181、MC、FINS、AB、OPC-DA、FANUC、MTConnect、Toledo、PROFINET、EtherCAT 共 13 种，开箱即用）。以下 4 种协议需要额外依赖：
+`pip install -e .` 只安装核心协议（Modbus TCP/RTU、HTTP、GB28181、MC、FINS、AB、OPC-DA、FANUC、MTConnect、Toledo、PROFINET、EtherCAT、IEC 104、IEC 61850、CoAP、DDS 共 17 种，开箱即用）。以下 4 种协议需要额外依赖：
 
 ```bash
-pip install -e ".[all]"        # 安装全部 17 种协议
+pip install -e ".[all]"        # 安装全部 21 种协议
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -311,6 +313,10 @@ pip install -e ".[s7]"        # Siemens S7
 | MQTT           | `[mqtt]`   | 1883  | 物联网消息协议          |
 | BACnet         | `[bacnet]` | 47808 | 楼宇自动化协议          |
 | Siemens S7     | `[s7]`     | 102   | 西门子 PLC 协议       |
+| IEC 60870-5-104 | 不需要      | 2404  | 电力远动协议 (SCADA)    |
+| IEC 61850       | 不需要        | 102   | 变电站自动化标准 (MMS)   |
+| CoAP           | 不需要        | 5683  | 受限 IoT 应用协议 (UDP) |
+| DDS            | 不需要        | 7400  | 数据分发服务 (发布/订阅)  |
 
 ***
 
@@ -350,7 +356,7 @@ pip install -e ".[s7]"        # Siemens S7
                     │  MQTT Broker        ←─ 端口 1883  │
                     │  HTTP Server        ←─ 端口 8080  │
                     │  GB28181 SIP        ←─ 端口 5060  │
-                    │  ...（17 种协议服务端）              │
+                    │  ...（21 种协议服务端）              │
                     └──────────┬──────────────────────┘
                                │ 标准 TCP/UDP 协议通信
                                │（和真实设备一模一样）
@@ -604,6 +610,10 @@ PROTOFORGE_GB28181_PORT=5060
 | 1701  | Mettler-Toledo | 称重仪表协议                              |
 | 34964 | PROFINET IO    | PI组织实时工业以太网协议                       |
 | 34980 | EtherCAT       | 倍福实时工业以太网协议                         |
+| 2404  | IEC 60870-5-104 | 电力远动协议（SCADA）                      |
+| 102   | IEC 61850       | 变电站自动化标准（MMS）                      |
+| 5683  | CoAP           | 受限 IoT 应用协议（UDP）                    |
+| 7400  | DDS            | 数据分发服务（发布/订阅）                      |
 | 50051 | gRPC           | 远程管理接口（默认禁用，设 `GRPC_PORT=50051` 启用） |
 
 #### 数据库配置
@@ -905,9 +915,9 @@ ProtoForge/
 │   ├── config.py             # 配置管理
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
-│   ├── protocols/            # 17 种协议服务端实现
+│   ├── protocols/            # 21 种协议服务端实现
 │   ├── sdk/                  # Python SDK（同步/异步）
-│   └── templates/            # 90+ 设备模板（JSON）
+│   └── templates/            # 122 设备模板（JSON）
 ├── sdk/                       # 多语言 SDK
 │   ├── java/                 # Java SDK
 │   ├── go/                   # Go SDK

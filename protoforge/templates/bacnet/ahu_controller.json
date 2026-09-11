@@ -1,5 +1,5 @@
 {
-  "id": "bacnet_ahu",
+  "id": "bacnet_ahu_controller",
   "name": "BACnet空调机组",
   "protocol": "bacnet",
   "description": "BACnet空调机组控制器，支持温度、湿度、风量、阀门控制等楼宇自控功能",

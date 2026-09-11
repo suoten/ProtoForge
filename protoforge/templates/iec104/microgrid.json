@@ -1,0 +1,19 @@
+{
+  "id": "iec104-microgrid",
+  "name": "微电网RTU (IEC 104)",
+  "description": "微电网远动终端 - 并网点监测/分布式电源控制",
+  "protocol": "iec104",
+  "device_type": "microgrid_rtu",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "grid_active_power", "address": "6001", "data_type": "float32", "unit": "kW", "description": "并网点有功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -100, "max": 500, "step_size": 5}, "min_value": -500, "max_value": 1000},
+    {"name": "grid_reactive_power", "address": "6002", "data_type": "float32", "unit": "kVar", "description": "并网点无功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -50, "max": 50, "step_size": 1}, "min_value": -200, "max_value": 200},
+    {"name": "grid_voltage", "address": "6003", "data_type": "float32", "unit": "V", "description": "并网点线电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 378, "max": 399, "step_size": 0.2}, "min_value": 0, "max_value": 500},
+    {"name": "grid_frequency", "address": "6004", "data_type": "float32", "unit": "Hz", "description": "电网频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.95, "max": 50.05, "step_size": 0.005}, "min_value": 47, "max_value": 53},
+    {"name": "battery_soc", "address": "6005", "data_type": "float32", "unit": "%", "description": "储能电池SOC", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 30, "max": 80, "step_size": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "pv_power", "address": "6006", "data_type": "float32", "unit": "kW", "description": "光伏发电功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0, "max": 300, "frequency": 0.0001, "noise": 2}, "min_value": 0, "max_value": 500},
+    {"name": "load_power", "address": "6007", "data_type": "float32", "unit": "kW", "description": "负荷功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 50, "max": 400, "step_size": 3}, "min_value": 0, "max_value": 600},
+    {"name": "grid_status", "address": "6008", "data_type": "bool", "unit": "", "description": "并网状态(true=并网 false=离网)", "access": "rw", "generator_type": "fixed", "fixed_value": true}
+  ]
+}

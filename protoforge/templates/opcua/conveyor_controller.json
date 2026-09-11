@@ -1,5 +1,5 @@
 {
-  "id": "opcua_conveyor",
+  "id": "opcua_conveyor_controller",
   "name": "输送线控制器",
   "protocol": "opcua",
   "description": "自动化输送线OPC UA控制器，支持多段皮带速度、传感器状态、分拣控制",

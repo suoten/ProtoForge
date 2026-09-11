@@ -288,6 +288,151 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
     return {"status": "ok", "stopped": stopped, "errors": errors}
 
 
+# ---------------------------------------------------------------------------
+# CSV batch import/export (must be before /devices/{device_id} route)
+# ---------------------------------------------------------------------------
+
+import csv as _csv
+import io as _io
+
+
+@router.get("/devices/export-csv")
+async def export_devices_csv(protocol: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
+    """Export all devices and their points as a CSV file."""
+    engine = _get_engine()
+    devices = engine.list_devices(protocol=protocol)
+    output = _io.StringIO()
+    writer = _csv.writer(output)
+    writer.writerow(["device_id", "device_name", "protocol", "point_name", "address",
+                     "data_type", "unit", "description", "access", "generator_type",
+                     "min_value", "max_value", "fixed_value"])
+    for dev in devices:
+        dev_id = getattr(dev, "id", "") if not isinstance(dev, dict) else dev.get("id", "")
+        dev_name = getattr(dev, "name", "") if not isinstance(dev, dict) else dev.get("name", "")
+        dev_proto = getattr(dev, "protocol", "") if not isinstance(dev, dict) else dev.get("protocol", "")
+        dev_points = getattr(dev, "points", []) if not isinstance(dev, dict) else dev.get("points", [])
+        for pt in dev_points:
+            pt_name = getattr(pt, "name", "") if not isinstance(pt, dict) else pt.get("name", "")
+            pt_addr = getattr(pt, "address", "") if not isinstance(pt, dict) else pt.get("address", "")
+            pt_dt = getattr(pt, "data_type", "") if not isinstance(pt, dict) else pt.get("data_type", "")
+            pt_unit = getattr(pt, "unit", "") if not isinstance(pt, dict) else pt.get("unit", "")
+            pt_desc = getattr(pt, "description", "") if not isinstance(pt, dict) else pt.get("description", "")
+            pt_access = getattr(pt, "access", "rw") if not isinstance(pt, dict) else pt.get("access", "rw")
+            pt_gen = getattr(pt, "generator_type", "fixed") if not isinstance(pt, dict) else pt.get("generator_type", "fixed")
+            writer.writerow([
+                dev_id, dev_name, dev_proto,
+                pt_name, pt_addr, pt_dt, pt_unit, pt_desc, pt_access, pt_gen,
+                getattr(pt, "min_value", "") if not isinstance(pt, dict) else pt.get("min_value", ""),
+                getattr(pt, "max_value", "") if not isinstance(pt, dict) else pt.get("max_value", ""),
+                getattr(pt, "fixed_value", "") if not isinstance(pt, dict) else pt.get("fixed_value", ""),
+            ])
+    content = output.getvalue()
+    from fastapi.responses import Response
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=protoforge_devices.csv"},
+    )
+
+
+class CSVImportRequest(BaseModel):
+    """Request body for CSV batch import."""
+    csv_text: str = Field(..., description="CSV content with device/point definitions")
+    protocol: str = Field(default="", description="Default protocol if not specified in CSV")
+    auto_start: bool = Field(default=True, description="Automatically start devices after creation")
+
+
+@router.post("/devices/import-csv")
+async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depends(require_operator)):
+    """Import devices and points from CSV text."""
+    engine = _get_engine()
+    db = _get_database()
+    lines = req.csv_text.strip().splitlines()
+    if not lines:
+        raise HTTPException(status_code=400, detail="CSV content is empty")
+
+    reader = _csv.DictReader(lines)
+    required_cols = {"device_id", "device_name", "protocol", "point_name"}
+    if not required_cols.issubset(set(reader.fieldnames or [])):
+        raise HTTPException(status_code=400,
+                            detail=f"CSV must contain columns: {', '.join(sorted(required_cols))}. "
+                                   f"Found: {', '.join(reader.fieldnames or [])}")
+
+    devices_data: dict[str, dict[str, Any]] = {}
+    for row in reader:
+        dev_id = row["device_id"].strip()
+        if not dev_id:
+            continue
+        if dev_id not in devices_data:
+            devices_data[dev_id] = {
+                "id": dev_id,
+                "name": row["device_name"].strip(),
+                "protocol": row.get("protocol", "").strip() or req.protocol,
+                "points": [],
+            }
+        point = {
+            "name": row["point_name"].strip(),
+            "address": row.get("address", "").strip(),
+            "data_type": row.get("data_type", "float32").strip() or "float32",
+            "unit": row.get("unit", "").strip(),
+            "description": row.get("description", "").strip(),
+            "access": row.get("access", "rw").strip() or "rw",
+            "generator_type": row.get("generator_type", "fixed").strip() or "fixed",
+        }
+        min_str = row.get("min_value", "").strip()
+        max_str = row.get("max_value", "").strip()
+        if min_str:
+            try:
+                point["min_value"] = float(min_str)
+            except ValueError:
+                pass
+        if max_str:
+            try:
+                point["max_value"] = float(max_str)
+            except ValueError:
+                pass
+        fixed_str = row.get("fixed_value", "").strip()
+        if fixed_str:
+            try:
+                point["fixed_value"] = float(fixed_str)
+            except ValueError:
+                point["fixed_value"] = fixed_str
+
+        devices_data[dev_id]["points"].append(point)
+
+    if not devices_data:
+        raise HTTPException(status_code=400, detail="No valid device rows found in CSV")
+
+    created = []
+    errors = []
+    for dev_id, dev_data in devices_data.items():
+        try:
+            config = DeviceConfig(**dev_data)
+            result = await engine.create_device(config)
+            if db is not None:
+                try:
+                    await db.save_device(config)
+                except Exception as db_err:
+                    logger.warning("Failed to save device %s to DB: %s", dev_id, db_err)
+            if req.auto_start:
+                with contextlib.suppress(Exception):
+                    await engine.start_device(config.id)
+            created.append({"id": dev_id, "name": dev_data["name"], "points": len(dev_data["points"])})
+        except Exception as e:
+            errors.append({"device_id": dev_id, "error": str(e)})
+            logger.warning("Failed to create device %s from CSV: %s", dev_id, e)
+
+    _trigger_webhook_safe("device_batch_imported", {"created": len(created), "errors": len(errors)})
+
+    return {
+        "status": "ok",
+        "created": len(created),
+        "errors": len(errors),
+        "devices": created,
+        "error_details": errors,
+    }
+
+
 @router.get("/devices/{device_id}")
 async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()
@@ -1206,3 +1351,4 @@ async def remove_timeseries_pattern(point_name: str, _user: dict[str, Any] = Dep
     except Exception as e:
         logger.exception("Failed to remove time series pattern %s: %s", point_name, e)
         raise HTTPException(status_code=500, detail=f"Failed to remove time series pattern: {e}") from e
+

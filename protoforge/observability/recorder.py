@@ -164,6 +164,36 @@ class Recording:
     def export_json(self) -> str:
         return json.dumps(self.to_full_dict(), indent=2, ensure_ascii=False)
 
+    def export_compressed(self) -> bytes:
+        """Export recording as gzip-compressed JSON for efficient storage."""
+        import gzip
+        raw = json.dumps(self.to_full_dict(), ensure_ascii=False).encode("utf-8")
+        return gzip.compress(raw)
+
+    @classmethod
+    def from_compressed(cls, compressed_data: bytes) -> "Recording":
+        """Import a gzip-compressed recording."""
+        import gzip
+        raw = gzip.decompress(compressed_data).decode("utf-8")
+        data = json.loads(raw)
+        return cls._from_dict(data)
+
+    @classmethod
+    def _from_dict(cls, data: dict[str, Any]) -> "Recording":
+        """Reconstruct a Recording from a dict (used by from_compressed)."""
+        messages = []
+        for m in data.get("frames", data.get("events", [])):
+            messages.append(RecordedMessage.from_dict(m))
+        return cls(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            protocol=data.get("protocol", ""),
+            start_time=data.get("start_time", data.get("started_at", 0)),
+            end_time=data.get("end_time", data.get("stopped_at", 0)),
+            messages=messages,
+            metadata=data.get("metadata", {}),
+        )
+
 
 class Recorder:
     _MAX_MESSAGES = None

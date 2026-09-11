@@ -1,0 +1,15 @@
+{
+  "id": "coap-air-quality",
+  "name": "空气质量传感器 (CoAP)",
+  "description": "空气质量监测 - PM2.5/PM10/VOC/噪声",
+  "protocol": "coap",
+  "device_type": "air_quality",
+  "category": "IoT",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "pm25", "address": "air/pm25", "data_type": "uint16", "unit": "μg/m³", "description": "PM2.5", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 10, "max": 200, "step_size": 3}, "min_value": 0, "max_value": 999},
+    {"name": "pm10", "address": "air/pm10", "data_type": "uint16", "unit": "μg/m³", "description": "PM10", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 20, "max": 300, "step_size": 5}, "min_value": 0, "max_value": 999},
+    {"name": "voc", "address": "air/voc", "data_type": "uint16", "unit": "ppb", "description": "挥发性有机物", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 50, "max": 500, "step_size": 10}, "min_value": 0, "max_value": 5000},
+    {"name": "noise", "address": "air/noise", "data_type": "float32", "unit": "dB", "description": "环境噪声", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 35, "max": 75, "step_size": 2}, "min_value": 0, "max_value": 120}
+  ]
+}

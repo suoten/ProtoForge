@@ -1,0 +1,19 @@
+{
+  "id": "iec104-bms",
+  "name": "储能BMS (IEC 104)",
+  "description": "电池储能系统BMS - 电池组电压/电流/SOC/SOH",
+  "protocol": "iec104",
+  "device_type": "bms",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "battery_voltage", "address": "3001", "data_type": "float32", "unit": "V", "description": "电池组总电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 512, "max": 576, "step_size": 0.5}, "min_value": 0, "max_value": 1000},
+    {"name": "battery_current", "address": "3002", "data_type": "float32", "unit": "A", "description": "电池组总电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": -50, "max": 50, "frequency": 0.01, "noise": 1}, "min_value": -200, "max_value": 200},
+    {"name": "soc", "address": "3003", "data_type": "float32", "unit": "%", "description": "电池荷电状态SOC", "access": "rw", "generator_type": "increment", "generator_config": {"min": 20, "max": 100, "step": 0.01, "frequency": 0.1}, "min_value": 0, "max_value": 100},
+    {"name": "soh", "address": "3004", "data_type": "float32", "unit": "%", "description": "电池健康状态SOH", "access": "rw", "generator_type": "fixed", "fixed_value": 98.5, "min_value": 0, "max_value": 100},
+    {"name": "cell_max_temp", "address": "3005", "data_type": "float32", "unit": "°C", "description": "单体最高温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 25, "max": 35, "frequency": 0.005, "noise": 0.3}, "min_value": 0, "max_value": 80},
+    {"name": "cell_max_voltage", "address": "3006", "data_type": "float32", "unit": "V", "description": "单体最高电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 3.2, "max": 3.65, "step_size": 0.005}, "min_value": 0, "max_value": 5},
+    {"name": "cell_min_voltage", "address": "3007", "data_type": "float32", "unit": "V", "description": "单体最低电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 3.0, "max": 3.5, "step_size": 0.005}, "min_value": 0, "max_value": 5},
+    {"name": "charge_status", "address": "3008", "data_type": "bool", "unit": "", "description": "充电状态", "access": "rw", "generator_type": "fixed", "fixed_value": true}
+  ]
+}

@@ -72,7 +72,7 @@ class OpcDaDeviceBehavior(StandardDeviceBehavior):
 
 class OpcDaServer(ProtocolServer):
     protocol_name = "opcda"
-    protocol_display_name = "OPC-DA (TCP-Proto)"
+    protocol_display_name = "OPC-DA (TCP Bridge)"
 
     OPCDA_MAGIC = b"PFDA"
 

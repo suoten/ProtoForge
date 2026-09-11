@@ -1,5 +1,5 @@
 {
-  "id": "toledo_scale",
+  "id": "toledo_scale_basic",
   "name": "梅特勒-托利多电子秤",
   "protocol": "toledo",
   "description": "梅特勒-托利多电子秤连续输出协议仿真",

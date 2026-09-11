@@ -57,6 +57,17 @@
               </n-button>
             </n-dropdown>
           </n-button-group>
+
+          <!-- CSV导入导出 -->
+          <n-button-group size="small">
+            <n-button @click="exportCSV" :loading="csvLoading" :title="t('devices.exportCSV')">
+              <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></template>
+              CSV
+            </n-button>
+            <n-button @click="showCSVImport = true" :title="t('devices.importCSV')">
+              <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></template>
+            </n-button>
+          </n-button-group>
         </n-space>
       </n-space>
 
@@ -480,6 +491,30 @@
         </template>
       </n-modal>
 
+      <!-- CSV导入弹窗 -->
+      <n-modal v-model:show="showCSVImport" preset="card" :title="t('devices.importCSV')" style="width:min(640px, 90vw)">
+        <n-space vertical size="large">
+          <n-alert type="info" :bordered="false">
+            <div style="font-size:13px; line-height:1.6">
+              CSV格式：device_id, device_name, protocol, point_name, address, data_type, unit, description, access, generator_type, min_value, max_value, fixed_value<br/>
+              每个点位一行，相同device_id的行会被合并为一个设备。
+            </div>
+          </n-alert>
+          <n-upload :show-file-list="false" accept=".csv,.txt" @change="handleCSVFileUpload">
+            <n-button size="small">选择CSV文件</n-button>
+          </n-upload>
+          <n-input v-model:value="csvText" type="textarea" :rows="10" placeholder="粘贴CSV内容或上传文件..." />
+          <n-space align="center">
+            <n-switch v-model:value="csvAutoStart" />
+            <span style="font-size:13px">导入后自动启动设备</span>
+          </n-space>
+          <n-space justify="end">
+            <n-button @click="showCSVImport = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="importCSV" :loading="csvLoading">{{ t('common.import') }}</n-button>
+          </n-space>
+        </n-space>
+      </n-modal>
+
     </n-space>
   </div>
 </template>
@@ -503,6 +538,10 @@ const dialog = useDialog()
 const devices = ref([])
 const selectedIds = ref([])
 const batchLoading = ref(false)
+const csvLoading = ref(false)
+const showCSVImport = ref(false)
+const csvText = ref('')
+const csvAutoStart = ref(true)
 const dataLoading = ref(false)
 const pushLoading = ref(false)
 const protocols = ref([])
@@ -1047,6 +1086,53 @@ async function loadData() {
     }
   } catch (e) { message.error(t('devices.loadDataFailed') + ': ' + (e.response?.data?.detail || e.message)) }
   finally { dataLoading.value = false }
+}
+
+async function exportCSV() {
+  csvLoading.value = true
+  try {
+    const blob = await api.exportDevicesCSV(filterProtocol.value)
+    const url = window.URL.createObjectURL(new Blob([blob], { type: 'text/csv' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'protoforge_devices.csv'
+    link.click()
+    window.URL.revokeObjectURL(url)
+    message.success(t('devices.csvExported'))
+  } catch (e) {
+    message.error(t('devices.csvExportFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally {
+    csvLoading.value = false
+  }
+}
+
+async function importCSV() {
+  if (!csvText.value.trim()) {
+    message.warning(t('devices.csvEmpty'))
+    return
+  }
+  csvLoading.value = true
+  try {
+    const res = await api.importDevicesCSV(csvText.value, '', csvAutoStart.value)
+    message.success(t('devices.csvImported') + `: ${res.created} ${t('devices.created')}`)
+    showCSVImport.value = false
+    csvText.value = ''
+    await loadData()
+  } catch (e) {
+    message.error(t('devices.csvImportFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally {
+    csvLoading.value = false
+  }
+}
+
+function handleCSVFileUpload(e) {
+  const file = e.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    csvText.value = ev.target.result
+  }
+  reader.readAsText(file)
 }
 
 async function batchStart() {

@@ -1,5 +1,5 @@
 {
-  "id": "mtconnect_lathe",
+  "id": "mtconnect_lathe_machine",
   "name": "MTConnect车床",
   "protocol": "mtconnect",
   "description": "MTConnect标准车床设备，HTTP/XML协议通信，支持实时数据采集",

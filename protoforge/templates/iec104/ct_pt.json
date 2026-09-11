@@ -1,0 +1,19 @@
+{
+  "id": "iec104-ct-pt",
+  "name": "电流电压互感器 (IEC 104)",
+  "description": "CT/PT 互感器 - 三相电压/电流/功率因数",
+  "protocol": "iec104",
+  "device_type": "ct_pt",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "voltage_a", "address": "2001", "data_type": "float32", "unit": "kV", "description": "A相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 9.9, "max": 10.1, "frequency": 50, "noise": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "voltage_b", "address": "2002", "data_type": "float32", "unit": "kV", "description": "B相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 9.9, "max": 10.1, "frequency": 50, "phase": 2.094, "noise": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "voltage_c", "address": "2003", "data_type": "float32", "unit": "kV", "description": "C相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 9.9, "max": 10.1, "frequency": 50, "phase": 4.189, "noise": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "current_a", "address": "2004", "data_type": "float32", "unit": "A", "description": "A相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 380, "max": 420, "frequency": 50, "noise": 1}, "min_value": 0, "max_value": 2000},
+    {"name": "current_b", "address": "2005", "data_type": "float32", "unit": "A", "description": "B相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 380, "max": 420, "frequency": 50, "phase": 2.094, "noise": 1}, "min_value": 0, "max_value": 2000},
+    {"name": "current_c", "address": "2006", "data_type": "float32", "unit": "A", "description": "C相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 380, "max": 420, "frequency": 50, "phase": 4.189, "noise": 1}, "min_value": 0, "max_value": 2000},
+    {"name": "power_factor", "address": "2007", "data_type": "float32", "unit": "", "description": "功率因数", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0.85, "max": 0.99, "step_size": 0.005}, "min_value": 0, "max_value": 1},
+    {"name": "frequency", "address": "2008", "data_type": "float32", "unit": "Hz", "description": "电网频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.95, "max": 50.05, "step_size": 0.01}, "min_value": 47, "max_value": 53}
+  ]
+}

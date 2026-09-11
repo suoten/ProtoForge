@@ -1,0 +1,18 @@
+{
+  "id": "dds-robot-fleet",
+  "name": "机器人队列 (DDS)",
+  "description": "多AGV机器人队列 - 位置/速度/载重/状态",
+  "protocol": "dds",
+  "device_type": "robot_fleet",
+  "category": "机器人",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "agv1_x", "address": "protoforge/agv1/x", "data_type": "float32", "unit": "m", "description": "AGV1 X坐标", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 100, "step_size": 0.5}, "min_value": 0, "max_value": 200},
+    {"name": "agv1_y", "address": "protoforge/agv1/y", "data_type": "float32", "unit": "m", "description": "AGV1 Y坐标", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 50, "step_size": 0.3}, "min_value": 0, "max_value": 100},
+    {"name": "agv1_speed", "address": "protoforge/agv1/speed", "data_type": "float32", "unit": "m/s", "description": "AGV1速度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 2, "step_size": 0.1}, "min_value": 0, "max_value": 5},
+    {"name": "agv1_payload", "address": "protoforge/agv1/payload", "data_type": "float32", "unit": "kg", "description": "AGV1载重", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 200, "step_size": 5}, "min_value": 0, "max_value": 500},
+    {"name": "agv1_battery", "address": "protoforge/agv1/battery", "data_type": "float32", "unit": "%", "description": "AGV1电池", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 20, "max": 100, "step_size": 0.1}, "min_value": 0, "max_value": 100},
+    {"name": "agv1_status", "address": "protoforge/agv1/status", "data_type": "uint16", "unit": "", "description": "AGV1状态(0=空闲 1=运行 2=充电 3=故障)", "access": "rw", "generator_type": "fixed", "fixed_value": 1, "min_value": 0, "max_value": 10},
+    {"name": "fleet_count", "address": "protoforge/fleet/count", "data_type": "uint16", "unit": "", "description": "活跃AGV数量", "access": "rw", "generator_type": "fixed", "fixed_value": 8, "min_value": 0, "max_value": 100}
+  ]
+}

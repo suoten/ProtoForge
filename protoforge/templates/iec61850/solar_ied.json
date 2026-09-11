@@ -1,0 +1,18 @@
+{
+  "id": "iec61850-solar-ied",
+  "name": "光伏IED (IEC 61850)",
+  "description": "光伏并口IED - 辐照度/功率/保护",
+  "protocol": "iec61850",
+  "device_type": "solar_ied",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "irradiance", "address": "LD0/DRPI1.Irr.cVal.mag.f", "data_type": "float32", "unit": "W/m2", "description": "太阳辐照度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 200, "max": 1000, "frequency": 0.0001, "noise": 10}, "min_value": 0, "max_value": 1200},
+    {"name": "active_power", "address": "LD0/MMXU1.PPV.cVal.mag.f", "data_type": "float32", "unit": "MW", "description": "有功功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0.5, "max": 5, "frequency": 0.0001, "noise": 0.05}, "min_value": 0, "max_value": 10},
+    {"name": "reactive_power", "address": "LD0/MMXU1.RPV.cVal.mag.f", "data_type": "float32", "unit": "MVar", "description": "无功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -0.5, "max": 0.5, "step_size": 0.02}, "min_value": -2, "max_value": 2},
+    {"name": "breaker_status", "address": "LD0/XCBR1.Pos.stVal", "data_type": "bool", "unit": "", "description": "并网断路器", "access": "rw", "generator_type": "fixed", "fixed_value": true},
+    {"name": "overvoltage_trip", "address": "LD0/PTOV1.Str.stVal", "data_type": "bool", "unit": "", "description": "过压保护", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "overfrequency_trip", "address": "LD0/PTOF1.Str.stVal", "data_type": "bool", "unit": "", "description": "高频保护", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "inverter_temp", "address": "LD0/TTMP1.TmpVal", "data_type": "float32", "unit": "°C", "description": "逆变器温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 35, "max": 55, "frequency": 0.001, "noise": 0.5}, "min_value": 0, "max_value": 90}
+  ]
+}

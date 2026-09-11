@@ -39,6 +39,10 @@ class TemplateManager:
         self._load_from_dir(_TEMPLATES_DIR / "profinet")
         self._load_from_dir(_TEMPLATES_DIR / "ethercat")
         self._load_from_dir(_TEMPLATES_DIR / "http_rest")
+        self._load_from_dir(_TEMPLATES_DIR / "iec104")
+        self._load_from_dir(_TEMPLATES_DIR / "iec61850")
+        self._load_from_dir(_TEMPLATES_DIR / "coap")
+        self._load_from_dir(_TEMPLATES_DIR / "dds")
         self._loaded = True
         logger.info("Loaded %d built-in templates", len(self._templates))
 

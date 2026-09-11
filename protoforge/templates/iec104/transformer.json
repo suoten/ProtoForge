@@ -1,0 +1,81 @@
+{
+  "id": "iec104-transformer",
+  "name": "电力变压器 (IEC 104)",
+  "description": "电力变压器监控 - 油温/绕组温度/负荷/分接开关",
+  "protocol": "iec104",
+  "device_type": "transformer",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {
+      "name": "oil_temperature",
+      "address": "1001",
+      "data_type": "float32",
+      "unit": "°C",
+      "description": "变压器顶层油温",
+      "access": "rw",
+      "generator_type": "sine",
+      "generator_config": {"min": 45, "max": 85, "frequency": 0.01, "noise": 0.5},
+      "min_value": 0,
+      "max_value": 200
+    },
+    {
+      "name": "winding_temperature",
+      "address": "1002",
+      "data_type": "float32",
+      "unit": "°C",
+      "description": "绕组热点温度",
+      "access": "rw",
+      "generator_type": "sine",
+      "generator_config": {"min": 55, "max": 95, "frequency": 0.01, "noise": 0.5},
+      "min_value": 0,
+      "max_value": 200
+    },
+    {
+      "name": "active_power",
+      "address": "1003",
+      "data_type": "float32",
+      "unit": "MW",
+      "description": "有功功率",
+      "access": "rw",
+      "generator_type": "random_walk",
+      "generator_config": {"min": 10, "max": 50, "step_size": 0.5},
+      "min_value": 0,
+      "max_value": 100
+    },
+    {
+      "name": "reactive_power",
+      "address": "1004",
+      "data_type": "float32",
+      "unit": "MVar",
+      "description": "无功功率",
+      "access": "rw",
+      "generator_type": "random_walk",
+      "generator_config": {"min": -5, "max": 15, "step_size": 0.3},
+      "min_value": -20,
+      "max_value": 30
+    },
+    {
+      "name": "tap_position",
+      "address": "1005",
+      "data_type": "uint16",
+      "unit": "",
+      "description": "分接开关位置",
+      "access": "rw",
+      "generator_type": "increment",
+      "generator_config": {"min": 1, "max": 17, "step": 1, "frequency": 0.01},
+      "min_value": 0,
+      "max_value": 17
+    },
+    {
+      "name": "circuit_breaker_status",
+      "address": "1006",
+      "data_type": "bool",
+      "unit": "",
+      "description": "断路器状态 (true=合闸 false=分闸)",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true
+    }
+  ]
+}

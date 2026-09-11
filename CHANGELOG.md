@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.1.0 — 2026-09-11
+
+**New Protocols (17 → 21):**
+
+- Added IEC 60870-5-104: Power telecontrol protocol (SCADA). Pure Python TCP server with APDU/ASDU parsing, U/S/I-format frames, spontaneous data transmission, command control (single/double/set-point commands). 7 device templates (BMS, CT/PT, microgrid, protection relay, solar plant, substation RTU, transformer).
+- Added IEC 61850: Substation automation standard with MMS TCP mapping. BER-encoded PDU parsing, Initiate/Conclude/Read/Write/GetNameList services, Logical Device → Logical Node → Data Object model, CDC types (SPS, MV, SPC, DPC). 3 device templates (bay controller, protection IED, solar IED).
+- Added CoAP (RFC 7252): Constrained Application Protocol for low-power IoT. Pure Python UDP server with CON/NON messages, GET/POST/PUT/DELETE, Uri-Path option parsing, Observe (RFC 7641) push, /.well-known/core discovery. 4 device templates (air quality, env sensor, gateway, smart meter).
+- Added DDS (Data Distribution Service): OMG standard pub/sub middleware with simplified RTPS wire protocol over TCP/UDP. Topic-based data distribution, subscribe/publish actions, QoS policies. 3 device templates (power grid, robot fleet, wind turbine).
+- All 4 new protocols are pure Python — no third-party dependencies required, included in core package.
+
+**Template expansion (90+ → 122):**
+
+- Added 32 new device templates across 4 new protocols (17 templates) and 2 existing protocols (energy meter, PV inverter for Modbus).
+- Fixed 6 duplicate template IDs that caused silent template overwriting during loading.
+- Total: 122 templates across 21 protocol categories.
+
+**CSV batch import/export:**
+
+- Added `GET /api/v1/devices/export-csv` endpoint — export all devices as CSV with one click.
+- Added `POST /api/v1/devices/import-csv` endpoint — batch import devices from CSV content.
+- Frontend CSV import/export buttons in Devices page.
+- Fixed route conflict: `/devices/export-csv` was incorrectly matched as `/{device_id}` — moved export route before parameterized route.
+- Fixed `AttributeError: 'DeviceInfo' object has no attribute 'get'` — export logic now handles both Pydantic models and dicts.
+
+**Recording compression:**
+
+- Recorder `export_compressed` method now uses gzip compression for storage optimization.
+- Reduced disk space usage for recorded protocol traces.
+
+**i18n fixes:**
+
+- Fixed i18n key display issue where `devices.importCSV` and `devices.exportCSV` showed as raw keys instead of translated text.
+- Added missing i18n keys (`importCSV`, `exportCSV`, `create`, `created`, `csvEmpty`, `csvExported`, `csvExportFailed`, `csvImported`, `csvImportFailed`) in both zh and en.
+- Removed incorrectly placed i18n keys from `common` namespace.
+- Fixed Vue component `t()` function calls — removed incorrect fallback parameters.
+
+**Documentation:**
+
+- Updated README.md: protocol count 17 → 21, template count 90+ → 122, added new protocols in feature list, protocol table, port table, and architecture diagram.
+- Updated version numbers across `pyproject.toml`, `protoforge/__init__.py`, and `web/package.json`.
+- Updated keywords in `pyproject.toml` to include new protocols.
+- Updated protocol optional-dependencies documentation in `pyproject.toml`.
+
+**OPC-DA:**
+
+- Real protocol implementation improvements (server.py modified).
+
 ## v1.0.0 — 2026-08-31
 
 **Architecture refactor (core split):**

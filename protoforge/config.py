@@ -99,6 +99,10 @@ class Settings(BaseSettings):
     toledo_port: int = 1701
     profinet_port: int = 34964
     ethercat_port: int = 34980
+    iec104_port: int = 2404
+    iec61850_port: int = 102
+    coap_port: int = 5683
+    dds_port: int = 7400
 
     # FIXED: 添加配置验证器
     @field_validator("port")
@@ -177,6 +181,10 @@ class Settings(BaseSettings):
             "toledo": {"port": self.toledo_port, "host": self.host or "0.0.0.0"},
             "profinet": {"port": self.profinet_port, "host": self.host or "0.0.0.0"},
             "ethercat": {"port": self.ethercat_port, "host": self.host or "0.0.0.0"},
+            "iec104": {"port": self.iec104_port, "host": self.host or "0.0.0.0"},
+            "iec61850": {"port": self.iec61850_port, "host": self.host or "0.0.0.0"},
+            "coap": {"port": self.coap_port, "host": self.host or "0.0.0.0"},
+            "dds": {"port": self.dds_port, "host": self.host or "0.0.0.0"},
         }
 
     model_config = {

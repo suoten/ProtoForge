@@ -1,0 +1,15 @@
+{
+  "id": "coap-env-sensor",
+  "name": "环境传感器 (CoAP)",
+  "description": "低功耗环境传感器 - 温湿度/CO2/光照",
+  "protocol": "coap",
+  "device_type": "env_sensor",
+  "category": "IoT",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "temperature", "address": "sensor/temperature", "data_type": "float32", "unit": "°C", "description": "环境温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 18, "max": 28, "frequency": 0.001, "noise": 0.1}, "min_value": -20, "max_value": 60},
+    {"name": "humidity", "address": "sensor/humidity", "data_type": "float32", "unit": "%RH", "description": "相对湿度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 30, "max": 70, "step_size": 1}, "min_value": 0, "max_value": 100},
+    {"name": "co2", "address": "sensor/co2", "data_type": "uint16", "unit": "ppm", "description": "CO2浓度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 400, "max": 1500, "step_size": 5}, "min_value": 0, "max_value": 5000},
+    {"name": "light", "address": "sensor/light", "data_type": "uint16", "unit": "lux", "description": "光照强度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0, "max": 1000, "frequency": 0.0001, "noise": 5}, "min_value": 0, "max_value": 65535}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "id": "iec104-protection-relay",
+  "name": "微机保护装置 (IEC 104)",
+  "description": "线路保护装置 - 过流/零序/距离保护",
+  "protocol": "iec104",
+  "device_type": "protection_relay",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "phase_current_a", "address": "4001", "data_type": "float32", "unit": "A", "description": "A相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 200, "max": 300, "frequency": 0.01, "noise": 2}, "min_value": 0, "max_value": 2000},
+    {"name": "phase_current_b", "address": "4002", "data_type": "float32", "unit": "A", "description": "B相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 200, "max": 300, "frequency": 0.01, "noise": 2, "phase": 120}, "min_value": 0, "max_value": 2000},
+    {"name": "phase_current_c", "address": "4003", "data_type": "float32", "unit": "A", "description": "C相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 200, "max": 300, "frequency": 0.01, "noise": 2, "phase": 240}, "min_value": 0, "max_value": 2000},
+    {"name": "zero_seq_current", "address": "4004", "data_type": "float32", "unit": "A", "description": "零序电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 5, "step_size": 0.1}, "min_value": 0, "max_value": 100},
+    {"name": "overcurrent_flag", "address": "4005", "data_type": "bool", "unit": "", "description": "过流保护动作标志", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "distance_zone1", "address": "4006", "data_type": "bool", "unit": "", "description": "距离保护I段动作", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "distance_zone2", "address": "4007", "data_type": "bool", "unit": "", "description": "距离保护II段动作", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "trip_command", "address": "4008", "data_type": "bool", "unit": "", "description": "跳闸命令", "access": "rw", "generator_type": "fixed", "fixed_value": false}
+  ]
+}

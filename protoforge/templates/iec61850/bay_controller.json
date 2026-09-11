@@ -1,0 +1,19 @@
+{
+  "id": "iec61850-bay-controller",
+  "name": "变电站间隔层 (IEC 61850)",
+  "description": "间隔层IED - 断路器控制/保护/测量",
+  "protocol": "iec61850",
+  "device_type": "bay_controller",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "breaker_pos", "address": "LD0/XCBR1.Pos.stVal", "data_type": "bool", "unit": "", "description": "断路器位置(合/分)", "access": "rw", "generator_type": "fixed", "fixed_value": true},
+    {"name": "breaker_op_cnt", "address": "LD0/XCBR1.Pos.opCnt", "data_type": "uint32", "unit": "", "description": "断路器操作计数", "access": "rw", "generator_type": "fixed", "fixed_value": 142, "min_value": 0, "max_value": 4294967295},
+    {"name": "voltage_a", "address": "LD0/MMXU1.V.phsA.cVal.mag.f", "data_type": "float32", "unit": "kV", "description": "A相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 9.9, "max": 10.1, "step_size": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "voltage_b", "address": "LD0/MMXU1.V.phsB.cVal.mag.f", "data_type": "float32", "unit": "kV", "description": "B相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 9.9, "max": 10.1, "step_size": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "voltage_c", "address": "LD0/MMXU1.V.phsC.cVal.mag.f", "data_type": "float32", "unit": "kV", "description": "C相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 9.9, "max": 10.1, "step_size": 0.01}, "min_value": 0, "max_value": 20},
+    {"name": "current_a", "address": "LD0/MMXU1.A.phsA.cVal.mag.f", "data_type": "float32", "unit": "A", "description": "A相电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 180, "max": 220, "step_size": 1}, "min_value": 0, "max_value": 1000},
+    {"name": "active_power", "address": "LD0/MMXU1.PPV.cVal.mag.f", "data_type": "float32", "unit": "MW", "description": "有功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 3, "max": 5, "step_size": 0.05}, "min_value": 0, "max_value": 10},
+    {"name": "protection_start", "address": "LD0/PTOC1.Str.stVal", "data_type": "bool", "unit": "", "description": "保护启动信号", "access": "rw", "generator_type": "fixed", "fixed_value": false}
+  ]
+}

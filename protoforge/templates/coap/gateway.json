@@ -1,0 +1,18 @@
+{
+  "id": "coap-gateway",
+  "name": "物联网网关 (CoAP)",
+  "description": "低功耗IoT网关 - 多通道数据采集/边缘计算",
+  "protocol": "coap",
+  "device_type": "gateway",
+  "category": "IoT",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "ch1_temp", "address": "gw/ch1/temp", "data_type": "float32", "unit": "°C", "description": "通道1温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 15, "max": 35, "frequency": 0.001, "noise": 0.2}, "min_value": -20, "max_value": 80},
+    {"name": "ch2_temp", "address": "gw/ch2/temp", "data_type": "float32", "unit": "°C", "description": "通道2温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 10, "max": 40, "frequency": 0.001, "noise": 0.3}, "min_value": -20, "max_value": 80},
+    {"name": "ch1_humidity", "address": "gw/ch1/humidity", "data_type": "float32", "unit": "%RH", "description": "通道1湿度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 30, "max": 70, "step_size": 1}, "min_value": 0, "max_value": 100},
+    {"name": "ch2_humidity", "address": "gw/ch2/humidity", "data_type": "float32", "unit": "%RH", "description": "通道2湿度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 25, "max": 65, "step_size": 1}, "min_value": 0, "max_value": 100},
+    {"name": "battery_level", "address": "gw/battery", "data_type": "float32", "unit": "%", "description": "电池电量", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 100, "step": -0.001, "frequency": 0.1}, "min_value": 0, "max_value": 100},
+    {"name": "rssi", "address": "gw/rssi", "data_type": "int16", "unit": "dBm", "description": "信号强度", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -80, "max": -40, "step_size": 1}, "min_value": -120, "max_value": 0},
+    {"name": "uptime", "address": "gw/uptime", "data_type": "uint32", "unit": "s", "description": "运行时间", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 9999999, "step": 1, "frequency": 1}, "min_value": 0, "max_value": 9999999}
+  ]
+}

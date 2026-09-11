@@ -221,6 +221,10 @@ resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   batchStartDevices: (ids) => d(api.post('/devices/batch/start', { device_ids: ids })),
   batchStopDevices: (ids) => d(api.post('/devices/batch/stop', { device_ids: ids })),
 
+  // CSV import/export
+  exportDevicesCSV: (protocol) => api.get('/devices/export-csv', { params: { protocol }, responseType: 'blob' }).then(r => r.data),
+  importDevicesCSV: (csvText, protocol = '', autoStart = true) => d(api.post('/devices/import-csv', { csv_text: csvText, protocol, auto_start: autoStart })),
+
   // 设备详情（含状态机、故障、控制回路）
   getDeviceDetail: (id) => d(api.get(`/devices/${id}/detail`)),
 

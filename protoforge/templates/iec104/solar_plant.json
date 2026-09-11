@@ -1,0 +1,18 @@
+{
+  "id": "iec104-solar-plant",
+  "name": "光伏电站监控 (IEC 104)",
+  "description": "光伏电站 - 辐照度/逆变器/并网点",
+  "protocol": "iec104",
+  "device_type": "solar_plant",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "irradiance", "address": "5001", "data_type": "float32", "unit": "W/m2", "description": "太阳辐照度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 200, "max": 1000, "frequency": 0.0001, "noise": 10}, "min_value": 0, "max_value": 1200},
+    {"name": "pv_voltage", "address": "5002", "data_type": "float32", "unit": "V", "description": "光伏阵列电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 580, "max": 820, "step_size": 2}, "min_value": 0, "max_value": 1000},
+    {"name": "pv_current", "address": "5003", "data_type": "float32", "unit": "A", "description": "光伏阵列电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 50, "max": 200, "frequency": 0.0001, "noise": 1}, "min_value": 0, "max_value": 500},
+    {"name": "grid_active_power", "address": "5004", "data_type": "float32", "unit": "kW", "description": "并网有功功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 30, "max": 150, "frequency": 0.0001, "noise": 1}, "min_value": 0, "max_value": 500},
+    {"name": "grid_reactive_power", "address": "5005", "data_type": "float32", "unit": "kVar", "description": "并网无功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -20, "max": 20, "step_size": 0.5}, "min_value": -100, "max_value": 100},
+    {"name": "inverter_status", "address": "5006", "data_type": "uint16", "unit": "", "description": "逆变器状态(0=待机 1=运行 2=故障)", "access": "rw", "generator_type": "fixed", "fixed_value": 1, "min_value": 0, "max_value": 10},
+    {"name": "grid_frequency", "address": "5007", "data_type": "float32", "unit": "Hz", "description": "电网频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.95, "max": 50.05, "step_size": 0.005}, "min_value": 47, "max_value": 53}
+  ]
+}

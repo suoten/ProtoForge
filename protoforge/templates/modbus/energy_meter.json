@@ -1,0 +1,22 @@
+{
+  "id": "modbus-energy-meter",
+  "name": "多功能电表 (Modbus)",
+  "description": "三相多功能电表 - 电压/电流/功率/电度",
+  "protocol": "modbus_tcp",
+  "device_type": "energy_meter",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "voltage_a", "address": "0", "data_type": "float32", "unit": "V", "description": "A相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 218, "max": 222, "step_size": 0.1}, "min_value": 0, "max_value": 300},
+    {"name": "voltage_b", "address": "2", "data_type": "float32", "unit": "V", "description": "B相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 218, "max": 222, "step_size": 0.1}, "min_value": 0, "max_value": 300},
+    {"name": "voltage_c", "address": "4", "data_type": "float32", "unit": "V", "description": "C相电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 218, "max": 222, "step_size": 0.1}, "min_value": 0, "max_value": 300},
+    {"name": "current_a", "address": "6", "data_type": "float32", "unit": "A", "description": "A相电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 45, "max": 55, "step_size": 0.3}, "min_value": 0, "max_value": 200},
+    {"name": "current_b", "address": "8", "data_type": "float32", "unit": "A", "description": "B相电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 45, "max": 55, "step_size": 0.3}, "min_value": 0, "max_value": 200},
+    {"name": "current_c", "address": "10", "data_type": "float32", "unit": "A", "description": "C相电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 45, "max": 55, "step_size": 0.3}, "min_value": 0, "max_value": 200},
+    {"name": "active_power", "address": "12", "data_type": "float32", "unit": "kW", "description": "有功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 28, "max": 35, "step_size": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "reactive_power", "address": "14", "data_type": "float32", "unit": "kVar", "description": "无功功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 2, "max": 8, "step_size": 0.3}, "min_value": -50, "max_value": 50},
+    {"name": "power_factor", "address": "16", "data_type": "float32", "unit": "", "description": "功率因数", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0.92, "max": 0.99, "step_size": 0.005}, "min_value": 0, "max_value": 1},
+    {"name": "frequency", "address": "18", "data_type": "float32", "unit": "Hz", "description": "电网频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.95, "max": 50.05, "step_size": 0.01}, "min_value": 47, "max_value": 53}
+  ],
+  "protocol_config": {"slave_id": 1}
+}

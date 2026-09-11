@@ -20,9 +20,9 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 
 ## ✨ Features
 
-- **17 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT
+- **21 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS
 - **Full-chain Simulation** — Complete protocol interactions including GB28181 SIP registration, RTP video streaming, and more
-- **90+ Device Templates** — PLC, sensor, CNC, camera, HVAC, servo drive — pick a template, name it, create with one click
+- **122 Device Templates** — PLC, sensor, CNC, camera, HVAC, servo drive, protection relay, IED, env sensor, microgrid — pick a template, name it, create with one click
 - **Real-time Debug Logs** — WebSocket real-time protocol messages, filterable by protocol/direction/keyword
 - **Visual Scenario Editor** — Visual device orchestration with threshold/change/timer/script rule types
 - **One-click Testing** — Auto-generated test cases with smart diagnostics
@@ -207,10 +207,10 @@ protoforge demo
 
 ## 📦 Optional: Install More Protocols
 
-Core protocols (Modbus TCP/RTU, HTTP, GB28181, MC, FINS, AB, OPC-DA, FANUC, MTConnect, Toledo, PROFINET, EtherCAT — 13 total) work out of the box. These 4 require extra deps:
+Core protocols (Modbus TCP/RTU, HTTP, GB28181, MC, FINS, AB, OPC-DA, FANUC, MTConnect, Toledo, PROFINET, EtherCAT, IEC 104, IEC 61850, CoAP, DDS — 17 total) work out of the box. These 4 require extra deps:
 
 ```bash
-pip install -e ".[all]"        # All 17 protocols
+pip install -e ".[all]"        # All 21 protocols
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -236,6 +236,10 @@ pip install -e ".[s7]"        # Siemens S7
 | MQTT | `[mqtt]` | 1883 | IoT messaging |
 | BACnet | `[bacnet]` | 47808 | Building automation |
 | Siemens S7 | `[s7]` | 102 | Siemens PLC |
+| IEC 60870-5-104 | No | 2404 | Power telecontrol (SCADA) |
+| IEC 61850 | No | 102 | Substation automation (MMS) |
+| CoAP | No | 5683 | Constrained IoT protocol (UDP) |
+| DDS | No | 7400 | Data Distribution Service |
 
 ---
 

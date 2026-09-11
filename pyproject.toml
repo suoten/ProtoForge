@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "protoforge"
-version = "1.0.0"
+version = "1.1.0"
 description = "IoT Protocol Simulation & Testing Platform - Postman for IoT"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ requires-python = ">=3.10"
 authors = [
     { name = "suoten", email = "suoten@163.com" },
 ]
-keywords = ["iot", "modbus", "opc-ua", "mqtt", "simulation", "testing", "gb28181", "bacnet", "s7", "mc", "fins", "ab", "opc-da", "fanuc", "mtconnect", "toledo"]
+keywords = ["iot", "modbus", "opc-ua", "mqtt", "simulation", "testing", "gb28181", "bacnet", "s7", "mc", "fins", "ab", "opc-da", "fanuc", "mtconnect", "toledo", "iec104", "iec61850", "coap", "dds"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -40,6 +40,8 @@ dependencies = [
 
 [project.optional-dependencies]
 deploy = ["gunicorn>=21.2.0"]
+# V1.1.0: IEC 104, IEC 61850, CoAP, DDS are pure Python — no extra dependencies needed
+# They are included in the core package and work out of the box
 opcua = ["asyncua>=1.0.0", "cryptography>=42.0.0"]
 mqtt = ["amqtt>=0.11.0"]
 bacnet = ["bacpypes>=0.18.0"]  # FIXED: add missing bacnet extras
@@ -160,5 +162,5 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",
 ]
-# Coverage ratchet: measured 40.5% at v1.0.0; raise in small steps (+1) as tests are added
+# Coverage ratchet: measured 40.5% at v1.1.0; raise in small steps (+1) as tests are added
 addopts = "--cov=protoforge --cov-report=term-missing --cov-report=html --cov-report=xml --cov-report=json --cov-fail-under=41"

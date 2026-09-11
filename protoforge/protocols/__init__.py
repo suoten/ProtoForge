@@ -21,6 +21,10 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "mtconnect": "protoforge.protocols.mtconnect:MtConnectServer",
     "ethercat": "protoforge.protocols.ethercat:EtherCATServer",
     "profinet": "protoforge.protocols.profinet:ProfinetServer",
+    "iec104": "protoforge.protocols.iec104:IEC104Server",
+    "iec61850": "protoforge.protocols.iec61850:IEC61850Server",
+    "coap": "protoforge.protocols.coap:CoAPServer",
+    "dds": "protoforge.protocols.dds:DDSServer",
 }
 
 PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {}

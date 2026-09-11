@@ -1,0 +1,20 @@
+{
+  "id": "modbus-pv-inverter",
+  "name": "光伏逆变器 (Modbus)",
+  "description": "光伏发电逆变器 - 直流侧/交流侧/效率",
+  "protocol": "modbus_tcp",
+  "device_type": "pv_inverter",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "dc_voltage", "address": "0", "data_type": "uint16", "unit": "V", "description": "直流侧电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 580, "max": 850, "step_size": 2}, "min_value": 0, "max_value": 1500},
+    {"name": "dc_current", "address": "1", "data_type": "uint16", "unit": "A", "description": "直流侧电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 5, "max": 15, "step_size": 0.5}, "min_value": 0, "max_value": 50},
+    {"name": "ac_voltage", "address": "2", "data_type": "uint16", "unit": "V", "description": "交流侧电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 218, "max": 222, "step_size": 0.5}, "min_value": 0, "max_value": 300},
+    {"name": "ac_current", "address": "3", "data_type": "uint16", "unit": "A", "description": "交流侧电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 10, "max": 25, "step_size": 0.5}, "min_value": 0, "max_value": 50},
+    {"name": "ac_power", "address": "4", "data_type": "uint16", "unit": "W", "description": "交流输出功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 2000, "max": 5000, "step_size": 50}, "min_value": 0, "max_value": 10000},
+    {"name": "ac_frequency", "address": "5", "data_type": "uint16", "unit": "0.01Hz", "description": "交流频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 4995, "max": 5005, "step_size": 1}, "min_value": 4500, "max_value": 5500},
+    {"name": "inverter_temp", "address": "6", "data_type": "uint16", "unit": "°C", "description": "逆变器温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 30, "max": 55, "frequency": 0.001, "noise": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "daily_energy", "address": "7", "data_type": "uint32", "unit": "Wh", "description": "当日发电量", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 99999, "step": 50, "frequency": 1}, "min_value": 0, "max_value": 4294967295}
+  ],
+  "protocol_config": {"slave_id": 1}
+}

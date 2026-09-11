@@ -17,6 +17,10 @@ export const protocolLabels = {
   toledo: 'Mettler-Toledo',
   profinet: 'PROFINET IO',
   ethercat: 'EtherCAT',
+  iec104: 'IEC 60870-5-104',
+  iec61850: 'IEC 61850',
+  coap: 'CoAP',
+  dds: 'DDS',
 }
 
 export const protocolColors = {
@@ -38,6 +42,10 @@ export const protocolColors = {
   toledo: '#a16207',
   profinet: '#2563eb',
   ethercat: '#7c2d12',
+  iec104: '#0284c7',
+  iec61850: '#0369a1',
+  coap: '#16a34a',
+  dds: '#9333ea',
 }
 
 export const protocolTagTypes = {
@@ -59,6 +67,10 @@ export const protocolTagTypes = {
   toledo: 'warning',
   profinet: 'info',
   ethercat: 'warning',
+  iec104: 'info',
+  iec61850: 'info',
+  coap: 'success',
+  dds: 'info',
 }
 
 export const protocolModes = {
@@ -80,6 +92,10 @@ export const protocolModes = {
   toledo: 'Server',
   profinet: 'IO Device',
   ethercat: 'Slave',
+  iec104: 'Slave',
+  iec61850: 'IED',
+  coap: 'Server',
+  dds: 'Publisher',
 }
 
 export const defaultPorts = {
@@ -101,6 +117,10 @@ export const defaultPorts = {
   toledo: 1701,
   profinet: 34964,
   ethercat: 34980,
+  iec104: 2404,
+  iec61850: 102,
+  coap: 5683,
+  dds: 7400,
 }
 
 export async function fetchDefaultPorts() {

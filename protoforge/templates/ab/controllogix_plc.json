@@ -1,5 +1,5 @@
 {
-  "id": "ab_controllogix",
+  "id": "ab_controllogix_plc",
   "name": "罗克韦尔ControlLogix PLC",
   "protocol": "ab",
   "description": "罗克韦尔ControlLogix系列PLC，EtherNet/IP CIP协议通信，支持标签读写",

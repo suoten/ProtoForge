@@ -1,0 +1,19 @@
+{
+  "id": "iec61850-protection-ied",
+  "name": "保护IED (IEC 61850)",
+  "description": "线路保护IED - 差动保护/距离保护/重合闸",
+  "protocol": "iec61850",
+  "device_type": "protection_ied",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "differential_current", "address": "LD0/PTDF1.Str.stVal", "data_type": "float32", "unit": "A", "description": "差动电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0, "max": 2, "step_size": 0.05}, "min_value": 0, "max_value": 100},
+    {"name": "restraint_current", "address": "LD0/PTDF1.RstVal", "data_type": "float32", "unit": "A", "description": "制动电流", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 100, "max": 300, "step_size": 1}, "min_value": 0, "max_value": 1000},
+    {"name": "distance_zone1_trip", "address": "LD0/PTZ1.Str.stVal", "data_type": "bool", "unit": "", "description": "距离I段跳闸", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "distance_zone2_trip", "address": "LD0/PTZ2.Str.stVal", "data_type": "bool", "unit": "", "description": "距离II段跳闸", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "reclosure_status", "address": "LD0/RREC1.Op.stVal", "data_type": "bool", "unit": "", "description": "重合闸动作状态", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "circuit_breaker", "address": "LD0/XCBR1.Pos.stVal", "data_type": "bool", "unit": "", "description": "断路器位置", "access": "rw", "generator_type": "fixed", "fixed_value": true},
+    {"name": "line_voltage", "address": "LD0/MMXU1.V.phsA.cVal.mag.f", "data_type": "float32", "unit": "kV", "description": "线路电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 109, "max": 111, "step_size": 0.05}, "min_value": 0, "max_value": 200},
+    {"name": "line_current", "address": "LD0/MMXU1.A.phsA.cVal.mag.f", "data_type": "float32", "unit": "A", "description": "线路电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 150, "max": 250, "frequency": 0.01, "noise": 1}, "min_value": 0, "max_value": 1000}
+  ]
+}

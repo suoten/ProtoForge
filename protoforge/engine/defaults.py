@@ -116,6 +116,30 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "EtherCAT Real-time Industrial Ethernet Protocol - Developed by Beckhoff, based on \"On-the-fly\" processing technology, extremely low latency distributed clock synchronization, widely used in motion control",
         "icon": "⚡",
     },
+    "iec104": {
+        "host": "0.0.0.0", "port": 2404, "common_address": 1,
+        "display_name": "IEC 60870-5-104",
+        "description": "IEC 60870-5-104 Power Telecontrol Protocol - TCP-based telecontrol standard, widely used in power SCADA systems, supports spontaneous data transmission and command control",
+        "icon": "⚡",
+    },
+    "iec61850": {
+        "host": "0.0.0.0", "port": 102,
+        "display_name": "IEC 61850",
+        "description": "IEC 61850 Substation Automation Standard - MMS mapping layer (TCP), supports Logical Device/Logical Node/Data Object model, global standard for substation intelligent electronic devices",
+        "icon": "⚡",
+    },
+    "coap": {
+        "host": "0.0.0.0", "port": 5683,
+        "display_name": "CoAP",
+        "description": "CoAP (RFC 7252) - Constrained Application Protocol, RESTful web protocol for low-power IoT devices, UDP-based, supports observe/push, resource discovery",
+        "icon": "📡",
+    },
+    "dds": {
+        "host": "0.0.0.0", "port": 7400,
+        "display_name": "DDS",
+        "description": "DDS (Data Distribution Service) - OMG standard publish/subscribe middleware for real-time systems, used in aerospace, defense, autonomous vehicles",
+        "icon": "📡",
+    },
 }
 
 PROTOCOL_DEVICE_CONFIG = {
@@ -204,6 +228,21 @@ PROTOCOL_DEVICE_CONFIG = {
     ],
     "ethercat": [
         {"key": "slave_address", "label": "Slave Address", "type": "number", "default": 4097, "min": 1, "max": 65535, "description": "EtherCAT slave address (Station Address), master uses this address to address the slave"},
+    ],
+    "iec104": [
+        {"key": "common_address", "label": "Common Address of ASDU", "type": "number", "default": 1, "min": 0, "max": 65535, "description": "IEC 104 common address (identifies the logical device within the connection)"},
+        {"key": "scan_interval", "label": "Scan Interval (seconds)", "type": "number", "default": 1.0, "min": 0.1, "max": 60, "description": "Periodic data scan interval for spontaneous data transmission"},
+        {"key": "k_factor", "label": "K Factor", "type": "number", "default": 12, "min": 1, "max": 32767, "description": "Max outstanding unacknowledged APDUs"},
+    ],
+    "iec61850": [
+        {"key": "ied_name", "label": "IED Name", "type": "string", "default": "PROTOFORGE", "description": "Intelligent Electronic Device name"},
+    ],
+    "coap": [
+        {"key": "push_interval", "label": "Observe Push Interval (s)", "type": "number", "default": 5.0, "min": 0.1, "max": 3600, "description": "Data push interval for Observe subscription (seconds)"},
+    ],
+    "dds": [
+        {"key": "push_interval", "label": "Push Interval (s)", "type": "number", "default": 1.0, "min": 0.1, "max": 60, "description": "Periodic data push interval for subscribers"},
+        {"key": "use_tcp", "label": "Use TCP Transport", "type": "select", "default": "true", "options": ["true", "false"], "description": "Use TCP transport (true) or UDP (false)"},
     ],
 }
 
@@ -422,6 +461,54 @@ PROTOCOL_USAGE: dict[str, dict[str, Any]] = {
             "csharp": "// SOEM.NET example - EtherCAT Master\nusing SOEM;\n\nvar master = new Master();\nmaster.Open(\"{host}\");\nint slaveCount = master.ConfigInit();\n\nif (slaveCount > 0)\n{\n    master.State = OpState.OP;\n    master.WriteState();\n    master.SendProcessData();\n    master.ReceiveProcessData(5000);\n}",
             "java": "// EtherCAT example\n// Using SOEM JNI binding\n// Connection: {host}\n// Scan slaves -> PRE-OP -> SAFE-OP -> OP\n// Read/write PDO process data",
             "go": "// ethercat example - EtherCAT Master\n// Using SOEM CGO binding\n// Connection: {host}\n// Scan slaves -> PRE-OP -> SAFE-OP -> OP\n// Read/write PDO process data",
+        },
+    },
+    "iec104": {
+        "mode": "server",
+        "mode_label": "Server Simulation (Slave/Controlled)",
+        "mode_desc": "ProtoForge simulates an IEC 60870-5-104 telecontrol slave, your master station connects to read/write data objects",
+        "connect_hint": "In your IEC 104 master program, connect to:",
+        "code_examples": {
+            "python": "# IEC 104 Master example\nimport socket\nsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\nsock.connect(('{host}', {port}))\n# Send STARTDT act\nsock.sendall(bytes([0x07, 0x00]))\nresp = sock.recv(2)  # STARTDT con\n# Read periodic data\ndata = sock.recv(1024)\nprint(f'Received {len(data)} bytes', data.hex())",
+            "csharp": "// IEC 104 Master example\nusing System.Net.Sockets;\nusing var tcp = new TcpClient(\"{host}\", {port});\nvar stream = tcp.GetStream();\nstream.Write(new byte[] { 0x07, 0x00 }, 0, 2);\nvar buf = new byte[1024];\nint n = stream.Read(buf, 0, buf.Length);\nConsole.WriteLine($\"Received {n} bytes\");",
+            "java": "// IEC 104 Master example\nimport java.net.Socket;\nSocket sock = new Socket(\"{host}\", {port});\nOutputStream out = sock.getOutputStream();\nout.write(new byte[]{0x07, 0x00});\nbyte[] buf = new byte[1024];\nint n = sock.getInputStream().read(buf);",
+            "go": "// IEC 104 Master example\nimport \"net\"\nconn, _ := net.Dial(\"tcp\", \"{host}:{port}\")\nconn.Write([]byte{0x07, 0x00})\nbuf := make([]byte, 1024)\nn, _ := conn.Read(buf)",
+        },
+    },
+    "iec61850": {
+        "mode": "server",
+        "mode_label": "Server Simulation (IED)",
+        "mode_desc": "ProtoForge simulates an IEC 61850 Intelligent Electronic Device (IED), your client connects via MMS to read/write data objects",
+        "connect_hint": "In your IEC 61850 client, connect to:",
+        "code_examples": {
+            "python": "# libIEC61850 Python example\n# Connection: {host}:{port}\n# Read logical node data: LD0/LLN0.{point_name}.stVal\n# Write control commands",
+            "csharp": "// IEC 61850 client example\n// Connection: {host}:{port}\n// MMS Read/Write\n// Logical Device -> Logical Node -> Data -> Data Attribute",
+            "java": "// IEC 61850 client example\n// Connection: {host}:{port}\n// Using OpenIEC61850 or libIEC61850",
+            "go": "// IEC 61850 client example\n// Connection: {host}:{port}\n// MMS Read/Write",
+        },
+    },
+    "coap": {
+        "mode": "server",
+        "mode_label": "Server Simulation",
+        "mode_desc": "ProtoForge simulates a CoAP server, your IoT device/client connects via UDP to read/write sensor data",
+        "connect_hint": "In your CoAP client, connect to:",
+        "code_examples": {
+            "python": "# aiocoap example - CoAP Client\nimport asyncio\nfrom aiocoap import *\nasync def main():\n    protocol = await Context.create_client_context()\n    request = Message(code=GET, uri='coap://{host}:{port}/sensor/temperature')\n    response = await protocol.request(request).response\n    print(response.payload.decode())\nasyncio.run(main())",
+            "csharp": "// CoAP client example\nusing CoAP;\nvar client = new CoapClient(new Uri(\"coap://{host}:{port}/sensor/temperature\"));\nvar response = client.Get();\nConsole.WriteLine(response.PayloadString);",
+            "java": "// Californium CoAP client example\nimport org.eclipse.californium.*;\nCoapClient client = new CoapClient(\"coap://{host}:{port}/sensor/temperature\");\nString response = client.get().getResponseText();",
+            "go": "// go-coap example\nimport \"github.com/plgd-dev/go-coap/v3\"\nctx, _ := coap.Dial(\"udp\", \"{host}:{port}\")\nresp, _ := ctx.Get(context.Background(), \"/sensor/temperature\")\nfmt.Println(string(resp.Body()))",
+        },
+    },
+    "dds": {
+        "mode": "server",
+        "mode_label": "Server Simulation (Publisher)",
+        "mode_desc": "ProtoForge simulates a DDS publisher/subscriber, your application subscribes to topics to receive data",
+        "connect_hint": "In your DDS application, connect to:",
+        "code_examples": {
+            "python": "# DDS client example (simplified RTPS)\nimport socket, json\nsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\nsock.connect(('{host}', {port}))\nmsg = json.dumps({'action': 'subscribe', 'topic': 'protoforge/temperature'})\nsock.sendall(b'RTPS' + b'\\x02\\x02\\x01\\x03' + b'\\x00' * 12 + msg.encode())\ndata = sock.recv(4096)\nprint(data)",
+            "csharp": "// DDS client example\n// Connection: {host}:{port}\n// Subscribe to topics, receive periodic data",
+            "java": "// DDS client example\n// Connection: {host}:{port}\n// Subscribe to topics",
+            "go": "// DDS client example\n// Connection: {host}:{port}\n// Subscribe to topics",
         },
     },
 }

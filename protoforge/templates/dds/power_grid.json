@@ -1,0 +1,18 @@
+{
+  "id": "dds-power-grid",
+  "name": "微电网监控 (DDS)",
+  "description": "微电网系统 - 分布式电源/储能/负荷",
+  "protocol": "dds",
+  "device_type": "power_grid",
+  "category": "新能源",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "grid_voltage", "address": "protoforge/grid_voltage", "data_type": "float32", "unit": "V", "description": "电网电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 378, "max": 399, "step_size": 0.2}, "min_value": 0, "max_value": 500},
+    {"name": "grid_frequency", "address": "protoforge/grid_frequency", "data_type": "float32", "unit": "Hz", "description": "电网频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.95, "max": 50.05, "step_size": 0.005}, "min_value": 47, "max_value": 53},
+    {"name": "total_generation", "address": "protoforge/total_generation", "data_type": "float32", "unit": "kW", "description": "总发电功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 50, "max": 500, "step_size": 5}, "min_value": 0, "max_value": 1000},
+    {"name": "total_load", "address": "protoforge/total_load", "data_type": "float32", "unit": "kW", "description": "总负荷功率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 40, "max": 480, "step_size": 3}, "min_value": 0, "max_value": 1000},
+    {"name": "battery_soc", "address": "protoforge/battery_soc", "data_type": "float32", "unit": "%", "description": "储能SOC", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 30, "max": 80, "step_size": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "pv_power", "address": "protoforge/pv_power", "data_type": "float32", "unit": "kW", "description": "光伏发电功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0, "max": 300, "frequency": 0.0001, "noise": 2}, "min_value": 0, "max_value": 500},
+    {"name": "grid_status", "address": "protoforge/grid_status", "data_type": "uint16", "unit": "", "description": "并网状态(0=离网 1=并网)", "access": "rw", "generator_type": "fixed", "fixed_value": 1, "min_value": 0, "max_value": 10}
+  ]
+}
