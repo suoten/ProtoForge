@@ -1452,7 +1452,7 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 | 📊 **企业版 License** | SSO/LDAP、多租户、审计日志、SLA 支持 | 生产级使用 |
 | 🎓 **技术培训** | 工业协议体系化培训 + ProtoForge 实操 | 团队技能提升 |
 
-> 💬 联系方式：[QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK)（群主）或邮箱 `suoten@jjtt.net`
+> 💬 联系方式：[QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK)（群主）或邮箱 `suoten@163.com`
 
 ---
 

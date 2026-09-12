@@ -273,7 +273,7 @@ pip install -e ".[s7]"        # Siemens S7
 | 📊 **Enterprise License** | SSO/LDAP, multi-tenant, audit log, SLA support | Production-grade use |
 | 🎓 **Technical Training** | Industrial protocol training + ProtoForge hands-on | Team skill building |
 
-> 💬 Contact: [QQ Group](https://qm.qq.com/q/ProtoForge) (Group Owner) or email `suoten@jjtt.net`
+> 💬 Contact: [QQ Group](https://qm.qq.com/q/ProtoForge) (Group Owner) or email `suoten@163.com`
 
 ---
 
