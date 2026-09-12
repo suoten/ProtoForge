@@ -167,3 +167,7 @@ scripts/test_ab_*.py
 scripts/test_all_*.py
 scripts/test_auto_*.py
 scripts/test_s7_*.py
+
+# 内部商业文档（不公开）
+ProtoForge_商业化路线图*.md
+ProtoForge_IoT*.md
