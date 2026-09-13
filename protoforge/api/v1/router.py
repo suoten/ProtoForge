@@ -21,6 +21,8 @@ from protoforge.api.v1.scenario_routes import router as _scenario_router
 from protoforge.api.v1.system_routes import router as _system_router
 from protoforge.api.v1.template_routes import router as _template_router
 from protoforge.api.v1.test_routes import router as _test_router
+from protoforge.api.v1.test_plan_routes import router as _test_plan_router
+from protoforge.api.v1.compliance_routes import router as _compliance_router
 from protoforge.api.v1.webhook_routes import router as _webhook_router
 
 router.include_router(_protocol_router)
@@ -37,3 +39,5 @@ router.include_router(_recorder_router)
 router.include_router(_webhook_router)
 router.include_router(_system_router)
 router.include_router(_fault_router)
+router.include_router(_test_plan_router)
+router.include_router(_compliance_router)

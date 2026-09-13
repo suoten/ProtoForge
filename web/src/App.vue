@@ -154,6 +154,8 @@ const breadcrumbs = computed(() => {
     '/templates': [{ label: t('nav.templates'), path: '/templates' }],
     '/marketplace': [{ label: t('nav.marketplace'), path: '/marketplace' }],
     '/testing': [{ label: t('nav.testing'), path: '/testing' }],
+'/test-plans': [{ label: t('nav.testPlans'), path: '/test-plans' }],
+'/compliance': [{ label: t('nav.compliance'), path: '/compliance' }],
     '/logs': [{ label: t('nav.logs'), path: '/logs' }],
     '/integration': [{ label: t('nav.integration'), path: '/integration' }],
     '/forward': [{ label: t('nav.forward'), path: '/forward' }],
@@ -182,6 +184,8 @@ watch(() => route.path, (path) => {
     '/templates': 'Templates - ProtoForge',
     '/marketplace': 'Marketplace - ProtoForge',
     '/testing': 'Testing - ProtoForge',
+'/test-plans': 'Test Plans - ProtoForge',
+'/compliance': 'Compliance - ProtoForge',
     '/logs': 'Logs - ProtoForge',
     '/integration': 'Integration - ProtoForge',
     '/forward': 'Forward - ProtoForge',
@@ -228,6 +232,8 @@ const menuOptions = computed(() => [
     key: 'group-testing',
     children: [
       { label: t('nav.testing'), key: '/testing', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
+      { label: t('nav.testPlans'), key: '/test-plans', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
+      { label: t('nav.compliance'), key: '/compliance', icon: svgIcon('M9 11l3 3L22 4 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11') },
       { label: t('nav.logs'), key: '/logs', icon: svgIcon('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M16 13H8 M16 17H8 M10 9H8') },
     ]
   },

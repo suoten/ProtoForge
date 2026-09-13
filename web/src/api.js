@@ -463,4 +463,24 @@ resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   importBackup: (backup) => d(api.post('/backup/restore', backup)),  // FIXED: renamed param from 'data' to 'backup' for clarity
 
   getHealth: () => api.get('/health').then(r => r.data).catch(() => null),
+
+  // ── Test Plans ──────────────────────────────────────────────────
+  createTestPlan: (data) => d(api.post('/test-plans', data)),
+  listTestPlans: (params) => d(api.get('/test-plans', { params })).then(r => normalizeList(r, 'plans')),
+  getTestPlan: (id) => d(api.get(`/test-plans/${id}`)),
+  updateTestPlan: (id, data) => d(api.put(`/test-plans/${id}`, data)),
+  deleteTestPlan: (id) => d(api.delete(`/test-plans/${id}`)),
+  cloneTestPlan: (id, data) => d(api.post(`/test-plans/${id}/clone`, data)),
+  runTestPlan: (id, data) => d(api.post(`/test-plans/${id}/run`, data || {})),
+  abortTestRun: (runId) => d(api.post(`/test-runs/${runId}/abort`)),
+  listPlanRuns: (planId, limit) => d(api.get(`/test-plans/${planId}/runs`, { params: { limit } })).then(r => normalizeList(r, 'runs')),
+  getTestRun: (runId) => d(api.get(`/test-runs/${runId}`)),
+  getTestRunReport: (runId, format) => d(api.get(`/test-runs/${runId}/report`, { params: { format } })),
+
+  // ── Compliance ──────────────────────────────────────────────────
+  listComplianceProtocols: () => d(api.get('/compliance/protocols')).then(r => normalizeList(r, 'protocols')),
+  getComplianceRules: (protocol) => d(api.get(`/compliance/rules/${protocol}`)),
+  runComplianceCheck: (data) => d(api.post('/compliance/check', data)),
+  listComplianceReports: (params) => d(api.get('/compliance/reports', { params })).then(r => normalizeList(r, 'reports')),
+  getComplianceReport: (id) => d(api.get(`/compliance/reports/${id}`)),
 }

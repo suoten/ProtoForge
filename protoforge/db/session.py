@@ -381,6 +381,48 @@ class Database:
                 enabled INTEGER DEFAULT 1,
                 created_at REAL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS test_plans (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                version TEXT NOT NULL DEFAULT '1.0.0',
+                description TEXT DEFAULT '',
+                config TEXT NOT NULL DEFAULT '{}',
+                created_by TEXT NOT NULL DEFAULT 'admin',
+                created_at REAL DEFAULT 0,
+                updated_at REAL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'draft'
+            );
+
+            CREATE TABLE IF NOT EXISTS test_runs (
+                id TEXT PRIMARY KEY,
+                plan_id TEXT NOT NULL,
+                plan_version TEXT NOT NULL DEFAULT '',
+                plan_name TEXT NOT NULL DEFAULT '',
+                plan_snapshot TEXT NOT NULL DEFAULT '{}',
+                triggered_by TEXT NOT NULL DEFAULT 'manual',
+                trigger_source TEXT NOT NULL DEFAULT 'manual',
+                start_time REAL DEFAULT 0,
+                end_time REAL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'running',
+                environment TEXT NOT NULL DEFAULT '{}',
+                results_summary TEXT NOT NULL DEFAULT '{}',
+                report_data TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE INDEX IF NOT EXISTS idx_test_runs_plan_id ON test_runs(plan_id);
+
+            CREATE TABLE IF NOT EXISTS compliance_reports (
+                id TEXT PRIMARY KEY,
+                protocol TEXT NOT NULL,
+                recording_id TEXT DEFAULT '',
+                total_messages INTEGER DEFAULT 0,
+                total_rules INTEGER DEFAULT 0,
+                violations TEXT NOT NULL DEFAULT '[]',
+                compliance_score REAL DEFAULT 100.0,
+                passed INTEGER DEFAULT 1,
+                created_at REAL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_compliance_protocol ON compliance_reports(protocol);
         """)
         await self._db.commit()
         await self._migrate_sqlite_tables()
@@ -1112,9 +1154,122 @@ class Database:
             (rec_id,),
         )
 
+    # ── Test Plan / Test Run / Compliance Report persistence ───────────
+
+    async def save_test_plan(self, plan_data: dict[str, Any]) -> None:
+        config = json.dumps({
+            "test_suite_ids": plan_data.get("test_suite_ids", []),
+            "device_configs": plan_data.get("device_configs", []),
+            "protocol_configs": plan_data.get("protocol_configs", []),
+            "fault_scenarios": plan_data.get("fault_scenarios", []),
+            "schedule": plan_data.get("schedule", {}),
+        })
+        sql = self._upsert_sql("test_plans", ["id", "name", "version", "description", "config", "created_by", "created_at", "updated_at", "status"])
+        await self._execute(
+            sql,
+            (plan_data["id"], plan_data.get("name", ""), plan_data.get("version", "1.0.0"),
+             plan_data.get("description", ""), config, plan_data.get("created_by", "admin"),
+             plan_data.get("created_at", 0), plan_data.get("updated_at", 0),
+             plan_data.get("status", "draft")),
+        )
+
+    async def load_all_test_plans(self) -> list[dict[str, Any]]:
+        rows = await self._fetchall("SELECT * FROM test_plans ORDER BY updated_at DESC")
+        result = []
+        for r in rows:
+            config = _safe_json_loads(r["config"], {})
+            result.append({
+                "id": r["id"], "name": r["name"], "version": r["version"],
+                "description": r["description"], "created_by": r["created_by"],
+                "created_at": r["created_at"], "updated_at": r["updated_at"],
+                "status": r["status"],
+                "test_suite_ids": config.get("test_suite_ids", []),
+                "device_configs": config.get("device_configs", []),
+                "protocol_configs": config.get("protocol_configs", []),
+                "fault_scenarios": config.get("fault_scenarios", []),
+                "schedule": config.get("schedule", {}),
+            })
+        return result
+
+    async def delete_test_plan(self, plan_id: str) -> None:
+        await self._execute(f"DELETE FROM test_plans WHERE {self._where_sql('id')}", (plan_id,))
+
+    async def save_test_run(self, run_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("test_runs", ["id", "plan_id", "plan_version", "plan_name", "plan_snapshot", "triggered_by", "trigger_source", "start_time", "end_time", "status", "environment", "results_summary", "report_data"])
+        await self._execute(
+            sql,
+            (run_data["id"], run_data.get("plan_id", ""), run_data.get("plan_version", ""),
+             run_data.get("plan_name", ""), json.dumps(run_data.get("plan_snapshot", {})),
+             run_data.get("triggered_by", "manual"), run_data.get("trigger_source", "manual"),
+             run_data.get("start_time", 0), run_data.get("end_time", 0),
+             run_data.get("status", "running"), json.dumps(run_data.get("environment", {})),
+             json.dumps(run_data.get("results_summary", {})), json.dumps(run_data.get("report_data", {}))),
+        )
+
+    async def load_all_test_runs(self, limit: int = 100) -> list[dict[str, Any]]:
+        limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
+        rows = await self._fetchall(f"SELECT * FROM test_runs ORDER BY start_time DESC {limit_clause}", (limit,))
+        return [{
+            "id": r["id"], "plan_id": r["plan_id"], "plan_version": r["plan_version"],
+            "plan_name": r["plan_name"], "plan_snapshot": _safe_json_loads(r["plan_snapshot"], {}),
+            "triggered_by": r["triggered_by"], "trigger_source": r["trigger_source"],
+            "start_time": r["start_time"], "end_time": r["end_time"], "status": r["status"],
+            "environment": _safe_json_loads(r["environment"], {}),
+            "results_summary": _safe_json_loads(r["results_summary"], {}),
+            "report_data": _safe_json_loads(r["report_data"], {}),
+        } for r in rows]
+
+    async def load_test_run(self, run_id: str) -> dict[str, Any] | None:
+        row = await self._fetchone(f"SELECT * FROM test_runs WHERE {self._where_sql('id')}", (run_id,))
+        if not row:
+            return None
+        return {
+            "id": row["id"], "plan_id": row["plan_id"], "plan_version": row["plan_version"],
+            "plan_name": row["plan_name"], "plan_snapshot": _safe_json_loads(row["plan_snapshot"], {}),
+            "triggered_by": row["triggered_by"], "trigger_source": row["trigger_source"],
+            "start_time": row["start_time"], "end_time": row["end_time"], "status": row["status"],
+            "environment": _safe_json_loads(row["environment"], {}),
+            "results_summary": _safe_json_loads(row["results_summary"], {}),
+            "report_data": _safe_json_loads(row["report_data"], {}),
+        }
+
+    async def save_compliance_report(self, report_data: dict[str, Any]) -> None:
+        sql = self._upsert_sql("compliance_reports", ["id", "protocol", "recording_id", "total_messages", "total_rules", "violations", "compliance_score", "passed", "created_at"])
+        await self._execute(
+            sql,
+            (report_data["id"], report_data.get("protocol", ""), report_data.get("recording_id", ""),
+             report_data.get("total_messages", 0), report_data.get("total_rules", 0),
+             json.dumps(report_data.get("violations", [])), report_data.get("compliance_score", 100.0),
+             1 if report_data.get("passed", True) else 0, report_data.get("created_at", 0)),
+        )
+
+    async def load_compliance_report(self, report_id: str) -> dict[str, Any] | None:
+        row = await self._fetchone(f"SELECT * FROM compliance_reports WHERE {self._where_sql('id')}", (report_id,))
+        if not row:
+            return None
+        return {
+            "id": row["id"], "protocol": row["protocol"], "recording_id": row["recording_id"],
+            "total_messages": row["total_messages"], "total_rules": row["total_rules"],
+            "violations": _safe_json_loads(row["violations"], []),
+            "compliance_score": row["compliance_score"], "passed": bool(row["passed"]),
+            "created_at": row["created_at"],
+        }
+
+    async def load_all_compliance_reports(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit_clause = f"LIMIT ${1}" if self._is_postgres else "LIMIT ?"
+        rows = await self._fetchall(f"SELECT * FROM compliance_reports ORDER BY created_at DESC {limit_clause}", (limit,))
+        return [{
+            "id": r["id"], "protocol": r["protocol"], "recording_id": r["recording_id"],
+            "total_messages": r["total_messages"], "total_rules": r["total_rules"],
+            "violations": _safe_json_loads(r["violations"], []),
+            "compliance_score": r["compliance_score"], "passed": bool(r["passed"]),
+            "created_at": r["created_at"],
+        } for r in rows]
+
     _VALID_TABLES = {"devices", "scenarios", "templates", "test_cases",
                       "test_suites", "test_reports", "users", "recordings", "audit_log",
-                      "integration_config", "alarm_reaction_rules"}
+                      "integration_config", "alarm_reaction_rules",
+                      "test_plans", "test_runs", "compliance_reports"}
 
     async def export_all(self) -> dict[str, Any]:
         result: dict[str, Any] = {}

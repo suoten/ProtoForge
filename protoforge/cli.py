@@ -79,6 +79,17 @@ def main():
     audit_parser.add_argument("--web-dir", default="web", help="Path to web/ directory for Layer 2")
     audit_parser.add_argument("--openapi-file", default="", help="Path to openapi.json for Layer 2")
 
+    test_parser = subparsers.add_parser("test", help="CI/CD test execution commands")
+    test_sub = test_parser.add_subparsers(dest="test_command", help="Test commands")
+    test_run_parser = test_sub.add_parser("run", help="Run a test plan")
+    test_run_parser.add_argument("--plan", required=True, help="Test plan ID")
+    test_run_parser.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
+    test_run_parser.add_argument("--token", default="", help="Authentication token")
+    test_run_parser.add_argument("--format", choices=["junit", "json", "html"], default="junit",
+                                 help="Output format (default: junit)")
+    test_run_parser.add_argument("--output", "-o", default="", help="Output file path (default: stdout)")
+    test_run_parser.add_argument("--timeout", type=int, default=300, help="Execution timeout in seconds (default: 300)")
+
     args = parser.parse_args()
 
     if args.command == "version":
@@ -100,6 +111,10 @@ def main():
 
     if args.command == "audit":
         _audit_command(args)
+        return
+
+    if args.command == "test":
+        _test_command(args)
         return
 
     if args.command == "demo":
@@ -361,6 +376,99 @@ def _audit_command(args):
     print("=" * 60 + "\n")
 
     if has_errors:
+        sys.exit(1)
+
+
+def _test_command(args):
+    """Execute a test plan via API and output results in specified format."""
+    import json as _json
+    import time as _time
+
+    import requests
+
+    test_cmd = getattr(args, "test_command", None)
+    if test_cmd != "run":
+        print("Usage: protoforge test run --plan <plan-id> [options]")
+        sys.exit(1)
+
+    plan_id = args.plan
+    server = args.server.rstrip("/")
+    token = args.token
+    fmt = args.format
+    output = args.output
+    timeout = args.timeout
+
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    print(f"+ Triggering test plan '{plan_id}' on {server}...")
+
+    # Trigger the run
+    try:
+        r = requests.post(
+            f"{server}/api/v1/test-plans/{plan_id}/run",
+            json={"trigger_source": "cli"},
+            headers=headers,
+            timeout=timeout,
+        )
+        r.raise_for_status()
+        run_data = r.json()
+    except requests.exceptions.ConnectionError:
+        print(f"! Cannot connect to ProtoForge server at {server}")
+        print("  Make sure the server is running: protoforge run")
+        sys.exit(1)
+    except requests.exceptions.HTTPError as e:
+        print(f"! API error: {e}")
+        if e.response is not None:
+            print(f"  Response: {e.response.text}")
+        sys.exit(1)
+
+    run_id = run_data["id"]
+    status = run_data["status"]
+    print(f"+ Run ID: {run_id}")
+    print(f"+ Status: {status}")
+
+    summary = run_data.get("results_summary", {})
+    total = summary.get("total", 0)
+    passed_count = summary.get("passed", 0)
+    failed_count = summary.get("failed", 0)
+    errors = summary.get("errors", 0)
+    duration = summary.get("duration_seconds", 0)
+
+    print(f"+ Results: {passed_count}/{total} passed, {failed_count} failed, {errors} errors ({duration}s)")
+
+    # Get the report in the requested format
+    try:
+        r = requests.get(
+            f"{server}/api/v1/test-runs/{run_id}/report",
+            params={"format": fmt},
+            headers=headers,
+            timeout=30,
+        )
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(f"! Failed to get report: {e}")
+        sys.exit(1)
+
+    if fmt == "json":
+        content = _json.dumps(r.json(), indent=2, ensure_ascii=False)
+    else:
+        content = r.text
+
+    # Output
+    if output:
+        from pathlib import Path
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(content, encoding="utf-8")
+        print(f"+ Report saved to: {output}")
+    else:
+        print(content)
+
+    # Exit code: 0 if passed, 1 if failed/error
+    if status == "passed":
+        sys.exit(0)
+    else:
         sys.exit(1)
 
 
