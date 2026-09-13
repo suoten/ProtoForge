@@ -38,6 +38,8 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 - **Real-time Debug Logs** — WebSocket real-time protocol messages, filterable by protocol/direction/keyword
 - **Visual Scenario Editor** — Visual device orchestration with threshold/change/timer/script rule types
 - **One-click Testing** — Auto-generated test cases with smart diagnostics
+- **Test Plans** — Versioned test plan management with CRUD, clone, execution history, JUnit/JSON/HTML reports, CI/CD integration (`protoforge test run`)
+- **Compliance Checking** — Protocol compliance verification for Modbus TCP, S7, OPC-UA, IEC 104, MQTT with rule-based scoring and violation reports
 - **Data Forwarding** — InfluxDB / HTTP Webhook / File export
 - **Protocol Recording & Playback** — Record communication messages and replay for verification
 - **Prometheus Metrics** — Built-in monitoring endpoint, Grafana-ready

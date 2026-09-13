@@ -16,7 +16,7 @@
 
 > ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
 >
-> 🔥 **V1.1.1 深度测试版** · 122 设备模板 · 21 种工业协议 · CSV 批量导入导出 · EdgeLite 生态对接 · 全功能验证通过
+> 🔥 **V1.2.0 测试平台版** · 122 设备模板 · 21 种工业协议 · 测试计划+合规检测 · CSV 批量导入导出 · EdgeLite 生态对接 · 31 项 E2E 测试全通过
 
 ![仪表盘](docs/images/1.png)
 
@@ -113,6 +113,14 @@ PLC、传感器、数控机床、IoT 设备、摄像头、楼宇设备、电力�
 
 ![仿真测试](docs/images/7.png)
 
+### 📋 测试计划 — 版本化测试用例管理
+
+创建测试计划，定义测试套件和故障场景，一键执行并生成 JUnit XML / JSON / HTML 报告。支持克隆、版本管理、执行历史追踪，CI/CD 集成一行命令搞定。
+
+### 🛡️ 合规检测 — 协议标准合规性验证
+
+内置 Modbus TCP、S7、OPC-UA、IEC 104、MQTT 五大协议合规检测器，一键检测通信报文是否符合协议标准，生成合规评分和违规详情报告。
+
 ### 🐛 调试日志 — 实时协议报文追踪
 
 WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂停、导出 JSON，快速定位开发问题。
@@ -168,6 +176,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 - **数据库备份恢复** — 一键导出/导入全库数据 JSON
 - **协议安全增强** — OPC-UA 证书自动生成、MQTT TLS 加密、GB28181 SRTP、录制报文加密
 - **K8s/Helm 部署** — 完整 Kubernetes 部署方案 + Helm Chart
+- **IoT 测试平台** — 测试计划管理（版本化/克隆/执行历史）、协议合规检测（5 协议合规规则+评分报告）、JUnit/JSON/HTML 报告导出、CI/CD 集成（`protoforge test run`）
 - **故障切换** — 主备健康检查，自动晋升，回调通知
 - **前端国际化** — 中英文双语，一键切换
 - **Docker 多架构** — 支持 amd64/arm64（通过 docker buildx 构建），CI 自动推送 Docker Hub + PyPI
@@ -819,6 +828,7 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 | `protoforge stop`    | 停止后台运行的服务（仅 Linux / macOS）                              |
 | `protoforge init`    | 初始化数据目录和默认配置（创建 `data/` 目录，从 `.env.example` 复制 `.env`） |
 | `protoforge migrate` | 运行数据库迁移（`--revision head`）                             |
+| `protoforge test run` | 执行测试计划（CI/CD 集成，支持 `--plan-id` 指定计划）                    |
 | `protoforge version` | 查看版本号                                                  |
 
 ***
@@ -910,7 +920,9 @@ ProtoForge/
 │   ├── api/v1/               # REST API 端点
 │   │   ├── common.py         # 统一响应格式和异常处理
 │   │   ├── rate_limit.py     # API 限流中间件
-│   │   └── router.py         # API 路由
+│   │   ├── router.py         # API 路由
+│   │   ├── test_plan_routes.py # 测试计划 API
+│   │   └── compliance_routes.py # 合规检测 API
 │   ├── core/                 # 核心引擎
 │   │   ├── engine.py         # 仿真引擎（设备/场景调度）
 │   │   ├── auth.py           # JWT 认证与 bcrypt 密码哈希
@@ -931,6 +943,7 @@ ProtoForge/
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
 │   ├── protocols/            # 21 种协议服务端实现
+│   ├── testing/              # IoT 测试平台（计划/执行/合规检测）
 │   ├── sdk/                  # Python SDK（同步/异步）
 │   └── templates/            # 122 设备模板（JSON）
 ├── sdk/                       # 多语言 SDK
@@ -938,13 +951,13 @@ ProtoForge/
 │   ├── go/                   # Go SDK
 │   └── csharp/               # C# SDK
 ├── web/                       # Vue3 前端
+│   ├── e2e/                  # Playwright E2E 浏试（31 项全通过）
 │   └── src/
-│       ├── views/            # 页面组件
+│       ├── views/            # 页面组件（含 TestPlans/Compliance）
 │       ├── App.vue           # 主布局（含i18n）
 │       ├── i18n.js           # 国际化框架（中英文）
 │       ├── api.js            # API 调用
-│       ├── main.js           # 入口
-│       └── views/           # 页面组件
+│       └── main.js           # 入口
 ├── k8s/                       # Kubernetes 部署
 │   ├── deployment.yaml       # ProtoForge + PostgreSQL
 │   ├── ingress.yaml          # Ingress（WebSocket支持）

@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.2.0 — 2026-09-13
+
+**IoT Industrial Device Testing Platform:**
+
+- Added Test Plan Management: versioned test plans with CRUD operations, clone, status filtering (draft/active/archived). Backend: `protoforge/testing/plan.py` (TestPlan/TestRun data models + TestPlanManager). Frontend: `TestPlans.vue` with create/edit/delete/clone/run/history UI.
+- Added Test Execution Engine: `protoforge/testing/runner.py` (PlanRunner class) orchestrates protocol/device startup, runs test suites, applies fault scenarios, generates JUnit XML / JSON / HTML reports.
+- Added Protocol Compliance Checking: `protoforge/testing/compliance.py` with 5 protocol-specific checkers (Modbus TCP, S7, OPC-UA, IEC 104, MQTT). Each checker has defined rules and violation reporting. Compliance score (percentage) generated per check.
+- Added REST API endpoints: `test_plan_routes.py` (CRUD + run + history + report download) and `compliance_routes.py` (protocols list + rules preview + check execution + reports history).
+- Added database tables: `test_plans`, `test_runs`, `compliance_reports` with full CRUD in `db/session.py`.
+- Added CLI command: `protoforge test run` for CI/CD integration.
+- Added frontend pages: `TestPlans.vue` (plan management with modal forms, run result display, report download buttons) and `Compliance.vue` (protocol selector, rules preview, check execution, score display, history tab).
+- Added i18n support for all new UI elements (Chinese + English).
+- Added Playwright E2E tests: 31 browser tests covering page rendering, CRUD, execution, reports, compliance checking, navigation, error handling, i18n — all passing.
+
+**E2E Test Results (31/31 passed):**
+
+- Test Plans page rendering: title, menu, breadcrumb, create button, empty state ✅
+- CRUD operations: create, edit, delete, clone, status filter ✅
+- Run & reports: execute plan, view result modal, download JUnit/HTML/JSON, run history ✅
+- Compliance page rendering: title, menu, tabs, protocol selector, run check button ✅
+- Compliance interactive: select protocol, view rules, run check, view score, history tab ✅
+- Error handling: empty name validation, disabled button without protocol, 404 responses ✅
+- Navigation: menu navigation, direct URL access ✅
+- i18n: Chinese default, English switch ✅
+
 ## v1.1.1 — 2026-09-11
 
 **UI/UX fixes (deep testing):**
