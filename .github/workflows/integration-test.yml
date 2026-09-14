@@ -16,9 +16,13 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install dependencies
-        run: pip install -e ".[dev,all]"
+        run: |
+          pip install -e ".[dev,all]"
+          pip install "ruff==0.15.11"
       - name: Ruff check
-        run: ruff check protoforge/ tests/ scripts/
+        run: |
+          ruff --version
+          ruff check protoforge/ tests/ scripts/
       - name: MyPy check
         run: mypy protoforge/ --ignore-missing-imports
         continue-on-error: true
@@ -42,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,all]"
       - name: Run Unit Tests
-        run: python -m pytest tests/ -v --tb=short --no-cov
+        run: python -m pytest tests/ -v --tb=short -o addopts="" 
 
   build-frontend:
     runs-on: ubuntu-latest
