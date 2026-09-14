@@ -426,6 +426,95 @@ client.on('message', (topic, message) => {
 client.subscribe('sensor/temperature')
 ```
 
+### 📍 PLC 地址映射 — 精确到每个测点
+
+ProtoForge 的每个测点都绑定了**具体的 PLC 协议地址**，你的上位机/网关按这个地址去读，和读真实 PLC 一模一样。
+
+#### 各协议地址格式
+
+| 协议 | 地址格式 | 示例 | 说明 |
+| ---- | ------- | ---- | ---- |
+| **Modbus TCP/RTU** | 寄存器偏移量（数字） | `address: "0"` | 寄存器 40001（holding register），`"2"` = 40003 |
+| **Siemens S7** | DB块.类型+偏移 | `address: "DB1.DBD2"` | DB块1，D=双字，偏移2字节；`DBX` = 位，`DBW` = 字 |
+| **Omron FINS** | 区域+地址 | `address: "DM100"` | DM区域地址100；`CIO0` = CIO区域地址0 |
+| **Mitsubishi MC** | 设备号+地址 | `address: "D100"` | D寄存器100；`M0` = 中间继电器0 |
+| **OPC-UA** | 节点ID | `address: "ns=2;s=Temperature"` | 命名空间2，节点名 Temperature |
+| **IEC 60870-5-104** | ASDU地址 | `address: "1"` | IOA（信息对象地址）= 1 |
+
+#### 完整示例：智能水表模板（Modbus TCP）
+
+设备模板中的测点定义：
+
+```json
+{
+  "name": "total_flow",
+  "address": "0",           // ← Modbus 寄存器 40001
+  "data_type": "float32",
+  "unit": "m³",
+  "generator_type": "increment",
+  "min_value": 0,
+  "max_value": 999999
+}
+```
+
+你的采集程序这样读：
+
+```python
+from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient("127.0.0.1", port=5020)
+client.connect()
+
+# 读 total_flow（address=0 → 寄存器 40001，float32 占 2 个寄存器）
+result = client.read_holding_registers(address=0, count=2, slave_id=1)
+# 解析 float32
+value = struct.unpack('>f', struct.pack('>HH', *result.registers))[0]
+print(f"累计流量: {value} m³")
+
+# 读 instant_flow（address=2 → 寄存器 40003）
+result = client.read_holding_registers(address=2, count=2, slave_id=1)
+# 同样解析 float32
+```
+
+#### 完整示例：西门子 S7-1200 模板
+
+```json
+{
+  "name": "temperature",
+  "address": "DB1.DBD2",     // ← DB块1，双字，偏移2
+  "data_type": "real",
+  "unit": "°C"
+}
+```
+
+用 snap7 读取：
+
+```python
+import snap7
+
+client = snap7.client.Client()
+client.connect("127.0.0.1", 0, 1)  # rack=0, slot=1
+
+# 读 DB1.DBD2（Real/Float，4字节）
+data = client.db_read(1, 2, 4)       # db_number=1, start=2, size=4
+temperature = snap7.util.get_real(data, 0)
+print(f"温度: {temperature} °C")
+```
+
+#### 完整示例：欧姆龙 FINS 模板
+
+```json
+{
+  "name": "motor_speed",
+  "address": "DM100",       // ← DM区域地址100
+  "data_type": "int16"
+}
+```
+
+> 💡 **在 Web 界面查看地址**：设备管理 → 点击「数据测点」→ 可以看到每个测点的名称、当前值、时间、质量。点击「编辑」设备可以查看和修改每个测点的协议地址、数据类型、生成器参数。
+>
+> 💡 **自定义地址**：创建设备时可以自由指定每个测点的 PLC 地址，完全匹配你真实设备的地址表。
+
 ### 方式 ②：EdgeLite 自动注册（便捷）
 
 如果你用 [EdgeLite](https://github.com/suoten/EdgeLiteGateway) 做网关，ProtoForge 可以自动把设备配置推送过去，免去手动在 EdgeLite 中添加设备的步骤。详见下方 [EdgeLite 网关对接](#-edgelite-网关对接) 章节。
