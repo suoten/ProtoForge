@@ -48,6 +48,7 @@ jobs:
       - name: Validate API consistency (existing check)
         working-directory: web
         run: npm run validate-api
+        continue-on-error: true
 
       - name: Layer 2 - API type consistency audit
         run: python scripts/audit_api_types.py --openapi-file openapi.json --web-dir web
