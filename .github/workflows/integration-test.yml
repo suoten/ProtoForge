@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,all]"
       - name: Run Unit Tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -v --tb=short --no-cov
 
   build-frontend:
     runs-on: ubuntu-latest
