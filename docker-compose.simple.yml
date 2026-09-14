@@ -32,7 +32,7 @@
 
 services:
   protoforge:
-    image: suoten/protoforge:0.1.0
+    image: suoten/protoforge:1.2.0
     container_name: protoforge
     command:
       - sh
@@ -80,6 +80,7 @@ services:
       PROTOFORGE_DB_PATH: data/protoforge.db
       PROTOFORGE_LOG_LEVEL: info
       PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:-admin}
+      PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:-protoforge_default_jwt_secret_change_in_production}
       PROTOFORGE_DEMO_MODE: "1"
     volumes:
       - protoforge-data:/app/data
