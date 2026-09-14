@@ -2,6 +2,10 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
+# 使用国内镜像源加速构建（解决 Docker 构建时 deb.debian.org 连接失败问题）
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libffi-dev curl ca-certificates gnupg && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
@@ -11,12 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY README.md .
 COPY protoforge/ protoforge/
-# FIXED: 分开安装可选依赖和核心包，避免降级安装掩盖依赖错误
-RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
+# 使用国内 PyPI 镜像加速构建
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
 
 # FIXED: 优化 npm 依赖缓存 — 先复制 package.json 安装依赖，再复制源码构建
 COPY web/package.json web/package-lock.json* web/
-RUN cd web && npm ci || npm install
+RUN cd web && npm config set registry https://registry.npmmirror.com && (npm ci || npm install)
 
 COPY web/ web/
 RUN cd web && npm run build && cd .. && mkdir -p static && cp -r web/dist/* static/
@@ -24,6 +29,10 @@ RUN cd web && npm run build && cd .. && mkdir -p static && cp -r web/dist/* stat
 FROM python:3.12-slim
 
 WORKDIR /app
+
+# 使用国内镜像源加速构建
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null || true && \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null || true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl libffi8 && \
