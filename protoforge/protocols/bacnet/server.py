@@ -116,7 +116,7 @@ class BACnetServer(ProtocolServer):
                 response = self._handle_bacnet_packet(data, addr)
                 if response:
                     await loop.sock_sendto(self._sock, response, addr)  # type: ignore[attr-defined]
-                # Bug1-FIX: BBMD转发应针对Original Broadcast NPDU (Type=0x0B)，而非BVLC-Result (Type=0x00)
+                # FIXED: BBMD转发针对Original-Broadcast-NPDU (ASHRAE 135: BVLC Type=0x0B)
                 if self._bbmd_enabled and data[0] == 0x81 and len(data) >= 2 and data[1] == 0x0B:
                     self._bbmd_forward(data, addr)
             except asyncio.CancelledError:
@@ -155,7 +155,11 @@ class BACnetServer(ProtocolServer):
         if msg_type == 0x05:
             return self._handle_register_foreign_device(data, addr)
 
-        # Original Unicast NPDU (Type=0x0A) 和 Original Broadcast NPDU (Type=0x0B)
+        # FIXED: ASHRAE 135 BVLC Function Codes:
+        #   0x0A = Original-Unicast-NPDU (YABE/标准客户端单播请求)
+        #   0x0B = Original-Broadcast-NPDU (YABE WhoIs 广播请求)
+        #   0x04 = Forwarded-NPDU (BBMD转发帧)
+        # 旧代码误将 0x04 当作广播、0x08 当作单播，导致标准客户端全部被丢弃
         if msg_type in (0x0A, 0x0B):
             if len(data) < 6:
                 return None
@@ -200,13 +204,14 @@ class BACnetServer(ProtocolServer):
 
             if apdu_type == 0:  # Confirmed Request
                 segmented = bool(data[apdu_start] & 0x04)
-                invoke_id = data[apdu_start + 1] if len(data) > apdu_start + 1 else 0
+                # FIXED: 标准格式 [0x00, MaxSeg/MaxAPDU, InvokeID, Service, ...]（旧代码漏掉 MaxSeg/MaxAPDU 字节）
+                invoke_id = data[apdu_start + 2] if len(data) > apdu_start + 2 else 0
                 if segmented:
-                    service_choice = data[apdu_start + 4] if len(data) > apdu_start + 4 else 0
-                    svc_offset = apdu_start + 5
+                    service_choice = data[apdu_start + 5] if len(data) > apdu_start + 5 else 0
+                    svc_offset = apdu_start + 6
                 else:
-                    service_choice = data[apdu_start + 2] if len(data) > apdu_start + 2 else 0
-                    svc_offset = apdu_start + 3
+                    service_choice = data[apdu_start + 3] if len(data) > apdu_start + 3 else 0
+                    svc_offset = apdu_start + 4
 
                 # Bug1-FIX: 使用正确的BACnet服务选择码
                 # 0x05=SubscribeCOV, 0x0C=ReadProperty, 0x0E=ReadPropertyMultiple, 0x0F=WriteProperty
@@ -228,7 +233,7 @@ class BACnetServer(ProtocolServer):
                 # I-Am (0x00) 等其他非确认服务无需响应
                 return None
 
-        # Forwarded NPDU (Type=0x04)
+        # Forwarded NPDU (ASHRAE 135 BVLC Type=0x04)：BBMD 转发帧，未启用时忽略
         elif msg_type == 0x04:
             logger.debug("BACnet Forwarded NPDU from %s", addr)
             return None
@@ -257,7 +262,7 @@ class BACnetServer(ProtocolServer):
             return bytes([0x24]) + struct.pack(">I", value & 0xFFFFFFFF)
 
     def _make_bvlc_npdu_header(self, bvlc_type: int = 0x0A) -> bytearray:
-        """构建BVLC+NPDU响应头。BVLC Type默认0x0A(Original Unicast NPDU)。"""
+        """构建BVLC+NPDU响应头。BVLC Type默认0x0A(Original-Unicast-NPDU, ASHRAE 135)。"""
         resp = bytearray()
         resp.append(0x81)       # BVLC Version
         resp.append(bvlc_type)  # BVLC Type
@@ -274,8 +279,9 @@ class BACnetServer(ProtocolServer):
     def _make_error_response(self, invoke_id: int, service_choice: int,
                               error_class: int, error_code: int) -> bytes:
         resp = self._make_bvlc_npdu_header()
-        resp.append(invoke_id & 0xFF)
+        # FIXED: 标准 Error APDU = [0x50, InvokeID, Service, ...]（旧代码缺 PDU 类型字节在首位）
         resp.append(0x50)  # APDU Error PDU type
+        resp.append(invoke_id & 0xFF)
         resp.append(service_choice & 0xFF)
         resp.append(0x91)  # Error class: context tag, length 1
         resp.append(error_class & 0xFF)
@@ -286,8 +292,9 @@ class BACnetServer(ProtocolServer):
 
     def _make_reject_response(self, invoke_id: int, reason: int) -> bytes:
         resp = self._make_bvlc_npdu_header()
+        # FIXED: 标准 Reject APDU = [0x60, InvokeID, Reason]
+        resp.append(0x60)  # APDU Reject PDU type
         resp.append(invoke_id & 0xFF)
-        resp.append(0x40)  # APDU Reject PDU type
         resp.append(reason & 0xFF)
         self._finalize_bvlc_length(resp)
         return bytes(resp)
@@ -298,11 +305,11 @@ class BACnetServer(ProtocolServer):
         if len(data) < svc_offset + 5:  # 需要至少obj_id(4) + prop_id(1)
             return self._make_reject_response(invoke_id, 4)
 
-        obj_id_bytes = data[svc_offset:svc_offset + 4]
+        obj_id_bytes = data[svc_offset + 1:svc_offset + 5]  # FIXED: svc_offset 首字节是 ctx tag 0x0C，跳过后才是对象 ID
         obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes)
         if obj_type == 0 and obj_inst == 0:  # FIXED-R09: 解码失败时返回Reject
             return self._make_reject_response(invoke_id, 4)
-        prop_id = data[svc_offset + 4]
+        prop_id = data[svc_offset + 6]  # FIXED: [0x0C][objid*4][0x19][prop]
 
         for device_id, device_obj in self._device_objects.items():
             behavior = self._behaviors.get(device_id)
@@ -323,13 +330,21 @@ class BACnetServer(ProtocolServer):
                     else:
                         value = behavior.get_value(obj.get("object_name", ""))
                     resp = self._make_bvlc_npdu_header()
+                    # FIXED: 标准 ComplexAck = [0x30, InvokeID, Service, ...]
+                    resp.append(0x30)  # APDU Complex ACK PDU type
                     resp.append(invoke_id & 0xFF)
-                    resp.append(0x0C)  # APDU Complex ACK, service choice=ReadProperty
+                    resp.append(0x0C)  # service choice=ReadProperty
+                    resp.append(0x0C)  # FIXED: ctx tag 0 (object identifier) 缺失
                     resp += self._encode_object_identifier(obj_type, obj_idx)
+                    # FIXED: 标准 ComplexAck 需回显 [0x19][prop] context tag（旧代码漏掉 0x19）
+                    resp.append(0x19)
                     resp.append(prop_id)
+                    resp.append(0x2E)  # FIXED: ctx tag 2 opening (value-list)
+                    # FIXED: binary 对象的 present-value 归一化为 bool，并按标准应用布尔编码（值在 length 位，无载荷）
+                    if str(obj.get("object_type", "")).startswith("binary") and not isinstance(value, bool):
+                        value = bool(value)
                     if isinstance(value, bool):
-                        resp.append(0x19)
-                        resp.append(0x01 if value else 0x00)
+                        resp.append(0x11 if value else 0x10)
                     elif isinstance(value, float):
                         resp.append(0x44)
                         resp += struct.pack(">f", value)
@@ -347,6 +362,7 @@ class BACnetServer(ProtocolServer):
                             resp += struct.pack(">f", float(value) if value else 0.0)
                         except (ValueError, TypeError):
                             resp += struct.pack(">f", 0.0)
+                    resp.append(0x2F)  # FIXED: ctx tag 2 closing (value-list)
                     self._finalize_bvlc_length(resp)
                     return bytes(resp)
         return self._make_error_response(invoke_id, 0x0C, 1, 31)
@@ -357,19 +373,23 @@ class BACnetServer(ProtocolServer):
         if len(data) < svc_offset + 4:
             return self._make_reject_response(invoke_id, 4)
         resp = self._make_bvlc_npdu_header()
+        # FIXED: 标准 ComplexAck = [0x30, InvokeID, Service, ...]
+        resp.append(0x30)  # APDU Complex ACK PDU type
         resp.append(invoke_id & 0xFF)
-        resp.append(0x0E)  # APDU Complex ACK, service choice=ReadPropertyMultiple
+        resp.append(0x0E)  # service choice=ReadPropertyMultiple
         offset = svc_offset
-        p_offset = offset  # Bug2-FIX: 初始化p_offset，避免未赋值时引用
-        while offset + 4 <= len(data):
-            obj_type, obj_inst = self._decode_object_identifier(data[offset:offset + 4])
-            offset += 4
-            if offset >= len(data):
-                break
-            prop_count = data[offset] if data[offset] != 0xFE else 1
-            offset += 1
+        # FIXED: 标准请求项 = [0x0E opening][0x0C][objid*4][0x19][prop][0x0F closing]
+        while offset + 9 <= len(data) and data[offset] == 0x0E:
+            obj_type, obj_inst = self._decode_object_identifier(data[offset + 2:offset + 6])
+            pid = data[offset + 7]
+            next_offset = offset + 9
             obj_data = bytearray()
+            obj_data.append(0x0E)  # ReadAccessSpecification opening tag
+            obj_data.append(0x0C)
             obj_data += self._encode_object_identifier(obj_type, obj_inst)
+            obj_data.append(0x19)
+            obj_data.append(pid)
+            obj_data.append(0x2E)  # ctx tag 2 opening (value-list)
             found = False
             for device_id, device_obj in self._device_objects.items():
                 behavior = self._behaviors.get(device_id)
@@ -377,61 +397,47 @@ class BACnetServer(ProtocolServer):
                     continue
                 for i, obj in enumerate(device_obj.get("objects", [])):
                     obj_idx = i + 1
-                    # Bug7-FIX: 移除obj_inst==0通配符
                     if obj_inst == obj_idx:
                         found = True
-                        prop_list = bytearray()
-                        prop_list.append(0x01)
-                        p_offset = offset
-                        for _ in range(min(prop_count, 10)):
-                            if p_offset >= len(data):
-                                break
-                            pid = data[p_offset]
-                            p_offset += 1
-                            if pid == 85 or pid == 0x55:
-                                value = behavior.get_value(obj.get("object_name", ""))
-                            elif pid == 77:
-                                value = obj.get("object_name", "")
-                            elif pid == 28:
-                                value = obj.get("description", "")
-                            elif pid == 96:
-                                value = obj.get("units", "")
-                            else:
-                                value = behavior.get_value(obj.get("object_name", ""))
-                            prop_list.append(pid)
-                            if isinstance(value, bool):
-                                prop_list.append(0x19)
-                                prop_list.append(0x01 if value else 0x00)
-                            elif isinstance(value, float):
-                                prop_list.append(0x44)
-                                prop_list += struct.pack(">f", value)
-                            elif isinstance(value, int):
-                                # Bug5-FIX: 根据值范围选择正确的编码
-                                prop_list += self._encode_int_value(value)
-                            elif isinstance(value, str):
-                                encoded = value.encode("utf-8")
-                                prop_list.append(0x75)
-                                prop_list += struct.pack(">H", len(encoded))
-                                prop_list += encoded
-                            else:
-                                prop_list.append(0x44)
-                                try:
-                                    prop_list += struct.pack(">f", float(value) if value else 0.0)
-                                except (ValueError, TypeError):
-                                    prop_list += struct.pack(">f", 0.0)
-                        obj_data += prop_list
+                        if pid == 77:
+                            value = obj.get("object_name", "")
+                        elif pid == 28:
+                            value = obj.get("description", "")
+                        elif pid == 96:
+                            value = obj.get("units", "")
+                        else:
+                            value = behavior.get_value(obj.get("object_name", ""))
+                        if isinstance(value, bool):
+                            obj_data.append(0x11 if value else 0x10)
+                        elif isinstance(value, float):
+                            obj_data.append(0x44)
+                            obj_data += struct.pack(">f", value)
+                        elif isinstance(value, int):
+                            obj_data += self._encode_int_value(value)
+                        elif isinstance(value, str):
+                            encoded = value.encode("utf-8")
+                            obj_data.append(0x75)
+                            obj_data += struct.pack(">H", len(encoded))
+                            obj_data += encoded
+                        else:
+                            obj_data.append(0x44)
+                            try:
+                                obj_data += struct.pack(">f", float(value) if value else 0.0)
+                            except (ValueError, TypeError):
+                                obj_data += struct.pack(">f", 0.0)
+                        obj_data.append(0x2F)  # ctx tag 2 closing (value-list)
                         break
                 if found:
                     break
             if not found:
-                obj_data += self._encode_object_identifier(obj_type, obj_inst)
-                obj_data.append(0x01)
-                obj_data.append(85)
+                # 标准 Result-Error: property id 后跟 error class/code（ctx 0/1）
                 obj_data.append(0x91)
-                obj_data.append(31)
+                obj_data.append(1)   # class=object
+                obj_data.append(0x91)
+                obj_data.append(31)  # code=unknown-object
+            obj_data.append(0x0F)  # closing tag
             resp += obj_data
-            # Bug2-FIX: offset必须推进到p_offset（属性ID遍历结束后的位置）
-            offset = p_offset
+            offset = next_offset
         self._finalize_bvlc_length(resp)
         return bytes(resp)
 
@@ -441,7 +447,7 @@ class BACnetServer(ProtocolServer):
         if len(data) < svc_offset + 5:
             return self._make_reject_response(invoke_id, 4)
 
-        obj_id_bytes = data[svc_offset:svc_offset + 4]
+        obj_id_bytes = data[svc_offset + 1:svc_offset + 5]  # FIXED: 跳过 ctx tag 0x0C
         obj_type, obj_inst = self._decode_object_identifier(obj_id_bytes)
         if obj_type == 0 and obj_inst == 0:  # FIXED-R10: 解码失败时返回Reject
             return self._make_reject_response(invoke_id, 4)
@@ -454,7 +460,7 @@ class BACnetServer(ProtocolServer):
                 obj_idx = i + 1
                 # Bug7-FIX: 移除obj_inst==0通配符
                 if obj_inst == obj_idx:
-                    tag_offset = svc_offset + 5
+                    tag_offset = svc_offset + 8  # FIXED: [0x0C][objid*4][0x19][prop][0x2E][value-tag] → tag 在 svc+8
                     tag = data[tag_offset] if len(data) > tag_offset else 0
                     val_offset = tag_offset + 1
                     if tag == 0x44 and len(data) >= val_offset + 4:
@@ -467,14 +473,23 @@ class BACnetServer(ProtocolServer):
                         value = struct.unpack(">H", data[val_offset:val_offset + 2])[0]
                     elif tag == 0x19 and len(data) >= val_offset + 1:
                         value = bool(data[val_offset])
+                    elif tag == 0x91 and len(data) >= val_offset + 1:  # FIXED: 应用 ENUMERATED（Binary 对象标准写入编码）
+                        value = int(data[val_offset])
+                    elif tag in (0x11, 0x10):  # FIXED: 应用 BOOLEAN（值在 length 位，无载荷）
+                        value = tag == 0x11
                     else:
                         value = 0
                     point_name = obj.get("object_name", "")
+                    # FIXED: binary 对象写入值归一化为 bool，保证读回编码一致
+                    if str(obj.get("object_type", "")).startswith("binary") and not isinstance(value, bool):
+                        value = bool(value)
                     behavior.set_value(point_name, value)
                     obj["present_value"] = value
                     resp = self._make_bvlc_npdu_header()
+                    # FIXED: 标准 SimpleAck = [0x20, InvokeID, Service]
+                    resp.append(0x20)  # APDU Simple ACK PDU type
                     resp.append(invoke_id & 0xFF)
-                    resp.append(0x0F)  # APDU Simple ACK, service choice=WriteProperty
+                    resp.append(0x0F)  # service choice=WriteProperty
                     self._finalize_bvlc_length(resp)
                     return bytes(resp)
         return None
@@ -589,8 +604,10 @@ class BACnetServer(ProtocolServer):
         if device_id is None:  # FIXED-R06: 未找到匹配设备时记录警告
             logger.warning("BACnet SubscribeCOV: no device found for obj_inst=%d", obj_inst)
         resp = self._make_bvlc_npdu_header()
+        # FIXED: 标准 SimpleAck = [0x20, InvokeID, Service]
+        resp.append(0x20)  # APDU Simple ACK PDU type
         resp.append(invoke_id & 0xFF)
-        resp.append(0x05)  # APDU Simple ACK, service choice=SubscribeCOV
+        resp.append(0x05)  # service choice=SubscribeCOV
         self._finalize_bvlc_length(resp)
         return bytes(resp)
 

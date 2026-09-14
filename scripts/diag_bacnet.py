@@ -98,16 +98,20 @@ def build_read_property(invoke_id: int, obj_type: int, obj_inst: int,
                         prop_id: int) -> bytes:
     """Build a BACnet ReadProperty request (Confirmed Request, unicast).
 
-    APDU (non-segmented confirmed request):
+    Standard APDU (non-segmented confirmed request):
       0x00       - PDU type: Confirmed Request (no segmentation)
+      0x05       - Max Segments/Max APDU (both accepted)
       invoke_id  - Invoke ID
       0x0C       - Service Choice: ReadProperty
-      obj_id     - Object Identifier (4 bytes, raw encoding)
+      0x0C       - Context tag 0 (Object Identifier)
+      obj_id     - Object Identifier (4 bytes)
+      0x19       - Context tag 1 (Property Identifier)
       prop_id    - Property Identifier (1 byte)
     """
-    apdu = bytes([0x00, invoke_id & 0xFF, SVC_READ_PROPERTY])
+    apdu = bytes([0x00, 0x05, invoke_id & 0xFF, SVC_READ_PROPERTY])
+    apdu += bytes([0x0C])  # context tag 0
     apdu += _encode_object_id(obj_type, obj_inst)
-    apdu += bytes([prop_id & 0xFF])
+    apdu += bytes([0x19, prop_id & 0xFF])  # context tag 1
     return _build_bvlc(BVLC_ORIGINAL_UNICAST, apdu)
 
 
@@ -115,20 +119,28 @@ def build_write_property_float(invoke_id: int, obj_type: int, obj_inst: int,
                                prop_id: int, value: float) -> bytes:
     """Build a BACnet WriteProperty request for a REAL (float32) value.
 
-    APDU (non-segmented confirmed request):
+    Standard APDU (non-segmented confirmed request):
       0x00       - PDU type: Confirmed Request
+      0x05       - Max Segments/Max APDU
       invoke_id  - Invoke ID
       0x0F       - Service Choice: WriteProperty
+      0x0C       - Context tag 0 (Object Identifier)
       obj_id     - Object Identifier (4 bytes)
+      0x19       - Context tag 1 (Property Identifier)
       prop_id    - Property Identifier (1 byte)
+      0x2E       - Context tag 2 opening (value)
       0x44       - Application tag: REAL (float32)
       value      - 4 bytes big-endian IEEE 754 float
+      0x2F       - Context tag 2 closing
     """
-    apdu = bytes([0x00, invoke_id & 0xFF, SVC_WRITE_PROPERTY])
+    apdu = bytes([0x00, 0x05, invoke_id & 0xFF, SVC_WRITE_PROPERTY])
+    apdu += bytes([0x0C])  # context tag 0
     apdu += _encode_object_id(obj_type, obj_inst)
-    apdu += bytes([prop_id & 0xFF])
+    apdu += bytes([0x19, prop_id & 0xFF])  # context tag 1
+    apdu += bytes([0x2E])  # context tag 2 opening
     apdu += bytes([0x44])  # REAL application tag
     apdu += struct.pack(">f", value)
+    apdu += bytes([0x2F])  # context tag 2 closing
     return _build_bvlc(BVLC_ORIGINAL_UNICAST, apdu)
 
 
@@ -211,12 +223,17 @@ def parse_read_property_response(data: bytes, expected_invoke_id: int) -> dict |
     """Parse a ReadProperty Complex ACK response.
 
     Expected structure after BVLC+NPDU (6 bytes):
+      0x30       - PDU type: Complex ACK
       invoke_id  - 1 byte
       0x0C       - Service ACK choice: ReadProperty
+      0x0C       - Context tag 0 (Object Identifier)
       obj_id     - 4 bytes (echoed back)
+      0x19       - Context tag 1 (Property Identifier)
       prop_id    - 1 byte (echoed back)
+      0x2E       - Context tag 2 opening (value)
       value_tag  - 1 byte (application tag)
       value_data - variable length
+      0x2F       - Context tag 2 closing
     """
     bvlc = _parse_bvlc(data)
     if not bvlc or bvlc["func"] != BVLC_ORIGINAL_UNICAST:
@@ -225,6 +242,24 @@ def parse_read_property_response(data: bytes, expected_invoke_id: int) -> dict |
         return None
 
     offset = 6  # skip BVLC(4) + NPDU(2)
+    pdu_type = data[offset]
+    offset += 1
+
+    # Error response (PDU type 0x50)
+    if pdu_type == 0x50:
+        invoke_id = data[offset]
+        offset += 1
+        err_svc = data[offset] if offset < len(data) else 0
+        offset += 1
+        err_class = data[offset + 1] if offset + 1 < len(data) else 0
+        err_code = data[offset + 3] if offset + 3 < len(data) else 0
+        return {"error": True, "service": err_svc,
+                "error_class": err_class, "error_code": err_code}
+
+    # Complex ACK for ReadProperty (PDU type 0x30)
+    if pdu_type != 0x30:
+        return None
+
     invoke_id = data[offset]
     if invoke_id != expected_invoke_id:
         return None
@@ -233,28 +268,27 @@ def parse_read_property_response(data: bytes, expected_invoke_id: int) -> dict |
     svc = data[offset]
     offset += 1
 
-    # Error response
-    if svc == 0x50:
-        err_svc = data[offset] if offset < len(data) else 0
-        offset += 1
-        err_class = data[offset + 1] if offset + 1 < len(data) else 0
-        err_code = data[offset + 3] if offset + 3 < len(data) else 0
-        return {"error": True, "service": err_svc,
-                "error_class": err_class, "error_code": err_code}
-
-    # Complex ACK for ReadProperty
     if svc != SVC_READ_PROPERTY:
         return None
 
-    # Skip echoed object identifier (4 bytes) and property identifier (1 byte)
-    if offset + 5 > len(data):
+    # Skip context tag 0 (0x0C)
+    if offset < len(data) and data[offset] == 0x0C:
+        offset += 1
+    # Skip echoed object identifier (4 bytes)
+    if offset + 4 > len(data):
         return None
     resp_obj_id = struct.unpack(">I", data[offset:offset + 4])[0]
     resp_obj_type = (resp_obj_id >> 22) & 0x3FF
     resp_obj_inst = resp_obj_id & 0x3FFFFF
     offset += 4
-    resp_prop_id = data[offset]
+    # Skip context tag 1 (0x19) and property identifier
+    if offset < len(data) and data[offset] == 0x19:
+        offset += 1
+    resp_prop_id = data[offset] if offset < len(data) else 0
     offset += 1
+    # Skip context tag 2 opening (0x2E)
+    if offset < len(data) and data[offset] == 0x2E:
+        offset += 1
 
     # Parse value based on application tag
     if offset >= len(data):
@@ -320,6 +354,7 @@ def parse_write_property_response(data: bytes, expected_invoke_id: int) -> dict 
     """Parse a WriteProperty Simple ACK response.
 
     Expected structure after BVLC+NPDU (6 bytes):
+      0x20       - PDU type: Simple ACK
       invoke_id  - 1 byte
       0x0F       - Service ACK choice: WriteProperty
     """
@@ -330,6 +365,24 @@ def parse_write_property_response(data: bytes, expected_invoke_id: int) -> dict 
         return None
 
     offset = 6  # skip BVLC(4) + NPDU(2)
+    pdu_type = data[offset]
+    offset += 1
+
+    # Error response (PDU type 0x50)
+    if pdu_type == 0x50:
+        invoke_id = data[offset]
+        offset += 1
+        err_svc = data[offset] if offset < len(data) else 0
+        offset += 1
+        err_class = data[offset + 1] if offset + 1 < len(data) else 0
+        err_code = data[offset + 3] if offset + 3 < len(data) else 0
+        return {"success": False, "error": True,
+                "service": err_svc, "error_class": err_class, "error_code": err_code}
+
+    # Simple ACK for WriteProperty (PDU type 0x20)
+    if pdu_type != 0x20:
+        return None
+
     invoke_id = data[offset]
     if invoke_id != expected_invoke_id:
         return None
@@ -338,16 +391,6 @@ def parse_write_property_response(data: bytes, expected_invoke_id: int) -> dict 
     svc = data[offset]
     offset += 1
 
-    # Error response
-    if svc == 0x50:
-        err_svc = data[offset] if offset < len(data) else 0
-        offset += 1
-        err_class = data[offset + 1] if offset + 1 < len(data) else 0
-        err_code = data[offset + 3] if offset + 3 < len(data) else 0
-        return {"success": False, "error": True,
-                "service": err_svc, "error_class": err_class, "error_code": err_code}
-
-    # Simple ACK for WriteProperty
     if svc == SVC_WRITE_PROPERTY:
         return {"success": True}
 
