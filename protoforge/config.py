@@ -1,6 +1,7 @@
 """Application configuration using pydantic-settings with env var support."""
 
 import logging
+import os
 import secrets
 import sys
 import threading
@@ -206,8 +207,36 @@ def get_settings() -> Settings:
         if _settings is None:
             _settings = Settings()
             if not _settings.jwt_secret:
-                _settings.jwt_secret = secrets.token_urlsafe(32)
-                logger.warning("JWT secret not configured, auto-generated. Set PROTOFORGE_JWT_SECRET for production.")
+                # JWT_SECRET 为空时，尝试从持久化文件加载（防止重启后 token 全部失效 → 401）
+                from pathlib import Path as _Path
+                _jwt_file = _Path(__file__).parent.parent / "data" / ".jwt_secret"
+                if _jwt_file.exists():
+                    try:
+                        saved = _jwt_file.read_text(encoding="utf-8").strip()
+                        if saved and len(saved) >= 32:
+                            _settings.jwt_secret = saved
+                            logger.info("JWT secret loaded from persistent file: %s", _jwt_file)
+                    except Exception as e:
+                        logger.debug("Could not read persistent JWT secret: %s", e)
+                if not _settings.jwt_secret:
+                    _settings.jwt_secret = secrets.token_urlsafe(32)
+                    # 持久化保存，确保重启后密钥不变
+                    try:
+                        _jwt_file.parent.mkdir(parents=True, exist_ok=True)
+                        _jwt_file.write_text(_settings.jwt_secret, encoding="utf-8")
+                        try:
+                            os.chmod(_jwt_file, 0o600)
+                        except OSError:
+                            pass
+                        logger.warning(
+                            "JWT secret not configured, auto-generated and saved to %s. "
+                            "Set PROTOFORGE_JWT_SECRET in .env for explicit control.", _jwt_file
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "JWT secret auto-generated but could not be persisted (%s). "
+                            "Tokens will invalidate on restart. Set PROTOFORGE_JWT_SECRET in .env.", e
+                        )
             if _settings_overrides:
                 for key, value in _settings_overrides.items():
                     if hasattr(_settings, key):

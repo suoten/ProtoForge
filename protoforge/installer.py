@@ -21,6 +21,44 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, cwd=str(PROJECT_DIR), **kwargs)
 
 
+def _generate_jwt_secret(venv_python: Path) -> str:
+    """Generate a stable JWT secret using Python's secrets module."""
+    result = subprocess.run(
+        [str(venv_python), "-c", "import secrets; print(secrets.token_urlsafe(32))"],
+        capture_output=True, text=True, cwd=str(PROJECT_DIR),
+    )
+    secret = result.stdout.strip()
+    return secret if secret else "protoforge_default_jwt_secret_change_me_in_production_2026"
+
+
+def _ensure_env_key(env_file: Path, key: str, default_value: str) -> None:
+    """Ensure a key in .env has a non-empty value. If empty or missing, set default_value.
+
+    This is critical for JWT_SECRET: if left empty, each server restart generates
+    a new random key, invalidating all previously issued tokens → 401 errors.
+    """
+    if not env_file.exists():
+        return
+    lines = env_file.read_text(encoding="utf-8").splitlines()
+    found = False
+    changed = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(f"{key}=") and not stripped.startswith("#"):
+            found = True
+            value = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
+            if not value:
+                lines[i] = f"{key}={default_value}"
+                changed = True
+            break
+    if not found:
+        lines.append(f"{key}={default_value}")
+        changed = True
+    if changed:
+        env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"       已设置 {key}")
+
+
 def main():
     os.chdir(str(PROJECT_DIR))
     print()
@@ -102,11 +140,12 @@ def main():
             else:
                 print("       前端构建成功")
 
-    # Step 5: Initialize config
+    # Step 5: Initialize config (关键：确保 JWT_SECRET 非空，否则每次重启 token 都失效 → 401)
     print()
     print("[5/5] 初始化配置 ...")
     env_file = PROJECT_DIR / ".env"
     env_example = PROJECT_DIR / ".env.example"
+
     if not env_file.exists():
         if env_example.exists():
             shutil.copy2(env_example, env_file)
@@ -116,9 +155,15 @@ def main():
     else:
         print("       配置文件 .env 已存在，跳过")
 
+    # 关键修复：确保 .env 中 JWT_SECRET 和 ADMIN_PASSWORD 非空
+    # 如果 JWT_SECRET 为空，每次重启都会生成不同的随机密钥，导致所有已登录用户的 token 失效（401 错误）
+    _ensure_env_key(env_file, "PROTOFORGE_JWT_SECRET", _generate_jwt_secret(venv_python))
+    _ensure_env_key(env_file, "PROTOFORGE_ADMIN_PASSWORD", "admin")
+    _ensure_env_key(env_file, "PROTOFORGE_DEMO_MODE", "true")
+
     # Read port and password from .env
     port = "8000"
-    password = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "")
+    password = "admin"
     if env_file.exists():
         try:
             with open(env_file, encoding="utf-8") as f:

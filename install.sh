@@ -143,6 +143,34 @@ else
     echo "        配置文件 .env 已存在，跳过"
 fi
 
+# 关键修复：确保 .env 中 JWT_SECRET 非空，否则每次重启 token 都失效 → 401 错误
+if [ -f ".env" ]; then
+    JWT_SECRET_VAL=$(grep "^PROTOFORGE_JWT_SECRET=" .env 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$JWT_SECRET_VAL" ]; then
+        echo "        检测到 JWT_SECRET 为空，正在修复 ..."
+        NEW_JWT_SECRET=$(venv/bin/python -c "import secrets; print(secrets.token_urlsafe(32))")
+        if [ -n "$NEW_JWT_SECRET" ]; then
+            if [[ "$(uname)" == "Darwin" ]]; then
+                sed -i '' "s/^PROTOFORGE_JWT_SECRET=$/PROTOFORGE_JWT_SECRET=${NEW_JWT_SECRET}/" .env
+            else
+                sed -i "s/^PROTOFORGE_JWT_SECRET=$/PROTOFORGE_JWT_SECRET=${NEW_JWT_SECRET}/" .env
+            fi
+            echo "        JWT_SECRET 已修复"
+        fi
+    fi
+
+    # 确保 ADMIN_PASSWORD 非空
+    ADMIN_PW_VAL=$(grep "^PROTOFORGE_ADMIN_PASSWORD=" .env 2>/dev/null | cut -d'=' -f2)
+    if [ -z "$ADMIN_PW_VAL" ]; then
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sed -i '' 's/^PROTOFORGE_ADMIN_PASSWORD=$/PROTOFORGE_ADMIN_PASSWORD=admin/' .env
+        else
+            sed -i 's/^PROTOFORGE_ADMIN_PASSWORD=$/PROTOFORGE_ADMIN_PASSWORD=admin/' .env
+        fi
+        echo "        已设置 ADMIN_PASSWORD=admin"
+    fi
+fi
+
 echo ""
 echo -e "${YELLOW}[5/5] 安装完成！${NC}"
 echo ""
