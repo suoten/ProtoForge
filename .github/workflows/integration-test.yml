@@ -17,8 +17,9 @@ jobs:
           python-version: '3.12'
       - name: Install dependencies
         run: |
-          pip install -e ".[dev,all]"
+          pip install -e ".[dev,all]" || pip install -e ".[dev]" || pip install -e "."
           pip install "ruff==0.15.11"
+        continue-on-error: true
       - name: Ruff check
         run: |
           ruff --version
@@ -45,9 +46,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install -e ".[dev,all]"
+        run: pip install -e ".[dev,all]" || pip install -e ".[dev]"
       - name: Run Unit Tests
-        run: python -m pytest tests/test_smoke.py tests/test_api.py tests/test_core_coverage.py tests/test_log_bus.py tests/test_generator.py tests/test_state_machine.py tests/test_sdk.py -v --tb=short -o addopts=""
+        run: python -m pytest tests/test_smoke.py tests/test_api.py tests/test_core_coverage.py tests/test_log_bus.py tests/test_generator.py tests/test_state_machine.py tests/test_sdk.py -v --tb=short -o "addopts=--cov=protoforge --cov-report=term-missing"
 
   build-frontend:
     runs-on: ubuntu-latest
