@@ -70,15 +70,17 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._area_lock = threading.Lock()  # FIXED-C03: 保护Timer/Counter区域的并发读写
         # 存储点位的 (area, db_number, offset) 三元组，支持 I/Q/M/DB/T/C 全区域
         self._point_addresses: dict[str, tuple[int, int, int]] = {}
-        # FIX: S7-1200/1500 优化块访问时，DB 数据区开头有 2 字节系统头
-        # 真实设备上用户变量从 byte 2 开始，ProtoForge 模板地址从 byte 0 开始
-        # 解决方案：解析模板地址时加 db_header_size，使内部偏移与真实设备一致
-        self._db_header_size = db_header_size
+        # FIXED: db_header_size 参数保留但不再使用。
+        # snap7 客户端库（以及大多数 S7 客户端）在内部已经处理了优化块的 2 字节系统头偏移，
+        # ProtoForge 在网络协议层收到的地址就是用户地址（不含系统头），
+        # 因此不应该再加偏移，否则数据存储位置和读取位置不一致。
+        # 旧代码误加偏移导致 snap7 db_read(1,4,4) 读到的是 offset 6 的数据而非 offset 4。
+        self._db_header_size = 0  # 强制为 0，不使用任何 DB 头偏移
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
                 address = getattr(p, 'address', '0') or '0'
-                area, db_number, offset = self._parse_s7_address(str(address), self._db_header_size)
+                area, db_number, offset = self._parse_s7_address(str(address), 0)
                 self._point_addresses[name] = (area, db_number, offset)
                 if name in self._values:
                     self._sync_value_to_area(name, self._values[name])
@@ -229,7 +231,10 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         area, db_number, offset = self._point_addresses[point_name]
         try:
             point = self._points.get(point_name)
-            dt = str(point.data_type) if point and hasattr(point, 'data_type') else ""
+            # DataType is a (str, Enum); str() would yield "DataType.FLOAT32" and break
+            # every type branch below. Normalize to the raw enum value string instead.
+            raw_dt = point.data_type if point and hasattr(point, 'data_type') else ""
+            dt = str(getattr(raw_dt, "value", raw_dt) or "").lower()
             if dt in ("float32",) or (not dt and isinstance(value, float)):
                 data = struct.pack(">f", float(value))  # S7 uses big-endian (Motorola)
             elif dt in ("float64",):
@@ -507,8 +512,8 @@ class S7Server(ProtocolServer):
                     with self._behaviors_sync_lock:
                         if resolved_id not in self._behaviors:
                             pc = device_config.protocol_config or {}
-                            db_hdr = 2 if pc.get("optimized_db", False) else 0
-                            self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points, db_header_size=db_hdr)
+                            # FIXED: db_header_size 强制为 0（snap7 客户端库已处理优化块偏移）
+                            self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points, db_header_size=0)
                             logger.debug("S7 pre-registered device from COTP CR: %s", resolved_id)
             return self._make_cotp_cr_response(data), resolved_id
 
@@ -858,7 +863,10 @@ class S7Server(ProtocolServer):
                     if area == p_area and (area != behavior.S7_AREA_DB or db_number == p_db) and offset == p_offset:
                         try:
                             pt = behavior._points.get(name)
-                            dt = str(pt.data_type) if pt and hasattr(pt, 'data_type') else ""
+                            # Same enum normalization as _sync_value_to_area: str(DataType.X) never
+                            # equals "float32", which silently degraded every write to int packing.
+                            raw_dt = pt.data_type if pt and hasattr(pt, 'data_type') else ""
+                            dt = str(getattr(raw_dt, "value", raw_dt) or "").lower()
                             if dt in ("float32",):
                                 behavior._values[name] = struct.unpack(">f", write_data[:4])[0]  # S7 big-endian
                             elif dt in ("float64",):
@@ -1115,9 +1123,8 @@ class S7Server(ProtocolServer):
     async def create_device(self, device_config: DeviceConfig) -> str:
         device_id = device_config.id
         proto_config = device_config.protocol_config or {}
-        # FIX: S7-1200/1500 优化块访问时启用 2 字节 DB 系统头
-        db_header_size = 2 if proto_config.get("optimized_db", False) else 0
-        behavior = S7DeviceBehavior(device_config.points, db_header_size=db_header_size)
+        # FIXED: db_header_size 强制为 0 — snap7 客户端库已处理优化块偏移
+        behavior = S7DeviceBehavior(device_config.points, db_header_size=0)
         async with self._behaviors_lock:  # FIXED: W3 - add _behaviors_lock protection for _behaviors and _device_configs access
             self._behaviors[device_id] = behavior
             self._device_configs[device_id] = device_config  # FIXED: S6 - move _device_configs write inside _behaviors_lock for consistency
