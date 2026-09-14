@@ -25,9 +25,10 @@ except ImportError:
 
 OLD_API_AVAILABLE = False
 try:
-    from pymodbus.datastore import ModbusDeviceContext, ModbusSequentialDataBlock, ModbusServerContext
-    OLD_API_AVAILABLE = True
-except ImportError:
+    import importlib.util as _importlib_util
+    if _importlib_util.find_spec("pymodbus.datastore") is not None:
+        OLD_API_AVAILABLE = True
+except Exception:
     pass
 
 StartAsyncSerialServer = None  # type: ignore[assignment]

@@ -1,5 +1,6 @@
 """Application configuration using pydantic-settings with env var support."""
 
+import contextlib
 import logging
 import os
 import secrets
@@ -224,10 +225,8 @@ def get_settings() -> Settings:
                     try:
                         _jwt_file.parent.mkdir(parents=True, exist_ok=True)
                         _jwt_file.write_text(_settings.jwt_secret, encoding="utf-8")
-                        try:
+                        with contextlib.suppress(OSError):
                             os.chmod(_jwt_file, 0o600)
-                        except OSError:
-                            pass
                         logger.warning(
                             "JWT secret not configured, auto-generated and saved to %s. "
                             "Set PROTOFORGE_JWT_SECRET in .env for explicit control.", _jwt_file

@@ -1,6 +1,8 @@
 """Device management API routes (CRUD, start/stop, config)."""
 
 import contextlib
+import csv as _csv
+import io as _io
 import logging
 import re
 import uuid
@@ -292,8 +294,6 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
 # CSV batch import/export (must be before /devices/{device_id} route)
 # ---------------------------------------------------------------------------
 
-import csv as _csv
-import io as _io
 
 
 @router.get("/devices/export-csv")
@@ -382,15 +382,11 @@ async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depe
         min_str = row.get("min_value", "").strip()
         max_str = row.get("max_value", "").strip()
         if min_str:
-            try:
+            with contextlib.suppress(ValueError):
                 point["min_value"] = float(min_str)
-            except ValueError:
-                pass
         if max_str:
-            try:
+            with contextlib.suppress(ValueError):
                 point["max_value"] = float(max_str)
-            except ValueError:
-                pass
         fixed_str = row.get("fixed_value", "").strip()
         if fixed_str:
             try:
@@ -408,7 +404,7 @@ async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depe
     for dev_id, dev_data in devices_data.items():
         try:
             config = DeviceConfig(**dev_data)
-            result = await engine.create_device(config)
+            await engine.create_device(config)
             if db is not None:
                 try:
                     await db.save_device(config)

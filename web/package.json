@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "generate-types": "openapi-typescript ../openapi.json -o src/api-types.d.ts",
-    "validate-api": "ts-node --esm scripts/validate-api.ts"
+    "validate-api": "node scripts/validate-api.mjs"
   },
   "dependencies": {
     "@vicons/ionicons5": "^0.12.0",

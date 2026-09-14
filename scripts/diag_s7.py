@@ -15,9 +15,11 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+import contextlib
+
 import snap7
 
-from protoforge.models.device import DeviceConfig, PointConfig, DataType
+from protoforge.models.device import DataType, DeviceConfig, PointConfig
 from protoforge.protocols.s7.server import S7Server
 
 HOST = "127.0.0.1"
@@ -192,14 +194,10 @@ def run_tests() -> list[tuple[str, bool, str]]:
     except Exception as exc:
         results.append(("Connect", False, str(exc)))
     finally:
-        try:
+        with contextlib.suppress(Exception):
             client.disconnect()
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             client.destroy()
-        except Exception:
-            pass
 
     return results
 
@@ -213,7 +211,7 @@ async def main():
     print(f"Starting S7 server on {HOST}:{PORT} ...")
     server = await start_server()
     await asyncio.sleep(0.5)
-    print(f"Server started, device created with optimized_db=True")
+    print("Server started, device created with optimized_db=True")
     print()
 
     print("Running tests (in separate thread) ...")

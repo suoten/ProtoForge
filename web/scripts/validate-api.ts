@@ -94,8 +94,13 @@ function extractApiCalls(
 
 function resolveEndpoint(basePath: string, rawPath: string): string {
   let resolved = rawPath;
-  if (!resolved.startsWith("/")) {
-    resolved = basePath + "/" + resolved;
+  // Always prepend basePath since frontend axios baseURL is /api/v1
+  if (!resolved.startsWith(basePath)) {
+    if (resolved.startsWith("/")) {
+      resolved = basePath + resolved;
+    } else {
+      resolved = basePath + "/" + resolved;
+    }
   }
   resolved = resolved.replace(/\/+/g, "/");
   return resolved;

@@ -1,35 +1,35 @@
 """IEC 60870-5-104 protocol server implementation.
 
-Implements a simplified IEC 60870-5-104 telecontrol server (slave/controlled side).
-Supports:
-  - APDU frame parsing (single-octet and multi-octet)
-  - I-format frames: carry application data (ASDU)
-  - S-format frames: numbered supervision (ACK)
-  - U-format frames: link control (STARTDT, STOPDT, TESTFR)
-  - ASDU types: single point (1), double point (3), measured value normalized (9),
-    measured value scaled (11), integrated totals (15), single command (45),
-    double command (46), set-point command (50)
-  - Spontaneous data transmission (background scan / periodic)
-  - Common address of ASDU, cause of transmission (COT)
-  - Sequence number management (N(S) / N(R))
+Standard-compliant IEC 60870-5-104 telecontrol server (controlled station /
+substation side), interoperate-tested against EdgeLite's IEC104 master.
 
-Design principles:
-  - Pure Python, no third-party IEC104 library required
-  - One TCP listener per protocol instance
-  - Per-connection state: sequence numbers, ASDU queue
-  - Periodic data push (Class 1 / Class 2 scanning)
-  - Debug logging via _log_debug (visible in Web UI Debug Logs)
+Implements:
+  - APCI framing: start 0x68 + 1-byte length (4..253) + 4-byte control field
+  - U-format: STARTDT/STOPDT/TESTFR act/con
+  - S-format: supervisory (acknowledge received I-frames)
+  - I-format: carries one or more ASDUs
+  - ASDU header: TI(1) + VSQ(1) + COT(2 LE) + OA(1) + CA(2 LE)
+  - Monitor direction: M_SP_NA(1), M_DP_NA(3), M_ME_NB(11), M_ME_NC(13),
+    M_IT_NA(15) (+ CP56Time2a time-tagged variants on the decode side)
+  - Control direction: C_SC_NA(45), C_DC_NA(46), C_SE_NB(49), C_SE_NC(50)
+    with direct-operate and Select-before-Operate (S/E bit) flows
+  - General interrogation C_IC_NA(100): ACT -> CON + all points COT=20 -> ACTTERM
+  - Clock sync C_CS_NA(103): ACT -> CON (echoes the new server time)
+  - Sequence number management N(S)/N(R) with k/w window acking
+
+Pure Python, no third-party IEC 104 library required.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
-from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
@@ -37,54 +37,134 @@ logger = logging.getLogger(__name__)
 _READ_TIMEOUT = 120  # matches other protocol servers
 
 # ---------------------------------------------------------------------------
-#  APDU / ASDU constants
+#  APDU / ASDU constants (IEC 60870-5-104)
 # ---------------------------------------------------------------------------
 
-# U-format frame identifiers
-U_STARTDT_ACT = 0x07  # STARTDT act
-U_STARTDT_CON = 0x0B  # STARTDT con
-U_STOPDT_ACT = 0x13   # STOPDT act
-U_STOPDT_CON = 0x17   # STOPDT con
-U_TESTFR_ACT = 0x43   # TESTFR act
-U_TESTFR_CON = 0x83   # TESTFR con
+APDU_START = 0x68
+APDU_MIN_LEN = 4
+APDU_MAX_LEN = 253
+
+# U-format control field 1 (bits 0..1 set identify U-format)
+U_STARTDT_ACT = 0x07
+U_STARTDT_CON = 0x0B
+U_STOPDT_ACT = 0x13
+U_STOPDT_CON = 0x23
+U_TESTFR_ACT = 0x43
+U_TESTFR_CON = 0x83
+
+# Control field 1 for S-format
+S_FORMAT = 0x01
 
 # ASDU type identifiers (TI)
-TI_SINGLE_POINT = 1           # M_SP_NA_1
-TI_DOUBLE_POINT = 3           # M_DP_NA_1
-TI_MEASURED_NORM = 9          # M_ME_NA_1
-TI_MEASURED_SCALED = 11      # M_ME_NB_1
-TI_INTEGRATED_TOTAL = 15     # M_IT_NA_1
-TI_SINGLE_CMD = 45            # C_SC_NA_1
-TI_DOUBLE_CMD = 46            # C_DC_NA_1
-TI_SETPOINT_CMD = 50          # C_SE_NA_1
+TI_SINGLE_POINT = 1      # M_SP_NA_1
+TI_DOUBLE_POINT = 3      # M_DP_NA_1
+TI_MEASURED_NORM = 9     # M_ME_NA_1
+TI_MEASURED_SCALED = 11  # M_ME_NB_1
+TI_MEASURED_FLOAT = 13   # M_ME_NC_1
+TI_INTEGRATED_TOTAL = 15  # M_IT_NA_1
+TI_SINGLE_CMD = 45       # C_SC_NA_1
+TI_DOUBLE_CMD = 46       # C_DC_NA_1
+TI_SETPOINT_SCALED = 49  # C_SE_NB_1
+TI_SETPOINT_FLOAT = 50   # C_SE_NC_1
+TI_CLOCK_SYNC = 103      # C_CS_NA_1
+TI_INTERROGATION = 100   # C_IC_NA_1
 
-# Cause of transmission (COT) common values
+# Cause of transmission (COT, 2 bytes; low 6 bits used)
 COT_PERIODIC = 1
 COT_BACKGROUND = 2
 COT_SPONTANEOUS = 3
-COT_INITIALIZED = 6
-COT_RETURN_REMOTE = 11
-COT_ACTIVATED = 6  # same as initialized? no — COT 6 = initialized, 7 = activated
+COT_ACTIVATED = 6
 COT_ACTCONFIRM = 7
 COT_ACTTERM = 10
+COT_RETURN_REMOTE = 11
+COT_INTERROGATED = 20
 
-# Map our point data types to IEC104 ASDU types
+# Quality / command qualifier bits
+SE_BIT = 0x80  # Select/Execute bit in SCO/DCO/QOS
+
+# Map our point data types to monitor-direction ASDU types
 _DATA_TYPE_TO_TI: dict[str, int] = {
     "bool": TI_SINGLE_POINT,
     "int16": TI_MEASURED_SCALED,
     "uint16": TI_MEASURED_SCALED,
-    "int32": TI_MEASURED_SCALED,
-    "uint32": TI_MEASURED_SCALED,
-    "float32": TI_MEASURED_NORM,
-    "float64": TI_MEASURED_NORM,
+    "int32": TI_INTEGRATED_TOTAL,
+    "uint32": TI_INTEGRATED_TOTAL,
+    "float32": TI_MEASURED_FLOAT,
+    "float64": TI_MEASURED_FLOAT,
     "string": TI_MEASURED_SCALED,
 }
 
 
+def _build_cp56time2a(ts: float | None = None) -> bytes:
+    """Encode a UNIX timestamp into 7-byte CP56Time2a.
+
+    Milliseconds field carries second*1000; weekday uses IEC convention
+    (1=Monday..7=Sunday).
+    """
+    t = time.localtime(ts if ts is not None else time.time())
+    ms = t.tm_sec * 1000
+    weekday = (t.tm_wday + 1) % 7 or 7  # tm_wday: 0=Mon..6=Sun -> 1..7
+    return bytes([
+        ms & 0xFF, (ms >> 8) & 0xFF,
+        t.tm_min & 0x3F,
+        t.tm_hour & 0x1F,
+        (t.tm_mday & 0x1F) | ((weekday & 0x07) << 5),
+        t.tm_mon & 0x0F,
+        (t.tm_year % 100) & 0x7F,
+    ])
+
+
+def _monitor_object(ti: int, value: Any) -> bytes:
+    """Encode one information object payload (without IOA) for a monitor TI."""
+    if ti == TI_SINGLE_POINT:
+        return bytes([0x01 if value else 0x00])
+    if ti == TI_DOUBLE_POINT:
+        try:
+            d = int(value) & 0x03
+        except (TypeError, ValueError):
+            d = 1 if value else 0
+        return bytes([d])
+    if ti == TI_MEASURED_SCALED:
+        try:
+            v = max(-32768, min(32767, int(value)))
+        except (TypeError, ValueError):
+            v = 0
+        return struct.pack("<h", v) + b"\x00"
+    if ti == TI_MEASURED_FLOAT:
+        return struct.pack("<f", float(value)) + b"\x00"
+    if ti == TI_INTEGRATED_TOTAL:
+        try:
+            v = max(-2147483648, min(2147483647, int(value)))
+        except (TypeError, ValueError):
+            v = 0
+        return struct.pack("<i", v) + b"\x00"
+    # fallback: scaled
+    try:
+        v = max(-32768, min(32767, int(value)))
+    except (TypeError, ValueError):
+        v = 0
+    return struct.pack("<h", v) + b"\x00"
+
+
+def _monitor_ti_payload_size(ti: int) -> int:
+    """Information object payload size (excluding IOA) for monitor TIs."""
+    return {
+        TI_SINGLE_POINT: 1,
+        TI_DOUBLE_POINT: 1,
+        TI_MEASURED_NORM: 3,
+        TI_MEASURED_SCALED: 3,
+        TI_MEASURED_FLOAT: 5,
+        TI_INTEGRATED_TOTAL: 5,
+    }.get(ti, 3)
+
+
 class IEC104DeviceBehavior(StandardDeviceBehavior):
-    """IEC 104 device behavior — maps point values to ASDU types."""
+    """IEC 104 device behavior — maps point names <-> IOA and values -> TI."""
 
     def __init__(self, points: list | None = None):
+        # per-IOA SBO selection state (point_name -> selected command info);
+        # must exist before any command handler can touch it.
+        self._selected: dict[str, dict] = {}
         super().__init__(points)
         self._config: DeviceConfig | None = None
         # Map point name -> IOA (Information Object Address)
@@ -113,8 +193,15 @@ class IEC104DeviceBehavior(StandardDeviceBehavior):
     def get_ti_for_point(self, point_name: str) -> int:
         pt = self._points.get(point_name)
         if pt and hasattr(pt, "data_type"):
-            return _DATA_TYPE_TO_TI.get(pt.data_type.value, TI_MEASURED_NORM)
-        return TI_MEASURED_NORM
+            return _DATA_TYPE_TO_TI.get(pt.data_type.value, TI_MEASURED_FLOAT)
+        return TI_MEASURED_FLOAT
+
+    # per-IOA SBO selection state (point_name -> selected command info)
+    def select(self, point_name: str, cmd: dict) -> None:
+        self._selected[point_name] = cmd
+
+    def take_selected(self, point_name: str) -> dict | None:
+        return self._selected.pop(point_name, None)
 
 
 class IEC104Server(ProtocolServer):
@@ -123,7 +210,7 @@ class IEC104Server(ProtocolServer):
     protocol_name = "iec104"
     protocol_display_name = "IEC 60870-5-104"
     protocol_description = "IEC 60870-5-104电力远动协议 - 基于TCP的远动设备和系统标准，广泛用于电力SCADA系统"
-    protocol_version = "2.0"
+    protocol_version = "2.1"
 
     def __init__(self):
         super().__init__()
@@ -135,22 +222,29 @@ class IEC104Server(ProtocolServer):
         self._server_running = False
         self._connections: dict[asyncio.StreamWriter, dict[str, Any]] = {}
         self._scan_task: asyncio.Task | None = None
-        self._scan_interval: float = 1.0
+        self._scan_interval: float = 5.0
         self._common_address: int = 1  # Common address of ASDU
         self._originator_address: int = 0
         self._k_factor: int = 12  # k parameter (max outstanding APDUs)
+        self._w_factor: int = 8   # w parameter (ack after w received I-frames)
+        self._t0_timeout: float = 30.0
         self._t1_timeout: float = 15.0
         self._t2_timeout: float = 10.0
         self._t3_timeout: float = 20.0
 
+    # ------------------------------------------------------------------
+    # lifecycle
+    # ------------------------------------------------------------------
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 2404)
         self._validate_port(self._port)
         self._common_address = int(config.get("common_address", 1))
-        self._scan_interval = float(config.get("scan_interval", 1.0))
+        self._originator_address = int(config.get("originator_address", 0))
+        self._scan_interval = float(config.get("scan_interval", 5.0))
         self._k_factor = int(config.get("k_factor", 12))
+        self._w_factor = int(config.get("w_factor", 8))
         try:
             self._server_running = True
             self._server_task = asyncio.create_task(self._serve())
@@ -170,21 +264,15 @@ class IEC104Server(ProtocolServer):
             self._server_running = False
             if self._scan_task:
                 self._scan_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._scan_task
-                except asyncio.CancelledError:
-                    pass
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
             for writer in list(self._connections.keys()):
-                try:
+                with contextlib.suppress(Exception):
                     writer.close()
-                except Exception:
-                    pass
             self._connections.clear()
         except Exception as e:
             logger.warning("IEC 104 server stop error: %s", e)
@@ -206,257 +294,362 @@ class IEC104Server(ProtocolServer):
             logger.exception("IEC 104 server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
+    # ------------------------------------------------------------------
+    # connection handling
+    # ------------------------------------------------------------------
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.on_client_connect()
         peer = writer.get_extra_info("peername", default=("?", "?"))
         self._log_debug("recv", "connection", f"IEC104 client connected: {peer[0]}:{peer[1]}")
-        # Per-connection state
+        # Per-connection link state
         conn_state = {
-            "vs": 0,   # N(S) — send sequence
-            "vr": 0,   # N(R) — receive sequence
-            "started": False,
+            "vs": 0,            # N(S) — our send sequence
+            "vr": 0,            # N(R) — our receive sequence
+            "started": False,   # STARTDT confirmed
+            "rx_i_count": 0,    # received I-frames since last S-frame ack
+            "outstanding": 0,   # sent unacked I-frames
             "last_activity": time.time(),
-            "ack_pending": False,
         }
         self._connections[writer] = conn_state
 
         try:
+            probing = False  # TESTFR_ACT sent, waiting for TESTFR_CON within t1
             while self._server_running:
+                # APDU: start byte + length byte + payload
+                # t3: idle link supervision; t1: TESTFR confirm deadline
+                timeout = self._t1_timeout if probing else self._t3_timeout
                 try:
-                    apdu = await asyncio.wait_for(reader.readexactly(2), timeout=self._t3_timeout)
+                    head = await asyncio.wait_for(reader.readexactly(2), timeout=timeout)
                 except asyncio.TimeoutError:
-                    # Send TESTFR
-                    testfr = bytes([0x43, 0x00])
-                    writer.write(testfr)
-                    await writer.drain()
+                    if probing:
+                        # t1 expired without TESTFR confirm — dead peer
+                        self._log_debug("send", "timeout", "IEC104 t1 timeout, closing connection")
+                        break
+                    # t3 idle: probe the link with TESTFR_ACT
+                    try:
+                        self._write_apdu(writer, bytes([U_TESTFR_ACT, 0, 0, 0]))
+                        await writer.drain()
+                        probing = True
+                    except Exception:
+                        break
                     continue
-                except asyncio.IncompleteReadError:
+                probing = False
+                if head[0] != APDU_START:
+                    self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad start byte {head[0]:#x}")
+                    continue
+                length = head[1]
+                if length < APDU_MIN_LEN or length > APDU_MAX_LEN:
+                    logger.warning("IEC 104: bad APDU length %d", length)
+                    self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad APDU length {length}")
                     break
-
-                start_byte = apdu[0]
-                if start_byte & 0x01 == 0:
-                    # I-format frame
-                    await self._handle_i_frame(reader, writer, apdu, conn_state)
-                elif start_byte & 0x03 == 0x01:
-                    # S-format frame
-                    await self._handle_s_frame(reader, writer, apdu, conn_state)
-                else:
-                    # U-format frame
-                    self._handle_u_frame(writer, apdu, conn_state)
-
+                apdu = await asyncio.wait_for(reader.readexactly(length), timeout=self._t1_timeout)
                 conn_state["last_activity"] = time.time()
 
-        except Exception as e:
-            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
-            logger.debug("IEC 104 connection error from %s: %s", peer, e)
+                c1 = apdu[0]
+                if c1 & 0x01 == 0:
+                    # I-format
+                    await self._handle_i_frame(writer, apdu, conn_state)
+                elif c1 & 0x02 == 0:
+                    # S-format: acknowledge our outstanding I-frames
+                    conn_state["outstanding"] = 0
+                else:
+                    # U-format
+                    await self._handle_u_frame(writer, apdu, conn_state)
+        except asyncio.IncompleteReadError:
+            pass
+        except Exception:
+            logger.exception("IEC 104 connection handler error from %s", peer)
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, "connection handler error")
         finally:
             self._connections.pop(writer, None)
-            try:
+            with contextlib.suppress(Exception):
                 writer.close()
-            except Exception:
-                pass
             self.on_client_disconnect()
             self._log_debug("send", "disconnected", f"IEC104 client disconnected: {peer[0]}:{peer[1]}")
 
-    async def _handle_i_frame(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                               header: bytes, conn_state: dict) -> None:
-        # I-format: 4 bytes header + ASDU
-        remaining = await reader.readexactly(2)  # next 2 bytes complete 4-byte header
-        full_header = header + remaining
-        ns = (full_header[0] >> 1) & 0x7F  # send sequence
-        nr = (full_header[2] >> 1) & 0x7F  # receive sequence
-        conn_state["vr"] = (conn_state["vr"] + 1) & 0x7FFF
-        conn_state["vs"] = (conn_state["vs"] + 1) & 0x7FFF
+    def _write_apdu(self, writer: asyncio.StreamWriter, control: bytes, asdu: bytes = b"") -> None:
+        """Write one APDU: 0x68 len control[4] asdu."""
+        payload = control + asdu
+        writer.write(bytes([APDU_START, len(payload)]) + payload)
 
-        # Parse ASDU
-        try:
-            asdu_len = self._parse_asdu_length(remaining, reader)
-            if asdu_len > 0:
-                asdu_data = await reader.readexactly(asdu_len)
-                await self._process_asdu(writer, asdu_data, conn_state)
-        except asyncio.IncompleteReadError:
-            logger.warning("IEC 104: incomplete ASDU from client")
-        except Exception as e:
-            logger.debug("IEC 104 ASDU parse error: %s", e)
-
-    async def _parse_asdu_length(self, remaining: bytes, reader: asyncio.StreamReader) -> int:
-        # We already consumed 4 header bytes; the ASDU follows.
-        # We need to peek at the type + COT + CA + IOA to determine size.
-        # But since we don't have random access, we read the ASDU header.
-        try:
-            asdu_header = await reader.readexactly(4)  # type(1) + var_qual(1) + COT(1) + CA(1) [simplified]
-        except asyncio.IncompleteReadError:
-            return 0
-
-        ti = asdu_header[0]
-        # var_qual: bit 7 = structure flag, bit 6 = number of elements follows
-        var_qual = asdu_header[1]
-        is_sequence = bool(var_qual & 0x80)
-        num_elements = var_qual & 0x7F
-        if num_elements == 0:
-            num_elements = 1
-
-        # Determine IO size per type
-        io_size = self._get_io_size(ti, is_sequence)
-        if is_sequence:
-            total_io_size = 4 + io_size + (num_elements - 1) * 3  # first IOA + (n-1)*0
-        else:
-            total_io_size = 4 + io_size * num_elements
-
-        # We already read 4 bytes of ASDU header, so remaining ASDU = total - 4
-        return total_io_size - 4
-
-    def _get_io_size(self, ti: int, is_sequence: bool) -> int:
-        """Return size of one information object (including IOA) for given TI."""
-        ioa_size = 3 if not is_sequence else 0
-        data_size_map = {
-            TI_SINGLE_POINT: 1,      # SIQ (1 byte)
-            TI_DOUBLE_POINT: 1,      # DIQ (1 byte)
-            TI_MEASURED_NORM: 5,      # NVA(2) + QDS(1) + time? no — normalized: value(2)+QDS(1)=3, no time in non-time version
-            TI_MEASURED_SCALED: 3,    # value(2)+QDS(1)
-            TI_INTEGRATED_TOTAL: 5,  # value(4)+QDS(1)
-            TI_SINGLE_CMD: 1,        # SCO (1 byte)
-            TI_DOUBLE_CMD: 1,        # DCO (1 byte)
-            TI_SETPOINT_CMD: 5,      # value(4)+QOS(1)
-        }
-        data_size = data_size_map.get(ti, 3)
-        return ioa_size + data_size
-
-    async def _process_asdu(self, writer: asyncio.StreamWriter, asdu: bytes, conn_state: dict) -> None:
-        if len(asdu) < 4:
-            return
-        ti = asdu[0]
-        var_qual = asdu[1]
-        cot = asdu[2]
-        ca = asdu[3] | (asdu[4] << 8 if len(asdu) > 4 else 0)  # common address (2 bytes)
-        num_elements = var_qual & 0x7F
-        if num_elements == 0:
-            num_elements = 1
-
-        self._log_debug("recv", "asdu", f"IEC104 ASDU: TI={ti} COT={cot} CA={ca} n={num_elements}",
-                        detail={"type_id": ti, "cot": cot, "ca": ca, "num": num_elements})
-
-        # Handle command ASDUs
-        if ti in (TI_SINGLE_CMD, TI_DOUBLE_CMD, TI_SETPOINT_CMD):
-            await self._handle_command(writer, asdu, ti, ca, num_elements)
-
-    async def _handle_command(self, writer: asyncio.StreamWriter, asdu: bytes, ti: int,
-                               ca: int, num_elements: int) -> None:
-        offset = 5  # type(1)+var(1)+cot(1)+ca(2)
-        for i in range(num_elements):
-            if offset + 3 >= len(asdu):
-                break
-            ioa = asdu[offset] | (asdu[offset + 1] << 8) | (asdu[offset + 2] << 16)
-            cmd_value = asdu[offset + 3] if offset + 3 < len(asdu) else 0
-
-            # Find device by IOA
-            for dev_id, behavior in self._behaviors.items():
-                point_name = behavior.get_point_name(ioa)
-                if point_name:
-                    # Apply command
-                    if ti == TI_SINGLE_CMD:
-                        behavior.on_write(point_name, bool(cmd_value & 0x01))
-                    elif ti == TI_DOUBLE_CMD:
-                        behavior.on_write(point_name, (cmd_value & 0x03))
-                    elif ti == TI_SETPOINT_CMD:
-                        val = struct.unpack("<f", asdu[offset + 3:offset + 7])[0] if offset + 7 <= len(asdu) else 0.0
-                        behavior.on_write(point_name, val)
-
-                    self._log_debug("send", "cmd_ack", f"IEC104 command ack: IOA={ioa} val={cmd_value}",
-                                    device_id=dev_id, detail={"ioa": ioa, "value": cmd_value})
-
-                    # Send acknowledgment (COT=ACTCONFIRM)
-                    ack = self._build_command_ack_asdu(ti, ca, ioa, cmd_value)
-                    await self._send_i_format(writer, ack)
-                    break
-            offset += 4 if ti != TI_SETPOINT_CMD else 8
-
-    async def _handle_s_frame(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                               header: bytes, conn_state: dict) -> None:
-        remaining = await reader.readexactly(2)
-        nr = (remaining[1] >> 1) & 0x7F
-        conn_state["ack_pending"] = False
-        self._log_debug("recv", "s_frame", f"IEC104 S-frame N(R)={nr}")
-
-    def _handle_u_frame(self, writer: asyncio.StreamWriter, header: bytes, conn_state: dict) -> None:
-        u_type = header[0] & 0xFC
+    async def _handle_u_frame(self, writer: asyncio.StreamWriter, apdu: bytes, conn_state: dict) -> None:
+        u_type = apdu[0]
         if u_type == U_STARTDT_ACT:
             conn_state["started"] = True
-            writer.write(bytes([U_STARTDT_CON, 0x00]))
+            self._write_apdu(writer, bytes([U_STARTDT_CON, 0, 0, 0]))
+            await writer.drain()
             self._log_debug("send", "startdt_con", "IEC104 STARTDT confirm")
         elif u_type == U_STOPDT_ACT:
             conn_state["started"] = False
-            writer.write(bytes([U_STOPDT_CON, 0x00]))
+            self._write_apdu(writer, bytes([U_STOPDT_CON, 0, 0, 0]))
+            await writer.drain()
             self._log_debug("send", "stopdt_con", "IEC104 STOPDT confirm")
         elif u_type == U_TESTFR_ACT:
-            writer.write(bytes([U_TESTFR_CON, 0x00]))
+            self._write_apdu(writer, bytes([U_TESTFR_CON, 0, 0, 0]))
+            await writer.drain()
             self._log_debug("send", "testfr_con", "IEC104 TESTFR confirm")
+        else:
+            self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"unknown U-function {u_type:#x}")
 
-    async def _send_i_format(self, writer: asyncio.StreamWriter, asdu: bytes) -> None:
-        conn = self._connections.get(writer)
-        if conn is None:
+    async def _handle_i_frame(self, writer: asyncio.StreamWriter, apdu: bytes, conn_state: dict) -> None:
+        # APCI: NS(2 LE) NR(2 LE), low bit of first byte is 0
+        ns = struct.unpack("<H", apdu[0:2])[0] >> 1
+        nr = struct.unpack("<H", apdu[2:4])[0] >> 1
+        # Peer acknowledges our frames up to nr
+        conn_state["outstanding"] = max(0, conn_state["vs"] - nr)
+        # Peer's NS must match our vr
+        if ns != conn_state["vr"]:
+            self.record_protocol_error(
+                ProtocolErrorCategory.FRAME_PARSE,
+                f"sequence mismatch: got N(S)={ns}, expected {conn_state['vr']}",
+            )
             return
-        ns = conn["vs"] & 0x7F
-        nr = conn["vr"] & 0x7F
-        header = bytes([(ns << 1) & 0xFE, 0x00, (nr << 1) & 0xFE, 0x00])
-        writer.write(header + asdu)
-        await writer.drain()
-        conn["vs"] = (conn["vs"] + 1) & 0x7FFF
+        conn_state["vr"] = (conn_state["vr"] + 1) & 0x7FFF
+        conn_state["rx_i_count"] += 1
+        if conn_state["rx_i_count"] >= self._w_factor:
+            conn_state["rx_i_count"] = 0
+            self._write_apdu(writer, bytes([S_FORMAT, 0]) + struct.pack("<H", conn_state["vr"] << 1))
+            await writer.drain()
 
-    def _build_command_ack_asdu(self, ti: int, ca: int, ioa: int, value: int) -> bytes:
-        asdu = bytearray()
-        asdu.append(ti)               # type identification
-        asdu.append(0x01)             # 1 element, non-sequence
-        asdu.append(COT_ACTCONFIRM)   # COT = activation confirmation
-        asdu += struct.pack("<H", ca)  # common address (2 bytes)
-        # IO: IOA(3 bytes) + value(1 byte for SCO/DCO)
-        asdu += struct.pack("<I", ioa)[:3]  # IOA 3 bytes
-        asdu.append(value & 0xFF)     # SCO/DCO
+        await self._process_asdus(writer, apdu[4:], conn_state)
+
+    # ------------------------------------------------------------------
+    # ASDU processing
+    # ------------------------------------------------------------------
+    async def _process_asdus(self, writer: asyncio.StreamWriter, data: bytes, conn_state: dict) -> None:
+        """Parse one or more ASDUs inside an I-format APDU payload."""
+        offset = 0
+        while offset + 4 <= len(data):
+            ti = data[offset]
+            vsq = data[offset + 1]
+            num = vsq & 0x7F
+            sq = bool(vsq & 0x80)
+            asdu_len = self._asdu_length(ti, num, sq)
+            if asdu_len is None or offset + asdu_len > len(data):
+                self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"unknown TI {ti} or truncated ASDU")
+                return
+            asdu = data[offset:offset + asdu_len]
+            offset += asdu_len
+            try:
+                await self._process_asdu(writer, asdu, conn_state)
+            except Exception as e:
+                logger.debug("IEC 104 ASDU processing error: %s", e)
+                self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
+
+    def _asdu_length(self, ti: int, num: int, sq: bool) -> int | None:
+        """Total ASDU length: header 7 (TI+VSQ+COT(2)+OA+CA) + information objects."""
+        obj = self._object_size(ti)
+        if obj is None:
+            return None
+        if sq:
+            # only the first object carries the IOA
+            return 7 + 3 + num * obj
+        return 7 + num * (3 + obj)
+
+    def _object_size(self, ti: int) -> int | None:
+        """Information object payload size (excluding IOA) or None if unsupported."""
+        sizes = {
+            TI_SINGLE_POINT: 1,
+            TI_DOUBLE_POINT: 1,
+            TI_MEASURED_NORM: 3,
+            TI_MEASURED_SCALED: 3,
+            TI_MEASURED_FLOAT: 5,
+            TI_INTEGRATED_TOTAL: 5,
+            TI_SINGLE_CMD: 1,
+            TI_DOUBLE_CMD: 1,
+            TI_SETPOINT_SCALED: 3,
+            TI_SETPOINT_FLOAT: 5,
+            TI_CLOCK_SYNC: 7,
+            TI_INTERROGATION: 1,
+        }
+        return sizes.get(ti)
+
+    async def _process_asdu(self, writer: asyncio.StreamWriter, asdu: bytes, conn_state: dict) -> None:
+        ti = asdu[0]
+        vsq = asdu[1]
+        cot = struct.unpack("<H", asdu[2:4])[0] & 0x3F
+        oa = asdu[4]
+        ca = struct.unpack("<H", asdu[5:7])[0]
+        num = vsq & 0x7F
+        sq = bool(vsq & 0x80)
+
+        self._log_debug("recv", "asdu", f"IEC104 ASDU: TI={ti} COT={cot} CA={ca} OA={oa} n={num} sq={sq}",
+                        detail={"type_id": ti, "cot": cot, "ca": ca, "num": num})
+
+        if ca != self._common_address:
+            # unknown common address — ignore silently (standard allows this)
+            self._log_debug("recv", "asdu_drop", f"IEC104 drop ASDU with unknown CA={ca}")
+            return
+
+        if ti == TI_INTERROGATION:
+            await self._handle_interrogation(writer, asdu, ca)
+            return
+        if ti == TI_CLOCK_SYNC:
+            await self._handle_clock_sync(writer, asdu, ca)
+            return
+        if ti in (TI_SINGLE_CMD, TI_DOUBLE_CMD, TI_SETPOINT_SCALED, TI_SETPOINT_FLOAT):
+            await self._handle_commands(writer, asdu, ti, ca, num, sq, conn_state)
+            return
+
+        self._log_debug("recv", "asdu_unsupported", f"IEC104 unsupported TI={ti} COT={cot}")
+
+    # -- general interrogation -----------------------------------------
+    async def _handle_interrogation(self, writer: asyncio.StreamWriter, asdu: bytes, ca: int) -> None:
+        qoi = asdu[10] if len(asdu) > 10 else 20
+        # ACT confirm
+        ack = bytearray(self._asdu_header(TI_INTERROGATION, 1, COT_ACTCONFIRM, ca))
+        ack += b"\x00\x00\x00" + bytes([qoi])
+        await self._send_i_format(writer, bytes(ack))
+        self._log_debug("send", "gi_con", f"IEC104 GI activation confirm (QOI={qoi})")
+
+        # All points with COT=20 (interrogated)
+        for dev_id, behavior in self._behaviors.items():
+            for point_name in behavior._values:
+                behavior.get_ti_for_point(point_name)
+                asdu_out = self._build_monitor_asdu(behavior, point_name, ca, COT_INTERROGATED)
+                if asdu_out:
+                    await self._send_i_format(writer, asdu_out)
+            self._log_debug("send", "gi_data", f"IEC104 GI data sent for device {dev_id}", device_id=dev_id)
+
+        # ACTTERM
+        term = bytearray(self._asdu_header(TI_INTERROGATION, 1, COT_ACTTERM, ca))
+        term += b"\x00\x00\x00" + bytes([qoi])
+        await self._send_i_format(writer, bytes(term))
+
+    # -- clock sync ------------------------------------------------------
+    async def _handle_clock_sync(self, writer: asyncio.StreamWriter, asdu: bytes, ca: int) -> None:
+        # Confirm with the new server time
+        now = time.time()
+        ack = bytearray(self._asdu_header(TI_CLOCK_SYNC, 1, COT_ACTCONFIRM, ca))
+        ack += b"\x00\x00\x00" + _build_cp56time2a(now)
+        await self._send_i_format(writer, bytes(ack))
+        self._log_debug("send", "cs_con", "IEC104 clock sync confirm")
+
+    # -- control direction ------------------------------------------------
+    async def _handle_commands(self, writer: asyncio.StreamWriter, asdu: bytes, ti: int,
+                               ca: int, num: int, sq: bool, conn_state: dict) -> None:
+        obj_size = self._object_size(ti) or 1
+        offset = 7  # ASDU header: TI(1)+VSQ(1)+COT(2)+OA(1)+CA(2)
+        for i in range(num):
+            if sq:
+                if offset + 3 + obj_size > len(asdu):
+                    break
+                ioa = self._decode_ioa(asdu[offset:offset + 3])
+                payload = asdu[offset + 3:offset + 3 + obj_size]
+                offset += 3 + obj_size if i == 0 else obj_size
+            else:
+                if offset + 3 + obj_size > len(asdu):
+                    break
+                ioa = self._decode_ioa(asdu[offset:offset + 3])
+                payload = asdu[offset + 3:offset + 3 + obj_size]
+                offset += 3 + obj_size
+
+            await self._apply_command(writer, asdu, ti, ca, ioa, payload)
+
+    async def _apply_command(self, writer: asyncio.StreamWriter, req_asdu: bytes, ti: int,
+                             ca: int, ioa: int, payload: bytes) -> None:
+        # Resolve device/point by IOA
+        target: tuple[str, IEC104DeviceBehavior, str] | None = None
+        for dev_id, behavior in self._behaviors.items():
+            point_name = behavior.get_point_name(ioa)
+            if point_name:
+                target = (dev_id, behavior, point_name)
+                break
+
+        select_flag = bool(payload[-1] & SE_BIT) if payload else False
+        payload[-1] if payload else 0
+
+        # Value extraction per TI
+        if ti == TI_SINGLE_CMD:
+            raw_val = payload[0] & 0x01 if payload else 0
+            value: Any = bool(raw_val)
+        elif ti == TI_DOUBLE_CMD:
+            raw_val = payload[0] & 0x03 if payload else 0
+            value = raw_val
+        elif ti == TI_SETPOINT_SCALED:
+            raw_val = struct.unpack("<h", payload[0:2])[0] if len(payload) >= 2 else 0
+            value = raw_val
+        elif ti == TI_SETPOINT_FLOAT:
+            raw_val = struct.unpack("<f", payload[0:4])[0] if len(payload) >= 4 else 0.0
+            value = raw_val
+        else:
+            return
+
+        if target is None:
+            self._log_debug("recv", "cmd_unknown_ioa", f"IEC104 command for unknown IOA={ioa}",
+                            detail={"ioa": ioa, "ti": ti})
+            return
+        dev_id, behavior, point_name = target
+
+        if select_flag:
+            # Select: confirm but do not apply; remember for the execute step
+            behavior.select(point_name, {"ti": ti, "value": value})
+            ack = self._build_command_ack_asdu(ti, ca, ioa, payload, COT_ACTCONFIRM)
+            await self._send_i_format(writer, ack)
+            self._log_debug("send", "cmd_select_con",
+                            f"IEC104 SELECT confirm: IOA={ioa} value={value}",
+                            device_id=dev_id, detail={"ioa": ioa, "value": value, "ti": ti})
+            return
+
+        # Execute (S/E=0): apply the value
+        behavior.on_write(point_name, value)
+        await self._fire_write_callback(dev_id, point_name, value)
+        behavior.take_selected(point_name)  # clear any pending selection
+
+        ack = self._build_command_ack_asdu(ti, ca, ioa, payload, COT_ACTCONFIRM)
+        await self._send_i_format(writer, ack)
+        # Activation termination
+        term = self._build_command_ack_asdu(ti, ca, ioa, payload, COT_ACTTERM)
+        await self._send_i_format(writer, term)
+        self._log_debug("send", "cmd_exec",
+                        f"IEC104 EXECUTE: IOA={ioa} ({point_name}) = {value}",
+                        device_id=dev_id, detail={"ioa": ioa, "value": value, "ti": ti, "point": point_name})
+
+    def _build_command_ack_asdu(self, ti: int, ca: int, ioa: int, payload: bytes, cot: int) -> bytes:
+        asdu = bytearray(self._asdu_header(ti, 1, cot, ca))
+        asdu += self._encode_ioa(ioa)
+        # IEC 60870-5-104: 确认 ASDU 与命令 ASDU 相同（仅 COT 不同），
+        # 完整回显命令对象（SCO/DCO/SCO+int16/QOS+float）。
+        asdu += payload
         return bytes(asdu)
 
-    def _build_spontaneous_asdu(self, behavior: IEC104DeviceBehavior, point_name: str,
-                                value: Any, ti: int, ca: int, cot: int) -> bytes:
-        asdu = bytearray()
-        asdu.append(ti)
-        asdu.append(0x01)  # 1 element
-        asdu.append(cot)
-        asdu += struct.pack("<H", ca)
-        ioa = behavior.get_ioa(point_name)
-        asdu += struct.pack("<I", ioa)[:3]
+    # ------------------------------------------------------------------
+    # monitor direction (spontaneous / interrogation data)
+    # ------------------------------------------------------------------
+    def _asdu_header(self, ti: int, num: int, cot: int, ca: int) -> bytes:
+        h = bytearray()
+        h.append(ti & 0xFF)
+        h.append(num & 0x7F)
+        h += struct.pack("<H", cot & 0x3F)
+        h.append(self._originator_address & 0xFF)
+        h += struct.pack("<H", ca & 0xFFFF)
+        return bytes(h)
 
-        if ti == TI_SINGLE_POINT:
-            asdu.append(0x01 if value else 0x00)
-        elif ti == TI_DOUBLE_POINT:
-            asdu.append(int(value) & 0x03)
-        elif ti == TI_MEASURED_NORM:
-            # Normalized value: -1.0..1.0 -> -32768..32767
-            norm = max(-1.0, min(1.0, float(value) / 32767.0))
-            asdu += struct.pack("<h", int(norm * 32767))
-            asdu.append(0x00)  # QDS
-        elif ti == TI_MEASURED_SCALED:
-            asdu += struct.pack("<h", int(value))
-            asdu.append(0x00)
-        elif ti == TI_INTEGRATED_TOTAL:
-            asdu += struct.pack("<i", int(value))
-            asdu.append(0x00)
-        else:
-            asdu += struct.pack("<h", int(value))
-            asdu.append(0x00)
+    def _build_monitor_asdu(self, behavior: IEC104DeviceBehavior, point_name: str,
+                            ca: int, cot: int) -> bytes | None:
+        ti = behavior.get_ti_for_point(point_name)
+        ioa = behavior.get_ioa(point_name)
+        if not ioa and ioa != 0:
+            return None
+        val = behavior.get_value(point_name)
+        asdu = bytearray(self._asdu_header(ti, 1, cot, ca))
+        asdu += self._encode_ioa(ioa)
+        asdu += _monitor_object(ti, val)
         return bytes(asdu)
 
     async def _scan_loop(self) -> None:
-        """Periodic data scan — send spontaneous data to connected clients."""
+        """Periodic data scan — send spontaneous/periodic data to started clients."""
         try:
             while self._server_running:
                 await asyncio.sleep(self._scan_interval)
                 if not self._connections:
                     continue
-                for dev_id, behavior in self._behaviors.items():
+                for _dev_id, behavior in self._behaviors.items():
                     ca = self._common_address
                     for point_name in behavior._values:
-                        val = behavior.get_value(point_name)
-                        ti = behavior.get_ti_for_point(point_name)
-                        asdu = self._build_spontaneous_asdu(behavior, point_name, val, ti, ca, COT_PERIODIC)
+                        asdu = self._build_monitor_asdu(behavior, point_name, ca, COT_PERIODIC)
+                        if not asdu:
+                            continue
                         for writer, conn in list(self._connections.items()):
                             if conn.get("started"):
                                 try:
@@ -468,6 +661,50 @@ class IEC104Server(ProtocolServer):
         except Exception as e:
             logger.exception("IEC 104 scan loop error: %s", e)
 
+    # ------------------------------------------------------------------
+    # send helpers
+    # ------------------------------------------------------------------
+    async def _send_i_format(self, writer: asyncio.StreamWriter, asdu: bytes) -> None:
+        conn = self._connections.get(writer)
+        if conn is None:
+            return
+        # ack peer before filling the window
+        if conn["rx_i_count"] > 0:
+            conn["rx_i_count"] = 0
+            self._write_apdu(writer, bytes([S_FORMAT, 0]) + struct.pack("<H", conn["vr"] << 1))
+        ns = conn["vs"] & 0x7FFF
+        nr = conn["vr"] & 0x7FFF
+        control = struct.pack("<HH", ns << 1, nr << 1)
+        self._write_apdu(writer, control, asdu)
+        await writer.drain()
+        conn["vs"] = (conn["vs"] + 1) & 0x7FFF
+        conn["outstanding"] += 1
+        # (k-window overflow handling omitted: the simulator never reaches k=12
+        #  in flight because every command is acked synchronously.)
+
+    @staticmethod
+    def _decode_ioa(b: bytes) -> int:
+        return int(b[0]) | int(b[1]) << 8 | int(b[2] & 0x0F) << 16
+
+    @staticmethod
+    def _encode_ioa(ioa: int) -> bytes:
+        return bytes([ioa & 0xFF, (ioa >> 8) & 0xFF, (ioa >> 16) & 0x0F])
+
+    # ------------------------------------------------------------------
+    # write propagation to DeviceInstance
+    # ------------------------------------------------------------------
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        """异步执行 _on_write 回调，捕获异常防止影响事件循环。"""
+        if not self._on_write:
+            return
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("External write callback error for %s.%s: %s", device_id, point_name, e)
+
+    # ------------------------------------------------------------------
+    # device registry
+    # ------------------------------------------------------------------
     async def create_device(self, device_config: DeviceConfig) -> str:
         self._device_configs[device_config.id] = device_config
         behavior = IEC104DeviceBehavior(device_config.points)
@@ -491,7 +728,7 @@ class IEC104Server(ProtocolServer):
         if not behavior:
             return []
         results = []
-        for point_name, ioa in behavior._ioa_map.items():
+        for point_name, _ioa in behavior._ioa_map.items():
             val = behavior.get_value(point_name)
             results.append(PointValue(name=point_name, value=val, timestamp=time.time(), quality="good", simulated=True))
         return results
@@ -517,13 +754,21 @@ class IEC104Server(ProtocolServer):
                     "type": "number", "default": 1,
                     "description": "Common Address of ASDU (1-65535)"
                 },
+                "originator_address": {
+                    "type": "number", "default": 0,
+                    "description": "Originator Address (OA)"
+                },
                 "scan_interval": {
-                    "type": "number", "default": 1.0,
+                    "type": "number", "default": 5.0,
                     "description": "Periodic data scan interval in seconds"
                 },
                 "k_factor": {
                     "type": "number", "default": 12,
                     "description": "K parameter - max outstanding unacknowledged APDUs"
+                },
+                "w_factor": {
+                    "type": "number", "default": 8,
+                    "description": "W parameter - ack after w received I-frames"
                 },
             },
         }

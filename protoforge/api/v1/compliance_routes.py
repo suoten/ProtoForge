@@ -52,10 +52,11 @@ async def run_compliance_check(
 
     checker = get_compliance_checker(protocol)
     if not checker:
+        from protoforge.testing.compliance import get_supported_protocols as _get_supported
         raise HTTPException(
             status_code=400,
             detail=f"Compliance checking not supported for protocol: {protocol}. "
-                  f"Supported: {get_supported_protocols()}"
+                  f"Supported: {_get_supported()}"
         )
 
     # Load messages from recording

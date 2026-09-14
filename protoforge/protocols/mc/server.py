@@ -45,11 +45,13 @@ class McDeviceBehavior(StandardDeviceBehavior):
                     self._point_data_types[name] = data_type.value if hasattr(data_type, 'value') else str(data_type)
                 self._sync_value_to_memory(name, self._values.get(name, 0))
 
+    # FIXED: 采用 SLMP/MELSEC 规范的二进制设备代码（而非 ASCII 字母码），
+    # 与真实三菱 PLC 及标准 MC 客户端（如 EdgeLite）保持一致。
     DEVICE_CODE_MAP: dict[str, int] = {
-        'D': 0x44, 'R': 0x52, 'ZR': 0x5A, 'M': 0x4D,
-        'X': 0x58, 'Y': 0x59, 'B': 0x42, 'W': 0x57,
-        'T': 0x54, 'C': 0x43, 'L': 0x4C, 'F': 0x46,
-        'V': 0x56, 'Z': 0x5C, 'U': 0x55, 'S': 0x53, 'SM': 0x93, 'SD': 0x9C,  # FIXED-P1: SM代码0x53→0x93，0x53是S(步进继电器)，补充S和SD；FIXED-M05: Z=0x5C为文件寄存器扩展索引，ZR=0x5A为文件寄存器
+        'D': 0xA8, 'R': 0xAF, 'ZR': 0xB4, 'M': 0x90,
+        'X': 0x9C, 'Y': 0x9D, 'B': 0xA0, 'W': 0xB4,
+        'T': 0xC2, 'C': 0xC4, 'L': 0x92, 'F': 0x93,
+        'V': 0x94, 'S': 0x98, 'Z': 0xCC, 'SM': 0x93, 'SD': 0xA9,
     }
 
     @staticmethod
@@ -310,7 +312,7 @@ class McServer(ProtocolServer):
         if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
             read_len = word_count * 2
         elif subcmd == 0x0001:
-            read_len = word_count
+            read_len = (word_count + 1) // 2  # FIXED: 位读数据每字节 2 点打包（高半字节为第 1 点）
         else:
             return self._make_error_response(data, 0xC059)
 
@@ -320,7 +322,7 @@ class McServer(ProtocolServer):
             read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
 
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -342,11 +344,12 @@ class McServer(ProtocolServer):
         if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
             write_len = word_count * 2
         elif subcmd == 0x0001:
-            write_len = word_count
+            write_len = (word_count + 1) // 2  # FIXED: 位写数据每字节 2 点打包
         else:
             return self._make_error_response(data, 0xC059)
 
-        write_data = data[20:20 + write_len]
+        # FIXED: 数据区紧跟在设备号(1)+起始地址(3)+点数(2)之后，即 data[21:]
+        write_data = data[21:21 + write_len]
         behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         if behavior:
             behavior.write_memory(device_code, start_addr, write_data)
@@ -380,7 +383,7 @@ class McServer(ProtocolServer):
                             detail={"device": device_code, "offset": start_addr, "len": len(write_data)})
 
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -411,7 +414,7 @@ class McServer(ProtocolServer):
                 elif subcmd == 0x0001:
                     read_data += behavior.read_memory_offset(device_code, start_addr, 1)  # FIXED-N06: 使用read_memory_offset避免越界
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -449,7 +452,7 @@ class McServer(ProtocolServer):
                     behavior.write_memory(device_code, start_addr, write_val)
                 offset += 4
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
         resp += struct.pack("<H", struct.unpack("<H", data[4:6])[0])
         resp += bytes([data[6]])
@@ -459,7 +462,7 @@ class McServer(ProtocolServer):
 
     def _handle_self_test(self, data: bytes) -> bytes:
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         if len(data) >= 7:
             resp += data[2:7]
         else:
@@ -470,7 +473,7 @@ class McServer(ProtocolServer):
 
     def _make_error_response(self, data: bytes, error_code: int) -> bytes:
         resp = bytearray()
-        resp += struct.pack(">H", self.SLMP_3E_BIN_SUBHEADER)
+        resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         if len(data) >= 7:
             resp += data[2:7]
         else:
@@ -616,7 +619,7 @@ class McServer(ProtocolServer):
             mem = behavior.read_memory(device_code, start_addr + read_len)
             read_data = mem[start_addr:start_addr + read_len]
 
-        resp = bytearray(b"5000")
+        resp = bytearray(b"D000")  # FIXED: ASCII 响应子头 D000
         resp += data[4:14]
         resp += self._hex_to_ascii(4 + len(read_data) * 2)
         resp += b"0000"
@@ -646,7 +649,7 @@ class McServer(ProtocolServer):
         if behavior:
             behavior.write_memory(device_code, start_addr, bytes(write_data))
 
-        resp = bytearray(b"5000")
+        resp = bytearray(b"D000")  # FIXED: ASCII 响应子头 D000
         resp += data[4:14]
         resp += self._hex_to_ascii(4)
         resp += b"0000"
@@ -678,7 +681,7 @@ class McServer(ProtocolServer):
                 elif subcmd == 0x0001:
                     mem = behavior.read_memory(device_code, start_addr + 1)
                     read_data += mem[start_addr:start_addr + 1]
-        resp = bytearray(b"5000")
+        resp = bytearray(b"D000")  # FIXED: ASCII 响应子头 D000
         resp += data[4:14]
         resp += self._hex_to_ascii(4 + len(read_data) * 2)
         resp += b"0000"
@@ -726,16 +729,17 @@ class McServer(ProtocolServer):
                 except (ValueError, IndexError):
                     break
                 offset += 8
-        resp = bytearray(b"5000")
+        resp = bytearray(b"D000")  # FIXED: ASCII 响应子头 D000
         resp += data[4:14]
         resp += self._hex_to_ascii(4)
         resp += b"0000"
         return bytes(resp)
 
     def _make_ascii_error_response(self, data: bytes, error_code: int) -> bytes:
-        resp = bytearray(b"5000")
+        resp = bytearray(b"D000")  # FIXED: ASCII 响应子头 D000
         if len(data) >= 14:
             resp += data[4:14]
         resp += self._hex_to_ascii(4)
         resp += self._hex_to_ascii(error_code)
         return bytes(resp)
+

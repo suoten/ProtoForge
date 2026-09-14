@@ -23,6 +23,7 @@ requiring actual DDS middleware (OpenDDS, FastDDS, etc.).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import struct
@@ -148,24 +149,18 @@ class DDSServer(ProtocolServer):
             self._server_running = False
             if self._push_task:
                 self._push_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._push_task
-                except asyncio.CancelledError:
-                    pass
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
             if hasattr(self, "_transport") and self._transport:
                 self._transport.close()
                 self._transport = None
             for writer in self._subscribers.values():
-                try:
+                with contextlib.suppress(Exception):
                     writer.close()
-                except Exception:
-                    pass
             self._subscribers.clear()
         except Exception as e:
             logger.warning("DDS server stop error: %s", e)
@@ -205,7 +200,7 @@ class DDSServer(ProtocolServer):
 
                 # Read RTPS header remainder
                 try:
-                    rest_header = await reader.readexactly(16)  # version(2)+vendor(2)+guid(12)
+                    await reader.readexactly(16)  # version(2)+vendor(2)+guid(12)
                 except asyncio.IncompleteReadError:
                     break
 
@@ -216,7 +211,7 @@ class DDSServer(ProtocolServer):
                     except asyncio.IncompleteReadError:
                         break
                     sub_type = sub_header[0]
-                    sub_flags = sub_header[1]
+                    sub_header[1]
                     sub_len = struct.unpack(">H", sub_header[2:4])[0]
                     if sub_len > 0:
                         try:

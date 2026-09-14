@@ -1,0 +1,216 @@
+import { readFileSync, readdirSync, statSync } from "fs";
+import { join, extname, relative } from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * @typedef {{ [method: string]: { operationId?: string, summary?: string, tags?: string[] } }} OpenAPIPath
+ * @typedef {{ paths: Record<string, OpenAPIPath>, info?: { title?: string, version?: string } }} OpenAPISpec
+ * @typedef {{ file: string, line: number, method: string, endpoint: string, message: string }} ValidationError
+ */
+
+/**
+ * @param {string} specPath
+ * @returns {OpenAPISpec}
+ */
+function loadOpenAPISpec(specPath) {
+  const raw = readFileSync(specPath, "utf-8");
+  return JSON.parse(raw);
+}
+
+/**
+ * @param {OpenAPISpec} spec
+ * @returns {Set<string>}
+ */
+function buildEndpointSet(spec) {
+  const endpoints = new Set();
+  for (const [path, methods] of Object.entries(spec.paths)) {
+    for (const method of Object.keys(methods)) {
+      endpoints.add(`${method.toUpperCase()} ${path}`);
+    }
+  }
+  return endpoints;
+}
+
+/**
+ * @param {string} dir
+ * @param {string[]} extensions
+ * @returns {string[]}
+ */
+function collectFiles(dir, extensions) {
+  const results = [];
+  function walk(current) {
+    const entries = readdirSync(current);
+    for (const entry of entries) {
+      const full = join(current, entry);
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        if (entry !== "node_modules" && entry !== "dist" && entry !== ".git") {
+          walk(full);
+        }
+      } else if (extensions.includes(extname(entry))) {
+        results.push(full);
+      }
+    }
+  }
+  walk(dir);
+  return results;
+}
+
+const API_CALL_REGEX =
+  /api\.(get|post|put|delete|patch|request)\s*\(\s*[`'"]([^`'"]+)[`'"]/g;
+
+/**
+ * @param {string} content
+ * @param {string} filePath
+ * @returns {{ method: string, endpoint: string, line: number }[]}
+ */
+function extractApiCalls(content, filePath) {
+  const calls = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let match;
+    const regex = new RegExp(API_CALL_REGEX.source, "g");
+    while ((match = regex.exec(line)) !== null) {
+      let method = match[1].toUpperCase();
+      const rawPath = match[2];
+      if (method === "REQUEST") {
+        if (line.includes("method: 'DELETE'") || line.includes('method: "DELETE"')) {
+          method = "DELETE";
+        } else if (line.includes("method: 'PUT'") || line.includes('method: "PUT"')) {
+          method = "PUT";
+        } else if (line.includes("method: 'PATCH'") || line.includes('method: "PATCH"')) {
+          method = "PATCH";
+        } else if (line.includes("method: 'POST'") || line.includes('method: "POST"')) {
+          method = "POST";
+        } else {
+          method = "GET";
+        }
+      }
+      calls.push({ method, endpoint: rawPath, line: i + 1 });
+    }
+  }
+  return calls;
+}
+
+/**
+ * @param {string} basePath
+ * @param {string} rawPath
+ * @returns {string}
+ */
+function resolveEndpoint(basePath, rawPath) {
+  let resolved = rawPath;
+  // Always prepend basePath since frontend axios baseURL is /api/v1
+  if (!resolved.startsWith(basePath)) {
+    if (resolved.startsWith("/")) {
+      resolved = basePath + resolved;
+    } else {
+      resolved = basePath + "/" + resolved;
+    }
+  }
+  resolved = resolved.replace(/\/+/g, "/");
+  return resolved;
+}
+
+/**
+ * @param {string} specEndpoint
+ * @param {string} lookupEndpoint
+ * @returns {boolean}
+ */
+function matchWithParams(specEndpoint, lookupEndpoint) {
+  const specParts = specEndpoint.split(" ");
+  const lookupParts = lookupEndpoint.split(" ");
+  if (specParts.length !== 2 || lookupParts.length !== 2) return false;
+  if (specParts[0] !== lookupParts[0]) return false;
+
+  const specSegments = specParts[1].split("/");
+  const lookupSegments = lookupParts[1].split("/");
+  if (specSegments.length !== lookupSegments.length) return false;
+
+  for (let i = 0; i < specSegments.length; i++) {
+    if (specSegments[i].startsWith("{") && specSegments[i].endsWith("}")) {
+      continue;
+    }
+    if (specSegments[i] !== lookupSegments[i]) return false;
+  }
+  return true;
+}
+
+function main() {
+  const projectRoot = join(__dirname, "..", "..");
+  const specPath = join(projectRoot, "openapi.json");
+  const webSrcDir = join(__dirname, "..", "src");
+
+  let spec;
+  try {
+    spec = loadOpenAPISpec(specPath);
+  } catch (e) {
+    console.error(`Failed to load openapi.json from ${specPath}: ${e.message}`);
+    process.exit(1);
+  }
+
+  const backendEndpoints = buildEndpointSet(spec);
+  const basePath = "/api/v1";
+
+  const files = collectFiles(webSrcDir, [".vue", ".ts", ".js"]);
+  const errors = [];
+
+  console.log(`\n=== ProtoForge API Consistency Check ===\n`);
+  console.log(`OpenAPI spec: ${specPath}`);
+  console.log(`Backend endpoints: ${backendEndpoints.size}`);
+  console.log(`Frontend files to scan: ${files.length}\n`);
+
+  for (const file of files) {
+    const content = readFileSync(file, "utf-8");
+    const calls = extractApiCalls(content, file);
+    const relPath = relative(projectRoot, file);
+
+    for (const call of calls) {
+      const resolved = resolveEndpoint(basePath, call.endpoint);
+      const lookupKey = `${call.method} ${resolved}`;
+      const lookupKeyNoTrailing = lookupKey.replace(/\/$/, "");
+
+      const found =
+        backendEndpoints.has(lookupKey) ||
+        backendEndpoints.has(lookupKeyNoTrailing) ||
+        Array.from(backendEndpoints).some(
+          (ep) =>
+            ep === lookupKey ||
+            ep === lookupKeyNoTrailing ||
+            matchWithParams(ep, lookupKey)
+        );
+
+      if (!found) {
+        errors.push({
+          file: relPath,
+          line: call.line,
+          method: call.method,
+          endpoint: resolved,
+          message: `Endpoint ${call.method} ${resolved} not found in OpenAPI spec`,
+        });
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error(`\n❌ Found ${errors.length} inconsistent API call(s):\n`);
+    for (const err of errors) {
+      console.error(`  ${err.file}:${err.line} - ${err.message}`);
+    }
+    console.error(
+      `\nPlease ensure frontend API calls match the backend OpenAPI spec.`
+    );
+    console.error(
+      `Run "python scripts/export-openapi.py" to regenerate openapi.json.\n`
+    );
+    process.exit(1);
+  } else {
+    console.log(`✅ All frontend API calls are consistent with backend OpenAPI spec.\n`);
+  }
+}
+
+main();

@@ -511,7 +511,6 @@ class S7Server(ProtocolServer):
                 if device_config:
                     with self._behaviors_sync_lock:
                         if resolved_id not in self._behaviors:
-                            pc = device_config.protocol_config or {}
                             # FIXED: db_header_size 强制为 0（snap7 客户端库已处理优化块偏移）
                             self._behaviors[resolved_id] = S7DeviceBehavior(device_config.points, db_header_size=0)
                             logger.debug("S7 pre-registered device from COTP CR: %s", resolved_id)

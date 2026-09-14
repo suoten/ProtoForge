@@ -28,13 +28,13 @@ For full compliance, use libIEC61850 or IEC104 tools.
 from __future__ import annotations
 
 import asyncio
-import json
+import contextlib
 import logging
 import struct
 import time
 from typing import Any
 
-from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
 
 logger = logging.getLogger(__name__)
@@ -230,10 +230,8 @@ class IEC61850Server(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._server_task
-                except asyncio.CancelledError:
-                    pass
         except Exception as e:
             logger.warning("IEC 61850 server stop error: %s", e)
         finally:
@@ -461,10 +459,7 @@ class IEC61850Server(ProtocolServer):
         if cdc in (CDC_SPS, CDC_SPC):
             val_encoded = _ber_encode_bool(bool(value))
         elif cdc == CDC_MV:
-            if isinstance(value, float):
-                val_encoded = _ber_encode_float(value)
-            else:
-                val_encoded = _ber_encode_int(int(value))
+            val_encoded = _ber_encode_float(value) if isinstance(value, float) else _ber_encode_int(int(value))
         else:
             val_encoded = _ber_encode_float(float(value))
 

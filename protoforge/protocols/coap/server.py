@@ -19,6 +19,7 @@ No third-party CoAP library required — pure Python asyncio UDP.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import struct
@@ -203,10 +204,8 @@ class CoAPServer(ProtocolServer):
             self._server_running = False
             if self._observe_task:
                 self._observe_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await self._observe_task
-                except asyncio.CancelledError:
-                    pass
             if self._transport:
                 self._transport.close()
                 self._transport = None
@@ -367,7 +366,7 @@ class CoAPServer(ProtocolServer):
 
     def _build_discovery_response(self, msg_type: int, msg_id: int, token: bytes) -> bytes:
         links = []
-        for dev_id, behavior in self._behaviors.items():
+        for _dev_id, behavior in self._behaviors.items():
             for uri in behavior.get_all_uris():
                 links.append(f"</{uri}>;ct=50;title=Sensor {uri}")
         links.append("</.well-known/core>;rt=core.wkc")

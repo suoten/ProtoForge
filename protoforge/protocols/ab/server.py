@@ -35,7 +35,9 @@ class AbDeviceBehavior(StandardDeviceBehavior):
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
-                data_type = str(p.data_type) if hasattr(p, 'data_type') else p.get("data_type", "int32")
+                raw_dt = p.data_type if hasattr(p, 'data_type') else p.get("data_type", "int32")
+                # FIXED: 枚举安全归一化（str(enum) 会带类名前缀，导致 _CIP_TYPE_MAP 永远 miss）
+                data_type = str(getattr(raw_dt, "value", raw_dt) or "int32").strip().lower()
                 self._tags[name] = self._values.get(name, 0)
                 self._data_types[name] = data_type
 
@@ -402,30 +404,32 @@ class AbServer(ProtocolServer):
 
     @staticmethod
     def _pack_cip_value(data_type: str, value: Any) -> bytes:
+        # FIXED: 标准 CIP Read Tag 响应数据段 = Symbol Type(2 字节: 类型码 + 0x00) + 值字节。
+        # 原实现额外插入 2 字节 size 字段（type(1)+size(2)+value），非真实 ControlLogix 行为。
         type_info = _CIP_TYPE_MAP.get(data_type, (0xC1, 4))
         type_code, size = type_info
         try:  # FIXED-P1: int()/float()异常保护，非数字值时回退0
             if data_type == "bool":
-                return bytes([type_code, 0x00, 0x01, 0x00, 0x01 if value else 0x00])
+                return struct.pack("<H", type_code) + bytes([0x01 if value else 0x00])
             elif data_type == "string":
                 s = str(value).encode("utf-8")
-                return struct.pack("<BH", type_code, len(s)) + s + b"\x00"
+                return struct.pack("<HH", type_code, len(s)) + s
             elif data_type in ("int16",):
-                return struct.pack("<BHh", type_code, size, int(value))
+                return struct.pack("<Hh", type_code, int(value))
             elif data_type in ("uint16",):
-                return struct.pack("<BHH", type_code, size, int(value))
+                return struct.pack("<HH", type_code, int(value))
             elif data_type in ("int32",):
-                return struct.pack("<BHi", type_code, size, int(value))
+                return struct.pack("<Hi", type_code, int(value))
             elif data_type in ("uint32",):
-                return struct.pack("<BHI", type_code, size, int(value))
+                return struct.pack("<HI", type_code, int(value))
             elif data_type in ("float32",):
-                return struct.pack("<BHf", type_code, size, float(value))
+                return struct.pack("<Hf", type_code, float(value))
             elif data_type in ("float64",):
-                return struct.pack("<BHd", type_code, size, float(value))
+                return struct.pack("<Hd", type_code, float(value))
             else:
-                return struct.pack("<BHi", type_code, 4, int(value))
+                return struct.pack("<Hi", type_code, int(value))
         except (ValueError, TypeError):
-            return struct.pack("<BHi", type_code, 4, 0)
+            return struct.pack("<Hi", type_code, 0)
 
     def _parse_cip_tag_path(self, cip_data: bytes) -> str:
         tag_parts = []
@@ -460,24 +464,15 @@ class AbServer(ProtocolServer):
         return ".".join(tag_parts) if tag_parts else ""
 
     def _get_path_end_offset(self, cip_data: bytes) -> int:
-        offset = 2
-        while offset < len(cip_data):
-            segment_type = cip_data[offset]
-            if segment_type == 0x91:
-                offset += 1
-                if offset >= len(cip_data):
-                    break
-                tag_len = cip_data[offset]
-                offset += 1 + tag_len
-                if tag_len % 2 != 0:
-                    offset += 1
-            elif segment_type == 0x28:
-                offset += 2
-            elif segment_type == 0x00:
-                offset += 1
-            else:
-                offset += 1
-        return offset
+        # FIXED: 按标准计算路径终点 = 2 + PathSize(字) * 2。
+        # 原实现逐字节扫描寻找段类型，无法识别路径结束，
+        # 会把写入的 Tag Type/Count/数据字节也当作路径段走查，
+        # 导致 path_end 越界、写入被误判为路径错误（status 0x04）。
+        if len(cip_data) < 2:
+            return len(cip_data)
+        path_size_words = cip_data[1]
+        end = 2 + path_size_words * 2
+        return min(end, len(cip_data))
 
     def _handle_cip_read_tag(self, session: int, cip_data: bytes,
                              sender_context: bytes = bytes(8)) -> bytes:
@@ -520,17 +515,25 @@ class AbServer(ProtocolServer):
                 cip_resp += bytes([0x04, 0x00])  # Path destination unknown
                 return self._wrap_cip_response(session, cip_resp, sender_context)
             if path_end < len(cip_data):
-                type_code = cip_data[path_end]
-                # 根据type_code确定跳过字节数：bool=4(type+0x00+0x01+0x00), string/其他=3(type+size_word)
-                skip = 4 if type_code == 0xC1 else 3  # bool=4, string/other=3
-                if path_end + skip <= len(cip_data):
+                # FIXED: 标准 CIP Write Tag 请求的数据段 = Tag Type(UINT 2 字节) +
+                # Number of Elements(UINT 2 字节) + 数据。原实现按自造的
+                # type(1)+size(2)+value 解析（bool skip=4 / 其他 skip=3），
+                # 与真实 ControlLogix 不兼容。
+                if path_end + 4 > len(cip_data):
+                    cip_resp = bytearray()
+                    cip_resp += bytes([0xCD, 0x00, 0x05, 0x00])  # status 0x05
+                    return self._wrap_cip_response(session, cip_resp, sender_context)
+                type_code = struct.unpack("<H", cip_data[path_end:path_end + 2])[0]
+                elem_count = struct.unpack("<H", cip_data[path_end + 2:path_end + 4])[0]
+                value_data = cip_data[path_end + 4:]
+                if len(value_data) > 0:
                     data_type = behavior.get_tag_type(tag_name)
-                    value_data = cip_data[path_end + skip:]
                     write_value = self._unpack_cip_value(data_type, value_data)
                     behavior.set_tag(tag_name, write_value)
                     self._log_debug("recv", "cip_write",
                                     f"Write tag {tag_name}={write_value}",
-                                    detail={"tag": tag_name, "value": write_value})
+                                    detail={"tag": tag_name, "value": write_value,
+                                            "type_code": type_code, "count": elem_count})
 
         # FIX: Write Tag Response service = 0xCD (0x4D | 0x80)
         # CIP 响应格式: Service(1) + Reserved(1) + Status(1) + AddStatusSize(1)
@@ -548,10 +551,9 @@ class AbServer(ProtocolServer):
     @staticmethod
     def _unpack_cip_value(data_type: str, data: bytes) -> Any:
         try:
-            if data_type == "bool" and len(data) >= 5:
-                return bool(data[4])
-            elif data_type == "bool" and len(data) >= 1:
-                return bool(data[0])
+            # FIXED: 数据从 Write Tag 请求的 type+count 字段之后开始，直接就是值字节
+            if data_type == "bool" and len(data) >= 1:
+                return data[0] != 0
             elif data_type == "int16" and len(data) >= 2:
                 return struct.unpack("<h", data[:2])[0]
             elif data_type == "uint16" and len(data) >= 2:
@@ -585,7 +587,8 @@ class AbServer(ProtocolServer):
         resp += struct.pack("<H", 0x0000)              # Timeout: 2 bytes
         resp += struct.pack("<H", 0x0002)              # Item Count: 2 bytes
         resp += struct.pack("<H", 0x0000)              # Item1 Type (Null Address): 2 bytes
-        resp += struct.pack("<H", 0x0000)              # Item1 Length: 0 (no data)
+        resp += struct.pack("<H", 0x0004)              # FIXED: Null Address Item 长度 4（标准），原为 0
+        resp += struct.pack("<I", 0x00000000)          # Null Address data: O->T/T->O 零连接 ID
         resp += struct.pack("<H", 0x00B2)              # Item2 Type (Unconnected Data): 2 bytes
         resp += struct.pack("<H", len(cip_data))       # Item2 Length: CIP data only
         resp += cip_data

@@ -7,7 +7,6 @@ verifying that recorded protocol messages conform to protocol specifications.
 from __future__ import annotations
 
 import logging
-import struct
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -161,8 +160,8 @@ class ModbusComplianceChecker(BaseComplianceChecker):
 
     def _check_rule(self, rule, msg, idx, all_messages):
         detail = msg.get("detail", {})
-        summary = msg.get("summary", "")
-        msg_type = msg.get("message_type", "")
+        msg.get("summary", "")
+        msg.get("message_type", "")
 
         if rule.id == "MB-001":
             fc = detail.get("function_code")
@@ -312,7 +311,7 @@ class IEC104ComplianceChecker(BaseComplianceChecker):
     def _check_rule(self, rule, msg, idx, all_messages):
         detail = msg.get("detail", {})
         msg_type = msg.get("message_type", "").lower()
-        summary = msg.get("summary", "").lower()
+        msg.get("summary", "").lower()
 
         if rule.id == "IEC-001":
             if idx > 0 and "data" in msg_type and "start" not in msg_type:

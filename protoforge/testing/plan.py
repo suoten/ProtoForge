@@ -7,7 +7,6 @@ repeatable execution unit.
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 import uuid
@@ -76,7 +75,7 @@ class TestPlan:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TestPlan":
+    def from_dict(cls, data: dict[str, Any]) -> TestPlan:
         return cls(
             id=data.get("id", ""),
             name=data.get("name", ""),
@@ -93,7 +92,7 @@ class TestPlan:
             status=data.get("status", "draft"),
         )
 
-    def clone(self, new_name: str | None = None) -> "TestPlan":
+    def clone(self, new_name: str | None = None) -> TestPlan:
         """Create a copy of this plan with a new ID."""
         data = self.to_dict()
         data["id"] = uuid.uuid4().hex[:12]
@@ -146,7 +145,7 @@ class TestRun:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "TestRun":
+    def from_dict(cls, data: dict[str, Any]) -> TestRun:
         return cls(
             id=data.get("id", ""),
             plan_id=data.get("plan_id", ""),

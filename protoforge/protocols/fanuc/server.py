@@ -68,6 +68,9 @@ class FanucDeviceBehavior(StandardDeviceBehavior):
                 self._cnc_status["speed_override"] = value
             elif point_name == "feed_override":
                 self._cnc_status["feed_override"] = value
+            elif point_name in ("tool_number", "sequence_number", "parts_count",
+                                "running_time", "cutting_time"):
+                self._cnc_status[point_name] = value
             elif point_name.startswith("abs_pos_"):
                 try:
                     idx = int(point_name.rsplit("_", maxsplit=1)[-1])
@@ -105,6 +108,7 @@ class FanucServer(ProtocolServer):
     protocol_display_name = "FANUC FOCAS (Sim)"
 
     FOCAS_HEADER_SIZE = 10
+    DBP_MAGIC = b"DBP\x00"
 
     def __init__(self):
         super().__init__()
@@ -196,10 +200,166 @@ class FanucServer(ProtocolServer):
         if len(data) < self.FOCAS_HEADER_SIZE:
             return None
 
+        # FIXED: DBP 数据块协议（EdgeLite Go 版 FOCAS/Ethernet 客户端使用）。
+        # 帧格式： "DBP\0" | 数据长度(uint32 LE) | 载荷
+        # 载荷：   dummy(uint16 LE) | body长度(uint16 LE) | 命令码/返回码(uint16 LE) | 数据长度(uint16 LE) | 数据
+        if data[:4] == self.DBP_MAGIC:
+            return self._process_dbp(data)
+
         if data[:4] == b"FANC":
             return self._process_focas2_ethernet(data)
         else:
             return self._process_focas_legacy(data)
+
+    # ------------------------------------------------------------------
+    # DBP 数据块协议（与 EdgeLite internal/drivers/fanuc_cnc.go 帧格式对齐）
+    # 请求载荷： dummy | bodyLen | 命令码 | dataLen | 请求体
+    # 响应载荷： dummy | bodyLen | 返回码(0=成功) | dataLen | 响应体
+    # ------------------------------------------------------------------
+
+    # DBP 命令码（与 EdgeLite focasCmd* 常量一致，FOCAS 函数编号）
+    DBP_CMD_CONNECT = 0x0016      # cnc_allclibhndl3
+    DBP_CMD_DISCONNECT = 0x0014   # cnc_freelibhndl
+    DBP_CMD_STATINFO = 0x0098     # cnc_statinfo
+    DBP_CMD_RD_PRG_NUM = 0x0080   # cnc_rdprgnum
+    DBP_CMD_EXE_PRG_NAME = 0x0026 # cnc_exeprgname
+    DBP_CMD_ACTF = 0x0094         # cnc_actf 实际进给率
+    DBP_CMD_ACTS = 0x0095         # cnc_acts 实际主轴转速
+    DBP_CMD_RD_OVRD = 0x00A4      # cnc_rdovrd 倍率
+    DBP_CMD_RD_POSITION = 0x00A2  # cnc_rdposition 坐标
+    DBP_CMD_RD_ALARM = 0x00A0     # cnc_rdalaim 报警
+    DBP_CMD_RD_SEQ_NUM = 0x0082   # cnc_rdseqnum 顺序号
+    DBP_CMD_RD_PARAM = 0x0027     # cnc_rdparam 参数（加工计数/运行/切削时间）
+    DBP_CMD_RD_TOOL_NUM = 0x015D  # cnc_rdtoolnum 当前刀号
+
+    def _process_dbp(self, data: bytes) -> bytes | None:
+        if len(data) < 8:
+            return None
+        payload_len = struct.unpack("<I", data[4:8])[0]
+        if payload_len < 8 or payload_len > 1 << 20:
+            return None
+        if len(data) < 8 + payload_len:
+            return None  # 半包：等待更多数据（EdgeLite 请求-响应串行，不会出现）
+        payload = data[8:8 + payload_len]
+        if len(payload) < 8:
+            return None
+        cmd = struct.unpack("<H", payload[4:6])[0]
+        data_len = struct.unpack("<H", payload[6:8])[0]
+        body = payload[8:8 + data_len]
+        return self._dispatch_dbp(cmd, body)
+
+    def _dbp_response(self, ret: int, out: bytes = b"") -> bytes:
+        """构造 DBP 响应帧： dummy | bodyLen(4+dataLen) | ret | dataLen | data。"""
+        payload = bytearray()
+        payload += struct.pack("<H", 0)
+        payload += struct.pack("<H", 4 + len(out))
+        payload += struct.pack("<H", ret & 0xFFFF)
+        payload += struct.pack("<H", len(out))
+        payload += out
+        frame = bytearray(self.DBP_MAGIC)
+        frame += struct.pack("<I", len(payload))
+        frame += payload
+        return bytes(frame)
+
+    def _dbp_device(self):
+        """DBP 无会话概念，路由到默认设备（单设备场景）。"""
+        device_id = self._default_device_id or (next(iter(self._behaviors), ""))
+        return self._behaviors.get(device_id)
+
+    @staticmethod
+    def _exec_to_status(execution: int) -> int:
+        """PF execution(1=RUN/2=STOP/3=HOLD) → EdgeLite CNCStatus 码空间(0-6)。"""
+        return {1: 4, 2: 1, 3: 2}.get(execution, 0)  # running/stop/hold/reset
+
+    @staticmethod
+    def _program_number(behavior) -> int:
+        if not behavior:
+            return 0
+        prog = str(behavior._cnc_status.get("program", "O0001"))
+        digits = "".join(ch for ch in prog if ch.isdigit())
+        return int(digits) if digits else 0
+
+    def _dispatch_dbp(self, cmd: int, body: bytes) -> bytes:
+        behavior = self._dbp_device()
+        st = behavior._cnc_status if behavior else {}
+
+        if cmd == self.DBP_CMD_CONNECT:
+            return self._dbp_response(0)
+        if cmd == self.DBP_CMD_DISCONNECT:
+            return self._dbp_response(0)
+
+        if cmd == self.DBP_CMD_STATINFO:
+            # EdgeLite 解码： data[0:2]=状态码(CNCStatus 空间), data[2:4]=模式码(CNCMode 空间)，
+            # 且要求 len(data) >= 10（真实 ODBST 结构更长），补齐 12 字节。
+            status = self._exec_to_status(int(st.get("execution", 1)))
+            mode = int(st.get("mode", 0)) & 0xFFFF
+            alarm = int(st.get("alarm", 0))
+            return self._dbp_response(0, struct.pack("<HHHHHH", status, mode, alarm, 0, 0, 0))
+
+        if cmd == self.DBP_CMD_RD_PRG_NUM:
+            # EdgeLite 解码： data[4:8]=程序号 int32
+            prog = self._program_number(behavior)
+            return self._dbp_response(0, struct.pack("<HHi", 0, 0, prog))
+
+        if cmd == self.DBP_CMD_EXE_PRG_NAME:
+            prog = str(st.get("program", "O0001")).encode("ascii", errors="replace")
+            return self._dbp_response(0, prog)
+
+        if cmd == self.DBP_CMD_ACTS:
+            # EdgeLite 解码： data[0:2]=主轴实际转速 int16
+            speed = int(float(st.get("spindle_speed", FanucDeviceBehavior._DEFAULT_SPINDLE_SPEED)))
+            return self._dbp_response(0, struct.pack("<h", max(-32768, min(32767, speed))))
+
+        if cmd == self.DBP_CMD_ACTF:
+            # EdgeLite 解码： data[0:2]=实际进给率 int16
+            feed = int(float(st.get("feed_rate", FanucDeviceBehavior._DEFAULT_FEED_RATE)))
+            return self._dbp_response(0, struct.pack("<h", max(-32768, min(32767, feed))))
+
+        if cmd == self.DBP_CMD_RD_OVRD:
+            # EdgeLite 解码： data[0:2]=进给倍率, data[2:4]=主轴倍率 int16
+            feed_ovrd = int(st.get("feed_override", FanucDeviceBehavior._DEFAULT_OVERRIDE))
+            speed_ovrd = int(st.get("speed_override", FanucDeviceBehavior._DEFAULT_OVERRIDE))
+            return self._dbp_response(0, struct.pack("<hh", feed_ovrd, speed_ovrd))
+
+        if cmd == self.DBP_CMD_RD_POSITION:
+            # 请求体： [posType uint16][axis uint16]；响应： data[0:4]=坐标 int32(1/1000 mm)
+            if len(body) < 4:
+                return self._dbp_response(2)
+            pos_type, axis = struct.unpack("<HH", body[0:4])
+            key = {0: "absolute_pos", 1: "machine_pos",
+                   2: "relative_pos", 3: "distance_pos"}.get(pos_type)
+            if key is None:
+                return self._dbp_response(2)
+            positions = st.get(key, [0.0])
+            pos = float(positions[axis]) if 0 <= axis < len(positions) else 0.0
+            return self._dbp_response(0, struct.pack("<i", int(pos * 1000)))
+
+        if cmd == self.DBP_CMD_RD_ALARM:
+            # EdgeLite 解码： data[0:2]=报警号 int16, data[2:34]=32字节报警信息
+            alm = int(st.get("alarm", 0))
+            msg = b"ALARM" if alm > 0 else b""
+            msg = msg[:32].ljust(32, b"\x00")
+            return self._dbp_response(0, struct.pack("<h", alm) + msg)
+
+        if cmd == self.DBP_CMD_RD_SEQ_NUM:
+            seq = int(st.get("sequence_number", 0))
+            return self._dbp_response(0, struct.pack("<i", seq))
+
+        if cmd == self.DBP_CMD_RD_PARAM:
+            # 请求体： [paramNo uint16][length uint16=4]；EdgeLite 读 data 末 4 字节 int32
+            if len(body) < 4:
+                return self._dbp_response(2)
+            param_no, _ = struct.unpack("<HH", body[0:4])
+            params = {6711: "parts_count", 6751: "running_time", 6752: "cutting_time"}
+            value = int(st.get(params.get(param_no, ""), 0))
+            return self._dbp_response(0, struct.pack("<HHi", param_no, 4, value))
+
+        if cmd == self.DBP_CMD_RD_TOOL_NUM:
+            tool = int(st.get("tool_number", 5))
+            return self._dbp_response(0, struct.pack("<h", tool))
+
+        # 未知命令： 返回非 0 错误码（EdgeLite 按命令失败处理）
+        return self._dbp_response(1)
 
     def _process_focas2_ethernet(self, data: bytes) -> bytes | None:
         if len(data) < 12:
@@ -464,6 +624,17 @@ class FanucServer(ProtocolServer):
             if len(current) < axis_count:
                 behavior._cnc_status[key] = current + [0.0] * (axis_count - len(current))
 
+        # FIXED: 点位初值（如 fixed_value 生成器）必须同步进 _cnc_status，
+        # 否则 DBP/FOCAS 协议读到的永远是内置默认值，与设备状态脱节。
+        for p in device_config.points:
+            try:
+                val = behavior.get_value(p.name)
+            except Exception:
+                continue
+            if val is None:
+                continue
+            self._sync_cnc_field(behavior, p.name, val)
+
         logger.info("FANUC device created: %s (cnc_type=%s, axis=%d)",
                      device_config.id,
                      self._device_params[device_config.id]["cnc_type"],
@@ -498,17 +669,8 @@ class FanucServer(ProtocolServer):
             return False
         return behavior.on_write(point_name, value)
 
-    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
-        """内部同步：更新 Fanuc CNC 状态数据，绕过访问控制检查。
-
-        直接更新 _values 和 _cnc_status，不设置 _written_values，
-        避免冻结生成器。
-        """
-        behavior = self._behaviors.get(device_id)
-        if not behavior:
-            return
-        behavior._values[point_name] = value
-        # 同步到 _cnc_status（协议处理器从这里读取数据）
+    def _sync_cnc_field(self, behavior: FanucDeviceBehavior, point_name: str, value: Any) -> None:
+        """将点位值同步到 _cnc_status 对应字段（sync_point_value 与 create_device 共用）。"""
         if point_name == "spindle_speed":
             behavior._cnc_status["spindle_speed"] = value
         elif point_name == "feed_rate":
@@ -522,10 +684,13 @@ class FanucServer(ProtocolServer):
         elif point_name == "z_pos":
             behavior._cnc_status["absolute_pos"][2] = value
             behavior._cnc_status["machine_pos"][2] = value
-        elif point_name in ("alarm", "mode", "execution", "motion", "speed_override", "feed_override"):
+        elif point_name in ("alarm", "mode", "execution", "speed_override", "feed_override"):
             behavior._cnc_status[point_name] = value
         elif point_name == "program":
             behavior._cnc_status["program"] = str(value)
+        elif point_name in ("tool_number", "sequence_number", "parts_count",
+                            "running_time", "cutting_time"):
+            behavior._cnc_status[point_name] = value
         elif point_name.startswith("abs_pos_"):
             try:
                 idx = int(point_name.rsplit("_", maxsplit=1)[-1])
@@ -534,6 +699,19 @@ class FanucServer(ProtocolServer):
                     behavior._cnc_status["machine_pos"][idx] = value
             except (ValueError, IndexError):
                 pass
+
+    async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
+        """内部同步：更新 Fanuc CNC 状态数据，绕过访问控制检查。
+
+        直接更新 _values 和 _cnc_status，不设置 _written_values，
+        避免冻结生成器。
+        """
+        behavior = self._behaviors.get(device_id)
+        if not behavior:
+            return
+        behavior._values[point_name] = value
+        # 同步到 _cnc_status（协议处理器从这里读取数据）
+        self._sync_cnc_field(behavior, point_name, value)
 
     def get_config_schema(self) -> dict[str, Any]:
         return {

@@ -24,6 +24,7 @@
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -97,6 +98,7 @@ class MqttBroker(ProtocolServer):
         self._default_qos: int = 0
         self._default_retain: bool = False
         self._qos_tracker: QoSMessageTracker | None = None
+        self._command_task: asyncio.Task | None = None
 
     @property
     def actual_port(self) -> int:
@@ -189,6 +191,8 @@ class MqttBroker(ProtocolServer):
 
             self._status = ProtocolStatus.RUNNING
             self._publish_task = asyncio.create_task(self._publish_loop(publish_interval))
+            # 回环命令消费者：接收网关发布的 {…}/command 下行命令并应用到设备
+            self._command_task = asyncio.create_task(self._command_consumer_loop())
 
             # FIXED: 检测端口是否被自动更换（EdgeLite社区版会处理端口冲突）
             actual_port = self._get_actual_port()
@@ -227,6 +231,14 @@ class MqttBroker(ProtocolServer):
                     logger.debug("MQTT task cancelled")
                 except Exception as e:
                     logger.warning("MQTT publish task error: %s", e)
+            if self._command_task:
+                self._command_task.cancel()
+                try:
+                    await self._command_task
+                except asyncio.CancelledError:
+                    logger.debug("MQTT command consumer cancelled")
+                except Exception as e:
+                    logger.warning("MQTT command consumer stop error: %s", e)
             if self._broker:
                 await self._broker.shutdown()
         except Exception as e:
@@ -544,6 +556,81 @@ class MqttBroker(ProtocolServer):
             logger.info("MQTT will message published for device %s to %s", device_id, will_topic)
         except Exception as e:
             logger.warning("MQTT will message publish failed for %s: %s", device_id, e)
+
+    def _resolve_command_device(self, topic: str, payload: dict) -> str | None:
+        """解析下行命令的目标设备。"""
+        # 1) payload 显式 device_id（EdgeLite 命令载荷自带）
+        did = payload.get("device_id")
+        if isinstance(did, str) and did in self._behaviors:
+            return did
+        # 2) 主题模式 {prefix}/{device_id}/command
+        parts = topic.split("/")
+        if len(parts) >= 3 and parts[-1] == "command":
+            candidate = parts[-2]
+            if candidate in self._behaviors:
+                return candidate
+        # 3) 仅注册一台设备时回退到该设备（单设备网关的常见形态）
+        if len(self._behaviors) == 1:
+            return next(iter(self._behaviors))
+        return None
+
+    async def _command_consumer_loop(self) -> None:
+        """回环命令消费者：以 MQTT 客户端身份连回自身 broker，订阅 `#`，
+        把网关（如 EdgeLite）发布的 `{…}/command` JSON 命令
+        （{"point","value"[,"device_id"]}）应用到本地设备点位。
+       这使得 broker 不再只出不进——下行控制链路真正可用。"""
+        import json as json_lib
+
+        from amqtt.client import MQTTClient
+        from amqtt.mqtt.constants import QOS_0
+
+        uri = f"mqtt://127.0.0.1:{self._port}/"
+        while self._status == ProtocolStatus.RUNNING:
+            client = MQTTClient(client_id="protoforge_cmd_consumer")
+            try:
+                await client.connect(uri)
+                await client.subscribe([("#", QOS_0)])
+                logger.info("MQTT command consumer connected to %s", uri)
+                while self._status == ProtocolStatus.RUNNING:
+                    message = await client.deliver_message()
+                    topic = getattr(message, "topic", "") or ""
+                    data = getattr(message, "data", b"") or b""
+                    if not topic.endswith("/command"):
+                        continue
+                    text = bytes(data).decode("utf-8", "replace") if isinstance(data, (bytes, bytearray)) else str(data)
+                    try:
+                        payload = json_lib.loads(text)
+                    except (json_lib.JSONDecodeError, TypeError, ValueError):
+                        logger.debug("MQTT command payload not JSON on %s", topic)
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    point = payload.get("point")
+                    if not point or "value" not in payload:
+                        logger.warning("MQTT command on %s missing point/value: %s", topic, text[:200])
+                        continue
+                    device_id = self._resolve_command_device(topic, payload)
+                    if not device_id:
+                        logger.warning("MQTT command on %s: no target device resolved", topic)
+                        continue
+                    ok = await self.write_point(device_id, str(point), payload["value"])
+                    if ok:
+                        logger.info("MQTT command applied: %s.%s = %s (topic %s)",
+                                    device_id, point, payload["value"], topic)
+                    else:
+                        logger.warning("MQTT command rejected: %s.%s = %s (topic %s)",
+                                       device_id, point, payload["value"], topic)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning("MQTT command consumer error: %s; retrying in 2s", e)
+                try:
+                    await asyncio.sleep(2)
+                except asyncio.CancelledError:
+                    break
+            finally:
+                with contextlib.suppress(Exception):
+                    await client.disconnect()
 
     def get_qos_stats(self) -> dict[str, Any]:
         """返回 QoS 消息追踪统计信息。"""

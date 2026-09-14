@@ -382,7 +382,6 @@ def _audit_command(args):
 def _test_command(args):
     """Execute a test plan via API and output results in specified format."""
     import json as _json
-    import time as _time
 
     import requests
 
@@ -451,10 +450,7 @@ def _test_command(args):
         print(f"! Failed to get report: {e}")
         sys.exit(1)
 
-    if fmt == "json":
-        content = _json.dumps(r.json(), indent=2, ensure_ascii=False)
-    else:
-        content = r.text
+    content = _json.dumps(r.json(), indent=2, ensure_ascii=False) if fmt == "json" else r.text
 
     # Output
     if output:
