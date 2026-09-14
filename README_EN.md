@@ -257,6 +257,206 @@ pip install -e ".[s7]"        # Siemens S7
 
 ---
 
+## 📍 PLC Address Mapping — Per-Point Precision
+
+Every point in ProtoForge is bound to a **specific PLC protocol address**. Your SCADA/gateway reads from this address exactly like reading a real PLC.
+
+### Address Formats by Protocol
+
+| Protocol | Address Format | Example | Description |
+| -------- | -------------- | ------- | ----------- |
+| **Modbus TCP/RTU** | Register offset (number) | `address: "0"` | Register 40001 (holding), `"2"` = 40003 |
+| **Siemens S7** | DB.type+offset | `address: "DB1.DBD2"` | DB1, D=double word, offset 2; `DBX`=bit, `DBW`=word |
+| **Omron FINS** | Area+address | `address: "DM100"` | DM area address 100; `CIO0` = CIO area |
+| **Mitsubishi MC** | Device+address | `address: "D100"` | D register 100; `M0` = internal relay 0 |
+| **OPC-UA** | Node ID | `address: "ns=2;s=Temperature"` | Namespace 2, node Temperature |
+| **IEC 60870-5-104** | ASDU address | `address: "1"` | IOA (Information Object Address) = 1 |
+
+### Modbus Register Types & Function Code Mapping
+
+ProtoForge supports all four Modbus register areas, auto-detected by address format:
+
+| Register Area | Address Format | Modbus Range | Function Codes | Description |
+| ------------- | -------------- | ------------ | -------------- | ----------- |
+| **Coil** | `0`, `00001`, `0x0`, `C0` | 00001–09999 | FC01 Read / FC05 Write / FC0F Write Multi | Bit, read/write |
+| **Discrete Input** | `10001`, `1x0`, `DI0` | 10001–19999 | FC02 Read | Bit, read-only |
+| **Input Register** | `30001`, `3x0`, `IR0` | 30001–39999 | FC04 Read | Word, read-only |
+| **Holding Register** | `0`, `40001`, `4x0`, `HR0` | 40001–49999 | FC03 Read / FC06 Write / FC10 Write Multi | Word, read/write |
+
+> 💡 **Auto-detection for plain numbers**: `bool` type → Coil; other types → Holding Register. Use `30001`, `10001` or `IR0`, `DI0` prefixes for Input Register / Discrete Input.
+
+### Data Types & Register Usage
+
+| Data Type | Bytes | Registers | Byte Order | Protocols |
+| --------- | ----- | --------- | ---------- | --------- |
+| `bool` | 1 bit | 1 (bit) | — | Modbus, S7 (DBX), FINS |
+| `int16` | 2 | 1 | Big-Endian | Modbus, S7 (DBW), FINS, MC |
+| `uint16` | 2 | 1 | Big-Endian | Modbus, S7, MC |
+| `int32` | 4 | 2 | Big-Endian | Modbus, S7 (DBD), MC |
+| `uint32` | 4 | 2 | Big-Endian | Modbus, S7, MC |
+| `float32` | 4 | 2 | Big-Endian (IEEE 754) | Modbus, S7 (DBD Real), FINS, MC |
+| `float64` | 8 | 4 | Big-Endian (IEEE 754) | Modbus, S7 |
+| `string` | Variable | Variable | Big-Endian (UTF-8) | Modbus, S7 |
+| `real` | 4 | 2 | Big-Endian | S7 (same as float32) |
+
+> ⚠️ **Byte Order**: ProtoForge uses **Big-Endian** for all protocols — the most common byte order in industrial devices. If your client uses Little-Endian, you'll need to swap bytes on the client side.
+
+### Data Generators
+
+| Generator | Description | Key Parameters | Use Case |
+| --------- | ----------- | -------------- | -------- |
+| `fixed` | Fixed value | `fixed_value` | Status, switches |
+| `random` | Random value | `min_value`, `max_value` | Sensor noise |
+| `sine` | Sine wave | `min_value`, `max_value`, `period` | Periodic changes |
+| `increment` | Incrementing | `min_value`, `max_value`, `step` | Flow meters, counters |
+| `ramp` | Linear ramp | `start_value`, `end_value`, `duration` | Gradual changes |
+
+> 💡 `update_frequency` (seconds per update, default `1.0`) controls how often data changes — similar to a real device's sampling period.
+
+### Write Behavior
+
+Writes to ProtoForge behave exactly like writing to a real PLC:
+
+| Operation | ProtoForge Response | Subsequent Read |
+| --------- | ------------------- | --------------- |
+| Write Single Coil (FC05) | Normal echo response | Returns written value |
+| Write Multiple Coils (FC0F) | Normal echo response | Returns written values |
+| Write Single Register (FC06) | Normal echo response | Returns written value |
+| Write Multiple Registers (FC10) | Normal echo response | Returns written values |
+| Read/Write Multiple (FC17) | Returns read values | Write takes effect immediately |
+| Mask Write Register (FC16) | Normal response | Updated per AND/OR mask logic |
+
+> ⚠️ If `generator_type` is set (e.g., `random`, `sine`), the generator will overwrite written values each cycle. Set `generator_type` to `fixed` to retain written values.
+
+### Multi-Device Coexistence
+
+Multiple devices can share the **same protocol port** — like multiple slaves on an RS-485 bus:
+
+```
+Device A: slave_id=1, protocol=modbus_tcp, port=5020
+Device B: slave_id=2, protocol=modbus_tcp, port=5020  ← same port, different slave_id
+Device C: slave_id=3, protocol=modbus_tcp, port=5020
+```
+
+Your acquisition program differentiates devices by `slave_id` — identical to real multi-device bus topology.
+
+### Modbus RTU Serial Configuration
+
+```json
+{
+  "protocol": "modbus_rtu",
+  "protocol_config": {
+    "slave_id": 2,
+    "serial_port": "COM3",
+    "baudrate": 9600,
+    "databits": 8,
+    "parity": "even",
+    "stopbits": 1
+  }
+}
+```
+
+| Parameter | Options | Default |
+| --------- | ------- | ------- |
+| `baudrate` | 1200–115200 | 9600 |
+| `databits` | 7, 8 | 8 |
+| `parity` | none, even, odd | even |
+| `stopbits` | 1, 1.5, 2 | 1 |
+
+---
+
+## 📊 Competitor Comparison
+
+| Feature | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | Real PLC |
+| ------- | ---------- | ----------------- | ------- | ------------- | -------- |
+| **Protocols** | 21 | Modbus only | 150+ (paid drivers) | MQTT/HTTP only | Single brand |
+| **Open Source** | ✅ MIT | ❌ Paid | ❌ Commercial | ✅ DIY | ❌ |
+| **Multi-protocol simultaneous** | ✅ 21 at once | ❌ | ✅ (paid) | ❌ | ❌ |
+| **Web UI** | ✅ Out of box | ❌ Desktop | ✅ | ❌ | Brand-specific |
+| **Device Templates** | ✅ 122+ | ❌ Manual | ✅ | ❌ | — |
+| **Batch Device Generation** | ✅ 100 with one click | ❌ | ✅ (paid) | ❌ | ❌ |
+| **Data Generators** | ✅ 5 types | ❌ Manual | ❌ | ✅ Basic | ✅ Real data |
+| **Exception Code Simulation** | ✅ State-mapped | ❌ | ❌ | ❌ | ✅ |
+| **Write Support** | ✅ Full read/write | ✅ | ✅ | ❌ | ✅ |
+| **Docker** | ✅ 30s start | ❌ | ❌ | ✅ | ❌ |
+| **ARM/Raspberry Pi** | ✅ | ❌ | ❌ | ✅ | — |
+| **Cost** | **Free** | $69+ | $1,500+/driver | Free | $500+ |
+
+### Protocol Compliance
+
+ProtoForge strictly follows industrial protocol standards:
+
+| Protocol | Standard | Error Handling |
+| -------- | -------- | -------------- |
+| Modbus TCP/RTU | Modbus App Protocol v1.1b3 | Full exception codes (0x01–0x0A) |
+| Siemens S7 | S7 Comm (ISO-on-TCP, RFC1006) | SZL response, error frames |
+| Omron FINS | FINS/TCP (CV-mode) | EndCode error codes |
+| Mitsubishi MC | SLMP 3E/4E frame | Subheader 0x5000, big-endian |
+| OPC-UA | OPC 1.05 Part 6 | Full NodeId/DataValue |
+| IEC 60870-5-104 | IEC 60870-5-104 | APDU/APCI frames, full IOA |
+| MQTT | 3.1.1 / 5.0 | QoS 0/1/2, Retain, LWT |
+| BACnet | BACnet/IP (ASHRAE 135) | ReadProperty/WriteProperty |
+
+> 💡 **Device state → exception code mapping**: Device states (stop/error/starting/stopping/maintenance/program) automatically map to protocol-specific exception codes — just like real devices returning errors on fault.
+
+---
+
+## 🍓 ARM / Raspberry Pi Deployment
+
+ProtoForge supports ARM64 architecture — runs on Raspberry Pi, industrial gateways, and other low-power devices:
+
+### Docker (Recommended)
+
+```bash
+docker run -d --name protoforge \
+  -p 8000:8000 \
+  -e PROTOFORGE_ADMIN_PASSWORD=admin \
+  -v protoforge-data:/app/data \
+  suoten/protoforge:latest
+```
+
+> Docker image auto-detects CPU architecture (amd64/arm64).
+
+### Resource Usage
+
+| Config | Minimum | Recommended | Tested Baseline |
+| ------ | ------- | ----------- | --------------- |
+| CPU | ARM Cortex-A53 (1.2GHz) | ARM Cortex-A72 (1.5GHz+) | Pi 4B (4GB) |
+| Memory | 256MB (10 devices) | 512MB (50 devices) | 1GB (100+ devices) |
+| Disk | 100MB (app) | 1GB (with data) | — |
+| Concurrent Devices | 10 | 50 | 100+ |
+
+> 💡 **Pi 4B tested**: 50 devices (Modbus + S7 + MQTT), CPU ~15%, Memory ~180MB — fully smooth.
+
+> ⚠️ **ARM limitations**: OPC-DA and FANUC FOCAS require Windows DLLs (unavailable on ARM). Core protocols (Modbus, S7, OPC-UA, MQTT, FINS, MC, IEC 104, BACnet, CoAP, DDS) fully support ARM64.
+
+---
+
+## 📋 Open Source vs Enterprise
+
+| Feature | Open Source (MIT) | Enterprise |
+| ------- | ----------------- | ---------- |
+| Protocols | 21, all included | 21 + custom protocols |
+| Device Templates | 122+ | 122+ + industry templates |
+| Concurrent Devices | Unlimited | Unlimited |
+| Web UI | ✅ Full | ✅ + branding |
+| REST API | ✅ Full | ✅ + gRPC batch |
+| Python SDK | ✅ Sync+Async | ✅ + Java/Go SDK |
+| Docker | ✅ | ✅ + Helm/K8s Operator |
+| ARM Support | ✅ | ✅ |
+| CSV Import/Export | ✅ | ✅ |
+| Test Plans | ✅ | ✅ + CI/CD plugins |
+| Compliance Checking | ✅ | ✅ + industry standard packs |
+| SSO / LDAP | ❌ | ✅ |
+| Multi-tenant | ❌ | ✅ |
+| Audit Log | ❌ | ✅ |
+| SLA Support | ❌ | ✅ 24/7 |
+| Professional Services | Community | Dedicated technical manager |
+
+> 💡 **Open source is free forever**: ProtoForge open source includes all core features with no protocol, device, or functionality limits. Enterprise adds organizational management and professional support.
+
+---
+
 ## 🤝 Support
 
 **QQ Group: 866599071** — Join code: **ProtoForge**

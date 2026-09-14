@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.2.1 — 2026-09-14
+
+**Documentation Enhancement:**
+
+- Added comprehensive Modbus register type mapping section (Coil/Discrete Input/Input Register/Holding Register with function codes)
+- Added data type & register usage table (bool/int16/int32/uint32/float32/float64/string/real with byte order)
+- Added step-by-step tutorial: creating devices from real address tables (Modbus address table → ProtoForge config → verification code)
+- Added Modbus RTU serial port configuration documentation (baudrate/databits/parity/stopbits)
+- Added multi-device coexistence documentation (multiple slave_ids on same port)
+- Added write behavior documentation (FC05/06/0F/10/16/17 response and read-back behavior)
+- Added data generator documentation (fixed/random/sine/increment/ramp with update_frequency parameter)
+- Added competitor comparison table (vs Modbus Slave/Poll, Kepware, Node-RED Mock, real PLC)
+- Added protocol compliance documentation (standards followed + exception code mapping per protocol)
+- Added ARM/Raspberry Pi deployment guide with resource consumption benchmarks
+- Added open source vs enterprise feature comparison table
+- Updated README_EN.md with all corresponding English documentation
+
 ## v1.2.0 — 2026-09-13
 
 **IoT Industrial Device Testing Platform:**

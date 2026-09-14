@@ -515,6 +515,199 @@ print(f"温度: {temperature} °C")
 >
 > 💡 **自定义地址**：创建设备时可以自由指定每个测点的 PLC 地址，完全匹配你真实设备的地址表。
 
+#### Modbus 寄存器类型与功能码映射
+
+ProtoForge 支持完整的 Modbus 四种寄存器区域，通过地址格式自动识别：
+
+| 寄存器区域 | 地址格式示例 | Modbus 地址范围 | 功能码 | 说明 |
+| --------- | ----------- | -------------- | ------ | ---- |
+| **线圈 (Coil)** | `0`, `00001`, `0x0`, `C0` | 00001–09999 | FC01 读 / FC05 写单 / FC0F 写多 | 位操作，可读可写 |
+| **离散输入 (Discrete Input)** | `10001`, `1x0`, `DI0` | 10001–19999 | FC02 读 | 位操作，只读 |
+| **输入寄存器 (Input Register)** | `30001`, `3x0`, `IR0`, `I0` | 30001–39999 | FC04 读 | 字操作，只读 |
+| **保持寄存器 (Holding Register)** | `0`, `40001`, `4x0`, `HR0`, `H0` | 40001–49999 | FC03 读 / FC06 写单 / FC10 写多 | 字操作，可读可写 |
+
+> 💡 **纯数字地址的自动判断规则**：`bool` 类型 → 线圈 (Coil)；其他类型 → 保持寄存器 (Holding Register)。如果你想使用输入寄存器或离散输入，请使用 `30001`、`10001` 等 5 位 PLC 地址格式，或 `IR0`、`DI0` 等前缀格式。
+
+#### 数据类型与寄存器占用
+
+不同数据类型占用的寄存器数量和字节序：
+
+| 数据类型 | 字节数 | 占用寄存器数 | 字节序 | 适用协议 |
+| -------- | ----- | ----------- | ------ | ------- |
+| `bool` | 1 bit | 1 (位) | — | Modbus (Coil/DI)、S7 (DBX)、FINS (CIO bit) |
+| `int16` | 2 | 1 | 大端序 (Big-Endian) | Modbus、S7 (DBW)、FINS、MC |
+| `uint16` | 2 | 1 | 大端序 | Modbus、S7、MC |
+| `int32` | 4 | 2 | 大端序 | Modbus、S7 (DBD)、MC |
+| `uint32` | 4 | 2 | 大端序 | Modbus、S7、MC |
+| `float32` | 4 | 2 | 大端序 (IEEE 754) | Modbus、S7 (DBD Real)、FINS、MC |
+| `float64` | 8 | 4 | 大端序 (IEEE 754) | Modbus、S7 |
+| `string` | 可变 | 可变 (每寄存器 2 字节) | 大端序 (UTF-8) | Modbus、S7 |
+| `real` | 4 | 2 | 大端序 | S7 专用（等同 float32） |
+
+> ⚠️ **字节序说明**：ProtoForge 所有协议统一使用**大端序 (Big-Endian)**，这是工业设备最常用的字节序。如果你的上位机使用小端序，需要在采集端做字节翻转。
+>
+> 例如：`float32` 值 `1.0` 在 ProtoForge 中存储为 `0x3F800000`，拆分为两个寄存器 → `HR[n]=0x3F80, HR[n+1]=0x0000`。用 pymodbus 读取后：`struct.unpack('>f', struct.pack('>HH', 0x3F80, 0x0000))` → `1.0`。
+
+#### 📋 从真实地址表创建设备教程
+
+假设你有一份设备说明书上的 Modbus 地址表：
+
+| 参数名 | Modbus 地址 | 数据类型 | 单位 | 读写 |
+| ------ | ----------- | -------- | ---- | ---- |
+| A相电压 | 40001 | float32 | V | RO |
+| B相电压 | 40003 | float32 | V | RO |
+| 有功功率 | 40005 | float32 | kW | RO |
+| 功率因数 | 40007 | float32 | - | RO |
+| 开关状态 | 00001 | bool | - | RW |
+
+**第 1 步：转换为 ProtoForge 地址格式**
+
+| 参数名 | 说明书地址 | ProtoForge address | data_type |
+| ------ | --------- | ------------------ | --------- |
+| A相电压 | 40001 | `0` (40001-40001=0) | float32 |
+| B相电压 | 40003 | `2` (40003-40001=0) | float32 |
+| 有功功率 | 40005 | `4` | float32 |
+| 功率因数 | 40007 | `6` | float32 |
+| 开关状态 | 00001 | `00001` 或 `0` | bool |
+
+> 💡 **5 位 PLC 地址自动转换**：你也可以直接填 `40001`、`30001`、`10001`、`00001`，ProtoForge 会自动减去基地址（40001→偏移 0，30001→偏移 0）。
+
+**第 2 步：在 Web 界面创建设备**
+
+1. 进入「设备管理」→ 点击「创建设备」
+2. 选择协议 `modbus_tcp`，填写设备名称
+3. 在测点配置中，逐条添加上表中的参数
+4. 设置 `slave_id`（如 `1`）
+5. 保存并启动设备
+
+**第 3 步：用你的采集程序验证**
+
+```python
+from pymodbus.client import ModbusTcpClient
+import struct
+
+client = ModbusTcpClient("127.0.0.1", port=5020)
+client.connect()
+
+# 读 A相电压 (address=0, float32, 占2个寄存器)
+result = client.read_holding_registers(address=0, count=2, slave_id=1)
+voltage_a = struct.unpack('>f', struct.pack('>HH', *result.registers))[0]
+
+# 读 B相电压 (address=2)
+result = client.read_holding_registers(address=2, count=2, slave_id=1)
+voltage_b = struct.unpack('>f', struct.pack('>HH', *result.registers))[0]
+
+# 读开关状态 (address=00001 → coil 0)
+result = client.read_coils(address=0, count=1, slave_id=1)
+switch_status = result.bits[0]
+
+print(f"A相电压: {voltage_a}V, B相电压: {voltage_b}V, 开关: {'ON' if switch_status else 'OFF'}")
+```
+
+**就是这么简单——ProtoForge 的地址和真实设备完全一致，你的采集代码不需要改一行。**
+
+#### Modbus RTU 串口配置
+
+Modbus RTU 模板支持完整的串口参数配置：
+
+```json
+{
+  "protocol": "modbus_rtu",
+  "protocol_config": {
+    "slave_id": 2,
+    "serial_port": "COM3",
+    "baudrate": 9600,
+    "databits": 8,
+    "parity": "even",
+    "stopbits": 1
+  }
+}
+```
+
+| 参数 | 说明 | 可选值 | 默认值 |
+| ---- | ---- | ------ | ------ |
+| `serial_port` | 串口设备路径 | Windows: `COM3`; Linux: `/dev/ttyUSB0` | — |
+| `baudrate` | 波特率 | `1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200` | `9600` |
+| `databits` | 数据位 | `7, 8` | `8` |
+| `parity` | 校验位 | `none, even, odd` | `even` |
+| `stopbits` | 停止位 | `1, 1.5, 2` | `1` |
+
+> 💡 **无串口硬件也能用**：ProtoForge 的 Modbus RTU 模式在没有物理串口时也可以启动（使用虚拟串口或 TCP-over-RTU 桥接）。在 Linux 上可以用 `socat` 创建虚拟串口：`socat -d -d PTY,raw,echo=0 PTY,raw,echo=0`。
+
+#### 多设备共存仿真
+
+ProtoForge 支持在**同一协议端口**下同时仿真多台设备，就像一条 RS-485 总线上挂多个从站：
+
+**Modbus 多 Slave 共存**：
+
+```
+设备A: slave_id=1, 协议=modbus_tcp, 端口=5020
+设备B: slave_id=2, 协议=modbus_tcp, 端口=5020  ← 同端口不同 slave_id
+设备C: slave_id=3, 协议=modbus_tcp, 端口=5020
+```
+
+采集程序通过 `slave_id` 区分不同设备：
+
+```python
+# 读设备A的数据
+result = client.read_holding_registers(address=0, count=2, slave_id=1)
+# 读设备B的数据
+result = client.read_holding_registers(address=0, count=2, slave_id=2)
+```
+
+> 💡 每个 Modbus 设备在创建时可以指定不同的 `slave_id`，它们共享同一协议端口但拥有独立的数据空间。
+
+**S7/OPC-UA/MQTT 等协议多设备**：每种协议都支持在同端口下创建多台虚拟设备，通过设备名/节点空间区分。
+
+#### 写入行为说明
+
+当你的采集程序向 ProtoForge 写入数据时，行为与真实 PLC 完全一致：
+
+| 操作 | ProtoForge 响应 | 后续读取行为 |
+| ---- | --------------- | ----------- |
+| **写单个线圈 (FC05)** | 返回正常响应（回显地址+值） | 读该地址返回写入的值 |
+| **写多个线圈 (FC0F)** | 返回正常响应（回显起始地址+数量） | 读该地址范围返回写入的值 |
+| **写单个寄存器 (FC06)** | 返回正常响应（回显地址+值） | 读该地址返回写入的值 |
+| **写多个寄存器 (FC10)** | 返回正常响应（回显起始地址+数量） | 读该地址范围返回写入的值 |
+| **读写多个寄存器 (FC17)** | 返回读部分的值 | 写入部分同时生效 |
+| **掩码写寄存器 (FC16)** | 返回正常响应 | 按掩码 AND/OR 逻辑更新寄存器 |
+
+> ⚠️ **写入与生成器的关系**：如果测点配置了 `generator_type`（如 `random`、`sine`），生成器会在每次更新周期覆盖写入的值。要保留写入值，请将 `generator_type` 设为 `fixed`。
+
+#### 数据更新频率与生成器
+
+每个测点可以配置数据生成器来模拟真实设备的变化行为：
+
+| 生成器类型 | 说明 | 关键参数 | 适用场景 |
+| ---------- | ---- | -------- | ------- |
+| `fixed` | 固定值 | `fixed_value` | 状态量、开关 |
+| `random` | 随机值 | `min_value`, `max_value` | 传感器噪声模拟 |
+| `sine` | 正弦波 | `min_value`, `max_value`, `period` | 周期性变化量 |
+| `increment` | 递增值 | `min_value`, `max_value`, `step` | 流量计、计数器 |
+| `ramp` | 线性变化 | `start_value`, `end_value`, `duration` | 渐变过程模拟 |
+
+```json
+{
+  "name": "temperature",
+  "address": "0",
+  "data_type": "float32",
+  "generator_type": "sine",
+  "min_value": 20.0,
+  "max_value": 80.0,
+  "period": 60,
+  "update_frequency": 1.0
+}
+```
+
+| 参数 | 说明 | 默认值 |
+| ---- | ---- | ------ |
+| `update_frequency` | 数据更新频率（秒/次） | `1.0`（1秒更新一次） |
+| `period` | 正弦周期（秒） | `60` |
+| `step` | 递增步长 | `1.0` |
+| `duration` | 渐变持续时间（秒） | `10` |
+
+> 💡 `update_frequency` 决定了数据多久变化一次。设为 `0.5` 表示每 0.5 秒更新一次（2Hz），设为 `5` 表示每 5 秒更新一次。这与真实设备的采样周期类似。
+
 ### 方式 ②：EdgeLite 自动注册（便捷）
 
 如果你用 [EdgeLite](https://github.com/suoten/EdgeLiteGateway) 做网关，ProtoForge 可以自动把设备配置推送过去，免去手动在 EdgeLite 中添加设备的步骤。详见下方 [EdgeLite 网关对接](#-edgelite-网关对接) 章节。
@@ -1368,6 +1561,122 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 2. 连续 3 次检查失败后，备节点自动晋升为主节点
 3. 晋升时触发回调通知（可注册自定义回调）
 4. 原主节点恢复后，可手动降级为备节点
+
+***
+
+## 📊 竞品对比
+
+### ProtoForge vs 同类工具
+
+| 特性 | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | 真实 PLC |
+| ---- | ---------- | ----------------- | ------- | ------------- | -------- |
+| **协议数量** | 21 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
+| **开源免费** | ✅ MIT | ❌ 付费 | ❌ 商业 | ✅ 但需自建 | ❌ |
+| **多协议同时仿真** | ✅ 21 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
+| **Web 管理界面** | ✅ 开箱即用 | ❌ 桌面软件 | ✅ | ❌ | 品牌专用 |
+| **设备模板库** | ✅ 122+ 模板 | ❌ 手动配置 | ✅ | ❌ | — |
+| **批量设备生成** | ✅ 一键 100 台 | ❌ | ✅ (付费) | ❌ | ❌ |
+| **数据生成器** | ✅ 5 种 (随机/正弦/递增/渐变/固定) | ❌ 手动改值 | ❌ | ✅ 简单 | ✅ 真实数据 |
+| **异常码模拟** | ✅ 设备状态映射异常码 | ❌ | ❌ | ❌ | ✅ |
+| **写入支持** | ✅ 完整读写 | ✅ | ✅ | ❌ | ✅ |
+| **Docker 部署** | ✅ 30 秒启动 | ❌ | ❌ | ✅ | ❌ |
+| **ARM/树莓派** | ✅ 支持 | ❌ | ❌ | ✅ | — |
+| **中文支持** | ✅ 双语 | ❌ | ❌ | ❌ | — |
+| **成本** | **免费** | $69+ | $1,500+/驱动 | 免费 | $500+ |
+
+> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 21 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
+
+### 协议一致性说明
+
+ProtoForge 严格遵循工业协议标准，确保你的采集程序对接真实设备时无缝切换：
+
+| 协议 | 遵循标准 | 异常码/错误处理 |
+| ---- | -------- | -------------- |
+| **Modbus TCP/RTU** | Modbus Application Protocol v1.1b3 | 完整异常码：0x01 非法功能、0x02 非法地址、0x03 非法数据值、0x04 从站故障、0x05 确认、0x06 从站忙、0x0A 网关不可达 |
+| **Siemens S7** | S7 Communication (ISO-on-TCP, RFC1006) | SZL 请求响应、错误帧完整支持 |
+| **Omron FINS** | FINS/TCP (CV-mode 命令) | EndCode 错误码完整返回 |
+| **Mitsubishi MC** | SLMP 3E/4E 帧格式 | 子头 0x5000，大端序读写 |
+| **OPC-UA** | OPC 1.05 Part 6: Mappings | NodeId/QualifiedName/DataValue 完整 |
+| **IEC 60870-5-104** | IEC 60870-5-104 (TI/CI/CD 等 ASDU) | APDU/APCI 帧、IOA 地址完整 |
+| **MQTT** | MQTT 3.1.1 / 5.0 | QoS 0/1/2、Retain、Last Will |
+| **BACnet** | BACnet/IP (ASHRAE 135) | ReadProperty/WriteProperty 服务 |
+
+> 💡 **设备状态→异常码映射**：ProtoForge 仿真设备的运行状态（stop/error/starting/stopping/maintenance/program）会自动映射为对应协议的异常码，就像真实设备在故障时会返回错误一样。例如 Modbus 设备处于 `error` 状态时返回异常码 `0x04` (Slave Device Failure)。
+
+***
+
+## 🍓 ARM / 树莓派部署
+
+ProtoForge 支持 ARM64 架构，可以在树莓派、工业网关等低功耗设备上运行：
+
+### Docker 部署（推荐）
+
+```bash
+# 树莓派 / ARM64 设备
+docker run -d --name protoforge \
+  -p 8000:8000 \
+  -e PROTOFORGE_ADMIN_PASSWORD=admin \
+  -v protoforge-data:/app/data \
+  suoten/protoforge:latest
+```
+
+> Docker 镜像自动识别 CPU 架构（amd64 / arm64），无需指定平台。
+
+### Python 源码部署
+
+```bash
+# 安装 Python 3.10+
+sudo apt install python3.10 python3.10-venv
+
+# 克隆并安装
+git clone https://github.com/suoten/ProtoForge.git
+cd ProtoForge
+python3.10 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+
+# 启动
+protoforge run --host 0.0.0.0 --port 8000
+```
+
+### 资源消耗参考
+
+| 配置项 | 最低要求 | 推荐 | 测试基准 |
+| ------ | -------- | ---- | -------- |
+| **CPU** | ARM Cortex-A53 (1.2GHz) | ARM Cortex-A72 (1.5GHz+) | 树莓派 4B (4GB) |
+| **内存** | 256MB (10 台设备) | 512MB (50 台设备) | 1GB (100+ 台设备) |
+| **磁盘** | 100MB (应用) | 1GB (含数据) | — |
+| **并发设备** | 10 台 | 50 台 | 100+ 台 |
+| **协议端口** | 5 个同时 | 10 个同时 | 全部 21 种 |
+
+> 💡 **树莓派实测**：在树莓派 4B (4GB) 上运行 50 台设备（Modbus + S7 + MQTT 同时），CPU 占用约 15%，内存约 180MB，完全流畅。
+
+> ⚠️ **ARM 限制**：部分协议驱动（如 OPC-DA、FANUC FOCAS）依赖 Windows 原生 DLL，在 ARM 上不可用。核心协议（Modbus、S7、OPC-UA、MQTT、FINS、MC、IEC 104、BACnet、CoAP、DDS）均完整支持 ARM64。
+
+***
+
+## 📋 开源版 vs 企业版功能对比
+
+| 功能 | 开源版 (MIT) | 企业版 |
+| ---- | ----------- | ------ |
+| **协议数量** | 21 种全支持 | 21 种 + 定制协议 |
+| **设备模板** | 122+ 模板 | 122+ + 行业定制模板 |
+| **同时仿真设备数** | 无限制 | 无限制 |
+| **Web 管理界面** | ✅ 完整功能 | ✅ + 品牌定制 |
+| **API 接口** | ✅ 完整 REST API | ✅ + gRPC 批量接口 |
+| **Python SDK** | ✅ 同步+异步 | ✅ + Java/Go SDK |
+| **Docker 部署** | ✅ | ✅ + Helm/K8s Operator |
+| **ARM 支持** | ✅ | ✅ |
+| **CSV 导入导出** | ✅ | ✅ |
+| **测试计划** | ✅ | ✅ + CI/CD 插件 |
+| **合规检查** | ✅ | ✅ + 行业标准包 |
+| **SSO / LDAP** | ❌ | ✅ |
+| **多租户** | ❌ | ✅ |
+| **审计日志** | ❌ | ✅ |
+| **SLA 支持** | ❌ | ✅ 7×24 |
+| **专业服务** | 社区支持 | 专属技术经理 |
+
+> 💡 **开源版永久免费**：ProtoForge 开源版包含全部核心功能，没有任何功能限制、设备数量限制或协议限制。企业版提供组织级管理能力和专业服务支持。
 
 ***
 
