@@ -418,7 +418,7 @@ async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depe
             errors.append({"device_id": dev_id, "error": str(e)})
             logger.warning("Failed to create device %s from CSV: %s", dev_id, e)
 
-    _trigger_webhook_safe("device_batch_imported", {"created": len(created), "errors": len(errors)})
+    await _trigger_webhook_safe("device_batch_imported", {"created": len(created), "errors": len(errors)})
 
     return {
         "status": "ok",
