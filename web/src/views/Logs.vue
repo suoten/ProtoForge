@@ -31,10 +31,9 @@
       <div v-else-if="filteredLogs.length === 0" style="padding: 40px; text-align: center; color: #666">
         {{ t('logs.noLogs') }}
       </div>
-      <div v-for="(log, idx) in filteredLogs" :key="idx"
+      <div v-for="(log, idx) in filteredLogs" :key="log._id"
            @click="showDetail(log)"
-           style="padding: 4px 12px; border-bottom: 1px solid #252540; cursor: pointer; display: flex; align-items: center; gap: 8px;"
-           :style="{ background: idx % 2 === 0 ? '#1a1a2e' : '#1e1e36' }">
+           :style="{ padding: '4px 12px', borderBottom: '1px solid #252540', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', background: idx % 2 === 0 ? '#1a1a2e' : '#1e1e36' }">
         <span style="color: #666; min-width: 75px; flex-shrink: 0;">{{ formatTime(log.timestamp) }}</span>
         <n-tag :type="getDirectionColor(log.direction)" size="tiny" round style="min-width: 50px; justify-content: center;">
           {{ getDirectionLabel(log.direction) }}
@@ -101,8 +100,14 @@ let ws = null
 let reconnectTimer = null
 let reconnectAttempts = 0
 let manualClose = false
+// FIXED-P1: 实时日志崩溃修复 — 批量刷入缓冲 + 渲染节流。
+// 高频流量下逐条 push+全量重渲染+强制回流会把浏览器主线程打满直至崩溃。
+let pendingLogs = []
+let flushTimer = null
+let logSeq = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const MAX_LOGS = 2000
+const FLUSH_INTERVAL_MS = 200
 
 const protocolOptions = computed(() => [
   { label: t('logs.allProtocols'), value: null },
@@ -129,15 +134,39 @@ const filteredLogs = computed(() => {
   }
   if (searchText.value) {
     const s = searchText.value.toLowerCase()
-    result = result.filter(l =>
-      (l.summary && l.summary.toLowerCase().includes(s)) ||
-      (l.message_type && l.message_type.toLowerCase().includes(s)) ||
-      (l.device_id && l.device_id.toLowerCase().includes(s)) ||
-      (l.detail && JSON.stringify(l.detail).toLowerCase().includes(s))
-    )
+    // FIXED: 预拼接的搜索串，避免每条日志每次重算时 JSON.stringify(detail)
+    result = result.filter(l => l._search && l._search.includes(s))
   }
   return result
 })
+
+// FIXED-P1: 收入日志时预计算稳定 key 与搜索串（JSON.stringify 只做一次）
+function normalizeLog(raw) {
+  const entry = { ...raw, _id: ++logSeq }
+  entry._search = (
+    (entry.summary || '') + '\n' +
+    (entry.message_type || '') + '\n' +
+    (entry.device_id || '') + '\n' +
+    JSON.stringify(entry.detail || {})
+  ).toLowerCase()
+  return entry
+}
+
+// FIXED-P1: 定时批量刷入，一次 flush 只触发一次列表重渲染和一次滚动
+function scheduleFlush() {
+  if (flushTimer) return
+  flushTimer = setTimeout(() => {
+    flushTimer = null
+    if (paused.value || pendingLogs.length === 0) return
+    const batch = pendingLogs
+    pendingLogs = []
+    logs.value = logs.value.concat(batch)
+    if (logs.value.length > MAX_LOGS) {
+      logs.value = logs.value.slice(-MAX_LOGS)
+    }
+    scrollToBottom()
+  }, FLUSH_INTERVAL_MS)
+}
 
 // FIXED: 重复定义的格式化函数 — 委托到utils.js统一实现
 function formatTime(ts) { return _formatTime(ts) }
@@ -226,6 +255,13 @@ async function connectWebSocket() {
     console.warn('Token validation failed, attempting WebSocket anyway:', e.message)
     message.warning(t('logs.tokenExpired'))
   }
+  // FIXED-P1: 重连前先关闭残留连接，避免多个 WebSocket 叠加导致消息重复、负载成倍放大
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    ws.onclose = null
+    ws.onmessage = null
+    ws.close()
+    ws = null
+  }
   try {
     ws = api.createLogWs()
     if (!ws) { message.warning(t('logs.notLoggedIn')); return }
@@ -242,7 +278,7 @@ async function connectWebSocket() {
     reconnectAttempts = 0
     api.getLogs({ count: 200 }).then(data => {
       if (Array.isArray(data) && data.length > 0) {
-        logs.value = data.slice(-MAX_LOGS)
+        logs.value = data.map(normalizeLog).slice(-MAX_LOGS)
         scrollToBottom()
       }
     }).catch(() => {})
@@ -253,15 +289,17 @@ async function connectWebSocket() {
     try {
       const msg = JSON.parse(event.data)
       if (msg.type === 'log' && msg.data) {
-        logs.value.push(msg.data)
-        if (logs.value.length > MAX_LOGS) {
-          logs.value = logs.value.slice(-MAX_LOGS)
-        }
-        scrollToBottom()
+        // 兼容旧版单条消息
+        pendingLogs.push(normalizeLog(msg.data))
+        scheduleFlush()
+      } else if (msg.type === 'log_batch' && Array.isArray(msg.data)) {
+        // FIXED-P1: 后端批量帧，一次入队，按固定间隔统一刷入渲染
+        for (const raw of msg.data) pendingLogs.push(normalizeLog(raw))
+        scheduleFlush()
       }
-      } catch (e) {
-        // Silently ignore non-log WebSocket messages (ping, etc.)
-      }
+    } catch (e) {
+      // Silently ignore non-log WebSocket messages (ping, etc.)
+    }
   }
 
   ws.onclose = () => {
@@ -302,7 +340,7 @@ async function loadHistory() {
   historyLoading.value = true
   try {
     const res = await api.getLogs({ count: 200 })
-    logs.value = res || []
+    logs.value = (res || []).map(normalizeLog)
   } catch (e) {
     message.error(t('logs.loadHistoryFailed') + ': ' + (e.response?.data?.detail || e.message))
   } finally { historyLoading.value = false }
@@ -324,5 +362,11 @@ onUnmounted(() => {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
+  // FIXED-P1: 清理批量刷入定时器与缓冲
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
+  pendingLogs = []
 })
 </script>

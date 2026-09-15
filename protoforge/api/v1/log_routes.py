@@ -165,27 +165,53 @@ async def ws_logs(websocket: WebSocket):
 
     try:
         while True:
+            # FIXED-P1: 批量下发。高流量场景（如多设备被持续轮询）下逐条发送
+            # 会产生每秒上千个 WS 帧，前端逐帧全量重渲染直至崩溃。改为先阻塞
+            # 等首条，再把队列中积压的日志一次打包成一帧（最多 200 条/帧）。
+            batch: list[Any] = []
             try:
-                entry = await asyncio.wait_for(queue.get(), timeout=30.0)
-                await websocket.send_json({
-                    "type": "log",
-                    "data": {
-                        "timestamp": entry.timestamp,
-                        "protocol": entry.protocol,
-                        "direction": entry.direction,
-                        "device_id": entry.device_id,
-                        "message_type": entry.message_type,
-                        "summary": entry.summary,
-                        "detail": entry.detail,
-                    },
-
-                })
+                batch.append(await asyncio.wait_for(queue.get(), timeout=30.0))
             except asyncio.TimeoutError:
                 try:
                     await websocket.send_json({"type": "ping"})
                 except Exception as exc:
                     logger.debug("Log WebSocket ping failed: %s", exc)
                     break
+                continue
+            for _ in range(199):
+                try:
+                    batch.append(queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+            # 合并窗口（确定性，不依赖系统定时器）：yield 一次让事件循环把所有
+            # 已就绪的投递回调批量执行完，队列汇入积压日志后再排干，帧数降低
+            # 一个数量级以上。若依赖 asyncio.sleep 定时窗口，在部分 Windows
+            # 机器上时钟异常会导致合并失效。
+            await asyncio.sleep(0)
+            for _ in range(199):
+                try:
+                    batch.append(queue.get_nowait())
+                except asyncio.QueueEmpty:
+                    break
+            try:
+                await websocket.send_json({
+                    "type": "log_batch",
+                    "data": [
+                        {
+                            "timestamp": entry.timestamp,
+                            "protocol": entry.protocol,
+                            "direction": entry.direction,
+                            "device_id": entry.device_id,
+                            "message_type": entry.message_type,
+                            "summary": entry.summary,
+                            "detail": entry.detail,
+                        }
+                        for entry in batch
+                    ],
+                })
+            except Exception as exc:
+                logger.debug("Log WebSocket batch send failed: %s", exc)
+                break
     except WebSocketDisconnect:
         logger.debug("WebSocket /ws/logs disconnected")
     except Exception as e:

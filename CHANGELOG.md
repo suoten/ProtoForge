@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.3 — 2026-09-15
+
+**Bug Fix — 实时日志页高频流量下浏览器崩溃：**
+
+- 后端 `/ws/logs` 改为批量下发：一次排干队列积压（最多 200 条/帧），循环内高频日志（多设备被持续轮询）从每秒上千个 WS 帧降为个位数大帧
+- 前端日志页改为 200ms 定时批量刷入：一次 flush 只触发一次列表重渲染和一次滚动，不再逐条全量重渲染 2000 行导致主线程饱和、内存飙升
+- 前端列表改用稳定 key（自增 id），新增日志只追加/裁剪，避免全列表重渲染；搜索过滤改为预拼接搜索串，避免每次重算对每条日志做 `JSON.stringify`
+- 重连前先关闭残留 WebSocket，修复多连接叠加导致消息重复、负载倍增
+- `LogBus.emit` 跨线程安全：工作线程中的协议服务通过 `call_soon_threadsafe` 投递，不再直接跨线程操作 asyncio.Queue
+- 回归脚本 `scripts/diag_log_ws_stress.py`：真实 uvicorn + WebSocket 压测，覆盖跨线程投递、循环内突发（500 条仅 2 帧）、超队列上限洪峰的优雅降级
+
+## v1.2.2 — 2026-09-15
+
+**Bug Fix — 按照说明文档手动部署后登录 401：**
+
+- `protoforge demo` 未设置 `PROTOFORGE_ADMIN_PASSWORD` 时，默认密码改为 `admin`（与说明文档承诺一致）；此前会生成随机密码，导致按说明文档使用 `admin`/`admin` 登录的用户收到 401
+- Demo 启动时自动设置 `PROTOFORGE_RESET_ADMIN_PASSWORD=1`，旧数据库（密码为历史随机值）也会同步为 demo 默认密码；显式设置 `PROTOFORGE_RESET_ADMIN_PASSWORD=0` 可关闭
+- 非 demo 模式（`protoforge run`）行为不变：未配置时仍生成随机密码并在启动横幅打印，生产环境安全默认不受影响
+- 同步修正文档：README.md / README_EN.md / DEPLOYMENT.md（Docker 段密码说明），明确 demo 与生产模式的密码规则
+
 ## v1.2.1 — 2026-09-14
 
 **Documentation Enhancement:**
