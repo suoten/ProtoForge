@@ -62,7 +62,11 @@ _test_*.py
 .git_commit_msg.txt
 test_output*.txt
 test_proto.txt
-test_*.py
+# FIXED-P1: 原 test_*.py 会误伤源码目录内的路由模块（如 protoforge/api/v1/test_plan_routes.py），
+# 导致文件从未入库、CI 构建的镜像缺少模块，容器启动即 ModuleNotFoundError。
+# 改为仅忽略仓库根目录下的临时测试脚本（tests/ 目录已单独整体排除）。
+/test_*.py
+!protoforge/**/test_*.py
 !tests/test_fins_bits.py
 test_screenshots/
 p4_*.txt
