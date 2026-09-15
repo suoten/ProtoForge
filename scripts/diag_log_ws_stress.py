@@ -70,7 +70,7 @@ async def read_entries(ws, want: int, timeout: float = 15.0):
     return entries, frames, sizes
 
 
-async def run_phases(url: str, bus) -> None:
+async def run_phases(url: str, port: int, bus) -> None:
     async with websockets.connect(url, max_size=None) as ws:
         await asyncio.sleep(0.5)  # let ws handler subscribe
         assert len(bus._subscribers) == 1, "expected exactly one subscriber"
@@ -130,6 +130,28 @@ async def run_phases(url: str, bus) -> None:
         print(f"phase2 flood: {N_FLOOD} emits -> {received} delivered (dropped oldest), "
               f"bus intact, ws alive  OK")
 
+    # ---- Phase 3: /ws/devices must not re-send identical snapshots ----
+    async with websockets.connect(f"ws://127.0.0.1:{port}/api/v1/ws/devices",
+                                  max_size=None) as ws:
+        import json
+        first = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+        assert first.get("type") == "devices", f"expected devices frame, got {first.get('type')}"
+        n_devices = len(first.get("data", []))
+        # idle for ~1.2s (several old-code loops would have re-sent ~12 times)
+        frames_while_idle = 0
+        deadline = time.time() + 1.2
+        while time.time() < deadline:
+            try:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=0.3))
+            except (asyncio.TimeoutError, websockets.ConnectionClosed):
+                continue
+            if msg.get("type") == "devices":
+                frames_while_idle += 1
+        assert frames_while_idle == 0, (
+            f"/ws/devices re-sent {frames_while_idle} identical snapshots while idle")
+        print(f"phase3 devices-ws: initial snapshot ({n_devices} devices), "
+              f"no duplicate pushes while idle  OK")
+
     print("ALL LOG STRESS REGRESSION PASSED")
 
 
@@ -156,7 +178,7 @@ def main() -> None:
 
     from protoforge.engine.registry import get_log_bus
     try:
-        asyncio.run(run_phases(f"ws://127.0.0.1:{port}/api/v1/ws/logs", get_log_bus()))
+        asyncio.run(run_phases(f"ws://127.0.0.1:{port}/api/v1/ws/logs", port, get_log_bus()))
     finally:
         server.should_exit = True
         thread.join(timeout=10)

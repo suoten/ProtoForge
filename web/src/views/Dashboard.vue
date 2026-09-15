@@ -285,8 +285,33 @@ const deviceCallbacks = {
   onMessage: (msg) => { if (msg.type === 'devices' && Array.isArray(msg.data)) devices.value = msg.data }
 }
 const logCallbacks = {
-  onOpen: () => { api.getLogs({ count: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {}) },
-  onMessage: (msg) => { if (msg.type === 'log' && msg.data && typeof msg.data === 'object') { recentLogs.value.unshift(msg.data); if (recentLogs.value.length > 500) recentLogs.value = recentLogs.value.slice(0, 500) } }
+onOpen: () => { api.getLogs({ count: 100 }).then(data => { if (Array.isArray(data)) recentLogs.value = data.slice(-50) }).catch(() => {}) },
+// FIXED-P1: 适配后端 log_batch 批量帧 + 批量刷入，避免逐条 unshift 触发全量重渲染
+onMessage: (msg) => {
+  if (msg.type === 'log' && msg.data && typeof msg.data === 'object') {
+    pendingLogBatch.unshift(msg.data)
+    scheduleLogFlush()
+  } else if (msg.type === 'log_batch' && Array.isArray(msg.data)) {
+    for (const item of msg.data) {
+      if (item && typeof item === 'object') pendingLogBatch.push(item)
+    }
+    scheduleLogFlush()
+  }
+}
+}
+
+// FIXED-P1: 批量刷入缓冲（最新在前，与展示顺序一致）
+let pendingLogBatch = []
+let logFlushTimer = null
+function scheduleLogFlush() {
+  if (logFlushTimer) return
+  logFlushTimer = setTimeout(() => {
+    logFlushTimer = null
+    const batch = pendingLogBatch
+    pendingLogBatch = []
+    if (batch.length === 0) return
+    recentLogs.value = [...batch.reverse(), ...recentLogs.value].slice(0, 100)
+  }, 200)
 }
 
 const onlineDevices = computed(() => devices.value.filter(d => d.status === 'online' || d.status === 'running').length)
@@ -412,8 +437,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (deviceConn) deviceConn.unsubscribe(deviceCallbacks)
-  if (logConn) logConn.unsubscribe(logCallbacks)
+if (deviceConn) deviceConn.unsubscribe(deviceCallbacks)
+if (logConn) logConn.unsubscribe(logCallbacks)
+// FIXED-P1: 清理日志批量刷入定时器与缓冲
+if (logFlushTimer) { clearTimeout(logFlushTimer); logFlushTimer = null }
+pendingLogBatch = []
 })
 </script>
 

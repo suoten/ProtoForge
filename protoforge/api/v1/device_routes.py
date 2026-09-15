@@ -4,6 +4,7 @@ import contextlib
 import csv as _csv
 import io as _io
 import logging
+import math
 import re
 import uuid
 from typing import Any
@@ -665,6 +666,15 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
         raise HTTPException(
             status_code=400,
             detail=f"Invalid value type: expected scalar (number/bool/string), got {type(value).__name__}",
+        )
+
+    # FIXED-P1: 拒绝非有限浮点（inf/-inf/nan），后续 JSON 序列化（webhook/日志）会抛
+    # "Out of range float values are not JSON compliant" 导致 500；且协议寄存器本身
+    # 无法表示 inf/nan，写入无意义
+    if isinstance(value, float) and not math.isfinite(value):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid value: {value} (inf/nan cannot be represented in protocol registers)",
         )
 
     instance = engine.get_device_instance(device_id)

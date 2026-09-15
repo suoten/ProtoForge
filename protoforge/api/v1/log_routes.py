@@ -110,7 +110,40 @@ async def ws_devices(websocket: WebSocket):
         proto_queue = event_bus.subscribe("ProtocolStatusEvent")
 
     try:
+        # FIXED-P1: 高频流量防护。原实现每轮循环都全量序列化并发送设备列表
+        # （即使无变化），协议事件风暴时迭代加速到每秒上百次，前端全量重渲染。
+        # 改为：协议事件批量排干（一帧最多 20 个）+ 设备列表仅在内容变化时发送。
+        last_devices_payload: str | None = None
         while True:
+            events = []
+            if proto_queue is not None:
+                try:
+                    events.append(await asyncio.wait_for(proto_queue.get(), timeout=0.1))
+                except asyncio.TimeoutError:
+                    pass
+                for _ in range(19):
+                    try:
+                        events.append(proto_queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+            else:
+                await asyncio.sleep(0.1)
+            if events:
+                await websocket.send_json({
+                    "type": "protocol_status_batch",
+                    "data": [
+                        {
+                            "protocol_name": e.protocol_name,
+                            "old_status": e.old_status,
+                            "new_status": e.new_status,
+                        }
+                        for e in events
+                    ],
+                })
+                if len(events) >= 20:
+                    # 事件风暴下让出调度，避免忙转
+                    await asyncio.sleep(0)
+
             devices = engine.list_devices()
             data = []
             for d in devices:
@@ -119,23 +152,10 @@ async def ws_devices(websocket: WebSocket):
                 except Exception as exc:
                     logger.debug("Device serialization fallback: %s", exc)
                     data.append({"id": d.id, "name": d.name, "protocol": d.protocol, "status": d.status.value})
-            await websocket.send_json({"type": "devices", "data": data})
-
-            if proto_queue:
-                try:
-                    event = await asyncio.wait_for(proto_queue.get(), timeout=0.1)
-                    await websocket.send_json({
-                        "type": "protocol_status",
-                        "data": {
-                            "protocol_name": event.protocol_name,
-                            "old_status": event.old_status,
-                            "new_status": event.new_status,
-                        },
-                    })
-                except asyncio.TimeoutError:
-                    pass
-                except Exception as exc:
-                    logger.debug("Protocol event send failed: %s", exc)
+            payload = json.dumps(data, ensure_ascii=False, default=str)
+            if payload != last_devices_payload:
+                await websocket.send_json({"type": "devices", "data": data})
+                last_devices_payload = payload
 
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
