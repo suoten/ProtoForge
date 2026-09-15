@@ -25,10 +25,10 @@ jobs:
       - name: Export OpenAPI spec
         run: python scripts/export-openapi.py
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v5
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install frontend dependencies
         working-directory: web
