@@ -713,7 +713,7 @@ class S7Server(ProtocolServer):
 
         for _i in range(item_count):
             if item_offset + 12 > len(data):
-                item_results.append((0x0A, b"\x00"))
+                item_results.append((0x0A, b"\x00", 0x04, 0))
                 continue
 
             item_spec = data[item_offset:item_offset + 12]
@@ -723,14 +723,14 @@ class S7Server(ProtocolServer):
             # [0]  Spec type (0x12)
             # [1]  Length of following (0x0A)
             # [2]  Syntax ID (0x10)
-            # [3]  Transport size (0x02=byte, 0x04=byte/word, 0x09=bool)
+            # [3]  Transport size (0x01=BIT, 0x02=byte, 0x03/0x04=byte/word/dword, 0x09=odd byte)
             # [4:6] Number of elements
             # [6:8] DB Number (big-endian uint16, 0 for non-DB areas)
             # [8]  Area code (0x84=DB, 0x81=I, 0x82=Q, 0x83=M)
             # [9:12] Address (3 bytes, bit address = byte_offset * 8 + bit_number)
             spec_type = item_spec[0]
             if spec_type != 0x12:
-                item_results.append((0x0A, b"\x00"))
+                item_results.append((0x0A, b"\x00", 0x04, 0))
                 continue
 
             transport_size_code = item_spec[3]
@@ -739,9 +739,15 @@ class S7Server(ProtocolServer):
             area = item_spec[8]  # FIXED-P0: Area 在偏移8，DB Number 之后
             full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
             offset = full_addr >> 3
-            full_addr & 0x07
 
-            read_size = (length + 7) // 8 if transport_size_code == 9 else length
+            # FIXED-P1: 请求 transport 0x01(BIT)/0x09(ODD) 的 Length 字段是位数(bit count)
+            # 其余(0x03/0x04)的 Length 字段是元素个数
+            if transport_size_code in (0x01, 0x09):
+                bit_count = length
+                read_size = (length + 7) // 8
+            else:
+                bit_count = 0
+                read_size = length
 
             if read_size <= 0:
                 read_size = 1
@@ -752,10 +758,10 @@ class S7Server(ProtocolServer):
             if behavior:
                 value_bytes = behavior.read_area(area, db_number, offset, read_size)
 
-            item_results.append((0xFF, value_bytes))
+            item_results.append((0xFF, value_bytes, transport_size_code, bit_count))
 
         data_len = 0
-        for _result_code, val_bytes in item_results:
+        for _result_code, val_bytes, _ts_req, _bit_count in item_results:
             data_len += 1 + 1 + 2 + len(val_bytes)
             if len(val_bytes) % 2 != 0:
                 data_len += 1
@@ -779,20 +785,26 @@ class S7Server(ProtocolServer):
         resp += bytes([item_count])
 
         # Data section: each item = ReturnCode(1) + TransportSize(1) + Length(2) + Data(N) + Padding
-        for result_code, val_bytes in item_results:
+        # FIXED-P1: 响应 transport/Length 对齐真实 S7-1200:
+        #   请求 BIT(0x01)  -> 响应 transport 0x03(BIT)，Length = 位数
+        #   请求 ODD(0x09)  -> 响应 transport 0x09，Length = 位数（原代码误写字节数）
+        #   请求 0x03/0x04  -> 响应 transport 0x04，Length = 位数
+        # 位读回 0x09 会导致客户端报"错误代码:255 未知错误"（如 DB1.DBX3.1 读取失败）
+        for result_code, val_bytes, ts_req, bit_count in item_results:
             resp += bytes([result_code])
             if result_code != 0xFF:
                 resp += bytes([0x00])
                 resp += struct.pack(">H", 0)
+            elif ts_req == 0x01:
+                resp += bytes([0x03])
+                resp += struct.pack(">H", bit_count if bit_count > 0 else 1)
+                resp += val_bytes
+                if len(val_bytes) % 2 != 0:
+                    resp += bytes([0x00])
             else:
-                # FIXED-P0: transport_size=0x04 时 Length 是位数(bit count)，snap7 用 length//8 计算字节数
-                transport_size = 0x09 if len(val_bytes) <= 1 else 0x04
-                if transport_size == 0x04:
-                    resp += bytes([transport_size])
-                    resp += struct.pack(">H", len(val_bytes) * 8)  # 位数
-                else:
-                    resp += bytes([transport_size])
-                    resp += struct.pack(">H", len(val_bytes))  # 字节数
+                transport_size = 0x09 if ts_req == 0x09 else 0x04
+                resp += bytes([transport_size])
+                resp += struct.pack(">H", len(val_bytes) * 8)  # 位数
                 resp += val_bytes
                 if len(val_bytes) % 2 != 0:
                     resp += bytes([0x00])
@@ -821,15 +833,15 @@ class S7Server(ProtocolServer):
         ptr = data_section_start
         for _ in range(item_count):
             if ptr + 4 > len(data):
-                write_data_list.append(b"")
+                write_data_list.append((0x04, b""))
                 break
             ts = data[ptr + 1]
             raw_len = struct.unpack(">H", data[ptr + 2:ptr + 4])[0]
             dlen = raw_len // 8 if ts == 0x04 else raw_len
             if ptr + 4 + dlen <= len(data):
-                write_data_list.append(data[ptr + 4:ptr + 4 + dlen])
+                write_data_list.append((ts, data[ptr + 4:ptr + 4 + dlen]))
             else:
-                write_data_list.append(b"")
+                write_data_list.append((ts, b""))
             ptr += 4 + dlen
             if dlen % 2 != 0:
                 ptr += 1
@@ -851,13 +863,25 @@ class S7Server(ProtocolServer):
             area = item_spec[8]  # FIXED-P0: Area 在偏移8
             full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
             offset = full_addr >> 3
-            full_addr & 0x07
+            bit_index = full_addr & 0x07
 
-            write_data = write_data_list[i] if i < len(write_data_list) else b""
+            write_ts, write_data = write_data_list[i] if i < len(write_data_list) else (0x04, b"")
 
             behavior = self._behaviors.get(device_id or self._default_device_id or "")
             if behavior:
-                behavior.write_area(area, db_number, offset, write_data)
+                # FIXED-P1: 位写入(数据项 transport=0x03 BIT)必须读-改-写单个位，
+                # 不能把 0x00/0x01 整字节写入覆盖同字节其他 7 个位
+                if write_ts == 0x03 and len(write_data) == 1:
+                    cur = behavior.read_area(area, db_number, offset, 1)
+                    cur_byte = cur[0] if cur else 0
+                    mask = 1 << bit_index
+                    if write_data[0] & 0x01:
+                        new_byte = cur_byte | mask
+                    else:
+                        new_byte = cur_byte & (0xFF ^ mask)
+                    behavior.write_area(area, db_number, offset, bytes([new_byte]))
+                else:
+                    behavior.write_area(area, db_number, offset, write_data)
                 for name, (p_area, p_db, p_offset) in behavior._point_addresses.items():
                     if area == p_area and (area != behavior.S7_AREA_DB or db_number == p_db) and offset == p_offset:
                         try:
