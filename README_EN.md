@@ -175,7 +175,8 @@ python -m venv venv
 pip install -e ".[all]"
 cd web && npm install && npm run build && cd ..
 protoforge demo
-# Open http://localhost:8000, login admin / admin
+# Open http://localhost:8000, login admin / <password from the startup banner>
+# (demo mode generates a random password on every start; set PROTOFORGE_ADMIN_PASSWORD to pin it, e.g. admin to use admin/admin)
 ```
 
 > ⚠️ If `.\venv\Scripts\activate` shows "running scripts is disabled", open PowerShell as admin and run:
@@ -196,7 +197,8 @@ source venv/bin/activate
 pip install -e ".[all]"
 cd web && npm install && npm run build && cd ..
 protoforge demo
-# Open http://localhost:8000, login admin / admin
+# Open http://localhost:8000, login admin / <password from the startup banner>
+# (demo mode generates a random password on every start; set PROTOFORGE_ADMIN_PASSWORD to pin it, e.g. admin to use admin/admin)
 ```
 
 </details>

@@ -111,7 +111,10 @@ python -m protoforge.main
 docker run -d --name protoforge -p 8000:8000 -v protoforge-data:/app/data suoten/protoforge:latest
 ```
 
-打开浏览器访问 http://localhost:8000，用 `admin` / `admin` 登录。
+打开浏览器访问 http://localhost:8000 登录。管理员账号为 `admin`，密码说明：
+
+- 未设置 `PROTOFORGE_ADMIN_PASSWORD` 时，首次启动会**自动生成随机密码**，打印在启动横幅中，用 `docker logs protoforge` 查看；
+- 也可以在启动时直接指定密码：`docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=你的密码 -v protoforge-data:/app/data suoten/protoforge:latest`。
 
 停止服务：`docker stop protoforge && docker rm protoforge`
 

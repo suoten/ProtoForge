@@ -495,8 +495,13 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         os.environ["PROTOFORGE_DEMO_MODE"] = "1"
         demo_pw = os.environ.get("PROTOFORGE_ADMIN_PASSWORD", "")
         if not demo_pw:
-            demo_pw = secrets.token_urlsafe(12)
+            # demo 模式默认 admin/admin（与 README 承诺一致，本机演示用途）；
+            # 可通过环境变量 PROTOFORGE_ADMIN_PASSWORD 覆盖。非 demo 模式仍为随机密码。
+            demo_pw = "admin"
             os.environ["PROTOFORGE_ADMIN_PASSWORD"] = demo_pw
+        # demo 模式下同步 admin 密码到上述值（含旧数据随机密码的情况），
+        # 保证"启动即用 admin/指定密码登录"；用户显式设 RESET=0 可关闭
+        os.environ.setdefault("PROTOFORGE_RESET_ADMIN_PASSWORD", "1")
         os.environ.setdefault("PROTOFORGE_NO_AUTH", "0")
         # FIXED: Reset cached settings so demo_mode is picked up
         import protoforge.config as config_module

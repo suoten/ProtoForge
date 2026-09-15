@@ -237,7 +237,8 @@ python -m venv venv
 pip install -e ".[all]"
 cd web && npm install && npm run build && cd ..
 protoforge demo
-# 浏览器打开 http://localhost:8000，用 admin / admin 登录
+# 浏览器打开 http://localhost:8000，用 admin / admin 登录（demo 模式默认密码，旧数据也会自动同步）
+# 可用环境变量 PROTOFORGE_ADMIN_PASSWORD 覆盖；正式模式（protoforge run）密码随机生成，见启动横幅
 ```
 
 > ⚠️ 如果 `.\venv\Scripts\activate` 报错"在此系统上禁止运行脚本"，以管理员身份打开 PowerShell，运行：
@@ -263,7 +264,8 @@ cd web && npm install && npm run build && cd ..
 protoforge demo
 # 或后台运行：protoforge demo -d
 # 停止后台服务：protoforge stop
-# 浏览器打开 http://localhost:8000，用 admin / admin 登录
+# 浏览器打开 http://localhost:8000，用 admin / admin 登录（demo 模式默认密码，旧数据也会自动同步）
+# 可用环境变量 PROTOFORGE_ADMIN_PASSWORD 覆盖；正式模式（protoforge run）密码随机生成，见启动横幅
 ```
 
 </details>

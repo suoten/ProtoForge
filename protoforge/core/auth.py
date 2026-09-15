@@ -287,6 +287,10 @@ class UserManager:
                 "SECURITY: Using default admin password 'admin'. "
                 "Set PROTOFORGE_ADMIN_PASSWORD environment variable to change it in production!"
             )
+        # FIXED-P1: 记录本次启动生效的 admin 密码（环境变量优先，否则为自动生成值）。
+        # restore_from_db 会用它同步数据库中的 admin 哈希，保证“启动横幅/配置的密码
+        # 永远可用”，否则 DB 里留存的是首次启动的旧密码，横幅显示的新密码登录必 401。
+        self._effective_admin_password = default_password
         admin_hash = hash_password(default_password)
         admin_user = User(
             id="admin", username="admin", password_hash=admin_hash, role="admin",
@@ -311,18 +315,25 @@ class UserManager:
             for u in users:
                 user = User.from_dict(u)
                 if user.username == "admin":
-                    # PROTOFORGE_RESET_ADMIN_PASSWORD=true 时，用环境变量密码覆盖数据库中的 admin 密码
+                    # FIXED-P1: 启动时同步 admin 密码：环境变量 PROTOFORGE_ADMIN_PASSWORD（或
+                    # 自动生成的密码）是权威来源。此前仅 PROTOFORGE_RESET_ADMIN_PASSWORD=true
+                    # 才同步，导致 DB 里永远是首次启动的旧密码，而启动横幅显示的是新密码，
+                    # 用户按横幅输入“正确密码”也报 401。现在每次启动都同步，横幅/配置密码永远可用。
                     try:
                         from protoforge.config import get_settings
                         settings = get_settings()
-                        if settings.reset_admin_password and settings.admin_password:
-                            user.password_hash = hash_password(settings.admin_password)
+                        effective_pw = getattr(self, "_effective_admin_password", None) or settings.admin_password
+                        if effective_pw and not verify_password(effective_pw, user.password_hash):
+                            user.password_hash = hash_password(effective_pw)
                             user.login_attempts = 0
                             user.locked_until = 0.0
                             await self._persist_user(user)
-                            logger.info("Admin password has been reset from PROTOFORGE_ADMIN_PASSWORD (PROTOFORGE_RESET_ADMIN_PASSWORD=true)")
+                            logger.info(
+                                "Admin password synchronized from PROTOFORGE_ADMIN_PASSWORD "
+                                "(or auto-generated password shown in the startup banner)"
+                            )
                     except Exception as e:
-                        logger.warning("Failed to reset admin password: %s", e)
+                        logger.warning("Failed to synchronize admin password: %s", e)
                     self._users["admin"] = user
                     self._users_by_id["admin"] = user
                 else:
