@@ -181,13 +181,14 @@ class ModbusTcpServer(ProtocolServer):
     _EX_GATEWAY_PATH_UNAVAILABLE = 0x0A
 
     # 设备状态 → Modbus 异常码映射
-    # 设计意图（与真实 PLC 行为一致）：设备处于 stop 时通信模块仍会响应
-    # Modbus 请求（返回寄存器最后已知值），因此 stop 不映射任何异常码。
+    # 设计意图（与真实 PLC 行为一致）：设备处于 stop/starting/stopping 状态时通信模块
+    # 仍会响应 Modbus 请求（返回寄存器最后已知值），这些状态不映射任何异常码。
+    # FIXED-P1: 原先 starting/stopping 映射 0x05(Acknowledge)，导致设备自动拉起后的
+    # STARTING 窗口期内所有读请求都收到异常响应（外部主站读到错误而非数据，
+    # 7 个真实链路 e2e 测试失败），与真实设备行为不符，改为照常应答。
     # 0x04 (Slave Device Failure) 仅用于真正的硬件故障 (error)。
     _STATE_EXCEPTION_CODES: dict[str, int] = {
         "error": 0x04,       # Slave Device Failure (硬件故障)
-        "starting": 0x05,   # Acknowledge (启动中，请稍后重试)
-        "stopping": 0x05,   # Acknowledge (停机中，请稍后重试)
         "maintenance": 0x06, # Slave Device Busy (维护中)
         "program": 0x0A,    # Gateway Path Unavailable (编程模式)
     }
@@ -566,13 +567,57 @@ class ModbusTcpServer(ProtocolServer):
             logger.info("Modbus TCP server stopped")
             self._log_debug("system", "server_stop", msg("modbus_tcp", "service_stopped"))  # FIXED: 中文硬编码→i18n常量
 
-    async def create_device(self, device_config: DeviceConfig) -> str:
-        behavior = ModbusDeviceBehavior(device_config.points)
-        async with self._behaviors_lock:
-            self._behaviors[device_config.id] = behavior
-            self._device_configs[device_config.id] = device_config
-        await self._update_default_device_async(device_config.id)
+    def _normalize_point_ranges(self, config: DeviceConfig) -> list[tuple[str, int, int, str]]:
+        """归一化设备点位为 (区域, 起始地址, 结束地址, 点位名) 列表（用于从站地址冲突检测）。"""
+        ranges: list[tuple[str, int, int, str]] = []
+        for point in config.points:
+            try:
+                addr, area = parse_modbus_address(point.address)
+            except (ValueError, TypeError):
+                continue
+            # auto 区域按数据类型判定，与 _apply_device_to_context/_resolve_write_target 一致
+            if area == "auto":
+                area = "coil" if point.data_type.value == "bool" else "holding"
+            ranges.append((area, addr, addr + self._point_reg_count(point), point.name))
+        return ranges
 
+    def _find_slave_address_conflicts(self, new_config: DeviceConfig, slave_id: int) -> list[str]:
+        """检测新设备与已占用同一从站号的设备是否存在点位地址重叠。
+
+        同一从站号下地址重叠会导致两台设备的数据互相覆盖（读取数据错误的根因），
+        必须在设备创建时拦截；地址不重叠的共享从站是合法配置（保持向后兼容）。
+
+        :return: 冲突描述列表，空列表表示无冲突
+        """
+        new_ranges = self._normalize_point_ranges(new_config)
+        if not new_ranges:
+            return []
+        conflicts: list[str] = []
+        for device_id, sid in self._slave_map.items():
+            if sid != slave_id or device_id == new_config.id:
+                continue
+            existing_config = self._device_configs.get(device_id)
+            if not existing_config:
+                continue
+            for e_area, e_start, e_end, e_point in self._normalize_point_ranges(existing_config):
+                for n_area, n_start, n_end, n_point in new_ranges:
+                    if e_area == n_area and n_start < e_end and e_start < n_end:
+                        conflicts.append(
+                            f"{e_point}@{e_area}[{e_start}-{e_end - 1}] 与 {n_point}@{n_area}[{n_start}-{n_end - 1}]"
+                        )
+        return conflicts
+
+    def _next_free_slave_id(self, exclude: str = "") -> int:
+        """返回未被占用（且不等于 exclude 设备）的最小从站号，用于冲突提示。"""
+        used = {sid for did, sid in self._slave_map.items() if did != exclude}
+        candidate = 1
+        while candidate in used:
+            candidate += 1
+        return candidate
+
+    async def create_device(self, device_config: DeviceConfig) -> str:
+        # FIXED-P1: 从站号分配与冲突校验必须在注册 behavior 之前完成，
+        # 否则校验失败会留下半注册状态（behavior 已入表但从站未分配）。
         proto_config = device_config.protocol_config or {}
         slave_id = proto_config.get("slave_id", self._next_slave_id)
         if not isinstance(slave_id, int) or slave_id < 1 or slave_id > 247:
@@ -586,6 +631,39 @@ class ModbusTcpServer(ProtocolServer):
         if "slave_id" not in proto_config:
             proto_config["slave_id"] = slave_id
             device_config.protocol_config = proto_config
+
+        # FIXED-P1: 同从站号+点位地址重叠会互相覆盖寄存器数据（UI 默认 slave_id=1，
+        # 用户创建第 2 台从站时不改从站地址就会触发“读取的数据不对”），创建时直接拦截。
+        conflicts = self._find_slave_address_conflicts(device_config, slave_id)
+        if conflicts:
+            raise ValueError(
+                f"从站地址 {slave_id} 已被其他设备占用，且点位地址存在重叠：{'; '.join(conflicts)}。"
+                f"请修改本设备的从站地址（如改为 {self._next_free_slave_id(exclude=device_config.id)}），"
+                "或调整点位寄存器地址避免重叠。"
+            )
+        # 地址不重叠的同从站共享是合法配置（向后兼容），但提示用户注意
+        shared_with = [
+            did for did, sid in self._slave_map.items()
+            if sid == slave_id and did != device_config.id
+        ]
+        if shared_with:
+            logger.warning(
+                "Modbus devices %s and %s share slave_id=%d (non-overlapping addresses); "
+                "set a distinct slave address or clear it for auto-assignment if separate units are intended.",
+                shared_with, device_config.id, slave_id,
+            )
+            self._log_debug("system", "slave_shared",
+                            f"设备 {device_config.id} 与 {shared_with} 共享从站 {slave_id}（地址不重叠）；"
+                            "如需独立从站请修改从站地址或留空自动分配",
+                            device_id=device_config.id,
+                            detail={"slave_id": slave_id, "shared_with": shared_with})
+
+        behavior = ModbusDeviceBehavior(device_config.points)
+        async with self._behaviors_lock:
+            self._behaviors[device_config.id] = behavior
+            self._device_configs[device_config.id] = device_config
+        await self._update_default_device_async(device_config.id)
+
         async with self._behaviors_lock:
             self._slave_map[device_config.id] = slave_id
             self._next_slave_id = max(self._next_slave_id, slave_id + 1)
