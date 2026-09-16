@@ -468,6 +468,24 @@ class MqttBroker(ProtocolServer):
         self.record_protocol_error(ProtocolErrorCategory.INTERNAL, "broker publish API missing")
         return False
 
+    @staticmethod
+    def _point_topic(device_id: str, point: PointConfig, topic_prefix: str) -> str:
+        """推导点位发布主题。
+
+        规则（FIXED-P0：单段 address 不再被误用作完整 topic）：
+        - address 含 ``{device_id}`` 占位符 -> 替换后使用（完全自定义）
+        - address 含 ``/``（多级路径） -> 视为用户显式指定的完整 topic，直接使用
+        - address 为空或单段（如模板里 address="latitude"） -> 必须走默认层级
+          ``{topic_prefix}/{device_id}/{point.name}``，否则 topic_prefix 与
+          device_id 全部丢失，订阅 ``prefix/device_id/#`` 的客户端永远收不到数据。
+        """
+        address = (point.address or "").strip()
+        if address and "{device_id}" in address:
+            return address.replace("{device_id}", device_id)
+        if address and "/" in address:
+            return address
+        return f"{topic_prefix}/{device_id}/{point.name}"
+
     async def _publish_loop(self, interval: int) -> None:
         import json as json_lib
 
@@ -483,13 +501,7 @@ class MqttBroker(ProtocolServer):
                 retain = proto_config.get("retain", self._default_retain)
                 for point in config.points:
                     value = behavior.get_value(point.name)
-                    # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式
-                    if point.address and '{device_id}' in point.address:
-                        topic = point.address.replace('{device_id}', device_id)
-                    elif point.address:
-                        topic = point.address
-                    else:
-                        topic = f"{topic_prefix}/{device_id}/{point.name}"
+                    topic = self._point_topic(device_id, point, topic_prefix)
                     payload = json_lib.dumps({
                         "device_id": device_id,
                         "point": point.name,
@@ -517,13 +529,7 @@ class MqttBroker(ProtocolServer):
         retain = proto_config.get("retain", self._default_retain)
         for point in config.points:
             value = behavior.get_value(point.name)
-            # FIXED-P1: 优先使用point.address并替换{device_id}占位符，回退到默认格式
-            if point.address and '{device_id}' in point.address:
-                topic = point.address.replace('{device_id}', device_id)
-            elif point.address:
-                topic = point.address
-            else:
-                topic = f"{topic_prefix}/{device_id}/{point.name}"
+            topic = self._point_topic(device_id, point, topic_prefix)
             payload = json_lib.dumps({
                 "device_id": device_id,
                 "point": point.name,

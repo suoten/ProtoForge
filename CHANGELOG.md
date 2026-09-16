@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.4 — 2026-09-16
+
+**Bug Fix — MQTT 设备启动后外部订阅者（MQTTX 等）收不到数据：**
+
+- 根因：点位 `address` 为单段值（官方 MQTT 模板即如此，如 GPS 模板 `address="latitude"`）时，发布主题被错误地当作**完整 topic** 使用，实际发到 `latitude`、`speed` 等顶层主题，`topic_prefix` 与 `device_id` 层级全部丢失，订阅 `protoforge/gps/#` 的客户端永远收不到数据
+- 修复：新主题推导规则 —— address 含 `{device_id}` 占位符 → 替换后使用；address 含 `/`（多级路径）→ 视为显式完整 topic；address 为空或单段 → 走默认层级 `{topic_prefix}/{device_id}/{point.name}`
+- 顺带验证：amqtt 0.11.3 `internal_message_broadcast` 内部广播路径本身可达（最小复现脚本确认），排除此前怀疑的 amqtt API 断裂
+- 回归脚本 `scripts/diag_mqtt_publish.py`：完整复现用户场景（broker + GPS 设备 + 外部订阅者），修复后订阅 `protoforge/gps/#` 正常收到 `protoforge/gps/latitude` 等消息
+- 注意：`topic_prefix` 在该版本起真正生效，使用官方模板创建的 MQTT 设备主题将变为 `{topic_prefix}/{device_id}/{point_name}`（如 `tracker/gps/<设备ID>/latitude`）
+
 ## v1.2.3 — 2026-09-15
 
 **Bug Fix — 实时日志页高频流量下浏览器崩溃（含全站 WebSocket 推送排查）：**
