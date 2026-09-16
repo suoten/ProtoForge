@@ -428,6 +428,11 @@ client.on('message', (topic, message) => {
 client.subscribe('sensor/temperature')
 ```
 
+> ⚠️ **MQTT 连接注意事项**
+>
+> - 内置 MQTT Broker 仅支持 **MQTT 3.1.1** 协议，**不支持 MQTT 5.0**。MQTTX 等客户端连接时，请在连接设置中手动将 **Protocol Version** 选为 `3.1.1`（默认 5.0 会连接失败，这是最常踩的坑）。
+> - MQTT 仿真设备还支持**上报到你自己的 MQTT 服务器**：在设备协议配置中填写「自定义 MQTT 服务器」（`server_host` / `server_port`，可选认证用户名密码），设备将以 MQTT 客户端身份连接并上报数据 —— EMQX / Mosquitto / 阿里云 IoT 等均可对接。
+
 ### 📍 PLC 地址映射 — 精确到每个测点
 
 ProtoForge 的每个测点都绑定了**具体的 PLC 协议地址**，你的上位机/网关按这个地址去读，和读真实 PLC 一模一样。

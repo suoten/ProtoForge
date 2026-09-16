@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.2.5 — 2026-09-16
+
+**Feature — MQTT 仿真设备支持上报自定义 MQTT 服务器（设备仿真对齐真实设备行为）：**
+
+- 设备协议配置新增 `server_host` / `server_port`（可选 `username` / `password` / `client_id`）：填入后仿真设备将以 MQTT 客户端身份连接用户自己的 broker（EMQX / Mosquitto / 阿里云 IoT 等）并上报数据，不再局限于内置 broker
+- 发布按设备路由：配置了 `server_host` 的设备走外部 client 发布，未配置的继续走内置 broker；遗嘱消息同样路由
+- 外部连接不可达时不会拖垮仿真：5s 重连限频 + 每 60s 限频告警 + 协议错误计数，恢复后自动重连
+- UI：创建 / 快速创建 / 编辑设备弹窗新增 MQTT 连接注意事项醒目提示；连接引导同步更新
+
+**Note — 内置 MQTT Broker 仅支持 MQTT 3.1.1：**
+
+- amqtt 不支持 MQTT 5.0。MQTTX 等客户端连接时必须手动将 Protocol Version 设为 3.1.1，否则连接失败（用户实测 MQTTX 默认 5.0 连不上，排查半天发现切协议版本即可）。已在 README、连接引导、设备弹窗三处醒目标注
+
 ## v1.2.4 — 2026-09-16
 
 **Bug Fix — MQTT 设备启动后外部订阅者（MQTTX 等）收不到数据：**

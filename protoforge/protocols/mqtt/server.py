@@ -99,6 +99,13 @@ class MqttBroker(ProtocolServer):
         self._default_retain: bool = False
         self._qos_tracker: QoSMessageTracker | None = None
         self._command_task: asyncio.Task | None = None
+        # FIXED-F2: 外部 MQTT 服务器支持 —— 设备可配置 server_host/server_port，
+        # 以 MQTT 客户端身份连接用户自己的 broker（EMQX/Mosquitto 等）上报数据，
+        # 而不是只能发布到内置 broker（重点在“设备仿真”，设备行为对齐真实设备）
+        self._external_clients: dict[str, Any] = {}
+        self._external_connected: set[str] = set()
+        self._external_last_warn: dict[str, float] = {}
+        self._external_next_attempt: dict[str, float] = {}
 
     @property
     def actual_port(self) -> int:
@@ -223,6 +230,12 @@ class MqttBroker(ProtocolServer):
         for device_id in list(self._behaviors.keys()):  # FIXED-P0: 停止前发布所有设备的遗嘱消息
             await self._publish_will(device_id)
         try:
+            # FIXED-F2: 断开所有外部 broker 客户端
+            for device_id, client in list(self._external_clients.items()):
+                with contextlib.suppress(Exception):
+                    await client.disconnect()
+            self._external_clients.clear()
+            self._external_connected.clear()
             if self._publish_task:
                 self._publish_task.cancel()
                 try:
@@ -271,6 +284,11 @@ class MqttBroker(ProtocolServer):
 
     async def remove_device(self, device_id: str) -> None:
         await self._publish_will(device_id)
+        client = self._external_clients.pop(device_id, None)
+        if client:
+            with contextlib.suppress(Exception):
+                await client.disconnect()
+            self._external_connected.discard(device_id)
         async with self._behaviors_lock:
             config = self._device_configs.pop(device_id, None)
             self._behaviors.pop(device_id, None)
@@ -468,6 +486,108 @@ class MqttBroker(ProtocolServer):
         self.record_protocol_error(ProtocolErrorCategory.INTERNAL, "broker publish API missing")
         return False
 
+    def _is_external_device(self, device_id: str) -> bool:
+        """设备是否配置了自定义外部 MQTT 服务器。"""
+        config = self._device_configs.get(device_id)
+        if not config:
+            return False
+        return bool((config.protocol_config or {}).get("server_host", "").strip())
+
+    async def _get_external_client(self, device_id: str) -> Any | None:
+        """获取（必要时建立）设备到外部 MQTT 服务器的客户端连接。
+
+        - 连接失败不抛异常，返回 None 并限频告警（每个设备每 60s 最多一条），
+          发布循环下一周期自动重试；绝不因外部服务器不可达而崩溃。
+        """
+        from amqtt.client import MQTTClient
+
+        client = self._external_clients.get(device_id)
+        if client is not None and device_id in self._external_connected:
+            return client
+
+        # 重连限频：外部服务器不可达时最多每 5s 尝试一次，避免连接风暴刷屏
+        now = time.monotonic()
+        if now < self._external_next_attempt.get(device_id, 0.0):
+            return None
+        self._external_next_attempt[device_id] = now + 5.0
+
+        config = self._device_configs.get(device_id)
+        if not config:
+            return None
+        proto_config = config.protocol_config or {}
+        host = (proto_config.get("server_host") or "").strip()
+        if not host:
+            return None
+        try:
+            port = int(proto_config.get("server_port") or 1883)
+        except (TypeError, ValueError):
+            port = 1883
+
+        # 清理陈旧连接后重建
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client.disconnect()
+            self._external_clients.pop(device_id, None)
+
+        username = (proto_config.get("username") or "").strip()
+        password = proto_config.get("password") or ""
+        client_id = (proto_config.get("client_id") or "").strip() or f"protoforge_{device_id}"
+        cred = f"{username}:{password}@" if username else ""
+        uri = f"mqtt://{cred}{host}:{port}/"
+        # auto_reconnect 关闭：重连由发布循环按周期统一管理，避免后台任务无限重试
+        new_client = MQTTClient(client_id=client_id, config={"auto_reconnect": False})
+        try:
+            await asyncio.wait_for(new_client.connect(uri), timeout=5.0)
+        except Exception as e:
+            now = time.monotonic()
+            last = self._external_last_warn.get(device_id, 0.0)
+            if now - last >= 60.0:
+                logger.warning(
+                    "MQTT device %s failed to connect external broker %s:%d: %s; retrying each publish cycle",
+                    device_id, host, port, e,
+                )
+                self._external_last_warn[device_id] = now
+            self.record_protocol_error(ProtocolErrorCategory.INTERNAL, f"external broker connect failed: {e}")
+            with contextlib.suppress(Exception):
+                await new_client.disconnect()
+            return None
+
+        self._external_clients[device_id] = new_client
+        self._external_connected.add(device_id)
+        self._external_last_warn.pop(device_id, None)
+        logger.info("MQTT device %s connected to external broker %s:%d (client_id=%s)",
+                    device_id, host, port, client_id)
+        self._log_debug("system", "external_connect",
+                        f"MQTT device {device_id} connected to external broker {host}:{port}",
+                        device_id=device_id,
+                        detail={"host": host, "port": port, "client_id": client_id})
+        return new_client
+
+    async def _publish_to_device_broker(
+        self, device_id: str, topic: str, payload: bytes, qos: int = 0, retain: bool = False,
+    ) -> bool:
+        """按设备配置路由发布：外部 broker（client 模式）或内置 broker。
+
+        Returns: True = 已发布；False = 无法发布（已记录告警）。
+        """
+        if self._is_external_device(device_id):
+            client = await self._get_external_client(device_id)
+            if client is None:
+                return False
+            try:
+                await client.publish(topic, payload, qos=qos, retain=retain)
+                return True
+            except Exception as e:
+                logger.warning("MQTT external publish failed for %s on %s: %s; will reconnect", device_id, topic, e)
+                self.record_protocol_error(ProtocolErrorCategory.INTERNAL, f"external publish failed: {e}")
+                # 连接已不可靠，丢弃陈旧客户端，下个周期自动重连
+                self._external_connected.discard(device_id)
+                with contextlib.suppress(Exception):
+                    await client.disconnect()
+                self._external_clients.pop(device_id, None)
+                return False
+        return await self._broker_publish(topic, payload, qos=qos, retain=retain)
+
     @staticmethod
     def _point_topic(device_id: str, point: PointConfig, topic_prefix: str) -> str:
         """推导点位发布主题。
@@ -511,7 +631,8 @@ class MqttBroker(ProtocolServer):
                     })
                     try:
                         # FIXED-P0: 兼容 amqtt 0.11+ API 改名，支持 QoS 与 Retain
-                        await self._broker_publish(topic, payload.encode("utf-8"), qos=qos, retain=retain)
+                        # FIXED-F2: 按设备配置路由到外部 broker 或内置 broker
+                        await self._publish_to_device_broker(device_id, topic, payload.encode("utf-8"), qos=qos, retain=retain)
                     except Exception as e:
                         logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
             await asyncio.sleep(interval)
@@ -539,7 +660,8 @@ class MqttBroker(ProtocolServer):
             })
             try:
                 # FIXED-P0: 兼容 amqtt 0.11+ API 改名，支持 QoS 与 Retain
-                await self._broker_publish(topic, payload.encode("utf-8"), qos=qos, retain=retain)
+                # FIXED-F2: 按设备配置路由到外部 broker 或内置 broker
+                await self._publish_to_device_broker(device_id, topic, payload.encode("utf-8"), qos=qos, retain=retain)
             except Exception as e:
                 logger.warning("MQTT publish failed for %s: %s", topic, e)  # FIXED-P1: QoS 1/2发布失败应warning级别
 
@@ -558,7 +680,8 @@ class MqttBroker(ProtocolServer):
         will_message = will_message.replace("{device_id}", device_id)
         try:
             # FIXED-P0: 兼容 amqtt 0.11+ API 改名（遗嘱消息）
-            await self._broker_publish(will_topic, will_message.encode("utf-8"), qos=will_qos, retain=will_retain)
+            # FIXED-F2: 遗嘱同样按设备配置路由到外部 broker
+            await self._publish_to_device_broker(device_id, will_topic, will_message.encode("utf-8"), qos=will_qos, retain=will_retain)
             logger.info("MQTT will message published for device %s to %s", device_id, will_topic)
         except Exception as e:
             logger.warning("MQTT will message publish failed for %s: %s", device_id, e)

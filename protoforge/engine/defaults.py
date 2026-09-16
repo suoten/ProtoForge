@@ -164,8 +164,11 @@ PROTOCOL_DEVICE_CONFIG = {
     "mqtt": [
         {"key": "topic_prefix", "label": "Topic Prefix", "type": "string", "default": "protoforge", "description": "MQTT publish topic prefix, format: {prefix}/{device_id}/{point_name}"},
         {"key": "qos", "label": "QoS Level", "type": "select", "default": 0, "options": [0, 1, 2], "description": "Message quality of service (0=At most once 1=At least once 2=Exactly once)"},
-        {"key": "username", "label": "Username", "type": "string", "default": "", "description": "MQTT Broker authentication username (optional)"},
-        {"key": "password", "label": "Password", "type": "string", "default": "", "description": "MQTT Broker authentication password (optional)"},
+        {"key": "server_host", "label": "Custom MQTT Server (optional)", "type": "string", "default": "", "description": "External MQTT server address (e.g. 192.168.1.100). Leave empty to publish to the built-in broker; fill in to simulate the device connecting and reporting to your own MQTT server (EMQX/Mosquitto/Aliyun IoT etc.)"},
+        {"key": "server_port", "label": "Custom MQTT Server Port", "type": "number", "default": 1883, "min": 1, "max": 65535, "description": "External MQTT server port, used together with server_host (default 1883)"},
+        {"key": "username", "label": "Username", "type": "string", "default": "", "description": "MQTT Broker authentication username (optional, used for custom server auth)"},
+        {"key": "password", "label": "Password", "type": "string", "default": "", "description": "MQTT Broker authentication password (optional, used for custom server auth)"},
+        {"key": "client_id", "label": "Client ID (optional)", "type": "string", "default": "", "description": "MQTT Client ID used when connecting to the custom server, must be unique per broker; default: protoforge_{device_id}"},
     ],
     "http": [
         {"key": "api_prefix", "label": "API Path Prefix", "type": "string", "default": "/api/v1", "description": "RESTful API path prefix, e.g. /api/v1"},
@@ -298,8 +301,8 @@ PROTOCOL_USAGE: dict[str, dict[str, Any]] = {
     "mqtt": {
         "mode": "broker",
         "mode_label": "Broker Agent",
-        "mode_desc": "ProtoForge built-in MQTT Broker, automatically publishes simulation data to Topics, your application subscribes to receive",
-        "connect_hint": "After your MQTT client connects to the ProtoForge Broker, subscribe to the following Topic:",
+        "mode_desc": "ProtoForge built-in MQTT Broker (MQTT 3.1.1 only, MQTT 5.0 NOT supported - in MQTTX manually set Protocol Version to 3.1.1), automatically publishes simulation data to Topics, your application subscribes to receive. Devices can also report to a custom external MQTT server via the server_host device option",
+        "connect_hint": "After your MQTT client connects to the ProtoForge Broker (protocol version must be 3.1.1), subscribe to the following Topic:",
         "code_examples": {
             "python": "# paho-mqtt example - MQTT Client Subscribe\nimport paho.mqtt.client as mqtt\nimport json\n\ndef on_message(client, userdata, msg):\n    data = json.loads(msg.payload.decode())\n    print(f'Topic: {msg.topic}')\n    print(f'  Value: {data[\"value\"]} {data[\"unit\"]}')\n\nclient = mqtt.Client()\nclient.on_message = on_message\nclient.connect('{host}', {port})\nclient.subscribe('protoforge/#')\nclient.loop_forever()",
             "csharp": "// MQTTnet example - MQTT Client Subscribe\nusing MQTTnet;\nusing MQTTnet.Client;\n\nvar factory = new MqttFactory();\nvar client = factory.CreateMqttClient();\n\nclient.ApplicationMessageReceivedAsync += e =>\n{\n    Console.WriteLine($\"Topic: {{e.ApplicationMessage.Topic}}\");\n    Console.WriteLine($\"Payload: {{e.ApplicationMessage.ConvertPayloadToString()}}\");\n    return Task.CompletedTask;\n};\n\nawait client.ConnectAsync(new MqttClientOptionsBuilder()\n    .WithTcpServer(\"{host}\", {port}).Build());\nawait client.SubscribeAsync(\"protoforge/#\");",

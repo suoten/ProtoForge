@@ -106,6 +106,14 @@
           <n-text v-if="qcTemplateId" depth="3" style="font-size:12px;margin-bottom:8px;display:block">
             {{ t('devices.protocol') }}: {{ qcTemplateName }} | {{ t('devices.points') }}: {{ qcTemplatePoints }}
           </n-text>
+          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
+          <n-alert v-if="qcProtocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+            <div style="font-size:13px;line-height:1.6">
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
+              <div>{{ t('devices.mqttNoteProtocol') }}</div>
+              <div>{{ t('devices.mqttNoteCustom') }}</div>
+            </div>
+          </n-alert>
           <!-- 协议配置：选择模板后自动加载，无配置时自动隐藏，不再单独成步 -->
           <div v-if="qcDeviceConfigFields.length > 0" style="margin-top:8px">
             <div style="font-weight:600;margin-bottom:8px;font-size:14px">{{ t('devices.config') }}</div>
@@ -151,6 +159,14 @@
               <div>{{ t('devices.gb28181GuideSipPassword') }}</div>
             </div>
           </n-alert>
+          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
+          <n-alert v-if="newDevice.protocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+            <div style="font-size:13px;line-height:1.6">
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
+              <div>{{ t('devices.mqttNoteProtocol') }}</div>
+              <div>{{ t('devices.mqttNoteCustom') }}</div>
+            </div>
+          </n-alert>
           <n-form :model="advancedProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in advancedConfigFields" :key="f.key" :label="f.label">
               <template v-if="f.type === 'select'">
@@ -180,6 +196,14 @@
         </n-form>
         <div v-if="editConfigFields.length > 0" style="margin-top:8px">
           <div style="font-weight:600;margin-bottom:8px;font-size:14px">{{ t('devices.protocolConfig') }}</div>
+          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
+          <n-alert v-if="editDevice.protocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+            <div style="font-size:13px;line-height:1.6">
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
+              <div>{{ t('devices.mqttNoteProtocol') }}</div>
+              <div>{{ t('devices.mqttNoteCustom') }}</div>
+            </div>
+          </n-alert>
           <n-form :model="editProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in editConfigFields" :key="f.key" :label="f.label">
               <template v-if="f.type === 'select'">

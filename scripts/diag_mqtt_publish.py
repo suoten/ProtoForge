@@ -82,3 +82,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+    os._exit(0)  # amqtt 后台任务会挂住事件循环导致进程不退出，强制结束避免僵尸进程污染端口
