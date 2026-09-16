@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from protoforge.models.device import DeviceConfig, PointConfig, PointValue
+from protoforge.models.device import DeviceConfig, PointConfig, PointValue, normalize_point_value
 from protoforge.observability.messages import desc, msg  # FIXED: i18n消息常量
 from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
 from protoforge.protocols.modbus._common import (
@@ -752,6 +752,17 @@ class ModbusTcpServer(ProtocolServer):
                 return False
             if point.access not in ("w", "rw"):
                 logger.debug("Modbus write_point: point '%s' is read-only on device %s", point_name, device_id)
+                return False
+
+            # FIXED: 按 data_type 归一写入值（bool → True/False、数值转换钳制），
+            # 保证 behavior 值与线圈/寄存器编码一致；不可表示的值拒绝写入
+            try:
+                value = normalize_point_value(point.data_type, value)
+            except (ValueError, TypeError) as e:
+                logger.warning(
+                    "Modbus write_point: value %r rejected for point '%s' on device %s: %s",
+                    value, point_name, device_id, e,
+                )
                 return False
 
         # 更新协议层 behavior 内部状态

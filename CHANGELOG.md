@@ -20,6 +20,13 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — 布尔量点位读写异常：UI 显示 true/11 而协议寄存器为 0/1（用户实测）：**
+
+- 根因：写入链路不按 data_type 归一值。bool 点位写数字 11 → 原样入库，UI 显示 11、线圈却编码为 1；数值点位写字符串 "true" → int("true") 转换失败被静默吞掉，原始字符串入库，UI 显示 true、寄存器保持 0 —— 界面值与协议线上的值不一致，用户侧无从排查
+- 修复：新增共享归一函数 `normalize_point_value()`（`protoforge/models/device.py`），写入三处入口（API 层 `PUT /devices/{id}/points/{name}`、Modbus 协议层 `server.write_point`、DeviceInstance `write_point`）统一归一：bool 接受 "true"/"1"/"on"/"yes"（→True）、"false"/"0"/"off"/"no"（→False）、数字非零→True（与 Modbus 线圈语义一致）；数值类型字符串自动转换并钳制到类型范围；不可表示的值拒绝写入，API 返回 400 并给出点位名、数据类型与原因
+- 排查确认的另一要点：**bool 点位自动落在线圈区（0xxxxx）**，主站须用 FC01 读、FC05 写，FC03 读保持寄存器看不到布尔量点位；数值型点位才在保持寄存器区（4xxxxx）。已在 README 地址表与设备弹窗连接注意事项中标注
+- 回归测试 `tests/test_bool_value_normalization.py`（16 例）：归一函数单元测试（bool/数值/字符串/拒绝/钳制）+ API 层复现用户场景（写 "true"/11 到 bool 点位归一为 True、写 "true" 到 uint16 返回 400、写 "42" 正常转换）；诊断脚本 `scripts/diag_bool_write.py` 端到端验证线圈编码与寄存器值一致
+
 ## v1.2.7 — 2026-09-16
 
 **Bug Fix — 同设备点位地址重叠导致固定值失效/乱值（FLOAT32 占 2 个寄存器互相覆盖）：**

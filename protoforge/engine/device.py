@@ -9,7 +9,7 @@ from typing import Any
 
 from protoforge.engine.generator import DataGenerator
 from protoforge.engine.state_machine import DeviceState, DeviceStateMachine, device_state_to_status
-from protoforge.models.device import DeviceConfig, DeviceStatus, GeneratorType, PointConfig, PointValue
+from protoforge.models.device import DeviceConfig, DeviceStatus, GeneratorType, PointConfig, PointValue, normalize_point_value
 from protoforge.simulation.control_loop import ControlLoopConfig, ControlLoopManager
 from protoforge.simulation.fault import (
     DeviceFailureException,
@@ -599,20 +599,21 @@ class DeviceInstance:
             except (ValueError, TypeError):
                 logger.debug("Range check skipped for point %s: value=%s is not numeric", point_name, value)
         async with self._lock:
-            # FIX: 按 data_type 截断值精度，确保 _point_values 与协议存储（如 Modbus float32）一致
-            # 避免 ProtoForge API 显示 77.7 而 EdgeLite 采集到 77.69999694824219 的精度差异
+            # FIX: 按 data_type 归一写入值（bool 归一为 True/False、数值类型转换并钳制、
+            # 不可表示的值拒绝写入），确保 _point_values 与协议存储（如 Modbus 线圈/寄存器）
+            # 完全一致 —— 修复"UI 显示 true/11 而寄存器是 0/1"的界面值与线上值不一致问题
             dt_val = point.data_type.value if hasattr(point.data_type, 'value') else str(point.data_type)
-            if dt_val == "float32" and isinstance(value, (int, float)):
-                with contextlib.suppress(ValueError, OverflowError):
-                    value = struct.unpack(">f", struct.pack(">f", float(value)))[0]
-            elif dt_val in ("int16",) and isinstance(value, (int, float)):
-                value = max(-32768, min(32767, int(value)))
-            elif dt_val in ("uint16",) and isinstance(value, (int, float)):
-                value = int(abs(value)) & 0xFFFF
-            elif dt_val in ("int32",) and isinstance(value, (int, float)):
-                value = max(-2147483648, min(2147483647, int(value)))
-            elif dt_val in ("uint32",) and isinstance(value, (int, float)):
-                value = int(abs(value)) & 0xFFFFFFFF
+            try:
+                value = normalize_point_value(dt_val, value)
+                if dt_val == "float32":
+                    with contextlib.suppress(ValueError, OverflowError):
+                        value = struct.unpack(">f", struct.pack(">f", float(value)))[0]
+            except (ValueError, TypeError):
+                logger.warning(
+                    "Write rejected for point %s on device %s: value %r cannot be represented as %s",
+                    point_name, self.config.id, value, dt_val,
+                )
+                return False
 
             self._point_values[point_name] = value
             # FIX: 定时冻结 — 写入后冻结 30 秒，确保 EdgeLite 有足够时间采集写入值，

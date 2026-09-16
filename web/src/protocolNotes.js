@@ -25,10 +25,12 @@ export const PROTOCOL_NOTES = {
       zh: [
         '请求中的 Unit ID 必须与从站地址配置一致（0 或 255 通常按广播处理）',
         '502 是特权端口，直连映射时注意容器端口映射与防火墙放行',
+        '布尔量（bool）点位存储在线圈区（0xxxxx）：用功能码 01 读、05 写；读保持寄存器（03）看不到它们，数值型点位才在保持寄存器区（4xxxxx）',
       ],
       en: [
         'The Unit ID in requests must match the configured slave address (0 / 255 are usually treated as broadcast)',
         'Port 502 is privileged — check container port mapping and firewall rules when connecting directly',
+        'Boolean (bool) points live in the coil area (0xxxxx): read with FC 01 and write with FC 05; they are invisible to FC 03 (holding registers). Numeric points use the holding-register area (4xxxxx)',
       ],
     },
   },

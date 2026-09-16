@@ -443,7 +443,7 @@ ProtoForge 的每个测点都绑定了**具体的 PLC 协议地址**，你的上
 
 | 协议 | 地址格式 | 示例 | 说明 |
 | ---- | ------- | ---- | ---- |
-| **Modbus TCP/RTU** | 寄存器偏移量（数字） | `address: "0"` | 寄存器 40001（holding register），`"2"` = 40003 |
+| **Modbus TCP/RTU** | 寄存器偏移量（数字） | `address: "0"` | 寄存器 40001（holding register），`"2"` = 40003。**布尔量（bool）点位自动落线圈区（0xxxxx）**：主站用功能码 01 读线圈、05 写线圈，读保持寄存器（FC03）看不到布尔量点位 |
 | **Siemens S7** | DB块.类型+偏移 | `address: "DB1.DBD2"` | DB块1，D=双字，偏移2字节；`DBX` = 位，`DBW` = 字 |
 | **Omron FINS** | 区域+地址 | `address: "DM100"` | DM区域地址100；`CIO0` = CIO区域地址0 |
 | **Mitsubishi MC** | 设备号+地址 | `address: "D100"` | D寄存器100；`M0` = 中间继电器0 |

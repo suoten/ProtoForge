@@ -20,7 +20,7 @@ from protoforge.api.v1._helpers import (
     ensure_no_point_overlap,
 )
 from protoforge.api.v1.auth import require_operator, require_viewer
-from protoforge.models.device import DeviceConfig
+from protoforge.models.device import DeviceConfig, normalize_point_value
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -808,16 +808,17 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
             detail=f"Point '{point_name}' is read-only (access='{point_config.access}')",
         )
 
-    # FIX: 根据点位 data_type 强制转换值类型，防止前端传入字符串 "false" 导致 bool("false")=True
+    # FIX: 按点位 data_type 归一写入值（bool 归一为 True/False、数值类型转换并钳制），
+    # 不可表示的值直接 400 并给出明确原因 —— 修复 bool 点位写 11 原样入库、
+    # 数值点位写 "true" 静默存字符串导致 UI 值与协议寄存器值不一致的问题
     dt = point_config.data_type.value if hasattr(point_config.data_type, 'value') else str(point_config.data_type)
-    if dt == "bool" and isinstance(value, str):
-        value = value.strip().lower() in ("true", "1", "on", "yes")
-    elif dt in ("float32", "float64") and isinstance(value, (int, str)):
-        with contextlib.suppress(ValueError, TypeError):
-            value = float(value)
-    elif dt in ("int16", "int32", "uint16", "uint32") and isinstance(value, str):
-        with contextlib.suppress(ValueError, TypeError):
-            value = int(value)
+    try:
+        value = normalize_point_value(dt, value)
+    except (ValueError, TypeError) as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid value for point '{point_name}' (data_type={dt}): {e}",
+        ) from e
 
     try:
         success = await engine.write_device_point(device_id, point_name, value)
