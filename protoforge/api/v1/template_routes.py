@@ -6,7 +6,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from protoforge.api.v1._helpers import _get_database, _get_template_manager
+from protoforge.api.v1._helpers import (
+    _get_database,
+    _get_template_manager,
+    ensure_no_point_overlap,
+)
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.models.template import TemplateDetail
 
@@ -63,6 +67,11 @@ async def get_template(template_id: str, _user: dict[str, Any] = Depends(require
 async def create_template(template: TemplateDetail, _user: dict[str, Any] = Depends(require_operator)):
     tm = _get_template_manager()
     db = _get_database()
+    # FIXED: 模板点位地址重叠检测（含重叠配置的模板实例化后固定值失效/乱值）
+    try:
+        ensure_no_point_overlap(template.protocol, template.points)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     try:
         tm.add_template(template)
     except ValueError as e:
@@ -121,6 +130,11 @@ async def update_template(template_id: str, data: dict[str, Any], _user: dict[st
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     data["id"] = template_id
+    # FIXED: 模板点位地址重叠检测（dict 形式，ensure 内部兼容转换）
+    try:
+        ensure_no_point_overlap(data.get("protocol", ""), data.get("points") or [])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     updated = tm.update_template(template_id, data)
     db_ok = True
     db_err_msg = ""
@@ -150,6 +164,16 @@ async def instantiate_template(
         protocol_config = body.get("protocol_config")
     tm = _get_template_manager()
 
+    # FIXED: 模板实例化前做点位地址重叠检测（与 quick-create 等入口一致）
+    try:
+        template = tm.get_template(template_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    try:
+        ensure_no_point_overlap(template.protocol, template.points)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
     try:
         return tm.create_device_from_template(template_id, device_id, device_name, protocol_config)
     except ValueError as e:
@@ -177,6 +201,8 @@ async def import_template(data: dict[str, Any], _user: dict[str, Any] = Depends(
     db = _get_database()
     try:
         template = TemplateDetail(**data)
+        # FIXED: 模板点位地址重叠检测
+        ensure_no_point_overlap(template.protocol, template.points)
         tm.add_template(template)
     except (ValueError, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

@@ -106,12 +106,11 @@
           <n-text v-if="qcTemplateId" depth="3" style="font-size:12px;margin-bottom:8px;display:block">
             {{ t('devices.protocol') }}: {{ qcTemplateName }} | {{ t('devices.points') }}: {{ qcTemplatePoints }}
           </n-text>
-          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
-          <n-alert v-if="qcProtocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+          <!-- 客户端连接注意事项（数据驱动，FIXED-F4：由 MQTT 3.1.1 坑推广到全协议） -->
+          <n-alert v-if="qcNotes.length" type="warning" :bordered="false" style="margin-bottom:8px">
             <div style="font-size:13px;line-height:1.6">
-              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
-              <div>{{ t('devices.mqttNoteProtocol') }}</div>
-              <div>{{ t('devices.mqttNoteCustom') }}</div>
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.noteTitle') }}</div>
+              <div v-for="(note, i) in qcNotes" :key="i">{{ note }}</div>
             </div>
           </n-alert>
           <!-- 协议配置：选择模板后自动加载，无配置时自动隐藏，不再单独成步 -->
@@ -159,12 +158,11 @@
               <div>{{ t('devices.gb28181GuideSipPassword') }}</div>
             </div>
           </n-alert>
-          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
-          <n-alert v-if="newDevice.protocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+          <!-- 客户端连接注意事项（数据驱动，FIXED-F4） -->
+          <n-alert v-if="createNotes.length" type="warning" :bordered="false" style="margin-bottom:8px">
             <div style="font-size:13px;line-height:1.6">
-              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
-              <div>{{ t('devices.mqttNoteProtocol') }}</div>
-              <div>{{ t('devices.mqttNoteCustom') }}</div>
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.noteTitle') }}</div>
+              <div v-for="(note, i) in createNotes" :key="i">{{ note }}</div>
             </div>
           </n-alert>
           <n-form :model="advancedProtocolConfig" label-placement="left" label-width="140">
@@ -196,12 +194,11 @@
         </n-form>
         <div v-if="editConfigFields.length > 0" style="margin-top:8px">
           <div style="font-weight:600;margin-bottom:8px;font-size:14px">{{ t('devices.protocolConfig') }}</div>
-          <!-- MQTT 3.1.1 协议限制醒目提示（FIXED-F3） -->
-          <n-alert v-if="editDevice.protocol === 'mqtt'" type="warning" :bordered="false" style="margin-bottom:8px">
+          <!-- 客户端连接注意事项（数据驱动，FIXED-F4） -->
+          <n-alert v-if="editNotes.length" type="warning" :bordered="false" style="margin-bottom:8px">
             <div style="font-size:13px;line-height:1.6">
-              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.mqttNoteTitle') }}</div>
-              <div>{{ t('devices.mqttNoteProtocol') }}</div>
-              <div>{{ t('devices.mqttNoteCustom') }}</div>
+              <div style="font-weight:600;margin-bottom:4px">{{ t('devices.noteTitle') }}</div>
+              <div v-for="(note, i) in editNotes" :key="i">{{ note }}</div>
             </div>
           </n-alert>
           <n-form :model="editProtocolConfig" label-placement="left" label-width="140">
@@ -549,7 +546,8 @@ import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFor
   NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
-import { useI18n } from '../i18n.js'
+import { useI18n, getLocale } from '../i18n.js'
+import { PROTOCOL_NOTES } from '../protocolNotes.js'
 import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol,
   dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions,
   generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
@@ -594,6 +592,17 @@ const qcLoading = ref(false)
 const qcProtocolConfig = ref({})
 const qcDeviceConfigFields = ref([])
 const qcProtocol = ref('')
+
+// FIXED-F4: 客户端连接注意事项（数据驱动，随协议与语言联动）
+function _notesFor(protocol) {
+  const entry = PROTOCOL_NOTES[protocol]
+  if (!entry) return []
+  const lang = getLocale() === 'zh' ? 'zh' : 'en'
+  return entry.items[lang] || []
+}
+const qcNotes = computed(() => _notesFor(qcProtocol.value))
+const createNotes = computed(() => _notesFor(newDevice.value.protocol))
+const editNotes = computed(() => _notesFor(editDevice.value.protocol))
 
 const showPipelineModal = ref(false)
 const pipelineResult = ref(null)

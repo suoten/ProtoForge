@@ -12,7 +12,13 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from protoforge.api.v1._helpers import _get_database, _get_engine, _get_log_bus, _trigger_webhook_safe
+from protoforge.api.v1._helpers import (
+    _get_database,
+    _get_engine,
+    _get_log_bus,
+    _trigger_webhook_safe,
+    ensure_no_point_overlap,
+)
 from protoforge.api.v1.auth import require_operator, require_viewer
 from protoforge.models.device import DeviceConfig
 
@@ -38,6 +44,11 @@ async def create_device(config: DeviceConfig, _user: dict[str, Any] = Depends(re
         raise HTTPException(status_code=400, detail="Device name must not exceed 128 characters")
     config.name = config.name.strip()
     config.id = config.id.strip()
+    # FIXED: 同设备点位地址重叠检测（多字节类型占多个寄存器，重叠互相覆盖数据）
+    try:
+        ensure_no_point_overlap(config.protocol, config.points)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     engine = _get_engine()
     db = _get_database()
     log_bus = _get_log_bus()
@@ -110,6 +121,11 @@ async def quick_create_device(params: dict[str, Any], _user: dict[str, Any] = De
         protocol=template.protocol, template_id=template_id,
         points=template.points or [], protocol_config=merged_config,
     )
+    # FIXED: 同设备点位地址重叠检测（模板本身含重叠配置时在此拦截）
+    try:
+        ensure_no_point_overlap(config.protocol, config.points)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     engine = _get_engine()
     db = _get_database()
@@ -167,6 +183,8 @@ async def batch_create_devices(
     try:
         for config in configs:
             try:
+                # FIXED: 同设备点位地址重叠检测（含在 per-device try 内，失败记入 error 列表/原子回滚）
+                ensure_no_point_overlap(config.protocol, config.points)
                 info = await engine.create_device(config)
                 created_devices.append(config.id)
                 db_ok = True
@@ -292,6 +310,84 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
 
 
 # ---------------------------------------------------------------------------
+# Device clone (must be before /devices/{device_id} route)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/devices/{device_id}/clone")
+async def clone_device(device_id: str, params: dict[str, Any] = Body(default={}),
+                       _user: dict[str, Any] = Depends(require_operator)):
+    """Clone an existing device with a new ID and name.
+
+    Body params (all optional):
+      - new_id: new device ID (auto-generated if not provided)
+      - new_name: new device name (defaults to "{original} Copy")
+      - auto_start: whether to auto-start the cloned device (default True)
+    """
+    engine = _get_engine()
+    db = _get_database()
+    log_bus = _get_log_bus()
+
+    # Get the original device config from engine instance directly
+    instance = engine._devices.get(device_id)
+    if not instance:
+        raise HTTPException(status_code=404, detail=f"Device not found: {device_id}")
+
+    original_config = instance.config
+
+    new_id = params.get("new_id") or f"{device_id}-copy-{uuid.uuid4().hex[:6]}"
+    new_name = params.get("new_name") or f"{original_config.name} Copy"
+    auto_start = params.get("auto_start", True)
+
+    # Validate new ID
+    new_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', new_id).strip('-')
+    if not new_id:
+        new_id = f"dev-copy-{uuid.uuid4().hex[:6]}"
+
+    # Check if new ID already exists
+    if new_id in engine._devices:
+        raise HTTPException(status_code=409, detail=f"Device ID already exists: {new_id}")
+
+    # Create cloned config
+    cloned_config = DeviceConfig(
+        id=new_id,
+        name=new_name,
+        protocol=original_config.protocol,
+        template_id=original_config.template_id,
+        points=[p.model_copy() for p in original_config.points],
+        protocol_config=dict(original_config.protocol_config) if original_config.protocol_config else {},
+    )
+
+    try:
+        # FIXED: 同设备点位地址重叠检测（克隆设备与原设备同点位，原配置重叠时拦截）
+        ensure_no_point_overlap(cloned_config.protocol, cloned_config.points)
+        result = await engine.create_device(cloned_config)
+        if db:
+            try:
+                await db.save_device(cloned_config)
+            except Exception as db_err:
+                logger.exception("Failed to persist cloned device %s: %s", new_id, db_err)
+        if auto_start:
+            try:
+                await engine.start_device(new_id)
+            except Exception as start_err:
+                logger.warning("Cloned device %s auto-start failed: %s", new_id, start_err)
+        log_bus.emit(cloned_config.protocol, "system", new_id, "device_cloned",
+                     f"Device {new_name} cloned from {device_id}",
+                     {"device_id": new_id, "source_device_id": device_id})
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
+        resp["cloned_from"] = device_id
+        return resp
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to clone device %s: %s", device_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to clone device: {e}") from e
+
+
+# ---------------------------------------------------------------------------
 # CSV batch import/export (must be before /devices/{device_id} route)
 # ---------------------------------------------------------------------------
 
@@ -405,6 +501,8 @@ async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depe
     for dev_id, dev_data in devices_data.items():
         try:
             config = DeviceConfig(**dev_data)
+            # FIXED: 同设备点位地址重叠检测（失败记入 errors 列表，不中断其他设备导入）
+            ensure_no_point_overlap(config.protocol, config.points)
             await engine.create_device(config)
             if db is not None:
                 try:
@@ -573,6 +671,8 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, A
     log_bus = _get_log_bus()
 
     try:
+        # FIXED: 同设备点位地址重叠检测（ValueError 统一映射为 400，非设备不存在）
+        ensure_no_point_overlap(config.protocol, config.points)
         result = await engine.update_device(device_id, config)
         db_ok = True
         db_err_msg = ""
@@ -591,7 +691,10 @@ async def update_device(device_id: str, config: DeviceConfig, _user: dict[str, A
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        # FIXED: 区分设备不存在(404)与配置校验失败(400，如点位地址重叠)
+        if engine.get_device_instance(device_id) is None:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.exception("Failed to update device %s: %s", device_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to update device: {e}") from e
