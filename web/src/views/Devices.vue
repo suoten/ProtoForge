@@ -950,7 +950,7 @@ const columns = computed(() => [
 const pointColumns = computed(() => [
   { title: t('devices.name'), key: 'name', width: 120 },
   // FIXED: 展示每个点位对应的存储区地址（多字节重叠问题从界面上一眼可见）
-  { title: t('devices.address'), key: 'address', width: 130, render: (row) => pointAddressMap.value[row.name] ?? '-' },
+  { title: t('common.address'), key: 'address', width: 130, render: (row) => pointAddressMap.value[row.name] ?? '-' },
   { title: t('devices.value'), key: 'value', width: 120, render: (row) => {
     const v = row.value
     if (v === null || v === undefined) return '-'
