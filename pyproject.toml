@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "protoforge"
-version = "1.2.0"
+version = "1.2.4"
 description = "IoT Protocol Simulation & Testing Platform - Postman for IoT"
 readme = "README.md"
 license = "MIT"
