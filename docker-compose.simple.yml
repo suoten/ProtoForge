@@ -32,7 +32,7 @@
 
 services:
   protoforge:
-    image: suoten/protoforge:1.2.0
+    image: suoten/protoforge:1.2.4
     container_name: protoforge
     command:
       - sh
