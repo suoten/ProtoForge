@@ -26,15 +26,15 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 | 2 | **Simulator too well-behaved, breaks in production** | Test env always returns perfect values, real PLC disconnects/timeouts/returns error codes | 9 fault injection types: sensor stuck/drift/noise/failure, intermittent disconnect/delay/packet loss, device failure/actuator stuck |
 | 3 | **Testing is all manual, regression takes all afternoon** | Every code change: create device→start→read→verify manually | Automated test engine: 13 assertion types, variable extraction, test suites, HTML reports + trend analysis |
 | 4 | **Can't reproduce customer site issues** | Client says "data was wrong at 3pm yesterday", no recording, can only guess | Protocol recording & replay: record→replay→verify fix, with Gzip compression |
-| 5 | **New hires don't understand protocols, takes a week** | Address offset, function codes, byte order all confused | 4-language code examples (Python/C#/Java/Go) per protocol, 122 ready-to-use templates |
-| 6 | **Multi-protocol testing, takes a week to set up** | Testing Modbus+S7+MQTT simultaneously, find 3 different vendor devices | 21 protocols on one computer, Docker 30-second startup, generate 100 virtual devices with one click |
+| 5 | **New hires don't understand protocols, takes a week** | Address offset, function codes, byte order all confused | 4-language code examples (Python/C#/Java/Go) per protocol, 131 ready-to-use templates |
+| 6 | **Multi-protocol testing, takes a week to set up** | Testing Modbus+S7+MQTT simultaneously, find 3 different vendor devices | 26 protocols on one computer, Docker 30-second startup, generate 100 virtual devices with one click |
 | 7 | **Protocol security can't be tested** | OPC-UA certs/TLS/GB28181 SRTP, can't touch production, no test env | Auto certificate generation, TLS encryption, SRTP support, test security freely |
 
 ## ✨ Features
 
-- **21 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS
+- **26 Industrial Protocols** — Modbus TCP/RTU, OPC-UA, MQTT, HTTP, GB28181, BACnet, Siemens S7/S7Comm-Plus, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS, DLT/T 645, CJ/T 188, Custom TCP/UDP
 - **Full-chain Simulation** — Complete protocol interactions including GB28181 SIP registration, RTP video streaming, and more
-- **122 Device Templates** — PLC, sensor, CNC, camera, HVAC, servo drive, protection relay, IED, env sensor, microgrid — pick a template, name it, create with one click
+- **131 Device Templates** — PLC, sensor, CNC, camera, HVAC, servo drive, protection relay, IED, env sensor, microgrid, smart meter, water/gas/heat meter — pick a template, name it, create with one click
 - **Real-time Debug Logs** — WebSocket real-time protocol messages, filterable by protocol/direction/keyword
 - **Visual Scenario Editor** — Visual device orchestration with threshold/change/timer/script rule types
 - **One-click Testing** — Auto-generated test cases with smart diagnostics
@@ -226,7 +226,7 @@ protoforge demo
 Core protocols (Modbus TCP/RTU, HTTP, GB28181, MC, FINS, AB, OPC-DA, FANUC, MTConnect, Toledo, PROFINET, EtherCAT, IEC 104, IEC 61850, CoAP, DDS — 17 total) work out of the box. These 4 require extra deps:
 
 ```bash
-pip install -e ".[all]"        # All 21 protocols
+pip install -e ".[all]"        # All 26 protocols
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -371,9 +371,9 @@ Your acquisition program differentiates devices by `slave_id` — identical to r
 
 | Feature | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | Real PLC |
 | ------- | ---------- | ----------------- | ------- | ------------- | -------- |
-| **Protocols** | 21 | Modbus only | 150+ (paid drivers) | MQTT/HTTP only | Single brand |
+| **Protocols** | 26 | Modbus only | 150+ (paid drivers) | MQTT/HTTP only | Single brand |
 | **Open Source** | ✅ MIT | ❌ Paid | ❌ Commercial | ✅ DIY | ❌ |
-| **Multi-protocol simultaneous** | ✅ 21 at once | ❌ | ✅ (paid) | ❌ | ❌ |
+| **Multi-protocol simultaneous** | ✅ 26 at once | ❌ | ✅ (paid) | ❌ | ❌ |
 | **Web UI** | ✅ Out of box | ❌ Desktop | ✅ | ❌ | Brand-specific |
 | **Device Templates** | ✅ 122+ | ❌ Manual | ✅ | ❌ | — |
 | **Batch Device Generation** | ✅ 100 with one click | ❌ | ✅ (paid) | ❌ | ❌ |
@@ -438,7 +438,7 @@ docker run -d --name protoforge \
 
 | Feature | Open Source (MIT) | Enterprise |
 | ------- | ----------------- | ---------- |
-| Protocols | 21, all included | 21 + custom protocols |
+| Protocols | 26, all included | 26 + custom protocols |
 | Device Templates | 122+ | 122+ + industry templates |
 | Concurrent Devices | Unlimited | Unlimited |
 | Web UI | ✅ Full | ✅ + branding |

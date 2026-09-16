@@ -3,7 +3,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <h1>🖥️ ProtoForge</h1>
-<p><b>一台电脑 = 21 种工业设备</b></p>
+<p><b>一台电脑 = 26 种工业设备</b></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
 [![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
@@ -16,7 +16,7 @@
 
 > ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
 >
-> 🔥 **V1.2.0 测试平台版** · 122 设备模板 · 21 种工业协议 · 测试计划+合规检测 · CSV 批量导入导出 · EdgeLite 生态对接 · 31 项 E2E 测试全通过
+> 🔥 **V1.3.0 工业标杆版** · 131 设备模板 · 26 种工业协议 · 设备/场景克隆 · 北向平台预设 · DAG 规则链编排 · 测试计划+合规检测 · EdgeLite 生态对接
 
 ![仪表盘](docs/images/1.png)
 
@@ -34,8 +34,8 @@
 | 2 | **模拟器太乖，上线就出事** | 测试环境永远返回正确值，上线后真实 PLC 断连/超时/返回异常码，全炸 | 内置9种故障注入：传感器卡死/漂移/噪声/失效、间歇断连/延迟/丢包、设备故障/执行器卡死，上线前测全异常场景 |
 | 3 | **测试全靠手点，回归一下午** | 每次改完代码：手动建设备→启动→读数据→验证，一个回归搞一下午 | 自动化测试引擎：13种断言、变量提取、测试套件、HTML报告+趋势分析，SDK一行代码跑全部测试 |
 | 4 | **客户现场出问题，没法复现** | 客户说昨天下午3点数据不对，没有录制，没法回放，只能猜 | 协议录制回放：录制通信报文→按需回放→验证修复，Gzip压缩存储 |
-| 5 | **新人不懂协议，教1周才干活** | 地址偏移、功能码、字节序全搞混，手把手教还是出错 | 每个协议内置4语言代码示例(Python/C#/Java/Go)，122个模板即用型配置，照着抄就能干 |
-| 6 | **多协议联调，环境搭1周** | 同时测 Modbus+S7+MQTT，找3台不同厂商设备，配3套参数 | 21种协议一台电脑全搞定，Docker 30秒启动，一键生成100台虚拟设备 |
+| 5 | **新人不懂协议，教1周才干活** | 地址偏移、功能码、字节序全搞混，手把手教还是出错 | 每个协议内置4语言代码示例(Python/C#/Java/Go)，131个模板即用型配置，照着抄就能干 |
+| 6 | **多协议联调，环境搭1周** | 同时测 Modbus+S7+MQTT，找3台不同厂商设备，配3套参数 | 26种协议一台电脑全搞定，Docker 30秒启动，一键生成100台虚拟设备 |
 | 7 | **协议安全不敢测** | OPC-UA证书/TLS加密/GB28181 SRTP，生产不敢动，测试又没有 | 证书自动生成、TLS加密、SRTP全支持，安全场景随便测 |
 
 ### 💰 硬件成本对比
@@ -44,7 +44,7 @@
 |------|---------|------------|
 | 测 Modbus | 买 PLC（￥3000+） | 1 条命令启动虚拟设备 |
 | GB28181 联调 | 买摄像头（￥500+） | 自动注册、自动推流 |
-| 测 21 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
+| 测 26 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
 | 压力测试 | 部署几十台物理设备 | 一键生成 100 台虚拟设备 |
 | 给客户演示 | 带一堆硬件出差 | 笔记本上完整演示 |
 
@@ -83,7 +83,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 ![设备管理](docs/images/2.png)
 
-### 🌐 协议服务 — 21 种工业协议一键启停
+### 🌐 协议服务 — 26 种工业协议一键启停
 
 Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS，全部支持独立配置端口和高级参数。
 
@@ -101,7 +101,7 @@ Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubis
 
 ![场景编排器](docs/images/5.png)
 
-### 📦 模板市场 — 122 设备模板开箱即用
+### 📦 模板市场 — 131 设备模板开箱即用
 
 PLC、传感器、数控机床、IoT 设备、摄像头、楼宇设备、电力保护装置、IED、环境传感器等分类筛选，选择模板一键创建仿真设备。
 
@@ -155,9 +155,9 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 ## ✨ 核心特性
 
-- **21 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS
+- **26 种工业协议** — Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、自定义 TCP/UDP
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
-- **122 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器、保护继电器、IED、环境传感器、微电网，选模板→起名字→一键创建
+- **131 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器、保护继电器、IED、环境传感器、微电网、智能电表、水/气/热表，选模板→起名字→一键创建
 - **实时调试日志** — WebSocket 实时推送协议交互报文，按协议/方向/关键词筛选，点击查看详情，快速定位开发问题
 - **可视化场景编排** — 可视化设备联动规则编辑器，支持阈值/值变化/定时/脚本四种规则类型
 - **一键仿真测试** — 自动生成测试用例，智能诊断问题
@@ -313,7 +313,7 @@ protoforge demo
 `pip install -e .` 只安装核心协议（Modbus TCP/RTU、HTTP、GB28181、MC、FINS、AB、OPC-DA、FANUC、MTConnect、Toledo、PROFINET、EtherCAT、IEC 104、IEC 61850、CoAP、DDS 共 17 种，开箱即用）。以下 4 种协议需要额外依赖：
 
 ```bash
-pip install -e ".[all]"        # 安装全部 21 种协议
+pip install -e ".[all]"        # 安装全部 26 种协议
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -382,7 +382,7 @@ pip install -e ".[s7]"        # Siemens S7
                     │  MQTT Broker        ←─ 端口 1883  │
                     │  HTTP Server        ←─ 端口 8080  │
                     │  GB28181 SIP        ←─ 端口 5060  │
-                    │  ...（21 种协议服务端）              │
+                    │  ...（26 种协议服务端）              │
                     └──────────┬──────────────────────┘
                                │ 标准 TCP/UDP 协议通信
                                │（和真实设备一模一样）
@@ -1233,10 +1233,10 @@ ProtoForge/
 │   ├── config.py             # 配置管理
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
-│   ├── protocols/            # 21 种协议服务端实现
+│   ├── protocols/            # 26 种协议服务端实现
 │   ├── testing/              # IoT 测试平台（计划/执行/合规检测）
 │   ├── sdk/                  # Python SDK（同步/异步）
-│   └── templates/            # 122 设备模板（JSON）
+│   └── templates/            # 131 设备模板（JSON）
 ├── sdk/                       # 多语言 SDK
 │   ├── java/                 # Java SDK
 │   ├── go/                   # Go SDK
@@ -1579,9 +1579,9 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 
 | 特性 | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | 真实 PLC |
 | ---- | ---------- | ----------------- | ------- | ------------- | -------- |
-| **协议数量** | 21 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
+| **协议数量** | 26 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
 | **开源免费** | ✅ MIT | ❌ 付费 | ❌ 商业 | ✅ 但需自建 | ❌ |
-| **多协议同时仿真** | ✅ 21 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
+| **多协议同时仿真** | ✅ 26 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
 | **Web 管理界面** | ✅ 开箱即用 | ❌ 桌面软件 | ✅ | ❌ | 品牌专用 |
 | **设备模板库** | ✅ 122+ 模板 | ❌ 手动配置 | ✅ | ❌ | — |
 | **批量设备生成** | ✅ 一键 100 台 | ❌ | ✅ (付费) | ❌ | ❌ |
@@ -1593,7 +1593,7 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 | **中文支持** | ✅ 双语 | ❌ | ❌ | ❌ | — |
 | **成本** | **免费** | $69+ | $1,500+/驱动 | 免费 | $500+ |
 
-> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 21 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
+> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 26 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
 
 ### 协议一致性说明
 
@@ -1656,7 +1656,7 @@ protoforge run --host 0.0.0.0 --port 8000
 | **内存** | 256MB (10 台设备) | 512MB (50 台设备) | 1GB (100+ 台设备) |
 | **磁盘** | 100MB (应用) | 1GB (含数据) | — |
 | **并发设备** | 10 台 | 50 台 | 100+ 台 |
-| **协议端口** | 5 个同时 | 10 个同时 | 全部 21 种 |
+| **协议端口** | 5 个同时 | 10 个同时 | 全部 26 种 |
 
 > 💡 **树莓派实测**：在树莓派 4B (4GB) 上运行 50 台设备（Modbus + S7 + MQTT 同时），CPU 占用约 15%，内存约 180MB，完全流畅。
 
@@ -1668,7 +1668,7 @@ protoforge run --host 0.0.0.0 --port 8000
 
 | 功能 | 开源版 (MIT) | 企业版 |
 | ---- | ----------- | ------ |
-| **协议数量** | 21 种全支持 | 21 种 + 定制协议 |
+| **协议数量** | 26 种全支持 | 26 种 + 定制协议 |
 | **设备模板** | 122+ 模板 | 122+ + 行业定制模板 |
 | **同时仿真设备数** | 无限制 | 无限制 |
 | **Web 管理界面** | ✅ 完整功能 | ✅ + 品牌定制 |
