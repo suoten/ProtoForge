@@ -7,6 +7,26 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+## v1.2.7 — 2026-09-16
+
+**Bug Fix — 同设备点位地址重叠导致固定值失效/乱值（FLOAT32 占 2 个寄存器互相覆盖）：**
+
+- 根因：Modbus 多字节类型（float32/int32/uint32 占 2 个寄存器，float64 占 4 个，string 占 32 个）按起始地址向后占用多个寄存器。用户模板中 humidity@2（占 2-3）与 point_4@3（占 3-4）在寄存器 3 上重叠——两个点位的生成器各自按自己的节拍写寄存器 3，后写的字节序把先写的覆盖掉，导致"固定值=10"的 point_4 持续显示乱值（-1.86e-27 之类）且不断变动。用户侧完全无从排查
+- 修复：新增共享校验 `find_overlapping_points()`（`_common.py`），按同一存储区（线圈/离散/输入/保持）内地址范围做区间相交检测；所有设备与模板写入入口统一拦截——创建设备、快速创建（含模板）、批量创建、克隆设备、更新设备、CSV 导入、创建模板、更新模板、导入模板、模板实例化共 10 处。命中重叠返回 400，错误信息含冲突点位名、存储区、地址范围与寄存器占用明细（如"点位 'humidity'(地址 2, 保持寄存器区(4区), 占2个寄存器) 与 'point_4'(地址 3, ...) 地址范围重叠 [2~3] 与 [3~4]"）
+- 校验仅对 modbus 系协议生效；不同存储区同地址（如线圈@0 与保持寄存器@0）不冲突
+- 前端：设备测点弹窗新增"地址"列，modbus 纯数字地址按后端 auto 规则展示 5 位规范地址（bool→线圈区 00001 起，其他→保持寄存器区 40001 起，如 `3 (40004)`），多字节点位占多个寄存器从界面上一眼可见；快速写入下拉同步展示点位地址
+- 回归测试 `tests/test_point_overlap_validation.py`（7 例）：重叠拒绝/非重叠放行/跨存储区允许/更新拦截/快速创建模板拦截/批量创建记入 error 列表/非 modbus 不校验；既有 API 测试中本身含重叠数据的用例已修正地址
+
+## v1.2.6 — 2026-09-16
+
+**Bug Fix — Modbus 只读点位（access='r'）可被外部客户端写成功：**
+
+- 根因：访问模式只在平台自身写入路径（UI 快速写入 / `PUT /devices/{id}/points/{name}` / `ModbusServer.write_point`）校验；外部 Modbus 客户端走原生帧处理器（FC05/06/0F/10/16/17）直接写 store，完全不校验 access——界面上标为"只读"的点位被外部写成功且经 `_notify_external_write` 反向传播回点位值，语义不一致
+- 修复：TCP 与 RTU 两套 server 的全部外部写路径统一增加只读校验。命中 access='r' 点位（按地址范围匹配，含多寄存器点位跨度）→ 返回异常码 0x01（ILLEGAL FUNCTION），store 不变、不触发双向传播，并记 warning 日志 + `_log_debug`（事件 `modbus_write_rejected`）；广播写命中只读点位时按广播语义丢弃（无响应）
+- 共享助手下沉 `_common.py`：`point_area()`（auto 按数据类型判定存储区，与写入规则一致）、`point_reg_count()`、`WRITE_FC_AREA_MAP`，TCP/RTU 同源校验避免两份逻辑漂移
+- 回归测试 `tests/test_modbus_readonly_write_guard.py`（18 例）：TCP/RTU × 六种写功能码只读拒绝/放行、范围跨度拦截、广播静默丢弃、access='w' 可写、拒绝后不触发传播、rw 写传播不受影响
+- 真实 socket 验证 `tests/test_e2e_modbus_real.py::test_real_modbus_write_to_readonly_point_rejected`：真实 pymodbus 客户端写只读点位收到异常码 0x01、寄存器值不变、相邻 rw 点位正常写
+
 ## v1.2.5 — 2026-09-16
 
 **Feature — MQTT 仿真设备支持上报自定义 MQTT 服务器（设备仿真对齐真实设备行为）：**

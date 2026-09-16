@@ -25,6 +25,11 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "iec61850": "protoforge.protocols.iec61850:IEC61850Server",
     "coap": "protoforge.protocols.coap:CoAPServer",
     "dds": "protoforge.protocols.dds:DDSServer",
+    "dlt645": "protoforge.protocols.dlt645:DLT645Server",
+    "cjt188": "protoforge.protocols.cjt188:CJT188Server",
+    "custom_tcp": "protoforge.protocols.custom_tcp:CustomTcpServer",
+    "custom_udp": "protoforge.protocols.custom_udp:CustomUdpServer",
+    "s7plus": "protoforge.protocols.s7plus:S7PlusServer",
 }
 
 PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {}

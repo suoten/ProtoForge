@@ -1,0 +1,15 @@
+{
+  "id": "custom-tcp-framed",
+  "name": "自定义TCP帧协议设备",
+  "description": "带长度前缀的TCP帧协议设备 - 支持响应模板",
+  "protocol": "custom_tcp",
+  "device_type": "sensor",
+  "category": "自定义",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "value1", "address": "0", "data_type": "uint16", "unit": "", "description": "数值1", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0, "max": 1000, "frequency": 0.01, "noise": 2}, "min_value": 0, "max_value": 65535},
+    {"name": "value2", "address": "1", "data_type": "uint16", "unit": "", "description": "数值2", "access": "rw", "generator_type": "sine", "generator_config": {"min": 100, "max": 500, "frequency": 0.015, "noise": 1}, "min_value": 0, "max_value": 65535},
+    {"name": "value3", "address": "2", "data_type": "float32", "unit": "", "description": "数值3", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": -10, "max": 10, "step_size": 0.1}, "min_value": -100, "max_value": 100}
+  ],
+  "protocol_config": {"frame_mode": "length_prefix", "response_template": "AA BB {seq} {all_points}", "port": 38000}
+}

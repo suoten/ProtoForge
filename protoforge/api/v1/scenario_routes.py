@@ -4,10 +4,11 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from protoforge.api.v1._helpers import _get_database, _get_engine, _trigger_webhook_safe
 from protoforge.api.v1.auth import require_operator, require_viewer
+from protoforge.models.device import DeviceConfig
 from protoforge.models.scenario import ScenarioConfig, ScenarioConfigUpdate
 
 router = APIRouter()
@@ -180,6 +181,121 @@ async def delete_scenario(scenario_id: str, _user: dict[str, Any] = Depends(requ
     except Exception as e:
         logger.exception("Failed to delete scenario %s: %s", scenario_id, e)
         raise HTTPException(status_code=500, detail=f"Failed to delete scenario: {e}") from e
+
+
+@router.post("/scenarios/{scenario_id}/clone")
+async def clone_scenario(scenario_id: str, params: dict[str, Any] = Body(default={}),
+                          _user: dict[str, Any] = Depends(require_operator)):
+    """Clone an existing scenario with a new ID and name.
+
+    Body params (all optional):
+      - new_id: new scenario ID (auto-generated if not provided)
+      - new_name: new scenario name (defaults to "{original} Copy")
+      - clone_devices: whether to clone all devices in the scenario (default True)
+    """
+    import re
+    import uuid
+
+    engine = _get_engine()
+    db = _get_database()
+
+    # Get original scenario config
+    try:
+        original = engine.get_scenario_config(scenario_id)
+    except ValueError:
+        original = None
+    if not original:
+        # Try loading from DB
+        if db:
+            try:
+                original = await db.load_scenario(scenario_id)
+            except Exception:
+                pass
+    if not original:
+        raise HTTPException(status_code=404, detail=f"Scenario not found: {scenario_id}")
+
+    new_id = params.get("new_id") or f"{scenario_id}-copy-{uuid.uuid4().hex[:6]}"
+    new_name = params.get("new_name") or f"{original.name} Copy"
+    clone_devices = params.get("clone_devices", True)
+
+    new_id = re.sub(r'[^a-zA-Z0-9_\-]', '-', new_id).strip('-') or f"scenario-copy-{uuid.uuid4().hex[:6]}"
+
+    # Check if new ID already exists
+    existing_scenarios = engine.list_scenarios()
+    for s in existing_scenarios:
+        if s.id == new_id:
+            raise HTTPException(status_code=409, detail=f"Scenario ID already exists: {new_id}")
+
+    # Clone devices if requested
+    cloned_device_ids: list[str] = []
+    if clone_devices and original.devices:
+        for dev_cfg in original.devices:
+            old_dev_id = dev_cfg.id
+            new_dev_id = f"{old_dev_id}-copy-{uuid.uuid4().hex[:4]}"
+            # Ensure uniqueness
+            while new_dev_id in engine._devices:
+                new_dev_id = f"{old_dev_id}-copy-{uuid.uuid4().hex[:4]}"
+
+            cloned_dev = DeviceConfig(
+                id=new_dev_id,
+                name=f"{dev_cfg.name} Copy",
+                protocol=dev_cfg.protocol,
+                template_id=dev_cfg.template_id,
+                points=[p.model_copy() for p in dev_cfg.points],
+                protocol_config=dict(dev_cfg.protocol_config) if dev_cfg.protocol_config else {},
+            )
+            try:
+                await engine.create_device(cloned_dev)
+                if db:
+                    try:
+                        await db.save_device(cloned_dev)
+                    except Exception as db_err:
+                        logger.warning("Failed to persist cloned device %s: %s", new_dev_id, db_err)
+                cloned_device_ids.append(new_dev_id)
+            except Exception as dev_err:
+                logger.warning("Failed to clone device %s: %s", old_dev_id, dev_err)
+
+    # Create cloned scenario config
+    from protoforge.models.device import DeviceConfig as DC
+    cloned_devices = []
+    if clone_devices and original.devices:
+        for i, dev_cfg in enumerate(original.devices):
+            if i < len(cloned_device_ids):
+                cloned_devices.append(DC(
+                    id=cloned_device_ids[i],
+                    name=f"{dev_cfg.name} Copy",
+                    protocol=dev_cfg.protocol,
+                    template_id=dev_cfg.template_id,
+                    points=[p.model_copy() for p in dev_cfg.points],
+                    protocol_config=dict(dev_cfg.protocol_config) if dev_cfg.protocol_config else {},
+                ))
+
+    cloned_config = ScenarioConfig(
+        id=new_id,
+        name=new_name,
+        description=original.description,
+        devices=cloned_devices,
+        rules=[r.model_copy() if hasattr(r, 'model_copy') else r for r in original.rules],
+    )
+
+    try:
+        result = await engine.create_scenario(cloned_config)
+        if db:
+            try:
+                await db.save_scenario(cloned_config)
+            except Exception as db_err:
+                logger.exception("Failed to persist cloned scenario %s: %s", new_id, db_err)
+        resp = result.model_dump() if hasattr(result, 'model_dump') and callable(result.model_dump) else result
+        resp["cloned_from"] = scenario_id
+        resp["cloned_device_ids"] = cloned_device_ids
+        return resp
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to clone scenario %s: %s", scenario_id, e)
+        raise HTTPException(status_code=500, detail=f"Failed to clone scenario: {e}") from e
 
 
 @router.get("/scenarios/{scenario_id}/export")

@@ -140,6 +140,36 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "DDS (Data Distribution Service) - OMG standard publish/subscribe middleware for real-time systems, used in aerospace, defense, autonomous vehicles",
         "icon": "📡",
     },
+    "dlt645": {
+        "host": "0.0.0.0", "port": 37120,
+        "display_name": "DLT/T 645",
+        "description": "DLT/T 645-2007 Multi-function Energy Meter Protocol - China electric power industry standard, BCD encoding, +0x33 encryption, supports active/reactive energy, voltage/current/power data reading",
+        "icon": "⚡",
+    },
+    "cjt188": {
+        "host": "0.0.0.0", "port": 37121,
+        "display_name": "CJ/T 188",
+        "description": "CJ/T 188-2004 Data Transmission Protocol for Metering Instruments - China urban construction industry standard, supports water/gas/heat meters, BCD encoding, type-code addressing",
+        "icon": "💧",
+    },
+    "custom_tcp": {
+        "host": "0.0.0.0", "port": 38000,
+        "display_name": "Custom TCP",
+        "description": "Custom TCP Protocol - User-defined TCP frame format simulation, supports hex template parsing, variable-length frames, checksum calculation, flexible data mapping",
+        "icon": "🔧",
+    },
+    "custom_udp": {
+        "host": "0.0.0.0", "port": 38001,
+        "display_name": "Custom UDP",
+        "description": "Custom UDP Protocol - User-defined UDP frame format simulation, supports hex template parsing, datagram-based communication, suitable for low-overhead real-time data",
+        "icon": "🔧",
+    },
+    "s7plus": {
+        "host": "0.0.0.0", "port": 10202,
+        "display_name": "S7Comm-Plus",
+        "description": "Siemens S7Comm-Plus Protocol - S7-1200/1500 next-gen communication protocol, TPKT/COTP based, supports optimized block access, SZL read, symbolic addressing",
+        "icon": "⚙️",
+    },
 }
 
 PROTOCOL_DEVICE_CONFIG = {

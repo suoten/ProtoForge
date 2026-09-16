@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     iec61850_port: int = 102
     coap_port: int = 5683
     dds_port: int = 7400
+    dlt645_port: int = 37120
+    cjt188_port: int = 37121
+    custom_tcp_port: int = 38000
+    custom_udp_port: int = 38001
+    s7plus_port: int = 10202
 
     # FIXED: 添加配置验证器
     @field_validator("port")
@@ -187,6 +192,11 @@ class Settings(BaseSettings):
             "iec61850": {"port": self.iec61850_port, "host": self.host or "0.0.0.0"},
             "coap": {"port": self.coap_port, "host": self.host or "0.0.0.0"},
             "dds": {"port": self.dds_port, "host": self.host or "0.0.0.0"},
+            "dlt645": {"port": self.dlt645_port, "host": self.host or "0.0.0.0"},
+            "cjt188": {"port": self.cjt188_port, "host": self.host or "0.0.0.0"},
+            "custom_tcp": {"port": self.custom_tcp_port, "host": self.host or "0.0.0.0"},
+            "custom_udp": {"port": self.custom_udp_port, "host": self.host or "0.0.0.0"},
+            "s7plus": {"port": self.s7plus_port, "host": self.host or "0.0.0.0"},
         }
 
     model_config = {

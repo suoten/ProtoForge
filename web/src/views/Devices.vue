@@ -241,7 +241,7 @@
         <n-space vertical style="margin-top:12px">
           <n-text strong style="font-size:13px">{{ t('devices.quickWritePoint') }}</n-text>
           <n-space align="center" size="small">
-            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:160px" size="small" />
+            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: pointAddressMap[p.name] ? `${p.name} (${pointAddressMap[p.name]})` : p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:200px" size="small" />
             <n-input v-model:value="writePointValue" :placeholder="t('devices.inputValue')" style="width:120px" size="small" />
             <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">{{ t('devices.write') }}</n-button>
             <n-button size="small" @click="resetDevicePointQuick" :loading="resetLoading">{{ t('devices.resetPoint') }}</n-button>
@@ -579,6 +579,8 @@ const guideLang = ref('python')
 const creating = ref(false)
 const saving = ref(false)
 const currentPoints = ref([])
+const pointAddressMap = ref({})   // FIXED: 点位名 → 展示地址（含 Modbus 5位规范地址）
+const currentViewProtocol = ref('')
 const selectedTemplate = ref(null)
 const editDevice = ref({ id: '', name: '', protocol: '', protocol_config: {} })
 const editProtocolConfig = ref({})
@@ -947,6 +949,8 @@ const columns = computed(() => [
 // FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
 const pointColumns = computed(() => [
   { title: t('devices.name'), key: 'name', width: 120 },
+  // FIXED: 展示每个点位对应的存储区地址（多字节重叠问题从界面上一眼可见）
+  { title: t('devices.address'), key: 'address', width: 130, render: (row) => pointAddressMap.value[row.name] ?? '-' },
   { title: t('devices.value'), key: 'value', width: 120, render: (row) => {
     const v = row.value
     if (v === null || v === undefined) return '-'
@@ -1433,15 +1437,41 @@ async function deleteDevice(id) {
   })
 }
 
+// FIXED: 格式化点位展示地址 —— modbus 纯数字地址按后端 auto 规则给出 5 位规范地址
+//（bool→线圈区 00001 起，其他→保持寄存器区 40001 起），带前缀/非 modbus 原样展示
+function formatPointAddress(addr, dataType, protocol) {
+  if (addr === undefined || addr === null || addr === '') return '-'
+  const raw = String(addr)
+  if (!String(protocol || '').startsWith('modbus')) return raw
+  if (/^\d+$/.test(raw)) {
+    const n = parseInt(raw, 10)
+    const base = String(dataType || '').toLowerCase() === 'bool' ? 1 : 40001
+    return `${raw} (${base + n})`
+  }
+  return raw
+}
+
+function buildPointAddressMap(config) {
+  const map = {}
+  const pts = Array.isArray(config?.points) ? config.points : []
+  pts.forEach((p) => {
+    map[p.name] = formatPointAddress(p.address, p.data_type, config?.protocol)
+  })
+  return map
+}
+
 async function viewPoints(id) {
   try {
-    const [res, deviceInfo] = await Promise.all([
+    const [res, deviceInfo, configRes] = await Promise.all([
       api.getDevicePoints(id),
       api.getDevice(id).catch(() => null),
+      api.getDeviceConfig(id).catch(() => null),
     ])
     currentPoints.value = Array.isArray(res?.points) ? res.points : (Array.isArray(res) ? res : [])
     currentViewDeviceId.value = id
     currentViewDeviceInfo.value = deviceInfo
+    currentViewProtocol.value = configRes?.protocol || deviceInfo?.protocol || ''
+    pointAddressMap.value = buildPointAddressMap(configRes)
     writePointName.value = ''
     writePointValue.value = ''
     showPointsModal.value = true

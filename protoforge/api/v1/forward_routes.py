@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from protoforge.api.v1._helpers import _get_log_bus
 from protoforge.api.v1.auth import require_operator, require_viewer
@@ -121,3 +121,165 @@ async def forward_stats(_user: dict[str, Any] = Depends(require_viewer)):
     except Exception as e:
         logger.exception("Failed to get forward stats: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to get forward stats: {e}") from e
+
+
+# ---------------------------------------------------------------------------
+# North-bound platform presets (ThingsBoard / Aliyun IoT / EMQX)
+# ---------------------------------------------------------------------------
+
+_PLATFORM_PRESETS: list[dict[str, Any]] = [
+    {
+        "id": "thingsboard",
+        "name": "ThingsBoard",
+        "description": "ThingsBoard IoT 平台 - HTTP API 透传",
+        "type": "http",
+        "fields": [
+            {"key": "host", "label": "ThingsBoard 地址", "placeholder": "demo.thingsboard.io", "required": True},
+            {"key": "port", "label": "端口", "placeholder": "8080", "required": True, "default": "8080"},
+            {"key": "access_token", "label": "设备 Access Token", "placeholder": "your-device-access-token", "required": True},
+        ],
+        "template": {
+            "type": "http",
+            "url": "http://{host}:{port}/api/v1/{access_token}/telemetry",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "data_format": "thingsboard",
+        },
+    },
+    {
+        "id": "aliyun_iot",
+        "name": "阿里云IoT",
+        "description": "阿里云物联网平台 - MQTT 主题透传",
+        "type": "http",
+        "fields": [
+            {"key": "host", "label": "API 网关地址", "placeholder": "iot.cn-shanghai.aliyuncs.com", "required": True},
+            {"key": "port", "label": "端口", "placeholder": "443", "required": True, "default": "443"},
+            {"key": "product_key", "label": "Product Key", "placeholder": "your-product-key", "required": True},
+            {"key": "device_name", "label": "Device Name", "placeholder": "your-device-name", "required": True},
+            {"key": "device_secret", "label": "Device Secret", "placeholder": "your-device-secret", "required": True},
+        ],
+        "template": {
+            "type": "http",
+            "url": "https://{host}:{port}/topic/sys/{product_key}/{device_name}/thing/event/property/post",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "data_format": "aliyun_iot",
+        },
+    },
+    {
+        "id": "emqx",
+        "name": "EMQX",
+        "description": "EMQX MQTT Broker - HTTP API 推送",
+        "type": "http",
+        "fields": [
+            {"key": "host", "label": "EMQX API 地址", "placeholder": "localhost", "required": True},
+            {"key": "port", "label": "API 端口", "placeholder": "8081", "required": True, "default": "8081"},
+            {"key": "api_key", "label": "API Key", "placeholder": "your-api-key", "required": True},
+            {"key": "api_secret", "label": "API Secret", "placeholder": "your-api-secret", "required": True},
+            {"key": "topic", "label": "推送主题", "placeholder": "protoforge/data", "required": True, "default": "protoforge/data"},
+        ],
+        "template": {
+            "type": "http",
+            "url": "http://{host}:{port}/api/v5/publish",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "data_format": "emqx",
+        },
+    },
+    {
+        "id": "influxdb_cloud",
+        "name": "InfluxDB Cloud",
+        "description": "InfluxDB Cloud 时序数据库",
+        "type": "influxdb",
+        "fields": [
+            {"key": "host", "label": "InfluxDB 地址", "placeholder": "localhost", "required": True},
+            {"key": "port", "label": "端口", "placeholder": "8086", "required": True, "default": "8086"},
+            {"key": "database", "label": "数据库/Bucket", "placeholder": "protoforge", "required": True},
+        ],
+        "template": {
+            "type": "influxdb",
+            "host": "{host}",
+            "port": "{port}",
+            "database": "{database}",
+        },
+    },
+    {
+        "id": "custom_webhook",
+        "name": "自定义 Webhook",
+        "description": "自定义 HTTP Webhook 推送",
+        "type": "http",
+        "fields": [
+            {"key": "url", "label": "Webhook URL", "placeholder": "https://your-server.com/api/data", "required": True},
+            {"key": "headers", "label": "请求头 (JSON)", "placeholder": '{"Authorization": "Bearer xxx"}', "required": False},
+        ],
+        "template": {
+            "type": "http",
+            "url": "{url}",
+            "method": "POST",
+            "headers": {"Content-Type": "application/json"},
+            "data_format": "generic",
+        },
+    },
+]
+
+
+@router.get("/forward/presets")
+async def list_forward_presets(_user: dict[str, Any] = Depends(require_viewer)):
+    """List available north-bound platform preset templates."""
+    return {"presets": _PLATFORM_PRESETS}
+
+
+@router.post("/forward/presets/{preset_id}/apply")
+async def apply_forward_preset(preset_id: str, params: dict[str, Any] = Body(default={}),
+                               _user: dict[str, Any] = Depends(require_operator)):
+    """Apply a platform preset with user-provided parameters."""
+    from fastapi import Body as _Body
+
+    preset = None
+    for p in _PLATFORM_PRESETS:
+        if p["id"] == preset_id:
+            preset = p
+            break
+    if not preset:
+        raise HTTPException(status_code=404, detail=f"Preset not found: {preset_id}")
+
+    template = preset["template"]
+    # Replace placeholders in template with actual values
+    resolved = {}
+    for key, val in template.items():
+        if isinstance(val, str):
+            try:
+                resolved[key] = val.format(**params)
+            except KeyError as e:
+                raise HTTPException(status_code=400, detail=f"Missing required parameter: {e.args[0]}") from e
+        elif isinstance(val, dict):
+            resolved[key] = val
+        else:
+            resolved[key] = val
+
+    # For InfluxDB presets, construct URL
+    if preset["type"] == "influxdb":
+        host = params.get("host", "localhost")
+        port = params.get("port", 8086)
+        resolved["url"] = f"http://{host}:{port}"
+        resolved.setdefault("type", "influxdb")
+
+    # Set target name
+    target_name = params.get("name") or f"{preset['id']}-{int(time.time())}"
+    resolved["name"] = target_name
+
+    try:
+        from protoforge.integrations.forward import create_target
+
+        engine = _get_forward_engine()
+        target = create_target(resolved)
+        engine.add_target(target_name, target)
+        return {"status": "ok", "name": target_name, "preset_id": preset_id}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Failed to apply forward preset: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to apply preset: {e}") from e
+

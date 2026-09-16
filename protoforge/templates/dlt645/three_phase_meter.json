@@ -1,0 +1,26 @@
+{
+  "id": "dlt645-three-phase-meter",
+  "name": "三相智能电表 (DLT645)",
+  "description": "三相四线智能电表 - 三相电压/电流/功率/电度量",
+  "protocol": "dlt645",
+  "device_type": "meter",
+  "category": "电力",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "total_active_energy", "address": "00010000", "data_type": "float32", "unit": "kWh", "description": "组合有功总电能", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 0.05, "frequency": 1}, "min_value": 0, "max_value": 999999},
+    {"name": "total_reactive_energy", "address": "00020000", "data_type": "float32", "unit": "kvarh", "description": "组合无功总电能", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 0.02, "frequency": 1}, "min_value": 0, "max_value": 999999},
+    {"name": "active_energy_t1", "address": "00010100", "data_type": "float32", "unit": "kWh", "description": "费率1有功电能", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 0.03, "frequency": 1}, "min_value": 0, "max_value": 999999},
+    {"name": "active_energy_t2", "address": "00010200", "data_type": "float32", "unit": "kWh", "description": "费率2有功电能", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 0.02, "frequency": 1}, "min_value": 0, "max_value": 999999},
+    {"name": "voltage_a", "address": "02010100", "data_type": "float32", "unit": "V", "description": "A相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 218, "max": 222, "frequency": 0.01, "noise": 0.5}, "min_value": 0, "max_value": 300},
+    {"name": "voltage_b", "address": "02010200", "data_type": "float32", "unit": "V", "description": "B相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 218, "max": 222, "frequency": 0.011, "noise": 0.5}, "min_value": 0, "max_value": 300},
+    {"name": "voltage_c", "address": "02010300", "data_type": "float32", "unit": "V", "description": "C相电压", "access": "rw", "generator_type": "sine", "generator_config": {"min": 218, "max": 222, "frequency": 0.009, "noise": 0.5}, "min_value": 0, "max_value": 300},
+    {"name": "current_a", "address": "02020100", "data_type": "float32", "unit": "A", "description": "A相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 5, "max": 30, "frequency": 0.02, "noise": 0.3}, "min_value": 0, "max_value": 100},
+    {"name": "current_b", "address": "02020200", "data_type": "float32", "unit": "A", "description": "B相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 5, "max": 28, "frequency": 0.021, "noise": 0.3}, "min_value": 0, "max_value": 100},
+    {"name": "current_c", "address": "02020300", "data_type": "float32", "unit": "A", "description": "C相电流", "access": "rw", "generator_type": "sine", "generator_config": {"min": 5, "max": 32, "frequency": 0.019, "noise": 0.3}, "min_value": 0, "max_value": 100},
+    {"name": "total_active_power", "address": "02030000", "data_type": "float32", "unit": "W", "description": "有功功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 1000, "max": 5000, "frequency": 0.02, "noise": 20}, "min_value": 0, "max_value": 50000},
+    {"name": "total_reactive_power", "address": "02040000", "data_type": "float32", "unit": "var", "description": "无功功率", "access": "rw", "generator_type": "sine", "generator_config": {"min": 100, "max": 800, "frequency": 0.015, "noise": 10}, "min_value": 0, "max_value": 10000},
+    {"name": "power_factor", "address": "02060000", "data_type": "float32", "unit": "", "description": "功率因数", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0.88, "max": 0.99, "step_size": 0.003}, "min_value": 0, "max_value": 1},
+    {"name": "frequency", "address": "02800003", "data_type": "float32", "unit": "Hz", "description": "频率", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 49.9, "max": 50.1, "step_size": 0.005}, "min_value": 45, "max_value": 55}
+  ],
+  "protocol_config": {"meter_address": "000000000002"}
+}

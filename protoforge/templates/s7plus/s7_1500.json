@@ -1,0 +1,20 @@
+{
+  "id": "s7plus-s7-1500",
+  "name": "S7-1500 PLC (S7Comm-Plus)",
+  "description": "西门子S7-1500 PLC仿真 - 支持S7Comm-Plus协议优化块访问",
+  "protocol": "s7plus",
+  "device_type": "plc",
+  "category": "PLC",
+  "manufacturer": "Siemens",
+  "points": [
+    {"name": "temperature", "address": "DB1.DBD0", "data_type": "float32", "unit": "°C", "description": "反应釜温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 60, "max": 80, "frequency": 0.01, "noise": 0.5}, "min_value": 0, "max_value": 200},
+    {"name": "pressure", "address": "DB1.DBD4", "data_type": "float32", "unit": "MPa", "description": "管道压力", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 1.5, "max": 2.5, "step_size": 0.01}, "min_value": 0, "max_value": 10},
+    {"name": "flow_rate", "address": "DB1.DBD8", "data_type": "float32", "unit": "L/min", "description": "流量", "access": "rw", "generator_type": "sine", "generator_config": {"min": 50, "max": 150, "frequency": 0.02, "noise": 2}, "min_value": 0, "max_value": 500},
+    {"name": "valve_status", "address": "M10.0", "data_type": "bool", "unit": "", "description": "阀门状态", "access": "rw", "generator_type": "fixed", "fixed_value": true},
+    {"name": "pump_running", "address": "M10.1", "data_type": "bool", "unit": "", "description": "泵运行状态", "access": "rw", "generator_type": "fixed", "fixed_value": true},
+    {"name": "alarm", "address": "M10.2", "data_type": "bool", "unit": "", "description": "报警标志", "access": "rw", "generator_type": "fixed", "fixed_value": false},
+    {"name": "speed", "address": "DB1.DBW12", "data_type": "uint16", "unit": "rpm", "description": "电机转速", "access": "rw", "generator_type": "sine", "generator_config": {"min": 800, "max": 1200, "frequency": 0.015, "noise": 5}, "min_value": 0, "max_value": 65535},
+    {"name": "batch_count", "address": "DB1.DBD14", "data_type": "uint32", "unit": "", "description": "批次计数", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 1, "frequency": 1}, "min_value": 0, "max_value": 4294967295}
+  ],
+  "protocol_config": {"rack": 0, "slot": 1, "plc_name": "S7-1500"}
+}

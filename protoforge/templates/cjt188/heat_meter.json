@@ -1,0 +1,19 @@
+{
+  "id": "cjt188-heat-meter",
+  "name": "热量表 (CJ/T 188)",
+  "description": "智能热量表 - 供回水温度/流量/热量",
+  "protocol": "cjt188",
+  "device_type": "meter",
+  "category": "供热",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "cumulative_volume", "address": "0x90", "data_type": "float32", "unit": "m³", "description": "累积流量", "access": "rw", "generator_type": "increment", "generator_config": {"min": 0, "max": 999999, "step": 0.002, "frequency": 1}, "min_value": 0, "max_value": 9999999},
+    {"name": "current_volume", "address": "0x91", "data_type": "float32", "unit": "m³", "description": "当前流量", "access": "rw", "generator_type": "sine", "generator_config": {"min": 0.5, "max": 3.0, "frequency": 0.01, "noise": 0.05}, "min_value": 0, "max_value": 100},
+    {"name": "flow_rate", "address": "0x92", "data_type": "float32", "unit": "L/min", "description": "瞬时流量", "access": "rw", "generator_type": "sine", "generator_config": {"min": 8, "max": 50, "frequency": 0.02, "noise": 1}, "min_value": 0, "max_value": 1000},
+    {"name": "temperature", "address": "0x93", "data_type": "float32", "unit": "°C", "description": "供水温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 45, "max": 55, "frequency": 0.001, "noise": 0.3}, "min_value": 0, "max_value": 100},
+    {"name": "pressure", "address": "0x94", "data_type": "float32", "unit": "MPa", "description": "管道压力", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 0.4, "max": 0.6, "step_size": 0.005}, "min_value": 0, "max_value": 2},
+    {"name": "voltage", "address": "0x95", "data_type": "float32", "unit": "V", "description": "电池电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 3.5, "max": 3.7, "step_size": 0.001}, "min_value": 0, "max_value": 5},
+    {"name": "status", "address": "0x97", "data_type": "uint16", "unit": "", "description": "阀门状态", "access": "rw", "generator_type": "fixed", "fixed_value": 1, "min_value": 0, "max_value": 65535}
+  ],
+  "protocol_config": {"meter_address": "00000000000003", "meter_type": 3}
+}

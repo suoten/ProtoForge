@@ -225,6 +225,24 @@ resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   exportDevicesCSV: (protocol) => api.get('/devices/export-csv', { params: { protocol }, responseType: 'blob' }).then(r => r.data),
   importDevicesCSV: (csvText, protocol = '', autoStart = true) => d(api.post('/devices/import-csv', { csv_text: csvText, protocol, auto_start: autoStart })),
 
+  // Device/Scenario clone
+  cloneDevice: (id, params) => d(api.post(`/devices/${id}/clone`, params || {})),
+  cloneScenario: (id, params) => d(api.post(`/scenarios/${id}/clone`, params || {})),
+
+  // Forward presets
+  getForwardPresets: () => d(api.get('/forward/presets')).then(r => normalizeList(r, 'presets')),
+  applyForwardPreset: (presetId, params) => d(api.post(`/forward/presets/${presetId}/apply`, params || {})),
+
+  // Rule chains
+  getRuleChains: () => d(api.get('/rule-chains')),
+  createRuleChain: (chain) => d(api.post('/rule-chains', chain)),
+  getRuleChain: (id) => d(api.get(`/rule-chains/${id}`)),
+  updateRuleChain: (id, chain) => d(api.put(`/rule-chains/${id}`, chain)),
+  deleteRuleChain: (id) => d(api.delete(`/rule-chains/${id}`)),
+  startRuleChain: (id) => d(api.post(`/rule-chains/${id}/start`)),
+  stopRuleChain: (id) => d(api.post(`/rule-chains/${id}/stop`)),
+  getRuleChainTemplates: () => d(api.get('/rule-chains/templates')).then(r => normalizeList(r, 'templates')),
+
   // 设备详情（含状态机、故障、控制回路）
   getDeviceDetail: (id) => d(api.get(`/devices/${id}/detail`)),
 

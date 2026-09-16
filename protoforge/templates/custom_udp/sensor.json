@@ -1,0 +1,15 @@
+{
+  "id": "custom-udp-sensor",
+  "name": "自定义UDP传感器",
+  "description": "自定义UDP协议传感器 - 温度/湿度 (UDP数据报模式)",
+  "protocol": "custom_udp",
+  "device_type": "sensor",
+  "category": "自定义",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "temperature", "address": "0", "data_type": "float32", "unit": "°C", "description": "温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 20, "max": 28, "frequency": 0.01, "noise": 0.1}, "min_value": -20, "max_value": 80},
+    {"name": "humidity", "address": "1", "data_type": "float32", "unit": "%RH", "description": "湿度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 40, "max": 60, "frequency": 0.008, "noise": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "battery", "address": "2", "data_type": "float32", "unit": "V", "description": "电池电压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 3.5, "max": 3.7, "step_size": 0.001}, "min_value": 0, "max_value": 5}
+  ],
+  "protocol_config": {"port": 38001}
+}

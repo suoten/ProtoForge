@@ -1,0 +1,15 @@
+{
+  "id": "custom-tcp-sensor",
+  "name": "自定义TCP传感器",
+  "description": "自定义TCP协议传感器 - 温度/湿度/压力 (raw模式)",
+  "protocol": "custom_tcp",
+  "device_type": "sensor",
+  "category": "自定义",
+  "manufacturer": "ProtoForge",
+  "points": [
+    {"name": "temperature", "address": "0", "data_type": "float32", "unit": "°C", "description": "温度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 20, "max": 28, "frequency": 0.01, "noise": 0.1}, "min_value": -20, "max_value": 80},
+    {"name": "humidity", "address": "1", "data_type": "float32", "unit": "%RH", "description": "湿度", "access": "rw", "generator_type": "sine", "generator_config": {"min": 40, "max": 60, "frequency": 0.008, "noise": 0.5}, "min_value": 0, "max_value": 100},
+    {"name": "pressure", "address": "2", "data_type": "float32", "unit": "hPa", "description": "气压", "access": "rw", "generator_type": "random_walk", "generator_config": {"min": 990, "max": 1020, "step_size": 0.1}, "min_value": 800, "max_value": 1200}
+  ],
+  "protocol_config": {"frame_mode": "raw", "port": 38000}
+}

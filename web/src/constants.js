@@ -21,6 +21,11 @@ export const protocolLabels = {
   iec61850: 'IEC 61850',
   coap: 'CoAP',
   dds: 'DDS',
+  dlt645: 'DLT/T 645',
+  cjt188: 'CJ/T 188',
+  custom_tcp: '自定义TCP',
+  custom_udp: '自定义UDP',
+  s7plus: 'S7Comm-Plus',
 }
 
 export const protocolColors = {
@@ -46,6 +51,11 @@ export const protocolColors = {
   iec61850: '#0369a1',
   coap: '#16a34a',
   dds: '#9333ea',
+  dlt645: '#0891b2',
+  cjt188: '#0d9488',
+  custom_tcp: '#6b7280',
+  custom_udp: '#9ca3af',
+  s7plus: '#be185d',
 }
 
 export const protocolTagTypes = {
@@ -71,6 +81,11 @@ export const protocolTagTypes = {
   iec61850: 'info',
   coap: 'success',
   dds: 'info',
+  dlt645: 'info',
+  cjt188: 'success',
+  custom_tcp: 'default',
+  custom_udp: 'default',
+  s7plus: 'error',
 }
 
 export const protocolModes = {
@@ -96,6 +111,11 @@ export const protocolModes = {
   iec61850: 'IED',
   coap: 'Server',
   dds: 'Publisher',
+  dlt645: 'Slave',
+  cjt188: 'Slave',
+  custom_tcp: 'Server',
+  custom_udp: 'Server',
+  s7plus: 'Server',
 }
 
 export const defaultPorts = {
@@ -121,6 +141,11 @@ export const defaultPorts = {
   iec61850: 102,
   coap: 5683,
   dds: 7400,
+  dlt645: 37120,
+  cjt188: 37121,
+  custom_tcp: 38000,
+  custom_udp: 38001,
+  s7plus: 10202,
 }
 
 export async function fetchDefaultPorts() {
