@@ -60,6 +60,11 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    # PyPI 上的 "protoforge" 包名已被无关项目占用（owner: Okediya，AI 虚拟硬件原型 CLI），
+    # 上传会被 403 拒绝，属包名冲突而非临时故障。实际分发走 DockerHub（suoten/protoforge），
+    # 此 job 保留构建产物但不再阻塞整体结果；若未来改用未占用名称（如 protoforge-iot）
+    # 并更新 PYPI_API_TOKEN 后，可移除此行恢复阻塞语义。
+    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
