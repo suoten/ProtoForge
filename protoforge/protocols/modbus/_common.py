@@ -100,6 +100,86 @@ def parse_modbus_address(address: str) -> tuple[int, str]:
         raise ValueError(f"Invalid Modbus address: {address}") from None
 
 
+def point_area(point: PointConfig) -> str:
+    """解析点位的 Modbus 存储区类型。
+
+    auto 区域按数据类型自动判定（与 server 写入存储规则一致）：
+    bool → 线圈区 (coil)，其他 → 保持寄存器区 (holding)。
+
+    :param point: 点位配置
+    :return: "coil" / "discrete" / "input" / "holding"
+    """
+    _, area = parse_modbus_address(point.address)
+    if area == "auto":
+        area = "coil" if point.data_type.value == "bool" else "holding"
+    return area
+
+
+def point_reg_count(point: PointConfig) -> int:
+    """返回点位占用的寄存器/线圈数（用于地址范围匹配）。"""
+    dt = point.data_type.value
+    if dt in ("bool", "int16", "uint16"):
+        return 1
+    elif dt in ("float32", "int32", "uint32"):
+        return 2
+    elif dt in ("float64",):
+        return 4
+    elif dt in ("string",):
+        return 32
+    return 1
+
+
+# 外部写入功能码 → 写目标存储区映射（TCP/RTU 共用，用于 access 只读校验）
+WRITE_FC_AREA_MAP: dict[int, str] = {
+    0x05: "coil", 0x06: "holding", 0x0F: "coil",
+    0x10: "holding", 0x16: "holding", 0x17: "holding",
+}
+
+# 存储区中文名（用于重叠冲突提示）
+_AREA_CN_LABELS: dict[str, str] = {
+    "coil": "线圈区(0区)",
+    "discrete": "离散输入区(1区)",
+    "input": "输入寄存器区(3区)",
+    "holding": "保持寄存器区(4区)",
+}
+
+
+def find_overlapping_points(points: list[PointConfig]) -> list[str]:
+    """检测同设备内点位地址范围是否重叠（Modbus 协议）。
+
+    背景：FLOAT32/INT32/UINT32 占 2 个寄存器、STRING 占 32 个，配置时极易
+    因疏忽与相邻点位重叠（如 FLOAT32@2 与 FLOAT32@3 共用寄存器 3）。
+    重叠点位互相覆盖数据：固定值失效、读出乱值、正弦波"串味"，
+    且这类问题从界面值上几乎无法排查。
+
+    :param points: 点位配置列表
+    :return: 冲突描述列表（人类可读中文），无冲突返回空列表。
+             地址无法解析（非 Modbus 语义/格式非法）的点位跳过不参与检测。
+    """
+    entries: list[tuple[str, str, int, int, int]] = []
+    for pt in points:
+        try:
+            addr = parse_modbus_address(pt.address)[0]
+            area = point_area(pt)
+        except (ValueError, TypeError):
+            continue
+        count = point_reg_count(pt)
+        entries.append((pt.name, area, addr, addr + count, count))
+
+    conflicts: list[str] = []
+    for i in range(len(entries)):
+        name1, area1, start1, end1, count1 = entries[i]
+        for j in range(i + 1, len(entries)):
+            name2, area2, start2, end2, count2 = entries[j]
+            if area1 == area2 and start1 < end2 and start2 < end1:
+                conflicts.append(
+                    f"点位 '{name1}'(地址 {start1}, {_AREA_CN_LABELS[area1]}, 占{count1}个寄存器) 与 "
+                    f"'{name2}'(地址 {start2}, {_AREA_CN_LABELS[area2]}, 占{count2}个寄存器) "
+                    f"地址范围重叠 [{start1}~{end1 - 1}] 与 [{start2}~{end2 - 1}]"
+                )
+    return conflicts
+
+
 class ModbusDeviceBehavior(DefaultDeviceBehavior):
     def __init__(self, points: list[PointConfig]):
         super().__init__(points)

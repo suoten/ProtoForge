@@ -11,7 +11,14 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.observability.messages import desc, msg  # FIXED: i18n消息常量
 from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior, parse_modbus_address
+from protoforge.protocols.modbus._common import (
+    WRITE_FC_AREA_MAP,
+    ModbusDataStore,
+    ModbusDeviceBehavior,
+    parse_modbus_address,
+    point_area,
+    point_reg_count,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +314,10 @@ class ModbusTcpServer(ProtocolServer):
         val = struct.unpack(">H", data[2:4])[0]
         if fc == 0x05 and val not in (0xFF00, 0x0000):
             return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        # access 只读校验：外部写命中 access='r' 点位时拒绝（FIXED：只读点位外部可写的语义缺口）
+        readonly_hit = self._check_external_write_access(slave_id, fc, start, 1, all_slaves=is_broadcast)
+        if readonly_hit:
+            return self._reject_readonly_write(fc, slave_id, fc_name, start, readonly_hit, is_broadcast)
         for s in target_stores:
             if fc == 0x05:
                 s.set_coil(start, 1 if val == 0xFF00 else 0)
@@ -343,6 +354,10 @@ class ModbusTcpServer(ProtocolServer):
         expected_bytes = (count + 7) // 8
         if byte_count != expected_bytes:
             return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+        readonly_hit = self._check_external_write_access(slave_id, fc, start, count, all_slaves=is_broadcast)
+        if readonly_hit:
+            return self._reject_readonly_write(fc, slave_id, fc_name, start, readonly_hit, is_broadcast)
         for s in target_stores:
             for i in range(count):
                 byte_idx = 5 + i // 8
@@ -378,6 +393,10 @@ class ModbusTcpServer(ProtocolServer):
             return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
         if byte_count != count * 2:
             return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+        readonly_hit = self._check_external_write_access(slave_id, fc, start, count, all_slaves=is_broadcast)
+        if readonly_hit:
+            return self._reject_readonly_write(fc, slave_id, fc_name, start, readonly_hit, is_broadcast)
         for s in target_stores:
             for i in range(count):
                 offset = 5 + i * 2
@@ -408,6 +427,10 @@ class ModbusTcpServer(ProtocolServer):
         addr = struct.unpack(">H", data[0:2])[0]
         and_mask = struct.unpack(">H", data[2:4])[0]
         or_mask = struct.unpack(">H", data[4:6])[0]
+        # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+        readonly_hit = self._check_external_write_access(slave_id, fc, addr, 1, all_slaves=is_broadcast)
+        if readonly_hit:
+            return self._reject_readonly_write(fc, slave_id, "Mask Write Register", addr, readonly_hit, is_broadcast)
         for s in target_stores:
             current = s.get_point(3, addr)
             new_val = (current & and_mask) | (or_mask & ~and_mask)
@@ -442,6 +465,10 @@ class ModbusTcpServer(ProtocolServer):
         w_count = struct.unpack(">H", data[6:8])[0]
         if r_count == 0 or r_count > self._MAX_READ_REGISTERS or w_count == 0 or w_count > 121:
             return self._err_response(fc, self._EX_ILLEGAL_DATA_VALUE)
+        # access 只读校验：FC17 写入部分同样不允许命中只读点位（FIXED：语义缺口）
+        readonly_hit = self._check_external_write_access(slave_id, fc, w_start, w_count, all_slaves=is_broadcast)
+        if readonly_hit:
+            return self._reject_readonly_write(fc, slave_id, "Read/Write Multiple Registers", w_start, readonly_hit, is_broadcast)
         for s in target_stores:
             for i in range(w_count):
                 offset = 9 + i * 2
@@ -932,6 +959,10 @@ class ModbusTcpServer(ProtocolServer):
         0x03: "holding", 0x06: "holding", 0x10: "holding", 0x16: "holding",
     }
 
+    # FC → 写目标存储区映射（仅外部写入功能码，用于 access 只读校验；
+    # 与 _common.WRITE_FC_AREA_MAP 保持一致，此处引用共享常量）
+    _FC_WRITE_AREA_MAP = WRITE_FC_AREA_MAP
+
     @staticmethod
     def _point_reg_count(point: PointConfig) -> int:
         """返回点位占用的寄存器/线圈数（用于反向映射地址范围匹配）。"""
@@ -971,6 +1002,71 @@ class ModbusTcpServer(ProtocolServer):
                 except (ValueError, TypeError):
                     continue
         return None
+
+    def _check_external_write_access(
+        self, slave_id: int, fc: int, start: int, count: int, all_slaves: bool = False,
+    ) -> tuple[str, str] | None:
+        """检查外部写入的目标地址范围是否命中只读点位（access='r'）。
+
+        外部 Modbus 写入（FC05/06/0F/10/16/17）此前不校验点位访问模式，
+        导致界面上标为只读的点位仍可被外部客户端写成功（语义缺口）。
+
+        :param slave_id: 从站 ID
+        :param fc: 写入功能码
+        :param start: 起始地址
+        :param count: 写入的寄存器/线圈数量
+        :param all_slaves: True 时检查所有从站（广播写入会命中全部存储）
+        :return: 第一个被命中的只读点位 (device_id, point_name)，允许写入时返回 None
+        """
+        area = self._FC_WRITE_AREA_MAP.get(fc)
+        if not area:
+            return None
+        end = start + max(count, 1)
+        slave_items = self._slave_map.items() if all_slaves else (
+            (did, sid) for did, sid in self._slave_map.items() if sid == slave_id
+        )
+        for device_id, _sid in slave_items:
+            config = self._device_configs.get(device_id)
+            if not config:
+                continue
+            for point in config.points:
+                if point.access in ("w", "rw"):
+                    continue
+                try:
+                    p_addr = parse_modbus_address(point.address)[0]
+                    p_area = point_area(point)
+                except (ValueError, TypeError):
+                    continue
+                if p_area != area:
+                    continue
+                if p_addr < end and start < p_addr + point_reg_count(point):
+                    return device_id, point.name
+        return None
+
+    def _reject_readonly_write(
+        self, fc: int, slave_id: int, fc_name: str, start: int,
+        readonly_hit: tuple[str, str], is_broadcast: bool,
+    ) -> bytes | None:
+        """外部写入命中只读点位时的统一拒绝处理：记日志并返回异常响应。
+
+        异常码采用 0x01（ILLEGAL FUNCTION）：该写功能对此点位不允许执行。
+        广播请求无响应，仅记日志并丢弃整个写入。
+        """
+        device_id, point_name = readonly_hit
+        logger.warning(
+            "External Modbus write rejected: point %s.%s is read-only (access='r'); "
+            "fc=%s start=%d slave_id=%d",
+            device_id, point_name, fc_name, start, slave_id,
+        )
+        self._log_debug(
+            "inbound", "modbus_write_rejected",
+            f"{fc_name}: addr={start} rejected (read-only point {device_id}.{point_name})",
+            detail={"fc": fc, "start": start, "unit": slave_id,
+                    "device_id": device_id, "point": point_name, "reason": "read_only"},
+        )
+        if is_broadcast:
+            return None
+        return self._err_response(fc, self._EX_ILLEGAL_FUNCTION)
 
     def _notify_external_write(self, slave_id: int, fc: int, address: int, value: Any) -> None:
         """外部 Modbus 写入后异步触发 _on_write 回调，传播到 DeviceInstance。

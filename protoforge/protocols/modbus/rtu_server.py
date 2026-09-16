@@ -12,7 +12,14 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
-from protoforge.protocols.modbus._common import ModbusDataStore, ModbusDeviceBehavior, parse_modbus_address
+from protoforge.protocols.modbus._common import (
+    WRITE_FC_AREA_MAP,
+    ModbusDataStore,
+    ModbusDeviceBehavior,
+    parse_modbus_address,
+    point_area,
+    point_reg_count,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +262,62 @@ class ModbusRtuServer(ProtocolServer):
             except Exception as e:
                 logger.debug("Modbus RTU writer close error: %s", e)
 
+    def _check_external_write_access(
+        self, slave_id: int, fc: int, start: int, count: int,
+    ) -> tuple[str, str] | None:
+        """检查外部写入的目标地址范围是否命中只读点位（access='r'）。
+
+        与 TCP server 同源校验（FIXED：只读点位外部可写的语义缺口）。
+
+        :param slave_id: 从站 ID（RTU 广播按 slave_id=1 处理，与写入目标一致）
+        :param fc: 写入功能码
+        :param start: 起始地址
+        :param count: 写入的寄存器/线圈数量
+        :return: 第一个被命中的只读点位 (device_id, point_name)，允许写入时返回 None
+        """
+        area = WRITE_FC_AREA_MAP.get(fc)
+        if not area:
+            return None
+        end = start + max(count, 1)
+        for device_id, s_id in self._slave_map.items():
+            if s_id != slave_id:
+                continue
+            config = self._device_configs.get(device_id)
+            if not config:
+                continue
+            for point in config.points:
+                if point.access in ("w", "rw"):
+                    continue
+                try:
+                    p_addr = parse_modbus_address(point.address)[0]
+                    p_area = point_area(point)
+                except (ValueError, TypeError):
+                    continue
+                if p_area != area:
+                    continue
+                if p_addr < end and start < p_addr + point_reg_count(point):
+                    return device_id, point.name
+        return None
+
+    def _reject_readonly_write(
+        self, fc: int, slave_id: int, fc_name: str, start: int,
+        readonly_hit: tuple[str, str],
+    ) -> bytes:
+        """外部写入命中只读点位时的统一拒绝处理：记日志并返回异常响应 (0x01)。"""
+        device_id, point_name = readonly_hit
+        logger.warning(
+            "External Modbus RTU write rejected: point %s.%s is read-only (access='r'); "
+            "fc=%s start=%d slave_id=%d",
+            device_id, point_name, fc_name, start, slave_id,
+        )
+        self._log_debug(
+            "inbound", "modbus_write_rejected",
+            f"{fc_name}: addr={start} rejected (read-only point {device_id}.{point_name})",
+            detail={"fc": fc, "start": start, "unit": slave_id,
+                    "device_id": device_id, "point": point_name, "reason": "read_only"},
+        )
+        return bytes([fc | 0x80, 0x01])
+
     def _process_modbus_frame(self, unit_id: int, fc: int, data: bytes) -> bytes:  # noqa: C901
         slave_id = unit_id if unit_id else 1
         store = self._data_stores.get(slave_id)
@@ -313,11 +376,19 @@ class ModbusRtuServer(ProtocolServer):
                 val = struct.unpack(">H", data[2:4])[0]
                 if val not in (0xFF00, 0x0000):  # FIXED-M02: FC05写入值必须为0xFF00(ON)或0x0000(OFF)，与TCP server保持一致
                     return bytes([fc | 0x80, 0x03])
+                # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, start, 1)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Write Single Coil", start, readonly_hit)
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 val = struct.unpack(">H", data[2:4])[0]
+                # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, start, 1)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Write Single Register", start, readonly_hit)
                 store.set_point(6, start, val)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
@@ -330,6 +401,10 @@ class ModbusRtuServer(ProtocolServer):
                 expected_byte_count = (count + 7) // 8
                 if byte_count != expected_byte_count:  # FIXED-M03: 校验byte_count与count的一致性
                     return bytes([fc | 0x80, 0x03])
+                # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, start, count)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Write Multiple Coils", start, readonly_hit)
                 for i in range(count):
                     byte_idx = 5 + i // 8
                     bit_idx = i % 8
@@ -345,6 +420,10 @@ class ModbusRtuServer(ProtocolServer):
                 byte_count = data[4]  # FIXED-M03: 读取byte_count字段
                 if byte_count != count * 2:  # FIXED-M03: 校验byte_count与count的一致性
                     return bytes([fc | 0x80, 0x03])
+                # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, start, count)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Write Multiple Registers", start, readonly_hit)
                 for i in range(count):
                     offset = 5 + i * 2
                     if offset + 2 <= len(data):
@@ -357,6 +436,10 @@ class ModbusRtuServer(ProtocolServer):
                 ref_addr = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 and_mask = struct.unpack(">H", data[2:4])[0]
                 or_mask = struct.unpack(">H", data[4:6])[0]
+                # access 只读校验（FIXED：只读点位外部可写的语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, ref_addr, 1)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Mask Write Register", ref_addr, readonly_hit)
                 current = store.get_point(3, ref_addr)
                 new_val = (current & and_mask) | (or_mask & ~and_mask)
                 new_val = new_val & 0xFFFF
@@ -369,6 +452,10 @@ class ModbusRtuServer(ProtocolServer):
                 read_count = struct.unpack(">H", data[2:4])[0]
                 write_start = struct.unpack(">H", data[4:6])[0]  # FIXED-P0: 移除+1偏移
                 write_count = struct.unpack(">H", data[6:8])[0]
+                # access 只读校验：FC17 写入部分同样不允许命中只读点位（FIXED：语义缺口）
+                readonly_hit = self._check_external_write_access(slave_id, fc, write_start, write_count)
+                if readonly_hit:
+                    return self._reject_readonly_write(fc, slave_id, "Read/Write Multiple Registers", write_start, readonly_hit)
                 data[8] if len(data) > 8 else 0
                 for i in range(write_count):
                     offset = 9 + i * 2
