@@ -27,6 +27,14 @@
 - 排查确认的另一要点：**bool 点位自动落在线圈区（0xxxxx）**，主站须用 FC01 读、FC05 写，FC03 读保持寄存器看不到布尔量点位；数值型点位才在保持寄存器区（4xxxxx）。已在 README 地址表与设备弹窗连接注意事项中标注
 - 回归测试 `tests/test_bool_value_normalization.py`（16 例）：归一函数单元测试（bool/数值/字符串/拒绝/钳制）+ API 层复现用户场景（写 "true"/11 到 bool 点位归一为 True、写 "true" 到 uint16 返回 400、写 "42" 正常转换）；诊断脚本 `scripts/diag_bool_write.py` 端到端验证线圈编码与寄存器值一致
 
+**Bug Fix — Windows 后台启动（start /B）后 `protoforge stop` 无法停止服务（Issue #12）：**
+
+- 根因一：PID 文件（`data/protoforge.pid`）仅在 Unix daemon 分支写入，Windows 上 `--daemon` 被禁用并引导用户用 `start /B` 启动——该路径永远不产生 PID 文件，`protoforge stop` 提示 "No background daemon found"
+- 根因二（潜伏 Bug）：旧 stop 流程用 `os.kill(pid, 0)` 探测进程存活，但 Windows 上 `os.kill` 对非 CTRL_* 信号一律走 `TerminateProcess`——**探测本身就会把目标进程杀掉**（退出码 0），等待-超时-SIGKILL 逻辑全部失效
+- 修复：所有启动方式（前台 / `start /B` 后台 / Unix daemon）统一写入 PID 文件，优雅退出时经 atexit 自动清理；`_process_alive()` 跨平台安全探测（Windows 用 `tasklist`，含重试防护，Unix 沿用 `os.kill(pid, 0)`）；Windows 停止改用 `taskkill /PID x /T /F`（杀进程树，含 uvicorn reload 子进程），超时/失败时兜底 `TerminateProcess`；无 PID 文件时按 `--port`（默认 8000）兜底查找监听中的 python 进程（`netstat -ano`），并校验进程镜像名防止 PID 复用误杀；Windows 下 `--daemon` 提示文案同步更新为可用的后台启动/停止流程
+- Windows 真实环境端到端验证：`start /B` 等效方式后台启动 demo 服务 → PID 文件与实际进程一致 → `protoforge stop` 成功停止且端口关闭、PID 文件清理；删除 PID 文件后重启服务 → 按端口兜底成功停止
+- 回归测试 `tests/test_cli_stop_windows.py`（9 例）：存活探测（含旧实现误杀回归）、PID 文件写入与清理、stop 杀死/残留清理/无目标提示、端口兜底查找
+
 ## v1.2.7 — 2026-09-16
 
 **Bug Fix — 同设备点位地址重叠导致固定值失效/乱值（FLOAT32 占 2 个寄存器互相覆盖）：**

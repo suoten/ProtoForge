@@ -1,8 +1,11 @@
 """ProtoForge command-line interface entry point."""
 
 import argparse
+import logging
 import os
 import sys
+
+logger = logging.getLogger(__name__)
 
 
 def _load_dotenv_to_environ():
@@ -69,7 +72,10 @@ def main():
     migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
     migrate_parser.add_argument("--revision", default="head", help="Target revision (default: head)")
 
-    subparsers.add_parser("stop", help="Stop background daemon")
+    subparsers.add_parser("stop", help="Stop background daemon").add_argument(
+        "--port", type=int, default=8000,
+        help="Server port for PID-file-less lookup on Windows (default 8000)",
+    )
 
     audit_parser = subparsers.add_parser("audit", help="Run automated audit checks (3-layer consistency)")
     audit_parser.add_argument("--layer", choices=["1", "2", "3", "all"], default="all",
@@ -106,7 +112,7 @@ def main():
         return
 
     if args.command == "stop":
-        _stop_command()
+        _stop_command(port=getattr(args, "port", 8000))
         return
 
     if args.command == "audit":
@@ -144,17 +150,171 @@ def _get_log_file():
     return Path("logs") / "protoforge.log"
 
 
-def _stop_command():
+def _write_pid_file():
+    """FIXED(Issue#12): 记录当前进程 PID 到 data/protoforge.pid。
+
+    此前仅在 Unix daemon 分支写入，Windows 上 'start /B' 后台启动永远没有
+    PID 文件，导致 'protoforge stop' 提示找不到后台服务。现在所有启动方式
+    （前台 / 后台 / daemon）都记录 PID，stop 在全平台可用。
+    """
     pid_file = _get_pid_file()
-    if not pid_file.exists():
-        print("! No background daemon found (PID file not found)")
-        return
-    try:  # FIXED: 添加异常保护，PID文件内容可能损坏
-        pid = int(pid_file.read_text().strip())
-    except (ValueError, OSError) as e:
-        print(f"! Invalid PID file: {e}")
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text(str(os.getpid()))
+    import atexit
+    atexit.register(lambda: pid_file.unlink(missing_ok=True))
+
+
+def _process_alive(pid: int) -> bool:
+    """跨平台安全地探测进程是否存活。
+
+    FIXED(Issue#12): 此前用 os.kill(pid, 0) 探测，但在 Windows 上
+    os.kill 对非 CTRL_* 信号一律走 TerminateProcess —— sig=0 会把目标进程
+    直接杀死（退出码 0），"存活探测"变成"误杀"。
+    """
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import subprocess
+        import time
+        # FIXED(Issue#12): tasklist 偶发超时不轻判"已停止"，重试一次；
+        # 探测误报 False 会导致 stop 跳过仍在运行的服务
+        for _attempt in range(2):
+            try:
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],  # noqa: S607,S603
+                    capture_output=True, text=True, timeout=30,
+                )
+                if f"\"{pid}\"" in result.stdout:
+                    return True
+                # 无匹配行 = 进程确实不存在（tasklist 正常完成时可靠）
+                if result.returncode == 0 and result.stdout.strip():
+                    return False
+            except (OSError, subprocess.SubprocessError):
+                pass
+            time.sleep(1.0)
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        # 进程存在但无权限发信号（如他人进程）——视为存活
+        return True
+
+
+def _win_terminate(pid: int) -> bool:
+    """Windows 兑底：直接 TerminateProcess 主进程（不含子进程树）。
+
+    taskkill 超时或不可用时使用；返回是否成功发起终止。
+    """
+    try:
+        import ctypes
+        PROCESS_TERMINATE = 0x0001
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+        if not handle:
+            return False
+        try:
+            return bool(ctypes.windll.kernel32.TerminateProcess(handle, 1))
+        finally:
+            ctypes.windll.kernel32.CloseHandle(handle)
+    except Exception as e:  # noqa: BLE001 — 兑底路径，任何异常都不能阻断 stop 流程
+        logger.warning("TerminateProcess fallback failed for PID %s: %s", pid, e)
+        return False
+
+
+def _find_pid_by_port(port: int) -> int | None:
+    """Windows 兑底：查找监听指定端口且属于 python 进程的 PID。
+
+    用于 'start /B' 后台启动且 PID 文件丢失（如服务未优雅退出残留、
+    手动删除 data 目录）的场景。校验进程镜像名为 python*，避免 PID
+    复用时误杀无关应用。
+    """
+    if sys.platform != "win32":
+        return None
+    import re as _re
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"],  # noqa: S607,S603
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    pids = set()
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        # 形如: TCP  0.0.0.0:8000  0.0.0.0:0  LISTENING  12345
+        if len(parts) >= 5 and parts[0].upper() == "TCP" and parts[3].upper() == "LISTENING":
+            if parts[1].rsplit(":", 1)[-1] == str(port):
+                try:
+                    pids.add(int(parts[4]))
+                except ValueError:
+                    continue
+    for pid in pids:
+        try:
+            check = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],  # noqa: S607,S603
+                capture_output=True, text=True, timeout=30,
+            )
+            if _re.search(r'"python', check.stdout, _re.IGNORECASE):
+                return pid
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return None
+
+
+def _stop_command(port: int = 8000):
+    pid_file = _get_pid_file()
+    pid = None
+    if pid_file.exists():
+        try:  # FIXED: 添加异常保护，PID文件内容可能损坏
+            pid = int(pid_file.read_text().strip())
+        except (ValueError, OSError) as e:
+            print(f"! Invalid PID file: {e}")
+            pid_file.unlink(missing_ok=True)
+    if pid is None:
+        # FIXED(Issue#12): Windows 'start /B' 后台启动没有 PID 文件时按端口兑底
+        found = _find_pid_by_port(port)
+        if found is None:
+            print("! No background daemon found (PID file not found)")
+            hint = "" if sys.platform == "win32" else "  On Linux/macOS use: protoforge run --daemon"
+            print(f"  Also tried: no python process listening on port {port}.{hint}")
+            return
+        pid = found
+        print(f"+ Found ProtoForge process by port {port}: PID {pid}")
+    if not _process_alive(pid):
+        print(f"! Process {pid} not found (may have already stopped)")
         pid_file.unlink(missing_ok=True)
         return
+
+    if sys.platform == "win32":
+        # Windows 没有 SIGTERM：taskkill /T 杀进程树（含 uvicorn reload 子进程）、/F 强制。
+        # SQLite 为崩溃安全设计，强杀不会损坏数据。
+        import subprocess
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],  # noqa: S607,S603
+                capture_output=True, text=True, timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError) as e:
+            # taskkill 超时/不可用时兜底：直接 TerminateProcess 主进程
+            logger.warning("taskkill failed for PID %s (%s), falling back to TerminateProcess", pid, e)
+            if not _win_terminate(pid):
+                print(f"! Failed to stop process {pid}: {e}")
+                return
+        import time
+        for _i in range(10):
+            if not _process_alive(pid):
+                print(f"+ Daemon (PID {pid}) stopped")
+                break
+            time.sleep(0.5)
+        else:
+            print(f"! Process {pid} still running after taskkill")
+        pid_file.unlink(missing_ok=True)
+        return
+
+    # Unix: SIGTERM 优雅退出，超时后 SIGKILL
     try:
         os.kill(pid, 15)  # SIGTERM
         print(f"+ Sent SIGTERM to daemon (PID {pid})")
@@ -167,17 +327,12 @@ def _stop_command():
         pid_file.unlink(missing_ok=True)
         return
 
-    # 等待进程退出，超时后强制 SIGKILL
     import time
     for _i in range(30):
-        try:
-            os.kill(pid, 0)  # 检查进程是否还存在
-        except ProcessLookupError:
+        if not _process_alive(pid):
             print(f"+ Daemon (PID {pid}) stopped gracefully")
             pid_file.unlink(missing_ok=True)
             return
-        except PermissionError:
-            break
         time.sleep(0.5)
 
     # 超时，强制杀死
@@ -525,8 +680,9 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
     # Daemon mode: double-fork and detach from terminal
     if daemon:
         if sys.platform == "win32":
-            print("! Daemon mode is not supported on Windows. Use 'start /B' or run as a service.")
-            print("  On Linux/macOS, use: protoforge demo --daemon")
+            print("! Daemon mode is not supported on Windows. Background usage:")
+            print("    start /B python -m protoforge run    (or: protoforge demo)")
+            print("  Then stop it from any terminal:  protoforge stop")
             return
         pid_file = _get_pid_file()
         pid_file.parent.mkdir(parents=True, exist_ok=True)
@@ -536,6 +692,10 @@ def _run_server(host="0.0.0.0", port=8000, reload=False, log_level="info", demo_
         # Register cleanup on exit
         import atexit
         atexit.register(lambda: _get_pid_file().unlink(missing_ok=True))
+    else:
+        # FIXED(Issue#12): 非 daemon 启动（含 Windows 'start /B' 后台）同样记录 PID，
+        # 保证 'protoforge stop' 全平台可用；优雅退出时由 atexit 自动清理
+        _write_pid_file()
 
     from pathlib import Path as _Path
 
