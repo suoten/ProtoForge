@@ -355,13 +355,23 @@ class SimulationEngine:
     _RETRY_DELAY_SECONDS = 2.0
     _RETRYABLE_ERRORS = ("connection refused", "timed out", "connection reset", "temporarily unavailable")
 
-    async def start_protocol(self, protocol_name: str, config: dict[str, Any]) -> None:
+    async def start_protocol(self, protocol_name: str, config: dict[str, Any], restart: bool = False) -> None:
         server = self._protocol_servers.get(protocol_name)
         if not server:
             raise ValueError(f"Unknown protocol: {protocol_name}")
         if server.status == ProtocolStatus.RUNNING:
-            logger.info("Protocol %s is already running, skipping", protocol_name)
-            return
+            if not restart:
+                # FIXED: 已运行时默认跳过（幂等启动）；显式 restart=True 时按新配置重启
+                logger.info("Protocol %s is already running, skipping", protocol_name)
+                return
+            # FIXED(Issue: custom_tcp 端口改不了): 运行中的协议带配置再次启动 = 按新配置重启。
+            # 此前静默返回 ok，用户在"高级配置"里改端口后点启动，界面提示成功但端口纹丝不动
+            logger.info("Protocol %s is running, restarting with new config (port=%s)",
+                        protocol_name, config.get("port"))
+            try:
+                await server.stop()
+            except Exception as stop_err:
+                logger.warning("Error stopping protocol %s before restart: %s", protocol_name, stop_err)
         logger.info("Starting protocol %s with config: %s", protocol_name, _sanitize_config(config))
 
         original_port = config.get("port")

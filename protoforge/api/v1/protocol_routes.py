@@ -175,7 +175,10 @@ async def start_protocol(protocol_name: str, request: Request, config: dict[str,
     original_port = config.get("port")
 
     try:
-        await engine.start_protocol(protocol_name, config)
+        # FIXED(Issue: custom_tcp 端口改不了): 单协议启动带 restart=True —— 协议已运行时
+        # 按提交的配置重启（否则用户在"高级配置"改端口后点启动会被静默忽略）。
+        # start-all 端点已预先过滤运行中的协议，不受影响
+        await engine.start_protocol(protocol_name, config, restart=True)
         actual_port = config.get("port", original_port)
         port_changed = config.pop("_port_changed", False)
         config_original_port = config.pop("_original_port", None)
