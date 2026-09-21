@@ -1,9 +1,12 @@
 """Unit tests for ProtoForge→EdgeLite point address translation.
 
 Validates ``_translate_point_address`` and the protocol-aware ``_build_points``:
-- Modbus: ``register_type`` must mirror ProtoForge server storage rules
-  (``auto+bool→coil``, ``auto→holding``, explicit prefixes mapped directly),
-  so EdgeLite reads from the same region ProtoForge writes to.
+- Modbus: output address carries the register-area prefix (``HR``/``IR``/``C``/``DI``)
+  because EdgeLite's modbus driver decides the area solely from the address prefix
+  (it ignores ``register_type``); ``register_type`` is still emitted as redundant
+  info and must mirror ProtoForge server storage rules (``auto+bool→coil``,
+  ``auto→holding``, explicit prefixes mapped directly), so EdgeLite reads from
+  the same region ProtoForge writes to.
 - S7: ProtoForge ``DB1.DBD2`` → EdgeLite ``DB1.D2`` (strip the leading ``B``
   of the type token after the first dot), avoiding ``int("BD2")`` ValueError
   in EdgeLite's ``s7.py:_parse_address``.
@@ -31,21 +34,21 @@ class TestModbusAddressTranslation:
     @pytest.mark.parametrize(
         "address,data_type,expected_addr,expected_reg",
         [
-            # 显式前缀
-            ("C100", "bool", "100", "coil"),
-            ("COIL5", "bool", "5", "coil"),
-            ("0X10", "bool", "10", "coil"),
-            ("HR100", "float32", "100", "holding"),
-            ("4X100", "float32", "100", "holding"),
-            ("IR8", "float32", "8", "input"),
-            ("3X8", "float32", "8", "input"),
-            ("DI3", "bool", "3", "discrete"),
-            ("DISCRETE_INPUT7", "bool", "7", "discrete"),
-            # 6 位 PLC 记法 (400001 → addr 0)
-            ("400100", "float32", "99", "holding"),
-            ("300100", "float32", "99", "input"),
-            ("000100", "bool", "99", "coil"),
-            ("100100", "bool", "99", "discrete"),
+            # 显式前缀 → 归一化为规范前缀 + 裸地址（EdgeLite 只认前缀）
+            ("C100", "bool", "C100", "coil"),
+            ("COIL5", "bool", "C5", "coil"),
+            ("0X10", "bool", "C10", "coil"),
+            ("HR100", "float32", "HR100", "holding"),
+            ("4X100", "float32", "HR100", "holding"),
+            ("IR8", "float32", "IR8", "input"),
+            ("3X8", "float32", "IR8", "input"),
+            ("DI3", "bool", "DI3", "discrete"),
+            ("DISCRETE_INPUT7", "bool", "DI7", "discrete"),
+            # 6 位 PLC 记法 (400001 → addr 0)，同样输出带前缀地址
+            ("400100", "float32", "HR99", "holding"),
+            ("300100", "float32", "IR99", "input"),
+            ("000100", "bool", "C99", "coil"),
+            ("100100", "bool", "DI99", "discrete"),
         ],
     )
     def test_explicit_prefix_and_plc_notation(self, address, data_type, expected_addr, expected_reg):
@@ -60,20 +63,20 @@ class TestModbusAddressTranslation:
         必须读 coil 而非默认的 holding，否则值错位。
         """
         result = _translate_point_address("modbus_tcp", "4", "bool")
-        assert result == {"address": "4", "register_type": "coil"}
+        assert result == {"address": "C4", "register_type": "coil"}
 
     def test_auto_numeric_maps_to_holding(self):
         """auto 区域 + 非 bool → holding。"""
         result = _translate_point_address("modbus_tcp", "100", "float32")
-        assert result == {"address": "100", "register_type": "holding"}
+        assert result == {"address": "HR100", "register_type": "holding"}
 
         result2 = _translate_point_address("modbus_tcp", "200", "int32")
-        assert result2["register_type"] == "holding"
+        assert result2 == {"address": "HR200", "register_type": "holding"}
 
     def test_holding_prefix_bool_stays_holding(self):
         """显式 HR 前缀即使 data_type=bool 也保持 holding（遵从显式地址）。"""
         result = _translate_point_address("modbus_tcp", "HR50", "bool")
-        assert result == {"address": "50", "register_type": "holding"}
+        assert result == {"address": "HR50", "register_type": "holding"}
 
     def test_empty_address_defaults_to_holding(self):
         result = _translate_point_address("modbus_tcp", "", "float32")
@@ -91,7 +94,7 @@ class TestModbusAddressTranslation:
     def test_modbus_rtu_same_rules_as_tcp(self):
         """modbus_rtu 与 modbus_tcp 共用同一翻译规则。"""
         result = _translate_point_address("modbus_rtu", "C10", "bool")
-        assert result == {"address": "10", "register_type": "coil"}
+        assert result == {"address": "C10", "register_type": "coil"}
 
     def test_plugin_name_normalized(self):
         """EdgeLite plugin_name 应被规范为别名后正确翻译。"""
@@ -160,6 +163,25 @@ class TestOtherProtocolsPassthrough:
         assert result == {"address": "ns=2;s=Temperature"}
         assert "register_type" not in result
 
+    def test_opcua_device_id_prefix(self):
+        """带 device_id 时字符串 NodeId 加设备前缀（与 OPC-UA 服务端命名一致）。"""
+        result = _translate_point_address(
+            "opcua", "ns=2;s=Temperature", "float32", device_id="plc01"
+        )
+        assert result == {"address": "ns=2;s=plc01.Temperature"}
+        assert "register_type" not in result
+
+    def test_opcua_no_device_id_no_prefix(self):
+        result = _translate_point_address("opcua", "ns=2;s=Temperature", "float32")
+        assert result == {"address": "ns=2;s=Temperature"}
+
+    def test_opcua_non_string_nodeid_no_prefix(self):
+        """数字 NodeId（ns=2;i=5）不加设备前缀。"""
+        result = _translate_point_address(
+            "opcua", "ns=2;i=5", "float32", device_id="plc01"
+        )
+        assert result == {"address": "ns=2;i=5"}
+
     def test_mqtt_topic_passthrough(self):
         result = _translate_point_address("mqtt", "protoforge/data/temp", "float32")
         assert result == {"address": "protoforge/data/temp"}
@@ -172,6 +194,53 @@ class TestOtherProtocolsPassthrough:
     def test_unknown_protocol_passthrough(self):
         result = _translate_point_address("unknown_proto", "123", "float32")
         assert result == {"address": "123"}
+
+
+# ---------------------------------------------------------------------------
+#  FINS 地址翻译
+# ---------------------------------------------------------------------------
+
+
+class TestFinsAddressTranslation:
+    """FINS 地址按点位 data_type 附加 EdgeLite 驱动的类型后缀。
+
+    EdgeLite 的 FINS 驱动 ``_parse_address`` 默认按 word(w) 解析，float/int
+    点位不加后缀会拿到原始字节。翻译层需按 data_type 附加 ",r"/",i"/",dw" 等。
+    """
+
+    @pytest.mark.parametrize(
+        "data_type,expected_suffix",
+        [
+            ("float32", "r"),
+            ("float64", "r"),
+            ("int16", "i"),
+            ("uint16", "w"),
+            ("int32", "dw"),
+            ("uint32", "dw"),
+            ("bool", "b"),
+            ("string", "str"),
+        ],
+    )
+    def test_data_type_suffix_appended(self, data_type, expected_suffix):
+        result = _translate_point_address("fins", "D100", data_type)
+        assert result == {"address": f"D100,{expected_suffix}"}
+
+    def test_unknown_data_type_no_suffix(self):
+        result = _translate_point_address("fins", "D100", "unknown_type")
+        assert result == {"address": "D100"}
+
+    def test_existing_suffix_not_duplicated(self):
+        """地址已带后缀时透传，不二次追加。"""
+        result = _translate_point_address("fins", "D100,r", "float32")
+        assert result == {"address": "D100,r"}
+
+    def test_empty_address_passthrough(self):
+        result = _translate_point_address("fins", "", "float32")
+        assert result == {"address": ""}
+
+    def test_plugin_name_omron_fins(self):
+        result = _translate_point_address("omron_fins", "D200", "int16")
+        assert result == {"address": "D200,i"}
 
 
 # ---------------------------------------------------------------------------
@@ -190,23 +259,23 @@ class TestBuildPointsIntegration:
         result = _build_points(points, protocol="modbus_tcp")
         assert len(result) == 2
 
-        # bool + auto → coil
+        # bool + auto → coil（输出带 C 前缀）
         coolant = result[0]
         assert coolant["name"] == "coolant_on"
-        assert coolant["address"] == "4"
+        assert coolant["address"] == "C4"
         assert coolant["register_type"] == "coil"
         assert coolant["data_type"] == "bool"
         assert coolant["access_mode"] == "rw"
 
-        # float32 + auto → holding
+        # float32 + auto → holding（输出带 HR 前缀）
         temp = result[1]
-        assert temp["address"] == "100"
+        assert temp["address"] == "HR100"
         assert temp["register_type"] == "holding"
 
     def test_modbus_explicit_coil_prefix(self):
         points = [{"name": "pump", "data_type": "bool", "address": "C8", "access": "rw"}]
         result = _build_points(points, protocol="modbus_tcp")
-        assert result[0]["address"] == "8"
+        assert result[0]["address"] == "C8"
         assert result[0]["register_type"] == "coil"
 
     def test_s7_points_translated(self):
