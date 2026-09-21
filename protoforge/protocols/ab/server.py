@@ -587,8 +587,10 @@ class AbServer(ProtocolServer):
         resp += struct.pack("<H", 0x0000)              # Timeout: 2 bytes
         resp += struct.pack("<H", 0x0002)              # Item Count: 2 bytes
         resp += struct.pack("<H", 0x0000)              # Item1 Type (Null Address): 2 bytes
-        resp += struct.pack("<H", 0x0004)              # FIXED: Null Address Item 长度 4（标准），原为 0
-        resp += struct.pack("<I", 0x00000000)          # Null Address data: O->T/T->O 零连接 ID
+        # FIXED-P0: 标准 Null Address Item 的 Length 必须为 0 且不带 data，
+        # 原实现写 Length=4 并多跟 4 字节零，导致 CIP 数据整体偏移 +4，
+        # 客户端(pylogix)在 offset 42 读 GeneralStatus 时读到错位字节，Forward Open 永远失败
+        resp += struct.pack("<H", 0x0000)              # Item1 Length = 0 (no data)
         resp += struct.pack("<H", 0x00B2)              # Item2 Type (Unconnected Data): 2 bytes
         resp += struct.pack("<H", len(cip_data))       # Item2 Length: CIP data only
         resp += cip_data
