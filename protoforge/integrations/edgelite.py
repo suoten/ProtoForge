@@ -64,6 +64,9 @@ def _get_http_client() -> httpx.AsyncClient:
                     keepalive_expiry=30.0,
                 ),
                 timeout=HTTP_TIMEOUT_DEFAULT,
+                # FIXED: EdgeLite 网关为点对点内网连接，禁止走系统/环境代理，
+                # 否则开启系统代理时回环地址请求会被代理劫持导致 502
+                trust_env=False,
             )
         return _http_client
 
@@ -738,7 +741,11 @@ def _translate_point_address(
             reg_type = "coil" if data_type == "bool" else "holding"
         else:  # holding
             reg_type = "holding"
-        return {"address": str(addr_int), "register_type": reg_type}
+        # EdgeLite 的 modbus 驱动仅从地址前缀判定存储区（不读取 register_type），
+        # 因此这里必须输出自带前缀的地址（HR/IR/C/DI），否则 input/coil/discrete
+        # 区会被错误当作 holding 区读取。register_type 仅作冗余信息保留。
+        _prefix = {"holding": "HR", "input": "IR", "coil": "C", "discrete": "DI"}
+        return {"address": f"{_prefix[reg_type]}{addr_int}", "register_type": reg_type}
 
     if norm == "s7":
         if not addr_str:
