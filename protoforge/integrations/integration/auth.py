@@ -27,7 +27,7 @@ class IntegrationAuth:
         self._refresh_token: str = ""
         self._csrf_token: str = ""  # EdgeLite CSRF token
         self._token_expires: float = 0.0
-        self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT, trust_env=False)
         self._lock = asyncio.Lock()  # 防止并发刷新 Token
         # FIXED-P3: 密码变更回调，通知 IntegrationManager 同步更新其 _password
         self._on_password_changed = None

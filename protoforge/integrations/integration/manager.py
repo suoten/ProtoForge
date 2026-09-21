@@ -221,6 +221,8 @@ class IntegrationManager:
                 write=10.0,        # 写入超时 10 秒
                 pool=5.0,          # 连接池等待超时 5 秒
             ),
+            # FIXED: 禁用环境代理，避免系统代理劫持对 EdgeLite 的内网/回环请求
+            trust_env=False,
         )
 
         # 订阅事件
@@ -878,7 +880,7 @@ class IntegrationManager:
 
         # FIXED-P1: 跟踪是否创建了临时客户端，确保在方法结束时关闭，避免资源泄漏
         _owns_client = self._http_client is None
-        client = self._http_client or httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+        client = self._http_client or httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT, trust_env=False)
         try:
             return await self._test_connection_inner(client, test_url, test_user, test_pass)
         finally:

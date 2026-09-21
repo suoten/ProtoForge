@@ -160,6 +160,7 @@ class WebhookManager:
                 max_keepalive_connections=10,
                 keepalive_expiry=30.0,
             ),
+            trust_env=False,
         )
         self._task = asyncio.create_task(self._send_loop())
         logger.info("Webhook manager started with %d webhooks", len(self._webhooks))

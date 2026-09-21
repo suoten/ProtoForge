@@ -106,6 +106,7 @@ class InfluxDBTarget(ForwardTarget):
                 base_url=self._url,
                 headers={"Authorization": f"Token {self._token}"},
                 timeout=get_http_timeout_default(),
+                trust_env=False,
             )
         return self._client
 
@@ -187,7 +188,7 @@ class HTTPTarget(ForwardTarget):
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT)
+            self._client = httpx.AsyncClient(timeout=HTTP_TIMEOUT_DEFAULT, trust_env=False)
         return self._client
 
     async def send(self, records: list[dict[str, Any]]) -> None:
