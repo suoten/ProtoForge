@@ -121,8 +121,18 @@ class FanucServer(ProtocolServer):
         self._server_running = False
         self._session_device_map: dict[int, str] = {}  # FIXED-P0: session_id→device_id映射，支持多CNC设备
         self._next_session_id = 1
+        # FIXED: 原始报文日志开关（供学习研究 FOCAS 底层 16 进制报文），
+        # 默认关闭；在高级配置中设 raw_frames=true 开启，报文出现在协议调试日志
+        self._raw_frames = False
 
     async def start(self, config: dict[str, Any]) -> None:
+        # raw_frames 兼容 boolean 与 UI 文本输入（"true"/"1"/"on" 等字符串）；
+        # 注意 bool("false") 为 True，不能直接 bool() 转换
+        _raw = config.get("raw_frames", False)
+        if isinstance(_raw, str):
+            self._raw_frames = _raw.strip().lower() in ("true", "1", "on", "yes")
+        else:
+            self._raw_frames = bool(_raw)
         self._status = ProtocolStatus.STARTING
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 8193)
@@ -179,8 +189,18 @@ class FanucServer(ProtocolServer):
                 data = await asyncio.wait_for(reader.read(4096), timeout=_READ_TIMEOUT)
                 if not data:
                     break
+                # FIXED: 原始报文日志（raw_frames=true 时记录收到的 16 进制字节流）
+                if self._raw_frames:
+                    self._log_debug("rx", "frame_rx",
+                                    f"RX {len(data)} bytes from {addr}",
+                                    detail={"hex": self._hex_dump(data), "peer": str(addr), "length": len(data)})
                 response = self._process_focas(data)
                 if response:
+                    # FIXED: 原始报文日志（响应方向）
+                    if self._raw_frames:
+                        self._log_debug("tx", "frame_tx",
+                                        f"TX {len(response)} bytes to {addr}",
+                                        detail={"hex": self._hex_dump(response), "peer": str(addr), "length": len(response)})
                     writer.write(response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
@@ -195,6 +215,14 @@ class FanucServer(ProtocolServer):
                 await writer.wait_closed()
             except Exception as e:
                 logger.debug("Writer wait_closed error: %s", e)
+
+    _RAW_HEX_MAX_BYTES = 256  # 原始报文日志单帧最大转储字节数，防止大帧刷屏
+
+    def _hex_dump(self, data: bytes) -> str:
+        """转储为空格分隔的大写 16 进制；超出上限截断并标注总长。"""
+        if len(data) <= self._RAW_HEX_MAX_BYTES:
+            return data.hex(" ").upper()
+        return data[:self._RAW_HEX_MAX_BYTES].hex(" ").upper() + f" … (total {len(data)} bytes)"
 
     def _process_focas(self, data: bytes) -> bytes | None:
         if len(data) < self.FOCAS_HEADER_SIZE:
@@ -721,5 +749,6 @@ class FanucServer(ProtocolServer):
                 "port": {"type": "integer", "default": 8193, "description": desc("fanuc_port", "FOCAS port (default 8193)")},
                 "cnc_type": {"type": "string", "default": "0i-F", "enum": ["0i-F", "0i-TD", "0i-MD", "16i", "18i", "21i", "30i", "31i", "32i"], "description": desc("cnc_type", "CNC series type")},  # FIXED-P1
                 "axis_count": {"type": "integer", "default": 3, "minimum": 1, "maximum": 8, "description": desc("axis_count", "Number of CNC axes")},  # FIXED-P1
+                "raw_frames": {"type": "boolean", "default": False, "description": desc("raw_frames", "Log raw hex frames (rx/tx) in the protocol debug log — for protocol study")},
             },
         }

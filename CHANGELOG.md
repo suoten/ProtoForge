@@ -20,6 +20,13 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Feature — FANUC 协议原始报文日志（raw_frames）：协议调试日志可查看底层 16 进制收发帧（协议研究场景）：**
+
+- 背景：用户学习研究 FANUC 协议底层 16 进制报文，协议调试日志此前只有应用层抽象事件（连接/请求/响应），看不到通信过程中的原始字节流
+- 实现：FANUC 协议新增 `raw_frames` 高级配置项（默认关闭，boolean；兼容 UI 文本输入 "true"/"1"/"on"/"yes"）。开启后每次 TCP 收发在协议调试日志中记录 `frame_rx` / `frame_tx` 事件，含完整 16 进制 dump、对端地址与字节长度；超过 256 字节的报文截断展示并标注总长，防止日志膨胀
+- 使用：协议服务页 → FANUC「高级配置」→ 添加 `raw_frames: true` → 点「启动」；默认关闭，不影响正常性能
+- 回归测试 `tests/test_fanuc_raw_frames.py`（5 例）：开启后 rx/tx 事件与 16 进制内容逐字节校验、默认关闭、字符串 "false"/"true" 兼容、256 字节截断保护；真实 TCP 连接端到端验证
+
 **Bug Fix — 布尔量点位读写异常：UI 显示 true/11 而协议寄存器为 0/1（用户实测）：**
 
 - 根因：写入链路不按 data_type 归一值。bool 点位写数字 11 → 原样入库，UI 显示 11、线圈却编码为 1；数值点位写字符串 "true" → int("true") 转换失败被静默吞掉，原始字符串入库，UI 显示 true、寄存器保持 0 —— 界面值与协议线上的值不一致，用户侧无从排查
