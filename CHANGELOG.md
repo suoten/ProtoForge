@@ -20,6 +20,12 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — 安装器第 4 步"构建前端页面"崩溃：`FileNotFoundError: [WinError 2] 系统找不到指定的文件`：**
+
+- 根因：安装器用裸字符串 `"npm"` 调 `subprocess.run`，Windows 的 `CreateProcess` 只能直接解析 `.exe`，而 npm 是 `npm.cmd`；且 Windows 版 Node.js 发行包里同时带一个无扩展名的 Unix sh 脚本 `npm`，`shutil.which("npm")` 可能命中它导致 `WinError 193`（不是有效的 Win32 应用程序）。两种情况都会让源码安装在第 4 步直接抛异常中断
+- 修复：新增 `_find_npm()`——Windows 下显式优先解析 `npm.cmd` 完整路径（次选 `npm`，最后兜底 Unix 的 `npm`），`npm install` / `npm run build` 全部使用解析出的完整路径；npm 启动异常（`OSError`）不再中断安装，降级为"使用仓库中预构建的前端"并给出提示；前端构建失败时打印 stderr 末尾 3 行辅助定位
+- 验证：`npm --version` 经解析路径调用成功（rc=0）；安装器语法编译通过
+
 **Bug Fix — 编辑设备/模板"添加测点"后保存报"更新失败"（默认地址与既有点位重叠被 400 拦截）：**
 
 - 根因："添加测点"的默认地址取 `points.length`（如第 5 个点位默认地址 4），而默认类型 float32 占 2 个寄存器（4~5）。设备中只要存在相邻的多字节点位（如内置温湿度传感器模板的报警位@5、或连续排列的 float32），默认地址必然与既有点位地址范围重叠——v1.2.7 起后端会拦截重叠并返回 400"检测到同设备点位地址重叠"，界面表现为"更新失败"，用户无从得知是默认地址撞车

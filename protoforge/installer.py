@@ -21,6 +21,20 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, cwd=str(PROJECT_DIR), **kwargs)
 
 
+def _find_npm() -> str | None:
+    """Locate the npm executable cross-platform.
+
+    On Windows npm ships as npm.cmd plus an extensionless Unix sh shim
+    with the same name. A bare "npm" in subprocess.run raises
+    FileNotFoundError (WinError 2), and shutil.which("npm") may resolve
+    to the sh shim (WinError 193), because CreateProcess only executes
+    .exe/.cmd via full path. Prefer npm.cmd explicitly on Windows.
+    """
+    if os.name == "nt":
+        return shutil.which("npm.cmd") or shutil.which("npm")
+    return shutil.which("npm")
+
+
 def _generate_jwt_secret(venv_python: Path) -> str:
     """Generate a stable JWT secret using Python's secrets module."""
     result = subprocess.run(
@@ -123,22 +137,35 @@ def main():
         ).stdout.strip()
         print(f"       已找到 Node.js {node_version}")
 
+        npm_path = _find_npm()
+        if not npm_path:
+            print("  [警告] 找到 Node.js 但未找到 npm，将使用仓库中预构建的前端")
+            print("  如需构建前端，请重装 Node.js（需包含 npm）: https://nodejs.org/")
+
         web_dir = PROJECT_DIR / "web"
-        if web_dir.exists():
+        if web_dir.exists() and npm_path:
             print("       安装前端依赖...")
-            subprocess.run(
-                ["npm", "install", "--quiet"], cwd=str(web_dir),  # noqa: S607
-                capture_output=True,
-            )
-            print("       构建前端页面...")
-            build_result = subprocess.run(
-                ["npm", "run", "build"], cwd=str(web_dir),  # noqa: S607
-                capture_output=True, text=True,
-            )
-            if build_result.returncode != 0:
-                print("  [警告] 前端构建失败，将使用仓库中已有的前端文件")
+            try:
+                subprocess.run(
+                    [npm_path, "install", "--quiet"], cwd=str(web_dir),
+                    capture_output=True,
+                )
+                print("       构建前端页面...")
+                build_result = subprocess.run(
+                    [npm_path, "run", "build"], cwd=str(web_dir),
+                    capture_output=True, text=True,
+                )
+            except OSError as e:
+                # 兜底：npm 存在但启动失败（权限/环境异常），降级用预构建前端
+                print(f"  [警告] npm 启动失败（{e}），将使用仓库中预构建的前端")
             else:
-                print("       前端构建成功")
+                if build_result.returncode != 0:
+                    print("  [警告] 前端构建失败，将使用仓库中已有的前端文件")
+                    stderr_tail = (build_result.stderr or "").strip().splitlines()[-3:]
+                    for line in stderr_tail:
+                        print(f"         {line}")
+                else:
+                    print("       前端构建成功")
 
     # Step 5: Initialize config (关键：确保 JWT_SECRET 非空，否则每次重启 token 都失效 → 401)
     print()
