@@ -20,6 +20,13 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — 编辑设备/模板"添加测点"后保存报"更新失败"（默认地址与既有点位重叠被 400 拦截）：**
+
+- 根因："添加测点"的默认地址取 `points.length`（如第 5 个点位默认地址 4），而默认类型 float32 占 2 个寄存器（4~5）。设备中只要存在相邻的多字节点位（如内置温湿度传感器模板的报警位@5、或连续排列的 float32），默认地址必然与既有点位地址范围重叠——v1.2.7 起后端会拦截重叠并返回 400"检测到同设备点位地址重叠"，界面表现为"更新失败"，用户无从得知是默认地址撞车
+- 修复：默认地址改为自动计算下一个不重叠的空闲寄存器地址——按数据类型寄存器占用数（bool/int16 占 1、float32/int32 占 2、float64 占 4、string 占 32，与后端一致）、区分线圈/保持寄存器存储区、兼容 C/HR/IR/DI 前缀与 6 位 PLC 记法（40001→地址 0）；默认点名同步避让重名。覆盖设备编辑弹窗与模板新建/编辑弹窗共 3 处入口
+- 说明：若设备**既有**点位本身已重叠（历史数据），保存仍会被拦截，错误信息中会列出冲突点位名与地址范围，按提示调整即可；新增点位的默认地址不会再引发冲突
+- 校验脚本 `web/scripts/validate-point-address.mjs`（22 例）：地址解析（纯数字/前缀/PLC 记法/非法输入）、空闲地址分配（模板场景/连续多字节/混合前缀/线圈区独立分配/空列表）、点名避让；`node scripts/validate-point-address.mjs` 可独立运行
+
 **Bug Fix — AB/EtherNet-IP pylogix Forward Open 永远失败（四处帧格式错误叠加）：**
 
 - Null Address Item：SendRRData 应答中 Null Address Item 写了 Length=4 并多跟 4 字节零（标准要求 Length=0 无数据），CIP 数据整体偏移 +4，客户端在 offset 42 读 GeneralStatus 读到错位字节

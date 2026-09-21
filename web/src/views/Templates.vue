@@ -168,6 +168,7 @@ import { NSpace, NSelect, NInput, NButton, NGrid, NGi, NCard, NTag, NDescription
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions, generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
+import { nextFreeModbusAddress, nextPointName } from '../utils.js'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -365,11 +366,12 @@ async function doSearch() {
 }
 
 function addNewPoint() {
-  newTemplate.value.points.push({ name: 'point_' + (newTemplate.value.points.length + 1), address: String(newTemplate.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+  // 默认地址自动避开已占用寄存器（多字节类型占多个，与后端重叠校验规则一致）
+  newTemplate.value.points.push({ name: nextPointName(newTemplate.value.points), address: nextFreeModbusAddress(newTemplate.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 function addEditPoint() {
-  editForm.value.points.push({ name: 'point_' + (editForm.value.points.length + 1), address: String(editForm.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+  editForm.value.points.push({ name: nextPointName(editForm.value.points), address: nextFreeModbusAddress(editForm.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 async function createTemplate() {

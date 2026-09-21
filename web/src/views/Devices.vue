@@ -548,6 +548,7 @@ import { useRouter } from 'vue-router'
 import api from '../api.js'
 import { useI18n, getLocale } from '../i18n.js'
 import { PROTOCOL_NOTES } from '../protocolNotes.js'
+import { nextFreeModbusAddress, nextPointName } from '../utils.js'
 import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig, defaultProtocol,
   dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions,
   generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
@@ -1051,7 +1052,9 @@ const editDevicePointColumns = computed(() => [
 
 function addEditDevicePoint() {
   if (!editDevice.value.points) editDevice.value.points = []
-  editDevice.value.points.push({ name: 'point_' + (editDevice.value.points.length + 1), address: String(editDevice.value.points.length), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+  // 默认地址自动避开已占用寄存器（多字节类型占多个，与后端重叠校验规则一致），
+  // 否则保存时会被 400 "检测到同设备点位地址重叠" 拦截，表现为"更新失败"
+  editDevice.value.points.push({ name: nextPointName(editDevice.value.points), address: nextFreeModbusAddress(editDevice.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 function openQuickCreate() {
