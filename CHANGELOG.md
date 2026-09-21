@@ -20,6 +20,19 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — AB/EtherNet-IP pylogix Forward Open 永远失败（四处帧格式错误叠加）：**
+
+- Null Address Item：SendRRData 应答中 Null Address Item 写了 Length=4 并多跟 4 字节零（标准要求 Length=0 无数据），CIP 数据整体偏移 +4，客户端在 offset 42 读 GeneralStatus 读到错位字节
+- Priority/TimeoutTicks：Forward Open 请求解析只跳过 1 字节，实际 Priority(1) 与 TimeoutTicks(1) 是两个独立字节，后续所有字段（连接 ID/参数）错位 1 字节，echo 回客户端的值错误
+- Large Forward Open：pylogix>=1.1 在 ConnectionSize>511 时发送 0x5B Large Forward Open，原实现不识别直接返回错误帧；现按大格式解析（Params 为 4 字节，响应 Service=0xDB）
+- SendUnitData：item_count 原来读在 offset 16（EIP header 内部），导致 Read/Write Tag 全部走错误分支，已连接模式读写永远失败；现按标准布局解析（header(24)+InterfaceHandle(4)+Timeout(2)+ItemCount(2)+Address Item+Data Item）
+- 回归测试 `tests/test_ab_forward_open.py`（8 例）：Null Address Item 结构（Length=0 无数据）、CIP 数据固定 offset 40、总长无额外填充、Forward Open echo 字段固定偏移、session/context 回显、0x5B 大格式响应 0xDB 与 4 字节 Params、SendRRData 路由 0x5B、端到端请求-应答 Item 解析往返
+
+**Bug Fix — 系统代理劫持集成层出站请求（502）+ EdgeLite Modbus 点位读取存储区错位：**
+
+- 系统代理：所有出站 `httpx.AsyncClient`（failover 对端健康检查、数据转发 InfluxDB/HTTP、webhook 推送、集成管理器/认证/HTTP 通道、EdgeLite 对接）补齐 `trust_env=False`——开启系统代理时回环/内网地址请求被代理劫持导致 502。回归测试 `tests/test_http_client_trust_env.py`（4 例）
+- EdgeLite 点位地址：地址翻译此前输出裸数字地址 + register_type，但 EdgeLite 的 modbus 驱动仅从地址前缀判定存储区（不读 register_type），input/coil/discrete 区会被错误当作 holding 读取。现输出带前缀地址（HR/IR/C/DI），register_type 作为冗余信息保留；FINS 地址按点位 data_type 附加驱动类型后缀（",r"/",i"/",dw" 等，原默认按 word 解析拿到原始字节）。测试 `tests/test_edgelite_point_translation.py` 更新至新语义并扩展至 42 例（含 FINS 后缀、OPC-UA 设备前缀）
+
 **Feature — FANUC 协议原始报文日志（raw_frames）：协议调试日志可查看底层 16 进制收发帧（协议研究场景）：**
 
 - 背景：用户学习研究 FANUC 协议底层 16 进制报文，协议调试日志此前只有应用层抽象事件（连接/请求/响应），看不到通信过程中的原始字节流
