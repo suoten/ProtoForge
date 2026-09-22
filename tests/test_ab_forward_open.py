@@ -147,6 +147,61 @@ class TestWrapCipResponseFraming:
         items = _parse_items(resp)
         assert items[1][1][0] == 0xDB
 
+class TestCipIdentityServices:
+    """CIP Get_Attributes_All (0x01) 与 '@cpu' 探针标签回归。
+
+    pylogix 的 GetDeviceProperties()/连接 ping 依赖 Identity Object 查询；
+    EdgeLite/上位机常用 '@cpu' 标签做连接健康检查。
+    """
+
+    def setup_method(self):
+        self.server = AbServer()
+        self.server._start_config = {"device_name": "PF-TEST"}
+
+    def _reply_cip(self, resp: bytes) -> bytes:
+        items = _parse_items(resp)
+        assert items[0] == (0x0000, b"")      # Null Address 无数据
+        assert items[1][0] == 0x00B2
+        return items[1][1]
+
+    def test_get_attributes_all_structure(self):
+        cip = self._reply_cip(
+            self.server._handle_cip_get_attributes_all(7, bytes([0x01, 0x00]))
+        )
+        assert cip[0] == 0x81                 # 0x01 | 0x80
+        assert cip[2] == 0x00                 # Status = Success
+        assert struct.unpack("<H", cip[4:6])[0] == 1     # Vendor ID
+        assert struct.unpack("<H", cip[6:8])[0] == 14    # Device Type (PLC)
+        assert struct.unpack("<H", cip[8:10])[0] == 1    # Product Code
+        assert cip[10] == 1 and cip[11] == 0             # Revision 1.0
+        # 4(hdr)+2+2+2+2+2+4=18 → SHORT_STRING: len @18, 名字 @19
+        name_len = cip[18]
+        assert cip[19:19 + name_len].decode() == "PF-TEST"
+
+    def test_get_attributes_all_default_name(self):
+        server = AbServer()                   # 无 _start_config
+        cip = self._reply_cip(
+            server._handle_cip_get_attributes_all(7, bytes([0x01, 0x00]))
+        )
+        name_len = cip[18]
+        assert cip[19:19 + name_len].decode() == "ProtoForge-AB"
+
+    def test_read_tag_cpu_probe(self):
+        """读 '@cpu' 探针标签应返回设备名（连接健康检查约定）。"""
+        # 构造 Read Tag 请求: Service(0x4C)+PathSize+路径+元素数(1)
+        # 用最小符号路径: PathSize=1, 单段 ASCII 扩展符号 '@cpu' 太长，
+        # 这里直接走 _parse_cip_tag_path 能识别的形式不可行（探针由上层拼帧），
+        # 因此直接调用读标签处理器构造完整请求帧:
+        req = bytes([0x4C, 0x01, 0x91, 0x04]) + b"@cpu" + struct.pack("<H", 1)
+        cip = self._reply_cip(self.server._handle_cip_read_tag(7, req))
+        # 响应: service(0xCC)+reserved+status(2B)+type(0xD0=STRING)+len(4B)+name
+        assert cip[0] == 0xCC
+        assert cip[2] == 0x00
+        assert struct.unpack("<H", cip[4:6])[0] == 0xD0  # STRING type code
+        name_len = struct.unpack("<I", cip[6:10])[0]
+        assert cip[10:10 + name_len].decode() == "PF-TEST"
+
+
     def test_roundtrip_through_send_rr_data_handler(self):
         """端到端：构造 SendRRData 请求 → Forward Open → 应答可被同一 Item
         解析逻辑还原出合法 CIP 应答（无错位）。"""

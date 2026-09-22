@@ -39,7 +39,9 @@
 - Priority/TimeoutTicks：Forward Open 请求解析只跳过 1 字节，实际 Priority(1) 与 TimeoutTicks(1) 是两个独立字节，后续所有字段（连接 ID/参数）错位 1 字节，echo 回客户端的值错误
 - Large Forward Open：pylogix>=1.1 在 ConnectionSize>511 时发送 0x5B Large Forward Open，原实现不识别直接返回错误帧；现按大格式解析（Params 为 4 字节，响应 Service=0xDB）
 - SendUnitData：item_count 原来读在 offset 16（EIP header 内部），导致 Read/Write Tag 全部走错误分支，已连接模式读写永远失败；现按标准布局解析（header(24)+InterfaceHandle(4)+Timeout(2)+ItemCount(2)+Address Item+Data Item）
-- 回归测试 `tests/test_ab_forward_open.py`（8 例）：Null Address Item 结构（Length=0 无数据）、CIP 数据固定 offset 40、总长无额外填充、Forward Open echo 字段固定偏移、session/context 回显、0x5B 大格式响应 0xDB 与 4 字节 Params、SendRRData 路由 0x5B、端到端请求-应答 Item 解析往返
+- 补充 CIP Get_Attributes_All (0x01)：pylogix 的 GetDeviceProperties()/连接 ping 依赖 Identity Object 查询，缺失时连接验证永远失败；现返回标准属性集（VendorID/DeviceType/ProductCode/Revision/Status/SerialNumber/ProductName，名称取自协议配置 device_name）
+- 读标签支持 `@cpu` / `@identity` 探针标签：EdgeLite/上位机常用该标签做连接健康检查，现返回设备名字符串（STRING 类型码 0xD0）
+- 回归测试 `tests/test_ab_forward_open.py`（11 例）：Null Address Item 结构（Length=0 无数据）、CIP 数据固定 offset 40、总长无额外填充、Forward Open echo 字段固定偏移、session/context 回显、0x5B 大格式响应 0xDB 与 4 字节 Params、SendRRData 路由 0x5B、Get_Attributes_All 属性集结构与默认名称、`@cpu` 探针返回设备名、端到端请求-应答 Item 解析往返
 
 **Bug Fix — 系统代理劫持集成层出站请求（502）+ EdgeLite Modbus 点位读取存储区错位：**
 

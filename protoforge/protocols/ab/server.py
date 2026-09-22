@@ -291,6 +291,11 @@ class AbServer(ProtocolServer):
         if cip_service in (0x54, 0x5B):
             return self._handle_cip_forward_open(session, cip_data, sender_context,
                                                  large=(cip_service == 0x5B))
+        # FIXED-P0: 补充 CIP Get_Attributes_All (0x01) —— pylogix 的
+        # GetDeviceProperties()/连接 ping 验证依赖 Identity Object 查询，
+        # 缺失该服务时客户端连接验证永远失败
+        elif cip_service == 0x01:
+            return self._handle_cip_get_attributes_all(session, cip_data, sender_context)
         elif cip_service == 0x4E:
             return self._handle_cip_forward_close(session, cip_data, sender_context)
         elif cip_service == 0x4C:
@@ -299,6 +304,29 @@ class AbServer(ProtocolServer):
             return self._handle_cip_write_tag(session, cip_data, sender_context)
 
         return self._make_cip_error_response(session, cip_service, 0x01, sender_context)
+
+    def _handle_cip_get_attributes_all(self, session: int, cip_data: bytes,
+                                       sender_context: bytes = bytes(8)) -> bytes:
+        """CIP Get_Attributes_All (0x01) —— Identity Object 标准属性集
+
+        响应: Service(0x81)+Reserved+Status+Attrs: VendorID(UINT) DeviceType(UINT)
+        ProductCode(UINT) Revision(2×USINT) Status(WORD) SerialNumber(UDWORD)
+        ProductName(SHORT_STRING)
+        """
+        config = getattr(self, '_start_config', {})
+        device_name = str(config.get("device_name", "ProtoForge-AB"))
+        cip_resp = bytearray()
+        cip_resp += bytes([0x81, 0x00, 0x00, 0x00])       # Service|0x80 + Reserved + Status + AddStatusSize
+        cip_resp += struct.pack("<H", 1)                   # Attr1: Vendor ID
+        cip_resp += struct.pack("<H", 14)                  # Attr2: Device Type (Prog. Logic Controller)
+        cip_resp += struct.pack("<H", 1)                   # Attr3: Product Code
+        cip_resp += bytes([1, 0])                          # Attr4: Revision 1.0
+        cip_resp += struct.pack("<H", 0x0000)              # Attr5: Status
+        cip_resp += struct.pack("<I", 0x00000001)          # Attr6: Serial Number
+        name_bytes = device_name.encode("utf-8")[:230]
+        cip_resp += bytes([len(name_bytes)])               # Attr7: Product Name (SHORT_STRING)
+        cip_resp += name_bytes
+        return self._wrap_cip_response(session, bytes(cip_resp), sender_context)
 
     def _handle_send_unit_data(self, data: bytes,
                                sender_context: bytes = bytes(8)) -> bytes:
@@ -510,6 +538,12 @@ class AbServer(ProtocolServer):
         data_type = "int32"
         behavior = self._behaviors.get(self._default_device_id or "")
         tag_name = self._parse_cip_tag_path(cip_data)
+        # FIXED-P0: 支持 '@cpu' 探针标签 —— EdgeLite/上位机常用该标签做连接
+        # 健康检查（约定读取控制器信息），返回设备名字符串
+        if tag_name and tag_name.lower() in ("@cpu", "@identity"):
+            device_name = str(getattr(self, '_start_config', {}).get("device_name", "ProtoForge-AB"))
+            name_bytes = device_name.encode("utf-8")
+            return bytes([0xCC, 0x00, 0x00, 0x00]) + struct.pack("<H", 0xD0) + struct.pack("<I", len(name_bytes)) + name_bytes
         if tag_name and behavior:
             # Bug 6 fix: 检查tag是否存在，不存在时返回CIP错误(0x04=路径段错误)
             if tag_name not in behavior._tags and tag_name not in behavior._data_types:
