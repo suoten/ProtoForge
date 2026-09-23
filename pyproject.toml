@@ -42,7 +42,7 @@ dependencies = [
 deploy = ["gunicorn>=21.2.0"]
 # V1.1.0: IEC 104, IEC 61850, CoAP, DDS are pure Python — no extra dependencies needed
 # They are included in the core package and work out of the box
-opcua = ["asyncua>=1.0.0", "cryptography>=42.0.0"]
+opcua = ["asyncua>=1.0.0", "cryptography>=42.0.0,<49"]  # FIXED(Issue#13): cryptography 49+ 不再发布 macOS x86_64 wheel，Intel Mac 会回退 Rust 源码编译而失败；48.x 提供 abi3 wheel（兼容 py3.14）
 mqtt = ["amqtt>=0.11.0"]
 bacnet = ["bacpypes>=0.18.0"]  # FIXED: add missing bacnet extras
 s7 = ["python-snap7>=1.3.0"]  # FIXED: add missing s7 extras
@@ -50,7 +50,7 @@ postgres = ["asyncpg>=0.29.0"]
 grpc = ["grpcio>=1.62.0", "grpcio-tools>=1.62.0"]
 all = [
     "asyncua>=1.0.0",
-    "cryptography>=42.0.0",
+    "cryptography>=42.0.0,<49",  # FIXED(Issue#13): 上限 49，避免 macOS x86_64 无 wheel 触发源码编译
     "amqtt>=0.11.0",
     "bacpypes>=0.18.0",
     "python-snap7>=1.3.0",
