@@ -109,7 +109,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, h, defineComponent } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, Handle, BaseEdge, EdgeLabelRenderer, getBezierPath, Position } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -150,16 +150,50 @@ const DeviceNode = defineComponent({
       }),
       h('div', { style: { fontSize: '10px', color: '#999', marginTop: '4px' } },
         `${props.data?.pointCount || 0} ${t('common.pointCount')}`),
+      // FIXED: Vue Flow 计算连线坐标依赖 Handle，自定义节点没有连接桩时所有关联的边都不会渲染
+      h(Handle, { type: 'target', position: Position.Left, style: { opacity: 0, pointerEvents: 'none' } }),
+      h(Handle, { type: 'source', position: Position.Right, style: { opacity: 0, pointerEvents: 'none' } }),
     ])
   }
 })
 
 const RuleEdge = defineComponent({
-  props: { id: String, source: String, target: String, data: Object },
+  props: { id: String, source: String, target: String, sourceX: Number, sourceY: Number, targetX: Number, targetY: Number, data: Object },
   setup(props) {
-    return () => h('div', {
-      style: { background: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', border: '1px solid #d9d9d9' }
-    }, props.data?.label || 'rule')
+    // FIXED: 原实现只渲染了一个 HTML div（且没有画任何 SVG path），而 Vue Flow 的自定义边渲染在 SVG 内部，
+    // HTML div 不会显示 —— 导致列表规则数 >0 但编辑器里看不到任何规则连线。
+    const isSelfLoop = computed(() => props.source === props.target)
+    const path = computed(() => {
+      if (isSelfLoop.value) {
+        // 自环规则（同设备触发同设备，demo 场景大量存在）：从右侧桩向上绕一个弧回到节点顶部，保证可见
+        const sx = props.sourceX ?? 0, sy = props.sourceY ?? 0
+        const tx = props.targetX ?? 0, ty = props.targetY ?? 0
+        return `M ${sx},${sy} C ${sx + 80},${sy - 90} ${tx - 100},${ty - 120} ${tx},${ty - 24}`
+      }
+      return getBezierPath({
+        sourceX: props.sourceX ?? 0, sourceY: props.sourceY ?? 0,
+        targetX: props.targetX ?? 0, targetY: props.targetY ?? 0,
+      })
+    })
+    const labelX = computed(() => {
+      if (isSelfLoop.value) return ((props.sourceX ?? 0) + (props.targetX ?? 0)) / 2
+      return (props.sourceX + props.targetX) / 2
+    })
+    const labelY = computed(() => {
+      if (isSelfLoop.value) return Math.min(props.sourceY ?? 0, props.targetY ?? 0) - 60
+      return (props.sourceY + props.targetY) / 2
+    })
+    return () => [
+      h(BaseEdge, { id: props.id, path: path.value, style: { stroke: '#722ed1', strokeWidth: 2 } }),
+      h(EdgeLabelRenderer, () => h('div', {
+        style: {
+          position: 'absolute', transform: `translate(-50%, -50%) translate(${labelX.value}px, ${labelY.value}px)`,
+          background: '#fff', padding: '2px 6px', borderRadius: '4px', fontSize: '10px',
+          border: '1px solid #d9d9d9', pointerEvents: 'all', whiteSpace: 'nowrap',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.12)', color: '#722ed1',
+        }
+      }, props.data?.label || 'rule')),
+    ]
   }
 })
 
@@ -370,11 +404,38 @@ async function loadScenario(scenarioId) {
         online: deviceMap[d.id] || false, points: d.points || [], pointCount: (d.points || []).length
       }
     }))
+    // FIXED: 后端返回 snake_case 字段，编辑器内部用 camelCase；此处归一化补齐，
+    // 否则"加载→直接保存"会把 rule_type/source_point 等退化成默认值
+    const normalizeRule = (rule) => ({
+      ...rule,
+      ruleType: rule.ruleType || rule.rule_type || 'threshold',
+      sourcePoint: rule.sourcePoint || rule.source_point || 'value',
+      targetPoint: rule.targetPoint || rule.target_point || 'alarm',
+      targetValue: rule.targetValue ?? rule.target_value ?? 'true',
+      operator: rule.operator || rule.condition?.operator || '>',
+      threshold: rule.threshold ?? rule.condition?.value ?? 0,
+      cooldown: rule.cooldown ?? rule.condition?.cooldown ?? 0,
+      actionType: rule.actionType || rule.condition?.action || 'set',
+    })
+    const deviceIds = new Set((scenario.devices || []).map(d => d.id))
+    const orphanRules = []
     edges.value = (scenario.rules || []).map((rule, i) => ({
       id: `edge-${i}`, source: `node-${rule.source_device_id}`, target: `node-${rule.target_device_id}`,
-      type: 'rule', data: { label: rule.name || `Rule ${i}`, rule },
+      type: 'rule', data: { label: rule.name || `Rule ${i}`, rule: normalizeRule(rule) },
       animated: true,
-    })).filter(e => e.source && e.target)
+    })).filter(e => {
+      // 规则引用的设备不在场景里（如设备被删）时，Vue Flow 找不到节点同样不渲染，主动提示避免"规则数对不上"
+      const srcOk = deviceIds.has(e.source.replace('node-', ''))
+      const tgtOk = deviceIds.has(e.target.replace('node-', ''))
+      if (!srcOk || !tgtOk) {
+        orphanRules.push(e.data.label)
+        return false
+      }
+      return true
+    })
+    if (orphanRules.length) {
+      message.warning(t('scenarioEditor.orphanRulesSkipped', { count: orphanRules.length, names: orphanRules.join('、') }))
+    }
   } catch (e) {
     message.error(t('scenarioEditor.loadScenarioFailed') + ': ' + (e.response?.data?.detail || e.message))
   }
