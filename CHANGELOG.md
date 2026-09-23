@@ -20,6 +20,12 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — `.env` 编码被改坏导致服务启动崩溃 `UnicodeDecodeError: 'utf-8' codec can't decode`：**
+
+- 根因：`.env.example` 的注释含中文，安装时复制为 `.env`；清理工具或系统自带记事本一旦把 `.env` 重新编码为 GBK/ANSI，服务启动读 `.env`（固定按 UTF-8）即崩溃，且重新安装也无法自愈（安装器保留已存在的 `.env`）
+- 修复：`.env.example` 注释全部改为纯 ASCII（中文文档指向 README），从源头消除该故障类别；安装器新增 `_read_env_text()` 编码自愈——读 `.env` 遇到非 UTF-8 时按 GBK 解码并自动重写回 UTF-8（覆盖 `_ensure_env_key` 与端口/密码读取两处），重新运行 install.bat 即可修复被改坏的 `.env`
+- 用户临时修复：删除项目根目录的 `.env` 后重新运行 install.bat
+
 **Improvement — MQTT 外部 broker 发布在协议调试日志中可见（external_publish 事件）：**
 
 - 背景：用户对接 ThingsBoard 时连接成功（external_connect）但无法确认数据是否在上传——外部发布路径此前没有调试日志事件，只有连接/失败事件，观测存在盲区

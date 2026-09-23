@@ -45,6 +45,24 @@ def _generate_jwt_secret(venv_python: Path) -> str:
     return secret if secret else "protoforge_default_jwt_secret_change_me_in_production_2026"
 
 
+def _read_env_text(env_file: Path) -> str:
+    """Read .env as UTF-8 with GBK fallback, self-healing to UTF-8.
+
+    .env is always read back as UTF-8 by pydantic-settings; if a cleaner
+    tool or editor re-encodes it (e.g. GBK, common on Chinese Windows),
+    the server crashes with UnicodeDecodeError on startup. Detect the
+    encoding here and rewrite the file as UTF-8 in place.
+    """
+    raw = env_file.read_bytes()
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("gb18030", errors="replace")
+        env_file.write_text(text, encoding="utf-8")
+        print("  [警告] .env 编码异常（非 UTF-8，可能被清理工具/编辑器改动），已自动转换为 UTF-8")
+        return text
+
+
 def _ensure_env_key(env_file: Path, key: str, default_value: str) -> None:
     """Ensure a key in .env has a non-empty value. If empty or missing, set default_value.
 
@@ -53,7 +71,7 @@ def _ensure_env_key(env_file: Path, key: str, default_value: str) -> None:
     """
     if not env_file.exists():
         return
-    lines = env_file.read_text(encoding="utf-8").splitlines()
+    lines = _read_env_text(env_file).splitlines()
     found = False
     changed = False
     for i, line in enumerate(lines):
@@ -193,13 +211,13 @@ def main():
     password = "admin"
     if env_file.exists():
         try:
-            with open(env_file, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith("PROTOFORGE_PORT=") and not line.startswith("#"):
-                        port = line.split("=", 1)[1].strip()
-                    elif line.startswith("PROTOFORGE_ADMIN_PASSWORD=") and not line.startswith("#"):
-                        password = line.split("=", 1)[1].strip()
+            env_text = _read_env_text(env_file)
+            for line in env_text.splitlines():
+                line = line.strip()
+                if line.startswith("PROTOFORGE_PORT=") and not line.startswith("#"):
+                    port = line.split("=", 1)[1].strip()
+                elif line.startswith("PROTOFORGE_ADMIN_PASSWORD=") and not line.startswith("#"):
+                    password = line.split("=", 1)[1].strip()
         except Exception as e:
             import logging
             logging.warning("读取 .env 配置文件失败: %s", e)
