@@ -80,6 +80,11 @@ class McDeviceBehavior(StandardDeviceBehavior):
         device_code, offset = self._point_addresses[point_name]
         data_type = self._point_data_types.get(point_name, "")
         try:
+            if data_type == "bool":
+                # SLMP 位设备线上布局：点 n 存于第 n//2 字节的半字节（偶数点=bit4 高半字节，
+                # 奇数点=bit0 低半字节），与 pymcprotocol/真实 Q/iQ-R PLC 一致。
+                self.set_bit_in_memory(device_code, offset, bool(value))
+                return
             if data_type == "int32":
                 data = struct.pack("<i", int(value))
             elif data_type == "uint32":
@@ -92,13 +97,54 @@ class McDeviceBehavior(StandardDeviceBehavior):
                 data = struct.pack("<h", int(value))
             elif data_type == "uint16":
                 data = struct.pack("<H", int(value))
-            elif data_type == "bool":
-                data = struct.pack("<?", bool(value))
             else:
                 data = struct.pack("<H", int(value) & 0xFFFF)
             self.write_memory(device_code, offset, data)
         except (ValueError, TypeError, struct.error) as e:
             logger.warning("MC on_write value conversion error for %s: %s", point_name, e)
+
+    def set_bit_in_memory(self, area_code: int, point_index: int, value: bool) -> None:
+        """按 SLMP 线上位布局写入单个位点（点 n → 第 n//2 字节，偶数点高半字节）。"""
+        if area_code not in self._device_memory:
+            self._device_memory[area_code] = bytearray(1024)
+        buf = self._device_memory[area_code]
+        byte_index = point_index // 2
+        if len(buf) <= byte_index:
+            buf.extend(bytearray(byte_index + 1 - len(buf)))
+        nibble = 0x10 if point_index % 2 == 0 else 0x01
+        if value:
+            buf[byte_index] |= nibble
+        else:
+            buf[byte_index] &= ~nibble & 0xFF
+
+    def read_bits_from_memory(self, area_code: int, start: int, count: int) -> bytes:
+        """按 SLMP 线上位布局读取 count 个位点，返回可直接回包的半字节打包数据。"""
+        out = bytearray((count + 1) // 2)
+        buf = self._device_memory.get(area_code)
+        for i in range(count):
+            point_index = start + i
+            bit = 0
+            if buf is not None:
+                byte_index = point_index // 2
+                if byte_index < len(buf):
+                    byte = buf[byte_index]
+                    bit = (byte >> 4) & 1 if point_index % 2 == 0 else byte & 1
+            if i % 2 == 0:
+                out[i // 2] |= bit << 4
+            else:
+                out[i // 2] |= bit
+        return bytes(out)
+
+    def write_bits_from_wire(self, area_code: int, start: int, data: bytes, count: int) -> None:
+        """将位批量写请求的半字节打包数据按线上布局写入内存。
+
+        请求第 i 个点位于 data[i//2] 的 bit4（i 偶）或 bit0（i 奇），
+        对应绝对点位 start+i，落库到其自身的字节/半字节位置。
+        """
+        for i in range(count):
+            byte = data[i // 2] if i // 2 < len(data) else 0
+            bit = (byte >> 4) & 1 if i % 2 == 0 else byte & 1
+            self.set_bit_in_memory(area_code, start + i, bool(bit))
 
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
@@ -297,29 +343,65 @@ class McServer(ProtocolServer):
 
         return self._make_error_response(data, 0xC059)
 
+    # SLMP 3E 二进制帧设备字段布局（pymcprotocol 与真实 PLC 一致）：
+    #   Q/经典（子命令 0x0000/0x0001）：设备号 3 字节 LE + 设备码 1 字节
+    #   iQ-R（子命令 0x0002/0x0003） ：设备号 4 字节 LE + 设备码 2 字节 LE
+    # FIXED-JOINT: 原实现按"设备码在前+设备号在后"解析，导致设备码恒为 0、
+    # 偏移错位（D0 被解析为区域 0x00 偏移 0xA80000），线上读写与点位注册表
+    # 完全脱节（联调实测：REST 写值后线上读不到；EdgeLite 采集恒为 0）。
+    IQR_WORD_SUBCMD = 0x0002
+    IQR_BIT_SUBCMD = 0x0003
+    Q_WORD_SUBCMD = 0x0000
+    Q_BIT_SUBCMD = 0x0001
+
+    def _is_iqr_subcmd(self, subcmd: int) -> bool:
+        return subcmd in (self.IQR_WORD_SUBCMD, self.IQR_BIT_SUBCMD)
+
+    def _is_bit_subcmd(self, subcmd: int) -> bool:
+        return subcmd in (self.Q_BIT_SUBCMD, self.IQR_BIT_SUBCMD)
+
+    def _parse_device_field(self, data: bytes, offset: int, subcmd: int) -> tuple[int, int, int] | None:
+        """解析 SLMP 设备字段，返回 (设备码, 起始地址, 字段结束偏移)；长度不足返回 None。"""
+        if self._is_iqr_subcmd(subcmd):
+            if offset + 6 > len(data):
+                return None
+            start_addr = int.from_bytes(data[offset : offset + 4], "little")
+            device_code = int.from_bytes(data[offset + 4 : offset + 6], "little")
+            return device_code, start_addr, offset + 6
+        if offset + 4 > len(data):
+            return None
+        start_addr = int.from_bytes(data[offset : offset + 3], "little")
+        device_code = data[offset + 3]
+        return device_code, start_addr, offset + 4
+
     def _handle_read(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
-        if len(data) < 21:
+        if len(data) < 17:
             return self._make_error_response(data, 0xC059)
 
-        # FIXED: MC 3E batch read request format:
-        # data[15] = device code (1 byte, e.g., 0xA8='D')
-        # data[16:19] = device number (3 bytes, little-endian)
-        # data[19:21] = number of points (2 bytes, little-endian)
-        device_code = data[15]
-        start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
-        word_count = struct.unpack("<H", data[19:21])[0]
+        parsed = self._parse_device_field(data, 15, subcmd)
+        if parsed is None:
+            return self._make_error_response(data, 0xC059)
+        device_code, start_addr, dev_end = parsed
+        if dev_end + 2 > len(data):
+            return self._make_error_response(data, 0xC059)
+        point_count = struct.unpack("<H", data[dev_end : dev_end + 2])[0]
 
-        if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
-            read_len = word_count * 2
-        elif subcmd == 0x0001:
-            read_len = (word_count + 1) // 2  # FIXED: 位读数据每字节 2 点打包（高半字节为第 1 点）
+        if self._is_bit_subcmd(subcmd):
+            # 位读数据每字节 2 点打包（高半字节为第 1 点）
+            read_len = (point_count + 1) // 2
+        elif subcmd in (self.Q_WORD_SUBCMD, self.IQR_WORD_SUBCMD):
+            read_len = point_count * 2
         else:
             return self._make_error_response(data, 0xC059)
 
-        read_data = bytearray(read_len)
         behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         if behavior:
-            read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 使用带偏移量的读取，避免越界
+            if self._is_bit_subcmd(subcmd):
+                read_data = behavior.read_bits_from_memory(device_code, start_addr, point_count)
+            else:
+                read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 带偏移读取避免越界
+        else:
+            read_data = bytearray(read_len)
 
         resp = bytearray()
         resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
@@ -333,30 +415,42 @@ class McServer(ProtocolServer):
         return bytes(resp)
 
     def _handle_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
-        if len(data) < 21:
+        if len(data) < 17:
             return self._make_error_response(data, 0xC059)
 
-        # FIXED: Same parsing fix as _handle_read
-        device_code = data[15]
-        start_addr = data[16] | (data[17] << 8) | (data[18] << 16)
-        word_count = struct.unpack("<H", data[19:21])[0]
+        parsed = self._parse_device_field(data, 15, subcmd)
+        if parsed is None:
+            return self._make_error_response(data, 0xC059)
+        device_code, start_addr, dev_end = parsed
+        if dev_end + 2 > len(data):
+            return self._make_error_response(data, 0xC059)
+        point_count = struct.unpack("<H", data[dev_end : dev_end + 2])[0]
 
-        if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
-            write_len = word_count * 2
-        elif subcmd == 0x0001:
-            write_len = (word_count + 1) // 2  # FIXED: 位写数据每字节 2 点打包
+        if self._is_bit_subcmd(subcmd):
+            write_len = (point_count + 1) // 2  # 位写数据每字节 2 点打包
+        elif subcmd in (self.Q_WORD_SUBCMD, self.IQR_WORD_SUBCMD):
+            write_len = point_count * 2
         else:
             return self._make_error_response(data, 0xC059)
 
-        # FIXED: 数据区紧跟在设备号(1)+起始地址(3)+点数(2)之后，即 data[21:]
-        write_data = data[21:21 + write_len]
+        data_start = dev_end + 2
+        write_data = data[data_start : data_start + write_len]
         behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         if behavior:
-            behavior.write_memory(device_code, start_addr, write_data)
+            if self._is_bit_subcmd(subcmd):
+                behavior.write_bits_from_wire(device_code, start_addr, write_data, point_count)
+            else:
+                behavior.write_memory(device_code, start_addr, write_data)
+            is_bit = self._is_bit_subcmd(subcmd)
             for name, (p_code, p_offset) in behavior._point_addresses.items():
                 if p_code == device_code and p_offset == start_addr:
                     try:
                         dt = behavior._point_data_types.get(name, "")
+                        if is_bit and dt == "bool" and len(write_data) >= 1:
+                            # 点位即批写首点：值在首字节高半字节 bit4
+                            behavior._values[name] = bool((write_data[0] >> 4) & 1)
+                            behavior._written_values[name] = behavior._values[name]
+                            continue
                         if dt == "int32" and len(write_data) >= 4:
                             behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
                         elif dt == "uint32" and len(write_data) >= 4:
@@ -369,8 +463,6 @@ class McServer(ProtocolServer):
                             behavior._values[name] = struct.unpack("<h", write_data[:2])[0]
                         elif dt == "uint16" and len(write_data) >= 2:
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
-                        elif dt == "bool" and len(write_data) >= 1:
-                            behavior._values[name] = bool(write_data[0])
                         elif len(write_data) >= 4:
                             behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
                         elif len(write_data) >= 2:
@@ -403,16 +495,17 @@ class McServer(ProtocolServer):
         behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
         offset = 17
         for _ in range(min(point_count, 64)):
-            if offset + 3 > len(data):
+            parsed = self._parse_device_field(data, offset, subcmd)
+            if parsed is None:
                 break
-            start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
-            device_code = data[offset + 2]
-            offset += 3
+            device_code, start_addr, offset = parsed
             if behavior:
-                if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
-                    read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 使用read_memory_offset避免越界
-                elif subcmd == 0x0001:
-                    read_data += behavior.read_memory_offset(device_code, start_addr, 1)  # FIXED-N06: 使用read_memory_offset避免越界
+                if self._is_bit_subcmd(subcmd):
+                    # 位随机读：每点 1 字节，0/1
+                    bits = behavior.read_bits_from_memory(device_code, start_addr, 1)
+                    read_data += bytes([1 if bits[0] & 0x10 else 0])
+                else:
+                    read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 带偏移读取避免越界
         resp = bytearray()
         resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
@@ -432,25 +525,26 @@ class McServer(ProtocolServer):
         except (IndexError, struct.error):
             return self._make_error_response(data, 0xC059)
         offset = 17
+        bit_val_len = 2 if self._is_iqr_subcmd(subcmd) else 1  # iQ-R 位随机写每点 2 字节值，Q 为 1 字节
         for _ in range(min(point_count, 64)):
-            if subcmd in (0x0000, 0x0002):  # 0x0000=standard word, 0x0002=iQ-R word
-                if offset + 5 > len(data):
+            parsed = self._parse_device_field(data, offset, subcmd)
+            if parsed is None:
+                break
+            device_code, start_addr, offset = parsed
+            if self._is_bit_subcmd(subcmd):
+                if offset + bit_val_len > len(data):
                     break
-                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
-                device_code = data[offset + 2]
-                write_val = data[offset + 3:offset + 5]
+                bit_on = any(data[offset : offset + bit_val_len])
+                offset += bit_val_len
+                if behavior:
+                    behavior.set_bit_in_memory(device_code, start_addr, bit_on)
+            else:
+                if offset + 2 > len(data):
+                    break
+                write_val = data[offset : offset + 2]
+                offset += 2
                 if behavior:
                     behavior.write_memory(device_code, start_addr, write_val)
-                offset += 5
-            elif subcmd == 0x0001:
-                if offset + 4 > len(data):
-                    break
-                start_addr = struct.unpack("<H", data[offset:offset + 2])[0]
-                device_code = data[offset + 2]
-                write_val = data[offset + 3:offset + 4]
-                if behavior:
-                    behavior.write_memory(device_code, start_addr, write_val)
-                offset += 4
         resp = bytearray()
         resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])

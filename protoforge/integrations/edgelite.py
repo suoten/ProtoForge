@@ -553,11 +553,16 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             base["security_policy"] = policy_alias_map.get(user_policy, user_policy)
     elif normalized_protocol == "mqtt":
         mqtt_port = port or 1883
+        # FIXED-JOINT: 默认订阅主题必须是通配符 {topic_prefix}/#。
+        # ProtoForge MQTT 模拟器的发布主题为 {topic_prefix}/{device_id}/{point}
+        # （见 protocols/mqtt/server.py _point_topic），固定默认值 "protoforge/data"
+        # 永远收不到任何发布，导致 EdgeLite 侧 MQTT 设备点位恒为空（联调实测）。
+        _mqtt_prefix = str(protocol_config.get("topic_prefix", "protoforge"))
         base = {
             "broker": host,
             "port": mqtt_port,
-            "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", "protoforge/data")),
-            "publish_topic": protocol_config.get("publish_topic", "protoforge/command"),
+            "subscribe_topic": protocol_config.get("subscribe_topic", protocol_config.get("topic", f"{_mqtt_prefix}/#")),
+            "publish_topic": protocol_config.get("publish_topic", f"{_mqtt_prefix}/command"),
             "client_id": protocol_config.get("client_id", f"protoforge-mqtt-{uuid.uuid4().hex[:8]}"),
         }
         if protocol_config.get("username"):

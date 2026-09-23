@@ -265,13 +265,16 @@ async def test_edgelite_config_has_correct_register_types(modbus_server):
     points = {p["name"]: p for p in result["points"]}
 
     coolant = points["coolant_on"]
-    assert coolant["address"] == "4", f"Expected address '4', got {coolant['address']}"
+    # FIXED-JOINT: EdgeLite 的 modbus 驱动仅从地址前缀判定存储区，转换层输出
+    # 自带前缀的地址（C/HR/IR/DI）+ 冗余 register_type。旧断言期望裸地址 "4"，
+    # 那是会让 bool 点被误读保持区的历史缺陷行为。
+    assert coolant["address"] == "C4", f"Expected address 'C4', got {coolant['address']}"
     assert coolant.get("register_type") == "coil", (
         f"Expected register_type='coil' for bool point, got {coolant.get('register_type')}"
     )
 
     temp = points["temperature"]
-    assert temp["address"] == "10", f"Expected address '10', got {temp['address']}"
+    assert temp["address"] == "HR10", f"Expected address 'HR10', got {temp['address']}'"
     assert temp.get("register_type") == "holding", (
         f"Expected register_type='holding' for float32 point, got {temp.get('register_type')}"
     )
