@@ -150,7 +150,11 @@
                     </n-space>
                     <n-grid :cols="2" :x-gap="8" v-if="step.action">
                       <n-gi v-for="paramKey in getActionParams(step.action)" :key="paramKey">
-                        <n-space align="center" size="small" style="margin-bottom:4px">
+                        <!-- FIXED: n-space 默认给每个子元素包一层 wrapper div，子元素上的 flex:1 只能撑满
+                             wrapper，而 wrapper 宽度由内容决定（空 select 宽度为 0），导致设备/协议等参数
+                             控件渲染为 0 宽度"隐形"。wrap-item=false 让子元素成为 n-space 的直接 flex 项，
+                             flex:1 才能真正生效。 -->
+                        <n-space align="center" size="small" :wrap-item="false" style="margin-bottom:4px">
                           <n-text style="font-size:12px;min-width:70px">{{ paramLabel(paramKey) }}:</n-text>
                           <n-select v-if="paramKey === 'device_id'" v-model:value="step.params[paramKey]"
                             :options="deviceOptions" :placeholder="t('common.selectPlaceholder')" style="flex:1" />

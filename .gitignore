@@ -137,7 +137,9 @@ agent-browser.json
 env/
 site-packages/
 .tox/
-dist/
+# FIXED: 裸 dist/ 会连带忽略 web/dist，导致克隆/拉取仓库后前端 JS 产物缺失（表现为页面白屏、设备/协议不显示）。
+# 改为仅忽略仓库根的 /dist/（上方已有），web/dist 作为随仓库发布的前端产物正常跟踪
+/dist/
 .next/
 .nuxt/
 .output/
