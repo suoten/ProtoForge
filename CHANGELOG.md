@@ -20,6 +20,11 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Improvement — MQTT 外部 broker 发布在协议调试日志中可见（external_publish 事件）：**
+
+- 背景：用户对接 ThingsBoard 时连接成功（external_connect）但无法确认数据是否在上传——外部发布路径此前没有调试日志事件，只有连接/失败事件，观测存在盲区
+- 实现：每次向外部 broker 发布成功记录 `tx/external_publish` 事件，含主题、QoS、Retain、字节数与 payload 预览（超 200 字节截断并标注，避免日志膨胀）
+
 **Bug Fix — 安装器第 4 步"构建前端页面"崩溃：`FileNotFoundError: [WinError 2] 系统找不到指定的文件`：**
 
 - 根因：安装器用裸字符串 `"npm"` 调 `subprocess.run`，Windows 的 `CreateProcess` 只能直接解析 `.exe`，而 npm 是 `npm.cmd`；且 Windows 版 Node.js 发行包里同时带一个无扩展名的 Unix sh 脚本 `npm`，`shutil.which("npm")` 可能命中它导致 `WinError 193`（不是有效的 Win32 应用程序）。两种情况都会让源码安装在第 4 步直接抛异常中断

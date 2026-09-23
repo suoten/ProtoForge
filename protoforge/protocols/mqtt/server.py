@@ -576,6 +576,17 @@ class MqttBroker(ProtocolServer):
                 return False
             try:
                 await client.publish(topic, payload, qos=qos, retain=retain)
+                # 外部发布在协议调试日志中可见（截断 payload，避免日志膨胀）：
+                # 此前只有连接/失败事件，数据是否真的在上传无从观察
+                _preview = payload[:200].decode("utf-8", errors="replace")
+                self._log_debug("tx", "external_publish",
+                                f"MQTT device {device_id} published to external broker "
+                                f"{topic} ({len(payload)} bytes)",
+                                device_id=device_id,
+                                detail={"topic": topic, "qos": qos, "retain": retain,
+                                        "bytes": len(payload),
+                                        "payload_preview": _preview,
+                                        "truncated": len(payload) > 200})
                 return True
             except Exception as e:
                 logger.warning("MQTT external publish failed for %s on %s: %s; will reconnect", device_id, topic, e)
