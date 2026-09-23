@@ -8,10 +8,12 @@ Implements:
   - U-format: STARTDT/STOPDT/TESTFR act/con
   - S-format: supervisory (acknowledge received I-frames)
   - I-format: carries one or more ASDUs
-  - ASDU header: TI(1) + VSQ(1) + COT(2 LE) + OA(1) + CA(2 LE)
+  - ASDU header: TI(1) + VSQ(1) + COT(1) + OA(1) + CA(2 LE)
   - Monitor direction: M_SP_NA(1), M_DP_NA(3), M_ME_NB(11), M_ME_NC(13),
     M_IT_NA(15) (+ CP56Time2a time-tagged variants on the decode side)
   - Control direction: C_SC_NA(45), C_DC_NA(46), C_SE_NB(49), C_SE_NC(50)
+    and their CP56Time2a time-tagged variants C_SC_TA(58), C_DC_TA(59),
+    C_SE_NB_TA(61), C_SE_NC_TA(62)
     with direct-operate and Select-before-Operate (S/E bit) flows
   - General interrogation C_IC_NA(100): ACT -> CON + all points COT=20 -> ACTTERM
   - Clock sync C_CS_NA(103): ACT -> CON (echoes the new server time)
@@ -69,7 +71,13 @@ TI_SETPOINT_FLOAT = 50   # C_SE_NC_1
 TI_CLOCK_SYNC = 103      # C_CS_NA_1
 TI_INTERROGATION = 100   # C_IC_NA_1
 
-# Cause of transmission (COT, 2 bytes; low 6 bits used)
+# Control direction with CP56Time2a time tag (values: command qualifier + 7-byte time)
+TI_SINGLE_CMD_TA = 58    # C_SC_TA_1
+TI_DOUBLE_CMD_TA = 59    # C_DC_TA_1
+TI_SETPOINT_SCALED_TA = 61  # C_SE_NB_TA_1
+TI_SETPOINT_FLOAT_TA = 62   # C_SE_NC_TA_1
+
+# Cause of transmission (COT, 1 byte; low 6 bits used)
 COT_PERIODIC = 1
 COT_BACKGROUND = 2
 COT_SPONTANEOUS = 3
@@ -437,14 +445,14 @@ class IEC104Server(ProtocolServer):
                 self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
 
     def _asdu_length(self, ti: int, num: int, sq: bool) -> int | None:
-        """Total ASDU length: header 7 (TI+VSQ+COT(2)+OA+CA) + information objects."""
+        """Total ASDU length: header 6 (TI+VSQ+COT+OA+CA) + information objects."""
         obj = self._object_size(ti)
         if obj is None:
             return None
         if sq:
             # only the first object carries the IOA
-            return 7 + 3 + num * obj
-        return 7 + num * (3 + obj)
+            return 6 + 3 + num * obj
+        return 6 + num * (3 + obj)
 
     def _object_size(self, ti: int) -> int | None:
         """Information object payload size (excluding IOA) or None if unsupported."""
@@ -461,15 +469,23 @@ class IEC104Server(ProtocolServer):
             TI_SETPOINT_FLOAT: 5,
             TI_CLOCK_SYNC: 7,
             TI_INTERROGATION: 1,
+            # time-tagged commands: command qualifier/value + 7-byte CP56Time2a
+            TI_SINGLE_CMD_TA: 8,
+            TI_DOUBLE_CMD_TA: 8,
+            TI_SETPOINT_SCALED_TA: 10,
+            TI_SETPOINT_FLOAT_TA: 12,
         }
         return sizes.get(ti)
 
     async def _process_asdu(self, writer: asyncio.StreamWriter, asdu: bytes, conn_state: dict) -> None:
         ti = asdu[0]
         vsq = asdu[1]
-        cot = struct.unpack("<H", asdu[2:4])[0] & 0x3F
-        oa = asdu[4]
-        ca = struct.unpack("<H", asdu[5:7])[0]
+        # IEC 60870-5-104: COT 为 1 字节 + OA 1 字节 + CA 2 字节（小端）。
+        # 之前误将 COT 编码/解析为 2 字节，导致主站侧 CA 显示为 256 倍、
+        # IOA 整体左移 8 位、遥测浮点数错位成乱值。
+        cot = asdu[2] & 0x3F
+        oa = asdu[3]
+        ca = struct.unpack("<H", asdu[4:6])[0]
         num = vsq & 0x7F
         sq = bool(vsq & 0x80)
 
@@ -487,7 +503,8 @@ class IEC104Server(ProtocolServer):
         if ti == TI_CLOCK_SYNC:
             await self._handle_clock_sync(writer, asdu, ca)
             return
-        if ti in (TI_SINGLE_CMD, TI_DOUBLE_CMD, TI_SETPOINT_SCALED, TI_SETPOINT_FLOAT):
+        if ti in (TI_SINGLE_CMD, TI_DOUBLE_CMD, TI_SETPOINT_SCALED, TI_SETPOINT_FLOAT,
+                  TI_SINGLE_CMD_TA, TI_DOUBLE_CMD_TA, TI_SETPOINT_SCALED_TA, TI_SETPOINT_FLOAT_TA):
             await self._handle_commands(writer, asdu, ti, ca, num, sq, conn_state)
             return
 
@@ -495,7 +512,7 @@ class IEC104Server(ProtocolServer):
 
     # -- general interrogation -----------------------------------------
     async def _handle_interrogation(self, writer: asyncio.StreamWriter, asdu: bytes, ca: int) -> None:
-        qoi = asdu[10] if len(asdu) > 10 else 20
+        qoi = asdu[9] if len(asdu) > 9 else 20  # header(6)+IOA(3) 之后即 QOI
         # ACT confirm
         ack = bytearray(self._asdu_header(TI_INTERROGATION, 1, COT_ACTCONFIRM, ca))
         ack += b"\x00\x00\x00" + bytes([qoi])
@@ -529,7 +546,7 @@ class IEC104Server(ProtocolServer):
     async def _handle_commands(self, writer: asyncio.StreamWriter, asdu: bytes, ti: int,
                                ca: int, num: int, sq: bool, conn_state: dict) -> None:
         obj_size = self._object_size(ti) or 1
-        offset = 7  # ASDU header: TI(1)+VSQ(1)+COT(2)+OA(1)+CA(2)
+        offset = 6  # ASDU header: TI(1)+VSQ(1)+COT(1)+OA(1)+CA(2)
         for i in range(num):
             if sq:
                 if offset + 3 + obj_size > len(asdu):
@@ -556,20 +573,25 @@ class IEC104Server(ProtocolServer):
                 target = (dev_id, behavior, point_name)
                 break
 
-        select_flag = bool(payload[-1] & SE_BIT) if payload else False
-        payload[-1] if payload else 0
+        # S/E(Select/Execute) 位位置与值提取按 TI 区分：
+        #   45/46/58/59 -> SCO/DCO 在 payload[0]；49/61 -> QOS 在 payload[2]；50/62 -> QOS 在 payload[4]
+        _se_pos = {TI_SINGLE_CMD: 0, TI_DOUBLE_CMD: 0, TI_SINGLE_CMD_TA: 0, TI_DOUBLE_CMD_TA: 0,
+                   TI_SETPOINT_SCALED: 2, TI_SETPOINT_SCALED_TA: 2,
+                   TI_SETPOINT_FLOAT: 4, TI_SETPOINT_FLOAT_TA: 4}
+        se_pos = _se_pos.get(ti, 0)
+        select_flag = bool(payload[se_pos] & SE_BIT) if len(payload) > se_pos else False
 
-        # Value extraction per TI
-        if ti == TI_SINGLE_CMD:
+        # Value extraction per TI（时标命令取值位置与非时标一致，时间标签仅回显）
+        if ti in (TI_SINGLE_CMD, TI_SINGLE_CMD_TA):
             raw_val = payload[0] & 0x01 if payload else 0
             value: Any = bool(raw_val)
-        elif ti == TI_DOUBLE_CMD:
+        elif ti in (TI_DOUBLE_CMD, TI_DOUBLE_CMD_TA):
             raw_val = payload[0] & 0x03 if payload else 0
             value = raw_val
-        elif ti == TI_SETPOINT_SCALED:
+        elif ti in (TI_SETPOINT_SCALED, TI_SETPOINT_SCALED_TA):
             raw_val = struct.unpack("<h", payload[0:2])[0] if len(payload) >= 2 else 0
             value = raw_val
-        elif ti == TI_SETPOINT_FLOAT:
+        elif ti in (TI_SETPOINT_FLOAT, TI_SETPOINT_FLOAT_TA):
             raw_val = struct.unpack("<f", payload[0:4])[0] if len(payload) >= 4 else 0.0
             value = raw_val
         else:
@@ -617,10 +639,11 @@ class IEC104Server(ProtocolServer):
     # monitor direction (spontaneous / interrogation data)
     # ------------------------------------------------------------------
     def _asdu_header(self, ti: int, num: int, cot: int, ca: int) -> bytes:
+        # IEC 60870-5-104 ASDU 固定头: TI(1) + VSQ(1) + COT(1) + OA(1) + CA(2 LE)
         h = bytearray()
         h.append(ti & 0xFF)
         h.append(num & 0x7F)
-        h += struct.pack("<H", cot & 0x3F)
+        h.append(cot & 0x3F)
         h.append(self._originator_address & 0xFF)
         h += struct.pack("<H", ca & 0xFFFF)
         return bytes(h)
@@ -684,11 +707,12 @@ class IEC104Server(ProtocolServer):
 
     @staticmethod
     def _decode_ioa(b: bytes) -> int:
-        return int(b[0]) | int(b[1]) << 8 | int(b[2] & 0x0F) << 16
+        # IOA 为 3 个完整 8 位组（低字节在前），高字节按标准使用全部 8 位
+        return int(b[0]) | int(b[1]) << 8 | int(b[2]) << 16
 
     @staticmethod
     def _encode_ioa(ioa: int) -> bytes:
-        return bytes([ioa & 0xFF, (ioa >> 8) & 0xFF, (ioa >> 16) & 0x0F])
+        return bytes([ioa & 0xFF, (ioa >> 8) & 0xFF, (ioa >> 16) & 0xFF])
 
     # ------------------------------------------------------------------
     # write propagation to DeviceInstance

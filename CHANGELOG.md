@@ -102,6 +102,14 @@
 - 修复：单协议启动端点（`POST /protocols/{name}/start`）改为 `restart=True` 语义——协议已运行时先停止再按提交的配置启动（改端口后点启动即生效）；"一键启动全部"已预先过滤运行中的协议、设备创建的协议自动启动、demo 模式、集成管理器均保持原有幂等跳过语义，不受影响
 - 回归测试 `tests/test_protocol_restart_port.py`（3 例）：运行中带新端口重启 → 新端口监听旧端口释放、start-all 幂等性（不重启运行中协议）、设备自动启动路径语义不变；真实服务端到端验证（默认端口启动 → 改 38124 重启 → 38000 关闭 / 38124 监听 / 停止后端口释放）
 
+**Bug Fix — IEC 104 遥信/遥测地址显示放大 256 倍、遥测值乱码（QTester104 实测反馈）：**
+
+- 根因：ASDU 固定头把**传送原因 COT 编码为 2 字节**（`struct.pack("<H", cot)`），而 IEC 60870-5-104 标准中 COT 为 **1 字节** + 源发地址 OA 1 字节 + 公共地址 CA 2 字节。多出的 1 字节使标准主站解析时**其后所有字段整体后移 1 字节**：CA=1 被读成 `0x0100`=256（×256）、IOA=n 被读成 n×256（1→256, 2→512…）、遥测浮点数与质量位错位成乱值（如 1922157431584980992.0）。用户排查方向（大小端/IOA 3 字节当 4 字节解析）均不是原因——驱动里 CA/IOA/float 本来就是标准小端
+- 修复：发送侧 `_asdu_header` 与接收侧 `_process_asdu`、`_handle_commands`（对象偏移 7→6）、`_asdu_length`（头长 7→6）、GI 的 QOI 偏移全部改为标准 1 字节 COT 布局；发送与接收两个方向同步修正
+- 顺带修正：IOA 第 3 字节按标准使用完整 8 位（原实现掩码 0x0F，IOA>4095 的点会错位）
+- 新增支持带 CP56Time2a 时标的遥控命令（QTester104 遥控默认类型）：C_SC_TA_1(58)、C_DC_TA_1(59)、C_SE_NB_TA_1(61)、C_SE_NC_TA_1(62)，S/E 选择执行位按 TI 正确定位，确认帧完整回显时标对象
+- 回归测试 `tests/test_iec104_wire.py`（7 例，内置严格按标准实现的迷你主站走真实 TCP）：M_ME_NC_1 帧布局逐字节校验（CA/IOA/浮点值/APDU 长度 0x12）、M_SP_NA_1 标准长度 0x0E、总召唤 ACT→CON(QOI)→逐点 COT=20→ACTTERM、C_SC_NA_1 直接遥控、C_SC_TA_1 时标遥控、选择-执行 SBO 流程、IOA 24 位全宽编解码
+
 **Bug Fix — CI Layer 3 exception lint 门禁失败（IntegrationManager `_ensure_connected` 静默吞异常）：**
 
 - CI（API Consistency Check / check-exception-patterns）扫描出 1 个 error 级违规：`protoforge/integrations/integration/manager.py` `_ensure_connected` 的 `except Exception` 后直接 `return False`，无日志无重抛，连接失败无从排查
