@@ -20,6 +20,12 @@
 - 设备弹窗（快速创建 / 高级创建 / 编辑）的连接注意事项改为数据驱动（`web/src/protocolNotes.js`，双语），选中协议即展示对应条目，新增 15 个协议的已知连接坑：Modbus TCP（Unit ID）、Modbus RTU（串口三要素）、S7（rack/slot 与 PUT/GET）、OPC-UA（Security=None + Anonymous）、IEC 104（CA/IOA）、DL/T 645（表地址与 0x33）、CJ/T 188、FINS（UDP/TCP 端口）、MC（3E/4E 帧）、BACnet（UDP 47808 / BBMD）、FANUC（8192 端口）、OPC DA（DCOM 权限）、AB（CIP 槽号）、GB28181（SIP 注册三元组）、自定义 TCP/UDP（帧格式）
 - 文档新增「其他协议的数据外送」说明：除 MQTT（设备级自定义 broker）与 GB28181（设备主动注册平台）外，其余协议为服务端模型，数据外送统一走数据转发功能
 
+**Bug Fix — 仿真测试"可视化编辑"无法选择操作（下拉空白 + 控制台 `Cannot read properties of undefined (reading 'forEach')`）：**
+
+- 根因：测试步骤的"操作"下拉用 naive-ui n-select 构造分组选项时，把 `{type:'group'}` 分组与选项**平铺**在同一层且分组缺少必需的 `children` 数组，n-select 渲染分组时对 `undefined.forEach` 抛 TypeError，整个下拉组件渲染成空壳——表现为"操作下拉点不开/选不上、设备/测点参数框出不来"，执行测试必然失败
+- 修复：分组选项改为标准嵌套结构（`{type:'group', label, key, children:[...]}`），与导航菜单的写法一致
+- 验证：真实服务 + 浏览器端到端复现（修复前：下拉空壳 + 控制台 TypeError；修复后：下拉正常打开、8 个操作全部可见、选择"读取测点"后设备/测点参数框正常联动出现、无控制台错误）
+
 **Bug Fix — `.env` 编码被改坏导致服务启动崩溃 `UnicodeDecodeError: 'utf-8' codec can't decode`：**
 
 - 根因：`.env.example` 的注释含中文，安装时复制为 `.env`；清理工具或系统自带记事本一旦把 `.env` 重新编码为 GBK/ANSI，服务启动读 `.env`（固定按 UTF-8）即崩溃，且重新安装也无法自愈（安装器保留已存在的 `.env`）

@@ -451,16 +451,17 @@ const actionTypeOptions = computed(() => {
   const categories = {}
   for (const at of actionTypes.value) {
     if (!categories[at.category]) categories[at.category] = []
-    categories[at.category].push(at)
+    categories[at.category].push({ label: at.label, value: at.value })
   }
-  const result = []
-  for (const [cat, items] of Object.entries(categories)) {
-    result.push({ type: 'group', label: cat, key: cat })
-    for (const item of items) {
-      result.push({ label: item.label, value: item.value })
-    }
-  }
-  return result
+  // FIXED-P0: naive-ui 的 n-select 对 type:'group' 选项要求必带 children 数组，
+  // 原实现把分组与选项平铺（group 无 children），渲染时对 undefined.forEach
+  // 抛 TypeError，整个下拉渲染为空壳 —— 表现为"选不了操作、设备参数出不来"。
+  return Object.entries(categories).map(([cat, items]) => ({
+    type: 'group',
+    label: cat,
+    key: cat,
+    children: items,
+  }))
 })
 
 const simpleAssertionOptions = computed(() => {
