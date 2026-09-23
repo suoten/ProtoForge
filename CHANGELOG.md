@@ -93,6 +93,11 @@
 - 修复：单协议启动端点（`POST /protocols/{name}/start`）改为 `restart=True` 语义——协议已运行时先停止再按提交的配置启动（改端口后点启动即生效）；"一键启动全部"已预先过滤运行中的协议、设备创建的协议自动启动、demo 模式、集成管理器均保持原有幂等跳过语义，不受影响
 - 回归测试 `tests/test_protocol_restart_port.py`（3 例）：运行中带新端口重启 → 新端口监听旧端口释放、start-all 幂等性（不重启运行中协议）、设备自动启动路径语义不变；真实服务端到端验证（默认端口启动 → 改 38124 重启 → 38000 关闭 / 38124 监听 / 停止后端口释放）
 
+**Bug Fix — CI Layer 3 exception lint 门禁失败（IntegrationManager `_ensure_connected` 静默吞异常）：**
+
+- CI（API Consistency Check / check-exception-patterns）扫描出 1 个 error 级违规：`protoforge/integrations/integration/manager.py` `_ensure_connected` 的 `except Exception` 后直接 `return False`，无日志无重抛，连接失败无从排查
+- 修复：except 块补 `logger.warning("HTTP ensure_connected failed: %s", e)` 后再返回 False（降级为 warning 级 swallow_return_logged，符合门禁要求）；全量 lint 0 errors，`tests/test_integration.py` + `tests/test_edgelite_point_translation.py` 65 例回归通过
+
 ## v1.2.7 — 2026-09-16
 
 **Bug Fix — 同设备点位地址重叠导致固定值失效/乱值（FLOAT32 占 2 个寄存器互相覆盖）：**

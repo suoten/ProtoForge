@@ -328,7 +328,10 @@ class IntegrationManager:
         try:
             await self._connect_http()
             return self._state.state == ConnectionState.CONNECTED
-        except Exception:
+        except Exception as e:
+            # FIXED-P0: 静默吞掉连接异常会让 _ensure_connected 失败无从排查
+            # （CI Layer 3 exception lint 门禁: except+return 必须先记录日志）
+            logger.warning("HTTP ensure_connected failed: %s", e)
             return False
 
     def _on_auth_password_changed(self, old_password: str, new_password: str) -> None:
