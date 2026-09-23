@@ -210,6 +210,7 @@ export const defaultPointConfig = {
   data_type: 'float32',
   access: 'rw',
   generator_type: 'random',
+  gen_interval: 0,
   min_value: 0,
   max_value: 100,
   fixed_value: null,

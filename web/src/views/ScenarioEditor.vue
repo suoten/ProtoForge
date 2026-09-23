@@ -256,6 +256,7 @@ const pointEditColumns = computed(() => [
   { title: t('common.address'), key: 'address', width: 80, render: (row, idx) => h(NInput, { value: row.address, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].address = v } }) },
   { title: t('common.dataType'), key: 'data_type', width: 100, render: (row, idx) => h(NSelect, { value: row.data_type, size: 'tiny', options: i18nDataTypeOptions.value, onUpdateValue: v => { editingPoints.value[idx].data_type = v } }) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: (row, idx) => h(NSelect, { value: row.generator_type, size: 'tiny', options: i18nGeneratorOptions.value, onUpdateValue: v => { editingPoints.value[idx].generator_type = v } }) },
+  { title: t('common.genInterval'), key: 'gen_interval', width: 100, render: (row, idx) => h(NInputNumber, { value: row.gen_interval ?? 0, size: 'tiny', min: 0, step: 0.1, placeholder: '0', onUpdateValue: v => { editingPoints.value[idx].gen_interval = v ?? 0 } }) },
   { title: t('common.minValue'), key: 'min_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.min_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].min_value = v } }) },
   { title: t('common.maxValue'), key: 'max_value', width: 80, render: (row, idx) => h(NInputNumber, { value: row.max_value, size: 'tiny', onUpdateValue: v => { editingPoints.value[idx].max_value = v } }) },
   { title: t('common.action'), key: 'actions', width: 60, render: (row, idx) => h(NButton, { size: 'tiny', type: 'error', onClick: () => editingPoints.value.splice(idx, 1) }, () => t('common.delete')) },
@@ -275,7 +276,7 @@ function onConnect(params) {
 function onNodeDoubleClick({ node }) {
   const deviceData = node.data || {}
   editingDevice.value = { nodeId: node.id, label: deviceData.label, deviceId: deviceData.deviceId }
-  editingPoints.value = (deviceData.points || [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }]).map(p => ({ ...p }))
+  editingPoints.value = (deviceData.points || [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100 }]).map(p => ({ gen_interval: 0, ...p }))
   showPointsModal.value = true
 }
 
@@ -297,7 +298,7 @@ function onEdgeDoubleClick({ edge }) {
 }
 
 function addPoint() {
-  editingPoints.value.push({ name: '', address: String(editingPoints.value.length), data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 })
+  editingPoints.value.push({ name: '', address: String(editingPoints.value.length), data_type: 'float32', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100 })
 }
 
 function savePoints() {
@@ -356,7 +357,7 @@ async function confirmAddNode() {
   const id = `node-${Date.now()}`
   const x = 100 + Math.random() * 400
   const y = 100 + Math.random() * 300
-  let points = [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', min_value: 0, max_value: 100 }]
+  let points = [{ name: 'value', address: '0', data_type: 'float32', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100 }]
   if (newNode.value.templateId) {
     try {
       const tmplRes = await api.getTemplate(newNode.value.templateId)

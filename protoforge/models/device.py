@@ -121,6 +121,11 @@ class PointConfig(BaseModel):
     generator_type: GeneratorType = GeneratorType.FIXED
     generator_config: dict[str, Any] = Field(default_factory=dict)
 
+    # 测点级生成周期（秒）：0 表示跟随引擎全局 tick 频率每个 tick 都生成；
+    # >0 时该测点每 gen_interval 秒才生成一次新值（实测频率受全局 tick 周期限制，
+    # 即 gen_interval 小于 tick 间隔时最多也只会每个 tick 生成一次）
+    gen_interval: float = Field(default=0.0, ge=0)
+
     min_value: float | None = None
     max_value: float | None = None
     fixed_value: Any | None = None

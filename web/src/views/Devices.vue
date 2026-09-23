@@ -1042,6 +1042,7 @@ const editDevicePointColumns = computed(() => [
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeDevSelectRenderer('data_type', devDataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeDevSelectRenderer('access', devAccessModeOptions) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeDevSelectRenderer('generator_type', devGeneratorOptions) },
+  { title: t('common.genInterval'), key: 'gen_interval', width: 100, render: makeDevEditRenderer('gen_interval', NInputNumber) },
   { title: t('common.minValue'), key: 'min_value', width: 110, render: makeDevEditRenderer('min_value', NInputNumber) },
   { title: t('common.maxValue'), key: 'max_value', width: 110, render: makeDevEditRenderer('max_value', NInputNumber) },
   { title: t('common.fixedValue'), key: 'fixed_value', width: 90, render: makeDevEditRenderer('fixed_value', NInput) },
@@ -1054,7 +1055,7 @@ function addEditDevicePoint() {
   if (!editDevice.value.points) editDevice.value.points = []
   // 默认地址自动避开已占用寄存器（多字节类型占多个，与后端重叠校验规则一致），
   // 否则保存时会被 400 "检测到同设备点位地址重叠" 拦截，表现为"更新失败"
-  editDevice.value.points.push({ name: nextPointName(editDevice.value.points), address: nextFreeModbusAddress(editDevice.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+  editDevice.value.points.push({ name: nextPointName(editDevice.value.points), address: nextFreeModbusAddress(editDevice.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 function openQuickCreate() {
@@ -1365,6 +1366,7 @@ async function openEditDevice(row) {
         data_type: p.data_type || 'float32',
         access: p.access || 'rw',
         generator_type: p.generator_type || 'random',
+        gen_interval: p.gen_interval ?? 0,
         min_value: p.min_value ?? 0,
         max_value: p.max_value ?? 100,
         fixed_value: p.fixed_value ?? null,

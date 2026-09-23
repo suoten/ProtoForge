@@ -1071,10 +1071,16 @@ class SimulationEngine:
                     # FIXED: 使用 sync_point_value 替代 write_point，绕过访问控制检查，
                     # 避免将值写入 _written_values 导致生成器冻结
                     server = self._protocol_servers.get(instance.protocol)
+                    # 测点级生成周期：只同步本 tick 实际重新生成的测点，
+                    # 未到期测点保持旧值（无论协议服务器是否在运行都要消费，避免集合无限增长）
+                    updated_points = instance.consume_updated_points()
                     if server and server.status == ProtocolStatus.RUNNING:
                         for pv in instance.read_all_points():
                             point_cfg = instance.get_point_config(pv.name)  # FIXED-M07: 使用公开方法而非直接访问私有属性
                             if point_cfg and point_cfg.generator_type != GeneratorType.FIXED:
+                                # 测点级生成周期：未到生成周期的测点本 tick 未变化，跳过同步
+                                if pv.name not in updated_points:
+                                    continue
                                 # FIX: 定时冻结 — 跳过仍在冻结期的点位，冻结到期后自动恢复同步
                                 if pv.name in instance._written_points:
                                     continue

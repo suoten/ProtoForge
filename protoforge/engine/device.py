@@ -47,6 +47,10 @@ class DeviceInstance:
         self._generator = generator
         self._point_values: dict[str, Any] = {}
         self._point_configs: dict[str, PointConfig] = {}
+        # 测点级生成周期：记录每测点上次生成时间与本 tick 实际生成过的测点，
+        # 供引擎只同步发生了变化的测点（未到期测点保持旧值不变）
+        self._point_last_gen: dict[str, float] = {}   # point_name -> last generation timestamp
+        self._updated_points: set[str] = set()        # names regenerated during the latest tick
         # FIX: 定时冻结 — 写入后冻结 WRITE_FREEZE_SECONDS 秒，到期后自动解冻恢复生成器
         self._written_points: dict[str, float] = {}  # point_name -> expiry_timestamp
         self._lock = asyncio.Lock()
@@ -335,8 +339,16 @@ class DeviceInstance:
                 if name in self._written_points:
                     continue
                 if point.generator_type != GeneratorType.FIXED:
+                    # 测点级生成周期：gen_interval > 0 时到期才重新生成，否则保持旧值
+                    gi = getattr(point, "gen_interval", 0) or 0
+                    if gi > 0:
+                        last = self._point_last_gen.get(name)
+                        if last is not None and (now - last) < gi - 1e-6:
+                            continue
                     try:
                         self._point_values[name] = self._generator.generate(point)
+                        self._point_last_gen[name] = now
+                        self._updated_points.add(name)
                     except DeviceFailureException:
                         # DEVICE_FAILURE 故障：数据生成失败，触发状态机故障
                         logger.warning(
@@ -357,17 +369,27 @@ class DeviceInstance:
                 try:
                     outputs = self._control_loops.tick(self, dt)
                     for point_name, value in outputs.items():
-                        if point_name in self._point_values:
-                            self._point_values[point_name] = value
-                        else:
+                        is_new_point = point_name not in self._point_values
+                        self._point_values[point_name] = value
+                        self._updated_points.add(point_name)
+                        if is_new_point:
                             # 控制输出点位不在预设点位中，动态添加
-                            self._point_values[point_name] = value
                             logger.debug(
                                 "Device %s: control loop wrote to new point %s = %.4f",
                                 self.config.id, point_name, value,
                             )
                 except Exception as e:
                     logger.warning("Device %s: control loop tick error: %s", self.config.id, e)
+
+    def consume_updated_points(self) -> set[str]:
+        """返回并清空本 tick 实际重新生成/被控制回路改写的测点名集合。
+
+        引擎在 ``DeviceInstance.tick()`` 之后调用，只把这些测点同步到
+        协议服务器；未到生成周期的测点保持旧值，不再重复同步。
+        """
+        updated = self._updated_points
+        self._updated_points = set()
+        return updated
 
     def clear_written_points(self, point_name: str = "") -> None:
         """清除外部写入标记，恢复生成器动态输出。
