@@ -920,7 +920,7 @@ class IntegrationManager:
         try:
             login_resp = await client.post(
                 f"{test_url.rstrip('/')}/api/v1/auth/login",
-                json={"username": test_user, "password": test_pass},
+                json={"username": test_user, "password": test_pass, "no_revoke": True},
             )
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             return {"ok": False, "error": str(e)}
@@ -966,7 +966,7 @@ class IntegrationManager:
                         # 重新登录获取新 token
                         relogin_resp = await client.post(
                             f"{test_url.rstrip('/')}/api/v1/auth/login",
-                            json={"username": test_user, "password": new_password},
+                            json={"username": test_user, "password": new_password, "no_revoke": True},
                         )
                         if relogin_resp.status_code == 200:
                             token = _extract_token(relogin_resp) or token
