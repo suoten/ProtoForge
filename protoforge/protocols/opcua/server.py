@@ -219,16 +219,14 @@ class OpcUaServer(ProtocolServer):
 
     @staticmethod
     def _get_local_ip() -> str:
-        """获取本机局域网IP地址，用于OPC UA endpoint广播。"""
-        import socket
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return ""
+        """获取本机局域网IP地址，用于OPC UA endpoint广播。
+
+        FIXED(Issue#15): 旧实现用 UDP connect 8.8.8.8 探测，VPN 虚拟网卡
+        （FakeIP 198.18.x.x）会劫持默认路由导致返回不可达地址，
+        改用跳过虚拟网段的共享探测工具。
+        """
+        from protoforge.core.netutils import detect_lan_ip
+        return detect_lan_ip()
 
     async def read_point_history(self, device_id: str, point_name: str) -> list[dict]:
         """读取点位历史数据（HistoricalAccess）。

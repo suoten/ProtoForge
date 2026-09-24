@@ -2,6 +2,7 @@
 
 import logging
 import re
+import socket
 import threading
 import time
 import uuid
@@ -286,18 +287,17 @@ def get_protoforge_host() -> str:
 
     host = s.host
     if host in ("0.0.0.0", ""):
-        import socket
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-                sock.settimeout(2)
-                sock.connect(("8.8.8.8", 80))
-                host = sock.getsockname()[0]
-        except Exception as e:
-            logger.debug("Failed to detect local IP via UDP: %s", e)
+        # FIXED(Issue#15): VPN 工具（Clash/Surge 等）把默认路由指向 utun 虚拟网卡时，
+        # 传统 UDP connect 8.8.8.8 探测会返回 FakeIP（198.18.x.x）等虚拟地址，
+        # 导致上报给 EdgeLite 网关的回调地址不可达。改用跳过虚拟网段的探测。
+        from protoforge.core.netutils import detect_lan_ip, is_usable_lan_ip
+        host = detect_lan_ip()
+        if not host:
             try:
-                host = socket.gethostbyname(socket.gethostname())
-            except Exception as e2:
-                logger.debug("Failed to detect local IP via hostname: %s, using 127.0.0.1", e2)
+                cand = socket.gethostbyname(socket.gethostname())
+                host = cand if is_usable_lan_ip(cand) else "127.0.0.1"
+            except OSError:
+                logger.debug("Failed to detect local IP via hostname, using 127.0.0.1")
                 host = "127.0.0.1"
     return host
 
