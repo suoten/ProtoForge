@@ -586,15 +586,11 @@ class SimulationEngine:
                 for new_point in config.points:
                     instance._point_configs[new_point.name] = new_point
                 server = self._protocol_servers.get(config.protocol)
-                if server and server.status == ProtocolStatus.RUNNING:
-                    try:
-                        if hasattr(server, '_device_configs'):
-                            server._device_configs[device_id] = config
-                        for pv in instance.read_all_points():
-                            with contextlib.suppress(Exception):
-                                await server.write_point(device_id, pv.name, pv.value)
-                    except Exception as e:
-                        logger.warning("Hot-update sync to protocol failed for %s: %s", device_id, e)
+                if server:
+                    # FIXED-P0: 必须走协议服务器标准接口重建内部映射（从站数据区/IOA 点表/behavior），
+                    # 直接改 _device_configs 会让第三方客户端按新配置轮询时读到旧点表，
+                    # 表现为"编辑设备后客户端连线中断/读数不对"
+                    await self._resync_protocol_device(server, device_id, config, old_config, instance)
                 logger.info("Device %s hot-updated (protocol_config only)", device_id)
                 info = self._get_device_info(instance)
                 info.protocol_active = bool(server and server.status == ProtocolStatus.RUNNING)
@@ -617,15 +613,11 @@ class SimulationEngine:
                     instance._point_configs.pop(rm_name, None)
                     instance._point_values.pop(rm_name, None)
                 server = self._protocol_servers.get(config.protocol)
-                if server and server.status == ProtocolStatus.RUNNING:
-                    try:
-                        if hasattr(server, '_device_configs'):
-                            server._device_configs[device_id] = config
-                        for pv in instance.read_all_points():
-                            with contextlib.suppress(Exception):
-                                await server.write_point(device_id, pv.name, pv.value)
-                    except Exception as e:
-                        logger.warning("Hot-update sync to protocol failed for %s: %s", device_id, e)
+                if server:
+                    # FIXED-P0: 必须走协议服务器标准接口重建内部映射（从站数据区/IOA 点表/behavior），
+                    # 直接改 _device_configs 会让第三方客户端按新配置轮询时读到旧点表，
+                    # 表现为"编辑设备后客户端连线中断/读数不对"
+                    await self._resync_protocol_device(server, device_id, config, old_config, instance)
                 logger.info("Device %s hot-updated (points changed: +%d -%d)", device_id, len(added), len(removed))
                 info = self._get_device_info(instance)
                 info.protocol_active = bool(server and server.status == ProtocolStatus.RUNNING)
@@ -664,6 +656,45 @@ class SimulationEngine:
             except Exception as restore_err:
                 logger.critical("Failed to restore old device %s: %s. Device may be lost!", device_id, restore_err)
             raise
+
+    async def _resync_protocol_device(
+        self,
+        server: ProtocolServer,
+        device_id: str,
+        new_config: DeviceConfig,
+        old_config: DeviceConfig | None,
+        instance,
+    ) -> None:
+        """热更新后将设备同步到协议服务器：重建内部映射，不断开客户端连接。
+
+        必须走协议服务器的 remove_device + create_device 标准接口：直接改
+        server._device_configs 不会重建从站数据区/IOA 点表/behavior 等内部映射，
+        第三方客户端按新配置轮询会读到旧点表（非法地址/超时），表现为
+        "编辑设备后客户端连线中断"。这两个接口均为纯内存注册表操作，
+        不触碰监听端口与既有 TCP 连接。
+        """
+        if server.status != ProtocolStatus.RUNNING:
+            return
+        try:
+            await server.remove_device(device_id)
+            await server.create_device(new_config)
+        except Exception:
+            # 重建失败时回滚注册旧配置，避免设备从协议服务器丢失
+            logger.exception("Failed to resync device %s to protocol %s", device_id, new_config.protocol)
+            with contextlib.suppress(Exception):
+                await server.remove_device(device_id)
+            if old_config is not None:
+                with contextlib.suppress(Exception):
+                    await server.create_device(old_config)
+            logger.warning("Device %s protocol resync failed (old registration restored)", device_id)
+            return
+        # 把引擎当前值写回协议服务器（重建后的 behavior 从初始值开始）
+        try:
+            for pv in instance.read_all_points():
+                with contextlib.suppress(Exception):
+                    await server.write_point(device_id, pv.name, pv.value)
+        except Exception as e:
+            logger.warning("Failed to write current values after resync for %s: %s", device_id, e)
 
     def get_all_device_ids(self) -> list[str]:
         return list(self._devices.keys())
