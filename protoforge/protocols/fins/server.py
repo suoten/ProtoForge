@@ -47,11 +47,21 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                 self._sync_value_to_area(name, self._values.get(name, 0))
 
     # FIXED-P0: FINS标准符号地址到区域代码映射
+    # 注意: EdgeLite 驱动对 W/H 区域使用非标准区码 (0xB4/0xB8 而非 0xB1/0xB2)，
+    # 需要同时兼容两套区码。_FINS_AREA_ALIASES 将 EdgeLite 区码映射到标准区码。
     _FINS_AREA_MAP = {
         'CIO': 0xB0, 'WR': 0xB1, 'W': 0xB1, 'HR': 0xB2, 'H': 0xB2,
         'AR': 0xB3, 'A': 0xB3, 'DM': 0x82, 'D': 0x82,
         'EM': 0x90, 'E': 0x90, 'TIM': 0x09, 'T': 0x09,
         'CNT': 0x08, 'C': 0x08,
+    }
+
+    # EdgeLite 驱动非标准区码 → 标准区码的别名映射
+    # EdgeLite: W=0xB4, H=0xB8 (字区码), 0x34/0x38 (位区码)
+    # 标准:    W=0xB1, H=0xB2 (字区码), 0x31/0x32 (位区码)
+    _FINS_AREA_ALIASES = {
+        0xB4: 0xB1,  # EdgeLite W word → standard W word
+        0xB8: 0xB2,  # EdgeLite H word → standard H word
     }
 
     _FINS_BIT_AREA_MAP = {
@@ -60,6 +70,9 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         0x32: 0xB2,  # HR bit -> HR word
         0x33: 0xB3,  # AR bit -> AR word
         0x02: 0x82,  # DM bit -> DM word
+        # EdgeLite 非标准位区码别名
+        0x34: 0xB1,  # EdgeLite W bit -> standard W word
+        0x38: 0xB2,  # EdgeLite H bit -> standard H word
     }
 
     @staticmethod
@@ -145,7 +158,13 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
                 return value
         return self._values.get(point_name, 0)
 
+    @staticmethod
+    def _normalize_area(area: int) -> int:
+        """将 EdgeLite 非标准区码归一化到标准区码。"""
+        return FinsDeviceBehavior._FINS_AREA_ALIASES.get(area, area)
+
     def read_area(self, area: int, offset: int, size: int) -> bytearray:
+        area = self._normalize_area(area)
         if area not in self._memory_areas:
             self._memory_areas[area] = bytearray(max(offset + size, 1024))
         elif len(self._memory_areas[area]) < offset + size:
@@ -153,6 +172,7 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
         return self._memory_areas[area][offset:offset + size]
 
     def write_area(self, area: int, offset: int, data: bytes) -> None:
+        area = self._normalize_area(area)
         if area not in self._memory_areas:
             self._memory_areas[area] = bytearray(1024)
         buf = self._memory_areas[area]
@@ -211,6 +231,7 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
     def sync_word_bits_to_points(self, word_area: int, word_address: int,
                                  data: bytes) -> None:
         """字写入后，同步覆盖范围内的位测点。"""
+        word_area = self._normalize_area(word_area)
         word_count = len(data) // 2
         for name, (point_area, point_word, point_bit) in self._point_bit_addresses.items():
             if point_area != word_area:
@@ -227,6 +248,7 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
     def sync_word_write_to_points(self, word_area: int, word_address: int,
                                   data: bytes) -> None:
         """把协议层的字写入统一同步回所有重叠的非位点位。"""
+        word_area = self._normalize_area(word_area)
         write_start = word_address * 2
         write_end = write_start + len(data)
         for name, (point_area, point_offset) in self._point_addresses.items():

@@ -911,7 +911,7 @@ async def _login_edgelite(client: httpx.AsyncClient, url: str, username: str, pa
     try:
         login_resp = await client.post(
             f"{url.rstrip('/')}/api/v1/auth/login",
-            json={"username": username, "password": password},
+            json={"username": username, "password": password, "no_revoke": True},
         )
     except httpx.ConnectError as e:
         raise EdgeLiteError("connection", desc("edgelite.error.connection").format(error=e), desc("edgelite.suggestion.verify_gateway")) from e
@@ -1837,7 +1837,7 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
     try:
         login_resp = await client.post(
             f"{url.rstrip('/')}/api/v1/auth/login",
-            json={"username": username, "password": password},
+            json={"username": username, "password": password, "no_revoke": True},
         )
     except httpx.ConnectError:
         return {"ok": False, "error": desc("edgelite.error.auth_connection")}

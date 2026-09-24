@@ -72,9 +72,10 @@ class IntegrationAuth:
     async def _login(self) -> None:
         try:
             # FIXED-P0: 使用 post() 替代 stream()，避免 "streaming response content" 错误
+            # FIXED-JOINT: 传入 no_revoke=True 避免撤销已有 EdgeLite 用户 session
             resp = await self._client.post(
                 f"{self._base_url}/api/v1/auth/login",
-                json={"username": self._username, "password": self._password},
+                json={"username": self._username, "password": self._password, "no_revoke": True},
             )
             if resp.status_code != 200:
                 from protoforge.integrations.integration.retry import AuthError
@@ -187,9 +188,10 @@ class IntegrationAuth:
     async def _login_once(self) -> None:
         """单次登录（不触发 must_change_password 检查，防止递归）。"""
         try:
+            # FIXED-JOINT: 传入 no_revoke=True 避免撤销已有 EdgeLite 用户 session
             resp = await self._client.post(
                 f"{self._base_url}/api/v1/auth/login",
-                json={"username": self._username, "password": self._password},
+                json={"username": self._username, "password": self._password, "no_revoke": True},
             )
             if resp.status_code != 200:
                 from protoforge.integrations.integration.retry import AuthError

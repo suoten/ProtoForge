@@ -719,9 +719,9 @@ class OpcUaServer(ProtocolServer):
                 if variant_type:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
-                    # FIX: NodeId 唯一化 - 所有字符串标识符都加设备ID前缀避免多设备冲突
-                    # 当多个设备使用相同的 ns=X;s=Y 地址时，NodeId 会冲突导致后续设备节点创建失败
-                    # 解决方案：字符串 NodeId 统一加 device_id 前缀，数字 NodeId 保持原样
+                    # FIX: NodeId 唯一化 - 仅对非 ns= 格式的地址加设备ID前缀避免多设备冲突。
+                    # 当用户显式指定 ns=X;s=Y 时，直接使用该 NodeId，不加前缀，
+                    # 确保 EdgeLite 等外部客户端可以用模板中配置的地址直接访问节点。
                     if not node_id_str.startswith('ns='):
                         unique_id = f"{config.id}.{point.name}"
                         ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
@@ -730,8 +730,7 @@ class OpcUaServer(ProtocolServer):
                         if is_numeric:
                             ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
                         else:
-                            unique_id = f"{config.id}.{parsed_id}"
-                            ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
+                            ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
                         ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
                     try:
                         if variant_type:

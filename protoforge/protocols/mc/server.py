@@ -154,6 +154,26 @@ class McDeviceBehavior(StandardDeviceBehavior):
             return True
         return False
 
+    def get_value(self, point_name: str) -> Any:
+        """FIXED-JOINT: 覆写 get_value，在生成器产生新值时同步到 MC 内存。
+
+        原问题：StandardDeviceBehavior.get_value() 对 sine/random 等动态生成器
+        只更新 _values 字典，不同步到 _device_memory。EdgeLite 通过 SLMP 读取
+        的是 _device_memory，导致读到旧值/初始值（如 float32 点位读到 0 或错位值）。
+        """
+        gen = self._generators.get(point_name)
+        if gen:
+            pt = self._points.get(point_name)
+            if pt and hasattr(pt, "generator_type"):
+                if pt.generator_type.value != "fixed" and point_name in self._written_values:
+                    return self._written_values[point_name]
+                if pt.generator_type.value != "fixed":
+                    value = gen.generate()
+                    self._values[point_name] = value
+                    self._sync_value_to_memory(point_name, value)
+                    return value
+        return self._values.get(point_name, 0)
+
     def set_value(self, point_name: str, value: Any) -> None:
         self._values[point_name] = value
         if point_name in self._point_addresses:
@@ -394,7 +414,8 @@ class McServer(ProtocolServer):
         else:
             return self._make_error_response(data, 0xC059)
 
-        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
+        lookup_key = device_id or self._default_device_id or ""
+        behavior = self._behaviors.get(lookup_key)  # FIXED-P1: 使用路由后的device_id
         if behavior:
             if self._is_bit_subcmd(subcmd):
                 read_data = behavior.read_bits_from_memory(device_code, start_addr, point_count)
@@ -645,12 +666,26 @@ class McServer(ProtocolServer):
         }
 
     def _find_device_by_params(self, network: int, station: int, pc: int) -> str | None:  # FIXED-P1: 根据network/station/pc路由到匹配设备
-        for dev_id, params in self._device_params.items():
+        # FIXED-JOINT: 当多个设备共享相同的 network/station/pc 时，
+        # 原实现返回字典遍历的第一个匹配项，但该设备可能不是请求的目标。
+        # 此场景在联调中很常见（多个仿真设备使用默认参数 network=0/station=0/pc=255）。
+        # 修复：收集所有匹配设备，如果只有一个则返回它；如果有多个则优先返回
+        # _default_device_id（最后创建的设备通常是联调脚本刚推送的目标），
+        # 否则返回第一个匹配项以保持向后兼容。
+        matches = [
+            dev_id for dev_id, params in self._device_params.items()
             if (params.get("network") == network and
                 params.get("station") == station and
-                params.get("pc") == pc):
-                return dev_id
-        return None
+                params.get("pc") == pc)
+        ]
+        if not matches:
+            return None
+        if len(matches) == 1:
+            return matches[0]
+        # Multiple devices share the same routing params — prefer default device if it matches
+        if self._default_device_id in matches:
+            return self._default_device_id
+        return matches[0]
 
     @staticmethod
     def _ascii_to_hex(ascii_str: bytes) -> int:

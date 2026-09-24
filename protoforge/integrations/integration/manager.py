@@ -920,7 +920,7 @@ class IntegrationManager:
         try:
             login_resp = await client.post(
                 f"{test_url.rstrip('/')}/api/v1/auth/login",
-                json={"username": test_user, "password": test_pass},
+                json={"username": test_user, "password": test_pass, "no_revoke": True},
             )
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             return {"ok": False, "error": str(e)}
@@ -966,7 +966,7 @@ class IntegrationManager:
                         # 重新登录获取新 token
                         relogin_resp = await client.post(
                             f"{test_url.rstrip('/')}/api/v1/auth/login",
-                            json={"username": test_user, "password": new_password},
+                            json={"username": test_user, "password": new_password, "no_revoke": True},
                         )
                         if relogin_resp.status_code == 200:
                             token = _extract_token(relogin_resp) or token
@@ -1433,6 +1433,9 @@ class IntegrationManager:
                         else:
                             # 扁平格式
                             points_data = all_values
+                    elif hasattr(instance, "get_point_values_snapshot"):
+                        # DeviceInstance: 使用 get_point_values_snapshot 获取当前值
+                        points_data = instance.get_point_values_snapshot()
                     elif hasattr(instance, "read_points"):
                         # read_points 返回 list[PointValue]
                         pts = instance.read_points(device_id)
@@ -1445,6 +1448,8 @@ class IntegrationManager:
                             pt_value = getattr(pt, "current_value", None)
                             if pt_value is None:
                                 pt_value = getattr(pt, "value", None)
+                            if pt_value is None:
+                                pt_value = getattr(pt, "fixed_value", None)
                             if pt_name and pt_value is not None:
                                 points_data[pt_name] = pt_value
 
