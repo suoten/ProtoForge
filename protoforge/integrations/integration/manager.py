@@ -1433,6 +1433,9 @@ class IntegrationManager:
                         else:
                             # 扁平格式
                             points_data = all_values
+                    elif hasattr(instance, "get_point_values_snapshot"):
+                        # DeviceInstance: 使用 get_point_values_snapshot 获取当前值
+                        points_data = instance.get_point_values_snapshot()
                     elif hasattr(instance, "read_points"):
                         # read_points 返回 list[PointValue]
                         pts = instance.read_points(device_id)
@@ -1445,6 +1448,8 @@ class IntegrationManager:
                             pt_value = getattr(pt, "current_value", None)
                             if pt_value is None:
                                 pt_value = getattr(pt, "value", None)
+                            if pt_value is None:
+                                pt_value = getattr(pt, "fixed_value", None)
                             if pt_name and pt_value is not None:
                                 points_data[pt_name] = pt_value
 

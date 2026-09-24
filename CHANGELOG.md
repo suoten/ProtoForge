@@ -102,6 +102,16 @@
 - 修复：单协议启动端点（`POST /protocols/{name}/start`）改为 `restart=True` 语义——协议已运行时先停止再按提交的配置启动（改端口后点启动即生效）；"一键启动全部"已预先过滤运行中的协议、设备创建的协议自动启动、demo 模式、集成管理器均保持原有幂等跳过语义，不受影响
 - 回归测试 `tests/test_protocol_restart_port.py`（3 例）：运行中带新端口重启 → 新端口监听旧端口释放、start-all 幂等性（不重启运行中协议）、设备自动启动路径语义不变；真实服务端到端验证（默认端口启动 → 改 38124 重启 → 38000 关闭 / 38124 监听 / 停止后端口释放）
 
+**Improvement — EdgeLite 联调修复批次（登录会话/区码兼容/读数链路/NodeId/路由）：**
+
+- EdgeLite 登录统一传 `no_revoke=True`（`edgelite.py` / `integration/auth.py` / `integration/manager.py` 共 5 处登录调用）：避免每次联调登录都撤销已有用户 session，反复登录导致对方被踢下线
+- FINS（`protocols/fins/server.py`）：兼容 EdgeLite 驱动对 W/H 区域的非标准区码（0xB4/0xB8 字区、0x34/0x38 位区），读写与字-位同步统一经 `_normalize_area` 归一化到标准区码（0xB1/0xB2）
+- MC/SLMP（`protocols/mc/server.py`）：覆写 `get_value`——正弦波/随机游走等动态生成器产生的新值同步写入 `_device_memory`（原实现只更新字典，EdgeLite 经 SLMP 读取 `_device_memory` 拿到旧值/初始值）；多设备共享 network/station/pc 路由参数时的设备路由优先 `_default_device_id`
+- OPC-UA（`protocols/opcua/server.py`）：用户显式指定 `ns=X;s=Y` 的点位地址不再追加设备前缀，EdgeLite 等外部客户端可直接按模板配置的 NodeId 访问；仅非 ns= 格式地址保留唯一化前缀防多设备冲突
+- IntegrationManager（`integration/manager.py`）：值采集新增 `get_point_values_snapshot` 快照通道，点位值兜底取 `fixed_value`，减少联调时"读到空值"
+- 联调测试（`tests/test_real_machine_joint.py`）：EdgeLite 子进程优先使用其自带虚拟环境解释器（`.venv-ci`/`.venv`），避免 ProtoForge venv 缺少 edgelite 运行依赖导致用例误报
+- 验证：`tests/test_fins_bits.py` + `tests/test_edgelite_point_translation.py` + `tests/test_net_detect.py` + `tests/test_integration.py`（86 例）与 `tests/test_e2e_multi_protocol_real.py`（10 例，真实 MC/FINS/OPC-UA 服务端到端）全部通过
+
 **Bug Fix — VPN 虚拟网卡导致回调地址探测到 FakeIP，网关无法回连（Issue #15）：**
 
 - 用户环境开启 VPN（Clash/Surge 等）后，服务把本机地址自动上报为虚拟网卡上的 FakeIP（198.18.x.x，RFC 2544 保留段）——传统探测方式"UDP connect 8.8.8.8 后读 `getsockname()`"依赖默认路由，而 VPN 把默认路由指向 utun 虚拟网卡，探测结果必然是虚拟地址

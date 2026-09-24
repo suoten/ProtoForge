@@ -198,8 +198,16 @@ async def real_edgelite():
     }
 
     log_file = open(log_path, "w", encoding="utf-8", errors="replace")
+    # FIXED-JOINT: 优先使用 EdgeLite 自带虚拟环境的解释器。sys.executable（ProtoForge
+    # 的 venv）缺少 edgelite 运行依赖（如 influxdb_client），子进程启动即崩，
+    # 用例只能报 "EdgeLite did not become ready"。
+    _candidates = [
+        os.path.join(EDGELITE_DIR, ".venv-ci", "Scripts", "python.exe"),
+        os.path.join(EDGELITE_DIR, ".venv", "Scripts", "python.exe"),
+    ]
+    interpreter = next((c for c in _candidates if os.path.isfile(c)), sys.executable)
     proc = subprocess.Popen(
-        [sys.executable, "main.py", "--host", "127.0.0.1", "--port", str(port)],
+        [interpreter, "main.py", "--host", "127.0.0.1", "--port", str(port)],
         cwd=EDGELITE_DIR,
         env=env,
         stdout=log_file,
