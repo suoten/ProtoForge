@@ -102,6 +102,14 @@
 - 修复：单协议启动端点（`POST /protocols/{name}/start`）改为 `restart=True` 语义——协议已运行时先停止再按提交的配置启动（改端口后点启动即生效）；"一键启动全部"已预先过滤运行中的协议、设备创建的协议自动启动、demo 模式、集成管理器均保持原有幂等跳过语义，不受影响
 - 回归测试 `tests/test_protocol_restart_port.py`（3 例）：运行中带新端口重启 → 新端口监听旧端口释放、start-all 幂等性（不重启运行中协议）、设备自动启动路径语义不变；真实服务端到端验证（默认端口启动 → 改 38124 重启 → 38000 关闭 / 38124 监听 / 停止后端口释放）
 
+**Bug Fix — VPN 虚拟网卡导致回调地址探测到 FakeIP，网关无法回连（Issue #15）：**
+
+- 用户环境开启 VPN（Clash/Surge 等）后，服务把本机地址自动上报为虚拟网卡上的 FakeIP（198.18.x.x，RFC 2544 保留段）——传统探测方式"UDP connect 8.8.8.8 后读 `getsockname()`"依赖默认路由，而 VPN 把默认路由指向 utun 虚拟网卡，探测结果必然是虚拟地址
+- 影响：EdgeLite 等集成上报给网关的 ProtoForge 回调地址不可达（`get_protoforge_host()`）；OPC UA endpoint 广播地址同理
+- 修复：新增共享探测工具 `protoforge/core/netutils.py`——优先枚举与本机主机名关联的地址（通常只含真实物理网卡），过滤 FakeIP(198.18.0.0/15)、CGNAT(100.64.0.0/10)、链路本地(169.254/16)等虚拟/保留网段后按 192.168 > 10 > 172.16-31 优先级选择；UDP 探测降级为回退路径且结果同样过滤。`get_protoforge_host()` 与 OPC UA `_get_local_ip()` 统一接入
+- 手动兜底不变：`PROTOFORGE_PUBLIC_HOST` 环境变量仍可强制指定对外地址
+- 回归测试 `tests/test_net_detect.py`（14 例）：虚拟网段判定、FakeIP+真实网卡混合候选选择、网段优先级、仅虚拟候选时返回空、UDP 回退过滤、EdgeLite 回调地址跳过 FakeIP、PUBLIC_HOST 覆盖优先
+
 **Bug Fix — 编辑设备保存后第三方客户端显示连线中断（热更新绕过协议服务器重建）：**
 
 - 用户反馈：经常在"设备管理 → 编辑设备"保存后，第三方客户端显示连线中断
