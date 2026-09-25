@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.2 — 2026-09-25
+
+**Bug Fix — 编辑设备弹窗测点表格"访问模式"显示 accessModes.rw、数据类型下拉选项截断（UIN.../FLO...，用户截图反馈）：**
+
+- 根因一：constants.js 中访问模式 label 是 i18n key（`accessModes.r/rw/w`），但 i18n.js 缺少 `accessModes` 翻译段，t() 找不到就原样返回 key 本身
+- 根因二：NSelect 菜单宽度默认跟随触发器宽度，列宽较窄时下拉选项被省略号截断
+- 修复：i18n 补充 `accessModes` 中英文段（只读/只写/读写）；Devices.vue 与 Templates.vue 测点表格下拉渲染统一加 `consistent-menu-width=false`（菜单宽度自适应内容）；设备编辑弹窗加宽至 1180px、scroll-x 同步 1160
+- 验证：真实服务 + 浏览器实测——访问模式显示"读写"、数据类型触发器完整显示 FLOAT32/INT16/布尔、下拉展开后全部选项（布尔/INT16/INT32/UINT16/UINT32/FLOAT32/FLOAT64/字符串）完整无截断
+
 ## v1.3.1 — 2026-09-23
 
 **Improvement — Docker 部署连接不上协议端口的引导（用户反馈：S7 工具连 172.17.0.2:102 超时）：**

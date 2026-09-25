@@ -187,7 +187,7 @@
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showEditModal" preset="card" :title="t('devices.editDevice')" style="width:min(900px, 95vw)">
+      <n-modal v-model:show="showEditModal" preset="card" :title="t('devices.editDevice')" style="width:min(1180px, 96vw)">
         <n-form ref="editFormRef" :model="editDevice" :rules="editRules" label-placement="left" label-width="80">
           <n-form-item :label="t('devices.deviceName')" path="name"><n-input v-model:value="editDevice.name" /></n-form-item>
           <n-form-item :label="t('devices.protocol')"><n-input :value="editDevice.protocol" disabled /></n-form-item>
@@ -223,7 +223,7 @@
         <div v-if="!editDevice.points || editDevice.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="1070" style="margin-top:8px" />
+        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="1160" style="margin-top:8px" />
         <template #action>
           <n-space>
             <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
@@ -1033,6 +1033,7 @@ function makeDevSelectRenderer(key, options) {
     value: editDevice.value.points?.[idx]?.[key],
     size: 'tiny',
     options: unref(options),
+    consistentMenuWidth: false, // FIXED: 菜单宽度不再跟随触发器，避免"UIN.../FLO..."选项截断
     style: 'width:100%',
     onUpdateValue: (v) => { const p = editDevice.value.points?.[idx]; if (p) p[key] = v },
   })

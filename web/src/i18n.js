@@ -539,6 +539,11 @@ const messages = {
       totalDevices: '设备总数',
       totalProtocols: '共 {n} 个协议',
     },
+    accessModes: {
+      r: '只读',
+      rw: '读写',
+      w: '只写',
+    },
     dataTypes: {
       bool: '布尔',
       float32: 'FLOAT32',
@@ -2748,6 +2753,11 @@ const messages = {
       title: 'Dashboard',
       totalDevices: 'Total Devices',
       totalProtocols: '{n} protocols total',
+    },
+    accessModes: {
+      r: 'Read',
+      rw: 'Read/Write',
+      w: 'Write',
     },
     dataTypes: {
       bool: 'BOOL',

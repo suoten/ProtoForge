@@ -326,6 +326,7 @@ function makeSelectRenderer(key, sourceRef, options) {
     value: sourceRef.value.points[idx]?.[key],
     size: 'tiny',
     options: unref(options),
+    consistentMenuWidth: false, // FIXED: 菜单宽度自适应内容，避免下拉选项截断
     style: 'width:100%',
     onUpdateValue: (v) => { const p = sourceRef.value.points[idx]; if (p) p[key] = v },
   })
