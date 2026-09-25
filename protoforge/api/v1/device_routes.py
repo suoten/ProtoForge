@@ -5,8 +5,10 @@ import csv as _csv
 import io as _io
 import logging
 import math
+import os
 import re
 import uuid
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -573,6 +575,13 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     if config.get("host") in ("0.0.0.0", ""):
         config["host"] = get_protoforge_host()
 
+    # Docker 容器内部署时，自动探测到的 host 是容器内网 IP（如 172.17.x.x），
+    # 宿主机/外部客户端无法直达，明确提示改用宿主机 IP + 端口映射
+    host_warning = ""
+    if Path("/.dockerenv").exists() or os.environ.get("PROTOFORGE_IN_CONTAINER"):
+        from protoforge.observability.messages import desc as _desc
+        host_warning = _desc("guide.container_host_warning", lang, "")
+
     # Filter connection_info to only show relevant connection parameters
     _irrelevant_keys = {"display_name", "description", "icon", "config"}
     connection_info = {k: v for k, v in config.items() if k not in _irrelevant_keys and not isinstance(v, (dict, list))}
@@ -617,6 +626,7 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
         "code_examples": code_examples,
         "connection_info": connection_info,
         "protocol_status": protocol_status,
+        "host_warning": host_warning,
     }
 
 

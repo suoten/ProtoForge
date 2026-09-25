@@ -436,6 +436,7 @@ TEST_MESSAGES = {
         "protocol.custom_udp.desc": "自定义UDP协议 - 用户自定义UDP帧格式仿真，支持十六进制模板解析、数据报通信，适用于低开销实时数据",
         "protocol.s7plus.desc": "西门子S7Comm-Plus协议 - S7-1200/1500新一代通信协议，基于TPKT/COTP，支持优化块访问、SZL读取、符号寻址",
         # Protocol usage (connection guide) i18n
+        "guide.container_host_warning": "检测到 ProtoForge 运行在 Docker 容器内：上方 host 是容器内网地址（如 172.17.x.x），宿主机/外部机器无法直接访问。请在客户端改用宿主机 IP（同机可用 127.0.0.1）+ 映射后的端口，并确认启动容器时已用 -p 把该协议端口映射到宿主机（如 -p 102:102）。",
         "protocol.modbus_tcp.usage.mode_label": "服务器仿真(从站)",
         "protocol.modbus_tcp.usage.mode_desc": "ProtoForge模拟Modbus TCP从站，您的应用程序作为主站连接进行寄存器读写",
         "protocol.modbus_tcp.usage.connect_hint": "在您的Modbus主站程序中，填写以下连接参数：",
@@ -780,6 +781,7 @@ TEST_MESSAGES = {
         "protocol.custom_udp.desc": "Custom UDP Protocol - User-defined UDP frame format simulation, supports hex template parsing, datagram-based communication, suitable for low-overhead real-time data",
         "protocol.s7plus.desc": "Siemens S7Comm-Plus Protocol - S7-1200/1500 next-gen communication protocol, TPKT/COTP based, supports optimized block access, SZL read, symbolic addressing",
         # Protocol usage (connection guide) i18n
+        "guide.container_host_warning": "ProtoForge is running inside a Docker container: the host above is the container-internal address (e.g. 172.17.x.x), which is not directly reachable from the host machine or other machines. Use the host machine's IP (127.0.0.1 on the same machine) plus the mapped port, and make sure the protocol port is published with -p when starting the container (e.g. -p 102:102).",
         "protocol.modbus_tcp.usage.mode_label": "Server Simulation (Slave)",
         "protocol.modbus_tcp.usage.mode_desc": "ProtoForge simulates a Modbus TCP Slave, your application connects as Master to read/write registers",
         "protocol.modbus_tcp.usage.connect_hint": "In your Modbus Master program, fill in the connection parameters:",

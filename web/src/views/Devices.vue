@@ -253,6 +253,9 @@
       <n-modal v-model:show="showGuideModal" preset="card" :title="t('devices.connectionGuide')" style="width:min(680px, 90vw)">
         <div v-if="guideData">
           <n-space vertical size="large">
+            <n-alert v-if="guideData.host_warning" type="warning" :bordered="false">
+              <div>{{ guideData.host_warning }}</div>
+            </n-alert>
             <n-alert v-if="guideData.protocol_status !== 'running'" type="warning" :bordered="false">
               <div style="font-weight:600;margin-bottom:4px">{{ t('devices.protocolNotRunning') }}</div>
               <div>{{ t('devices.protocolNotRunningDesc') }}</div>

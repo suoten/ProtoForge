@@ -108,13 +108,25 @@ python -m protoforge.main
 直接使用 Docker Hub 上的预构建镜像，无需克隆代码，无需编译：
 
 ```bash
-docker run -d --name protoforge -p 8000:8000 -v protoforge-data:/app/data suoten/protoforge:latest
+# IMPORTANT: 除了 Web 界面的 8000 端口，还必须把需要的协议端口一并映射，
+# 否则外部客户端（PLC 工具 / HMI / SCADA）无法连接仿真设备：
+#   Modbus TCP 502 | Siemens S7 102 | OPC-UA 4840 | FINS 9600 | MC 5007 | AB 44818 ...
+# 各协议默认端口见 docs/USER_GUIDE.md 及「协议服务」页详情。下面示例映射常用几个：
+docker run -d --name protoforge \
+  -p 8000:8000 \
+  -p 502:502 -p 102:102 -p 4840:4840 -p 44818:44818 \
+  -v protoforge-data:/app/data \
+  suoten/protoforge:latest
 ```
+
+> ⚠️ 常见问题：只映射 8000 时 Web 界面一切正常，但 PLC 工具连接协议端口会**超时**；
+> 且连接指南里显示的 `172.17.x.x` 是容器内网 IP，宿主机/外部机器**不可直达**，
+> 客户端请填宿主机 IP（同机填 `127.0.0.1`）+ 映射后的端口。
 
 打开浏览器访问 http://localhost:8000 登录。管理员账号为 `admin`，密码说明：
 
 - 未设置 `PROTOFORGE_ADMIN_PASSWORD` 时，首次启动会**自动生成随机密码**，打印在启动横幅中，用 `docker logs protoforge` 查看；
-- 也可以在启动时直接指定密码：`docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=你的密码 -v protoforge-data:/app/data suoten/protoforge:latest`。
+- 也可以在启动时直接指定密码：`docker run -d --name protoforge -p 8000:8000 -p 502:502 -p 102:102 -e PROTOFORGE_ADMIN_PASSWORD=你的密码 -v protoforge-data:/app/data suoten/protoforge:latest`。
 
 停止服务：`docker stop protoforge && docker rm protoforge`
 
