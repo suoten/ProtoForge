@@ -511,14 +511,29 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
     if normalized_protocol == "modbus_tcp":
         base = {"host": host, "port": port or 5020, "slave_id": protocol_config.get("slave_id", 1), "timeout": timeout}
     elif normalized_protocol == "modbus_rtu":
-        base = {
-            "port": protocol_config.get("serial_port", "/dev/ttyUSB0"),
-            "baudrate": protocol_config.get("baudrate", 9600),
-            "slave_id": protocol_config.get("slave_id", 1),
-            "parity": protocol_config.get("parity", "N"),
-            "stopbits": protocol_config.get("stopbits", protocol_config.get("stop_bits", 1)),
-            "timeout": timeout,
-        }
+        serial_port = protocol_config.get("serial_port") or ""
+        if serial_port:
+            # 真串口直连
+            base = {
+                "serial_port": serial_port,
+                "baudrate": protocol_config.get("baudrate", 9600),
+                "slave_id": protocol_config.get("slave_id", 1),
+                "parity": protocol_config.get("parity", "N"),
+                "stopbits": protocol_config.get("stopbits", protocol_config.get("stop_bits", 1)),
+                "timeout": timeout,
+            }
+        else:
+            # FIXED-JOINT: RTU over TCP —— ProtoForge 的 modbus_rtu 服务端在
+            # TCP bridge 模式监听（无串口环境默认 5021+），EdgeLite 的
+            # modbus_rtu 驱动在无 serial_port 时按 host+port 走 RTU/TCP。
+            # 原实现把串口路径塞进 "port" 字段，EdgeLite 解析成数字失败
+            # 后回落 502，永远连不上。
+            base = {
+                "host": host,
+                "port": port or 5021,
+                "slave_id": protocol_config.get("slave_id", 1),
+                "timeout": timeout,
+            }
     elif normalized_protocol == "opcua":
         ua_port = port or 4840
         # 优先使用用户配置的 server_url/endpoint，但需要更新端口（可能因冲突自动切换）
@@ -780,12 +795,13 @@ def _translate_point_address(
         if fins_dt and "," not in addr_str:
             return {"address": f"{addr_str},{fins_dt}"}
 
-    # OPC-UA: 字符串 NodeId 加设备 ID 前缀确保唯一性
-    # OPC UA 服务器为每个设备的字符串 NodeId 加了 device_id 前缀
-    # 推送到 EdgeLite 时也需要同步使用带前缀的地址
-    if norm == "opcua" and device_id and addr_str.startswith("ns=") and ";s=" in addr_str:
-        parts = addr_str.split(";s=", 1)
-        return {"address": f"{parts[0]};s={device_id}.{parts[1]}"}
+    # OPC-UA: 字符串 NodeId 透传。
+    # OPC-UA server（protocols/opcua/server.py NodeId 唯一化 FIX）对显式 ns=X;s=Y
+    # 的地址直接使用该 NodeId、不加设备 ID 前缀；此处同步透传，否则 EdgeLite 会
+    # 读取 server 上不存在的 "ns=X;s={device_id}.{name}" 节点（BadNodeIdUnknown）。
+    # 仅非 ns= 的裸地址仍按 server 的唯一化规则加前缀，保持与 server 端一致。
+    if norm == "opcua" and device_id and addr_str and not addr_str.startswith("ns="):
+        return {"address": f"{device_id}.{addr_str}"}
     # MQTT/HTTP/其他：address 即 topic/path，透传
     return {"address": addr_str}
 
@@ -852,6 +868,12 @@ def convert_device_to_edgelite(
 
     edgelite_protocol = proto_result.edgelite_protocol
     config = getattr(device, "protocol_config", {}) or {}
+    # FIXED-JOINT: 无串口环境下 ProtoForge 的 modbus_rtu 服务端运行在 TCP
+    # bridge 模式，线上帧为 Modbus TCP（MBAP）而非裸 RTU —— 推送时应映射为
+    # modbus_tcp，否则 EdgeLite 以 RTU 帧通信永远超时。真串口（serial_port
+    # 已配置）仍按 modbus_rtu 推送。
+    if edgelite_protocol == "modbus_rtu" and not config.get("serial_port"):
+        edgelite_protocol = "modbus_tcp"
     points = getattr(device, "points", []) or []
     points_data = []
     for p in points:

@@ -643,8 +643,10 @@ class IntegrationManager:
                 logger.info("Device %s registered to EdgeLite", payload["device_id"])
 
                 # 被动协议（HTTP/Webhook）需要 ProtoForge 主动推送模拟数据到 EdgeLite
+                # payload["protocol"] 是映射后的 EdgeLite 协议名（"http_webhook"），
+                # 同时兼容 ProtoForge 源协议名（"http"）与旧写法（"webhook"）。
                 protocol = payload.get("protocol", "")
-                if protocol in ("http", "webhook"):
+                if protocol in ("http", "webhook", "http_webhook"):
                     self._start_http_push(payload["device_id"], device)
 
                 return {"ok": True, "action": "created", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
@@ -797,6 +799,18 @@ class IntegrationManager:
                 latency_ms = (time.time() - start_time) * 1000
                 self._metrics.record_push_success(latency_ms)
                 logger.info("Device %s updated on EdgeLite (PUT after 409)", payload["device_id"])
+                # 被动协议（HTTP/Webhook）在更新路径同样要恢复推送循环 ——
+                # ProtoForge 重启后设备已存在，只会走这条路径，
+                # 不补启动的话 pf-http-* 的 webhook 数据推送永远丢失。
+                protocol = payload.get("protocol", "")
+                if protocol in ("http", "webhook", "http_webhook"):
+                    try:
+                        from protoforge.engine.registry import get_engine as _get_pf_engine
+                        instance = _get_pf_engine().get_device_instance(device_id)
+                        if instance is not None:
+                            self._start_http_push(device_id, instance)
+                    except Exception as loop_err:
+                        logger.debug("Failed to restart HTTP push loop for %s: %s", device_id, loop_err)
                 return {"ok": True, "action": "updated", "device_id": payload["device_id"], "driver_config": payload.get("config", {})}
         except (httpx.ConnectError, httpx.TimeoutException) as e:
             logger.debug("Network error during PUT update: %s", e)

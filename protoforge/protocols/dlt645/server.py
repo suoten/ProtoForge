@@ -82,7 +82,6 @@ ERR_DATA = 0x10  # data out of range
 ERR_PASSWORD_ERROR = 0x20  # password error
 ERR_UNAUTHORIZED = 0x40  # unauthorized
 
-
 def _bcd_encode(val: int, num_bytes: int) -> bytes:
     """Encode integer to BCD bytes (little-endian digit order)."""
     result = bytearray()
@@ -94,7 +93,6 @@ def _bcd_encode(val: int, num_bytes: int) -> bytes:
         result.append((high << 4) | low)
     return bytes(result)
 
-
 def _bcd_decode(data: bytes) -> int:
     """Decode BCD bytes to integer (little-endian digit order)."""
     val = 0
@@ -104,21 +102,17 @@ def _bcd_decode(data: bytes) -> int:
         val += (low + high * 10) * (100 ** i)
     return val
 
-
 def _encrypt_data(data: bytes) -> bytes:
     """DLT645 data encryption: each byte + 0x33."""
     return bytes((b + DATA_ENCRYPT_KEY) & 0xFF for b in data)
-
 
 def _decrypt_data(data: bytes) -> bytes:
     """DLT645 data decryption: each byte - 0x33."""
     return bytes((b - DATA_ENCRYPT_KEY) & 0xFF for b in data)
 
-
 def _calc_checksum(data: bytes) -> int:
     """DLT645 checksum: sum of all bytes mod 256."""
     return sum(data) & 0xFF
-
 
 def _parse_meter_address(addr_bytes: bytes) -> str:
     """Parse 7-byte address field to 12-digit string.
@@ -136,26 +130,25 @@ def _parse_meter_address(addr_bytes: bytes) -> str:
         digits.append(f"{high}{low}")
     return "".join(digits)
 
-
 def _build_meter_address(addr_str: str) -> bytes:
-    """Build 7-byte address field from 12-digit string.
+    """Build 6-byte address field (DL/T645-2007 standard) from 12-digit string.
 
-    Returns A0~A6 where A0~A5 is BCD (little-endian) and A6 is complement.
+    Returns A0~A5 as BCD in little-endian order. The 7-byte variant (A6 = ~A5)
+    is only accepted on receive for vendor compatibility; responses follow the
+    standard 6-byte layout so standard clients (EdgeLite, pymeter, etc.) parse
+    them correctly.
     """
     # Pad to 12 digits
     addr_str = addr_str.zfill(12)
     # Parse 6 BCD bytes in little-endian order
-    result = bytearray(7)
+    result = bytearray(6)
     for i in range(6):
         # Start from the least significant pair
         idx = 10 - i * 2  # position in string (0-indexed)
         high = int(addr_str[idx])
         low = int(addr_str[idx + 1])
         result[i] = (high << 4) | low
-    # A6 = ~A5
-    result[6] = (~result[5]) & 0xFF
     return bytes(result)
-
 
 # ---------------------------------------------------------------------------
 # Standard data identifiers (DI3-DI0)
@@ -188,7 +181,6 @@ DI_FREQUENCY = bytes([0x02, 0x80, 0x00, 0x03])  # 频率
 
 # Time
 DI_DATE_TIME = bytes([0x04, 0x00, 0x01, 0x00])  # 日期时间
-
 
 def _format_data_value(value: Any, data_type: str = "float") -> bytes:
     """Format a value to DLT645 BCD data bytes.
@@ -263,7 +255,6 @@ def _format_data_value(value: Any, data_type: str = "float") -> bytes:
         bcd = _bcd_encode(scaled, 4)
         return bcd
 
-
 def _di_to_data_type(di: bytes) -> str:
     """Map data identifier to data type for formatting."""
     di_hex = di.hex()
@@ -292,7 +283,6 @@ def _di_to_data_type(di: bytes) -> str:
     if di_hex.startswith("0400"):
         return "datetime"
     return "energy"
-
 
 class DLT645DeviceBehavior(StandardDeviceBehavior):
     """DLT645 device behavior — maps point names <-> data identifiers."""
@@ -362,7 +352,6 @@ class DLT645DeviceBehavior(StandardDeviceBehavior):
 
     def get_data_type_for_di(self, di: bytes) -> str:
         return _di_to_data_type(di)
-
 
 class DLT645Server(ProtocolServer):
     """DLT/T 645-2007 smart meter protocol server (slave side).
@@ -453,7 +442,9 @@ class DLT645Server(ProtocolServer):
             while self._server_running:
                 # Read frame: start byte
                 try:
+
                     start = await asyncio.wait_for(reader.readexactly(1), timeout=_READ_TIMEOUT)
+
                 except asyncio.TimeoutError:
                     break
                 except asyncio.IncompleteReadError:
@@ -464,22 +455,38 @@ class DLT645Server(ProtocolServer):
                                                f"bad start byte {start[0]:#x}")
                     continue
 
-                # Read address (7 bytes)
+                # Read address field. DL/T645-2007 standard is 6 bytes (A0~A5);
+                # some vendors append a 7th byte A6 = ~A5 (one's complement).
+                # Read 6 bytes first, then peek one byte to detect the variant.
                 try:
-                    addr_bytes = await asyncio.wait_for(reader.readexactly(ADDRESS_LEN), timeout=10)
-                except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                    addr_bytes = await asyncio.wait_for(reader.readexactly(6), timeout=10)
+
+                except (asyncio.TimeoutError, asyncio.IncompleteReadError) as _e:
+
                     break
 
-                # Read second start byte
+                # Read next byte: either the second start byte (standard frame)
+                # or the A6 complement byte (7-byte address variant).
                 try:
-                    start2 = await asyncio.wait_for(reader.readexactly(1), timeout=10)
-                except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                    next_byte = await asyncio.wait_for(reader.readexactly(1), timeout=10)
+
+                except (asyncio.TimeoutError, asyncio.IncompleteReadError) as _e:
+
                     break
 
-                if start2[0] != FRAME_START:
-                    self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE,
-                                               f"bad second start byte {start2[0]:#x}")
-                    continue
+                if next_byte[0] != FRAME_START:
+                    if next_byte[0] == (~addr_bytes[5]) & 0xFF:
+                        # 7-byte address variant (A6 = ~A5)
+                        addr_bytes += next_byte
+                        try:
+                            next_byte = await asyncio.wait_for(reader.readexactly(1), timeout=10)
+                        except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                            break
+                    if next_byte[0] != FRAME_START:
+                        self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE,
+                                                   f"bad second start byte {next_byte[0]:#x}")
+                        continue
+                start2 = next_byte
 
                 # Read control code + data length
                 try:
@@ -495,7 +502,8 @@ class DLT645Server(ProtocolServer):
                     remaining = await asyncio.wait_for(
                         reader.readexactly(data_len + 2), timeout=10  # data + CS + end
                     )
-                except (asyncio.TimeoutError, asyncio.IncompleteReadError):
+                except (asyncio.TimeoutError, asyncio.IncompleteReadError) as _e:
+
                     break
 
                 data = remaining[:data_len]
@@ -505,6 +513,7 @@ class DLT645Server(ProtocolServer):
                 if end_byte != FRAME_END:
                     self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE,
                                                f"bad end byte {end_byte:#x}")
+
                     continue
 
                 # Verify checksum
@@ -513,6 +522,7 @@ class DLT645Server(ProtocolServer):
                 if calc_cs != cs:
                     self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE,
                                                f"checksum mismatch: calc={calc_cs:#x} recv={cs:#x}")
+
                     continue
 
                 # Parse meter address
@@ -589,12 +599,14 @@ class DLT645Server(ProtocolServer):
         if len(data) < 4:
             return self._build_error_response(meter_addr, ctrl, ERR_DATA)
 
-        # Decrypt data and extract DI
+        # Decrypt data and extract DI.
+        # 传输序（DL/T645-2007）：DI0 在前（低字节先发），而 _di_map 键按
+        # DI3..DI0（fromhex 顺序）存储 —— 查表前需反转；响应回显保持传输序。
         dec_data = _decrypt_data(data)
         di = dec_data[:4]
 
         # Look up point by DI
-        point_name = behavior.get_point_name(di)
+        point_name = behavior.get_point_name(di[::-1])
 
         if point_name is None:
             # No matching point — return error (no data)
@@ -602,7 +614,7 @@ class DLT645Server(ProtocolServer):
 
         # Get value
         value = behavior.get_value(point_name)
-        data_type = behavior.get_data_type_for_di(di)
+        data_type = behavior.get_data_type_for_di(di[::-1])
 
         # Format value to BCD
         value_bytes = _format_data_value(value, data_type)

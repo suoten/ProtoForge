@@ -177,3 +177,8 @@ scripts/test_s7_*.py
 # 内部商业文档（不公开）
 ProtoForge_商业化路线图*.md
 ProtoForge_IoT*.md
+
+# 联调临时产物（不入库）
+tmp_joint/
+tmp_pf_token.txt
+tmp_*.txt

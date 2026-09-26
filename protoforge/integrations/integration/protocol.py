@@ -19,9 +19,11 @@ PROTOCOL_MAP_BASE: dict[str, str | None] = {
     "mc": "mitsubishi_mc",
     "fins": "omron_fins",
     "ab": "allen_bradley",
-    # FIXED: EdgeLite 实际有这些驱动（plugin_name 已核对），原映射为 None 导致无法推送
-    "bacnet": "bacnet_ip",        # bacnet.py plugin_name="bacnet_ip"
-    "bacnet_ip": "bacnet_ip",     # FIX: 设备可能直接使用 bacnet_ip 作为协议名
+    # FIXED: EdgeLite Go 版 drivers/protocols 返回的 plugin_name 是 "bacnet"
+    # （Python 版无 BACnet 推送支持，无回归）；映射值必须与目标端列表一致，
+    # 否则 ProtocolMapper 判定 target_unavailable 导致推送被跳过。
+    "bacnet": "bacnet",           # EdgeLite Go bacnet.go plugin_name="bacnet"
+    "bacnet_ip": "bacnet",        # 设备可能直接使用 bacnet_ip 作为协议名
     "fanuc": "fanuc_cnc",         # fanuc.py plugin_name="fanuc_cnc"
     "fanuc_cnc": "fanuc_cnc",     # FIX: 设备可能直接使用 fanuc_cnc 作为协议名
     "mtconnect": "mtconnect",     # mtconnect.py plugin_name="mtconnect"

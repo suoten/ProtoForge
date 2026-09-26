@@ -32,41 +32,62 @@ class AbDeviceBehavior(StandardDeviceBehavior):
         super().__init__(points)
         self._tags: dict[str, Any] = {}
         self._data_types: dict[str, str] = {}
+        self._tag_alias: dict[str, str] = {}    # point name -> tag(address)
+        self._tag_reverse: dict[str, str] = {}  # tag(address) -> point name
         if points:
             for p in points:
                 name = p.name if hasattr(p, 'name') else p.get("name", "")
+                addr = (p.address if hasattr(p, 'address') else p.get("address", "")) or ""
                 raw_dt = p.data_type if hasattr(p, 'data_type') else p.get("data_type", "int32")
                 # FIXED: 枚举安全归一化（str(enum) 会带类名前缀，导致 _CIP_TYPE_MAP 永远 miss）
                 data_type = str(getattr(raw_dt, "value", raw_dt) or "int32").strip().lower()
-                self._tags[name] = self._values.get(name, 0)
-                self._data_types[name] = data_type
+                # FIXED-JOINT: CIP 以 tag 名寻址，tag 名即点位 address（TestTag1 等）；
+                # 原实现用 point.name 注册导致 EdgeLite 按 address 读取时
+                # 返回 CIP 0x04（Path destination unknown），采集恒为 null。
+                # 无 address 的点位回退到 name。
+                tag = addr or name
+                self._tag_alias[name] = tag
+                self._tag_reverse[tag] = name
+                self._tags[tag] = self._values.get(tag, self._values.get(name, 0))
+                self._data_types[tag] = data_type
+
+    def _resolve_tag(self, key: str) -> str:
+        """point name ↔ tag(address) 双向兼容：优先按别名映射，未知键原样返回。"""
+        return self._tag_alias.get(key, key)
 
     def on_write(self, point_name: str, value: Any) -> bool:
-        if point_name in self._values:
+        tag = self._resolve_tag(point_name)
+        if point_name in self._values or tag in self._tags:
             self._values[point_name] = value
             self._written_values[point_name] = value
-            self._tags[point_name] = value
+            self._tags[tag] = value
             return True
         return False
 
     def set_value(self, point_name: str, value: Any) -> None:
+        # 引擎生成循环按 point name 调用；tag 键同步更新保证 CIP 读到最新值
         self._values[point_name] = value
-        self._tags[point_name] = value
+        self._tags[self._resolve_tag(point_name)] = value
 
     def get_tag(self, tag_name: str) -> Any:
-        if tag_name in self._tags:
-            return self._tags[tag_name]
+        # CIP 读取优先走 get_value 的动态生成路径（sine 等生成器实时出值），
+        # 否则会一直读到 _tags 初始化时的静态 0。
+        key = self._resolve_tag(tag_name)
+        if key in self._tags:
+            name = self._tag_reverse.get(key, key)
+            return self.get_value(name)
         return None
 
     def set_tag(self, tag_name: str, value: Any) -> None:
-        self._tags[tag_name] = value
-        self._values[tag_name] = value
+        tag = self._resolve_tag(tag_name)
+        self._tags[tag] = value
+        self._values[tag] = value
 
     def get_tag_type(self, tag_name: str) -> str:
-        return self._data_types.get(tag_name, "int32")
+        return self._data_types.get(self._resolve_tag(tag_name), "int32")
 
     def get_data_type(self, point_name: str) -> str:
-        return self._data_types.get(point_name, "int32")
+        return self._data_types.get(self._resolve_tag(point_name), "int32")
 
 
 class AbServer(ProtocolServer):

@@ -350,6 +350,13 @@ class IEC104Server(ProtocolServer):
                     logger.warning("IEC 104: bad APDU length %d", length)
                     self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad APDU length {length}")
                     break
+                # 标准 IEC 104 APDU 长度字段为 2 字节（L1 L2，L2 恒 0）：
+                # 68 L1 L2 C1..C4 ASDU。原实现只读 1 字节长度，导致标准
+                # 客户端（EdgeLite / 真实主站）的帧控制域与 ASDU 整体错位。
+                l2 = await asyncio.wait_for(reader.readexactly(1), timeout=self._t1_timeout)
+                if l2[0] != 0:
+                    self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad L2 byte {l2[0]:#x}")
+                    break
                 apdu = await asyncio.wait_for(reader.readexactly(length), timeout=self._t1_timeout)
                 conn_state["last_activity"] = time.time()
 
@@ -376,9 +383,11 @@ class IEC104Server(ProtocolServer):
             self._log_debug("send", "disconnected", f"IEC104 client disconnected: {peer[0]}:{peer[1]}")
 
     def _write_apdu(self, writer: asyncio.StreamWriter, control: bytes, asdu: bytes = b"") -> None:
-        """Write one APDU: 0x68 len control[4] asdu."""
+        """Write one standard APDU: 0x68 L1 L2(=0) control[4] asdu."""
         payload = control + asdu
-        writer.write(bytes([APDU_START, len(payload)]) + payload)
+        # 标准 IEC 104 长度字段为 2 字节（L1 L2，L2 恒 0）；原实现只写
+        # 1 字节长度导致标准客户端把 0x0B/0x0D 等 U/I 控制码当 L2 解析。
+        writer.write(bytes([APDU_START, len(payload), 0x00]) + payload)
 
     async def _handle_u_frame(self, writer: asyncio.StreamWriter, apdu: bytes, conn_state: dict) -> None:
         u_type = apdu[0]
@@ -445,14 +454,14 @@ class IEC104Server(ProtocolServer):
                 self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
 
     def _asdu_length(self, ti: int, num: int, sq: bool) -> int | None:
-        """Total ASDU length: header 6 (TI+VSQ+COT+OA+CA) + information objects."""
+        """Total ASDU length: standard 8-byte header + information objects."""
         obj = self._object_size(ti)
         if obj is None:
             return None
         if sq:
             # only the first object carries the IOA
-            return 6 + 3 + num * obj
-        return 6 + num * (3 + obj)
+            return 8 + 3 + num * obj
+        return 8 + num * (3 + obj)
 
     def _object_size(self, ti: int) -> int | None:
         """Information object payload size (excluding IOA) or None if unsupported."""
@@ -480,12 +489,11 @@ class IEC104Server(ProtocolServer):
     async def _process_asdu(self, writer: asyncio.StreamWriter, asdu: bytes, conn_state: dict) -> None:
         ti = asdu[0]
         vsq = asdu[1]
-        # IEC 60870-5-104: COT 为 1 字节 + OA 1 字节 + CA 2 字节（小端）。
-        # 之前误将 COT 编码/解析为 2 字节，导致主站侧 CA 显示为 256 倍、
-        # IOA 整体左移 8 位、遥测浮点数错位成乱值。
-        cot = asdu[2] & 0x3F
-        oa = asdu[3]
-        ca = struct.unpack("<H", asdu[4:6])[0]
+        # 标准 104 ASDU 头 8 字节: TI(1) VSQ(1) COT(2 LE) OA(2 LE) CA(2 LE)。
+        # 旧实现按 6 字节头（COT/OA 各 1 字节）解析，与标准主站不兼容。
+        cot = struct.unpack("<H", asdu[2:4])[0] & 0x3F
+        oa = struct.unpack("<H", asdu[4:6])[0]
+        ca = struct.unpack("<H", asdu[6:8])[0]
         num = vsq & 0x7F
         sq = bool(vsq & 0x80)
 
@@ -512,7 +520,7 @@ class IEC104Server(ProtocolServer):
 
     # -- general interrogation -----------------------------------------
     async def _handle_interrogation(self, writer: asyncio.StreamWriter, asdu: bytes, ca: int) -> None:
-        qoi = asdu[9] if len(asdu) > 9 else 20  # header(6)+IOA(3) 之后即 QOI
+        qoi = asdu[11] if len(asdu) > 11 else 20  # header(8)+IOA(3) 之后即 QOI
         # ACT confirm
         ack = bytearray(self._asdu_header(TI_INTERROGATION, 1, COT_ACTCONFIRM, ca))
         ack += b"\x00\x00\x00" + bytes([qoi])
@@ -546,7 +554,7 @@ class IEC104Server(ProtocolServer):
     async def _handle_commands(self, writer: asyncio.StreamWriter, asdu: bytes, ti: int,
                                ca: int, num: int, sq: bool, conn_state: dict) -> None:
         obj_size = self._object_size(ti) or 1
-        offset = 6  # ASDU header: TI(1)+VSQ(1)+COT(1)+OA(1)+CA(2)
+        offset = 8  # standard ASDU header: TI(1)+VSQ(1)+COT(2)+OA(2)+CA(2)
         for i in range(num):
             if sq:
                 if offset + 3 + obj_size > len(asdu):
@@ -639,12 +647,14 @@ class IEC104Server(ProtocolServer):
     # monitor direction (spontaneous / interrogation data)
     # ------------------------------------------------------------------
     def _asdu_header(self, ti: int, num: int, cot: int, ca: int) -> bytes:
-        # IEC 60870-5-104 ASDU 固定头: TI(1) + VSQ(1) + COT(1) + OA(1) + CA(2 LE)
+        # 标准 IEC 60870-5-104 ASDU 固定头（8 字节）: TI(1) + VSQ(1) + COT(2 LE)
+        # + OA(2 LE) + CA(2 LE)。原实现 COT/OA 各只占 1 字节（IEC 101 串行版
+        # 布局），导致标准主站（EdgeLite / lib60870）的 CA 与 IOA 全部错位。
         h = bytearray()
         h.append(ti & 0xFF)
         h.append(num & 0x7F)
-        h.append(cot & 0x3F)
-        h.append(self._originator_address & 0xFF)
+        h += struct.pack("<H", cot & 0x3F)
+        h += struct.pack("<H", self._originator_address & 0xFFFF)
         h += struct.pack("<H", ca & 0xFFFF)
         return bytes(h)
 
