@@ -226,6 +226,29 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 熟悉命令行的用户，或需要自定义配置。详细步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
+### 开机自启动与数据保存（Windows）
+
+<details>
+<summary><b>开机自动运行 ProtoForge — 点击展开</b></summary>
+
+**日常启动**：双击项目文件夹里的 `quickstart.bat` 即可（自动检查环境 → 启动服务 → 提示访问地址）。窗口保持开着服务就在运行，关闭窗口或按 `Ctrl+C` 即停止。
+
+**开机自启**：如果希望电脑开机登录后 ProtoForge 自动在后台运行（不弹黑框），双击 `scripts\install_autostart.bat` 安装即可：
+
+```text
+scripts\install_autostart.bat   ← 双击，一键安装开机自启
+```
+
+- 安装后会在你的"启动"文件夹放入一个隐藏启动脚本，每次开机登录后自动运行 ProtoForge
+- **卸载自启**：按 `Win + R`，输入 `shell:startup` 回车，在打开的文件夹里删除 `ProtoForge_AutoStart.vbs` 即可
+- 自启运行日志在项目目录的 `data\autostart.log`，启动失败可以看这个文件排查
+
+**数据不会丢**：所有配置（设备、测点、场景、模板、规则）都保存在项目目录的 `data\protoforge.db`（SQLite 数据库）中，与软件是否关闭、电脑是否重启无关。下次启动自动恢复所有设备和运行状态，不需要重新配置。
+
+> ⚠️ 注意：升级版本时不要删除 `data` 文件夹；把它一起备份就能完整迁移所有配置。
+
+</details>
+
 <details>
 <summary><b>Windows — 点击展开</b></summary>
 
