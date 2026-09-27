@@ -44,6 +44,7 @@ class TemplateManager:
         self._load_from_dir(_TEMPLATES_DIR / "coap")
         self._load_from_dir(_TEMPLATES_DIR / "dds")
         self._load_from_dir(_TEMPLATES_DIR / "dlt645")
+        self._load_from_dir(_TEMPLATES_DIR / "mewtocol")
         self._load_from_dir(_TEMPLATES_DIR / "cjt188")
         self._load_from_dir(_TEMPLATES_DIR / "custom_tcp")
         self._load_from_dir(_TEMPLATES_DIR / "custom_udp")

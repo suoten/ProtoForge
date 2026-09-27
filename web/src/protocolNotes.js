@@ -118,6 +118,20 @@ export const PROTOCOL_NOTES = {
       ],
     },
   },
+  mewtocol: {
+    items: {
+      zh: [
+        '设备配置中的站号（protocol_config.station_number，0-255）必须与主站请求帧中的站号一致，未配置时默认为 1',
+        '点位地址格式为区域+序号：字区 DT/WR/LD/FL（如 DT100），触点区 X/Y/R/T/C/L（如 R10）；float32 占用 2 个连续字，低字在前',
+        '当前支持 %RD/%WD/%RC/%WC 寄存器读写命令；监视注册（%RM/%WM）与状态监控（%MS/%MG）暂不支持',
+      ],
+      en: [
+        "The station number in the device config (protocol_config.station_number, 0-255) must match the station in master request frames; defaults to 1 when unset",
+        "Point address format is area+index: word areas DT/WR/LD/FL (e.g. DT100), contact areas X/Y/R/T/C/L (e.g. R10); float32 occupies 2 consecutive words, low word first",
+        "Currently supports %RD/%WD/%RC/%WC register read/write commands; monitor registration (%RM/%WM) and status monitoring (%MS/%MG) are not supported yet",
+      ],
+    },
+  },
   mc: {
     items: {
       zh: [

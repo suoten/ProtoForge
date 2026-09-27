@@ -27,6 +27,7 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "dds": "protoforge.protocols.dds:DDSServer",
     "dlt645": "protoforge.protocols.dlt645:DLT645Server",
     "cjt188": "protoforge.protocols.cjt188:CJT188Server",
+    "mewtocol": "protoforge.protocols.mewtocol:MewtocolServer",
     "custom_tcp": "protoforge.protocols.custom_tcp:CustomTcpServer",
     "custom_udp": "protoforge.protocols.custom_udp:CustomUdpServer",
     "s7plus": "protoforge.protocols.s7plus:S7PlusServer",

@@ -1,0 +1,101 @@
+{
+  "id": "mewtocol_fpx",
+  "name": "松下FP-X PLC",
+  "protocol": "mewtocol",
+  "description": "松下FP-X PLC MEWTOCOL-COM协议仿真（DT/WR字区 + R/X/Y触点区读写）",
+  "manufacturer": "Panasonic",
+  "model": "FP-X C30T",
+  "points": [
+    {
+      "name": "run_flag",
+      "address": "R0",
+      "data_type": "bool",
+      "description": "运行标志（触点R0）",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true
+    },
+    {
+      "name": "output_y0",
+      "address": "Y0",
+      "data_type": "bool",
+      "description": "输出继电器Y0",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false
+    },
+    {
+      "name": "input_x0",
+      "address": "X0",
+      "data_type": "bool",
+      "description": "输入继电器X0",
+      "access": "rw",
+      "generator_type": "random",
+      "min_value": 0,
+      "max_value": 1
+    },
+    {
+      "name": "production_counter",
+      "address": "DT0",
+      "data_type": "uint16",
+      "unit": "件",
+      "description": "生产计数（DT0）",
+      "access": "rw",
+      "generator_type": "increment",
+      "min_value": 0,
+      "max_value": 65535
+    },
+    {
+      "name": "line_speed",
+      "address": "DT1",
+      "data_type": "uint16",
+      "unit": "rpm",
+      "description": "产线转速（DT1）",
+      "access": "rw",
+      "generator_type": "random",
+      "min_value": 800,
+      "max_value": 1450
+    },
+    {
+      "name": "temperature",
+      "address": "DT10",
+      "data_type": "float32",
+      "unit": "°C",
+      "description": "加热器温度（DT10-DT11，低字在前）",
+      "access": "rw",
+      "generator_type": "random",
+      "min_value": 30.0,
+      "max_value": 85.0
+    },
+    {
+      "name": "pressure",
+      "address": "DT20",
+      "data_type": "float32",
+      "unit": "kPa",
+      "description": "管路压力（DT20-DT21）",
+      "access": "rw",
+      "generator_type": "sine",
+      "min_value": 180.0,
+      "max_value": 320.0
+    },
+    {
+      "name": "recipe_no",
+      "address": "WR0",
+      "data_type": "uint16",
+      "description": "配方编号（WR0）",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": 1
+    }
+  ],
+  "protocol_config": {
+    "station_number": 1
+  },
+  "tags": [
+    "PLC",
+    "松下",
+    "Panasonic",
+    "FP-X",
+    "MEWTOCOL"
+  ]
+}
