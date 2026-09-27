@@ -1,24 +1,37 @@
 @echo off
-chcp 65001 >nul
-title ProtoForge Quick Start
 REM ============================================
-REM ProtoForge 一键启动 (Windows)
-REM 双击即可运行，自动检查环境、安装依赖、启动服务
+REM ProtoForge Quick Start (Windows / yi jian qi dong)
+REM Double-click to run: checks env, installs deps, starts server.
+REM All lines below the restart marker display in Chinese correctly.
 REM ============================================
 
+REM FIXED: known cmd.exe bug -- after `chcp 65001`, the rest of the SAME
+REM batch file is re-parsed with wrong byte offsets (UTF-8 multi-byte chars
+REM get split), producing garbage errors like "'xxx' is not recognized as
+REM an internal or external command". Workaround: restart the script so
+REM cmd.exe re-reads the whole file under UTF-8.
+REM NOTE: keep every line ABOVE `chcp 65001` pure ASCII (Chinese text here
+REM is parsed under the legacy codepage and would garble/execute wrongly).
+if "%~1"=="__utf8" goto main
+chcp 65001 >nul
+cmd /s /c ""%~f0" __utf8"
+exit /b %errorlevel%
+
+:main
+title ProtoForge Quick Start
 cd /d "%~dp0"
 
 echo.
-echo   ╔══════════════════════════════════════════════════╗
-echo   ║        ProtoForge 一键启动 (Windows)              ║
-echo   ║        物联网协议仿真与测试平台                     ║
-echo   ╚══════════════════════════════════════════════════╝
+echo   ======================================================
+echo         ProtoForge 一键启动 (Windows)
+echo         物联网协议仿真与测试平台
+echo   ======================================================
 echo.
 
 REM Step 1: 检查 Python
 echo [1/4] 检查 Python ...
 where python >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo.
     echo   [错误] 没有找到 Python，请先安装 Python 3.10+
     echo   下载地址: https://www.python.org/downloads/
@@ -37,7 +50,7 @@ if exist "venv\Scripts\python.exe" (
 ) else (
     echo       创建虚拟环境 ...
     python -m venv venv
-    if %errorlevel% neq 0 (
+    if errorlevel 1 (
         echo   [错误] 创建虚拟环境失败
         pause
         exit /b 1
@@ -49,14 +62,14 @@ echo.
 REM Step 3: 检查依赖是否已安装（通过检测 protoforge 包是否可导入）
 echo [3/4] 检查 Python 依赖 ...
 venv\Scripts\python.exe -c "import protoforge" >nul 2>&1
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo       首次运行，正在安装依赖（可能需要几分钟）...
     venv\Scripts\python.exe -m pip install --quiet --upgrade pip
     venv\Scripts\pip.exe install -e ".[all]" >nul 2>&1
-    if %errorlevel% neq 0 (
+    if errorlevel 1 (
         echo       全部协议安装失败，尝试安装核心依赖...
         venv\Scripts\pip.exe install -e .
-        if %errorlevel% neq 0 (
+        if errorlevel 1 (
             echo   [错误] 依赖安装失败，请检查网络连接
             echo   可尝试设置国内镜像: pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
             pause
@@ -71,11 +84,15 @@ echo.
 
 REM Step 4: 确保 .env 配置正确（关键：生成稳定的 JWT_SECRET）
 echo [4/4] 检查配置文件 ...
+
+REM FIXED: 原写法 "set /pf" 是无效语法（应为 set /p），变量读不到，
+REM 导致首次生成的 .env 里 JWT_SECRET 为空
+set "JWT_SECRET_GEN="
 venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))" > "%TEMP%\pf_jwt_tmp" 2>nul
-set /pf JWT_SECRET_GEN=<"%TEMP%\pf_jwt_tmp"
+set /p JWT_SECRET_GEN=<"%TEMP%\pf_jwt_tmp"
 del "%TEMP%\pf_jwt_tmp" >nul 2>&1
 
-if not exist ".env" (
+if exist ".env" goto check_env
     echo       首次运行，生成配置文件 ...
     REM 生成 .env，确保 JWT_SECRET 非空且持久
     (
@@ -90,24 +107,28 @@ if not exist ".env" (
         echo PROTOFORGE_CORS_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
     ) > ".env"
     echo       配置文件已生成
+    goto env_done
+
+:check_env
+REM 检查 .env 中 JWT_SECRET 是否为空，为空则补填
+REM （用两个 findstr 串联：先取 JWT_SECRET 行，再匹配行尾为空的情形）
+findstr /B /C:"PROTOFORGE_JWT_SECRET=" .env 2>nul | findstr /R /C:"PROTOFORGE_JWT_SECRET=$" >nul 2>&1
+if not errorlevel 1 (
+    echo       检测到 JWT_SECRET 为空，正在修复 ...
+    powershell -NoProfile -Command "(Get-Content '.env') -replace '^PROTOFORGE_JWT_SECRET=$', 'PROTOFORGE_JWT_SECRET=%JWT_SECRET_GEN%' | Set-Content '.env'"
+    echo       JWT_SECRET 已修复
 ) else (
-    REM 检查 .env 中 JWT_SECRET 是否为空，为空则补填
-    findstr /R "^PROTOFORGE_JWT_SECRET=$" .env >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo       检测到 JWT_SECRET 为空，正在修复 ...
-        powershell -Command "(Get-Content '.env') -replace '^PROTOFORGE_JWT_SECRET=$', 'PROTOFORGE_JWT_SECRET=%JWT_SECRET_GEN%' | Set-Content '.env'"
-        echo       JWT_SECRET 已修复
-    ) else (
-        echo       配置文件正常
-    )
+    echo       配置文件正常
 )
+
+:env_done
 echo.
 
 REM 确保 data 目录存在
 if not exist "data" mkdir data
 
 REM 显示启动信息
-echo ════════════════════════════════════════════════════
+echo ======================================================
 echo.
 echo   ProtoForge 正在启动...
 echo.
@@ -117,13 +138,13 @@ echo   登录密码:   admin
 echo.
 echo   按 Ctrl+C 可停止服务
 echo.
-echo ════════════════════════════════════════════════════
+echo ======================================================
 echo.
 
 REM 启动服务（演示模式）
 venv\Scripts\python.exe -m protoforge.cli demo
 
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo.
     echo   [错误] 服务启动失败，请检查上方错误信息
     echo   或尝试重新运行本脚本

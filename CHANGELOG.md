@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.3.3 — 2026-09-27
+
+**Bug Fix — Windows quickstart.bat 运行时报 "'xxx' is not recognized as an internal or external command" 乱码错误（用户反馈）：**
+
+- 根因一：cmd.exe 已知 bug——`chcp 65001` 后继续解析同一批处理文件时，文件读取偏移按旧代码页计算，UTF-8 多字节字符被错误切分，中文/制表符 echo 行被拆成"命令"执行报错
+- 根因二：`set /pf` 为无效语法（应为 `set /p`），JWT_SECRET 变量读不到，首次生成的 .env 密钥为空
+- 根因三：括号块内 `%errorlevel%` 在解析期展开，取到旧值，导致分支判断错乱
+- 修复：切码页后重启脚本让 cmd 在 UTF-8 下完整重读（重启标记 `__utf8`）；chcp 之前所有行保持纯 ASCII；`set /p` 修正；全部改用 `if errorlevel 1` 动态判断
+- 验证：真实运行 quickstart.bat，输出无乱码、服务正常启动（HTTP 200）
+
+**New — Windows 开机自启（用户需求：软件关闭后开机自动运行且设备配置不丢失）：**
+
+- 新增 `scripts/install_autostart.bat`：一键安装自启，写入用户"启动"文件夹的 VBS（隐藏窗口运行 quickstart.bat），Win+R `shell:startup` 删除 VBS 即可卸载
+- 设备/场景/模板配置存于 `data/protoforge.db`（SQLite + WAL），与代码目录同在，重启/关机不丢失；data/ 目录已在 .gitignore 中
+
 ## v1.3.2 — 2026-09-25
 
 **Bug Fix — 编辑设备弹窗测点表格"访问模式"显示 accessModes.rw、数据类型下拉选项截断（UIN.../FLO...，用户截图反馈）：**
