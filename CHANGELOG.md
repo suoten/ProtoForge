@@ -132,6 +132,16 @@
 - 修复：单协议启动端点（`POST /protocols/{name}/start`）改为 `restart=True` 语义——协议已运行时先停止再按提交的配置启动（改端口后点启动即生效）；"一键启动全部"已预先过滤运行中的协议、设备创建的协议自动启动、demo 模式、集成管理器均保持原有幂等跳过语义，不受影响
 - 回归测试 `tests/test_protocol_restart_port.py`（3 例）：运行中带新端口重启 → 新端口监听旧端口释放、start-all 幂等性（不重启运行中协议）、设备自动启动路径语义不变；真实服务端到端验证（默认端口启动 → 改 38124 重启 → 38000 关闭 / 38124 监听 / 停止后端口释放）
 
+**Feature — 新协议：松下 MEWTOCOL（FP-X/FP7 系列 PLC，Issue #11 需求落地）：**
+
+- 新增 `mewtocol` 协议（第 28 种）：实现 MEWTOCOL-COM ASCII 命令集的寄存器读写范围——`%RD/%WD`（字区 DT/WR/LD/FL）与 `%RC/%WC`（触点区 X/Y/R/T/C/L），按需求方确认范围不含监视注册（%RM/%WM）与 PLC 状态监控（%MS/%MG）
+- 帧格式：`%STN#CMD<BCC>CR` 请求 / `$` 成功 / `!` 错误 响应，BCC 异或校验全量实现；32 位数据（int32/uint32/float32）占 2 个连续字、低字在前（松下 FP 约定）
+- 双传输栈：TCP（Mewtocol/TCP 风格，默认端口 2049）+ 串口（pyserial，波特率/数据位/校验/停止位可配）；串口不可用时自动降级 TCP bridge 模式（同 Modbus RTU 语义）
+- 站号路由：设备 `protocol_config.station_number`（0-255，默认 1）映射请求帧站号到设备，站号冲突在创建时拦截（校验前置，无半注册状态）；生成器动态值在读取时同步进内存区（规避 MC 服务器曾出现的"读到旧值"问题）
+- 外部写入（%WD/%WC）双向传播：内存区更新 + 引擎 DeviceInstance 同步 + 生成器冻结（写入值优先）
+- 内置设备模板：松下 FP-X（mewtocol_fpx）、松下 FP7（mewtocol_fp7）；前端协议清单/标签色/默认端口/连接注意事项同步更新
+- 回归测试 `tests/test_mewtocol.py`（11 例，严格 MEWTOCOL-COM 主站走真实 TCP）：%RD/%WD 字区读写回环（uint16/int16/float32 两字低字在前）、%RC/%WC 触点读写、BCC 错误响应、不支持命令错误帧、写入传播到引擎、动态值可见性、多站号路由、站号冲突、编解码单元测试；`tests/test_e2e_multi_protocol_real.py` + `tests/test_engine_device_coverage.py`（64 例）回归通过
+
 **Improvement — EdgeLite 联调修复批次（登录会话/区码兼容/读数链路/NodeId/路由）：**
 
 - EdgeLite 登录统一传 `no_revoke=True`（`edgelite.py` / `integration/auth.py` / `integration/manager.py` 共 5 处登录调用）：避免每次联调登录都撤销已有用户 session，反复登录导致对方被踢下线

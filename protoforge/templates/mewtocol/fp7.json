@@ -1,0 +1,81 @@
+{
+  "id": "mewtocol_fp7",
+  "name": "松下FP7 PLC",
+  "protocol": "mewtocol",
+  "description": "松下FP7 PLC MEWTOCOL协议仿真（FP7兼容模式，寄存器读写）",
+  "manufacturer": "Panasonic",
+  "model": "FP7 CPS3E",
+  "points": [
+    {
+      "name": "cpu_run",
+      "address": "R100",
+      "data_type": "bool",
+      "description": "CPU运行继电器（R100）",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true
+    },
+    {
+      "name": "alarm_out",
+      "address": "Y50",
+      "data_type": "bool",
+      "description": "报警输出（Y50）",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false
+    },
+    {
+      "name": "unit_voltage",
+      "address": "DT100",
+      "data_type": "float32",
+      "unit": "V",
+      "description": "模块电压（DT100-DT101）",
+      "access": "rw",
+      "generator_type": "random",
+      "min_value": 23.5,
+      "max_value": 24.5
+    },
+    {
+      "name": "scan_time",
+      "address": "DT110",
+      "data_type": "uint16",
+      "unit": "ms",
+      "description": "扫描周期（DT110）",
+      "access": "rw",
+      "generator_type": "random",
+      "min_value": 2,
+      "max_value": 20
+    },
+    {
+      "name": "batch_id",
+      "address": "WR10",
+      "data_type": "uint16",
+      "description": "批次号（WR10）",
+      "access": "rw",
+      "generator_type": "increment",
+      "min_value": 1,
+      "max_value": 9999
+    },
+    {
+      "name": "motor_current",
+      "address": "DT120",
+      "data_type": "float32",
+      "unit": "A",
+      "description": "电机电流（DT120-DT121）",
+      "access": "rw",
+      "generator_type": "sine",
+      "min_value": 2.0,
+      "max_value": 8.5
+    }
+  ],
+  "protocol_config": {
+    "station_number": 1
+  },
+  "tags": [
+    "PLC",
+    "松下",
+    "Panasonic",
+    "FP7",
+    "MEWTOCOL"
+  ]
+}
