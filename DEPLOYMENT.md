@@ -130,7 +130,7 @@ docker run -d --name protoforge \
 
 停止服务：`docker stop protoforge && docker rm protoforge`
 
-> 也可以用 docker compose 方式（方便管理更多参数）：下载仓库中的 [docker-compose.simple.yml](../docker-compose.simple.yml)，然后运行 `docker compose -f docker-compose.simple.yml up -d`
+> 也可以用 docker compose 方式（方便管理更多参数）：下载仓库中的 [docker-compose.simple.yml](../docker-compose.simple.yml)，然后运行 `docker compose -f docker-compose.simple.yml up -d`。该文件**已默认映射全部常用协议端口**（Modbus/S7/OPC-UA/MQTT/BACnet 等），一般无需修改即可直接从外部连接仿真协议；GB28181 RTP 媒体流范围等特殊端口按需取消注释。
 
 ### 生产环境 Docker Compose（PostgreSQL）
 
