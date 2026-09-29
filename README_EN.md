@@ -8,6 +8,8 @@
 
 [中文](README.md) | [English](README_EN.md)
 
+> ⚠️ **Official Repository Notice**: The only official source repository of ProtoForge is [**github.com/suoten/ProtoForge**](https://github.com/suoten/ProtoForge) (Gitee mirror: [gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)); the official Docker image is [**suoten/protoforge**](https://hub.docker.com/r/suoten/protoforge). Any same-named or renamed repositories on GitHub/Gitee are third-party re-uploads that **may lag months behind and miss critical fixes** — always use the official repository, and report issues there.
+
 > ✅ **Windows** &nbsp; ✅ **Linux** &nbsp; ✅ **macOS**
 
 ---
