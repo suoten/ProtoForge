@@ -12,11 +12,13 @@ export const PROTOCOL_NOTES = {
     items: {
       zh: [
         '内置 MQTT Broker 仅支持 MQTT 3.1.1 协议，不支持 MQTT 5.0 —— MQTTX 等客户端连接时，请在连接设置中手动将 Protocol Version 选为 3.1.1（默认 5.0 会连接失败）',
-        '设备默认上报到内置 Broker；如需上报到自己的 MQTT 服务器（EMQX/Mosquitto/阿里云 IoT 等），在下方协议配置中填写“自定义 MQTT 服务器”地址即可，设备将以客户端身份连接并上报',
+        '⚠️ 「host」是 Broker 自身的监听地址（填 0.0.0.0 监听全部网卡），不是要连接的外部服务器地址——填了 EMQX 的 IP 会导致绑定失败；如需把设备数据上报到自己的 EMQX/Mosquitto/阿里云 IoT 等，在下方协议配置中填写“自定义 MQTT 服务器”地址即可，设备将以客户端身份连接并上报',
+        '开启认证后客户端连接必须携带用户名密码；auth_users 支持多账号，格式为 JSON：{"user1":"pass1"}，留空则使用上方配置的单个账号',
       ],
       en: [
         'The built-in MQTT Broker only supports MQTT 3.1.1 (NOT 5.0). In MQTTX or other clients, manually set Protocol Version to 3.1.1 in connection settings (the default 5.0 will fail to connect)',
-        'Devices report to the built-in broker by default; to report to your own MQTT server (EMQX/Mosquitto/Aliyun IoT etc.), fill in the Custom MQTT Server address below and the device will connect and report as an MQTT client',
+        '⚠️ "host" is the broker\'s OWN bind address (use 0.0.0.0 for all interfaces), NOT a remote server to connect to — filling in your EMQX IP will fail to bind; to report device data to your own EMQX/Mosquitto/Aliyun IoT etc., fill in the Custom MQTT Server address below and the device will connect and report as an MQTT client',
+        'When auth is enabled, clients must carry username/password; auth_users supports multiple accounts as JSON: {"user1":"pass1"}; leave empty to use the single account above',
       ],
     },
   },
