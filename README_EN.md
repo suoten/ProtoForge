@@ -467,6 +467,20 @@ docker run -d --name protoforge \
 
 ---
 
+## 🔗 Related Projects
+
+| Project | Description | Repositories |
+| ------- | ----------- | ------------ |
+| [ProtoForge](https://github.com/suoten/ProtoForge) | This project — simulate 28 kinds of industrial devices on one machine | [Gitee](https://gitee.com/suoten/ProtoForge) · [GitHub](https://github.com/suoten/ProtoForge) |
+| [EdgeLiteGateway](https://github.com/suoten/EdgeLiteGateway) | Lightweight IoT edge gateway with 22 industrial protocols built-in | [Gitee](https://gitee.com/suoten/EdgeLiteGateway) · [GitHub](https://github.com/suoten/EdgeLiteGateway) |
+| [EdgeLiteGateway-Go](https://github.com/suoten/EdgeLiteGateway-Go) | Go implementation of the EdgeLite industrial gateway | [Gitee](https://gitee.com/suoten/EdgeLiteGateway-Go) · [GitHub](https://github.com/suoten/EdgeLiteGateway-Go) |
+| [GBDoctor](https://github.com/suoten/GBDoctor) | GB28181 video surveillance access diagnostic tool | [Gitee](https://gitee.com/suoten/GBDoctor) · [GitHub](https://github.com/suoten/GBDoctor) |
+| [PyGBSentry](https://github.com/suoten/PyGBSentry) | GB28181 video surveillance access platform | [Gitee](https://gitee.com/suoten/PyGBSentry) · [GitHub](https://github.com/suoten/PyGBSentry) |
+| [EdgeAgent Hub](https://github.com/suoten/EdgeAgent-Hub) | Industrial edge AI platform: ONNX inference + LLM + RAG + multi-agent orchestration + offline autonomy + A/B OTA | [Gitee](https://gitee.com/suoten/edgeagent-hub) · [GitHub](https://github.com/suoten/EdgeAgent-Hub) |
+| [IoT-ZTNA](https://github.com/suoten/IoT-ZTNA) | Zero-trust network access gateway for IoT: Rust + eBPF/XDP line-rate filtering + AI behavior detection | [Gitee](https://gitee.com/suoten/IoT-ZTNA) · [GitHub](https://github.com/suoten/IoT-ZTNA) |
+
+---
+
 ## 🏢 Enterprise Service & Professional Support
 
 > ProtoForge open-source is free forever. If your team needs deeper support, we offer:

@@ -1875,9 +1875,15 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 ## 🔗 相关项目
 
-| 项目                                                           | 说明                        | 仓库地址                                                                                                    |
-| ------------------------------------------------------------ | ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 项目                                                           | 说明                                              | 仓库地址                                                                                                    |
+| ------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [ProtoForge](https://github.com/suoten/ProtoForge) | 本项目 —— 一台电脑模拟 28 种工业设备的多协议仿真平台 | [Gitee](https://gitee.com/suoten/ProtoForge) · [GitHub](https://github.com/suoten/ProtoForge) |
 | [EdgeLiteGateway](https://github.com/suoten/EdgeLiteGateway) | 轻量级边缘计算物联网网关，22 种工业协议开箱即用 | [Gitee](https://gitee.com/suoten/EdgeLiteGateway) · [GitHub](https://github.com/suoten/EdgeLiteGateway) |
+| [EdgeLiteGateway-Go](https://github.com/suoten/EdgeLiteGateway-Go) | EdgeLite 工业网关 Go 版本，高性能重构实现 | [Gitee](https://gitee.com/suoten/EdgeLiteGateway-Go) · [GitHub](https://github.com/suoten/EdgeLiteGateway-Go) |
+| [GBDoctor](https://github.com/suoten/GBDoctor) | GB28181 视频监控接入诊断工具，现场接入问题一测即知 | [Gitee](https://gitee.com/suoten/GBDoctor) · [GitHub](https://github.com/suoten/GBDoctor) |
+| [PyGBSentry](https://github.com/suoten/PyGBSentry) | GB28181 视频监控国标接入平台 | [Gitee](https://gitee.com/suoten/PyGBSentry) · [GitHub](https://github.com/suoten/PyGBSentry) |
+| [EdgeAgent Hub](https://github.com/suoten/EdgeAgent-Hub) | 工业边缘 AI 平台：ONNX 推理 + LLM + RAG + 多智能体编排 + 全协议接入 + 断网自治 + A/B 分区 OTA | [Gitee](https://gitee.com/suoten/edgeagent-hub) · [GitHub](https://github.com/suoten/EdgeAgent-Hub) |
+| [IoT-ZTNA](https://github.com/suoten/IoT-ZTNA) | IoT 零信任网络访问网关：Rust + eBPF/XDP 线速过滤 + AI 行为检测 | [Gitee](https://gitee.com/suoten/IoT-ZTNA) · [GitHub](https://github.com/suoten/IoT-ZTNA) |
 
 ***
 
