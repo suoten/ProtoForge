@@ -1793,6 +1793,9 @@ const messages = {
     },
     settings: {
       about: '关于',
+      version: '程序版本',
+      projectHome: '项目主页',
+      starHint: '如果 ProtoForge 帮到了你，欢迎去 GitHub / Gitee 点个 Star 支持一下，也让更多工友能搜到这个项目～',
       addUser: '添加用户',
       addUserTitle: '添加用户',
       admin: '管理员',
@@ -4029,6 +4032,9 @@ const messages = {
     },
     settings: {
       about: 'About',
+      version: 'Version',
+      projectHome: 'Project Home',
+      starHint: 'If ProtoForge helps you, a Star on GitHub / Gitee is the best support and helps more engineers find this project!',
       addUser: 'Add User',
       addUserTitle: 'Add User',
       admin: 'Admin',

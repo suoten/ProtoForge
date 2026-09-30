@@ -176,6 +176,30 @@
           </n-space>
         </n-card>
       </n-tab-pane>
+
+      <n-tab-pane name="about" :tab="t('settings.about')">
+        <n-card style="max-width: 680px; margin-top: 16px">
+          <template #header>
+            <span>ℹ️ {{ t('settings.about') }}</span>
+          </template>
+          <n-space vertical size="large">
+            <n-descriptions :column="1" bordered size="small">
+              <n-descriptions-item :label="t('settings.version')">
+                <n-tag type="success" size="small">v{{ appVersion || '…' }}</n-tag>
+              </n-descriptions-item>
+              <n-descriptions-item :label="t('settings.projectHome')">
+                <n-space vertical size="small">
+                  <n-button text tag="a" href="https://github.com/suoten/ProtoForge" target="_blank" type="primary">GitHub: suoten/ProtoForge</n-button>
+                  <n-button text tag="a" href="https://gitee.com/suoten/ProtoForge" target="_blank" type="primary">Gitee: suoten/ProtoForge</n-button>
+                </n-space>
+              </n-descriptions-item>
+            </n-descriptions>
+            <n-alert type="info" :bordered="false">
+              {{ t('settings.starHint') }}
+            </n-alert>
+          </n-space>
+        </n-card>
+      </n-tab-pane>
     </n-tabs>
 
     <n-modal v-model:show="showAddUser" :title="t('settings.addUserTitle')" preset="card" style="width:min(420px, 90vw)" :mask-closable="false">
@@ -221,6 +245,7 @@
 
 <script setup>
 import { ref, computed, h, onMounted } from 'vue'
+import { fetchAppVersion } from '../version.js'
 import { NButton, NSpace, NTag, NPopconfirm, NSelect, NForm, NFormItem, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -236,6 +261,8 @@ const settingsLoading = ref(false)
 const saveLoading = ref(false)
 const setupLoading = ref(false)
 const demoLoading = ref(false)
+// FIXED: "关于"页展示程序版本号 —— 群公告让用户提供版本号，但界面上无处可查
+const appVersion = ref('')
 const addUserLoading = ref(false)
 const resetLoading = ref(false)
 const testEdgeLiteLoading = ref(false)
@@ -566,5 +593,9 @@ onMounted(async () => {  // FIXED: made async and added try-catch for await call
   try { await loadSettings() } catch (e) { message.error(t('settings.loadSettingsFailed') + ': ' + e.message) }
   try { await loadUsers() } catch (e) { message.error(t('settings.loadUsersFailed') + ': ' + e.message) }
   try { await loadSetupStatus() } catch (e) { message.error(t('settings.loadStatusFailed') + ': ' + e.message) }
+  // 版本号：全局缓存，没有再拉健康检查
+  try {
+    appVersion.value = await fetchAppVersion()
+  } catch { /* 版本号获取失败不影响设置页 */ }
 })
 </script>

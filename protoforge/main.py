@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
 from protoforge.api.v1.router import router
+from protoforge import __version__
 from protoforge.db.session import Database
 from protoforge.engine.engine import SimulationEngine
 from protoforge.engine.event_bus import EventBus
@@ -574,7 +575,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="ProtoForge",
         description="IoT Protocol Simulation & Testing Platform API",
-        version="0.1.0",
+        version=__version__,  # FIXED: 原写死 0.1.0，与实际发布版本不一致
         lifespan=lifespan,
     )
 
@@ -671,6 +672,7 @@ def create_app() -> FastAPI:
 
         return {
             "status": status,
+            "version": __version__,  # FIXED: 健康检查附带程序版本号，供前端"关于"页与用户排查展示
             "timestamp": ts,
             "database": db_ok,
             "database_health": db_health,

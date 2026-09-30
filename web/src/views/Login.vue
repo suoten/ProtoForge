@@ -39,16 +39,19 @@
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#94a3b8" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4 M12 8h.01"/></svg>
           <span v-if="isDev">{{ t('login.defaultAccount') }}</span>
         </div>
+        <!-- FIXED: 登录页底部显示版本号（用户建议，NAS Docker 用户排查需提供版本） -->
+        <div class="login-version">ProtoForge v{{ appVersion || '…' }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
+import { fetchAppVersion } from '../version.js'
 
 const { t } = useI18n()
 const message = useMessage()
@@ -56,6 +59,9 @@ const loading = ref(false)
 const form = ref({ username: '', password: '' })
 const isDev = ref(import.meta.env.DEV)
 const loginFormRef = ref(null)
+// FIXED: 登录页展示版本号（/health 公开端点，登录前可取）
+const appVersion = ref('')
+onMounted(() => { fetchAppVersion().then(v => { appVersion.value = v }).catch(() => {}) })
 const loginRules = computed(() => ({
   username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
   password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }],
@@ -123,5 +129,13 @@ async function handleLogin() {
   margin-top: 16px;
   font-size: 12px;
   color: #94a3b8;
+}
+/* FIXED: 登录页底部版本号 */
+.login-version {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  user-select: text;
 }
 </style>

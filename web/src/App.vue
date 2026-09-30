@@ -49,6 +49,8 @@
             :options="menuOptions"
             @update:value="navigate"
           />
+          <!-- FIXED: 侧边栏底部显示程序版本号（用户建议，便于排查时提供版本） -->
+          <div v-if="!collapsed" class="sider-version">v{{ appVersion || '…' }}</div>
         </n-layout-sider>
         <n-layout>
           <n-layout-header bordered class="app-header">
@@ -119,6 +121,7 @@ import { NLayout, NLayoutSider, NLayoutHeader, NLayoutContent, NMenu, NSpace, NA
 import { useI18n } from './i18n.js'
 import { createDiscreteApi } from 'naive-ui'
 import api, { setNotifyFunction } from './api.js'
+import { fetchAppVersion } from './version.js'
 import Login from './views/Login.vue'
 import ChangePasswordModal from './components/ChangePasswordModal.vue'
 
@@ -134,6 +137,8 @@ const naiveDateLocale = computed(() => locale.value === 'zh' ? dateZhCN : dateEn
 setNotifyFunction((type, msg) => discreteMessage[type]?.(msg, { duration: 4000 }), t)
 const loggedIn = ref(false)
 const collapsed = ref(localStorage.getItem('sider_collapsed') === 'true')
+// FIXED: 侧边栏底部版本号（与登录页/设置页共用 version.js 缓存）
+const appVersion = ref('')
 const username = ref(localStorage.getItem('username') || '')
 const searchQuery = ref('')
 const searchResults = ref([])
@@ -324,6 +329,8 @@ function onGlobalKeydown(e) {
 
 onMounted(async () => {
   window.addEventListener('keydown', onGlobalKeydown)
+  // 拉取版本号（/health 为公开端点，未登录也可用）
+  fetchAppVersion().then(v => { appVersion.value = v }).catch(() => {})
   const token = localStorage.getItem('token')
   if (token) {
     const valid = await api.ensureValidToken()
@@ -496,6 +503,15 @@ body {
 }
 
 .sider-logo:hover { opacity: 0.8; }
+
+/* FIXED: 侧边栏底部版本号 */
+.sider-version {
+  padding: 10px 20px 14px;
+  font-size: 12px;
+  color: #94a3b8;
+  user-select: text;
+  margin-top: auto;
+}
 
 .logo-text {
   font-size: 18px;

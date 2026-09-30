@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.4 — 2026-09-30
+
+**New — 程序版本号全局可见（用户建议：界面各处显示版本号，便于排查问题时提供版本信息）：**
+
+- 后端：/health 接口新增 version 字段；修正 FastAPI app version 写死 0.1.0 与实际发布版本不一致的问题
+- 前端新增 version.js 全局版本缓存（登录页/侧边栏/设置页共用一次请求）
+- 登录页底部显示 ProtoForge vX.Y.Z；左侧菜单底部显示 vX.Y.Z；系统设置新增"关于"页（程序版本 + GitHub/Gitee 项目主页 + Star 引导）
+- 浏览器实测三处均正确显示 v1.3.0
+
 ## v1.3.3 — 2026-09-27
 
 **Bug Fix — Windows quickstart.bat 运行时报 "'xxx' is not recognized as an internal or external command" 乱码错误（用户反馈）：**
