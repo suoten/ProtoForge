@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api/v1")
 
 from protoforge.api.v1.auth_routes import router as _auth_router
 from protoforge.api.v1.compliance_routes import router as _compliance_router
+from protoforge.api.v1.diagnostics_routes import router as _diagnostics_router
 from protoforge.api.v1.device_routes import router as _device_router
 from protoforge.api.v1.edgelite_routes import router as _edgelite_router
 from protoforge.api.v1.fault_routes import router as _fault_router
@@ -42,4 +43,5 @@ router.include_router(_system_router)
 router.include_router(_fault_router)
 router.include_router(_test_plan_router)
 router.include_router(_compliance_router)
+router.include_router(_diagnostics_router)
 router.include_router(_rule_chain_router)

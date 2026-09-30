@@ -195,6 +195,17 @@ export default {
   startAllProtocols: () => d(api.post('/protocols/start-all')),
   stopAllProtocols: () => d(api.post('/protocols/stop-all')),
 
+  // 连接诊断（UX 增强：一键体检"连不上"类问题）
+  diagnoseProtocol: (name) => d(api.post(`/diagnostics/protocol/${name}`)),
+  diagnoseOutbound: (host, port) => d(api.post('/diagnostics/outbound', { host, port })),
+  listNics: () => d(api.get('/diagnostics/nics')).then(r => r.addresses || []),
+  versionCheck: () => d(api.get('/system/version-check')),
+
+  // 测点调试 Force（临时钉值，引擎重启后失效）
+  forcePoint: (deviceId, pointName, value) =>
+    d(api.post(`/devices/${deviceId}/points/${pointName}/force`, { value })),
+  listForcedPoints: (deviceId) => d(api.get(`/devices/${deviceId}/forces`)).then(r => r.forced_points || {}),
+
   getDevices: (protocol) => d(api.get('/devices', { params: { protocol } })).then(r => normalizeList(r, 'devices')),
   getDevice: (id) => d(api.get(`/devices/${id}`)),
   createDevice: (config) => d(api.post('/devices', config)),

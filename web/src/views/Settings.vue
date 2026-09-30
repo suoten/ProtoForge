@@ -185,7 +185,12 @@
           <n-space vertical size="large">
             <n-descriptions :column="1" bordered size="small">
               <n-descriptions-item :label="t('settings.version')">
-                <n-tag type="success" size="small">v{{ appVersion || '…' }}</n-tag>
+                <n-space align="center" size="small">
+                  <n-tag type="success" size="small">v{{ appVersion || '…' }}</n-tag>
+                  <n-button v-if="updateCheck && updateCheck.update_available" size="tiny" @click="copyUpgradeCmdSettings">{{ t('settings.updateAvailableShort', { latest: updateCheck.latest }) }}</n-button>
+                  <n-text v-else-if="updateCheck && updateCheck.check_failed" depth="3" style="font-size:12px">{{ t('settings.updateCheckFailed') }}</n-text>
+                </n-space>
+                <div v-if="updateCheck && updateCheck.update_available && updateCheck.notes" style="margin-top:8px;white-space:pre-wrap;font-size:12px;max-height:160px;overflow:auto;background:rgba(128,128,128,0.08);padding:8px;border-radius:6px">{{ updateCheck.notes }}</div>
               </n-descriptions-item>
               <n-descriptions-item :label="t('settings.projectHome')">
                 <n-space vertical size="small">
@@ -263,6 +268,15 @@ const setupLoading = ref(false)
 const demoLoading = ref(false)
 // FIXED: "关于"页展示程序版本号 —— 群公告让用户提供版本号，但界面上无处可查
 const appVersion = ref('')
+// 更新检查（UX）：新版本提示 + Release Notes
+const updateCheck = ref(null)
+function copyUpgradeCmdSettings() {
+  const cmd = updateCheck.value?.upgrade_command || 'docker pull suoten/protoforge:latest'
+  navigator.clipboard?.writeText(cmd).then(
+    () => message.success(t('common.copied')),
+    () => message.info(cmd),
+  )
+}
 const addUserLoading = ref(false)
 const resetLoading = ref(false)
 const testEdgeLiteLoading = ref(false)
@@ -596,6 +610,8 @@ onMounted(async () => {  // FIXED: made async and added try-catch for await call
   // 版本号：全局缓存，没有再拉健康检查
   try {
     appVersion.value = await fetchAppVersion()
+    // 更新检查（静默失败）
+    api.versionCheck().then(d => { if (d) updateCheck.value = d }).catch(() => {})
   } catch { /* 版本号获取失败不影响设置页 */ }
 })
 </script>

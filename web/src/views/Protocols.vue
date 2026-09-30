@@ -44,14 +44,20 @@
             <n-space justify="space-between" align="center">
               <n-space size="small" align="center">
                 <n-text depth="3" style="font-size:12px">{{ p.default_port ? t('common.port') + ' ' + p.default_port : '' }}</n-text>
-                <n-tag size="tiny" :type="protocolModes[p.name] === 'Broker' || protocolModes[p.name] === 'SIP' || protocolModes[p.name] === 'Agent' ? 'warning' : 'info'" :bordered="false">
-                  {{ protocolModes[p.name] || 'Server' }}
-                </n-tag>
+                <n-tooltip trigger="hover">
+                  <template #trigger>
+                    <n-tag size="tiny" :type="protocolModes[p.name] === 'Broker' || protocolModes[p.name] === 'SIP' || protocolModes[p.name] === 'Agent' ? 'warning' : 'info'" :bordered="false" style="cursor:help">
+                      {{ protocolModes[p.name] || 'Server' }}
+                    </n-tag>
+                  </template>
+                  {{ t('protocols.roleHint.' + (protocolModes[p.name] || 'Server')) }}
+                </n-tooltip>
               </n-space>
               <n-space size="small">
                 <n-button v-if="p.status !== 'running'" type="primary" size="small" :loading="startingProtocol === p.name" @click="quickStart(p.name)">{{ t('protocols.quickStart') }}</n-button>
                 <n-button v-else type="warning" size="small" :loading="stoppingProtocol === p.name" @click="stopProtocol(p.name)">{{ t('common.stop') }}</n-button>
                 <n-button size="small" tertiary @click="openAdvanced(p)">{{ t('protocols.advancedConfig') }}</n-button>
+                <n-button size="small" tertiary @click="runDiagnose(p.name)">{{ t('protocols.diagnose') }}</n-button>
                 <n-button size="small" tertiary @click="showProtocolInfo(p.name)">{{ t('common.detail') }}</n-button>
               </n-space>
             </n-space>
@@ -195,13 +201,49 @@
           <n-button v-else disabled>{{ t('protocols.batchItemStarting') }}</n-button>
         </template>
       </n-modal>
+
+      <!-- 连接诊断弹窗（UX：一键体检"连不上"类问题） -->
+      <n-modal v-model:show="showDiag" preset="card" :title="t('protocols.diagnosticsTitle', { name: diagProtocol })" style="width:min(560px, 90vw)">
+        <n-spin :show="diagLoading">
+          <n-space vertical size="small">
+            <template v-if="diagResult">
+              <n-alert :type="diagResult.ok ? 'success' : 'error'" :bordered="false">
+                {{ diagResult.ok ? t('protocols.diagAllPass') : t('protocols.diagHasFail') }}
+              </n-alert>
+              <div v-for="c in diagResult.checks" :key="c.key" style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:6px;background:rgba(128,128,128,0.08)">
+                <span :style="{ color: c.ok ? '#18a058' : '#d03050', fontWeight: 700, minWidth: '14px' }">{{ c.ok ? '✓' : '✗' }}</span>
+                <div>
+                  <div style="font-size:13px">{{ t('protocols.diag_' + c.key) }}<n-text depth="3" style="font-size:12px;margin-left:8px">{{ c.detail }}</n-text></div>
+                  <n-text v-if="!c.ok && c.suggestion" type="warning" style="font-size:12px">{{ t('protocols.' + c.suggestion) }}</n-text>
+                </div>
+              </div>
+            </template>
+            <n-divider style="margin:8px 0" />
+            <div style="font-size:13px;font-weight:600">{{ t('protocols.outboundTest') }}</div>
+            <n-space size="small">
+              <n-input v-model:value="diagOutHost" :placeholder="t('protocols.outboundHost')" style="width:200px" size="small" />
+              <n-input-number v-model:value="diagOutPort" size="small" style="width:120px" :placeholder="t('common.port')" />
+              <n-button size="small" type="primary" :loading="diagOutLoading" @click="runOutboundTest">{{ t('protocols.outboundTestBtn') }}</n-button>
+            </n-space>
+            <n-alert v-if="diagOutResult" :type="diagOutResult.ok ? 'success' : 'error'" :bordered="false" size="small">
+              {{ diagOutResult.ok ? t('protocols.outboundOk', { ms: diagOutResult.latency_ms }) : t('protocols.outboundFail', { error: diagOutResult.error || '' }) }}
+            </n-alert>
+          </n-space>
+        </n-spin>
+        <template #action>
+          <n-space justify="space-between" style="width:100%">
+            <n-button size="small" @click="runDiagnose(diagProtocol)" :loading="diagLoading">{{ t('protocols.diagRerun') }}</n-button>
+            <n-button @click="showDiag = false">{{ t('common.close') }}</n-button>
+          </n-space>
+        </template>
+      </n-modal>
     </n-space>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NInputNumber, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, NProgress, NSkeleton, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NGrid, NGi, NCard, NTag, NButton, NAlert, NModal, NForm, NFormItem, NInput, NInputNumber, NText, NDescriptions, NDescriptionsItem, NDataTable, NSpin, NProgress, NSkeleton, NTooltip, NDivider, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { protocolColors, protocolModes } from '../constants.js'
@@ -230,6 +272,43 @@ const advancedConfigSchema = computed(() => {
 const showInfoModal = ref(false)
 const protocolInfoName = ref('')
 const protocolInfoData = ref(null)
+
+// 连接诊断（UX）
+const showDiag = ref(false)
+const diagProtocol = ref('')
+const diagLoading = ref(false)
+const diagResult = ref(null)
+const diagOutHost = ref('')
+const diagOutPort = ref(1883)
+const diagOutLoading = ref(false)
+const diagOutResult = ref(null)
+
+async function runDiagnose(name) {
+  diagProtocol.value = name
+  showDiag.value = true
+  diagLoading.value = true
+  diagResult.value = null
+  try {
+    diagResult.value = await api.diagnoseProtocol(name)
+  } catch (e) {
+    message.error(t('protocols.diagFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally {
+    diagLoading.value = false
+  }
+}
+
+async function runOutboundTest() {
+  if (!diagOutHost.value || !diagOutPort.value) return
+  diagOutLoading.value = true
+  diagOutResult.value = null
+  try {
+    diagOutResult.value = await api.diagnoseOutbound(diagOutHost.value, Number(diagOutPort.value))
+  } catch (e) {
+    diagOutResult.value = { ok: false, error: e.response?.data?.error || e.message }
+  } finally {
+    diagOutLoading.value = false
+  }
+}
 const protocolConfigData = ref(null)
 const loadingInfo = ref(false)
 

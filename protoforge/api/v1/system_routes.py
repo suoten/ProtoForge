@@ -194,6 +194,92 @@ async def clear_audit_log(
     raise HTTPException(status_code=403, detail="Audit log cannot be cleared. Audit logs are append-only for compliance.")
 
 
+# ---------------------------------------------------------------------------
+# Version check (update notification)
+# ---------------------------------------------------------------------------
+
+_version_check_cache: dict[str, Any] = {"ts": 0.0, "data": None}
+
+
+def _is_newer(latest: str, current: str) -> bool:
+    """宽松 semver 比较：逐段数值比较（v 前缀/多余后缀忽略），任何一段更大即更新。"""
+    def parts(v: str) -> list[int]:
+        out: list[int] = []
+        for seg in v.strip().lstrip("vV").split("."):
+            digits = ""
+            for ch in seg:
+                if ch.isdigit():
+                    digits += ch
+                else:
+                    break
+            out.append(int(digits) if digits else 0)
+        return out
+
+    a, b = parts(latest), parts(current)
+    width = max(len(a), len(b))
+    a += [0] * (width - len(a))
+    b += [0] * (width - len(b))
+    return a > b
+
+
+@router.get("/system/version-check")
+async def version_check(_user: dict[str, Any] = Depends(require_viewer)):
+    """检查新版本（GitHub Releases），10 分钟内复用缓存；失败时静默降级。"""
+    import httpx
+
+    now = time.monotonic()
+    cached = _version_check_cache.get("data")
+    if cached and now - _version_check_cache["ts"] < 600:
+        return cached
+
+    current = _get_version()
+    data: dict[str, Any] = {
+        "current": current,
+        "latest": None,
+        "update_available": False,
+        "check_failed": False,
+        "notes": "",
+        "url": "https://github.com/suoten/ProtoForge/releases",
+        "upgrade_command": "docker pull suoten/protoforge:latest",
+    }
+    try:
+        async with httpx.AsyncClient(trust_env=False, timeout=6.0) as client:
+            headers = {"Accept": "application/vnd.github+json", "User-Agent": "protoforge-update-check"}
+            resp = await client.get("https://api.github.com/repos/suoten/ProtoForge/releases/latest",
+                                    headers=headers)
+            if resp.status_code == 200:
+                release = resp.json()
+                tag = release.get("tag_name") or ""
+                latest = tag.lstrip("vV")
+                data["latest"] = tag or None
+                data["update_available"] = bool(latest) and _is_newer(latest, current)
+                data["notes"] = (release.get("body") or "")[:2000]
+                data["url"] = release.get("html_url") or data["url"]
+            elif resp.status_code == 404:
+                # 仓库没有正式 Release：退化为取最新 tag
+                tags_resp = await client.get("https://api.github.com/repos/suoten/ProtoForge/tags?per_page=1",
+                                             headers=headers)
+                if tags_resp.status_code == 200:
+                    tags = tags_resp.json()
+                    if tags:
+                        tag = tags[0].get("name", "")
+                        latest = tag.lstrip("vV")
+                        data["latest"] = tag or None
+                        data["update_available"] = bool(latest) and _is_newer(latest, current)
+                    else:
+                        data["check_failed"] = True
+                else:
+                    data["check_failed"] = True
+            else:
+                data["check_failed"] = True
+    except Exception as e:
+        logger.debug("Version check failed: %s", e)
+        data["check_failed"] = True
+
+    _version_check_cache.update(ts=now, data=data)
+    return data
+
+
 @router.get("/backup")
 async def export_backup(_user: dict[str, Any] = Depends(require_admin)):
     try:

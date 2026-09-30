@@ -1,5 +1,19 @@
 <template>
   <div>
+    <!-- 版本更新提示（UX：自动检查 GitHub 最新版本，提示更新内容与升级方式） -->
+    <n-alert v-if="updateInfo && updateInfo.update_available" type="info" :bordered="false" style="margin-bottom:16px" closable>
+      <n-space align="center" justify="space-between">
+        <span>
+          🎉 {{ t('dashboard.updateAvailable', { latest: updateInfo.latest, current: updateInfo.current }) }}
+          <n-button text size="tiny" @click="showUpdateNotes = !showUpdateNotes">{{ showUpdateNotes ? t('common.hide') : t('dashboard.viewNotes') }}</n-button>
+        </span>
+        <n-space size="small">
+          <n-button size="tiny" @click="copyUpgradeCmd">{{ t('dashboard.copyUpgradeCmd') }}</n-button>
+          <n-button v-if="updateInfo.url" size="tiny" tag="a" :href="updateInfo.url" target="_blank">{{ t('dashboard.viewRelease') }}</n-button>
+        </n-space>
+      </n-space>
+      <div v-if="showUpdateNotes && updateInfo.notes" style="margin-top:8px;white-space:pre-wrap;font-size:12px;max-height:200px;overflow:auto;background:rgba(128,128,128,0.08);padding:8px;border-radius:6px">{{ updateInfo.notes }}</div>
+    </n-alert>
     <template v-if="loading && devices.length === 0">
       <n-space vertical size="large">
         <n-grid :cols="responsiveCols" :x-gap="16" :y-gap="16">
@@ -155,7 +169,17 @@
             <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#cbd5e1" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             <div class="pf-section-title" style="font-size:16px">{{ t('dashboard.noDevices') }}</div>
             <div class="pf-section-desc">{{ t('dashboard.quickStart') }}</div>
-            <n-button type="primary" @click="$router.push('/marketplace')">{{ t('dashboard.goToMarketplace') }}</n-button>
+            <!-- 新手三步引导（UX） -->
+            <n-space vertical size="small" style="max-width:420px;margin-top:8px">
+              <div v-for="(step, i) in 3" :key="i" style="display:flex;align-items:flex-start;gap:10px;text-align:left">
+                <n-tag type="info" size="small" :bordered="false" style="min-width:22px;justify-content:center">{{ i + 1 }}</n-tag>
+                <span style="font-size:13px;line-height:1.6">{{ t('dashboard.onboardingStep' + (i + 1)) }}</span>
+              </div>
+            </n-space>
+            <n-space>
+              <n-button type="primary" @click="$router.push('/marketplace')">{{ t('dashboard.goToMarketplace') }}</n-button>
+              <n-button tertiary @click="$router.push('/devices')">{{ t('dashboard.goToDevices') }}</n-button>
+            </n-space>
           </n-space>
         </n-card>
 
@@ -225,6 +249,16 @@ const { t } = useI18n()
 const message = useMessage()
 const dialog = useDialog()
 const devices = ref([])
+// 版本更新提示
+const updateInfo = ref(null)
+const showUpdateNotes = ref(false)
+function copyUpgradeCmd() {
+  const cmd = updateInfo.value?.upgrade_command || 'docker pull suoten/protoforge:latest'
+  navigator.clipboard?.writeText(cmd).then(
+    () => message.success(t('common.copied')),
+    () => message.info(cmd),
+  )
+}
 const protocols = ref([])
 const templates = ref([])
 const scenarios = ref([])
@@ -427,6 +461,8 @@ function openMetrics() {
 
 onMounted(() => {
   loadData()
+  // 版本更新检查（静默失败，不影响页面）
+  api.versionCheck().then(d => { if (d && d.update_available) updateInfo.value = d }).catch(() => {})
   deviceConn = getConnection('devices', () => api.createDeviceWs())
   deviceConn.subscribe(deviceCallbacks)
   deviceConn.connect()
