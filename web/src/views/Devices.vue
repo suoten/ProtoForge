@@ -652,11 +652,11 @@ const showNetworkModal = ref(false)
 const networkConfigLoading = ref(false)
 const networkForm = ref({ profile: 'wan', enabled: false })
 const networkProfileOptions = computed(() => [
-  { label: 'Ideal', value: 'ideal' },
+  { label: t('devices.networkIdeal') || 'Ideal', value: 'ideal' },
   { label: 'LAN', value: 'lan' },
   { label: 'WAN', value: 'wan' },
   { label: t('devices.wireless') || 'Wireless', value: 'wireless' },
-  { label: 'Satellite', value: 'satellite' },
+  { label: t('devices.networkSatellite') || 'Satellite', value: 'satellite' },
   { label: t('devices.degraded') || 'Degraded', value: 'degraded' },
 ])
 const faultForm = ref({ fault_type: 'sensor_drift', target: '*', duration: -1, severity: 'medium', trigger_mode: 'manual' })
@@ -703,9 +703,9 @@ const stateEventOptions = computed(() => [
 ])
 
 const loopTypeOptions = computed(() => [
-  { label: 'Simple', value: 'simple' },
-  { label: 'Cascade', value: 'cascade' },
-  { label: 'Feedforward', value: 'feedforward' },
+  { label: t('devices.loopTypeSimple'), value: 'simple' },
+  { label: t('devices.loopTypeCascade'), value: 'cascade' },
+  { label: t('devices.loopTypeFeedforward'), value: 'feedforward' },
 ])
 
 const stateHistoryColumns = computed(() => [
@@ -989,7 +989,7 @@ function renderDevGenConfigExpand(row) {
             size: 'tiny',
             style: 'width:80px',
             value: val ? 'true' : 'false',
-            options: [{ label: 'True', value: 'true' }, { label: 'False', value: 'false' }],
+            options: [{ label: t('common.true'), value: 'true' }, { label: t('common.false'), value: 'false' }],
             onUpdateValue: (v) => { row.generator_config[param.key] = v === 'true' },
           }),
         ])
