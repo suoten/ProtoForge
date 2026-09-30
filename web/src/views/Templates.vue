@@ -252,7 +252,7 @@ function renderGenConfigExpand(row) {
             size: 'tiny',
             style: 'width:80px',
             value: val ? 'true' : 'false',
-            options: [{ label: 'True', value: 'true' }, { label: 'False', value: 'false' }],
+            options: [{ label: t('common.true'), value: 'true' }, { label: t('common.false'), value: 'false' }],
             onUpdateValue: (v) => { row.generator_config[param.key] = v === 'true' },
           }),
         ])

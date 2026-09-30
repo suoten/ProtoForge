@@ -67,7 +67,7 @@
               <n-table :bordered="false" size="small">
                 <thead>
                   <tr>
-                    <th>Rule ID</th>
+                    <th>{{ t('compliance.ruleId') }}</th>
                     <th>{{ t('compliance.ruleName') }}</th>
                     <th>{{ t('compliance.severity') }}</th>
                     <th>{{ t('compliance.violationMsg') }}</th>
@@ -121,7 +121,7 @@ const protocolOptions = computed(() =>
 )
 
 const reportColumns = computed(() => [
-  { title: 'Report ID', key: 'id', width: 120, ellipsis: { tooltip: true } },
+  { title: t('compliance.reportId'), key: 'id', width: 120, ellipsis: { tooltip: true } },
   { title: t('compliance.protocolCol'), key: 'protocol', width: 100 },
   { title: t('compliance.score'), key: 'compliance_score', width: 80,
     render: (row) => h(NTag, { size: 'small', type: row.passed ? 'success' : 'error', bordered: false },

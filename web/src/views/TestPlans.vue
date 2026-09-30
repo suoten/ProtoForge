@@ -158,7 +158,7 @@ const suiteOptions = computed(() =>
 )
 
 const runColumns = computed(() => [
-  { title: 'Run ID', key: 'id', width: 120, ellipsis: { tooltip: true } },
+  { title: t('testPlans.runId'), key: 'id', width: 120, ellipsis: { tooltip: true } },
   { title: t('testPlans.runStatusCol'), key: 'status', width: 100,
     render: (row) => h(NTag, { size: 'small', type: runStatusType(row.status), bordered: false }, () => runStatusText(row.status)) },
   { title: t('testPlans.total'), key: 'results_summary.total', width: 60,

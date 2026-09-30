@@ -245,10 +245,10 @@ const ruleTypeOptions = computed(() => [
 ])
 
 const actionTypeOptions = computed(() => [  // FIXED-P1: 动作类型选项
-  { label: 'Set', value: 'set' },
-  { label: 'Toggle', value: 'toggle' },
-  { label: 'Increment', value: 'increment' },
-  { label: 'Decrement', value: 'decrement' },
+  { label: t('scenarioEditor.actionSet'), value: 'set' },
+  { label: t('scenarioEditor.actionToggle'), value: 'toggle' },
+  { label: t('scenarioEditor.actionIncrement'), value: 'increment' },
+  { label: t('scenarioEditor.actionDecrement'), value: 'decrement' },
 ])
 
 const pointEditColumns = computed(() => [
