@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "protoforge"
-version = "1.4.0"
+version = "1.4.1"
 description = "IoT Protocol Simulation & Testing Platform - Postman for IoT"
 readme = "README.md"
 license = "MIT"
@@ -36,6 +36,9 @@ dependencies = [
     "PyJWT>=2.8.0",
     "bcrypt>=4.0.1",
     "alembic>=1.13.0",
+    # FIXED(v1.4.1): SQLAlchemy 仅经由 alembic 间接安装，新版 SQLAlchemy 不再默认携带 greenlet，
+    # Docker 容器内 alembic 迁移报 "No module named 'greenlet'"；显式声明 asyncio extra 保证 greenlet 随装
+    "sqlalchemy[asyncio]>=2.0.0",
 ]
 
 [project.optional-dependencies]

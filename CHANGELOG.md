@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.4.1 — 2026-09-30
+
+### 🐛 Bug Fix（v1.4.0 用户反馈专项）
+
+**修复 — IEC 104 帧格式回归（v1.4.0 已携带，标准主站连上即被踢、遥测地址 ×256 复发）：**
+
+- 根因：自动化提交 `1df6f50`（9 月 26 日"联调批次修复"）将 IEC 60870-5-**101**（FT1.2）的帧格式错套到 **104** 上：APDU 长度域被改为 2 字节（L1 L2）、ASDU 头被改为 COT 2 字节 + OA 2 字节（8 字节头）。IEC 60870-5-104 标准为**单字节长度域** + **6 字节 ASDU 头**（TI+VSQ+COT(1)+OA(1)+CA(2 LE)）——该改动不仅让标准客户端（QTester104、lib60870 等）连接即被断开（控制码 0x07 被当作 L2 校验失败），还回退了此前修复 QTester104 遥测地址 ×256 的 COT 1 字节修正（`4f7f803`），等于 v1.4.0 重新带上了用户报告过的原始 Bug
+- 修复：`protoforge/protocols/iec104/server.py` 整体回退到标准实现（`4f7f803` 版本）；回归测试 `tests/test_iec104_wire.py` 7 例全绿（含 STARTDT/时钟同步/总召/遥控选择-执行/时标命令的严格字节级断言）
+- 教训记录：APDU 帧格式 `68 L(1字节) C1..C4`、ASDU 头 6 字节，是 104 与 101 的核心区别之一，后续任何协议格式修改须对照标准原文并跑 wire 回归
+
+**修复 — Docker 镜像启动报 `ModuleNotFoundError: No module named 'greenlet'`（alembic 迁移失败，容器无法启动）：**
+
+- 根因：SQLAlchemy 经由 alembic 间接安装，未显式声明。SQLAlchemy 2.1 起移除了默认的平台级 greenlet 依赖（仅保留 `sqlalchemy[asyncio]` extra），v1.4.0 镜像构建时 pip 解析到 SQLAlchemy 2.1.1 → 容器内缺 greenlet → `alembic upgrade head` 导入 `sqlalchemy.ext.asyncio` 时崩溃
+- 修复：核心依赖显式加入 `sqlalchemy[asyncio]>=2.0.0`，保证任何 SQLAlchemy 版本下 greenlet 随装
+- 顺手修复：`alembic.ini` 含中文注释，Windows GBK locale 下 configparser 解码失败（本地 pip 安装用户执行数据库迁移同样会崩）——改为 ASCII 注释，并保留说明
+
+**修复 — Docker 中启动 S7 协议报 503（"No free port found"，无从排查）：**
+
+- 根因：S7 默认端口 102 是 Linux 特权端口（<1024），容器以非 root 用户（uid 1000）运行，绑定报 PermissionError；旧逻辑把 PermissionError 误判为"端口被占用"，自动换端口又连续撞上 103..1023 的权限墙，最终报 "No free port found in range"（API 503），用户无法理解
+- 修复：引擎在端口占用检测前增加**特权端口预检**——用测试 socket 实际探测绑定，PermissionError 时直接给出可操作提示（`--cap-add NET_BIND_SERVICE` 或改用 1024 以上端口），中英双语；"No free port found" 友好报错映射同步补充根因说明
+- 部署文档与 compose 同步：`DEPLOYMENT.md` Docker run 示例加入 `--cap-add NET_BIND_SERVICE` 并新增特权端口专述；`docker-compose.simple.yml` 加 `cap_add: NET_BIND_SERVICE`（映射了 102 端口的场景必需）
+- 回归测试 `tests/test_privileged_port_precheck.py`（4 例）：权限拒绝→可操作报错、≥1024 端口占用路径不受预检影响、全端口占用仍报 "No free port found"、友好报错中英文映射
+
+### 升级提示
+
+Docker 用户升级命令：`docker pull suoten/protoforge:1.4.1`（或 latest）。**使用 IEC 104 的用户建议立即升级**（v1.4.0 的 IEC104 服务端对标准主站不兼容）；**使用 S7（端口 102）的用户**：升级后需以 `--cap-add NET_BIND_SERVICE` 参数重建容器，或在协议高级配置中把 S7 端口改为 1024 以上（如 1102）。
+
 ## v1.4.0 — 2026-09-30
 
 ### 🚀 新功能 —— 体验与调试专项（用户反馈驱动）

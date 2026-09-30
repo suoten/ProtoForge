@@ -115,6 +115,7 @@ python -m protoforge.main
 docker run -d --name protoforge \
   -p 8000:8000 \
   -p 502:502 -p 102:102 -p 4840:4840 -p 44818:44818 \
+  --cap-add NET_BIND_SERVICE \
   -v protoforge-data:/app/data \
   suoten/protoforge:latest
 ```
@@ -123,10 +124,15 @@ docker run -d --name protoforge \
 > 且连接指南里显示的 `172.17.x.x` 是容器内网 IP，宿主机/外部机器**不可直达**，
 > 客户端请填宿主机 IP（同机填 `127.0.0.1`）+ 映射后的端口。
 
+> ⚠️ 特权端口提示（v1.4.1）：S7 默认端口 102 属于 Linux 特权端口（<1024），容器默认以非 root 用户运行，
+> **不加以 `--cap-add NET_BIND_SERVICE` 参数时无法绑定**，启动 S7 会报错（界面提示 503）。
+> 两种解决方式任选其一：① 启动容器时加 `--cap-add NET_BIND_SERVICE`（上方示例已包含）；
+> ② 在协议服务「高级配置」中把 S7 端口改为 1024 以上（如 1102），客户端同步使用新端口连接。
+
 打开浏览器访问 http://localhost:8000 登录。管理员账号为 `admin`，密码说明：
 
 - 未设置 `PROTOFORGE_ADMIN_PASSWORD` 时，首次启动会**自动生成随机密码**，打印在启动横幅中，用 `docker logs protoforge` 查看；
-- 也可以在启动时直接指定密码：`docker run -d --name protoforge -p 8000:8000 -p 502:502 -p 102:102 -e PROTOFORGE_ADMIN_PASSWORD=你的密码 -v protoforge-data:/app/data suoten/protoforge:latest`。
+- 也可以在启动时直接指定密码：`docker run -d --name protoforge -p 8000:8000 -p 502:502 -p 102:102 --cap-add NET_BIND_SERVICE -e PROTOFORGE_ADMIN_PASSWORD=你的密码 -v protoforge-data:/app/data suoten/protoforge:latest`（使用 S7 102 特权端口时 `--cap-add NET_BIND_SERVICE` 必须加，其他端口可省略）。
 
 停止服务：`docker stop protoforge && docker rm protoforge`
 

@@ -421,6 +421,29 @@ class SimulationEngine:
             host = config.get("host", "0.0.0.0")
             # FIXED-P0: GB28181/BACnet 使用 UDP，需要用 SOCK_DGRAM 检测端口
             port_protocol = "udp" if protocol_name in ("gb28181", "bacnet") else "tcp"
+            # FIXED(v1.4.1): 特权端口预检 —— Linux/Docker 下绑定 <1024 端口需要 root 或
+            # CAP_NET_BIND_SERVICE（如 S7 默认端口 102）。此前 PermissionError 被 _is_port_in_use
+            # 误判为"端口被占用"，自动换端口又连续撞上 103..1023 的权限墙，最终报
+            # "No free port found"（API 503），用户无法理解。这里用测试 socket 提前探测，
+            # 区分"权限不足"与"真被占用"，给出可操作提示。
+            if host and not _is_serial_path(host) and config["port"] < 1024:
+                af = socket.AF_INET6 if ":" in str(host) else socket.AF_INET
+                sock_type = socket.SOCK_DGRAM if port_protocol == "udp" else socket.SOCK_STREAM
+                try:
+                    with socket.socket(af, sock_type) as probe:
+                        probe.bind((str(host) or "0.0.0.0", config["port"]))
+                except PermissionError as perm_err:
+                    raise RuntimeError(
+                        f"Port {config['port']} is a privileged port (<1024) and binding it was denied. "
+                        f"On Linux/Docker it requires root or CAP_NET_BIND_SERVICE; on Windows it may be "
+                        f"a system-reserved port range. Fixes: run the Docker container with "
+                        f"--cap-add NET_BIND_SERVICE, or change the protocol port to >= 1024 (e.g. 1102) "
+                        f"in advanced config and point clients to the new port. "
+                        f"(特权端口（<1024）绑定被拒绝：Linux/Docker 需 root 或 --cap-add NET_BIND_SERVICE；"
+                        f"也可在高级配置中把端口改为 1024 以上，客户端同步修改)"
+                    ) from perm_err
+                except OSError:
+                    pass  # 其他绑定错误（如端口真的被占用）交由下方占用检测处理
             if host and not _is_serial_path(host) and _is_port_in_use(config["port"], host, port_protocol):
                 original_port = config["port"]
                 new_port = _find_free_port(original_port + 1, host, protocol=port_protocol)
