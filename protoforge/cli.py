@@ -183,6 +183,7 @@ def _process_alive(pid: int) -> bool:
                 result = subprocess.run(
                     ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],  # noqa: S607,S603
                     capture_output=True, text=True, timeout=30,
+                    encoding="utf-8", errors="replace",
                 )
                 if f"\"{pid}\"" in result.stdout:
                     return True
@@ -237,7 +238,7 @@ def _find_pid_by_port(port: int) -> int | None:
     try:
         result = subprocess.run(
             ["netstat", "-ano", "-p", "tcp"],  # noqa: S607,S603
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -255,7 +256,7 @@ def _find_pid_by_port(port: int) -> int | None:
         try:
             check = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],  # noqa: S607,S603
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
             )
             if _re.search(r'"python', check.stdout, _re.IGNORECASE):
                 return pid
@@ -295,7 +296,7 @@ def _stop_command(port: int = 8000):
         try:
             subprocess.run(
                 ["taskkill", "/PID", str(pid), "/T", "/F"],  # noqa: S607,S603
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
             )
         except (OSError, subprocess.SubprocessError) as e:
             # taskkill 超时/不可用时兜底：直接 TerminateProcess 主进程
@@ -413,7 +414,7 @@ def _migrate_command(revision: str = "head"):
         result = subprocess.run(
             ["alembic", "upgrade", revision],  # noqa: S607
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         if result.returncode == 0:
             print("+ Database migration completed")
@@ -493,7 +494,7 @@ def _audit_command(args):
             if openapi_file:
                 cmd.extend(["--openapi-file", openapi_file])
             cmd.extend(["--web-dir", web_dir])
-            layer2_result = subprocess.run(cmd, capture_output=True, text=True)
+            layer2_result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print(layer2_result.stdout)
             if layer2_result.stderr:
                 print(layer2_result.stderr)
@@ -511,7 +512,7 @@ def _audit_command(args):
             import subprocess
             cmd = [sys.executable, "-m", "protoforge.audit.exception_lint", "protoforge",
                    "--severity", severity, "--max-violations", "50"]
-            layer3_result = subprocess.run(cmd, capture_output=True, text=True)
+            layer3_result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
             print(layer3_result.stdout)
             if layer3_result.stderr:
                 print(layer3_result.stderr)

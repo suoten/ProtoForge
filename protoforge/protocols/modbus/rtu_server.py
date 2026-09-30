@@ -116,7 +116,16 @@ class ModbusRtuServer(ProtocolServer):
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
-        self._port = config.get("port", default_port)
+        raw_port = config.get("port", default_port)
+        if isinstance(raw_port, int):
+            # Integration clients (edgelite push) send an int `port` meaning
+            # "serve RTU-over-TCP on this TCP port" -- route it to the bridge
+            # and fall back to the platform's nominal serial path, which then
+            # takes the TCP-bridge branch below when it does not exist.
+            config.setdefault("tcp_bridge_port", raw_port)
+            self._port = default_port
+        else:
+            self._port = raw_port
         self._baudrate = config.get("baudrate", 9600)
         if self._baudrate not in self._VALID_BAUDRATES:
             raise ValueError(
@@ -299,6 +308,58 @@ class ModbusRtuServer(ProtocolServer):
                     return device_id, point.name
         return None
 
+    def _notify_external_write(self, slave_id: int, fc: int, address: int, value: Any) -> None:
+        """外部 RTU-over-TCP 写入后异步触发 _on_write 回调，传播到 DeviceInstance。
+
+        与 TCP server 的同名机制对齐：不通知时引擎侧 30 秒写入冻结建不起来，
+        采集生成器会覆盖外部下发值（联调实测）。value=None 时从 store 读回实际值。
+        """
+        if not self._on_write:
+            return
+        area = WRITE_FC_AREA_MAP.get(fc)
+        if not area:
+            return
+        target = None
+        for device_id, s_id in self._slave_map.items():
+            if s_id != slave_id:
+                continue
+            config = self._device_configs.get(device_id)
+            if not config:
+                continue
+            for point in config.points:
+                try:
+                    p_addr = parse_modbus_address(point.address)[0]
+                    p_area = point_area(point)
+                except (ValueError, TypeError):
+                    continue
+                if p_area != area:
+                    continue
+                if p_addr <= address < p_addr + point_reg_count(point):
+                    target = (device_id, point)
+                    break
+            if target:
+                break
+        if not target:
+            return
+        device_id, point = target
+        if value is None:
+            try:
+                value = self._read_register(point, slave_id)
+            except Exception as e:
+                logger.debug("RTU read-back after external write failed for %s: %s", point.name, e)
+            if value is None:
+                return
+        try:
+            asyncio.create_task(self._fire_write_callback(device_id, point.name, value))
+        except RuntimeError:
+            pass
+
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("Modbus RTU external write callback error for %s.%s: %s", device_id, point_name, e)
+
     def _reject_readonly_write(
         self, fc: int, slave_id: int, fc_name: str, start: int,
         readonly_hit: tuple[str, str],
@@ -381,6 +442,7 @@ class ModbusRtuServer(ProtocolServer):
                 if readonly_hit:
                     return self._reject_readonly_write(fc, slave_id, "Write Single Coil", start, readonly_hit)
                 store.set_coil(start, 1 if val == 0xFF00 else 0)
+                self._notify_external_write(slave_id, fc, start, 1 if val == 0xFF00 else 0)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x06:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
@@ -390,6 +452,7 @@ class ModbusRtuServer(ProtocolServer):
                 if readonly_hit:
                     return self._reject_readonly_write(fc, slave_id, "Write Single Register", start, readonly_hit)
                 store.set_point(6, start, val)
+                self._notify_external_write(slave_id, fc, start, val)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x0F:
                 # FIXED-P0: 校验最小长度
@@ -410,6 +473,7 @@ class ModbusRtuServer(ProtocolServer):
                     bit_idx = i % 8
                     if byte_idx < len(data):
                         store.set_coil(start + i, 1 if data[byte_idx] & (1 << bit_idx) else 0)
+                self._notify_external_write(slave_id, fc, start, None)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x10:
                 # FIXED-P0: 校验最小长度
@@ -429,6 +493,7 @@ class ModbusRtuServer(ProtocolServer):
                     if offset + 2 <= len(data):
                         val = struct.unpack(">H", data[offset:offset + 2])[0]
                         store.set_point(16, start + i, val)
+                self._notify_external_write(slave_id, fc, start, None)
                 return bytes([fc]) + data[0:4]
             elif fc == 0x16:
                 if len(data) < 6:  # FIXED-P1: FC0x16需addr(2)+and_mask(2)+or_mask(2)=6字节，原值10错误
@@ -444,6 +509,7 @@ class ModbusRtuServer(ProtocolServer):
                 new_val = (current & and_mask) | (or_mask & ~and_mask)
                 new_val = new_val & 0xFFFF
                 store.set_point(16, ref_addr, new_val)
+                self._notify_external_write(slave_id, fc, ref_addr, new_val)
                 return bytes([fc]) + data[0:6]
             elif fc == 0x17:
                 if len(data) < 9:  # FIXED-P1: FC0x17需r_start(2)+r_count(2)+w_start(2)+w_count(2)+w_byte_count(1)=9字节，原值10错误
@@ -462,6 +528,7 @@ class ModbusRtuServer(ProtocolServer):
                     if offset + 2 <= len(data):
                         val = struct.unpack(">H", data[offset:offset + 2])[0]
                         store.set_point(16, write_start + i, val)
+                self._notify_external_write(slave_id, 0x10, write_start, None)
                 byte_count = read_count * 2
                 regs = bytearray(byte_count)
                 for i in range(read_count):

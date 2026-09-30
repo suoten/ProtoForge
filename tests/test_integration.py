@@ -62,7 +62,8 @@ def test_edgelite_protocol_mapping():
     assert PROTOCOL_MAP.get("s7") == "siemens_s7"
     assert PROTOCOL_MAP.get("mqtt") == "mqtt_client"
     # FIXED: previously-mapped-None protocols now map to EdgeLite plugin_names (drivers verified to exist)
-    assert PROTOCOL_MAP.get("bacnet") == "bacnet_ip"
+    # EdgeLite Go 版 bacnet 驱动 plugin_name 为 "bacnet"（见 PROTOCOL_MAP_BASE 注释）
+    assert PROTOCOL_MAP.get("bacnet") == "bacnet"
     assert PROTOCOL_MAP.get("fanuc") == "fanuc_cnc"
     assert PROTOCOL_MAP.get("mtconnect") == "mtconnect"
     assert PROTOCOL_MAP.get("toledo") == "toledo"

@@ -540,6 +540,35 @@ async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_vie
         # 因此额外调用 read_device_points() 从协议服务器获取实时值。
         device = engine.get_device(device_id)
         device.points = await engine.read_device_points(device_id)
+        # 把点位配置字段（address/data_type/generator 等）合并进运行时点位：
+        # 纯运行时 PointValue 没有 address/generator，客户端 GET→修改→PUT 会把
+        # 点位配置清空（联调实测：AB 设备 tag 地址被抹成点位名）。在 dict 层做
+        # 加法合并，不影响只读 value/quality 的既有消费者。
+        try:
+            instance = engine.get_device_instance(device_id)
+            cfg_by_name = {p.name: p for p in (instance.config.points if instance else [])}
+            out = device.model_dump()
+            for pv in out.get("points", []):
+                cfg = cfg_by_name.get(pv.get("name"))
+                if cfg is None:
+                    continue
+                pv.setdefault("address", getattr(cfg, "address", ""))
+                pv.setdefault("data_type", str(getattr(cfg.data_type, "value", getattr(cfg, "data_type", "float32"))))
+                pv.setdefault("unit", getattr(cfg, "unit", ""))
+                pv.setdefault("description", getattr(cfg, "description", ""))
+                pv.setdefault("access_mode", getattr(cfg, "access", "rw"))
+                pv.setdefault("generator_type", str(getattr(cfg.generator_type, "value", getattr(cfg, "generator_type", "fixed"))))
+                pv.setdefault("generator_config", getattr(cfg, "generator_config", {}) or {})
+                pv.setdefault("gen_interval", getattr(cfg, "gen_interval", 0.0))
+                if getattr(cfg, "fixed_value", None) is not None:
+                    pv.setdefault("fixed_value", cfg.fixed_value)
+                if getattr(cfg, "min_value", None) is not None:
+                    pv.setdefault("min_value", cfg.min_value)
+                if getattr(cfg, "max_value", None) is not None:
+                    pv.setdefault("max_value", cfg.max_value)
+            return out
+        except Exception:
+            logger.debug("merge point config into device detail failed", exc_info=True)
         return device
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

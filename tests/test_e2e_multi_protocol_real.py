@@ -77,7 +77,15 @@ async def _teardown_engine_and_db(engine):
 # ---------------------------------------------------------------------------
 
 
-HTTP_TEST_PORT = 18080
+def _free_tcp_port() -> int:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+# 随机空闲端口：固定端口会与同机运行中的 ProtoForge/EdgeLite 实例冲突
+# （Windows SO_REUSEADDR 允许双绑，请求随机路由到错误服务器返回 404）
+HTTP_TEST_PORT = _free_tcp_port()
 
 
 def _make_http_device() -> DeviceConfig:

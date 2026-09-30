@@ -246,11 +246,14 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
             self._written_values[name] = value
 
     def sync_word_write_to_points(self, word_area: int, word_address: int,
-                                  data: bytes) -> None:
-        """把协议层的字写入统一同步回所有重叠的非位点位。"""
+                                  data: bytes) -> dict[str, Any]:
+        """把协议层的字写入统一同步回所有重叠的非位点位。
+
+        返回 {点名称: 写入值}，供服务器通知引擎（设备写入冻结）。"""
         word_area = self._normalize_area(word_area)
         write_start = word_address * 2
         write_end = write_start + len(data)
+        updated: dict[str, Any] = {}
         for name, (point_area, point_offset) in self._point_addresses.items():
             if name in self._point_bit_addresses or point_area != word_area:
                 continue
@@ -277,6 +280,8 @@ class FinsDeviceBehavior(StandardDeviceBehavior):
             if value is not None:
                 self._values[name] = value
                 self._written_values[name] = value
+                updated[name] = value
+        return updated
 
 
 class FinsServer(ProtocolServer):
@@ -551,7 +556,8 @@ class FinsServer(ProtocolServer):
             else:
                 behavior.write_area(area, word_addr * 2, write_data)
                 behavior.sync_word_bits_to_points(area, word_addr, write_data)
-                behavior.sync_word_write_to_points(area, word_addr, write_data)
+                for _name, _value in behavior.sync_word_write_to_points(area, word_addr, write_data).items():
+                    self._notify_engine_write(self._default_device_id or "", _name, _value)
             self._log_debug("recv", "fins_write",
                             f"Write area {area} offset {word_addr}",
                             detail={"area": area, "offset": word_addr, "len": len(write_data)})
@@ -648,6 +654,21 @@ class FinsServer(ProtocolServer):
             return []
         now = time.time()
         return [PointValue(name=p.name, value=behavior.get_value(p.name), timestamp=now) for p in config.points]
+
+    def _notify_engine_write(self, device_id: str, point_name: str, value: Any) -> None:
+        """外部 FINS 写入后异步触发 _on_write 回调，传播到 DeviceInstance。"""
+        if not self._on_write or not point_name or not device_id:
+            return
+        try:
+            asyncio.create_task(self._fire_write_callback(device_id, point_name, value))
+        except RuntimeError:
+            pass
+
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("FINS external write callback error for %s.%s: %s", device_id, point_name, e)
 
     async def write_point(self, device_id: str, point_name: str, value: Any) -> bool:
         behavior = self._behaviors.get(device_id)
@@ -755,7 +776,8 @@ class FinsUdpProtocol(asyncio.DatagramProtocol):
             else:
                 behavior.write_area(area, word_addr * 2, write_data)
                 behavior.sync_word_bits_to_points(area, word_addr, write_data)
-                behavior.sync_word_write_to_points(area, word_addr, write_data)
+                for _name, _value in behavior.sync_word_write_to_points(area, word_addr, write_data).items():
+                    self._notify_engine_write(self._default_device_id or "", _name, _value)
         return bytes(self._swap_fins_header(header)) + bytes([0x02, 0x01]) + struct.pack(">H", 0)
 
     def _handle_controller_read_udp(self, data: bytes, header: bytes) -> bytes:

@@ -164,11 +164,15 @@ class TestOtherProtocolsPassthrough:
         assert "register_type" not in result
 
     def test_opcua_device_id_prefix(self):
-        """带 device_id 时字符串 NodeId 加设备前缀（与 OPC-UA 服务端命名一致）。"""
+        """显式 ns= NodeId 透传不加工设备前缀。
+
+        OPC-UA server 的 NodeId 唯一化规则：显式 ns=X;s=Y 地址按原样注册/读取，
+        加设备前缀会读到不存在的节点（BadNodeIdUnknown，联调实测）。
+        仅非 ns= 裸地址仍按服务端规则加前缀。"""
         result = _translate_point_address(
             "opcua", "ns=2;s=Temperature", "float32", device_id="plc01"
         )
-        assert result == {"address": "ns=2;s=plc01.Temperature"}
+        assert result == {"address": "ns=2;s=Temperature"}
         assert "register_type" not in result
 
     def test_opcua_no_device_id_no_prefix(self):

@@ -16,7 +16,7 @@ ProtoForge 启动的是**标准协议服务端**（Modbus TCP Server、OPC-UA Se
                     │  OPC-UA Server      ←─ 端口 4840  │
                     │  S7 Server          ←─ 端口 102   │
                     │  MQTT Broker        ←─ 端口 1883  │
-                    │  HTTP Server        ←─ 端口 8080  │
+                    │  HTTP Server        ←─ 端口 18080 │
                     │  GB28181 SIP        ←─ 端口 5060  │
                     │  ...（17 种协议服务端）              │
                     └──────────┬──────────────────────┘
@@ -98,7 +98,7 @@ client.subscribe('sensor/temperature')
 
 ```bash
 # ProtoForge 的 HTTP 协议服务提供 RESTful 接口
-curl http://127.0.0.1:8080/devices/modbus-plc-001/points/temperature
+curl http://127.0.0.1:18080/devices/modbus-plc-001/points/temperature
 ```
 
 ---

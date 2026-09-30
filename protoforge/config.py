@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     modbus_rtu_host: str = ""  # FIXED: modbus_rtu_host默认值与modbus_rtu_port重复(均为COM1/ttyUSB0)，改为空字符串表示未配置
     opcua_port: int = 4840
     mqtt_port: int = 1883
-    http_port: int = 8080
+    http_port: int = 18080  # 8080 与 EdgeLite Go API 默认端口冲突，同机联调必撞
     gb28181_port: int = 5060
     bacnet_port: int = 47808
     s7_port: int = 102

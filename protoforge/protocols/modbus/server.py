@@ -1090,6 +1090,20 @@ class ModbusTcpServer(ProtocolServer):
         if not target:
             return
         device_id, point_name = target
+        if value is None:
+            # Multi-register/coil frame handlers (FC0F/10/17) don't carry a
+            # scalar value; without reading the written value back the engine's
+            # DeviceInstance.write_point(None) is rejected and the 30s write
+            # freeze never engages, so the generator overwrites the push.
+            config = self._device_configs.get(device_id)
+            point = next((p for p in config.points if p.name == point_name), None) if config else None
+            if point is not None:
+                try:
+                    value = self._read_register(point, self._slave_map.get(device_id, 1))
+                except Exception as e:
+                    logger.debug("Failed to read back written value for %s.%s: %s", device_id, point_name, e)
+            if value is None:
+                return
         asyncio.create_task(self._fire_write_callback(device_id, point_name, value))
 
     async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:

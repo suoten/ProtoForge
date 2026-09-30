@@ -80,8 +80,13 @@ class AbDeviceBehavior(StandardDeviceBehavior):
 
     def set_tag(self, tag_name: str, value: Any) -> None:
         tag = self._resolve_tag(tag_name)
+        name = self._tag_reverse.get(tag, tag)
         self._tags[tag] = value
-        self._values[tag] = value
+        self._values[name] = value
+        # 行为级写入冻结：get_value() 对动态生成器（sine/increment 等）会重新生成，
+        # 不记录 _written_values 时下一次 CIP 读就把外部下发值覆盖（联调实测）。
+        # 30 秒后由引擎 tick 的解冻逻辑 clear_written() 恢复动态输出。
+        self._written_values[name] = value
 
     def get_tag_type(self, tag_name: str) -> str:
         return self._data_types.get(self._resolve_tag(tag_name), "int32")
@@ -615,6 +620,12 @@ class AbServer(ProtocolServer):
                     data_type = behavior.get_tag_type(tag_name)
                     write_value = self._unpack_cip_value(data_type, value_data)
                     behavior.set_tag(tag_name, write_value)
+                    # 通知引擎必须用 point 名（DeviceInstance._point_configs 的键）：
+                    # tag 名（地址）传给 write_point 会被静默拒绝，设备侧 30 秒写入冻结
+                    # 建不起来，引擎 tick 随即把 behavior 侧冻结当"已到期"清除，
+                    # 外部下发值被生成器覆盖（联调实测）。
+                    point_name = behavior._tag_reverse.get(tag_name, tag_name)
+                    self._notify_engine_write(self._default_device_id or "", point_name, write_value)
                     self._log_debug("recv", "cip_write",
                                     f"Write tag {tag_name}={write_value}",
                                     detail={"tag": tag_name, "value": write_value,
@@ -637,6 +648,21 @@ class AbServer(ProtocolServer):
                               sender_context: bytes = bytes(8)) -> bytes:
         return self._wrap_cip_response(session, self._build_cip_write_response(cip_data),
                                        sender_context)
+
+    def _notify_engine_write(self, device_id: str, point_name: str, value: Any) -> None:
+        """外部 CIP 写入后异步触发 _on_write 回调，传播到 DeviceInstance。"""
+        if not self._on_write or not point_name or not device_id:
+            return
+        try:
+            asyncio.create_task(self._fire_write_callback(device_id, point_name, value))
+        except RuntimeError:
+            pass
+
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("AB external write callback error for %s.%s: %s", device_id, point_name, e)
 
     @staticmethod
     def _unpack_cip_value(data_type: str, data: bytes) -> Any:

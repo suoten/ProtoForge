@@ -73,8 +73,31 @@ def _sanitize_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _is_port_in_use(port: int, host: str = "0.0.0.0", protocol: str = "tcp") -> bool:
-    sock_type = socket.SOCK_DGRAM if protocol == "udp" else socket.SOCK_STREAM
-    with socket.socket(socket.AF_INET, sock_type) as s:
+    if protocol == "udp":
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            try:
+                s.bind((host, port))
+            except OSError:
+                return True
+        return False
+    # TCP: a successful outbound connect proves a live listener even when a
+    # re-bind would silently succeed. On Windows, SO_REUSEADDR lets a wildcard
+    # (0.0.0.0) bind coexist with an existing 127.0.0.1 listener on the same
+    # port, after which connections are routed to either socket at random --
+    # the bind-only probe cannot see that conflict, so probe with a connect
+    # against loopback and the configured host first.
+    probe_hosts = ["127.0.0.1"]
+    if host not in ("", "0.0.0.0", "*", "::", "127.0.0.1"):
+        probe_hosts.append(host)
+    for probe_host in probe_hosts:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.25)
+            try:
+                if s.connect_ex((probe_host, port)) == 0:
+                    return True
+            except OSError:
+                pass
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.bind((host, port))
         except OSError:

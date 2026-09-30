@@ -60,6 +60,9 @@ class MqttDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDev
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            # 记录行为级冻结：get_value() 对非 fixed 生成器会重新生成，
+            # 不记录时命令写入立即被发布循环的新生成值覆盖（联调实测）。
+            self._written_values[point_name] = value
             return True
         return False
 
@@ -71,6 +74,10 @@ class MqttDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDev
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                # 外部写入冻结期：下发值优先于生成器（与 StandardDeviceBehavior 一致），
+                # 否则命令消费者写入后发布循环立即用新生成值覆盖（联调实测）。
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 return value

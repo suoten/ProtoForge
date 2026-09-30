@@ -182,3 +182,7 @@ ProtoForge_IoT*.md
 tmp_joint/
 tmp_pf_token.txt
 tmp_*.txt
+
+# 本地临时/内部材料（不入库）
+tmp_*.json
+软著申请材料/

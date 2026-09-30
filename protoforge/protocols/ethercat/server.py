@@ -88,6 +88,7 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
     def on_write(self, point_name: str, value: Any) -> bool:
         if point_name in self._values:
             self._values[point_name] = value
+            self._written_values[point_name] = value  # 行为级冻结（与 StandardDeviceBehavior 一致）
             self._sync_values_to_pd_input()
             return True
         return False
@@ -101,6 +102,9 @@ class EtherCATDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承Standar
         if gen:
             pt = self._points.get(point_name)
             if pt and hasattr(pt, "generator_type") and pt.generator_type.value != "fixed":
+                # 外部写入冻结期：下发值优先于生成器（与 StandardDeviceBehavior 一致）
+                if point_name in self._written_values:
+                    return self._written_values[point_name]
                 value = gen.generate()
                 self._values[point_name] = value
                 self._sync_values_to_pd_input()

@@ -435,6 +435,21 @@ class McServer(ProtocolServer):
 
         return bytes(resp)
 
+    def _notify_engine_write(self, device_id: str, point_name: str, value: Any) -> None:
+        """外部 MC 写入后异步触发 _on_write 回调，传播到 DeviceInstance。"""
+        if not self._on_write or not point_name or not device_id:
+            return
+        try:
+            asyncio.create_task(self._fire_write_callback(device_id, point_name, value))
+        except RuntimeError:
+            pass
+
+    async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
+        try:
+            await self._on_write(device_id, point_name, value)
+        except Exception as e:
+            logger.debug("MC external write callback error for %s.%s: %s", device_id, point_name, e)
+
     def _handle_write(self, data: bytes, subcmd: int, device_id: str | None = None) -> bytes:
         if len(data) < 17:
             return self._make_error_response(data, 0xC059)
@@ -456,7 +471,8 @@ class McServer(ProtocolServer):
 
         data_start = dev_end + 2
         write_data = data[data_start : data_start + write_len]
-        behavior = self._behaviors.get(device_id or self._default_device_id or "")  # FIXED-P1: 使用路由后的device_id
+        target_device = device_id or self._default_device_id or ""
+        behavior = self._behaviors.get(target_device)  # FIXED-P1: 使用路由后的device_id
         if behavior:
             if self._is_bit_subcmd(subcmd):
                 behavior.write_bits_from_wire(device_code, start_addr, write_data, point_count)
@@ -471,6 +487,7 @@ class McServer(ProtocolServer):
                             # 点位即批写首点：值在首字节高半字节 bit4
                             behavior._values[name] = bool((write_data[0] >> 4) & 1)
                             behavior._written_values[name] = behavior._values[name]
+                            self._notify_engine_write(target_device, name, behavior._values[name])
                             continue
                         if dt == "int32" and len(write_data) >= 4:
                             behavior._values[name] = struct.unpack("<i", write_data[:4])[0]
@@ -488,6 +505,12 @@ class McServer(ProtocolServer):
                             behavior._values[name] = struct.unpack("<f", write_data[:4])[0]
                         elif len(write_data) >= 2:
                             behavior._values[name] = struct.unpack("<H", write_data[:2])[0]
+                        if name in behavior._written_values or name in behavior._values:
+                            # 数值写入同样记录 behavior 级冻结值并通知引擎，
+                            # 否则 DeviceInstance 的 30 秒写入冻结不会生效，
+                            # 采集生成器会立刻覆盖外部下发值（联调实测）。
+                            behavior._written_values[name] = behavior._values[name]
+                            self._notify_engine_write(target_device, name, behavior._values[name])
                     except (struct.error, IndexError) as e:
                         logger.warning("MC write value sync error: %s", e)
                     # FIXED-H05: 移除break，遍历所有匹配点而非只更新第一个

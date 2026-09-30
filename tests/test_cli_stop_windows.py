@@ -120,16 +120,27 @@ class TestFindPidByPort:
         srv.bind(("127.0.0.1", 0))
         port = srv.getsockname()[1]
         srv.close()
+        # venv 的 python.exe 是重定向启动器：Popen.pid 是启动器的 PID，
+        # 真正绑定端口的解释器是其子进程（netstat/kill 看到的都是解释器 PID）。
+        # 因此让子进程自报 getpid() 作为期望值，而非直接用 proc.pid。
         proc = subprocess.Popen(
             [sys.executable, "-c",
-             f"import socket,time;s=socket.socket();s.bind(('127.0.0.1',{port}));"
-             f"s.listen(1);time.sleep(120)"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+             f"import os,socket,time;s=socket.socket();s.bind(('127.0.0.1',{port}));"
+             f"s.listen(1);print(os.getpid(),flush=True);time.sleep(120)"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
         )
         try:
+            expected_pid = int(proc.stdout.readline().strip())
             time.sleep(1.0)
-            found = _find_pid_by_port(port)
-            assert found == proc.pid
+            # bind→close→rebind 与繁忙机器上的 ephemeral 端口复用存在竞态
+            # （netstat 可能短暂匹配到其他套接字），重试数次取确定性结果
+            found = None
+            for _ in range(5):
+                found = _find_pid_by_port(port)
+                if found == expected_pid:
+                    break
+                time.sleep(1.0)
+            assert found == expected_pid
         finally:
             proc.kill()
             proc.wait(timeout=10)
