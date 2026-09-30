@@ -170,6 +170,12 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "Siemens S7Comm-Plus Protocol - S7-1200/1500 next-gen communication protocol, TPKT/COTP based, supports optimized block access, SZL read, symbolic addressing",
         "icon": "⚙️",
     },
+    "mewtocol": {
+        "host": "0.0.0.0", "port": 2049,
+        "display_name": "Panasonic MEWTOCOL",
+        "description": "Panasonic MEWTOCOL-COM Protocol - MEWTOCOL-COM ASCII frames (%RD/%WD/%RC/%WC etc.), supports DT/WR/LD/FL word areas and X/Y/R/T/C/L contact areas, BCC checksum",
+        "icon": "🟡",
+    },
 }
 
 PROTOCOL_DEVICE_CONFIG = {

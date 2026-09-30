@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.4.2 — 2026-09-30
+
+### 🐛 Bug Fix（v1.4.1 用户反馈专项）
+
+**修复 — 系统设置 → 协议端口，修改保存不生效（用户反馈）：**
+
+- 根因：前端 `PUT /settings` 以 `protocol_ports` 字典提交（`GET /settings` 也按字典返回），但配置层 `update_settings` 只接受 `{proto}_port` 形式的键——整个字典被**静默丢弃**，界面提示"设置已保存"而实际未入库。API 层白名单与配置层键规则双层不一致
+- 修复：`update_settings` 将 `protocol_ports` 字典展开为逐协议 `{proto}_port` 键，走统一的范围校验、跨协议端口冲突检查与 `.env` 持久化；非数字/越界/冲突给出明确 422 报错
+- 生效时机：保存后协议服务**下次启动/重启**使用新端口（默认端口统一从设置读取）；前端保存后若检测到端口变更，明确提示哪些协议需重启、可到"协议服务"页点"启动"立即应用，避免"改了没反应"的困惑
+
+**修复 — mewtocol（松下 MEWTOCOL）缺失端口默认值与设置项：**
+
+- v1.4.0 新增的第 28 种协议未同步进 `PROTOCOL_DEFAULTS` 与系统设置（`protocol_ports` 共 26 项，无 mewtocol）——不填高级配置直接启动会回退到 8000 端口（与 Web 服务端口冲突，触发自动换端口）
+- 修复：`PROTOCOL_DEFAULTS` 补 mewtocol 条目（标准端口 2049），Settings 模型补 `mewtocol_port`，设置页协议端口列表同步出现该协议
+- 回归测试 `tests/test_settings_protocol_ports.py`（6 例）：字典入库、下次启动生效、冲突拒绝、非法值拒绝、未知协议忽略、mewtocol 条目
+
 ## v1.4.1 — 2026-09-30
 
 ### 🐛 Bug Fix（v1.4.0 用户反馈专项）

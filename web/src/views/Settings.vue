@@ -396,8 +396,15 @@ async function saveSettings() {
     const updates = { ...form.value }
     if (updates.edgelite_password === PASSWORD_MASK) delete updates.edgelite_password
     if (updates.influxdb_token === PASSWORD_MASK) delete updates.influxdb_token
-    await api.updateSettings(updates)
+    const res = await api.updateSettings(updates)
     message.success(t('settings.settingsSaved'))
+    // FIXED(v1.4.1): 协议端口变更需重启对应协议服务才生效，明确提示避免"改了没反应"
+    const changed = res?.changed || {}
+    const portProtocols = Object.keys(changed).filter(k => k.endsWith('_port'))
+    if (portProtocols.length) {
+      const names = portProtocols.map(k => getProtocolLabel(k.slice(0, -5))).join(', ')
+      message.info(t('settings.portSaveRestartHint', { ports: names }), { duration: 6000 })
+    }
   } catch (e) {
     message.error(t('common.saveFailed') + ': ' + (e.response?.data?.message || e.response?.data?.detail || e.message))
   } finally {

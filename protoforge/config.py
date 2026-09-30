@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     custom_tcp_port: int = 38000
     custom_udp_port: int = 38001
     s7plus_port: int = 10202
+    mewtocol_port: int = 2049
 
     # FIXED: 添加配置验证器
     @field_validator("port")
@@ -197,6 +198,7 @@ class Settings(BaseSettings):
             "custom_tcp": {"port": self.custom_tcp_port, "host": self.host or "0.0.0.0"},
             "custom_udp": {"port": self.custom_udp_port, "host": self.host or "0.0.0.0"},
             "s7plus": {"port": self.s7plus_port, "host": self.host or "0.0.0.0"},
+            "mewtocol": {"port": self.mewtocol_port, "host": self.host or "0.0.0.0"},
         }
 
     model_config = {
@@ -314,6 +316,20 @@ def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
         "protoforge_public_host",
     }
     with _settings_lock:
+        # FIXED(v1.4.1): 前端"系统设置→协议端口"以 protocol_ports 字典提交（GET /settings 也按字典返回），
+        # 但下方循环只接受 {proto}_port 形式的键——该字典此前被静默丢弃，导致用户反馈
+        # "协议端口修改保存不生效"（界面提示保存成功，实际未入库）。在此展开为
+        # 逐协议 {proto}_port 键，走统一的校验/冲突检查/持久化。
+        if isinstance(updates.get("protocol_ports"), dict):
+            updates = {**updates}
+            proto_ports = updates.pop("protocol_ports")
+            for proto, value in proto_ports.items():
+                field = f"{proto}_port"
+                if hasattr(s, field):
+                    try:
+                        updates[field] = int(value)
+                    except (TypeError, ValueError):
+                        updates[field] = value  # 非数字交由下方校验给出明确报错
         for key, value in updates.items():
             if key.endswith("_port") or key in allowed_keys:
                 if value == "***":
