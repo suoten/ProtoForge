@@ -215,6 +215,15 @@ def desc(key: str, lang: str = "", default: str = "") -> str:
 
 TEST_MESSAGES = {
     "zh": {
+        # MQTT 协议配置字段描述（高级配置弹窗引导）
+        "mqtt_host_listen_hint": "本机监听地址（0.0.0.0=全部网卡）。⚠️ 这是 Broker 自身的监听地址，不是要连接的外部服务器地址；如需把设备数据上报到自己的 EMQX/Mosquitto，请在设备协议配置中填写「自定义 MQTT 服务器（server_host）」",
+        "mqtt_publish_interval": "数据上报间隔（秒）",
+        "mqtt_auth_required": "启用用户名/密码认证",
+        "mqtt_auth_username": "认证用户名",
+        "mqtt_auth_password": "认证密码",
+        "mqtt_auth_users_hint": "多用户认证 JSON（可选），格式 {\"user1\":\"pass1\"}；留空时使用上方单独配置的用户名/密码",
+        "mqtt_tls_enabled": "启用 TLS 加密",
+
         # Test suite names
         "suite_api_test": "API测试",
         "suite_quick_test": "快速测试",
@@ -560,6 +569,15 @@ TEST_MESSAGES = {
         "edgelite.suggestion.verify_gateway": "请验证网关地址和网络连通性",
     },
     "en": {
+        # MQTT protocol config field descriptions (advanced config dialog guidance)
+        "mqtt_host_listen_hint": "Local listen address (0.0.0.0 = all interfaces). ⚠️ This is the broker's OWN bind address, NOT a remote server to connect to; to report device data to your own EMQX/Mosquitto, set the Custom MQTT Server (server_host) in the device's protocol config instead",
+        "mqtt_publish_interval": "Data publish interval (seconds)",
+        "mqtt_auth_required": "Enable username/password authentication",
+        "mqtt_auth_username": "Authentication username",
+        "mqtt_auth_password": "Authentication password",
+        "mqtt_auth_users_hint": "Multi-user auth JSON (optional), format {\"user1\":\"pass1\"}; when empty, the single username/password above is used",
+        "mqtt_tls_enabled": "Enable TLS encryption",
+
         # Test suite names
         "suite_api_test": "API Test",
         "suite_quick_test": "Quick test",

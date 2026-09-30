@@ -354,7 +354,7 @@ class MqttBroker(ProtocolServer):
                 "host": {
                     "type": "string",
                     "default": "0.0.0.0",
-                    "description": desc("listen_address", "Listen address"),
+                    "description": desc("mqtt_host_listen_hint", "Listen address"),
                 },
                 "port": {
                     "type": "integer",
@@ -384,7 +384,7 @@ class MqttBroker(ProtocolServer):
                 "auth_users": {
                     "type": "string",
                     "default": "",
-                    "description": desc("mqtt_auth_users", 'Multi-user auth JSON, e.g. {"user1":"pass1","user2":"pass2"}'),
+                    "description": desc("mqtt_auth_users_hint", 'Multi-user auth JSON, e.g. {"user1":"pass1","user2":"pass2"}'),
                 },
                 "tls_enabled": {
                     "type": "boolean",
