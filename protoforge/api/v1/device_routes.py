@@ -884,6 +884,41 @@ async def write_device_point(device_id: str, point_name: str, body: dict[str, An
 #  测点重置 API — 清除外部写入缓存，恢复生成器动态输出
 # ===========================================================================
 
+@router.post("/devices/{device_id}/points/{point_name}/force", response_model=dict)
+async def force_device_point(
+    device_id: str,
+    point_name: str,
+    body: dict[str, Any] = Body(...),
+    _user: dict[str, Any] = Depends(require_operator),
+):
+    """调试 Force：把测点强制钉在固定值（value=null 释放，恢复生成器输出）。
+
+    与普通写入的区别：Force 每 tick 重新施加，压过生成器输出，直到释放；
+    状态在引擎重启后失效（属于临时调试态，不持久化）。
+    """
+    engine = _get_engine()
+    try:
+        engine.set_point_override(device_id, point_name, body.get("value"))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    forced = engine.get_point_overrides(device_id)
+    return {
+        "status": "ok",
+        "forced": point_name in forced,
+        "value": forced.get(point_name),
+        "forced_points": forced,
+    }
+
+
+@router.get("/devices/{device_id}/forces", response_model=dict)
+async def list_device_forces(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
+    """列出设备当前被 Force 的测点及固定值。"""
+    engine = _get_engine()
+    if engine.get_device_instance(device_id) is None:
+        raise HTTPException(status_code=404, detail=f"Device '{device_id}' not found")
+    return {"device_id": device_id, "forced_points": engine.get_point_overrides(device_id)}
+
+
 @router.post("/devices/{device_id}/points/{point_name}/reset", response_model=dict)
 async def reset_device_point(device_id: str, point_name: str, _user: dict[str, Any] = Depends(require_operator)):
     """清除点位的外部写入缓存，恢复生成器动态输出。

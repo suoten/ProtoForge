@@ -218,7 +218,10 @@
         <n-divider />
         <n-space justify="space-between" align="center">
           <n-text strong>{{ t('templates.pointConfigCount', { n: (editDevice.points || []).length }) }}</n-text>
-          <n-button size="small" type="primary" @click="addEditDevicePoint">{{ t('scenarioEditor.addPoint') }}</n-button>
+          <n-space>
+            <n-button size="small" @click="openBatchAddPoints">{{ t('devices.batchAddPoints') }}</n-button>
+            <n-button size="small" type="primary" @click="addEditDevicePoint">{{ t('scenarioEditor.addPoint') }}</n-button>
+          </n-space>
         </n-space>
         <div v-if="!editDevice.points || editDevice.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
@@ -232,6 +235,57 @@
         </template>
       </n-modal>
 
+      <!-- 批量添加测点（UX：按地址范围一键生成 N 个测点） -->
+      <n-modal v-model:show="showBatchPointsModal" preset="card" :title="t('devices.batchAddPoints')" style="width:min(480px, 90vw)">
+        <n-form :model="batchPointsForm" label-placement="left" label-width="110">
+          <n-form-item :label="t('devices.namePrefix')"><n-input v-model:value="batchPointsForm.namePrefix" placeholder="point" /></n-form-item>
+          <n-form-item :label="t('devices.startIndex')"><n-input-number v-model:value="batchPointsForm.startIndex" :min="1" style="width:100%" /></n-form-item>
+          <n-form-item :label="t('common.count')"><n-input-number v-model:value="batchPointsForm.count" :min="1" :max="1000" style="width:100%" /></n-form-item>
+          <n-form-item :label="t('common.address')"><n-input v-model:value="batchPointsForm.addressBase" placeholder="DT100 / 40001 / X0" />
+            <template #feedback><n-text depth="3" style="font-size:12px">{{ t('devices.batchPointsAddrHint') }}</n-text></template>
+          </n-form-item>
+          <n-form-item :label="t('devices.dataType')"><n-select v-model:value="batchPointsForm.dataType" :options="batchPointsDataTypeOptions" style="width:100%" /></n-form-item>
+          <n-form-item :label="t('devices.accessMode')"><n-select v-model:value="batchPointsForm.access" :options="batchPointsAccessOptions" style="width:100%" /></n-form-item>
+          <n-form-item :label="t('devices.generator')"><n-select v-model:value="batchPointsForm.generatorType" :options="batchPointsGeneratorOptions" style="width:100%" /></n-form-item>
+        </n-form>
+        <template #action>
+          <n-space>
+            <n-button @click="showBatchPointsModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="confirmBatchAddPoints" :loading="batchPointsLoading">{{ t('common.confirm') }}</n-button>
+          </n-space>
+        </template>
+      </n-modal>
+
+      <!-- 批量克隆（UX：多从站/多设备一键生成，支持站号递增与地址偏移） -->
+      <n-modal v-model:show="showBatchCloneModal" preset="card" :title="t('devices.batchClone')" style="width:min(480px, 90vw)">
+        <n-form :model="batchCloneForm" label-placement="left" label-width="130">
+          <n-form-item :label="t('common.count')"><n-input-number v-model:value="batchCloneForm.count" :min="1" :max="50" style="width:100%" /></n-form-item>
+          <n-form-item :label="t('devices.namePattern')"><n-input v-model:value="batchCloneForm.namePattern" placeholder="{name}-{n}" />
+            <template #feedback><n-text depth="3" style="font-size:12px">{{ t('devices.namePatternHint') }}</n-text></template>
+          </n-form-item>
+          <n-form-item :label="t('devices.incrementStation')">
+            <n-space align="center">
+              <n-switch v-model:value="batchCloneForm.incrementStation" size="small" />
+              <n-input-number v-if="batchCloneForm.incrementStation" v-model:value="batchCloneForm.stationStart" :min="1" :max="247" size="small" style="width:110px" />
+              <n-text v-if="batchCloneForm.incrementStation" depth="3" style="font-size:12px">{{ t('devices.stationStart') }}</n-text>
+            </n-space>
+          </n-form-item>
+          <n-form-item :label="t('devices.offsetAddresses')">
+            <n-space align="center">
+              <n-switch v-model:value="batchCloneForm.offsetAddresses" size="small" />
+              <n-input-number v-if="batchCloneForm.offsetAddresses" v-model:value="batchCloneForm.addressOffset" :min="1" size="small" style="width:110px" />
+              <n-text v-if="batchCloneForm.offsetAddresses" depth="3" style="font-size:12px">{{ t('devices.addressOffsetPerCopy') }}</n-text>
+            </n-space>
+          </n-form-item>
+        </n-form>
+        <template #action>
+          <n-space>
+            <n-button @click="showBatchCloneModal = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="confirmBatchClone" :loading="batchCloneLoading">{{ t('common.confirm') }}</n-button>
+          </n-space>
+        </template>
+      </n-modal>
+
       <n-modal v-model:show="showPointsModal" preset="card" :title="t('devices.devicePoints')" style="width:min(700px, 90vw)">
         <n-space v-if="currentViewDeviceInfo" align="center" size="small" style="margin-bottom:8px">
           <n-tag :type="currentViewDeviceInfo.status === 'online' ? 'success' : currentViewDeviceInfo.status === 'error' ? 'error' : 'default'" size="small" :bordered="false">{{ currentViewDeviceInfo.status || 'offline' }}</n-tag>
@@ -241,11 +295,31 @@
         <n-space vertical style="margin-top:12px">
           <n-text strong style="font-size:13px">{{ t('devices.quickWritePoint') }}</n-text>
           <n-space align="center" size="small">
-            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: pointAddressMap[p.name] ? `${p.name} (${pointAddressMap[p.name]})` : p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:200px" size="small" />
+            <n-select v-model:value="writePointName" :options="currentPoints.map(p => ({ label: pointAddressMap[p.name] ? `${p.name} (${pointAddressMap[p.name]})` : p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" style="width:200px" size="small" filterable />
             <n-input v-model:value="writePointValue" :placeholder="t('devices.inputValue')" style="width:120px" size="small" />
             <n-button type="primary" size="small" @click="writeDevicePointQuick" :loading="writeLoading">{{ t('devices.write') }}</n-button>
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <n-button size="small" type="warning" secondary @click="forcePointQuick" :loading="forceLoading" :disabled="!writePointName">{{ t('devices.force') }}</n-button>
+              </template>
+              {{ t('devices.forceHint') }}
+            </n-tooltip>
+            <n-button size="small" @click="releaseForceQuick" :loading="forceLoading" :disabled="!writePointName">{{ t('devices.releaseForce') }}</n-button>
+            <n-divider vertical />
             <n-button size="small" @click="resetDevicePointQuick" :loading="resetLoading">{{ t('devices.resetPoint') }}</n-button>
             <n-button size="small" @click="resetAllPointsQuick" :loading="resetLoading">{{ t('devices.resetAllPoints') }}</n-button>
+            <n-divider vertical />
+            <n-tooltip trigger="hover">
+              <template #trigger>
+                <n-button size="small" tertiary @click="snapshotValues">{{ t('devices.snapshot') }}</n-button>
+              </template>
+              {{ t('devices.snapshotHint') }}
+            </n-tooltip>
+            <n-button size="small" tertiary :disabled="!hasSnapshot" @click="restoreSnapshot" :loading="restoreLoading">{{ t('devices.restoreSnapshot') }}</n-button>
+          </n-space>
+          <n-space v-if="Object.keys(forcedPoints).length" size="small" style="margin-top:4px" align="center">
+            <n-text type="warning" style="font-size:12px">{{ t('devices.forcedList') }}</n-text>
+            <n-tag v-for="(v, k) in forcedPoints" :key="k" size="tiny" type="warning" :bordered="false">{{ k }} = {{ v }}</n-tag>
           </n-space>
         </n-space>
       </n-modal>
@@ -546,7 +620,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, h, unref } from 'vue'
 import { NSpace, NSelect, NButton, NButtonGroup, NDataTable, NModal, NForm, NFormItem, NInput, NInputNumber, NTag,
-  NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, useMessage, useDialog } from 'naive-ui'
+  NText, NAlert, NSpin, NCard, NSkeleton, NDropdown, NDivider, NTooltip, NSwitch, useMessage, useDialog } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
 import { useI18n, getLocale } from '../i18n.js'
@@ -933,11 +1007,15 @@ const columns = computed(() => [
           { label: t('devices.deviceDetail'), key: 'detail' },
           { label: t('devices.guide'), key: 'guide' },
           { label: t('devices.pipeline'), key: 'pipeline' },
+          { label: t('devices.clone'), key: 'clone' },
+          { label: t('devices.batchClone'), key: 'batchClone' },
         ],
         onSelect: (key) => {
           if (key === 'detail') openDeviceDetail(row.id)
           else if (key === 'guide') showGuide(row.id)
           else if (key === 'pipeline') openPipelineVerify(row.id)
+          else if (key === 'clone') simpleCloneDevice(row)
+          else if (key === 'batchClone') openBatchClone(row)
         },
       }, () => h(NButton, { size: 'tiny', tertiary: true, title: t('common.more') }, () => [
         h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
@@ -1060,6 +1138,186 @@ function addEditDevicePoint() {
   // 默认地址自动避开已占用寄存器（多字节类型占多个，与后端重叠校验规则一致），
   // 否则保存时会被 400 "检测到同设备点位地址重叠" 拦截，表现为"更新失败"
   editDevice.value.points.push({ name: nextPointName(editDevice.value.points), address: nextFreeModbusAddress(editDevice.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+}
+
+async function simpleCloneDevice(row) {
+  try {
+    const res = await api.cloneDevice(row.id, { new_name: `${row.name}-${Date.now().toString(36).slice(-4)}` })
+    message.success(t('devices.cloneSuccess', { name: res?.name || res?.id || row.id }))
+    await loadData()
+  } catch (e) {
+    message.error(t('devices.cloneFailed') + ': ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+// ========== 批量添加测点（UX） ==========
+const showBatchPointsModal = ref(false)
+const batchPointsLoading = ref(false)
+const batchPointsForm = ref({ namePrefix: 'point', startIndex: 1, count: 10, addressBase: '', dataType: 'float32', access: 'rw', generatorType: 'random' })
+
+const batchPointsDataTypeOptions = computed(() => _dataTypeOptions.map(o => ({ label: t(o.label), value: o.value })))
+const batchPointsAccessOptions = computed(() => _accessModeOptions.map(o => ({ label: t(o.label), value: o.value })))
+const batchPointsGeneratorOptions = computed(() => _generatorTypeOptions.map(o => ({ label: t(o.label), value: o.value })))
+
+function openBatchAddPoints() {
+  batchPointsForm.value = {
+    namePrefix: 'point',
+    startIndex: (editDevice.value.points || []).length + 1,
+    count: 10,
+    addressBase: nextFreeModbusAddress(editDevice.value.points || [], 'float32'),
+    dataType: 'float32', access: 'rw', generatorType: 'random',
+  }
+  showBatchPointsModal.value = true
+}
+
+function _splitAddressTail(addr) {
+  const m = /^([A-Za-z]*)(\d+)$/.exec(String(addr || '').trim())
+  return m ? [m[1], parseInt(m[2], 10)] : null
+}
+
+async function confirmBatchAddPoints() {
+  const f = batchPointsForm.value
+  if (!f.namePrefix || !(f.count >= 1) || f.count > 1000) { message.warning(t('devices.batchPointsInvalid')); return }
+  const base = _splitAddressTail(f.addressBase)
+  if (!base) { message.warning(t('devices.batchPointsInvalidAddress')); return }
+  if (!editDevice.value.points) editDevice.value.points = []
+  batchPointsLoading.value = true
+  try {
+    for (let i = 0; i < f.count; i++) {
+      editDevice.value.points.push({
+        name: `${f.namePrefix}${f.startIndex + i}`,
+        address: `${base[0]}${base[1] + i}`,
+        data_type: f.dataType,
+        access: f.access,
+        generator_type: f.generatorType,
+        gen_interval: 0,
+        min_value: 0, max_value: 100, fixed_value: null,
+        unit: '', description: '', generator_config: {},
+      })
+    }
+    message.success(t('devices.batchPointsAdded', { n: f.count }))
+    showBatchPointsModal.value = false
+  } finally { batchPointsLoading.value = false }
+}
+
+// ========== 批量克隆（UX） ==========
+const showBatchCloneModal = ref(false)
+const batchCloneLoading = ref(false)
+const batchCloneDevice = ref(null)
+const batchCloneForm = ref({ count: 3, namePattern: '{name}-{n}', incrementStation: false, stationStart: 2, offsetAddresses: false, addressOffset: 100 })
+
+function openBatchClone(row) {
+  batchCloneDevice.value = row
+  batchCloneForm.value = { count: 3, namePattern: `${row.name}-{n}`, incrementStation: false, stationStart: 2, offsetAddresses: false, addressOffset: 100 }
+  showBatchCloneModal.value = true
+}
+
+async function confirmBatchClone() {
+  const row = batchCloneDevice.value
+  const f = batchCloneForm.value
+  const n = Math.min(Math.max(parseInt(f.count) || 1, 1), 50)
+  batchCloneLoading.value = true
+  let ok = 0, fail = 0
+  try {
+    const src = await api.getDevice(row.id)
+    for (let i = 1; i <= n; i++) {
+      try {
+        const cfg = JSON.parse(JSON.stringify(src))
+        cfg.id = `${(src.id || 'device')}-${Date.now().toString(36)}-${i}`
+        cfg.name = String(f.namePattern || '{name}-{n}').replaceAll('{name}', src.name || '').replaceAll('{n}', String(i))
+        const pc = cfg.protocol_config = { ...(src.protocol_config || {}) }
+        if (f.incrementStation) {
+          for (const k of ['slave_id', 'station_number', 'unit_id']) {
+            if (typeof pc[k] === 'number') pc[k] = Math.min(247, (parseInt(f.stationStart, 10) || 2) + i - 1)
+          }
+        }
+        if (f.offsetAddresses && Number(f.addressOffset) > 0 && Array.isArray(cfg.points)) {
+          const off = Number(f.addressOffset) * i
+          cfg.points = cfg.points.map(p => {
+            const parts = _splitAddressTail(p.address)
+            return parts ? { ...p, address: `${parts[0]}${parts[1] + off}` } : p
+          })
+        }
+        await api.createDevice(cfg)
+        ok++
+      } catch (e) { fail++ }
+    }
+    if (fail === 0) message.success(t('devices.batchCloneDone', { ok }))
+    else message.warning(t('devices.batchClonePartial', { ok, fail }))
+    showBatchCloneModal.value = false
+    await loadData()
+  } finally { batchCloneLoading.value = false }
+}
+
+// ========== 调试 Force / 值快照（UX） ==========
+const forcedPoints = ref({})
+const forceLoading = ref(false)
+const restoreLoading = ref(false)
+const hasSnapshot = ref(false)
+
+function _snapshotKey(id) { return `pf_snapshot_${id}` }
+
+async function refreshForces() {
+  if (!currentViewDeviceId.value) return
+  try { forcedPoints.value = await api.listForcedPoints(currentViewDeviceId.value) } catch { /* 静默 */ }
+}
+
+async function forcePointQuick() {
+  if (!currentViewDeviceId.value || !writePointName.value) { message.warning(t('devices.pleaseSelectPoint')); return }
+  forceLoading.value = true
+  try {
+    const dt = currentPoints.value.find(p => p.name === writePointName.value)?.data_type || ''
+    let value = String(writePointValue.value ?? '').trim()
+    if (dt === 'bool') value = ['true', '1', 'on', 'yes'].includes(value.toLowerCase())
+    else if (['int16', 'int32', 'uint16', 'uint32'].includes(dt)) value = parseInt(value, 10)
+    else if (['float32', 'float64'].includes(dt)) value = parseFloat(value)
+    await api.forcePoint(currentViewDeviceId.value, writePointName.value, value)
+    message.success(t('devices.forceSuccess', { name: writePointName.value }))
+    await refreshForces()
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = Array.isArray(res?.points) ? res.points : []
+  } catch (e) {
+    message.error(t('devices.forceFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { forceLoading.value = false }
+}
+
+async function releaseForceQuick() {
+  if (!currentViewDeviceId.value || !writePointName.value) { message.warning(t('devices.pleaseSelectPoint')); return }
+  forceLoading.value = true
+  try {
+    await api.forcePoint(currentViewDeviceId.value, writePointName.value, null)
+    message.success(t('devices.forceReleased', { name: writePointName.value }))
+    await refreshForces()
+  } catch (e) {
+    message.error(t('devices.forceFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { forceLoading.value = false }
+}
+
+function snapshotValues() {
+  if (!currentViewDeviceId.value) return
+  const snap = { time: Date.now(), values: currentPoints.value.map(p => ({ name: p.name, value: p.value })) }
+  try {
+    localStorage.setItem(_snapshotKey(currentViewDeviceId.value), JSON.stringify(snap))
+    hasSnapshot.value = true
+    message.success(t('devices.snapshotSaved', { n: snap.values.length }))
+  } catch (e) { message.error(t('devices.forceFailed') + ': ' + e.message) }
+}
+
+async function restoreSnapshot() {
+  if (!currentViewDeviceId.value) return
+  const raw = localStorage.getItem(_snapshotKey(currentViewDeviceId.value))
+  if (!raw) { message.warning(t('devices.noSnapshot')); return }
+  restoreLoading.value = true
+  try {
+    const snap = JSON.parse(raw)
+    let ok = 0
+    for (const p of snap.values || []) {
+      try { await api.writeDevicePoint(currentViewDeviceId.value, p.name, p.value); ok++ } catch { /* 单点失败继续 */ }
+    }
+    message.success(t('devices.snapshotRestored', { ok }))
+    const res = await api.getDevicePoints(currentViewDeviceId.value)
+    currentPoints.value = Array.isArray(res?.points) ? res.points : []
+  } finally { restoreLoading.value = false }
 }
 
 function openQuickCreate() {
@@ -1483,6 +1741,9 @@ async function viewPoints(id) {
     pointAddressMap.value = buildPointAddressMap(configRes)
     writePointName.value = ''
     writePointValue.value = ''
+    // Force 状态与快照可用性（UX）
+    api.listForcedPoints(id).then(fp => { forcedPoints.value = fp }).catch(() => {})
+    hasSnapshot.value = !!localStorage.getItem(_snapshotKey(id))
     showPointsModal.value = true
   } catch (e) { message.error(t('devices.readPointsFailed') + ': ' + (e.response?.data?.detail || e.message)) }
 }

@@ -24,6 +24,7 @@
         </n-button>
         <n-button tertiary @click="showImportModal = true">{{ t('scenarios.importScene') }}</n-button>
         <n-button type="primary" @click="showCreateModal = true">{{ t('scenarios.createScene') }}</n-button>
+        <n-button tertiary @click="createSampleScenario" :loading="sampleCreating">{{ t('scenarios.createSample') }}</n-button>
       </n-space>
     </n-space>
 
@@ -38,9 +39,9 @@
         <n-text depth="3">{{ t('scenarios.noScenariosDesc') }}</n-text>
       </div>
       <div style="margin-top: 16px">
-        <n-space justify="center">
+        <n-space>
           <n-button type="primary" @click="showCreateModal = true">{{ t('scenarios.createScene') }}</n-button>
-          <n-button @click="goDashboard">{{ t('scenarios.backToDashboard') }}</n-button>
+          <n-button tertiary @click="createSampleScenario" :loading="sampleCreating">{{ t('scenarios.createSample') }}</n-button>
         </n-space>
       </div>
     </n-card>
@@ -420,6 +421,49 @@ async function deleteScenario(id) {
       } finally { deletingIds.value.delete(id) }
     }
   })
+}
+
+// ========== 示例场景（UX：一键生成演示设备 + 阈值联动规则） ==========
+const sampleCreating = ref(false)
+
+async function createSampleScenario() {
+  sampleCreating.value = true
+  try {
+    const stamp = Date.now().toString(36)
+    const deviceId = `demo-temp-${stamp}`
+    await api.createDevice({
+      id: deviceId,
+      name: t('scenarios.sampleDeviceName'),
+      protocol: 'modbus_tcp',
+      protocol_config: { host: '0.0.0.0', port: 15020, slave_id: 1 },
+      points: [
+        { name: 'temperature', address: '100', data_type: 'float32', access: 'rw', generator_type: 'sine', min_value: 20, max_value: 95, unit: '°C', description: t('scenarios.samplePointTemp') },
+        { name: 'alarm', address: '110', data_type: 'bool', access: 'rw', generator_type: 'fixed', fixed_value: false, description: t('scenarios.samplePointAlarm') },
+      ],
+    })
+    await api.createScenario({
+      id: `demo-scene-${stamp}`,
+      name: t('scenarios.sampleSceneName'),
+      description: t('scenarios.sampleSceneDesc'),
+      devices: [],
+      rules: [{
+        id: `demo-rule-${stamp}`,
+        name: t('scenarios.sampleRuleName'),
+        rule_type: 'threshold',
+        source_device_id: deviceId,
+        source_point: 'temperature',
+        condition: { operator: '>', value: 80, cooldown: 10 },
+        target_device_id: deviceId,
+        target_point: 'alarm',
+        target_value: 'true',
+        enabled: true,
+      }],
+    })
+    message.success(t('scenarios.sampleCreated'))
+    await loadData()
+  } catch (e) {
+    message.error(t('scenarios.createFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { sampleCreating.value = false }
 }
 
 onMounted(loadData)

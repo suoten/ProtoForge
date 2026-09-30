@@ -58,6 +58,39 @@ def _priority(ip: str) -> int:
     return 3
 
 
+def list_local_ips() -> list[str]:
+    """枚举本机所有 IPv4 地址（含回环），用于绑定地址校验与提示。"""
+    ips: list[str] = ["127.0.0.1"]
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip not in ips:
+                ips.append(ip)
+    except OSError as e:
+        logger.debug("getaddrinfo(hostname) failed: %s", e)
+    return ips
+
+
+def is_local_bind_host(host: str) -> bool:
+    """判断主机地址是否可用于本机绑定（通配地址/回环/本机任一网卡 IP）。
+
+    用于拦截"把外部服务器 IP（EMQX/SIP 平台等）误填为协议服务监听地址"的
+    常见错误——该错误会导致启动时绑定失败且难以定位。
+    """
+    if not host:
+        return True
+    lowered = host.lower().strip()
+    if lowered in ("0.0.0.0", "::", "::/0", "localhost", "*", "any", "all"):
+        return True
+    try:
+        addr = ipaddress.ip_address(lowered)
+    except ValueError:
+        return False  # 非法 IP（可能是误填的主机名/外部地址）
+    if addr.is_loopback or addr.is_unspecified:
+        return True
+    return lowered in list_local_ips()
+
+
 def detect_lan_ip() -> str:
     """探测本机局域网 IP，自动跳过 VPN/FakeIP 虚拟网卡地址。
 

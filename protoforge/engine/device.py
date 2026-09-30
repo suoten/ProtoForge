@@ -381,6 +381,13 @@ class DeviceInstance:
                 except Exception as e:
                     logger.warning("Device %s: control loop tick error: %s", self.config.id, e)
 
+    def force_point_value(self, point_name: str, value: Any) -> None:
+        """调试 Force：把指定测点钉在固定值（每 tick 由引擎重新施加），压过生成器输出。"""
+        if point_name not in self._point_values:
+            raise ValueError(f"Point not found: {point_name}")
+        self._point_values[point_name] = value
+        self._updated_points.add(point_name)
+
     def consume_updated_points(self) -> set[str]:
         """返回并清空本 tick 实际重新生成/被控制回路改写的测点名集合。
 

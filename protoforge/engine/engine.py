@@ -134,6 +134,8 @@ class SimulationEngine:
         self._event_bus = event_bus
         self._tick_interval = tick_interval
         self._fault_propagation = FaultPropagation()
+        # 调试 Force：device_id -> {point_name: value}，每个 tick 重新施加，压过生成器
+        self._point_overrides: dict[str, dict[str, Any]] = {}
         self._timeseries_manager = TimeSeriesManager()
         self._network_sim = NetworkSimulator(enabled=False)
         # P4: 时序模式 & 事件驱动记录
@@ -396,6 +398,19 @@ class SimulationEngine:
             except Exception as stop_err:
                 logger.warning("Error stopping protocol %s before restart: %s", protocol_name, stop_err)
         logger.info("Starting protocol %s with config: %s", protocol_name, _sanitize_config(config))
+
+        # FIXED: 绑定地址预校验 —— 用户常把外部服务器 IP（EMQX/SIP 平台等）误填为
+        # 监听地址（如 MQTT host 填 EMQX IP），启动时绑定失败且难以定位。提前拦截。
+        bind_host = config.get("host", "0.0.0.0")
+        if bind_host and not _is_serial_path(bind_host):
+            from protoforge.core.netutils import is_local_bind_host, list_local_ips
+            if not is_local_bind_host(str(bind_host)):
+                raise ValueError(
+                    f"Host '{bind_host}' is not a local NIC address and cannot be bound. "
+                    f"Tip: use a local IP or 0.0.0.0 for the protocol service; to reach an external "
+                    f"server (EMQX/SIP etc.), configure it on the device instead. "
+                    f"Local addresses: {', '.join(list_local_ips())}"
+                )
 
         original_port = config.get("port")
 
@@ -718,6 +733,27 @@ class SimulationEngine:
                     await server.write_point(device_id, pv.name, pv.value)
         except Exception as e:
             logger.warning("Failed to write current values after resync for %s: %s", device_id, e)
+
+    def set_point_override(self, device_id: str, point_name: str, value: Any) -> None:
+        """调试 Force：设置/清除测点强制值（value=None 表示释放，恢复生成器输出）。"""
+        instance = self._devices.get(device_id)
+        if not instance:
+            raise ValueError(f"Device not found: {device_id}")
+        device_overrides = self._point_overrides.setdefault(device_id, {})
+        if value is None:
+            device_overrides.pop(point_name, None)
+            if not device_overrides:
+                self._point_overrides.pop(device_id, None)
+            return
+        instance.force_point_value(point_name, value)  # 立即生效（含存在性校验）
+        device_overrides[point_name] = value
+
+    def get_point_overrides(self, device_id: str) -> dict[str, Any]:
+        """返回设备当前的强制覆盖测点（调试 Force 状态）。"""
+        return dict(self._point_overrides.get(device_id, {}))
+
+    def get_all_point_overrides(self) -> dict[str, dict[str, Any]]:
+        return {dev: dict(pts) for dev, pts in self._point_overrides.items()}
 
     def get_all_device_ids(self) -> list[str]:
         return list(self._devices.keys())
@@ -1121,6 +1157,12 @@ class SimulationEngine:
             for instance in devices_snapshot:
                 try:
                     await instance.tick()
+                    # 调试 Force：每 tick 把强制覆盖的测点重新钉回固定值（压过生成器）
+                    overrides = self._point_overrides.get(instance.id)
+                    if overrides:
+                        for p_name, p_val in overrides.items():
+                            with contextlib.suppress(Exception):
+                                instance.force_point_value(p_name, p_val)
                     # FIXED-P0: tick后将动态值同步到协议服务器，否则上位机读到的是创建时的静态值
                     # FIXED: 使用 sync_point_value 替代 write_point，绕过访问控制检查，
                     # 避免将值写入 _written_values 导致生成器冻结
