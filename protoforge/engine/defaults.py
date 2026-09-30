@@ -619,6 +619,8 @@ ERROR_MESSAGES: MappingProxyType[str, str] = MappingProxyType({
     "authentication failed": "Authentication failed. Please check that the username, password, or authentication key is correct.",
     "access denied": "Access denied. The target server rejected the connection. Please check authentication credentials and permissions.",
     "endpoint": "Failed to connect to the specified endpoint. Please check that the server address and port are correct, and that the target service is running.",
+    # FIXED(v1.4.1): S7 等特权端口（<1024）在 Docker/Linux 下被误判为占用后换端口失败的真实原因
+    "no free port found": "No free port found in the searched range. If the protocol uses a privileged port below 1024 (e.g. S7 on 102) on Linux/Docker, binding requires root or --cap-add NET_BIND_SERVICE. Alternatively, change the protocol port to >= 1024 in advanced config and update clients.",
 })
 
 
@@ -654,6 +656,7 @@ ERROR_MESSAGES_ZH: MappingProxyType[str, str] = MappingProxyType({
     "authentication failed": "认证失败。请检查用户名、密码或认证密钥是否正确。",
     "access denied": "访问被拒绝。目标服务器拒绝了连接。请检查认证凭据和权限。",
     "endpoint": "无法连接到指定的端点。请检查服务器地址和端口是否正确，以及目标服务是否运行。",
+    "no free port found": "在搜索范围内未找到可用端口。若协议使用 1024 以下特权端口（如 S7 默认端口 102），在 Linux/Docker 下需要 root 权限或启动容器时加 --cap-add NET_BIND_SERVICE 参数；也可以在高级配置中把协议端口改为 1024 以上（客户端同步修改端口）。",
 })
 
 
