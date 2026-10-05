@@ -69,8 +69,9 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 For shop-floor Windows machines with no Docker/Python/Node:
 
 ```text
-1. Unzip ProtoForge-v1.6.0-win64-portable.zip
-2. Double-click ProtoForge.exe
+1. Download ProtoForge-v1.6.0-win64-portable.zip (~45MB) from
+   GitHub Releases: https://github.com/suoten/ProtoForge/releases
+2. Unzip and double-click ProtoForge.exe
 3. The web UI opens in your browser automatically
 ```
 
