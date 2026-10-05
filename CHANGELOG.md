@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.6.0 — 2026-10-05
+
+### 🖥️ Windows 桌面版（升级规划 v1.6.0"双击就能用"专项）
+
+**新增 — 桌面模式 `protoforge desktop`：**
+
+为无 Python/Node/Docker 的工控现场 Windows 机器设计的一键使用形态：
+
+- 后台线程启动与 `protoforge run` 完全相同的服务（同一 app、同一配置链路），就绪后**自动打开管理界面**；
+- **重复双击 = 打开界面**：目标端口上已有健康实例时不再起第二个服务，直接打开已运行实例（单实例语义自然实现）；
+- 端口默认 18080，被占用自动顺延；健康检查 90 秒超时，失败时指向日志文件；
+- 可选**系统托盘**（pystray + Pillow，随 `[desktop]` extra 安装）：菜单"打开界面 / 退出"，托盘气泡提示新版本；未安装时自动降级为纯浏览器模式，Ctrl+C 优雅退出；
+- `--native` 可选 pywebview 原生窗口（未安装自动回退浏览器——v1.6.0 取浏览器为主形态：工控现场零依赖、无 WebView2 兼容问题、打包体积与杀软误报更可控）；
+- **冻结模式数据随 exe 走**：chdir 到 exe 目录，data/、logs/、.env 全部落 exe 旁，便携包解压即用、配置可整体拷贝迁移。
+
+**新增 — 路径解析基础设施 `protoforge/core/paths.py`：**
+
+开发 / PyInstaller 冻结双模式统一：静态资源解析顺序 `PROTOFORGE_STATIC_DIR` 环境变量 > bundle 内 web/dist（`sys._MEIPASS`，onedir 即 `_internal/`）> 仓库根 web/dist（开发模式不变）；`app_root()` 冻结模式返回 exe 目录。`main.py` 静态挂载与 `doctor` 改走该模块（Docker 部署行为不变）。
+
+**新增 — Windows 服务模式 CLI 化：**
+
+`protoforge install-service` / `uninstall-service`（`protoforge/win_service.py`）：与 v1.5.0 的 `scripts/install_service.bat` 同一套 NSSM 语义（开机自启 SERVICE_AUTO_START、崩溃自动拉起 AppExit→Restart、日志轮转 10MB），但 **pip 安装位置也能用**（不要求仓库 checkout）；管理员权限与 NSSM 定位（PATH → tools/nssm.exe）带明确提示。参数构建为纯函数，跨平台可测。
+
+**新增 — 桌面便携包构建：**
+
+- `protoforge.spec`：PyInstaller onedir 打包（前端 web/dist、133 个设备模板 JSON、协议 extras pymodbus/asyncua/amqtt、uvicorn 动态导入段全部随包）；onedir 优于 onefile——秒级启动 vs 半分钟解压，杀软误报更少；保留控制台窗口（首次启动的管理员密码打印在控制台）。
+- `scripts/build_desktop.py`：一键构建 + 产出 `dist/ProtoForge-v<版本>-win64-portable.zip`，内置规划验收线（zip ≤ 300MB）自动检查。
+- `scripts/desktop_entry.py`：冻结入口——双击 exe 默认进桌面模式，`ProtoForge.exe doctor` 等子命令原样透传。
+
+**改进 — 版本检查提取复用：**
+
+v1.4.0 内嵌在 `/system/version-check` 的 GitHub Releases 检查逻辑提取到 `protoforge/core/version_check.py`（`fetch_release_info` + TTL 缓存类），API 端点行为不变（10 分钟缓存 + 鉴权），桌面模式复用同一实现。
+
+### 升级提示
+
+- 桌面用户：下载 `ProtoForge-v1.6.0-win64-portable.zip` 解压双击 `ProtoForge.exe` 即可（或源码构建：`python scripts/build_desktop.py`）；
+- 服务用户：除既有 `scripts/install_service.bat` 外，现可用 `protoforge install-service`；
+- Docker 用户：`docker pull suoten/protoforge:1.6.0`，行为无变化。
+
 ## v1.5.0 — 2026-10-05
 
 ### 🛡️ 质量护城河（升级规划 v1.5.0"可信"专项）

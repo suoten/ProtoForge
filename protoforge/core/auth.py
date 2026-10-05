@@ -26,7 +26,12 @@ _BCRYPT_ROUNDS = 12
 _VALID_USERNAME_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,' + str(_USERNAME_MAX_LENGTH) + r'}$')
 
 _SECRET_KEY: str = ""
-_SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
+# FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 data/），原包相对路径会写进只读 _internal
+try:
+    from protoforge.core.paths import app_root as _app_root
+    _SECRET_KEY_FILE = os.path.join(str(_app_root()), "data", ".jwt_secret")
+except Exception:  # pragma: no cover - paths 模块不可用时退回原行为
+    _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
 _SECRET_KEY_LOCK = threading.Lock()  # FIXED: 添加锁保护，避免并发读写_SECRET_KEY
 
 
@@ -267,7 +272,10 @@ class UserManager:
         if not default_password:
             default_password = secrets.token_urlsafe(16)
             try:
-                pw_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".admin_password")
+                # FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 data/），
+                # 原包相对路径会写进只读的 _internal
+                from protoforge.core.paths import app_root as _app_root
+                pw_file = os.path.join(str(_app_root()), "data", ".admin_password")
                 os.makedirs(os.path.dirname(pw_file), exist_ok=True)
                 with open(pw_file, "w") as f:
                     f.write(default_password)

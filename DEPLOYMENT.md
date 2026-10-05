@@ -173,6 +173,24 @@ docker run -d \
   protoforge:latest
 ```
 
+## 桌面版 / 便携包（Windows，v1.6.0 新增）
+
+面向"现场机器没 Docker、不想装 Python"的形态。产物为 onedir 目录（双击
+`ProtoForge.exe` 秒级启动）加便携 zip：
+
+```bash
+# 构建前端（首次）
+cd web && npm install && npm run build && cd ..
+# 构建 + 打便携包（需 pip install pyinstaller pystray pillow）
+python scripts/build_desktop.py
+# 产物：dist/ProtoForge/ 与 dist/ProtoForge-v<版本>-win64-portable.zip
+```
+
+- 数据目录 = exe 旁的 `data\`，日志 = `logs\`，`.env` 也在 exe 旁——**整个文件夹拷走即完成迁移**；
+- 重复双击不会起第二个实例：直接打开已运行实例的界面；
+- `ProtoForge.exe doctor` 自检、`ProtoForge.exe install-service` 安装系统服务；
+- 可选托盘：随包内置（pystray + Pillow），无托盘环境自动降级为浏览器模式。
+
 ## 生产环境部署
 
 ### 使用 Nginx 反向代理（推荐）

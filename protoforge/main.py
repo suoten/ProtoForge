@@ -701,7 +701,10 @@ def create_app() -> FastAPI:
             logger.debug("Metrics: test runner not available")
         return metrics.generate_prometheus_output()
 
-    static_dir = Path(__file__).parent.parent / "web" / "dist"
+    # FIXED(v1.6.0): 静态目录解析改走 core.paths（开发/PyInstaller 冻结双模式），
+    # 环境变量 PROTOFORGE_STATIC_DIR 仍具最高优先级（与 Docker 部署兼容）
+    from protoforge.core.paths import static_dir as _resolve_static_dir
+    static_dir = _resolve_static_dir()
     fallback_dir = Path(__file__).parent.parent / "static"
 
     if not static_dir.is_dir():

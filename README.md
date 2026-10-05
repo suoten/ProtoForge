@@ -18,7 +18,7 @@
 
 > ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
 >
-> 🔥 **V1.5.0 质量护城河** · 28 种工业协议 · 133 设备模板 · wire 级黄金用例门禁 · `protoforge doctor` 自检 · 测试计划+合规检测 · Windows 服务化 · EdgeLite 生态对接
+> 🔥 **V1.6.0 桌面版** · 28 种工业协议 · 133 设备模板 · 双击即用桌面版 · wire 级黄金用例门禁 · `protoforge doctor` 自检 · Windows 服务化 · EdgeLite 生态对接
 
 ![仪表盘](docs/images/1.png)
 
@@ -159,6 +159,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 - **28 种工业协议** — Modbus TCP/RTU、OPC-UA（Server/Client）、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP
 - **协议黄金用例门禁** — 10 个核心协议 43 组字节级黄金帧回归（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **桌面版（v1.6.0）** — `protoforge desktop` 或双击便携包 exe：自动起服务 + 自动打开界面 + 可选系统托盘 + 新版本气泡提示；数据随 exe 目录走，解压即用
 - **`protoforge doctor` 一键自检** — 端口冲突、特权端口、依赖完整、数据库可写、容器网络拓扑逐项体检，部署类问题发 issue 前先自诊（支持 `--json`）
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
 - **133 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器、保护继电器、IED、环境传感器、微电网、智能电表、水/气/热表，选模板→起名字→一键创建
@@ -230,6 +231,29 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 熟悉命令行的用户，或需要自定义配置。详细步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
+### 桌面版：双击就能用（v1.6.0 新增）
+
+为"现场机器没 Docker、不想装 Python"的场景准备的一键形态：
+
+**便携包（推荐）**：解压 `ProtoForge-v1.6.0-win64-portable.zip` → 双击 `ProtoForge.exe` →
+界面自动在浏览器打开。数据（设备/场景/模板）保存在 exe 旁的 `data\` 目录——
+**整个文件夹拷到 U 盘或另一台机器，配置原样带走**。
+
+```text
+ProtoForge.exe                     ← 双击：起服务 + 自动开界面（托盘常驻）
+ProtoForge.exe doctor              ← 环境自检
+ProtoForge.exe install-service     ← 安装为 Windows 服务（开机自启）
+```
+
+自行构建便携包（开发者）：
+
+```bash
+python scripts/build_desktop.py    # PyInstaller 构建 + 产出 dist/*.zip（≤300MB 验收）
+```
+
+**源码运行桌面模式**：`python -m protoforge desktop`（默认端口 18080，被占用自动顺延；
+重复启动直接打开已运行实例的界面）。可选托盘：`pip install 'protoforge[desktop]'`。
+
 ### 开机自启动与数据保存（Windows）
 
 <details>
@@ -237,14 +261,16 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 **日常启动**：双击项目文件夹里的 `quickstart.bat` 即可（自动检查环境 → 启动服务 → 提示访问地址）。窗口保持开着服务就在运行，关闭窗口或按 `Ctrl+C` 即停止。
 
-**方式一（推荐，v1.5.0）：安装为 Windows 系统服务**——开机自启、崩溃自动拉起、日志自动轮转，需要管理员权限与 [NSSM](https://nssm.cc/download)（放到 `tools\nssm.exe` 即可）：
+**方式一（推荐，v1.5.0 起）：安装为 Windows 系统服务**——开机自启、崩溃自动拉起、日志自动轮转。两种入口等价：
 
 ```text
-scripts\install_service.bat     ← 管理员终端运行，一键安装并启动服务
-scripts\uninstall_service.bat   ← 停止并卸载服务
+protoforge install-service        ← v1.6.0 起 CLI 直接安装（管理员终端）
+scripts\install_service.bat       ← 仓库脚本方式
 ```
 
-安装后访问 `http://localhost:18080`，日志在 `logs\service-out.log`。详见 [DEPLOYMENT.md](DEPLOYMENT.md) 的「Windows 服务化」章节。
+需要 [NSSM](https://nssm.cc/download)（放到 `tools\nssm.exe` 或 PATH）。卸载：
+`protoforge uninstall-service` 或 `scripts\uninstall_service.bat`。
+日志在 `logs\service-out.log`。详见 [DEPLOYMENT.md](DEPLOYMENT.md) 的「Windows 服务化」章节。
 
 **方式二（轻量）：启动文件夹自启**——不需要管理员权限，适合个人电脑：
 
@@ -1162,6 +1188,9 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 | `protoforge init`    | 初始化数据目录和默认配置（创建 `data/` 目录，从 `.env.example` 复制 `.env`） |
 | `protoforge migrate` | 运行数据库迁移（`--revision head`）                             |
 | `protoforge test run` | 执行测试计划（CI/CD 集成，支持 `--plan-id` 指定计划）                    |
+| `protoforge desktop` | 桌面模式：起服务 + 自动打开界面 + 托盘常驻（`--port` / `--no-tray`）   |
+| `protoforge install-service` | 安装为 Windows 服务（NSSM，开机自启，需管理员）                  |
+| `protoforge uninstall-service` | 停止并卸载 Windows 服务（需管理员）                          |
 | `protoforge doctor`  | 环境自检：端口冲突/特权端口/依赖完整/数据库可写/容器拓扑逐项体检（`--json` 供 issue 附带） |
 | `protoforge version` | 查看版本号                                                  |
 

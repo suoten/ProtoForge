@@ -14,7 +14,14 @@ from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
 
+# FIXED(v1.6.0): .env 路径走 app_root（冻结模式 = exe 旁），与数据目录同处，
+# 原包相对路径在 PyInstaller 下会读写只读的 _internal
 _ENV_FILE = Path(__file__).parent.parent / ".env"
+try:
+    from protoforge.core.paths import app_root as _app_root
+    _ENV_FILE = _app_root() / ".env"
+except Exception:  # pragma: no cover - paths 模块不可用时退回原行为
+    pass
 
 
 class Settings(BaseSettings):
@@ -222,7 +229,10 @@ def get_settings() -> Settings:
             if not _settings.jwt_secret:
                 # JWT_SECRET 为空时，尝试从持久化文件加载（防止重启后 token 全部失效 → 401）
                 from pathlib import Path as _Path
-                _jwt_file = _Path(__file__).parent.parent / "data" / ".jwt_secret"
+                # FIXED(v1.6.0): 路径走 app_root（冻结模式= exe 旁，配置随目录走），
+                # 原包相对路径在 PyInstaller 下会写进只读的 _internal
+                from protoforge.core.paths import app_root as _app_root
+                _jwt_file = _app_root() / "data" / ".jwt_secret"
                 if _jwt_file.exists():
                     try:
                         saved = _jwt_file.read_text(encoding="utf-8").strip()
@@ -303,18 +313,23 @@ class ConfigValidationError(Exception):
         super().__init__("; ".join(errors))
 
 
+# v1.6.0: 白名单提升为模块级常量（单一事实源，测试直接 import 对比，
+# 不再从函数源码反解）。新增可运行时更新的设置项时在此登记。
+UPDATABLE_SETTINGS_KEYS = frozenset({
+    "host", "port", "db_path", "demo_mode",
+    "log_level", "cors_origins",
+    "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
+    "edgelite_url", "edgelite_username", "edgelite_password",
+    "protoforge_public_host",
+})
+
+
 def update_settings(updates: dict[str, Any]) -> dict[str, Any]:
     global _settings, _settings_overrides
     s = get_settings()
     changed = {}
     errors = []
-    allowed_keys = {
-        "host", "port", "db_path", "demo_mode",
-        "log_level", "cors_origins",
-        "influxdb_url", "influxdb_token", "influxdb_org", "influxdb_bucket",
-        "edgelite_url", "edgelite_username", "edgelite_password",
-        "protoforge_public_host",
-    }
+    allowed_keys = UPDATABLE_SETTINGS_KEYS
     with _settings_lock:
         # FIXED(v1.4.1): 前端"系统设置→协议端口"以 protocol_ports 字典提交（GET /settings 也按字典返回），
         # 但下方循环只接受 {proto}_port 形式的键——该字典此前被静默丢弃，导致用户反馈

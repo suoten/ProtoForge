@@ -36,6 +36,7 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 
 - **28 Industrial Protocols** — Modbus TCP/RTU, OPC-UA (Server/Client), MQTT, HTTP, GB28181, BACnet, Siemens S7/S7Comm-Plus, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS, DLT/T 645, CJ/T 188, Panasonic MEWTOCOL, Custom TCP/UDP
 - **Wire-Level Golden Test Gate** — 43 byte-exact golden frames across the 10 core protocols, verified against real sockets and enforced as a non-exemptable CI merge gate, so the simulator speaks the standard, not an approximation
+- **Desktop Edition (v1.6.0)** — `protoforge desktop` or double-click the portable exe: starts the server and auto-opens the UI, optional system tray with new-version notifications; data lives next to the executable (unzip and go)
 - **`protoforge doctor` Self-Check** — One command to inspect port conflicts, privileged ports, dependencies, database writability and container networking, with actionable fixes (`--json` for issue reports)
 - **Full-chain Simulation** — Complete protocol interactions including GB28181 SIP registration, RTP video streaming, and more
 - **133 Device Templates** — PLC, sensor, CNC, camera, HVAC, servo drive, protection relay, IED, env sensor, microgrid, smart meter, water/gas/heat meter — pick a template, name it, create with one click
@@ -62,6 +63,23 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 ---
 
 ## 📥 Installation
+
+### Method 0: Portable Desktop Edition (v1.6.0, No Prerequisites)
+
+For shop-floor Windows machines with no Docker/Python/Node:
+
+```text
+1. Unzip ProtoForge-v1.6.0-win64-portable.zip
+2. Double-click ProtoForge.exe
+3. The web UI opens in your browser automatically
+```
+
+Data (devices/scenarios/templates) is stored in the `data\` folder next to the
+executable — copy the whole folder to a USB stick and your configuration
+travels with it. `ProtoForge.exe doctor` runs the environment self-check;
+`ProtoForge.exe install-service` registers auto-start as a Windows service.
+
+Build it yourself: `python scripts/build_desktop.py` (requires PyInstaller).
 
 ### Prerequisites
 
