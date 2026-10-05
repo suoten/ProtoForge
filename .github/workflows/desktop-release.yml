@@ -1,0 +1,58 @@
+name: Desktop Portable Build
+
+# v1.6.0: 推送 v* tag（或手动触发）时在云端构建 Windows 便携包，
+# 自动挂载到 GitHub Release——免去网页手动上传。
+# 产物即 scripts/build_desktop.py 的 dist/ProtoForge-v*-win64-portable.zip。
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-portable:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -e ".[all]"
+          pip install pyinstaller pystray pillow
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          npm install
+          npm run build
+
+      - name: Build portable package
+        run: python scripts/build_desktop.py
+
+      - name: Attach zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ProtoForge-*.zip
+          generate_release_notes: true
+
+      - name: Upload workflow artifact (manual runs)
+        if: '!startsWith(github.ref, ''refs/tags/'')'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProtoForge-portable
+          path: dist/ProtoForge-*.zip
+          retention-days: 14
