@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.5.0 — 2026-10-05
+
+### 🛡️ 质量护城河（升级规划 v1.5.0"可信"专项）
+
+**新增 — Wire 级协议黄金用例回归体系（10 协议 / 43 用例，CI 合并门禁）：**
+
+针对 v1.4.x 的 IEC 104 帧格式回归事故建立的系统性防线：用**按协议标准原文构造的字节级黄金帧**与真实 socket 上的服务端响应逐字节对比，动态字段（事务号/PDU 引用/invoke ID）由客户端指定，期望帧完全确定。覆盖 Modbus TCP/RTU（桥接）、S7（COTP CR→CC/Setup Comm/Read Var/Write Var）、IEC 104（既有 7 例）、DL/T 645、CJ/T 188、MC(SLMP)、FINS（TCP 握手/内存读写/控制器读）、MQTT（连接/订阅/发布契约/心跳）、BACnet（Who-Is→I-Am/ReadProperty/WriteProperty/Error）、OPC-UA（HELF→ACKF/垃圾帧拒绝）。CI 新增 `wire-golden-gate` job（**不可豁免**）。
+
+黄金用例上线第一天即抓到并修复 **3 个真实 wire 级缺陷**：
+
+1. **Modbus RTU 桥接 count=0 返回正常响应**（`03 00`）：规范（Modbus V1.1b3）要求返回异常码 03（ILLEGAL DATA VALUE），TCP 服务端是对的、RTU 桥接漏了 count==0 校验（FC01/02/03/04 全部补齐）
+2. **MC(SLMP) 字设备偏移错位**：字编号被直接当字节偏移，D100/D101 相邻两个字互相覆盖（多字读返回 `34 78 56 00` 而非 `34 12 78 56`）。修正为标准语义——字设备字节偏移 = 字编号 × 2（读/写/随机读写全路径 + 点位解析同步），位设备 nibble 布局不变
+3. **DL/T 645 广播读表地址在单设备场景永远无响应**：`device_id is None` 条件在单设备时恒假（`_find_device_by_addr` 会匹配唯一设备），而广播读地址恰恰是"不知道表地址"时用的功能。移除该条件，广播读地址按标准返回第一台设备的地址
+
+与 v1.4.4 mewtocol 教训同源：协议实现必须有标准原文/第三方实现的独立验证向量，"自己写的测试通过"不等于"符合协议"。黄金用例即为此建立的长效机制。
+
+**新增 — `protoforge doctor` 环境自检命令：**
+
+把 v1.3.x—v1.4.x 修复过的每类部署问题的诊断逻辑沉淀成一条命令：数据目录可写、核心/可选依赖完整、Web 端口占用、协议特权端口（<1024）提示、协议端口冲突（首跑即发现 iec61850 与 s7 默认都占 102 的既知冲突）、容器环境网络拓扑提示、免认证模式告警。支持 `--json` 机器可读输出（报 issue 附上），error 级问题退出码为 1。
+
+**新增 — 配置链路一致性测试（8 例）：**
+
+v1.4.2"协议端口静默丢弃"事故的通用化防线：`PROTOCOL_DEFAULTS` 每个带端口的协议必须有 Settings 设置项（mewtocol 类事故防线）；port_map 与 Settings 双向一致；`protocol_ports` 字典四层贯通（提交→Settings→defaults→port_map）并持久化到 .env；非法值显式拒绝；**Settings 全字段分类完备性断言**——每个字段必须落在"可更新白名单 / 已知不可更新"两个集合之一，未来新增字段若两边都不挂（即走静默丢弃路径）测试立即红灯。
+
+**新增 — Windows 服务化（NSSM）：**
+
+替代 v1.3.3 脆弱的 VBS 开机自启：`scripts/install_service.bat` 把 ProtoForge 注册为真正的 Windows 服务（开机自启、崩溃自动拉起、日志轮转 10MB），`scripts/uninstall_service.bat` 一键卸载。详见 DEPLOYMENT.md。
+
+### 🔧 改进
+
+- DEPLOYMENT.md 新增「Windows 服务化（NSSM）」与「一键自检 protoforge doctor」章节
+
+### 升级提示
+
+Docker 用户：`docker pull suoten/protoforge:1.5.0`。本版本无破坏性 API 变更；**MC 协议字设备偏移修正**后，此前依赖"错位行为"的自定义客户端需改按标准字编址（标准客户端如 pymcprotocol 无需任何改动）。部署类问题先跑 `protoforge doctor`。
+
 ## v1.4.4 — 2026-09-30
 
 ### 🐛 Bug Fix（v1.4.2 用户反馈专项）

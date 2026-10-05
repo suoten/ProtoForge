@@ -294,6 +294,30 @@ stderr_logfile=/var/log/protoforge.err.log
 stdout_logfile=/var/log/protoforge.out.log
 ```
 
+### Windows 服务化（NSSM，v1.5.0 新增）
+
+v1.3.3 的 VBS"开机自启"是脆弱的补丁方案（隐藏窗口脚本，无崩溃恢复、无日志轮转）。
+v1.5.0 起推荐用 NSSM 把 ProtoForge 安装为真正的 Windows 服务：开机自启、崩溃自动拉起、
+日志轮转、随系统用户管理。
+
+1. 下载 [NSSM](https://nssm.cc/download)，把 `win64/nssm.exe` 复制到项目 `tools/` 目录（或加入 PATH）；
+2. 以管理员身份运行终端，进入项目根目录：
+
+```bat
+scripts\install_service.bat 18080
+```
+
+脚本会注册名为 `ProtoForge` 的服务（默认端口 18080）并立即启动。管理命令：
+
+```bat
+sc query ProtoForge                    :: 查看状态
+scripts\uninstall_service.bat          :: 停止并卸载服务
+logs\service-out.log                   :: 查看输出日志（自动轮转）
+```
+
+> ⚠️ 安装后请立即修改管理员密码：编辑服务环境变量
+> `nssm edit ProtoForge` → Environment → `PROTOFORGE_ADMIN_PASSWORD`，然后重启服务。
+
 ## 数据库迁移
 
 ProtoForge 使用 Alembic 管理数据库迁移。
@@ -344,6 +368,18 @@ alembic upgrade head
 ```
 
 ## 故障排查
+
+### 一键自检（v1.5.0 新增：`protoforge doctor`）
+
+遇到"连不上/起不来"类问题时，先跑自检命令——它覆盖了端口冲突、特权端口、
+数据目录不可写、依赖缺失、容器网络拓扑、免认证模式等历史高频问题的诊断：
+
+```bash
+protoforge doctor        # 人类可读
+protoforge doctor --json # 机器可读（报 issue 时附上此输出）
+```
+
+存在 error 级问题时命令退出码为 1，每条问题附修复建议。
 
 ### 页面空白（前端无法显示）
 

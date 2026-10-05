@@ -54,6 +54,13 @@ class McDeviceBehavior(StandardDeviceBehavior):
         'V': 0x94, 'S': 0x98, 'Z': 0xCC, 'SM': 0x93, 'SD': 0xA9,
     }
 
+    # FIXED(v1.5.0): 字设备（D/R/ZR/W/SD）按 SLMP 标准以"字编号"编址——内部内存
+    # 统一按字节偏移存储，字设备的字节偏移 = 字编号 × 2。原实现把字编号直接当
+    # 字节偏移，导致相邻两个字点位互相覆盖（D100/D101 各占 2 字节却只隔 1 字节），
+    # 多字读取（如读 float32 跨 D100-D101 之外的相邻字、批量读 D100-D103）返回错位数据。
+    # 位设备（X/Y/M/B/L/F/V/S/SM）保持"点 n → 第 n//2 字节半字节"的线上布局不变。
+    _WORD_DEVICE_PREFIXES = ("D", "R", "ZR", "W", "SD")
+
     @staticmethod
     def _parse_mc_address(address: str) -> tuple[int, int]:
         try:
@@ -68,6 +75,8 @@ class McDeviceBehavior(StandardDeviceBehavior):
                 name = match.group(1).upper()
                 # FIXED-P2: X/Y设备地址使用十六进制解析
                 offset = int(match.group(2), 16) if name in ('X', 'Y') else int(match.group(2))
+                if name in McDeviceBehavior._WORD_DEVICE_PREFIXES:
+                    offset *= 2  # 字设备：字编号 → 字节偏移
                 code = McDeviceBehavior.DEVICE_CODE_MAP.get(name, 0x44)
                 return (code, offset)
             return (0x44, int(address))
@@ -420,7 +429,7 @@ class McServer(ProtocolServer):
             if self._is_bit_subcmd(subcmd):
                 read_data = behavior.read_bits_from_memory(device_code, start_addr, point_count)
             else:
-                read_data = behavior.read_memory_offset(device_code, start_addr, read_len)  # FIXED-H04: 带偏移读取避免越界
+                read_data = behavior.read_memory_offset(device_code, start_addr * 2, read_len)  # FIXED(v1.5.0): 字地址×2=字节偏移（SLMP 标准），FIXED-H04: 带偏移读取避免越界
         else:
             read_data = bytearray(read_len)
 
@@ -477,10 +486,10 @@ class McServer(ProtocolServer):
             if self._is_bit_subcmd(subcmd):
                 behavior.write_bits_from_wire(device_code, start_addr, write_data, point_count)
             else:
-                behavior.write_memory(device_code, start_addr, write_data)
+                behavior.write_memory(device_code, start_addr * 2, write_data)  # FIXED(v1.5.0): 字地址×2=字节偏移
             is_bit = self._is_bit_subcmd(subcmd)
             for name, (p_code, p_offset) in behavior._point_addresses.items():
-                if p_code == device_code and p_offset == start_addr:
+                if p_code == device_code and p_offset == start_addr * 2:
                     try:
                         dt = behavior._point_data_types.get(name, "")
                         if is_bit and dt == "bool" and len(write_data) >= 1:
@@ -549,7 +558,7 @@ class McServer(ProtocolServer):
                     bits = behavior.read_bits_from_memory(device_code, start_addr, 1)
                     read_data += bytes([1 if bits[0] & 0x10 else 0])
                 else:
-                    read_data += behavior.read_memory_offset(device_code, start_addr, 2)  # FIXED-N06: 带偏移读取避免越界
+                    read_data += behavior.read_memory_offset(device_code, start_addr * 2, 2)  # FIXED(v1.5.0): 字地址×2; FIXED-N06: 带偏移读取避免越界
         resp = bytearray()
         resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])
@@ -588,7 +597,7 @@ class McServer(ProtocolServer):
                 write_val = data[offset : offset + 2]
                 offset += 2
                 if behavior:
-                    behavior.write_memory(device_code, start_addr, write_val)
+                    behavior.write_memory(device_code, start_addr * 2, write_val)  # FIXED(v1.5.0): 字地址×2
         resp = bytearray()
         resp += struct.pack("<H", 0x00D0)  # FIXED: 响应子头 D0 00 (SLMP 3E 标准响应子头，原误用请求子头 0x5000 回显)
         resp += bytes([data[2], data[3]])

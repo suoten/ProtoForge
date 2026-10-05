@@ -391,7 +391,7 @@ class ModbusRtuServer(ProtocolServer):
             if fc == 0x01:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_COILS:  # FIXED-P1: RTU添加读取数量上限校验
+                if count == 0 or count > self._MAX_READ_COILS:  # FIXED(v1.5.0): count=0 按规范返回异常码03（与TCP server一致）
                     return bytes([fc | 0x80, 0x03])
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
@@ -402,7 +402,7 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x02:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_COILS:  # FIXED-P1: RTU添加读取数量上限校验
+                if count == 0 or count > self._MAX_READ_COILS:  # FIXED(v1.5.0): count=0 按规范返回异常码03
                     return bytes([fc | 0x80, 0x03])
                 byte_count = (count + 7) // 8
                 bits = bytearray(byte_count)
@@ -413,7 +413,7 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x03:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED-P1: RTU添加读取数量上限校验
+                if count == 0 or count > self._MAX_READ_REGISTERS:  # FIXED(v1.5.0): count=0 按规范返回异常码03（黄金用例回归）
                     return bytes([fc | 0x80, 0x03])
                 byte_count = count * 2
                 regs = bytearray(byte_count)
@@ -424,7 +424,7 @@ class ModbusRtuServer(ProtocolServer):
             elif fc == 0x04:
                 start = struct.unpack(">H", data[0:2])[0]  # FIXED-P0: 移除+1偏移
                 count = struct.unpack(">H", data[2:4])[0]
-                if count > self._MAX_READ_REGISTERS:  # FIXED-P1: RTU添加读取数量上限校验
+                if count == 0 or count > self._MAX_READ_REGISTERS:  # FIXED(v1.5.0): count=0 按规范返回异常码03
                     return bytes([fc | 0x80, 0x03])
                 byte_count = count * 2
                 regs = bytearray(byte_count)
