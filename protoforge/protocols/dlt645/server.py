@@ -561,8 +561,10 @@ class DLT645Server(ProtocolServer):
 
         # Handle broadcast address (only read address allowed)
         if meter_addr == self._broadcast_address:
-            if ctrl == C_READ_ADDRESS and device_id is None:
-                # Return first device's address
+            if ctrl == C_READ_ADDRESS:
+                # FIXED(v1.5.0): 广播读表地址不依赖 device_id 解析结果——单设备场景
+                # _find_device_by_addr 会命中唯一设备（原条件 device_id is None 恒假），
+                # 导致广播读地址在最常见的单表场景下永远无响应（违反 DL/T 645-2007）。
                 if self._behaviors:
                     first_dev = next(iter(self._behaviors.keys()))
                     addr = self._meter_addresses.get(first_dev, "000000000000")

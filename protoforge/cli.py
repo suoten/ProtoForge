@@ -67,6 +67,10 @@ def main():
 
     subparsers.add_parser("version", help="Show version")
 
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Environment self-check (ports, DB, deps, container hints)")
+    doctor_parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+
     subparsers.add_parser("init", help="Initialize data directory and default config")
 
     migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
@@ -102,6 +106,10 @@ def main():
         from protoforge import __version__  # FIXED: 引用__version__单一来源，避免硬编码版本号
         print(f"ProtoForge v{__version__} - IoT Protocol Simulation & Testing Platform")
         return
+
+    if args.command == "doctor":
+        from protoforge.doctor import main as doctor_main
+        sys.exit(doctor_main(json_output=bool(getattr(args, "json", False))))
 
     if args.command == "init":
         _init_command()
