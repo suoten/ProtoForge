@@ -196,25 +196,20 @@ def test_settings_fields_all_classified():
 
     这是对 update_settings 白名单的"完备性"断言：任何新字段两边都不挂，
     就意味着它会走静默丢弃路径（v1.4.2 事故的根因模式）。
+    v1.6.0: 白名单提升为 config.UPDATABLE_SETTINGS_KEYS 模块级常量，直接
+    import 对比（不再从函数源码反解——inspect 方式在全量测试中会被模块
+    状态污染，出现过假阳性）。
     """
-    from protoforge.config import update_settings  # noqa: F401 (白名单在函数闭包内)
-    import inspect
-    import protoforge.config as cfg
-
-    # 从 update_settings 源码提取 allowed_keys 字面量，避免复制漂移
-    src = inspect.getsource(cfg.update_settings)
-    match = __import__("re").search(r"allowed_keys\s*=\s*\{([^}]*)\}", src, __import__("re").S)
-    assert match, "update_settings 中的 allowed_keys 未找到"
-    allowed = {x.strip().strip('"\'') for x in match.group(1).split(",") if x.strip()}
+    from protoforge.config import UPDATABLE_SETTINGS_KEYS
 
     s = get_settings()
     unclassified = []
     for field_name in type(s).model_fields:
         if field_name.endswith("_port"):
             continue
-        if field_name in allowed or field_name in KNOWN_IMMUTABLE_FIELDS:
+        if field_name in UPDATABLE_SETTINGS_KEYS or field_name in KNOWN_IMMUTABLE_FIELDS:
             continue
         unclassified.append(field_name)
     assert not unclassified, (
-        "以下 Settings 字段既不在 update_settings 白名单也不在 KNOWN_IMMUTABLE_FIELDS，"
+        "以下 Settings 字段既不在 UPDATABLE_SETTINGS_KEYS 也不在 KNOWN_IMMUTABLE_FIELDS，"
         f"提交后会被静默丢弃，请显式分类: {sorted(unclassified)}")

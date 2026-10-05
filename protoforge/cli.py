@@ -15,7 +15,12 @@ def _load_dotenv_to_environ():
     This ensures cli.py can read PROTOFORGE_ADMIN_PASSWORD via os.environ.get().
     """
     from pathlib import Path
-    env_file = Path(__file__).parent.parent / ".env"
+    # FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 .env），与 config 层同源
+    try:
+        from protoforge.core.paths import app_root as _app_root
+        env_file = _app_root() / ".env"
+    except Exception:
+        env_file = Path(__file__).parent.parent / ".env"
     if not env_file.exists():
         return
     try:
@@ -71,6 +76,26 @@ def main():
         "doctor", help="Environment self-check (ports, DB, deps, container hints)")
     doctor_parser.add_argument("--json", action="store_true", help="Machine-readable JSON output")
 
+    desktop_parser = subparsers.add_parser(
+        "desktop", help="Desktop mode: start server and auto-open the web UI (v1.6.0)")
+    desktop_parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
+    desktop_parser.add_argument("--port", type=int, default=18080, help="HTTP port (default: 18080)")
+    desktop_parser.add_argument("--native", action="store_true",
+                                help="Prefer native window (requires pywebview; falls back to browser)")
+    desktop_parser.add_argument("--no-tray", action="store_true", help="Disable system tray (if available)")
+    desktop_parser.add_argument("--no-update-check", action="store_true", help="Skip update check on start")
+    desktop_parser.add_argument("--log-level", default="info", help="Log level (debug/info/warning/error)")
+
+    svc_install = subparsers.add_parser(
+        "install-service", help="Install ProtoForge as a Windows service via NSSM (admin required)")
+    svc_install.add_argument("--port", type=int, default=18080, help="HTTP port for the service (default: 18080)")
+    svc_install.add_argument("--name", default="ProtoForge", help="Service name (default: ProtoForge)")
+    svc_install.add_argument("--python", default="", help="Python executable to run (default: current interpreter)")
+
+    svc_uninstall = subparsers.add_parser(
+        "uninstall-service", help="Stop and remove the ProtoForge Windows service (admin required)")
+    svc_uninstall.add_argument("--name", default="ProtoForge", help="Service name (default: ProtoForge)")
+
     subparsers.add_parser("init", help="Initialize data directory and default config")
 
     migrate_parser = subparsers.add_parser("migrate", help="Run database migrations")
@@ -110,6 +135,28 @@ def main():
     if args.command == "doctor":
         from protoforge.doctor import main as doctor_main
         sys.exit(doctor_main(json_output=bool(getattr(args, "json", False))))
+
+    if args.command == "desktop":
+        from protoforge.desktop import run_desktop
+        return run_desktop(
+            host=args.host,
+            port=args.port,
+            prefer_native=args.native,
+            use_tray=not args.no_tray,
+            check_updates=not args.no_update_check,
+            log_level=args.log_level,
+        )
+
+    if args.command == "install-service":
+        from protoforge.win_service import cmd_install_service
+        return cmd_install_service(
+            port=args.port, service_name=args.name,
+            python_exe=args.python or None,
+        )
+
+    if args.command == "uninstall-service":
+        from protoforge.win_service import cmd_uninstall_service
+        return cmd_uninstall_service(service_name=args.name)
 
     if args.command == "init":
         _init_command()

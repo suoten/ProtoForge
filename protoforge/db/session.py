@@ -23,7 +23,12 @@ def _safe_json_loads(value: str, default=None):
         logger.warning("Failed to parse JSON value: %s, using default", e)
         return default if default is not None else []
 
-_DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
+try:
+    # FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 data/），配置随目录走
+    from protoforge.core.paths import app_root as _app_root
+    _DEFAULT_DB_PATH = _app_root() / "data" / "protoforge.db"
+except Exception:
+    _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
 _BUSY_TIMEOUT_MS = 5000
 _MAX_QUERY_COUNT = 10000

@@ -94,19 +94,27 @@ def _in_container() -> bool:
 # ---------------------------------------------------------------------------
 
 def check_environment() -> list[CheckResult]:
+    from protoforge.core.paths import is_frozen
+
     results = [
         CheckResult("sys.platform", "ok", f"操作系统: {sys.platform} / Python {sys.version.split()[0]}"),
     ]
+    frozen = is_frozen()
     venv = sys.prefix != getattr(sys, "base_prefix", sys.prefix)
-    results.append(CheckResult(
-        "sys.venv", "ok" if venv or _in_container() else "warning",
-        "虚拟环境: " + ("已激活" if venv else "未使用虚拟环境（pip 安装位置可能与系统冲突）"),
-        fixes=[] if venv or _in_container() else ["python -m venv venv 并激活后重装依赖"],
-    ))
+    if frozen:
+        results.append(CheckResult("sys.venv", "ok", "桌面版（冻结包）：数据随 exe 目录走"))
+    else:
+        results.append(CheckResult(
+            "sys.venv", "ok" if venv else "warning",
+            "虚拟环境: " + ("已激活" if venv else "未使用虚拟环境（pip 安装位置可能与系统冲突）"),
+            fixes=[] if venv else ["python -m venv venv 并激活后重装依赖"],
+        ))
     return results
 
 
 def check_database(settings: Any) -> list[CheckResult]:
+    from protoforge.core.paths import is_frozen
+
     results = []
     db_path = getattr(settings, "db_path", "data/protoforge.db")
     db_file = Path(db_path.replace("sqlite:///", "").replace("sqlite://", "") or "data/protoforge.db")
@@ -129,7 +137,8 @@ def check_database(settings: Any) -> list[CheckResult]:
                 "Docker 场景确认已挂载数据卷（-v protoforge-data:/app/data）",
             ],
         ))
-    if not shutil.which("alembic"):
+    frozen = is_frozen()
+    if not shutil.which("alembic") and not frozen:
         results.append(CheckResult(
             "db.migrations", "warning",
             "alembic 不可用——数据库迁移命令（protoforge migrate）将失败",
@@ -178,7 +187,9 @@ def check_dependencies() -> list[CheckResult]:
 
 
 def check_web_dist() -> list[CheckResult]:
-    dist = Path(__file__).resolve().parent.parent / "web" / "dist"
+    from protoforge.core.paths import static_dir
+
+    dist = static_dir()
     if (dist / "index.html").exists():
         return [CheckResult("web.dist", "ok", f"前端静态资源存在: {dist}")]
     return [CheckResult(

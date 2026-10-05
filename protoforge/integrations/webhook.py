@@ -71,7 +71,13 @@ class WebhookConfig:
 
 
 class WebhookManager:
-    _PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
+    # FIXED(v1.6.0): 持久化目录走 app_root（冻结模式 = exe 旁 data/），
+    # 原包相对路径会写进只读的 _internal
+    try:
+        from protoforge.core.paths import app_root as _app_root
+        _PERSIST_DIR = os.path.join(str(_app_root()), "data")
+    except Exception:
+        _PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
     _PERSIST_FILE = None
 
     @classmethod
