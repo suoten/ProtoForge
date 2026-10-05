@@ -66,7 +66,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ProtoForge
-        run: pip install -e ".[all]"
+        # FIXED: pytest/pytest-asyncio 在 dev extra 中，仅装 all 会报
+        # "No module named pytest"（CI wire-golden-gate 失败根因）
+        run: pip install -e ".[all,dev]"
       - name: Wire-level golden tests (10 protocols) + settings chain consistency
         run: |
           python -m pytest             tests/test_wire_golden_modbus.py             tests/test_wire_golden_s7.py             tests/test_iec104_wire.py             tests/test_wire_golden_dlt645.py             tests/test_wire_golden_cjt188.py             tests/test_wire_golden_mc.py             tests/test_wire_golden_fins.py             tests/test_wire_golden_mqtt.py             tests/test_wire_golden_bacnet.py             tests/test_wire_golden_opcua.py             tests/test_settings_chain_consistency.py             tests/test_doctor.py             -v --tb=short --override-ini="asyncio_mode=auto" --override-ini="addopts="
