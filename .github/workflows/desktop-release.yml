@@ -40,7 +40,18 @@ jobs:
           npm run build
 
       - name: Build portable package
-        run: python scripts/build_desktop.py
+        shell: bash
+        run: |
+          python scripts/build_desktop.py 2>&1 | tee build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 14
 
       - name: Attach zip to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
