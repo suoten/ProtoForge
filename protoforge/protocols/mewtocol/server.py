@@ -4,17 +4,32 @@ Implements the MEWTOCOL-COM ASCII command set for Panasonic FP series PLCs
 (FP-X / FP0R / FP7 compatible mode), covering the register read/write scope
 requested in Issue #11:
 
-  - %RD  word-area read  (DT / WR / LD / FL)
-  - %WD  word-area write
-  - %RC  contact read    (X / Y / R / T / C / L)
-  - %WC  contact write
+  - RDD / WDD   data area read/write (D=DT / L=LD / F=FL)
+  - RCS / RCC   contact read, single point / word units (X / Y / R / T / C / L)
+  - WCS / WCC   contact write, single point / word units (Y / R / L)
 
-Frame format (ASCII, terminated by CR = 0x0D):
+Frame format (ASCII, terminated by CR = 0x0D), cross-checked against the
+reference implementations hiroeorz/mewtocol-go and OpenLogics/MewtocolNet:
 
-  request  : % <STN:2hex> # <CMD:2> <params> <BCC:2hex> CR
-  response : % <STN:2hex> $ <CMD:2> <data> <BCC:2hex> CR   (success)
-             % <STN:2hex> ! <CMD:2> <err:4>  <BCC:2hex> CR   (failure)
-  BCC      : XOR of the ASCII codes of every character between '%' and BCC.
+  request  : % <STN:2dec> # <CMD> <params> <BCC:2hex> CR
+  response : % <STN:2dec> $ <CMD:2> <data> <BCC:2hex> CR   (success, 2-char echo:
+             RCS/RCC→$RC, WCS/WCC→$WC, verified via mewtocol-go README vector)
+             % <STN:2dec> ! <err:2hex>    <BCC:2hex> CR   (failure, no echo)
+  STN      : 2-digit DECIMAL station number (01..99); "EE" = global broadcast
+             (broadcast requests are executed but NOT answered, like real PLCs)
+  BCC      : XOR of the ASCII codes of ALL characters from the leading '%' up to
+             (excluding) the BCC itself — i.e. the '%' is INCLUDED.
+
+Command details (v1.4.4, fixes ConvergeLoop-era deviations):
+  - RDDssssseeeee : single-char area code + 5-digit DECIMAL start/end address
+    (INCLUSIVE range, count = end - start + 1). The old implementation invented
+    two-char area codes ("RDDT") and a count field — real masters reject it.
+  - Word transfer order: each 16-bit word is 4 hex digits, LOW BYTE FIRST
+    (0x1234 -> "3412"), matching mewtocol-go's lower/upper swap in both
+    directions.
+  - RCSCnnnn / RCCCsssseeee : contact read in single-point (1-digit data "0/1")
+    or word-unit (4 hex digits per 16 contacts, bit i = contact word*16+i) mode.
+  - Error response: 2-digit code only, no command echo.
 
 Transport:
   - TCP (Mewtocol/TCP style, default port 2049) — FP-X / FP7 Ethernet module
@@ -22,9 +37,9 @@ Transport:
     TCP bridge port when pyserial is unavailable or the port cannot be opened,
     mirroring the Modbus RTU server behaviour.
 
-Word encoding: each 16-bit word is 4 hex chars. 32-bit values (int32/uint32/
-float32) occupy two consecutive registers with the LOW word at the lower
-address (Panasonic FP convention: DT101:DT100 = high:low for a real at DT100).
+Word encoding: 32-bit values (int32/uint32/float32) occupy two consecutive
+registers with the LOW word at the lower address (Panasonic FP convention:
+DT101:DT100 = high:low for a real at DT100).
 
 Not in scope (per the requester): monitor registration (%RM/%WM) and PLC
 status monitoring (%MS/%MG).
@@ -51,30 +66,54 @@ logger = logging.getLogger(__name__)
 
 CR = "\r"
 
-# MEWTOCOL-COM error responses use a 4-digit code. Masters decide retry/report
-# by the '!' marker; codes follow the manual's error classification.
-ERR_FORMAT = "2100"    # command format error (length / illegal characters)
-ERR_BCC = "2200"       # BCC check mismatch
-ERR_UNSUPPORTED = "4000"  # unsupported command
-ERR_ADDRESS = "4400"   # unknown area / address out of range
-ERR_NO_UNIT = "4100"   # station has no registered device
-ERR_PROCESS = "5000"   # internal processing error
+# MEWTOCOL-COM error responses carry a 2-digit code after '!' (no command echo).
+# Codes follow the manual's error classification (21=BCC, 22=format, 40=undefined
+# command, 41=unit/station, 50=processing); masters surface the code as-is.
+ERR_BCC = "21"        # BCC check mismatch
+ERR_FORMAT = "22"     # command format error (length / illegal characters)
+ERR_UNSUPPORTED = "40"  # undefined command
+ERR_NO_UNIT = "41"    # station has no registered device
+ERR_ADDRESS = "43"    # unknown area / address out of range
+ERR_PROCESS = "50"    # internal processing error
 
+# Protocol-visible data areas (single-char codes): D=DT L=LD F=FL
+WORD_AREA_MAP = {"D": "DT", "L": "LD", "F": "FL"}
+BIT_AREAS = ("X", "Y", "R", "T", "C", "L")
+WRITABLE_BIT_AREAS = ("Y", "R", "L")  # WCS/WCC 仅允许输出型接点区（与手册/参考实现一致）
+
+# Internal memory areas (behavior layer); the protocol maps D/L/F onto DT/LD/FL.
+# "WR" is kept for compatibility with existing point addresses (word relay).
 WORD_AREAS = ("DT", "WR", "LD", "FL")
-BIT_AREAS = ("X", "Y", "R", "T", "C", "L", "E")
 
-MAX_WORD_COUNT = 512
-MAX_BIT_COUNT = 1024
+# Frame budget: MEWTOCOL max frame length is 118 chars incl. CR.
+# "%01$RD" (6) + BCC (2) = 8 overhead -> max 27 words (108 data chars) per read.
+MAX_WORD_COUNT = 27
+MAX_BIT_WORD_COUNT = 27
 
 _POINT_ADDR_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
 
 
 def bcc(chars: str) -> str:
-    """XOR check code: XOR of ASCII codes of all input characters, output as 2 hex chars."""
+    """XOR check code: XOR of ASCII codes of all input characters, output as 2 hex chars.
+
+    NOTE: callers MUST include the leading '%' — the MEWTOCOL BCC covers the
+    entire frame from '%' up to (excluding) the BCC itself.
+    """
     acc = 0
     for ch in chars:
         acc ^= ord(ch)
     return f"{acc:02X}"
+
+
+def word_to_hex(word: int) -> str:
+    """16-bit word -> 4 hex chars, LOW BYTE FIRST (0x1234 -> "3412")."""
+    w = int(word) & 0xFFFF
+    return f"{w & 0xFF:02X}{(w >> 8) & 0xFF:02X}"
+
+
+def hex_to_word(text: str) -> int:
+    """4 hex chars (low byte first) -> 16-bit int."""
+    return int(text[2:4] + text[0:2], 16)
 
 
 def _span_for(data_type: Any) -> int:
@@ -255,6 +294,7 @@ class MewtocolServer(ProtocolServer):
         self._behaviors: dict[str, MewtocolDeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._station_map: dict[int, str] = {}  # station number -> device_id
+        self._global_station = -1  # "EE" 全局广播路由到默认设备（执行但不回应）
         self._host = "0.0.0.0"
         self._port = 2049
         self._server_task: asyncio.Task | None = None
@@ -449,133 +489,198 @@ class MewtocolServer(ProtocolServer):
         """Process one MEWTOCOL request frame (without CR); return response incl. CR.
 
         Returns None for frames that cannot even be attributed to a station
-        (nothing to answer to).
+        (nothing to answer to), and for global ("EE") broadcasts — real PLCs
+        execute those silently without responding.
         """
         text = raw.strip()
         if not text.startswith("%") or len(text) < 9:
             self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad frame: {raw[:32]!r}")
             return None
 
-        body = text[1:]  # STN..BCC
-        if len(body) < 8:
-            self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"frame too short: {text[:32]!r}")
-            return None
-        given_bcc = body[-2:].upper()
-        core = body[:-2]
+        # BCC covers ALL chars from '%' up to (excluding) the BCC itself
+        given_bcc = text[-2:].upper()
+        core = text[:-2]
         if bcc(core) != given_bcc:
             self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, "BCC mismatch")
-            stn = core[:2]
-            return self._build_response(stn, core[2], core[3:5] if len(core) >= 5 else "??", error=ERR_BCC)
+            stn = core[1:3]
+            return self._build_response(stn, error=ERR_BCC)
 
-        stn, marker, cmd, params = core[:2], core[2], core[3:5], core[5:]
+        stn, marker, cmdtext = core[1:3], core[3:4], core[4:]
+        if marker != "#":
+            self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad request marker {marker!r}")
+            return self._build_response(stn, error=ERR_FORMAT)
+
+        # station number: 2-digit DECIMAL (01..99); "EE" = global broadcast
         try:
-            station = int(stn, 16)
+            if stn.upper() == "EE":
+                station = self._global_station
+            else:
+                station = int(stn, 10)
         except ValueError:
             self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad station: {stn!r}")
             return None
 
         device_id = self._station_map.get(station) or self._default_device_id
         behavior = self._behaviors.get(device_id or "")
-        if marker != "#":
-            self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, f"bad request marker {marker!r}")
-            return self._build_response(stn, marker, cmd, error=ERR_FORMAT)
-        if behavior is None:
-            return self._build_response(stn, "$", cmd, error=ERR_NO_UNIT)
 
-        if cmd == "RD":
-            return self._handle_rd(stn, behavior, params)
-        if cmd == "WD":
-            return self._handle_wd(stn, behavior, params)
-        if cmd == "RC":
-            return self._handle_rc(stn, behavior, params)
-        if cmd == "WC":
-            return self._handle_wc(stn, behavior, params)
-        # Monitor registration / status monitoring are out of scope (Issue #11)
-        self._log_debug("recv", "frame", f"unsupported MEWTOCOL command {cmd!r}",
-                        device_id=device_id, detail={"params": params[:40]})
-        return self._build_response(stn, "$", cmd, error=ERR_UNSUPPORTED)
+        # commands are 2 chars (RD/WD) or 3 chars (RCS/RCC/WCS/WCC)
+        cmd3 = cmdtext[:3].upper()
+        cmd2 = cmdtext[:2].upper()
+        if cmd3 in ("RCS", "RCC", "WCS", "WCC"):
+            cmd, params = cmd3, cmdtext[3:]
+        else:
+            cmd, params = cmd2, cmdtext[2:]
+
+        if cmd not in ("RD", "WD", "RCS", "RCC", "WCS", "WCC"):
+            self._log_debug("recv", "frame", f"unsupported MEWTOCOL command {cmd!r}",
+                            device_id=device_id, detail={"params": params[:40]})
+            return self._build_response(stn, error=ERR_UNSUPPORTED)
+        if behavior is None:
+            return self._build_response(stn, error=ERR_NO_UNIT)
+
+        broadcast = stn.upper() == "EE"
+        try:
+            if cmd == "RD":
+                resp = self._handle_rd(behavior, params)
+            elif cmd == "WD":
+                resp = self._handle_wd(behavior, params)
+            elif cmd == "RCS":
+                resp = self._handle_rcs(behavior, params)
+            elif cmd == "RCC":
+                resp = self._handle_rcc(behavior, params)
+            elif cmd == "WCS":
+                resp = self._handle_wcs(behavior, params)
+            else:  # WCC
+                resp = self._handle_wcc(behavior, params)
+        except Exception as e:  # noqa: BLE001 — 协议层兜底：任何处理异常都不得断连
+            logger.warning("MEWTOCOL handler error for %r: %s", cmdtext[:32], e)
+            resp = ERR_PROCESS
+        if broadcast:
+            return None  # 全局广播：执行但不回应（与真实 PLC 一致）
+        if isinstance(resp, str) and resp in (ERR_FORMAT, ERR_ADDRESS, ERR_PROCESS):
+            return self._build_response(stn, error=resp)
+        # 响应只回显命令前两个字符：RCS/RCC→$RC、WCS/WCC→$WC（真实 PLC 行为，
+        # mewtocol-go README 向量 %01#RCSX00001D → %01$RC021 证实）
+        return self._build_response(stn, cmd=cmd[:2], data=resp)
 
     # -- per-command handlers ------------------------------------------
+    # Handlers return: data string (success) / ERR_* string (protocol error)
+    # / None (no response, e.g. malformed broadcast).
 
-    def _parse_word_params(self, params: str) -> tuple[str, int, int] | None:
-        if len(params) < 12:
-            return None
-        area = params[:2].upper()
-        if area not in WORD_AREAS:
-            return None
-        try:
-            addr = int(params[2:7])
-            count = int(params[7:12])
-        except ValueError:
-            return None
-        return area, addr, count
-
-    def _parse_bit_params(self, params: str) -> tuple[str, int, int] | None:
-        if len(params) < 11:
+    def _parse_range_params(self, params: str, width: int = 5) -> tuple[str, int, int, int] | None:
+        """Parse <area:1><start:N><end:N>; return (area_code, start, end, count)."""
+        if len(params) < 1 + width * 2:
             return None
         area = params[0].upper()
+        try:
+            start = int(params[1:1 + width], 10)
+            end = int(params[1 + width:1 + width * 2], 10)
+        except ValueError:
+            return None
+        if end < start:
+            return None
+        return area, start, end, end - start + 1
+
+    def _handle_rd(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        parsed = self._parse_range_params(params)
+        if not parsed or parsed[0] not in WORD_AREA_MAP:
+            return ERR_FORMAT
+        area_code, start, _end, count = parsed
+        if count > MAX_WORD_COUNT:
+            return ERR_FORMAT
+        words = behavior.read_words(WORD_AREA_MAP[area_code], start, count)
+        data = "".join(word_to_hex(w) for w in words)
+        self._log_debug("recv", "frame", f"RDD {area_code}{start}..{_end} x{count}",
+                        detail={"words": words[:8]})
+        return data
+
+    def _handle_wd(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        parsed = self._parse_range_params(params)
+        if not parsed or parsed[0] not in WORD_AREA_MAP:
+            return ERR_FORMAT
+        area_code, start, _end, count = parsed
+        if count > MAX_WORD_COUNT:
+            return ERR_FORMAT
+        hex_data = params[11:]
+        if len(hex_data) != count * 4 or any(c not in "0123456789ABCDEFabcdef" for c in hex_data):
+            return ERR_FORMAT
+        words = [hex_to_word(hex_data[i * 4:(i + 1) * 4]) for i in range(count)]
+        affected = behavior.write_words(WORD_AREA_MAP[area_code], start, words)
+        device_id = next((d for d, b in self._behaviors.items() if b is behavior), "") or ""
+        self._propagate_writes(device_id, affected)
+        self._log_debug("recv", "frame", f"WDD {area_code}{start} x{count}",
+                        detail={"affected": affected})
+        return ""  # $WD 无数据
+
+    def _handle_rcs(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        if len(params) < 5:
+            return ERR_FORMAT
+        area = params[0].upper()
         if area not in BIT_AREAS:
-            return None
+            return ERR_FORMAT
         try:
-            addr = int(params[1:6])
-            count = int(params[6:11])
+            contact_no = int(params[1:5], 10)
         except ValueError:
-            return None
-        return area, addr, count
+            return ERR_FORMAT
+        bits = behavior.read_bits(area, contact_no, 1)
+        self._log_debug("recv", "frame", f"RCS {area}{contact_no} -> {int(bits[0])}")
+        return "1" if bits[0] else "0"
 
-    def _handle_rd(self, stn: str, behavior: MewtocolDeviceBehavior, params: str) -> str:
-        parsed = self._parse_word_params(params)
-        if not parsed or parsed[2] < 1 or parsed[2] > MAX_WORD_COUNT:
-            return self._build_response(stn, "$", "RD", error=ERR_FORMAT)
-        area, addr, count = parsed
-        words = behavior.read_words(area, addr, count)
-        data = "".join(f"{w:04X}" for w in words)
-        self._log_debug("recv", "frame", f"%RD {area}{addr} x{count}", detail={"words": words[:8]})
-        return self._build_response(stn, "$", "RD", data=data)
+    def _handle_rcc(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        parsed = self._parse_range_params(params, width=4)
+        if not parsed or parsed[0] not in BIT_AREAS:
+            return ERR_FORMAT
+        area, start_word, _end_word, count = parsed
+        if count > MAX_BIT_WORD_COUNT:
+            return ERR_FORMAT
+        data_parts = []
+        for w in range(count):
+            bits = behavior.read_bits(area, (start_word + w) * 16, 16)
+            word_val = sum(int(bool(b)) << i for i, b in enumerate(bits))
+            data_parts.append(word_to_hex(word_val))
+        self._log_debug("recv", "frame", f"RCC {area} words {start_word}..{_end_word}")
+        return "".join(data_parts)
 
-    def _handle_wd(self, stn: str, behavior: MewtocolDeviceBehavior, params: str) -> str:
-        parsed = self._parse_word_params(params)
-        if not parsed or parsed[2] < 1 or parsed[2] > MAX_WORD_COUNT:
-            return self._build_response(stn, "$", "WD", error=ERR_FORMAT)
-        area, addr, count = parsed
-        hex_data = params[12:]
-        if len(hex_data) != count * 4:
-            return self._build_response(stn, "$", "WD", error=ERR_FORMAT)
+    def _handle_wcs(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        if len(params) < 6:
+            return ERR_FORMAT
+        area = params[0].upper()
+        if area not in WRITABLE_BIT_AREAS:
+            return ERR_ADDRESS
         try:
-            words = [int(hex_data[i * 4:(i + 1) * 4], 16) for i in range(count)]
+            contact_no = int(params[1:5], 10)
+            state = int(params[5], 10)
         except ValueError:
-            return self._build_response(stn, "$", "WD", error=ERR_FORMAT)
-        affected = behavior.write_words(area, addr, words)
+            return ERR_FORMAT
+        if state not in (0, 1):
+            return ERR_FORMAT
+        affected = behavior.write_bits(area, contact_no, [bool(state)])
         device_id = next((d for d, b in self._behaviors.items() if b is behavior), "") or ""
         self._propagate_writes(device_id, affected)
-        self._log_debug("recv", "frame", f"%WD {area}{addr} x{count}",
+        self._log_debug("recv", "frame", f"WCS {area}{contact_no}={state}",
                         detail={"affected": affected})
-        return self._build_response(stn, "$", "WD")
+        return ""  # $WCS 无数据
 
-    def _handle_rc(self, stn: str, behavior: MewtocolDeviceBehavior, params: str) -> str:
-        parsed = self._parse_bit_params(params)
-        if not parsed or parsed[2] < 1 or parsed[2] > MAX_BIT_COUNT:
-            return self._build_response(stn, "$", "RC", error=ERR_FORMAT)
-        area, addr, count = parsed
-        bits = behavior.read_bits(area, addr, count)
-        data = "".join("1" if b else "0" for b in bits)
-        self._log_debug("recv", "frame", f"%RC {area}{addr} x{count}", detail={"bits": bits[:16]})
-        return self._build_response(stn, "$", "RC", data=data)
-
-    def _handle_wc(self, stn: str, behavior: MewtocolDeviceBehavior, params: str) -> str:
-        parsed = self._parse_bit_params(params)
-        if not parsed or parsed[2] < 1 or parsed[2] > MAX_BIT_COUNT:
-            return self._build_response(stn, "$", "WC", error=ERR_FORMAT)
-        area, addr, count = parsed
-        bits_text = params[11:]
-        if len(bits_text) != count or any(c not in "01" for c in bits_text):
-            return self._build_response(stn, "$", "WC", error=ERR_FORMAT)
-        affected = behavior.write_bits(area, addr, [c == "1" for c in bits_text])
+    def _handle_wcc(self, behavior: MewtocolDeviceBehavior, params: str) -> str:
+        parsed = self._parse_range_params(params, width=4)
+        if not parsed or parsed[0] not in WRITABLE_BIT_AREAS:
+            return ERR_ADDRESS if parsed and parsed[0] not in BIT_AREAS else ERR_FORMAT
+        area, start_word, _end_word, count = parsed
+        if count > MAX_BIT_WORD_COUNT:
+            return ERR_FORMAT
+        hex_data = params[9:]
+        if len(hex_data) != count * 4 or any(c not in "0123456789ABCDEFabcdef" for c in hex_data):
+            return ERR_FORMAT
+        affected = []
+        for i in range(count):
+            word_val = hex_to_word(hex_data[i * 4:(i + 1) * 4])
+            bits = [bool((word_val >> k) & 1) for k in range(16)]
+            affected.extend(behavior.write_bits(area, (start_word + i) * 16, bits))
         device_id = next((d for d, b in self._behaviors.items() if b is behavior), "") or ""
         self._propagate_writes(device_id, affected)
-        self._log_debug("recv", "frame", f"%WC {area}{addr} x{count}",
-                        detail={"affected": affected})
-        return self._build_response(stn, "$", "WC")
+        self._log_debug("recv", "frame", f"WCC {area} words {start_word}..{_end_word}",
+                        detail={"affected": affected[:16]})
+        return ""  # $WCC 无数据
 
     def _propagate_writes(self, device_id: str, affected: list[str]) -> None:
         """Propagate external protocol writes to the engine DeviceInstance.
@@ -606,11 +711,19 @@ class MewtocolServer(ProtocolServer):
 
     # -- response builder -----------------------------------------------
 
-    def _build_response(self, stn: str, marker: str, cmd: str,
-                        data: str = "", error: str | None = None) -> str:
-        resp_marker = "!" if error else "$"
-        payload = f"{stn}{resp_marker}{cmd}{error if error else data}"
-        return f"%{payload}{bcc(payload)}{CR}"
+    def _build_response(self, stn: str, cmd: str = "", data: str = "",
+                        error: str | None = None) -> str:
+        """Build a response frame (incl. BCC + CR).
+
+        Success:  % <STN> $ <CMD> <data> <BCC> CR
+        Failure:  % <STN> ! <err:2> <BCC> CR   (no command echo, per manual)
+        BCC covers ALL chars from '%' up to (excluding) the BCC itself.
+        """
+        if error:
+            payload = f"%{stn}!{error}"
+        else:
+            payload = f"%{stn}${cmd}{data}"
+        return f"{payload}{bcc(payload)}{CR}"
 
     # ------------------------------------------------------------------
     # device registry
@@ -619,8 +732,8 @@ class MewtocolServer(ProtocolServer):
         device_id = device_config.id
         proto_config = device_config.protocol_config or {}
         station = proto_config.get("station_number", 1)
-        if not isinstance(station, int) or not 0 <= station <= 0xFF:
-            raise ValueError(f"MEWTOCOL station_number must be an integer 0-255 (got {station!r})")
+        if not isinstance(station, int) or not 1 <= station <= 99:
+            raise ValueError(f"MEWTOCOL station_number must be an integer 1-99 (got {station!r})")
         async with self._behaviors_lock:
             # FIXED-P1: 站号冲突校验必须在任何注册动作之前，避免留下半注册状态
             existing = self._station_map.get(station)
