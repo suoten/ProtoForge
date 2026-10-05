@@ -15,6 +15,10 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      # FIXED: runner stdout 默认 cp1252，中文 print 会 UnicodeEncodeError
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: '1'
     steps:
       - uses: actions/checkout@v5
 

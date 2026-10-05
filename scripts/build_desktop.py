@@ -28,6 +28,16 @@ import sys
 import zipfile
 from pathlib import Path
 
+# FIXED(v1.6.0): 中文 Windows / GitHub Windows runner 的 stdout 可能是
+# cp1252/GBK，任何中文 print 直接 UnicodeEncodeError（CI 实测崩溃）。
+# 强制 UTF-8 输出，异常编码下退化为 replace 不再致命。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream.encoding and _stream.encoding.lower() not in ("utf-8", "utf8"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # 脚本可直接运行（scripts/ 不在包路径上）
 DIST = ROOT / "dist"
