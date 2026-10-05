@@ -587,7 +587,7 @@ def _build_driver_config(protocol: str, protocol_config: dict[str, Any], protofo
             base["tls_enabled"] = True
             base["tls_insecure"] = protocol_config.get("tls_insecure", False)
     elif normalized_protocol == "http":
-        http_port = port or 8080
+        http_port = port or 18080
         # FIX: EdgeLite HTTP 驱动期望 config.url 或 config.endpoint，
         # 原代码仅发送 push_url，导致 EdgeLite 驱动启动失败 "Missing required field: url"
         _http_url = f"http://{host}:{http_port}/webhook/data"
@@ -1507,7 +1507,7 @@ _PROTOCOL_DISPLAY = {
 }
 
 _PROTOCOL_DEFAULT_PORTS = {
-    "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 8080,
+    "modbus_tcp": 5020, "opcua": 4840, "mqtt": 1883, "http": 18080,
     "s7": 102, "mc": 5000, "fins": 9600, "ab": 44818, "fanuc": 8193,
     "mtconnect": 7878, "toledo": 1701, "opcda": 51340, "onvif": 80,
     "dlt645": 0, "iec104": 2404, "kuka": 54600, "abb_robot": 80,
