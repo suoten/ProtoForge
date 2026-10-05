@@ -118,10 +118,16 @@ def do_build() -> int:
         _force_clean_dir(APP_DIR)
     # FIXED(v1.6.0): Windows 上杀软实时扫描/句柄释放竞态会让 COLLECT 复制
     # 运行时 DLL（如 MSVCP140.dll）偶发 PermissionError，重试即可通过
+    # FIXED(v1.6.0): PyInstaller 输出必须透传（此前 capture_output 吞掉了全部
+    # 报错，CI 上只能看到退出码无法排障）；失败时尾部日志由 workflow 打成
+    # GitHub annotation（匿名可见）
     last_code = 1
     for attempt in range(1, 4):
         print(f"+ PyInstaller 构建（第 {attempt}/3 次）")
-        last_code = run([pyinstaller, "protoforge.spec", "--noconfirm", "--distpath", str(DIST)])
+        last_code = subprocess.run(
+            [str(pyinstaller), "protoforge.spec", "--noconfirm", "--distpath", str(DIST)],
+            cwd=str(ROOT),
+        ).returncode
         if last_code == 0 and (APP_DIR / "ProtoForge.exe").exists():
             return 0
         print(f"! 构建未成功（exit={last_code}），2 秒后重试…")

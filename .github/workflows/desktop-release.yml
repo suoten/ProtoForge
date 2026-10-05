@@ -45,6 +45,14 @@ jobs:
           python scripts/build_desktop.py 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
+      - name: Expose error tail as annotation (anonymous-visible)
+        if: failure()
+        shell: bash
+        run: |
+          tail -60 build.log | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
