@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.4.3 — 2026-09-30
+
+### 🐛 Bug Fix（v1.4.2 用户反馈专项）
+
+**修复 — Windows 升级后 OPC-UA 数据不再变化（正弦波/随机数全部冻结）（用户反馈）：**
+
+- 根因：`pyproject.toml` 对 OPC-UA 依赖 asyncua 未设版本上限，用户升级 ProtoForge 时 pip 重新解析装上了 **asyncua 2.0.x**；asyncua 2.0 将 `DataValue` 的 StatusCode 字段由 `StatusCode_` 改名为 `StatusCode`（跟随 OPC UA 结构体 CamelCase 命名），服务端把生成值写入节点的代码在 2.0 下构造 DataValue 即抛 `TypeError: unexpected keyword argument 'StatusCode_'`——而该错误只记 **debug 级日志**，于是所有 OPC-UA 节点值静默停止更新，订阅客户端再也收不到数据变化
+- 修复：
+  - `opcua/server.py` 新增 `_make_datavalue()` 双版本兼容层（自动探测 1.x/2.x 的字段名并缓存，Variant 统一关键字传参），1.1.8 与 2.0.1 双环境真实服务端 + 客户端读值验证通过
+  - 同步错误从静默 debug 升级为"首次 warning、同类降级"（`_report_sync_error`），今后此类故障开日志即可见，不再无感
+  - `pyproject.toml` asyncua 上限封到 `<3.0`（2.x 兼容已验证，3.x 出现后需回归再放开）
+- 回归测试 `tests/test_opcua_datavalue_compat.py`（2 例，双环境执行）：DataValue 构造兼容性、端到端节点值变化
+
 ## v1.4.2 — 2026-09-30
 
 ### 🐛 Bug Fix（v1.4.1 用户反馈专项）
