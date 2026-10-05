@@ -83,13 +83,35 @@ def _force_clean_dir(path: Path) -> None:
         raise RuntimeError(f"无法清理 {path}——请手动删除后重试（可能有进程占用）")
 
 
+def _find_pyinstaller() -> Path | None:
+    """定位 pyinstaller 可执行文件。
+
+    FIXED(v1.6.0): GitHub Actions hostedtoolcache 的 Python 不把 Scripts/
+    加进 PATH，shutil.which 找不到 pip 装的 pyinstaller（本地 venv 布局
+    不同所以从未暴露）。按 which > Scripts/ > 同目录 顺序探测。
+    """
+    which = shutil.which("pyinstaller")
+    if which:
+        return Path(which)
+    exe_name = "pyinstaller.exe" if sys.platform == "win32" else "pyinstaller"
+    py_dir = Path(sys.executable).parent
+    candidates = [
+        py_dir / "Scripts" / exe_name,          # venv / hostedtoolcache 标准布局
+        py_dir.parent / "Scripts" / exe_name,   # hostedtoolcache 变体
+        py_dir / exe_name,
+    ]
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
 def do_build() -> int:
-    pyinstaller = Path(sys.executable).parent / ("pyinstaller.exe" if sys.platform == "win32" else "pyinstaller")
-    if not pyinstaller.exists():
-        pyinstaller = Path(shutil.which("pyinstaller") or "")
-        if not pyinstaller.exists():
-            print("! pyinstaller 不可用：pip install pyinstaller pystray pillow")
-            return 1
+    pyinstaller = _find_pyinstaller()
+    if not pyinstaller:
+        print("! pyinstaller 不可用：pip install pyinstaller pystray pillow")
+        print(f"  (python: {sys.executable})")
+        return 1
     # 清理旧产物，避免 COLLECT 残留旧文件混淆体积
     if APP_DIR.exists():
         print(f"+ 清理旧产物 {APP_DIR}")
