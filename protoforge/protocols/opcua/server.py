@@ -184,6 +184,45 @@ class OpcUaDeviceBehavior(StandardDeviceBehavior):  # FIXED: 改继承StandardDe
         return self._values.get(point_name, 0)
 
 
+def _make_datavalue(value, variant_type, status_code_int: int, source_ts):
+    """构造 DataValue，兼容 asyncua 1.x 与 2.0+。
+
+    FIXED(v1.4.3): asyncua 2.0 将 DataValue 的 StatusCode 字段由 ``StatusCode_``
+    改名为 ``StatusCode``（跟随 OPC UA 结构体 CamelCase 命名）。旧代码在 2.0 下
+    构造即抛 TypeError，且被调用方的 debug 级日志吞掉，导致所有节点值静默停止
+    更新（用户反馈"更新到最新版后正弦波/随机数不再变化"）。
+    成功用法的关键字名会被缓存，避免每 tick 异常尝试；Variant 统一用关键字
+    传参（两版字段顺序有差异风险）。
+    """
+    global _DV_STATUSCODE_KW
+    from asyncua import ua as asyncua_ua  # 局部导入：与文件其余用法一致，避免模块加载时强依赖
+    variant = asyncua_ua.Variant(value, VariantType=variant_type)
+    status_code = asyncua_ua.StatusCode(asyncua_ua.UInt32(status_code_int))
+    if _DV_STATUSCODE_KW:
+        return asyncua_ua.DataValue(variant, SourceTimestamp=source_ts, **{_DV_STATUSCODE_KW: status_code})
+    try:
+        dv = asyncua_ua.DataValue(variant, SourceTimestamp=source_ts, StatusCode_=status_code)
+        _DV_STATUSCODE_KW = "StatusCode_"  # asyncua 1.x
+        return dv
+    except TypeError:
+        dv = asyncua_ua.DataValue(variant, SourceTimestamp=source_ts, StatusCode=status_code)
+        _DV_STATUSCODE_KW = "StatusCode"  # asyncua 2.0+
+        return dv
+
+
+_DV_STATUSCODE_KW: str | None = None
+_SYNC_ERROR_REPORTED: set[str] = set()
+
+
+def _report_sync_error(key: str, message: str) -> None:
+    """同步错误首次报 warning、后续降为 debug，既不静默也不刷屏。"""
+    if key in _SYNC_ERROR_REPORTED:
+        logger.debug("%s (repeated)", message)
+    else:
+        _SYNC_ERROR_REPORTED.add(key)
+        logger.warning("%s (后续同类错误降为 debug 日志)", message)
+
+
 class OpcUaServer(ProtocolServer):
     protocol_name = "opcua"
     protocol_display_name = "OPC-UA"
@@ -508,7 +547,7 @@ class OpcUaServer(ProtocolServer):
                         "string": asyncua_ua.VariantType.String,
                     }
                     variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
-                    await node.set_value(asyncua_ua.Variant(value, variant_type))
+                    await node.set_value(asyncua_ua.Variant(value, VariantType=variant_type))
                 except Exception as e:
                     logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
                     return False
@@ -558,14 +597,11 @@ class OpcUaServer(ProtocolServer):
                             # FIX: 使用 set_value 而非 write_value，确保触发 OPC UA 订阅通知
                             # asyncua 的 write_value 不会触发 MonitoredItem 通知，
                             # 导致 Kepware 等订阅客户端收不到数据变更
-                            dv = asyncua_ua.DataValue(
-                                asyncua_ua.Variant(value, variant_type),
-                                StatusCode_=asyncua_ua.StatusCode(qcode_int),
-                                SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
-                            )
+                            dv = _make_datavalue(value, variant_type, qcode_int, datetime.datetime.now(datetime.timezone.utc))
                             await node.set_value(dv)
                         except Exception as e:
-                            logger.debug("OPC-UA sync value error for %s.%s: %s", device_id, point.name, e)
+                            _report_sync_error(f"sync-loop:{device_id}.{point.name}",
+                                               f"OPC-UA sync value error for {device_id}.{point.name}: {e}")
             except Exception as e:
                 logger.warning("OPC-UA sync loop error: %s", e)
             await asyncio.sleep(self._sync_interval)
@@ -622,14 +658,11 @@ class OpcUaServer(ProtocolServer):
                 }
                 variant_type = type_map.get(data_type, asyncua_ua.VariantType.Double)
                 qcode_int = self._point_qualities.get(point_node_key, int(QualityCode.GOOD))
-                dv = asyncua_ua.DataValue(
-                    asyncua_ua.Variant(value, variant_type),
-                    StatusCode_=asyncua_ua.StatusCode(qcode_int),
-                    SourceTimestamp=datetime.datetime.now(datetime.timezone.utc),
-                )
+                dv = _make_datavalue(value, variant_type, qcode_int, datetime.datetime.now(datetime.timezone.utc))
                 await node.set_value(dv)
             except Exception as e:
-                logger.debug("OPC-UA sync_point_value error for %s.%s: %s", device_id, point_name, e)
+                _report_sync_error(f"sync-point:{device_id}.{point_name}",
+                                   f"OPC-UA sync_point_value error for {device_id}.{point_name}: {e}")
 
     def get_config_schema(self) -> dict[str, Any]:
         return {
@@ -735,7 +768,7 @@ class OpcUaServer(ProtocolServer):
                     try:
                         if variant_type:
                             node = await device_folder.add_variable(
-                                ua_node_id, ua_bname, ua.Variant(value, variant_type)
+                                ua_node_id, ua_bname, ua.Variant(value, VariantType=variant_type)
                             )
                         else:
                             node = await device_folder.add_variable(
@@ -746,7 +779,7 @@ class OpcUaServer(ProtocolServer):
                         logger.warning("OPC-UA add_variable failed for %s.%s (id=%s): %s, auto-assigning NodeId",
                                        config.id, point.name, parsed_id, create_err)
                         node = await device_folder.add_variable(
-                            device_idx, point.name, ua.Variant(value, variant_type)
+                            device_idx, point.name, ua.Variant(value, VariantType=variant_type)
                         )
                 else:
                     node_id_str = point.address if point.address else point.name
