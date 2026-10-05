@@ -18,7 +18,7 @@
 
 > ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
 >
-> 🔥 **V1.3.0 工业标杆版** · 133 设备模板 · 28 种工业协议 · 设备/场景克隆 · 北向平台预设 · DAG 规则链编排 · 测试计划+合规检测 · EdgeLite 生态对接
+> 🔥 **V1.5.0 质量护城河** · 28 种工业协议 · 133 设备模板 · wire 级黄金用例门禁 · `protoforge doctor` 自检 · 测试计划+合规检测 · Windows 服务化 · EdgeLite 生态对接
 
 ![仪表盘](docs/images/1.png)
 
@@ -158,6 +158,8 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 ## ✨ 核心特性
 
 - **28 种工业协议** — Modbus TCP/RTU、OPC-UA（Server/Client）、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP
+- **协议黄金用例门禁** — 10 个核心协议 43 组字节级黄金帧回归（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **`protoforge doctor` 一键自检** — 端口冲突、特权端口、依赖完整、数据库可写、容器网络拓扑逐项体检，部署类问题发 issue 前先自诊（支持 `--json`）
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）
 - **133 设备模板** — PLC、传感器、CNC、摄像头、HVAC、伺服驱动器、保护继电器、IED、环境传感器、微电网、智能电表、水/气/热表，选模板→起名字→一键创建
 - **实时调试日志** — WebSocket 实时推送协议交互报文，按协议/方向/关键词筛选，点击查看详情，快速定位开发问题
@@ -235,7 +237,16 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 **日常启动**：双击项目文件夹里的 `quickstart.bat` 即可（自动检查环境 → 启动服务 → 提示访问地址）。窗口保持开着服务就在运行，关闭窗口或按 `Ctrl+C` 即停止。
 
-**开机自启**：如果希望电脑开机登录后 ProtoForge 自动在后台运行（不弹黑框），双击 `scripts\install_autostart.bat` 安装即可：
+**方式一（推荐，v1.5.0）：安装为 Windows 系统服务**——开机自启、崩溃自动拉起、日志自动轮转，需要管理员权限与 [NSSM](https://nssm.cc/download)（放到 `tools\nssm.exe` 即可）：
+
+```text
+scripts\install_service.bat     ← 管理员终端运行，一键安装并启动服务
+scripts\uninstall_service.bat   ← 停止并卸载服务
+```
+
+安装后访问 `http://localhost:18080`，日志在 `logs\service-out.log`。详见 [DEPLOYMENT.md](DEPLOYMENT.md) 的「Windows 服务化」章节。
+
+**方式二（轻量）：启动文件夹自启**——不需要管理员权限，适合个人电脑：
 
 ```text
 scripts\install_autostart.bat   ← 双击，一键安装开机自启
@@ -852,6 +863,9 @@ docker compose -f docker-compose.joint.yml --env-file .env.joint up -d
 
 #### 🛠 故障排查 FAQ
 
+**Q: 启动报错 / 连不上协议端口，先做什么？**
+A: 先跑自检命令 `protoforge doctor`（或 `python -m protoforge doctor`）——它会逐项检查端口占用、特权端口、依赖完整性、数据目录可写、容器网络拓扑，并给出修复建议。报 issue 时附上 `protoforge doctor --json` 的输出能大幅加快定位。
+
 **Q: 启动时报端口占用？**
 A: 检查本机是否已有其他服务占用上述端口。Windows 用 `netstat -ano | findstr :8000`，Linux 用 `lsof -i:8000`。可在 `.env.joint` 中修改端口映射。
 
@@ -1148,6 +1162,7 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 | `protoforge init`    | 初始化数据目录和默认配置（创建 `data/` 目录，从 `.env.example` 复制 `.env`） |
 | `protoforge migrate` | 运行数据库迁移（`--revision head`）                             |
 | `protoforge test run` | 执行测试计划（CI/CD 集成，支持 `--plan-id` 指定计划）                    |
+| `protoforge doctor`  | 环境自检：端口冲突/特权端口/依赖完整/数据库可写/容器拓扑逐项体检（`--json` 供 issue 附带） |
 | `protoforge version` | 查看版本号                                                  |
 
 ***
