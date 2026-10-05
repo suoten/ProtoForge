@@ -51,7 +51,7 @@ services:
       - "5060:5060/udp"
       - "47808:47808/udp"
       - "102:102"
-      - "8080:8080"
+      - "8080:8080"      # HTTP REST（容器内已通过 PROTOFORGE_HTTP_PORT 固定为 8080）
       - "5000:5000"
       - "9600:9600"
       - "44818:44818"
@@ -70,6 +70,7 @@ services:
       PROTOFORGE_JWT_SECRET: ${PROTOFORGE_JWT_SECRET:?必须在.env中设置PROTOFORGE_JWT_SECRET}
       PROTOFORGE_ADMIN_PASSWORD: ${PROTOFORGE_ADMIN_PASSWORD:?必须在.env中设置PROTOFORGE_ADMIN_PASSWORD}
       PROTOFORGE_LOG_LEVEL: info
+      PROTOFORGE_HTTP_PORT: "8080"   # FIXED: 默认已改 18080（避开 EdgeLite 冲突），容器内固定回 8080 与端口映射一致
       PROTOFORGE_CORS_ORIGINS: ${PROTOFORGE_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}  # FIXED: 默认仅允许本地访问，生产环境务必设置具体域名
       PROTOFORGE_GRPC_PORT: "0"
     depends_on:
