@@ -235,9 +235,12 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 为"现场机器没 Docker、不想装 Python"的场景准备的一键形态：
 
-**便携包（推荐）**：解压 `ProtoForge-v1.6.0-win64-portable.zip` → 双击 `ProtoForge.exe` →
+**便携包（推荐）**：从 [GitHub Releases](https://github.com/suoten/ProtoForge/releases) 下载
+`ProtoForge-v1.6.0-win64-portable.zip`（约 45MB）→ 解压 → 双击 `ProtoForge.exe` →
 界面自动在浏览器打开。数据（设备/场景/模板）保存在 exe 旁的 `data\` 目录——
 **整个文件夹拷到 U 盘或另一台机器，配置原样带走**。
+
+> 📎 若 Release 尚未附带 zip 资产，可自行构建（下述开发者命令，需一次 Node.js + Python 环境）。
 
 ```text
 ProtoForge.exe                     ← 双击：起服务 + 自动开界面（托盘常驻）
