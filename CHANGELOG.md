@@ -73,7 +73,7 @@ v1.4.2"协议端口静默丢弃"事故的通用化防线：`PROTOCOL_DEFAULTS` �
 
 ### 升级提示
 
-Docker 用户：`docker pull suoten/protoforge:1.5.0`。本版本无破坏性 API 变更；**MC 协议字设备偏移修正**后，此前依赖"错位行为"的自定义客户端需改按标准字编址（标准客户端如 pymcprotocol 无需任何改动）。部署类问题先跑 `protoforge doctor`。
+Docker 用户：`docker pull suoten/protoforge:1.5.0`（> 📎 **修订注记（v1.6.0 期补记）**：v1.5.0 未单独打 tag，Docker Hub 无 1.5.0 镜像；本版本全部内容已随 [1.6.0 镜像](https://hub.docker.com/r/suoten/protoforge/tags)提供，请直接 `docker pull suoten/protoforge:1.6.0`）。本版本无破坏性 API 变更；**MC 协议字设备偏移修正**后，此前依赖"错位行为"的自定义客户端需改按标准字编址（标准客户端如 pymcprotocol 无需任何改动）。部署类问题先跑 `protoforge doctor`。
 
 ## v1.4.4 — 2026-09-30
 
