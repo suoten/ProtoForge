@@ -234,7 +234,11 @@ protoforge demo
 
 > **Prerequisite**: Deployment completed, browser opens http://localhost:8000.
 
-1. **Login** — Enter `admin` / `admin`
+1. **Login** — Default user is `admin`. The password depends on how you deployed:
+   - **quickstart.bat / docker-compose.simple.yml / `protoforge demo`**: password is `admin`
+   - **`protoforge run` (production mode)**: a random password is generated on first start — check the `Admin:` line in the startup banner, or open the `data/.admin_password` file
+   - **Docker**: check the `Admin:` line in `docker logs protoforge` (if compose sets `PROTOFORGE_ADMIN_PASSWORD`, use that value)
+   - **401 on login?** See the "admin/admin login fails" entry in the FAQ below
 2. **Start Protocols** — Left menu "Protocol Services" → Click "Start All"
 3. **Create Device** — Left menu "Template Market" → Pick a template → Enter name → Create
 4. **View Data** — Device list → Click "Points" → See real-time simulated data
