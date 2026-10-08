@@ -50,7 +50,7 @@
     },
     {
       "name": "current_a",
-      "address": "11",
+      "address": "12",
       "data_type": "float32",
       "unit": "A",
       "description": "A相电流",
@@ -61,7 +61,7 @@
     },
     {
       "name": "power_factor",
-      "address": "12",
+      "address": "14",
       "data_type": "float32",
       "description": "功率因数",
       "access": "rw",

@@ -71,7 +71,7 @@
     },
     {
       "name": "register_1",
-      "address": "21",
+      "address": "22",
       "data_type": "int32",
       "description": "保持寄存器1",
       "access": "rw",

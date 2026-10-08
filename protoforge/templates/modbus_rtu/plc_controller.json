@@ -45,7 +45,7 @@
     },
     {
       "name": "process_value",
-      "address": "102",
+      "address": "103",
       "data_type": "float32",
       "unit": "",
       "description": "过程值",
