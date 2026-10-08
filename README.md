@@ -419,7 +419,11 @@ pip install -e ".[s7]"        # Siemens S7
 >
 > 🌐 **不想安装？直接体验演示站点**：[https://protoforge.jjtt.net/](https://protoforge.jjtt.net/) 用户名：`admin`　密码：`Protoforge123`
 
-1. **登录** — 输入 `admin` / `admin`
+1. **登录** — 默认账号 `admin`。密码取决于部署方式：
+   - **quickstart.bat / docker-compose.simple.yml / `protoforge demo`**：密码为 `admin`
+   - **`protoforge run`（正式模式）**：首次启动自动生成随机密码，看启动横幅 `Admin:` 那一行，或打开 `data/.admin_password` 文件查看
+   - **Docker**：查看 `docker logs protoforge` 里的 `Admin:` 行（compose 指定了 `PROTOFORGE_ADMIN_PASSWORD` 的以设置为准）
+   - **登录 401？** 见下方[常见问题排查](#-常见问题排查)中的「admin/admin 登录失败」条目
 2. **启动协议** — 左侧菜单「协议服务」→ 点击「一键启动」
 3. **创建设备** — 左侧菜单「模板市场」→ 选择一个模板 → 填写名称 → 一键创建
 4. **查看数据** — 设备列表 → 点击「测点」→ 看到实时变化的仿真数据
@@ -1782,6 +1786,19 @@ pip install -e .
 **Q:** **`protoforge run`** **报** **`No module named 'protoforge'`？**
 
 A: 依赖还没装，先执行 `pip install -e .`。
+
+**Q: `admin/admin` 登录失败（401）？**
+
+A: 密码取决于部署方式，不是所有情况都是 `admin`：
+
+| 部署方式 | 密码 |
+|---------|------|
+| quickstart.bat / docker-compose.simple.yml / `protoforge demo` | `admin`（启动时自动同步到旧数据） |
+| `protoforge run`（正式模式） | **随机生成**：看启动横幅 `Admin:` 行，或打开 `data/.admin_password` 文件 |
+| Docker + `-e PROTOFORGE_ADMIN_PASSWORD=xxx` | 你设置的值 |
+| Docker 未设置 + 旧数据卷 | 首次启动时的随机密码，`docker logs protoforge` 找 `Admin:` 行 |
+
+强制重置密码：设置环境变量 `PROTOFORGE_ADMIN_PASSWORD=你的新密码` 和 `PROTOFORGE_RESET_ADMIN_PASSWORD=1`，然后重启服务即可用新密码登录。
 
 **Q: 启动后打开** **`http://localhost:8000`** **看到 Swagger 文档？**
 
