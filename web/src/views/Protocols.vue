@@ -729,10 +729,14 @@ function openAdvanced(p) {
   try {
     const schema = p.config_schema || {}
     const properties = schema.properties || schema
+    // FIXED: 协议运行中时回显实际生效的启动配置（引擎记录的 running_config），
+    // 而不是 schema 默认值 —— 否则用户改过 host/port 后再打开弹窗看到的还是 0.0.0.0
+    const last = (p.status === 'running' && p.running_config) || null
     advancedConfig.value = {}
     for (const [key, info] of Object.entries(properties)) {
       if (info !== null && info !== undefined && typeof info === 'object' && info.type) {
-        advancedConfig.value[key] = info.default ?? ''
+        const actual = last ? last[key] : undefined
+        advancedConfig.value[key] = (actual !== undefined && actual !== null && actual !== '') ? actual : (info.default ?? '')
       }
     }
   } catch (e) {

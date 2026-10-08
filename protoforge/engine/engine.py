@@ -122,6 +122,7 @@ def _find_free_port(start_port: int, host: str = "0.0.0.0", max_tries: int = 100
 class SimulationEngine:
     def __init__(self, event_bus: EventBus | None = None, tick_interval: float = 1.0):
         self._protocol_servers: dict[str, ProtocolServer] = {}
+        self._last_protocol_configs: dict[str, dict[str, Any]] = {}  # FIXED: 记录每个协议最近一次成功启动的配置，供高级配置弹窗回显实际值（而非 schema 默认值）
         self._devices: dict[str, DeviceInstance] = {}
         self._devices_lock = asyncio.Lock()  # FIXED: S7 - add lock for _devices dict concurrent access
         self._scenarios: dict[str, ScenarioConfig] = {}
@@ -369,6 +370,7 @@ class SimulationEngine:
                 "status": server.status.value,
                 "default_port": port_info.get("port", 0),
                 "config_schema": server.get_config_schema(),
+                "running_config": self._last_protocol_configs.get(server.protocol_name, {}),
             })
         return result
 
@@ -488,6 +490,10 @@ class SimulationEngine:
                         logger.warning("Error stopping protocol %s after ERROR state: %s", protocol_name, stop_err)
                     raise RuntimeError(f"Failed to start protocol {protocol_name}: {error_msg}")
                 logger.info("Protocol %s started", protocol_name)
+                # FIXED: 记录实际生效的启动配置（剔除下划线开头的内部标记），高级配置弹窗回显用
+                self._last_protocol_configs[protocol_name] = {
+                    k: v for k, v in config.items() if not str(k).startswith("_")
+                }
                 for dev_id, instance in list(self._devices.items()):
                     if instance.protocol == protocol_name:
                         try:
