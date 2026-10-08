@@ -114,7 +114,8 @@ def is_admin() -> bool:
     try:
         import ctypes
         return bool(ctypes.windll.shell32.IsUserAnAdmin())
-    except Exception:
+    except (AttributeError, OSError):
+        # ctypes/windll 不可用或系统调用失败：按"无管理员权限"处理（非错误路径）
         return False
 
 
