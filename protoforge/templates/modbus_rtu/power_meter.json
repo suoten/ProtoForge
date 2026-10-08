@@ -19,7 +19,7 @@
     },
     {
       "name": "voltage_b",
-      "address": "1",
+      "address": "2",
       "data_type": "float32",
       "unit": "V",
       "description": "B相电压",
@@ -30,7 +30,7 @@
     },
     {
       "name": "voltage_c",
-      "address": "2",
+      "address": "4",
       "data_type": "float32",
       "unit": "V",
       "description": "C相电压",
@@ -41,7 +41,7 @@
     },
     {
       "name": "current_a",
-      "address": "3",
+      "address": "6",
       "data_type": "float32",
       "unit": "A",
       "description": "A相电流",
@@ -52,7 +52,7 @@
     },
     {
       "name": "power_total",
-      "address": "4",
+      "address": "8",
       "data_type": "float32",
       "unit": "kW",
       "description": "总有功功率",
@@ -63,7 +63,7 @@
     },
     {
       "name": "power_factor",
-      "address": "5",
+      "address": "10",
       "data_type": "float32",
       "unit": "",
       "description": "功率因数",

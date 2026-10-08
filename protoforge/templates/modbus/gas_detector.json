@@ -19,7 +19,7 @@
     },
     {
       "name": "alarm_level",
-      "address": "1",
+      "address": "2",
       "data_type": "uint16",
       "description": "告警等级(0=正常 1=低报 2=高报)",
       "access": "rw",
@@ -28,7 +28,7 @@
     },
     {
       "name": "sensor_status",
-      "address": "2",
+      "address": "3",
       "data_type": "uint16",
       "description": "传感器状态(0=正常 1=故障)",
       "access": "rw",
@@ -37,7 +37,7 @@
     },
     {
       "name": "temperature",
-      "address": "3",
+      "address": "4",
       "data_type": "float32",
       "unit": "°C",
       "description": "环境温度",

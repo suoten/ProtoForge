@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.1 — 2026-10-08
+
+### Fixed — 内置 Modbus 模板点位地址重叠
+
+新增的点位地址重叠检测上线后，实例化内置 Modbus 模板报 400「实例化失败」。根因是 8 个内置模板的多字节点位（float32/int32 占 2 个寄存器）地址间隔只有 1，互相覆盖。已重排全部 8 个模板（gas_detector / generic_plc / plc_controller / temp_sensor / vfd / modbus_rtu 版 plc_controller、power_meter、temperature_sensor）的地址，全部通过重叠检测与 PointConfig 模型校验。已部署用户更新后重启即可用新地址实例化（历史设备数据不受影响）。
+
 ## v1.6.0 — 2026-10-05
 
 ### 🖥️ Windows 桌面版（升级规划 v1.6.0"双击就能用"专项）
