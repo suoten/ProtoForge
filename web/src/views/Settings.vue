@@ -199,6 +199,9 @@
                 </n-space>
               </n-descriptions-item>
             </n-descriptions>
+            <n-alert type="success" :bordered="false">
+              {{ t('settings.freeNotice') }}
+            </n-alert>
             <n-alert type="info" :bordered="false">
               {{ t('settings.starHint') }}
             </n-alert>
