@@ -6,6 +6,10 @@
 
 新增的点位地址重叠检测上线后，实例化内置 Modbus 模板报 400「实例化失败」。根因是 8 个内置模板的多字节点位（float32/int32 占 2 个寄存器）地址间隔只有 1，互相覆盖。已重排全部 8 个模板（gas_detector / generic_plc / plc_controller / temp_sensor / vfd / modbus_rtu 版 plc_controller、power_meter、temperature_sensor）的地址，全部通过重叠检测与 PointConfig 模型校验。已部署用户更新后重启即可用新地址实例化（历史设备数据不受影响）。
 
+### Fixed — AB (EtherNet/IP) 与 Kepware 兼容性
+
+Kepware 以 Allen-Bradley ControlLogix Ethernet 驱动连接时报 "Unable to retrieve the identity / Frame received contains errors" 并降级 Symbolic Protocol。根因是 AB 服务端缺少 Kepware 依赖的 CIP 服务：EIP ListServices (0x0004)、Get_Attribute_List (0x03，读 Identity Object 设备身份)、Multiple Service Packet (0x0A，批量读写)、Read/Write Tag Fragmented (0x52/0x53，按普通读写处理)。另修复 tag 大小写敏感问题（客户端常把 PROGRAM:MAIN.CPULOAD 全大写发送，点位地址是 Program:Main.CpuLoad）。已用 pylogix（已连接读写）与自研裸 EIP 客户端（ListServices / Get_Attribute_List / MSF / 未连接读）双客户端实测通过。
+
 ## v1.6.0 — 2026-10-05
 
 ### 🖥️ Windows 桌面版（升级规划 v1.6.0"双击就能用"专项）

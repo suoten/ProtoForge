@@ -210,6 +210,9 @@ class AbServer(ProtocolServer):
             return self._handle_send_unit_data(data, sender_context)
         elif command == 0x0001:
             return self._handle_list_identity(data, session, sender_context)
+        elif command == 0x0004:
+            # FIXED: Kepware 连接前先发 ListServices，缺失时对端报 framing error
+            return self._handle_list_services(session, sender_context)
 
         return self._make_eip_error(command, session, 0x01, sender_context)
 
@@ -247,6 +250,16 @@ class AbServer(ProtocolServer):
         item_payload += struct.pack("<H", len(identity))       # Item Length
         item_payload += identity
         return self._make_eip_response(0x0001, session, bytes(item_payload), sender_context)
+
+    def _handle_list_services(self, session: int, sender_context: bytes = bytes(8)) -> bytes:
+        """EIP ListServices (0x0004) —— 客户端能力协商，缺失时 Kepware 报 framing error"""
+        payload = bytearray()
+        payload += struct.pack("<H", 1)            # Item Count = 1
+        payload += struct.pack("<H", 0x0100)       # Item Type: List Services Item
+        payload += struct.pack("<H", 4)            # Item Length
+        payload += struct.pack("<H", 1)            # Protocol Version
+        payload += struct.pack("<H", 0x021E)       # Capability Flags (同真实 ControlLogix)
+        return self._make_eip_response(0x0004, session, bytes(payload), sender_context)
 
     def _make_eip_response(self, command: int, session: int, payload: bytes,
                            sender_context: bytes = bytes(8)) -> bytes:
@@ -328,6 +341,19 @@ class AbServer(ProtocolServer):
             return self._handle_cip_read_tag(session, cip_data, sender_context)
         elif cip_service == 0x4D:
             return self._handle_cip_write_tag(session, cip_data, sender_context)
+        elif cip_service == 0x03:
+            # FIXED: Kepware 用 Get_Attribute_List 读设备身份（Identity Object），
+            # 缺失该服务时 "Unable to retrieve the identity" 并降级 Symbolic Protocol
+            return self._handle_cip_get_attribute_list(session, cip_data, sender_context)
+        elif cip_service == 0x0A:
+            # FIXED: Kepware 批量读用 Multiple Service Packet，缺失时报 framing error
+            return self._handle_cip_multiple_service(session, cip_data, sender_context)
+        elif cip_service == 0x52:
+            # Read Tag Fragmented —— 点位值小，按普通读处理（偏移字段被忽略）
+            return self._handle_cip_read_tag(session, cip_data, sender_context)
+        elif cip_service == 0x53:
+            # Write Tag Fragmented —— 按普通写处理
+            return self._handle_cip_write_tag(session, cip_data, sender_context)
 
         return self._make_cip_error_response(session, cip_service, 0x01, sender_context)
 
@@ -378,6 +404,12 @@ class AbServer(ProtocolServer):
             if service == 0x4C:
                 cip_resp = self._build_cip_read_response(cip_data)
             elif service == 0x4D:
+                cip_resp = self._build_cip_write_response(cip_data)
+            elif service == 0x52:
+                # 分段读按普通读处理
+                cip_resp = self._build_cip_read_response(cip_data)
+            elif service == 0x53:
+                # 分段写按普通写处理
                 cip_resp = self._build_cip_write_response(cip_data)
             else:
                 return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
@@ -571,6 +603,7 @@ class AbServer(ProtocolServer):
             name_bytes = device_name.encode("utf-8")
             return bytes([0xCC, 0x00, 0x00, 0x00]) + struct.pack("<H", 0xD0) + struct.pack("<I", len(name_bytes)) + name_bytes
         if tag_name and behavior:
+            tag_name = self._resolve_behavior_key(behavior, tag_name)
             # Bug 6 fix: 检查tag是否存在，不存在时返回CIP错误(0x04=路径段错误)
             if tag_name not in behavior._tags and tag_name not in behavior._data_types:
                 return bytes([0xCC, 0x00, 0x04, 0x00])
@@ -603,6 +636,7 @@ class AbServer(ProtocolServer):
         tag_name = self._parse_cip_tag_path(cip_data)
         behavior = self._behaviors.get(self._default_device_id or "")
         if tag_name and behavior:
+            tag_name = self._resolve_behavior_key(behavior, tag_name)
             path_end = self._get_path_end_offset(cip_data)
             if path_end < 0 or path_end + 3 > len(cip_data):  # FIXED-N07: 路径偏移校验，至少需要3字节(type+size)
                 return bytes([0xCD, 0x00, 0x04, 0x00])
@@ -712,6 +746,144 @@ class AbServer(ProtocolServer):
         resp += cip_data
         resp[2:4] = struct.pack("<H", len(resp) - 24)  # Update EIP length
         return bytes(resp)
+
+    def _read_epath_class_instance(self, cip_data: bytes, start: int, end: int):
+        """解析 padded EPath 中的 class/instance（逻辑段 + 符号段），失败返回 (None, None)"""
+        cls = None
+        inst = None
+        off = start
+        while off < end:
+            b = cip_data[off]
+            if b == 0x00:
+                off += 1
+                continue
+            if b == 0x91:  # ANSI/Symbolic segment
+                if off + 2 > end:
+                    break
+                ln = cip_data[off + 1]
+                off += 2 + ln + (ln & 1)
+                continue
+            if (b & 0xE0) == 0x20:  # Logical segment
+                fmt = b & 0x03
+                size = (1, 2, 4)[fmt] if fmt < 3 else 1
+                if off + 1 + size > end:
+                    break
+                val = int.from_bytes(cip_data[off + 1:off + 1 + size], "little")
+                seg_type = (b >> 2) & 0x07
+                if seg_type == 0:
+                    cls = val
+                elif seg_type == 1:
+                    inst = val
+                off += 1 + size
+                if (1 + size) % 2 != 0:
+                    off += 1  # padded EPath 补齐到偶数字节
+                continue
+            off += 1
+        return cls, inst
+
+    def _identity_attribute_values(self) -> dict[int, bytes]:
+        """Identity Object (Class 0x01) 实例属性值（与 Get_Attributes_All 保持一致）"""
+        config = getattr(self, '_start_config', {})
+        device_name = str(config.get("device_name", "ProtoForge-AB"))
+        name_bytes = device_name.encode("utf-8")[:230]
+        return {
+            1: struct.pack("<H", 1),           # Vendor ID
+            2: struct.pack("<H", 14),          # Device Type: PLC
+            3: struct.pack("<H", 1),           # Product Code
+            4: bytes([1, 0]),                  # Revision 1.0
+            5: struct.pack("<H", 0x0000),      # Status
+            6: struct.pack("<I", 0x00000001),  # Serial Number
+            7: bytes([len(name_bytes)]) + name_bytes,  # Product Name (SHORT_STRING)
+        }
+
+    def _handle_cip_get_attribute_list(self, session: int, cip_data: bytes,
+                                       sender_context: bytes = bytes(8)) -> bytes:
+        """CIP Get_Attribute_List (0x03) —— Kepware 读设备身份用
+
+        请求: [0x03][PathSize][Path...][属性个数 UINT][属性ID UINT...]
+        响应: [0x83][Status][属性个数 UINT][每项: 属性ID UINT][状态 UINT][值...]
+        """
+        path_end = self._get_path_end_offset(cip_data)
+        cls, _inst = self._read_epath_class_instance(cip_data, 2, path_end)
+        if cls != 0x01:
+            # 仅支持 Identity Object，其余类按 "service not supported" 拒绝
+            return self._make_cip_error_response(session, 0x03, 0x08, sender_context)
+        if path_end + 2 > len(cip_data):
+            return self._make_cip_error_response(session, 0x03, 0x05, sender_context)
+        count = struct.unpack("<H", cip_data[path_end:path_end + 2])[0]
+        if count == 0 or path_end + 2 + 2 * count > len(cip_data):
+            return self._make_cip_error_response(session, 0x03, 0x05, sender_context)
+        attr_ids = [struct.unpack("<H", cip_data[path_end + 2 + 2 * i:path_end + 4 + 2 * i])[0]
+                    for i in range(count)]
+        values = self._identity_attribute_values()
+        resp = bytearray()
+        resp += bytes([0x83, 0x00])               # Reply service + general status
+        resp += struct.pack("<H", count)
+        for aid in attr_ids:
+            resp += struct.pack("<H", aid)
+            if aid in values:
+                resp += struct.pack("<H", 0x0000)  # attribute status: success
+                resp += values[aid]
+            else:
+                resp += struct.pack("<H", 0x0014)  # attribute not gettable
+        return self._wrap_cip_response(session, bytes(resp), sender_context)
+
+    def _handle_cip_multiple_service(self, session: int, cip_data: bytes,
+                                     sender_context: bytes = bytes(8)) -> bytes:
+        """CIP Multiple Service Packet (0x0A) —— Kepware 批量读写
+
+        请求: [0x0A][PathSize][Path...][服务数 UINT][偏移 UINT...][子请求数据区]
+        响应: [0x8A][Status][服务数 UINT][偏移 UINT...][子应答数据区]
+        """
+        path_end = self._get_path_end_offset(cip_data)
+        if path_end + 2 > len(cip_data):
+            return self._make_cip_error_response(session, 0x0A, 0x05, sender_context)
+        count = struct.unpack("<H", cip_data[path_end:path_end + 2])[0]
+        offsets_start = path_end + 2
+        data_start = offsets_start + 2 * count
+        if count == 0 or data_start > len(cip_data):
+            return self._make_cip_error_response(session, 0x0A, 0x05, sender_context)
+        offsets = [struct.unpack("<H", cip_data[offsets_start + 2 * i:offsets_start + 2 + 2 * i])[0]
+                   for i in range(count)]
+        replies: list[bytes] = []
+        for i, off in enumerate(offsets):
+            seg_start = data_start + off
+            seg_end = data_start + offsets[i + 1] if i + 1 < count else len(cip_data)
+            sub = cip_data[seg_start:seg_end] if seg_start <= seg_end <= len(cip_data) else b""
+            if not sub:
+                replies.append(bytes([0x0A, 0x08]))
+                continue
+            svc = sub[0]
+            if svc in (0x4C, 0x52):
+                replies.append(self._build_cip_read_response(sub))
+            elif svc in (0x4D, 0x53):
+                replies.append(self._build_cip_write_response(sub))
+            else:
+                replies.append(bytes([svc | 0x80, 0x08]))  # 子服务不支持
+        data_area = b"".join(replies)
+        resp = bytearray()
+        resp += bytes([0x8A, 0x00])
+        resp += struct.pack("<H", count)
+        rel = 0
+        for r in replies:
+            resp += struct.pack("<H", rel)
+            rel += len(r)
+        resp += data_area
+        return self._wrap_cip_response(session, bytes(resp), sender_context)
+
+    def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
+        """FIXED: tag 大小写不敏感匹配 —— Kepware 等客户端常将 tag 转为大写
+        （如 PROGRAM:MAIN.CPULOAD），而点位 address 是 Program:Main.CpuLoad"""
+        if tag_name in behavior._tags or tag_name in behavior._data_types:
+            return tag_name
+        lower = tag_name.lower()
+        for k in behavior._tags:
+            if k.lower() == lower:
+                return k
+        for k in behavior._data_types:
+            if k.lower() == lower:
+                return k
+        return tag_name
 
     def _make_cip_error_response(self, session: int, service: int, error: int,
                                  sender_context: bytes = bytes(8)) -> bytes:
