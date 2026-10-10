@@ -1,0 +1,140 @@
+{
+  "id": "opcua_power_meter",
+  "name": "电力仪表",
+  "protocol": "opcua",
+  "description": "工业电力仪表，支持三相电压、电流、功率和电能监测",
+  "manufacturer": "Generic",
+  "model": "PM-3000",
+  "points": [
+    {
+      "name": "voltage_a",
+      "address": "ns=2;s=VoltageA",
+      "data_type": "float32",
+      "unit": "V",
+      "description": "A相电压",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 200.0,
+      "max_value": 250.0,
+      "generator_config": {
+        "period": 5.0
+      }
+    },
+    {
+      "name": "voltage_b",
+      "address": "ns=2;s=VoltageB",
+      "data_type": "float32",
+      "unit": "V",
+      "description": "B相电压",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 200.0,
+      "max_value": 250.0,
+      "generator_config": {
+        "period": 5.0
+      }
+    },
+    {
+      "name": "voltage_c",
+      "address": "ns=2;s=VoltageC",
+      "data_type": "float32",
+      "unit": "V",
+      "description": "C相电压",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 200.0,
+      "max_value": 250.0,
+      "generator_config": {
+        "period": 5.0
+      }
+    },
+    {
+      "name": "current_a",
+      "address": "ns=2;s=CurrentA",
+      "data_type": "float32",
+      "unit": "A",
+      "description": "A相电流",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 0.0,
+      "max_value": 50.0
+    },
+    {
+      "name": "current_b",
+      "address": "ns=2;s=CurrentB",
+      "data_type": "float32",
+      "unit": "A",
+      "description": "B相电流",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 0.0,
+      "max_value": 50.0
+    },
+    {
+      "name": "current_c",
+      "address": "ns=2;s=CurrentC",
+      "data_type": "float32",
+      "unit": "A",
+      "description": "C相电流",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 0.0,
+      "max_value": 50.0
+    },
+    {
+      "name": "active_power",
+      "address": "ns=2;s=ActivePower",
+      "data_type": "float32",
+      "unit": "kW",
+      "description": "总有功功率",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 0.0
+    },
+    {
+      "name": "reactive_power",
+      "address": "ns=2;s=ReactivePower",
+      "data_type": "float32",
+      "unit": "kVAR",
+      "description": "总无功功率",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 0.0
+    },
+    {
+      "name": "energy",
+      "address": "ns=2;s=Energy",
+      "data_type": "float64",
+      "unit": "kWh",
+      "description": "累计电能",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 0.0
+    },
+    {
+      "name": "frequency",
+      "address": "ns=2;s=Frequency",
+      "data_type": "float32",
+      "unit": "Hz",
+      "description": "电网频率",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 49.5,
+      "max_value": 50.5,
+      "generator_config": {
+        "period": 2.0
+      }
+    }
+  ],
+  "protocol_config": {
+    "security_mode": "None",
+    "security_policy": "None",
+    "certificate_path": "",
+    "private_key_path": ""
+  },
+  "tags": [
+    "电力",
+    "能源管理",
+    "三相"
+  ]
+}
