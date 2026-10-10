@@ -388,40 +388,70 @@ class AbServer(ProtocolServer):
                                sender_context: bytes = bytes(8)) -> bytes:
         session = struct.unpack("<I", data[4:8])[0]
         if len(data) < 46:
-            return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+            # FIXED-P0: 已连接通道的错误必须通过 _wrap_unit_data_response 返回，
+            # 原实现返回 _make_cip_error_response（SendRRData 帧），
+            # Kepware 在已连接通道收到错误格式即报 framing error
+            return self._make_eip_error(0x0070, session, 0x01, sender_context)
         # FIXED-P0: 标准 SendUnitData 布局 —— EIP header(24) + InterfaceHandle(4) +
         # Timeout(2) + ItemCount(2) + Item1(Connected Address: Type(2)+Len(2)+ConnID(4))
         # + Item2(Connected Data: Type(2)+Len(2)+SeqNum(2)) + CIP data
         # 原实现把 item_count 读在 offset 16（EIP header 内部），导致 Read/Write Tag
         # 全部走错误分支，已连接读写永远失败
-        item_count = struct.unpack("<H", data[30:32])[0] if len(data) >= 32 else 0
+        #
+        # FIXED-P0: 动态解析 items 而非硬编码偏移，不同客户端的 item 长度可能不同
+        offset = self.EIP_HEADER_SIZE + 4 + 2  # Skip Interface Handle + Timeout
+        item_count = struct.unpack("<H", data[offset:offset + 2])[0] if offset + 2 <= len(data) else 0
+        offset += 2
         if item_count < 2:
-            return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
-        t_o_conn_id = struct.unpack("<I", data[36:40])[0] if len(data) >= 40 else 0
-        seq_num = struct.unpack("<H", data[44:46])[0] if len(data) >= 46 else 0
-        cip_data = data[46:] if len(data) > 46 else b""
-        if len(cip_data) > 2:
-            service = cip_data[0]
-            # FIXED-P0: 已连接消息必须返回裸 CIP 数据，原实现调用 _handle_cip_read_tag/
-            # _handle_cip_write_tag（返回完整 EIP SendRRData 帧）导致双重封装，
-            # 客户端解析失败
-            if service in (0x4C, 0x52):
-                cip_resp = self._build_cip_read_response(cip_data)
-            elif service in (0x4D, 0x53):
-                cip_resp = self._build_cip_write_response(cip_data)
-            elif service == 0x01:
-                # FIXED: Kepware 可能通过已连接通道查询设备身份/属性，
-                # 未识别服务此前在已连接路径返回畸形错误帧
-                cip_resp = self._build_cip_get_attributes_all(cip_data)
-            elif service == 0x03:
-                cip_resp = self._build_cip_get_attribute_list(cip_data)
-            elif service == 0x0A:
-                cip_resp = self._build_cip_multiple_service(cip_data)
-            else:
-                return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+            return self._make_eip_error(0x0070, session, 0x01, sender_context)
+        t_o_conn_id = 0
+        seq_num = 0
+        cip_data = b""
+        for _ in range(item_count):
+            if offset + 4 > len(data):
+                break
+            item_type = struct.unpack("<H", data[offset:offset + 2])[0]
+            item_len = struct.unpack("<H", data[offset + 2:offset + 4])[0]
+            offset += 4
+            if offset + item_len > len(data):
+                break
+            # FIXED-P0: 标准 EtherNet/IP 中 Connected Address item 类型是 0x00A1，
+            # Connected Data item 类型是 0x00B1。原实现两个分支都写 0x00B1，
+            # 导致 Connected Address 永远不匹配，ConnID 恒为 0。
+            if item_type == 0x00A1:  # Connected Address item
+                if item_len >= 4:
+                    t_o_conn_id = struct.unpack("<I", data[offset:offset + 4])[0]
+            elif item_type == 0x00B1:  # Connected Data item
+                # Connected Data: first 2 bytes = sequence number, rest = CIP data
+                if item_len >= 2:
+                    seq_num = struct.unpack("<H", data[offset:offset + 2])[0]
+                    cip_data = data[offset + 2:offset + item_len]
+            offset += item_len
+        if not cip_data or len(cip_data) < 2:
+            cip_resp = self._make_bare_cip_error(0x00, 0x05)
             return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
                                                  sender_context)
-        return self._make_cip_error_response(session, 0x00, 0x00, sender_context)
+        service = cip_data[0]
+        # FIXED-P0: 已连接消息必须返回裸 CIP 数据，原实现调用 _handle_cip_read_tag/
+        # _handle_cip_write_tag（返回完整 EIP SendRRData 帧）导致双重封装，
+        # 客户端解析失败
+        if service in (0x4C, 0x52):
+            cip_resp = self._build_cip_read_response(cip_data)
+        elif service in (0x4D, 0x53):
+            cip_resp = self._build_cip_write_response(cip_data)
+        elif service == 0x01:
+            # FIXED: Kepware 可能通过已连接通道查询设备身份/属性，
+            # 未识别服务此前在已连接路径返回畸形错误帧
+            cip_resp = self._build_cip_get_attributes_all(cip_data)
+        elif service == 0x03:
+            cip_resp = self._build_cip_get_attribute_list(cip_data)
+        elif service == 0x0A:
+            cip_resp = self._build_cip_multiple_service(cip_data)
+        else:
+            # FIXED-P0: 已连接通道不支持的服务也必须通过 _wrap_unit_data_response 返回
+            cip_resp = self._make_bare_cip_error(service, 0x08)
+        return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
+                                             sender_context)
 
     def _wrap_unit_data_response(self, session: int, conn_id: int, seq_num: int,
                                  cip_resp: bytes,
@@ -440,10 +470,13 @@ class AbServer(ProtocolServer):
         resp += struct.pack("<H", 0x0000)              # Timeout: 2 bytes
         items = bytearray()
         items += struct.pack("<H", 2)
-        items += struct.pack("<H", 0x00B1)
+        # FIXED-P0: 标准 EtherNet/IP 中 Connected Address item 类型是 0x00A1，
+        # 原实现用 0x00B1（Connected Data 类型），严格客户端解析时
+        # 把 ConnID 当成 Connected Data 解析导致 framing error
+        items += struct.pack("<H", 0x00A1)           # Item1: Connected Address
         items += struct.pack("<H", 4)
         items += struct.pack("<I", conn_id)
-        items += struct.pack("<H", 0x00B1)
+        items += struct.pack("<H", 0x00B1)           # Item2: Connected Data
         items += struct.pack("<H", 2 + len(cip_resp))
         items += struct.pack("<H", seq_num)
         items += cip_resp
@@ -554,17 +587,33 @@ class AbServer(ProtocolServer):
             return struct.pack("<Hi", type_code, 0)
 
     def _parse_cip_tag_path(self, cip_data: bytes) -> str:
+        # FIXED-P0: 使用 _get_path_end_offset 限制扫描范围，
+        # 原实现扫描整个 cip_data，会把路径后面的 Element Count / Type / Data
+        # 字节误当路径段解析（如 ElementCount=1 的低字节 0x01 被跳过，
+        # 但高字节 0x00 循环；若值恰好是 0x91/0x28 则误生成额外路径段，
+        # 导致 tag 名拼接错误，读取返回 status 0x04）
+        path_end = self._get_path_end_offset(cip_data)
+        tag_parts = self._scan_tag_segments(cip_data, 2, path_end)
+        if not tag_parts and path_end < len(cip_data):
+            # 回退：某些客户端 PathSize 字段不准确（偏小），
+            # 回退扫描整个 cip_data 以保持兼容
+            tag_parts = self._scan_tag_segments(cip_data, 2, len(cip_data))
+        return ".".join(tag_parts) if tag_parts else ""
+
+    @staticmethod
+    def _scan_tag_segments(cip_data: bytes, start: int, end: int) -> list[str]:
+        """扫描 CIP 路径段，返回 tag 名部分列表"""
         tag_parts = []
-        offset = 2
-        while offset < len(cip_data):
+        offset = start
+        while offset < end:
             segment_type = cip_data[offset]
             if segment_type == 0x91:
                 offset += 1
-                if offset >= len(cip_data):
+                if offset >= end:
                     break
                 tag_len = cip_data[offset]
                 offset += 1
-                if offset + tag_len > len(cip_data):
+                if offset + tag_len > end:
                     break
                 tag_name = cip_data[offset:offset + tag_len].decode("ascii", errors="replace").rstrip("\x00")
                 tag_parts.append(tag_name)
@@ -573,7 +622,7 @@ class AbServer(ProtocolServer):
                     offset += 1
             elif segment_type == 0x28:
                 offset += 1
-                if offset >= len(cip_data):
+                if offset >= end:
                     break
                 member_id = cip_data[offset]
                 offset += 1
@@ -583,7 +632,7 @@ class AbServer(ProtocolServer):
                 offset += 1
             else:
                 offset += 1
-        return ".".join(tag_parts) if tag_parts else ""
+        return tag_parts
 
     def _get_path_end_offset(self, cip_data: bytes) -> int:
         # FIXED: 按标准计算路径终点 = 2 + PathSize(字) * 2。
@@ -849,7 +898,7 @@ class AbServer(ProtocolServer):
                     for i in range(count)]
         values = self._identity_attribute_values()
         resp = bytearray()
-        resp += bytes([0x83, 0x00])               # Reply service + general status
+        resp += bytes([0x83, 0x00, 0x00, 0x00])       # Reply service + Reserved + Status + AddStatusSize
         resp += struct.pack("<H", count)
         for aid in attr_ids:
             resp += struct.pack("<H", aid)
@@ -870,6 +919,11 @@ class AbServer(ProtocolServer):
 
         请求: [0x0A][PathSize][Path...][服务数 UINT][偏移 UINT...][子请求数据区]
         响应: [0x8A][Status][服务数 UINT][偏移 UINT...][子应答数据区]
+
+        FIXED-P0: 原实现末尾调用 _wrap_cip_response(session, ...) 但方法签名
+        中没有 session/sender_context 参数，运行时直接 NameError 崩溃。
+        同时 _handle_cip_multiple_service 和 _handle_send_unit_data 调用方
+        都已做了 EIP 封装，_build_ 系列方法应只返回裸 CIP 数据。
         """
         path_end = self._get_path_end_offset(cip_data)
         if path_end + 2 > len(cip_data):
@@ -899,14 +953,14 @@ class AbServer(ProtocolServer):
                 replies.append(self._make_bare_cip_error(svc, 0x08))
         data_area = b"".join(replies)
         resp = bytearray()
-        resp += bytes([0x8A, 0x00])
+        resp += bytes([0x8A, 0x00, 0x00, 0x00])       # Service|0x80 + Reserved + Status + AddStatusSize
         resp += struct.pack("<H", count)
         rel = 0
         for r in replies:
             resp += struct.pack("<H", rel)
             rel += len(r)
         resp += data_area
-        return self._wrap_cip_response(session, bytes(resp), sender_context)
+        return bytes(resp)
 
     def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
         """FIXED: tag 大小写不敏感匹配 —— Kepware 等客户端常将 tag 转为大写
