@@ -168,6 +168,23 @@ protoforge/
 - [ ] 文档已更新（README、API 文档等）
 - [ ] 提交信息符合规范
 
+## 🎯 第一个贡献者任务
+
+刚加入不知道从哪里开始？以下任务适合新手：
+
+1. **[good first issue 列表](../../issues?q=label%3A%22good+first+issue%22+is%3Aopen)** — 精选的入门级任务，难度低、范围清晰
+2. **补充协议模板** — 在 `protoforge/templates/` 下为缺少模板的协议添加设备模板
+3. **改进文档** — 发现文档不清楚的地方？直接改，文档类 PR 最容易合并
+
+### 推荐流程
+
+1. 在 Issues 页面找到一个 `good first issue` 标签的任务
+2. 在 issue 下留言认领（避免重复劳动）
+3. Fork → 分支 → 改代码 → 跑测试 → 提 PR
+4. PR 描述中关联 issue（`Closes #123`）
+
+> 💡 第一次提 PR 不确定代码风格？先跑一遍 `ruff check protoforge/ --fix`，大部分格式问题自动修复。
+
 ## 许可证
 
 提交代码即表示你同意在 MIT 许可证下发布你的贡献。

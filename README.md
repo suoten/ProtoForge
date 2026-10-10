@@ -14,15 +14,19 @@
 
 [🚀 在线体验](https://protoforge.jjtt.net) · [📖 5分钟上手](#-5分钟上手) · [💬 加入QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) · [English](README_EN.md)
 
-> ⚠️ **唯一官方仓库声明**：ProtoForge 的官方源码仓库仅有 [**github.com/suoten/ProtoForge**](https://github.com/suoten/ProtoForge)（Gitee 镜像：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)），官方 Docker 镜像为 [**suoten/protoforge**](https://hub.docker.com/r/suoten/protoforge)。GitHub/Gitee 上其他同名或改名的仓库均为第三方转载，**内容可能滞后数月、缺失重要修复**，请一律以本仓库为准。发现问题请到官方仓库提交 Issue。
+```bash
+docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin -v protoforge-data:/app/data suoten/protoforge:latest
+```
 
-> ✅ **Windows** · ✅ **Linux** · ✅ **macOS**
->
-> 🔥 **V1.6.0 桌面版** · 28 种工业协议 · 133 设备模板 · 双击即用桌面版 · wire 级黄金用例门禁 · `protoforge doctor` 自检 · Windows 服务化 · EdgeLite 生态对接
+> 浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录
+
+**28 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · ✅ Windows / Linux / macOS
 
 ![仪表盘](docs/images/1.png)
 
 </div>
+
+> ⚠️ **唯一官方仓库**：[github.com/suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 镜像：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)），Docker 镜像 [suoten/protoforge](https://hub.docker.com/r/suoten/protoforge)。其他同名仓库均为第三方转载，可能滞后数月。
 
 ---
 
