@@ -1038,6 +1038,15 @@ const pointColumns = computed(() => [
     if (v === null || v === undefined) return '-'
     if (typeof v === 'boolean') return v ? 'true' : 'false'
     if (typeof v === 'number' && isNaN(v)) return '-'
+    if (typeof v === 'number') {
+      // float32 精度有限，显示时保留合理小数位避免长尾（如 25.498046875）
+      const abs = Math.abs(v)
+      if (abs === 0) return '0'
+      if (abs < 0.001) return v.toExponential(4)
+      if (abs < 1) return parseFloat(v.toFixed(6)).toString()
+      if (abs < 100) return parseFloat(v.toFixed(4)).toString()
+      return parseFloat(v.toFixed(2)).toString()
+    }
     return String(v)
   } },
   { title: t('devices.time'), key: 'timestamp', width: 180, render: (row) => row.timestamp ? formatDate(row.timestamp) : '-' },
