@@ -15,9 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml .
 COPY README.md .
 COPY protoforge/ protoforge/
-# 使用国内 PyPI 镜像加速构建
-RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
-    pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
+# GitHub Actions runner 在海外，直接使用官方 PyPI 源（阿里云镜像可能同步滞后导致 aarch64 wheel 404）
+# 如需国内构建加速，取消下面两行注释并注释掉官方源行
+# RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+#     pip config set global.extra-index-url https://pypi.org/simple/
+RUN pip install --no-cache-dir ".[opcua,mqtt,bacnet,s7,postgres,grpc]"
 
 # FIXED: 优化 npm 依赖缓存 — 先复制 package.json 安装依赖，再复制源码构建
 COPY web/package.json web/package-lock.json* web/
