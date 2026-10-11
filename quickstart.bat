@@ -1,17 +1,13 @@
 @echo off
 REM ============================================
-REM ProtoForge Quick Start (Windows / yi jian qi dong)
+REM ProtoForge Quick Start (Windows)
 REM Double-click to run: checks env, installs deps, starts server.
-REM All lines below the restart marker display in Chinese correctly.
 REM ============================================
 
 REM FIXED: known cmd.exe bug -- after `chcp 65001`, the rest of the SAME
 REM batch file is re-parsed with wrong byte offsets (UTF-8 multi-byte chars
-REM get split), producing garbage errors like "'xxx' is not recognized as
-REM an internal or external command". Workaround: restart the script so
-REM cmd.exe re-reads the whole file under UTF-8.
-REM NOTE: keep every line ABOVE `chcp 65001` pure ASCII (Chinese text here
-REM is parsed under the legacy codepage and would garble/execute wrongly).
+REM get split), producing garbage errors. Workaround: restart the script.
+REM NOTE: keep every line ABOVE `chcp 65001` pure ASCII.
 if "%~1"=="__utf8" goto main
 chcp 65001 >nul
 cmd /s /c ""%~f0" __utf8"
@@ -29,7 +25,7 @@ echo   ======================================================
 echo.
 
 REM Step 1: 检查 Python
-echo [1/4] 检查 Python ...
+echo [1/5] 检查 Python ...
 where python >nul 2>&1
 if errorlevel 1 (
     echo.
@@ -44,7 +40,7 @@ python --version
 echo.
 
 REM Step 2: 创建/检查虚拟环境
-echo [2/4] 检查 Python 虚拟环境 ...
+echo [2/5] 检查 Python 虚拟环境 ...
 if exist "venv\Scripts\python.exe" (
     echo       虚拟环境已存在，跳过创建
 ) else (
@@ -59,34 +55,51 @@ if exist "venv\Scripts\python.exe" (
 )
 echo.
 
-REM Step 3: 检查依赖是否已安装（通过检测 protoforge 包是否可导入）
-echo [3/4] 检查 Python 依赖 ...
+REM Step 3: 检查依赖是否已安装
+echo [3/5] 检查 Python 依赖 ...
 venv\Scripts\python.exe -c "import protoforge" >nul 2>&1
 if errorlevel 1 (
     echo       首次运行，正在安装依赖（可能需要几分钟）...
+
+    REM FIXED: ensure pip is available and up-to-date in fresh venv
+    venv\Scripts\python.exe -m ensurepip --default-pip >nul 2>&1
     venv\Scripts\python.exe -m pip install --quiet --upgrade pip
+
+    REM FIXED: install core deps first (guarantees server can start),
+    REM then try [all] extras (grpcio, asyncua, etc.) as best-effort.
+    REM This way if [all] fails on a slow network or missing C build tools,
+    REM the server still starts with core protocols (Modbus, HTTP, GB28181, etc.)
+    echo       安装核心依赖...
+    venv\Scripts\pip.exe install -e .
+    if errorlevel 1 (
+        echo.
+        echo   [错误] 核心依赖安装失败，请检查网络连接
+        echo   可尝试设置国内镜像后重新运行:
+        echo   pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+        echo.
+        pause
+        exit /b 1
+    )
+    echo       核心依赖安装成功
+
+    echo       安装扩展协议依赖（可选，失败不影响核心功能）...
     venv\Scripts\pip.exe install -e ".[all]" >nul 2>&1
     if errorlevel 1 (
-        echo       全部协议安装失败，尝试安装核心依赖...
-        venv\Scripts\pip.exe install -e .
-        if errorlevel 1 (
-            echo   [错误] 依赖安装失败，请检查网络连接
-            echo   可尝试设置国内镜像: pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-            pause
-            exit /b 1
-        )
+        echo       [提示] 扩展协议依赖安装失败，核心协议仍可正常使用
+        echo       缺失的协议（OPC-UA/MQTT/BACnet/S7等）可通过以下命令单独安装:
+        echo       pip install -e ".[opcua]"  或  pip install -e ".[all]"
+    ) else (
+        echo       扩展协议依赖安装成功
     )
-    echo       依赖安装成功
+    echo       依赖安装完成
 ) else (
     echo       依赖已安装，跳过
 )
 echo.
 
-REM Step 4: 确保 .env 配置正确（关键：生成稳定的 JWT_SECRET）
-echo [4/4] 检查配置文件 ...
+REM Step 4: 确保 .env 配置正确
+echo [4/5] 检查配置文件 ...
 
-REM FIXED: 原写法 "set /pf" 是无效语法（应为 set /p），变量读不到，
-REM 导致首次生成的 .env 里 JWT_SECRET 为空
 set "JWT_SECRET_GEN="
 venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))" > "%TEMP%\pf_jwt_tmp" 2>nul
 set /p JWT_SECRET_GEN=<"%TEMP%\pf_jwt_tmp"
@@ -94,7 +107,6 @@ del "%TEMP%\pf_jwt_tmp" >nul 2>&1
 
 if exist ".env" goto check_env
     echo       首次运行，生成配置文件 ...
-    REM 生成 .env，确保 JWT_SECRET 非空且持久
     (
         echo # ProtoForge 配置文件（由 quickstart.bat 自动生成）
         echo PROTOFORGE_HOST=0.0.0.0
@@ -110,8 +122,6 @@ if exist ".env" goto check_env
     goto env_done
 
 :check_env
-REM 检查 .env 中 JWT_SECRET 是否为空，为空则补填
-REM （用两个 findstr 串联：先取 JWT_SECRET 行，再匹配行尾为空的情形）
 findstr /B /C:"PROTOFORGE_JWT_SECRET=" .env 2>nul | findstr /R /C:"PROTOFORGE_JWT_SECRET=$" >nul 2>&1
 if not errorlevel 1 (
     echo       检测到 JWT_SECRET 为空，正在修复 ...
@@ -124,8 +134,20 @@ if not errorlevel 1 (
 :env_done
 echo.
 
+REM Step 5: 数据库迁移 + 启动
+echo [5/5] 初始化数据库 ...
+
 REM 确保 data 目录存在
 if not exist "data" mkdir data
+
+REM 运行数据库迁移（失败不阻止启动，首次运行 SQLite 会自动建表）
+venv\Scripts\python.exe -m alembic upgrade head 2>nul
+if errorlevel 1 (
+    echo       [提示] 数据库迁移未执行或失败，系统将自动创建数据库
+) else (
+    echo       数据库迁移完成
+)
+echo.
 
 REM 显示启动信息
 echo ======================================================
@@ -147,7 +169,11 @@ venv\Scripts\python.exe -m protoforge.cli demo
 if errorlevel 1 (
     echo.
     echo   [错误] 服务启动失败，请检查上方错误信息
-    echo   或尝试重新运行本脚本
+    echo.
+    echo   常见原因:
+    echo   1. 端口 8000 被占用 - 修改 .env 中的 PROTOFORGE_PORT
+    echo   2. 依赖未装全 - 运行: venv\Scripts\pip install -e ".[all]"
+    echo   3. 数据库损坏 - 删除 data\protoforge.db 后重试
     echo.
 )
 echo.

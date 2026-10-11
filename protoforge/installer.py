@@ -131,16 +131,28 @@ def main():
 
     run(f'"{venv_python}" -m pip install --quiet --upgrade pip')
 
-    result = run(f'"{venv_python}" -m pip install -e ".[all]"')
+    # FIXED: install core deps first (guarantees server can start),
+    # then try [all] extras as best-effort upgrade.
+    # This way if [all] fails on a slow network or missing C build tools,
+    # the server still starts with core protocols (Modbus, HTTP, GB28181, etc.)
+    print("       安装核心依赖...")
+    result = run(f'"{venv_python}" -m pip install -e .')
     if result.returncode != 0:
-        print("  [警告] 全部协议安装失败，尝试安装核心依赖...")
-        result = run(f'"{venv_python}" -m pip install -e .')
-        if result.returncode != 0:
-            print("  [错误] Python 依赖安装失败")
-            print("  请检查网络连接，或尝试设置国内镜像：")
-            print("  pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple")
-            input("按回车退出 ...")
-            sys.exit(1)
+        print("  [错误] Python 核心依赖安装失败")
+        print("  请检查网络连接，或尝试设置国内镜像：")
+        print("  pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple")
+        input("按回车退出 ...")
+        sys.exit(1)
+    print("       核心依赖安装成功")
+
+    print("       安装扩展协议依赖（可选，失败不影响核心功能）...")
+    result_all = run(f'"{venv_python}" -m pip install -e ".[all]"')
+    if result_all.returncode != 0:
+        print("  [提示] 扩展协议依赖安装失败，核心协议仍可正常使用")
+        print("  缺失的协议可通过以下命令单独安装:")
+        print('  pip install -e ".[opcua]"  或  pip install -e ".[all]"')
+    else:
+        print("       扩展协议依赖安装成功")
 
     # Step 4: Build frontend
     print()
@@ -221,6 +233,20 @@ def main():
         except Exception as e:
             import logging
             logging.warning("读取 .env 配置文件失败: %s", e)
+
+    print()
+    print("  正在初始化数据库...")
+
+    # Ensure data directory exists
+    data_dir = PROJECT_DIR / "data"
+    data_dir.mkdir(exist_ok=True)
+
+    # Run database migration (non-fatal: first run with SQLite auto-creates tables)
+    migrate_result = run(f'"{venv_python}" -m alembic upgrade head')
+    if migrate_result.returncode != 0:
+        print("  [提示] 数据库迁移未执行或失败，系统将自动创建数据库")
+    else:
+        print("  数据库迁移完成")
 
     print()
     print("  +--------------------------------------------------+")
