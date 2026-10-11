@@ -149,5 +149,8 @@ if errorlevel 1 (
     echo   [错误] 服务启动失败，请检查上方错误信息
     echo   或尝试重新运行本脚本
     echo.
-    pause
 )
+echo.
+echo   ProtoForge 已停止
+echo.
+pause
