@@ -1589,6 +1589,9 @@ class IntegrationManager:
         设备仍用旧端口配置，导致连接失败。此处理器在协议重启后自动用
         新端口重新推送所有受影响的设备。
         """
+        if not self._enabled:
+            return  # EdgeLite 未配置，跳过自动推送
+
         protocol_name = getattr(event, "protocol_name", "")
         new_status = getattr(event, "new_status", "")
         getattr(event, "old_status", "")
@@ -1627,6 +1630,12 @@ class IntegrationManager:
                     logger.info(
                         "Auto-updated device %s on EdgeLite after protocol %s restart (port=%s)",
                         instance.id, protocol_name, actual_port,
+                    )
+                elif result.get("skipped"):
+                    # EdgeLite 未配置 / 协议不支持 / 已在推送中 — 静默跳过，不打 WARNING
+                    logger.debug(
+                        "Skipped auto-update device %s on EdgeLite after protocol %s restart: %s",
+                        instance.id, protocol_name, result.get("reason", "skipped"),
                     )
                 else:
                     logger.warning(
