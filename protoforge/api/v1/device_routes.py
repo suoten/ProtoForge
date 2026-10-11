@@ -600,6 +600,13 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     defaults = get_protocol_defaults(device.protocol, lang=lang)
     config = {**defaults, **(device.protocol_config or {})}
 
+    # 补充示例代码模板中需要的变量
+    config.setdefault('device_id', device_id)
+    config.setdefault('device_name', device.name)
+    # HTTP REST 协议的 api_prefix：与 HttpSimulatorServer.create_device 默认值一致
+    if device.protocol == 'http' and 'api_prefix' not in config:
+        config['api_prefix'] = f'/api/{device_id}'
+
     # Replace 0.0.0.0 (server listen address) with actual reachable host
     if config.get("host") in ("0.0.0.0", ""):
         config["host"] = get_protoforge_host()

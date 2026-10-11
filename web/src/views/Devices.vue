@@ -286,7 +286,7 @@
         </template>
       </n-modal>
 
-      <n-modal v-model:show="showPointsModal" preset="card" :title="t('devices.devicePoints')" style="width:min(700px, 90vw)">
+      <n-modal v-model:show="showPointsModal" preset="card" :title="t('devices.devicePoints')" style="width:min(960px, 95vw)">
         <n-space v-if="currentViewDeviceInfo" align="center" size="small" style="margin-bottom:8px">
           <n-tag :type="currentViewDeviceInfo.status === 'online' ? 'success' : currentViewDeviceInfo.status === 'error' ? 'error' : 'default'" size="small" :bordered="false">{{ currentViewDeviceInfo.status || 'offline' }}</n-tag>
           <n-text depth="3" style="font-size:12px">{{ currentViewDeviceInfo.name }} ({{ currentViewDeviceInfo.protocol }})</n-text>
@@ -940,9 +940,9 @@ async function loadDeviceConfig(protocol) {
 // FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
 const columns = computed(() => [
   { type: 'selection' },
-  { title: t('devices.device'), key: 'name', width: 160, render: (row) => h('div', {}, [
+  { title: t('devices.device'), key: 'name', width: 200, minWidth: 160, ellipsis: { tooltip: true }, render: (row) => h('div', {}, [
     h('div', { style: 'font-weight:500' }, row.name || row.id),
-    h('div', { style: 'font-size:11px;color:#94a3b8' }, row.id),
+    h('div', { style: 'font-size:11px;color:#94a3b8;cursor:pointer', title: t('devices.clickToCopyId'), onClick: (e) => { e.stopPropagation(); navigator.clipboard?.writeText(row.id).then(() => message.success(t('common.copied'))).catch(() => {}) } }, row.id),
   ]) },
   { title: t('devices.protocol'), key: 'protocol', width: 120, render: (row) => h(NTag, { size: 'tiny', type: 'info', bordered: false }, () => protocolLabels[row.protocol] || row.protocol) },
   {
@@ -1030,10 +1030,10 @@ const columns = computed(() => [
 
 // FIXED: P3 - Q7: 顶层t()数组改为computed，语言切换后自动刷新
 const pointColumns = computed(() => [
-  { title: t('devices.name'), key: 'name', width: 120 },
+  { title: t('devices.name'), key: 'name', width: 160, ellipsis: { tooltip: true } },
   // FIXED: 展示每个点位对应的存储区地址（多字节重叠问题从界面上一眼可见）
-  { title: t('common.address'), key: 'address', width: 130, render: (row) => pointAddressMap.value[row.name] ?? '-' },
-  { title: t('devices.value'), key: 'value', width: 120, render: (row) => {
+  { title: t('common.address'), key: 'address', width: 160, ellipsis: { tooltip: true }, render: (row) => pointAddressMap.value[row.name] ?? '-' },
+  { title: t('devices.value'), key: 'value', width: 140, render: (row) => {
     const v = row.value
     if (v === null || v === undefined) return '-'
     if (typeof v === 'boolean') return v ? 'true' : 'false'
