@@ -171,7 +171,7 @@ def main():
                 print("       构建前端页面...")
                 build_result = subprocess.run(
                     [npm_path, "run", "build"], cwd=str(web_dir),
-                    capture_output=True, text=True,
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
                 )
             except OSError as e:
                 # 兜底：npm 存在但启动失败（权限/环境异常），降级用预构建前端

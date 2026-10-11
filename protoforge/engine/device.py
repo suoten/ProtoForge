@@ -616,7 +616,7 @@ class DeviceInstance:
         point = self._point_configs[point_name]
         if point.access not in ("w", "rw"):
             return False
-        if point.min_value is not None and point.max_value is not None:
+        if point.min_value is not None and point.max_value is not None and point.data_type.value != "bool":
             try:
                 num_val = float(value)
                 if num_val < point.min_value or num_val > point.max_value:
