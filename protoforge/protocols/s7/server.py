@@ -217,6 +217,12 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 counter_num = int(addr_upper[1:] or '0')
                 return (S7DeviceBehavior.S7_AREA_COUNTERS, 0, counter_num)
 
+            # 纯数字：视为 DB1 的字节偏移（与 S7-Plus 解析器行为一致）
+            # 用户只填数字时，按 data_type 自动分配 DB1 中的偏移量
+            if addr_upper.isdigit():
+                offset = int(addr_upper) + db_header_size
+                return (S7DeviceBehavior.S7_AREA_DB, 1, offset)
+
             # 无法识别的格式，默认到 DB1 offset 0
             logger.warning("S7 address '%s' not recognized, defaulting to DB1 offset 0", address)
             return (S7DeviceBehavior.S7_AREA_DB, 1, db_header_size)

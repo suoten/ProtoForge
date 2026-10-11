@@ -51,9 +51,9 @@ _DEMO_DEVICES: list[dict[str, Any]] = [
         "protocol": "s7",
         "template_id": "siemens_s7_1200",
         "points": [
-            {"name": "running", "address": "0", "data_type": "bool", "generator_type": "fixed", "min_value": 1, "max_value": 1},
-            {"name": "speed", "address": "1", "data_type": "float32", "generator_type": "sine", "min_value": 800, "max_value": 1500},
-            {"name": "temperature", "address": "3", "data_type": "float32", "generator_type": "random", "min_value": 40, "max_value": 85},
+            {"name": "running", "address": "DB1.DBX0.0", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+            {"name": "speed", "address": "DB1.DBD2", "data_type": "float32", "generator_type": "sine", "min_value": 800, "max_value": 1500},
+            {"name": "temperature", "address": "DB1.DBD6", "data_type": "float32", "generator_type": "random", "min_value": 40, "max_value": 85},
         ],
     },
     {
@@ -74,7 +74,7 @@ _DEMO_DEVICES: list[dict[str, Any]] = [
         "points": [
             {"name": "flow_rate", "address": "0", "data_type": "float32", "generator_type": "sine", "min_value": 0, "max_value": 100},
             {"name": "total", "address": "2", "data_type": "float32", "generator_type": "sawtooth", "min_value": 0, "max_value": 99999},
-            {"name": "alarm", "address": "4", "data_type": "bool", "generator_type": "fixed", "min_value": 0, "max_value": 0},
+            {"name": "alarm", "address": "4", "data_type": "bool", "generator_type": "fixed", "fixed_value": False},
         ],
     },
     {
@@ -189,10 +189,10 @@ _WATER_DEVICES: list[dict[str, Any]] = [
         "protocol": "s7",
         "template_id": "siemens_s7_1200",
         "points": [
-            {"name": "pump_on", "address": "0", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
-            {"name": "valve_pos", "address": "1", "data_type": "float32", "generator_type": "sine", "min_value": 0, "max_value": 100},
-            {"name": "pump_speed", "address": "3", "data_type": "float32", "generator_type": "random_walk", "min_value": 20, "max_value": 80},
-            {"name": "total_flow", "address": "5", "data_type": "float32", "generator_type": "sine", "min_value": 0, "max_value": 500},
+            {"name": "pump_on", "address": "DB1.DBX0.0", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+            {"name": "valve_pos", "address": "DB1.DBD2", "data_type": "float32", "generator_type": "sine", "min_value": 0, "max_value": 100},
+            {"name": "pump_speed", "address": "DB1.DBD6", "data_type": "float32", "generator_type": "random_walk", "min_value": 20, "max_value": 80},
+            {"name": "total_flow", "address": "DB1.DBD10", "data_type": "float32", "generator_type": "sine", "min_value": 0, "max_value": 500},
         ],
     },
     {
@@ -313,11 +313,11 @@ _CNC_DEVICES: list[dict[str, Any]] = [
         "protocol": "s7",
         "template_id": "siemens_s7_1500",
         "points": [
-            {"name": "cell_running", "address": "0", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
-            {"name": "cell_mode", "address": "1", "data_type": "uint16", "generator_type": "fixed", "fixed_value": 1},
-            {"name": "workorder_count", "address": "2", "data_type": "uint16", "generator_type": "sawtooth", "min_value": 0, "max_value": 9999},
-            {"name": "cycle_time_sec", "address": "4", "data_type": "float32", "generator_type": "random", "min_value": 30, "max_value": 120},
-            {"name": "quality_pass_rate", "address": "6", "data_type": "float32", "generator_type": "random_walk", "min_value": 90, "max_value": 99.5},
+            {"name": "cell_running", "address": "DB1.DBX0.0", "data_type": "bool", "generator_type": "fixed", "fixed_value": True},
+            {"name": "cell_mode", "address": "DB1.DBW2", "data_type": "uint16", "generator_type": "fixed", "fixed_value": 1},
+            {"name": "workorder_count", "address": "DB1.DBW4", "data_type": "uint16", "generator_type": "sawtooth", "min_value": 0, "max_value": 9999},
+            {"name": "cycle_time_sec", "address": "DB1.DBD8", "data_type": "float32", "generator_type": "random", "min_value": 30, "max_value": 120},
+            {"name": "quality_pass_rate", "address": "DB1.DBD12", "data_type": "float32", "generator_type": "random_walk", "min_value": 90, "max_value": 99.5},
         ],
     },
     {
