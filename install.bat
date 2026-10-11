@@ -1,6 +1,17 @@
 @echo off
+REM ============================================
+REM ProtoForge Installer (Windows)
+REM Runs installer.py which handles all logic in Python
+REM ============================================
+
+REM FIXED: same chcp 65001 UTF-8 restart workaround as quickstart.bat
+if "%~1"=="__utf8" goto main
 chcp 65001 >nul
-title ProtoForge
+cmd /s /c ""%~f0" __utf8"
+exit /b %errorlevel%
+
+:main
+title ProtoForge Installer
 
 echo.
 echo   ProtoForge Installer (Windows)
