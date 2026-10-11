@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.5 — 2026-10-11
+
+### Fixed — EdgeLite 未配置时协议启动产生大量 WARNING（深度审计发现）
+
+`_on_protocol_status` 事件处理器缺少 `_enabled` 检查，导致即使 EdgeLite 完全未配置，每次协议启动仍会尝试推送所有受影响设备并记录 WARNING。修复：
+
+1. 在 `_on_protocol_status` 开头添加 `if not self._enabled: return` 检查，与其他事件处理器（`_on_device_created` 等）保持一致。
+2. 在 `push_device` 返回 `skipped` 时（EdgeLite 未配置/协议不支持/已在推送中），将日志级别从 WARNING 降为 DEBUG，避免不必要的日志噪音。
+
 ## v1.6.4 — 2026-10-11
 
 ### Fixed — Demo 模式启动时大量 WARNING 日志刷屏（自检发现）
