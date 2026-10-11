@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.6.4 — 2026-10-11
+
+### Fixed — Demo 模式启动时大量 WARNING 日志刷屏（自检发现）
+
+用户日志分析发现 demo 模式启动后每个 tick 周期产生数十条 WARNING，严重影响日志可读性和用户信心。根因三处，全部修复：
+
+1. **S7 demo 设备地址使用纯数字（"0"、"1"、"3"）**：S7 地址解析器不认识纯数字格式，每次创建设备都输出 "S7 address '0' not recognized, defaulting to DB1 offset 0" 警告。修复：全部改为标准 S7 地址格式（DB1.DBX0.0、DB1.DBD2 等），同时 S7 解析器增加纯数字 → DB1 字节偏移的兼容处理（与 S7-Plus 解析器行为一致），用户填纯数字不再报警告。
+
+2. **场景启动重复调用 device.start()**：`engine.start_scenario()` 先通过 `start_device()` 把设备置入 STARTING 状态，随后 `scenario.start()` 又对所有设备调用 `device.start()`，触发 "No valid transition for event 'start' from state 'starting'" 警告。修复：`scenario.start()` 跳过已在 STARTING/RUN/STOPPING 状态的设备，只对 STOP/ERROR 状态的设备触发 start。
+
+3. **bool 报警点位 `alarm` 配置 `min_value=0, max_value=0`**：规则引擎写 `True` 到该点位时，虽然 bool 类型已跳过范围检查，但 `min=0, max=0` 的配置本身不合理（bool 点位不应该有数值范围限制）。修复：移除 min/max，改为 `fixed_value=False`。
+
+### Fixed — S7 地址解析器兼容纯数字输入
+
+S7 地址解析器此前对纯数字地址（如 "0"、"2"）输出 WARNING 并默认到 DB1 offset 0，现在正确解析为 DB1 的字节偏移（与 S7-Plus 协议解析器行为一致）。用户使用纯数字作为 S7 地址时不再产生警告日志，且地址偏移正确递增。
+
+## v1.6.3 — 2026-10-10
+
+### Fixed — GitHub Actions Docker 构建失败（aarch64 wheel 404）
+
+阿里云 PyPI 镜像同步滞后导致 `cryptography` 包的 aarch64 wheel 404。Dockerfile 改用官方 PyPI 源。
+
+### Fixed — Windows 环境编码崩溃
+
+`subprocess.run` 在 Windows 下默认使用 GBK 解码 UTF-8 输出导致 `UnicodeDecodeError`。`installer.py` 和 `win_service.py` 显式指定 `encoding="utf-8"`。
+
+### Fixed — bool 点位被范围检查截断
+
+`True`（1.0）超出 `[0, 0]` 范围被截断为 0.0。`device.write_point()` 对 bool 类型跳过数值范围检查。
+
+### Fixed — HTTP REST 示例代码路径错误
+
+连接指南中 HTTP REST 协议的示例代码 api_prefix 与实际服务端路由不一致。修正 defaults.py 中的示例路径。
+
+### Improved — 前端设备弹窗宽度与数值精度
+
+设备弹窗宽度扩大至 960px，增加 device_id 点击复制功能，float32 数值显示精度优化（<100 显示 4 位小数，≥100 显示 2 位小数）。
+
+### Improved — quickstart.bat 防闪退
+
+`quickstart.bat` 末尾增加无条件 `pause`，防止服务停止或启动失败时窗口闪退。
+
 ## v1.6.1 — 2026-10-08
 
 ### Fixed — 内置 Modbus 模板点位地址重叠

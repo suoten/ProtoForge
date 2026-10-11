@@ -71,7 +71,15 @@ class Scenario:
         # 启动时间序列回放器（若配置）
         if self._replay:
             self._replay.start()
+        # FIXED: 跳过已在 STARTING / RUN 状态的设备，避免重复触发 "start" 事件
+        # 导致 "No valid transition for event 'start' from state 'starting'" 警告。
+        # 场景创建流程中 engine.start_scenario() 已通过 start_device() 启动了设备，
+        # 此处的 device.start() 只是冗余保险，对已启动设备应静默跳过。
+        from protoforge.engine.state_machine import DeviceState
         for device in self._devices.values():
+            state = device.state_machine.get_state()
+            if state in (DeviceState.STARTING, DeviceState.RUN, DeviceState.STOPPING):
+                continue
             device.start()
 
     def _sync_collaboration_rules(self) -> None:
