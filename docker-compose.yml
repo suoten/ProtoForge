@@ -76,6 +76,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # S7/IEC 61850 默认端口 102 是 Linux 特权端口（<1024），容器以非 root 用户
+    # 运行时需要此能力才能绑定；若不需要 S7/61850 可删除此项
+    cap_add:
+      - NET_BIND_SERVICE
     volumes:
       - protoforge-data:/app/data
     restart: unless-stopped
