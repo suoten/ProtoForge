@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.6.8 / v1.6.9 — 2026-10-12
+
+### Fixed — AB (EtherNet/IP) 与 Kepware 深度兼容（用户 raw_frames 帧捕获定位，实测闭环）
+
+群友用 Kepware (Allen-Bradley ControlLogix Ethernet 驱动) 连接报 "Frame received contains errors / Unable to retrieve the identity"，经六轮修复、最终以其 raw_frames 实抓帧回放验证闭环（v1.6.9）：
+
+1. **CIP 错误帧格式**：标准应为 [服务|0x80][状态][附加状态长度 UINT]，原实现多发 4 字节畸形帧；
+2. **tag 跨设备路由**：原实现只查默认设备的点位表，多设备部署时非默认设备 tag 全部 0x04；
+3. **已连接通道服务分发**：身份查询/属性列表/批量读补齐 SendUnitData 路径；
+4. **0x52 双语义**：区分 Connection Manager 的 Unconnected Send 与 Read Tag Fragmented；
+5. **UCMM 完整格式**（实测帧定位）：CM 路径后含 priority/timeout 各 1 字节，内层支持 Large Forward Open (0x55)/Forward Close (0x4E) 分发——Kepware 把建连请求也包在 UCMM 里；
+6. **MSF 偏移基准**：Multiple Service Packet 偏移从 count 字段起始处计算（pycomm3 与实测 Kepware 帧双确认），原实现按偏移表之后计算导致批量读整体截错位；
+7. **ListIdentity 规范重写**：版本 UINT、socket 地址布局、State 字节逐项对齐；
+8. **高级配置暴露 raw_frames 开关**，收发帧 16 进制日志便于客户端兼容性排查。
+
+验证：真实 Kepware 帧回放（UCMM 建连/MSF 批量读）+ pylogix 连接读写 + 11 项 AB 单元测试全绿。Kepware 已可正常读取仿真数据。
+
 ## v1.6.7 — 2026-10-11
 
 ### Fixed — 桌面模式 exe 在不同机器上 API 路径不一致（用户反馈）
