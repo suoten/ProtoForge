@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.7 — 2026-10-11
+
+### Fixed — 桌面模式 exe 在不同机器上 API 路径不一致（用户反馈）
+
+用户反馈在虚拟机上打包的 ProtoForge.exe 拷到主机和虚拟机运行时，HTTP API 路径不一致——主机有 `/api/v1` 前缀，虚拟机没有。根因和修复：
+
+1. **桌面模式未同步 `PROTOFORGE_PORT` 环境变量**：`run_desktop()` 使用端口 18080 启动 uvicorn，但没有设置 `PROTOFORGE_PORT` 环境变量。`config.Settings` 从 `.env` 文件读取 `PROTOFORGE_PORT`（可能是 8000），导致 `settings.port` 与实际监听端口不一致。这会影响 CORS 默认 origins、系统设置页面显示的端口号、协议端口冲突校验等逻辑。修复：在 `run_desktop()` 中设置 `os.environ["PROTOFORGE_PORT"]` 和 `PROTOFORGE_HOST` 为实际值，使 Settings 能正确反映桌面模式的端口配置。
+
+2. **缺少源码模式实例冲突检测**：如果虚拟机上同时运行了源码模式（端口 8000）和桌面模式（端口 18080），用户可能在浏览器中混淆访问的实例。修复：桌面模式启动时检测 8000 端口是否已有服务运行，如有则输出提醒信息。
+
+3. **`__init__.py` 版本号与 `pyproject.toml` 不一致**：`pyproject.toml` 已更新到 1.6.6 但 `__init__.py` 仍为 1.6.3。修复：同步为 1.6.7。
+
 ## v1.6.6 — 2026-10-11
 
 ### Fixed — Win11 裸机环境 quickstart.bat 启动失败（用户反馈）
