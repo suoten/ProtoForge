@@ -509,6 +509,11 @@ class AbServer(ProtocolServer):
     def _handle_cip_forward_open(self, session: int, cip_data: bytes,
                                  sender_context: bytes = bytes(8),
                                  large: bool = False) -> bytes:
+        return self._wrap_cip_response(
+            session, self._build_cip_forward_open(cip_data, large=large), sender_context)
+
+    def _build_cip_forward_open(self, cip_data: bytes, large: bool = False) -> bytes:
+        """构造裸 CIP Forward Open 应答（不含 EIP 封装，供 UCMM 内层分发使用）"""
         # FIX: 正确解析 Forward Open 请求
         # 标准格式(0x54): Service(1)+PathSize(1)+Path(N*2)+Priority(1)+TimeoutTicks(1)+
         #        O->T ConnID(4)+T->O ConnID(4)+ConnSerial(2)+VendorID(2)+OrigSerial(4)+
@@ -567,17 +572,20 @@ class AbServer(ProtocolServer):
             cip_resp += struct.pack("<H", o_t_params)
             cip_resp += struct.pack("<H", t_o_params)
         cip_resp += bytes([0x00])  # Connection Path Size = 0 (no path echoed)
-        return self._wrap_cip_response(session, cip_resp, sender_context)
+        return bytes(cip_resp)
 
     def _handle_cip_forward_close(self, session: int, cip_data: bytes,
                                   sender_context: bytes = bytes(8)) -> bytes:
+        return self._wrap_cip_response(session, self._build_cip_forward_close(), sender_context)
+
+    def _build_cip_forward_close(self) -> bytes:
         # FIX: Forward Close Response service = 0xCE (0x4E | 0x80)
         cip_resp = bytearray()
         cip_resp += bytes([0xCE])
         cip_resp += bytes([0x00])       # Reserved
         cip_resp += bytes([0x00])       # Status = Success
         cip_resp += bytes([0x00])       # Additional Status Size = 0
-        return self._wrap_cip_response(session, cip_resp, sender_context)
+        return bytes(cip_resp)
 
     @staticmethod
     def _pack_cip_value(data_type: str, value: Any) -> bytes:
@@ -957,11 +965,15 @@ class AbServer(ProtocolServer):
             return self._make_bare_cip_error(0x0A, 0x05)
         offsets = [struct.unpack("<H", cip_data[offsets_start + 2 * i:offsets_start + 2 + 2 * i])[0]
                    for i in range(count)]
+        # FIXED-P0(实测 Kepware 帧捕获): MSF 偏移基准 = count 字段起始处（含
+        # count+offsets 头部），pycomm3 构建请求时首偏移 = 2+2*count，Kepware
+        # 实测帧亦如此。原实现按"偏移表之后"算基准，导致整包子请求被截错位，
+        # Kepware 批量读全部报 framing error。
         replies: list[bytes] = []
         for i, off in enumerate(offsets):
-            seg_start = data_start + off
-            seg_end = data_start + offsets[i + 1] if i + 1 < count else len(cip_data)
-            sub = cip_data[seg_start:seg_end] if seg_start <= seg_end <= len(cip_data) else b""
+            seg_start = path_end + off
+            seg_end = path_end + offsets[i + 1] if i + 1 < count else len(cip_data)
+            sub = cip_data[seg_start:seg_end] if path_end <= seg_start <= seg_end <= len(cip_data) else b""
             if not sub:
                 replies.append(self._make_bare_cip_error(0x0A, 0x08))
                 continue
@@ -977,7 +989,9 @@ class AbServer(ProtocolServer):
         resp = bytearray()
         resp += bytes([0x8A, 0x00, 0x00, 0x00])       # Service|0x80 + Reserved + Status + AddStatusSize
         resp += struct.pack("<H", count)
-        rel = 0
+        # FIXED-P0: 应答偏移基准与请求一致 —— 相对 count 字段起始（含 count+offsets 头部），
+        # 首偏移 = 2+2*count（pycomm3 _parse_reply 同样按此基准切片）
+        rel = 2 + 2 * count
         for r in replies:
             resp += struct.pack("<H", rel)
             rel += len(r)
@@ -985,44 +999,66 @@ class AbServer(ProtocolServer):
         return bytes(resp)
 
     _UCMM_INNER_SERVICES = {0x01, 0x02, 0x03, 0x04, 0x0A, 0x0E, 0x10, 0x4C, 0x4D,
-                            0x4E, 0x52, 0x53, 0x54, 0x5B}
+                            0x4E, 0x52, 0x53, 0x54, 0x55, 0x5B}
 
     def _is_unconnected_send(self, cip_data: bytes) -> bool:
-        """判断 0x52 请求是 Unconnected Send 还是 Read Tag Fragmented（结构化识别）"""
-        if len(cip_data) < 5:
+        """判断 0x52 是 Unconnected Send 还是 Read Tag Fragmented
+
+        真实 UCMM 格式（参照 pycomm3，与真实 PLC 互通验证）：
+        [0x52][path_size][CM 路径(20 06 24 01)][priority 1][timeout_ticks 1]
+        [msg_size UINT][msg][补齐][route_path]
+        """
+        if len(cip_data) < 8:
             return False
-        msg_size = struct.unpack("<H", cip_data[1:3])[0]
-        if msg_size < 2 or 3 + msg_size > len(cip_data):
+        path_end = self._get_path_end_offset(cip_data)
+        # CM 路径后是 priority+timeout(2 字节) + msg_size(UINT)
+        if path_end + 4 > len(cip_data):
             return False
-        return cip_data[3] in self._UCMM_INNER_SERVICES
+        msg_size = struct.unpack("<H", cip_data[path_end + 2:path_end + 4])[0]
+        if msg_size < 2 or path_end + 4 + msg_size > len(cip_data):
+            return False
+        return cip_data[path_end + 4] in self._UCMM_INNER_SERVICES
 
     def _handle_cip_unconnected_send(self, session: int, cip_data: bytes,
                                      sender_context: bytes = bytes(8)) -> bytes:
         """CIP Unconnected Send (Connection Manager 0x52) —— 拆包内层请求并分发
 
-        请求: [0x52][内层消息长度 UINT][内层 CIP 请求（长度按偶数补齐）][路由路径...]
+        请求: [0x52][path_size][CM 路径][priority 1][timeout_ticks 1]
+              [msg_size UINT][内层 CIP 请求][补齐][route path]
         响应: 直接返回内层请求的应答（不额外包裹）
         """
-        if len(cip_data) < 4:
+        path_end = self._get_path_end_offset(cip_data)
+        if path_end + 4 > len(cip_data):
             return self._make_cip_error_response(session, 0x52, 0x05, sender_context)
-        msg_size = struct.unpack("<H", cip_data[1:3])[0]
-        inner = cip_data[3:3 + msg_size]
+        msg_size = struct.unpack("<H", cip_data[path_end + 2:path_end + 4])[0]
+        inner = cip_data[path_end + 4:path_end + 4 + msg_size]
         if not inner:
             return self._make_cip_error_response(session, 0x52, 0x05, sender_context)
+        return self._wrap_cip_response(
+            session, self._dispatch_inner_cip(inner), sender_context)
+
+    def _dispatch_inner_cip(self, inner: bytes) -> bytes:
+        """分发 UCMM 内层 CIP 请求，返回裸 CIP 应答"""
+        if not inner:
+            return self._make_bare_cip_error(0x52, 0x08)
         svc = inner[0]
         if svc in (0x4C, 0x52):
-            resp = self._build_cip_read_response(inner)
-        elif svc in (0x4D, 0x53):
-            resp = self._build_cip_write_response(inner)
-        elif svc == 0x01:
-            resp = self._build_cip_get_attributes_all(inner)
-        elif svc == 0x03:
-            resp = self._build_cip_get_attribute_list(inner)
-        elif svc == 0x0A:
-            resp = self._build_cip_multiple_service(inner)
-        else:
-            resp = self._make_bare_cip_error(svc, 0x08)
-        return self._wrap_cip_response(session, resp, sender_context)
+            return self._build_cip_read_response(inner)
+        if svc in (0x4D, 0x53):
+            return self._build_cip_write_response(inner)
+        if svc == 0x01:
+            return self._build_cip_get_attributes_all(inner)
+        if svc == 0x03:
+            return self._build_cip_get_attribute_list(inner)
+        if svc == 0x0A:
+            return self._build_cip_multiple_service(inner)
+        if svc == 0x54:
+            return self._build_cip_forward_open(inner, large=False)
+        if svc == 0x55:
+            return self._build_cip_forward_open(inner, large=True)
+        if svc == 0x4E:
+            return self._build_cip_forward_close()
+        return self._make_bare_cip_error(svc, 0x08)
 
     def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
         """FIXED: tag 大小写不敏感匹配 —— Kepware 等客户端常将 tag 转为大写
