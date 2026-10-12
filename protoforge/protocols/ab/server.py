@@ -173,8 +173,20 @@ class AbServer(ProtocolServer):
                 if eip_length > 0:
                     payload = await asyncio.wait_for(reader.readexactly(eip_length), timeout=_READ_TIMEOUT)
                 data = header + payload
+                # FIXED: 支持 raw_frames 调试开关 —— 16 进制记录 Kepware 等客户端
+                # 的原始收发帧，用于兼容性问题定位
+                raw = bool(getattr(self, '_start_config', {}).get("raw_frames"))
+                if raw:
+                    self._log_debug("recv", "frame_rx",
+                                    f"RX frame cmd=0x{struct.unpack('<H', data[0:2])[0]:04x} len={len(data)}",
+                                    detail={"hex": data[:256].hex(" "), "length": len(data),
+                                            "peer": str(addr)})
                 response = self._process_eip(data)
                 if response:
+                    if raw:
+                        self._log_debug("send", "frame_tx",
+                                        f"TX frame cmd=0x{struct.unpack('<H', response[0:2])[0]:04x} len={len(response)}",
+                                        detail={"hex": response[:256].hex(" "), "length": len(response)})
                     writer.write(response)
                     await writer.drain()
         except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
@@ -1103,5 +1115,8 @@ class AbServer(ProtocolServer):
             "properties": {
                 "host": {"type": "string", "default": "0.0.0.0", "description": desc("listen_address", "EtherNet/IP server listen address")},
                 "port": {"type": "integer", "default": 44818, "description": desc("ab_port", "EtherNet/IP port (default 44818)")},
+                # FIXED: 高级配置界面暴露 raw_frames 开关 —— 排查客户端兼容性时
+                # 可在网页直接打开 16 进制帧日志（此前只能通过 API 传参设置）
+                "raw_frames": {"type": "boolean", "default": False, "description": "Log raw frames in hex (debug client compatibility issues)"},
             },
         }
