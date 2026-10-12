@@ -227,22 +227,26 @@ class AbServer(ProtocolServer):
         except (ValueError, AttributeError):
             ip_bytes = b"\x00\x00\x00\x00"
         identity = bytearray()
-        identity += struct.pack("<I", 0x00000001)
-        identity += struct.pack("<H", 0x0001)
-        identity += struct.pack("<H", 0x0001)
-        identity += struct.pack("<H", 0x0000)
-        identity += struct.pack("<H", 0x008E)
-        identity += struct.pack("<H", 0x0001)
-        identity += struct.pack("<H", port)
-        identity += ip_bytes
-        identity += bytes([0x01, 0x00])
-        identity += struct.pack("<I", 0x00000000)
-        identity += struct.pack("<H", 0x0000)
-        identity += struct.pack("<H", 0x0000)
-        identity += struct.pack("<H", 0x0000)
-        device_name = config.get("device_name", "ProtoForge-AB").encode("utf-8")
-        identity += struct.pack("<B", len(device_name))
+        # FIXED: 按 CIP Vol2 ListIdentity 规范重写 Identity Item —— 原实现的
+        # 协议版本写成 DWORD（应为 UINT）、socket 地址布局错位（sin_family 应为
+        # AF_UNSPEC(0)、sin_zero 8 字节缺失）、结尾缺 State 字节。pylogix 解析
+        # 宽松能容忍，Kepware 严格解析即报 "Frame received contains errors /
+        # Unable to retrieve the identity" 并降级符号协议。
+        identity += struct.pack("<H", 1)                    # Encapsulation protocol version
+        identity += struct.pack("<H", 0)                    # sin_family = AF_UNSPEC
+        identity += struct.pack("<H", port)                 # sin_port
+        identity += ip_bytes                                # sin_addr
+        identity += bytes(8)                                # sin_zero
+        identity += struct.pack("<H", 1)                    # Vendor ID
+        identity += struct.pack("<H", 14)                   # Device Type: PLC
+        identity += struct.pack("<H", 1)                    # Product Code
+        identity += bytes([1, 0])                           # Revision 1.0
+        identity += struct.pack("<H", 0x0000)               # Status
+        identity += struct.pack("<I", 0x00000001)           # Serial Number
+        device_name = str(config.get("device_name", "ProtoForge-AB")).encode("utf-8")[:23]
+        identity += struct.pack("<B", len(device_name))     # Product Name (SHORT_STRING)
         identity += device_name
+        identity += bytes([0x00])                           # State
         # Bug 3 fix: 添加Item封装层 (Item Count + Item Type + Item Length)
         item_payload = bytearray()
         item_payload += struct.pack("<H", 0x0001)              # Item Count = 1
