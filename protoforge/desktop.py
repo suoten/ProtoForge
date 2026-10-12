@@ -254,11 +254,28 @@ def run_desktop(host: str = "127.0.0.1", port: int | None = None,
 
     target_port = port or DEFAULT_DESKTOP_PORT
 
+    # FIXED(v1.6.7): 同步 PROTOFORGE_PORT 环境变量为实际监听端口，
+    # 使 config.Settings 和 create_app() 中的 CORS 默认 origins 能正确反映
+    # 桌面模式端口（否则 .env 中 PROTOFORGE_PORT=8000 会导致 CORS 只允许
+    # localhost:8000，同源虽不受 CORS 限制，但 settings.port 不一致会影响
+    # 前端"系统设置"页面显示的端口号、协议端口冲突校验等逻辑）。
+    os.environ["PROTOFORGE_PORT"] = str(target_port)
+    os.environ.setdefault("PROTOFORGE_HOST", host)
+
     # 已有实例在跑 → 只开界面（重复双击语义）
     if is_port_serving(target_port, host):
         print(f"+ 检测到 ProtoForge 已在 {ui_url(target_port, host)} 运行，直接打开界面")
         open_ui(target_port, host, prefer_native=False)
         return 0
+
+    # FIXED(v1.6.7): 检测源码模式（默认端口 8000）是否已有 ProtoForge 实例在运行，
+    # 避免用户同时运行两个实例后在浏览器中混淆（源码模式 API 路径与桌面模式一致，
+    # 但数据库/配置可能不同，且 8000 端口上的实例不受桌面模式托盘管理）。
+    _source_port = 8000
+    if target_port != _source_port and is_port_serving(_source_port, host):
+        print(f"! 注意：检测到端口 {_source_port} 上已有服务运行（可能是源码模式的 ProtoForge）。")
+        print(f"  桌面模式将在端口 {target_port} 启动，两个实例互不干扰但数据独立。")
+        print(f"  如需统一，请先停止端口 {_source_port} 上的服务。")
 
     port = pick_desktop_port(target_port)
 
