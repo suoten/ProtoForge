@@ -349,7 +349,13 @@ class AbServer(ProtocolServer):
             # FIXED: Kepware 批量读用 Multiple Service Packet，缺失时报 framing error
             return self._handle_cip_multiple_service(session, cip_data, sender_context)
         elif cip_service == 0x52:
-            # Read Tag Fragmented —— 点位值小，按普通读处理（偏移字段被忽略）
+            # 0x52 双语义：Unconnected Send（连接管理器服务，Kepware 等标准客户端
+            # 的未连接请求包裹层）或 Read Tag Fragmented。
+            # 结构化区分：UCMM 帧为 [0x52][内层长度 UINT][内层 CIP 请求][路由路径]，
+            # 内层首字节必须是合法服务码；分段读帧为 [0x52][路径字数][路径][元素数][偏移]，
+            # [1:3] 会被读成超大长度而不满足 UCMM 结构。
+            if self._is_unconnected_send(cip_data):
+                return self._handle_cip_unconnected_send(session, cip_data, sender_context)
             return self._handle_cip_read_tag(session, cip_data, sender_context)
         elif cip_service == 0x53:
             # Write Tag Fragmented —— 按普通写处理
@@ -961,6 +967,46 @@ class AbServer(ProtocolServer):
             rel += len(r)
         resp += data_area
         return bytes(resp)
+
+    _UCMM_INNER_SERVICES = {0x01, 0x02, 0x03, 0x04, 0x0A, 0x0E, 0x10, 0x4C, 0x4D,
+                            0x4E, 0x52, 0x53, 0x54, 0x5B}
+
+    def _is_unconnected_send(self, cip_data: bytes) -> bool:
+        """判断 0x52 请求是 Unconnected Send 还是 Read Tag Fragmented（结构化识别）"""
+        if len(cip_data) < 5:
+            return False
+        msg_size = struct.unpack("<H", cip_data[1:3])[0]
+        if msg_size < 2 or 3 + msg_size > len(cip_data):
+            return False
+        return cip_data[3] in self._UCMM_INNER_SERVICES
+
+    def _handle_cip_unconnected_send(self, session: int, cip_data: bytes,
+                                     sender_context: bytes = bytes(8)) -> bytes:
+        """CIP Unconnected Send (Connection Manager 0x52) —— 拆包内层请求并分发
+
+        请求: [0x52][内层消息长度 UINT][内层 CIP 请求（长度按偶数补齐）][路由路径...]
+        响应: 直接返回内层请求的应答（不额外包裹）
+        """
+        if len(cip_data) < 4:
+            return self._make_cip_error_response(session, 0x52, 0x05, sender_context)
+        msg_size = struct.unpack("<H", cip_data[1:3])[0]
+        inner = cip_data[3:3 + msg_size]
+        if not inner:
+            return self._make_cip_error_response(session, 0x52, 0x05, sender_context)
+        svc = inner[0]
+        if svc in (0x4C, 0x52):
+            resp = self._build_cip_read_response(inner)
+        elif svc in (0x4D, 0x53):
+            resp = self._build_cip_write_response(inner)
+        elif svc == 0x01:
+            resp = self._build_cip_get_attributes_all(inner)
+        elif svc == 0x03:
+            resp = self._build_cip_get_attribute_list(inner)
+        elif svc == 0x0A:
+            resp = self._build_cip_multiple_service(inner)
+        else:
+            resp = self._make_bare_cip_error(svc, 0x08)
+        return self._wrap_cip_response(session, resp, sender_context)
 
     def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
         """FIXED: tag 大小写不敏感匹配 —— Kepware 等客户端常将 tag 转为大写
