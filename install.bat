@@ -43,6 +43,9 @@ where python >nul 2>&1
 if %errorlevel% neq 0 (
     echo   [ERROR] Python not found. Install Python 3.10+ from https://www.python.org/downloads/
     echo   Make sure to check "Add Python to PATH" during installation.
+    echo   FIXED HINT: if you right-clicked "Run as administrator", the admin PATH
+    echo   may not include a per-user Python. Please double-click this file to run
+    echo   it normally instead, or open a cmd and run it from the project folder.
     echo.
     pause
     exit /b 1

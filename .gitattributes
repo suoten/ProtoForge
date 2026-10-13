@@ -1,0 +1,5 @@
+# FIXED: Windows 批处理必须 CRLF —— cmd.exe 对 LF 行尾的 .bat 解析会错乱
+# （goto/标签/括号块碎裂），zip 下载不转换行尾，必须由仓库保证
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
