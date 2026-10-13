@@ -286,6 +286,18 @@
         </template>
       </n-modal>
 
+      <!-- FIXED: 行内快速写值轻量对话框（设备列表一键直达） -->
+      <n-modal v-model:show="qwVisible" preset="card" :title="t('devices.quickWriteTitle', { name: qwDevice?.name || '' })" style="width:min(460px, 92vw)">
+        <n-space vertical size="small">
+          <n-select v-model:value="qwPoint" :options="qwPoints.map(p => ({ label: p.name, value: p.name }))" :placeholder="t('devices.selectPoint')" filterable :loading="qwVisible && qwPoints.length === 0" />
+          <n-input v-model:value="qwValue" :placeholder="t('devices.inputValue')" @keyup.enter="quickWriteDevicePoint" />
+          <n-space justify="end" size="small">
+            <n-button @click="qwVisible = false">{{ t('common.cancel') }}</n-button>
+            <n-button type="primary" @click="quickWriteDevicePoint" :loading="qwLoading">{{ t('devices.write') }}</n-button>
+          </n-space>
+        </n-space>
+      </n-modal>
+
       <n-modal v-model:show="showPointsModal" preset="card" :title="t('devices.devicePoints')" style="width:min(960px, 95vw)">
         <n-space v-if="currentViewDeviceInfo" align="center" size="small" style="margin-bottom:8px">
           <n-tag :type="currentViewDeviceInfo.status === 'online' ? 'success' : currentViewDeviceInfo.status === 'error' ? 'error' : 'default'" size="small" :bordered="false">{{ currentViewDeviceInfo.status || 'offline' }}</n-tag>
@@ -697,6 +709,43 @@ const batchForm = ref({ templateId: null, count: 5, namePrefix: '', idPrefix: ''
 const writePointName = ref('')
 const writePointValue = ref('')
 const writeLoading = ref(false)
+
+// FIXED: 行内快速写值 —— 设备列表直接弹出轻量对话框，不再需要打开详情找面板
+const qwVisible = ref(false)
+const qwDevice = ref(null)
+const qwPoints = ref([])
+const qwPoint = ref('')
+const qwValue = ref('')
+const qwLoading = ref(false)
+
+async function openQuickWrite(row) {
+  qwDevice.value = row
+  qwPoint.value = ''
+  qwValue.value = ''
+  qwPoints.value = []
+  qwVisible.value = true
+  try {
+    const res = await api.getDevicePoints(row.id)
+    qwPoints.value = Array.isArray(res?.points) ? res.points : []
+  } catch { /* 静默，下拉为空即可 */ }
+}
+
+async function quickWriteDevicePoint() {
+  if (!qwDevice.value || !qwPoint.value) { message.warning(t('devices.pleaseSelectPoint')); return }
+  qwLoading.value = true
+  try {
+    const dt = qwPoints.value.find(p => p.name === qwPoint.value)?.data_type || ''
+    let value = String(qwValue.value ?? '').trim()
+    if (dt === 'bool') value = ['true', '1', 'on', 'yes'].includes(value.toLowerCase())
+    else if (['int16', 'int32', 'uint16', 'uint32'].includes(dt)) value = parseInt(value, 10)
+    else if (['float32', 'float64'].includes(dt)) value = parseFloat(value)
+    await api.writeDevicePoint(qwDevice.value.id, qwPoint.value, value)
+    message.success(t('devices.writeSuccess', { name: qwPoint.value }))
+    qwVisible.value = false
+  } catch (e) {
+    message.error(t('devices.writeFailed') + ': ' + (e.response?.data?.detail || e.message))
+  } finally { qwLoading.value = false }
+}
 const resetLoading = ref(false)
 const currentViewDeviceId = ref('')
 const currentViewDeviceInfo = ref(null)
@@ -964,16 +1013,24 @@ const columns = computed(() => [
     }
   },
   { title: t('devices.points'), key: 'points', width: 70, render: (row) => (row.points || []).length },
-  {
-    title: t('devices.actions'), key: 'actions', width: 220,
-    render: (row) => h(NSpace, { size: 4 }, () => [
-      // 测点（图标直显）
-      h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id), title: t('devices.points') }, () => [
-        h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
-          h('circle', { cx: 12, cy: 12, r: 3 }),
-          h('circle', { cx: 12, cy: 12, r: 9, opacity: 0.3 }),
-        ])
-      ]),
+      {
+        title: t('devices.actions'), key: 'actions', width: 252,
+        render: (row) => h(NSpace, { size: 4 }, () => [
+          // 测点（图标直显）
+          h(NButton, { size: 'tiny', tertiary: true, onClick: () => viewPoints(row.id), title: t('devices.points') }, () => [
+            h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+              h('circle', { cx: 12, cy: 12, r: 3 }),
+              h('circle', { cx: 12, cy: 12, r: 9, opacity: 0.3 }),
+            ])
+          ]),
+          // FIXED: 行内快速写值 —— 原流程需打开详情弹窗再找“快速写入”面板，
+          // 新手不知道写入在哪（用户实测反馈），现在一步直达
+          h(NButton, { size: 'tiny', type: 'success', secondary: true, onClick: () => openQuickWrite(row), title: t('devices.quickWrite') }, () => [
+            h('svg', { viewBox: '0 0 24 24', width: 14, height: 14, fill: 'none', stroke: 'currentColor', 'stroke-width': 2 }, [
+              h('path', { d: 'M12 20h9' }),
+              h('path', { d: 'M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' }),
+            ])
+          ]),
       // 启停（图标直显，颜色区分破坏性）
       row.status === 'online' || row.status === 'running'
         ? h(NButton, { size: 'tiny', type: 'warning', secondary: true, loading: togglingIds.value.has(row.id), onClick: () => toggleDevice(row.id, 'stop'), title: t('common.stop') }, () => [
