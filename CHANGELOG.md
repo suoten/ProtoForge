@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.10 ~ v1.6.14 — 2026-10-12/13
+
+### Fixed — Windows 启动链路战役（裸机 Win11 LTSC 实测反馈驱动）
+
+用户在裸机 Win11 LTSC 上启动连番踩坑，逐层修复：
+
+1. **quickstart 防闪退**（v1.6.10）：父进程捕获子脚本异常退出码并展示日志；Microsoft Store 假 python 别名检测；服务启动前导入预检——瞬间崩溃的真实堆栈直接显示；
+2. **install.bat 路径修复**（v1.6.11）：先 cd 到脚本所在目录，修复 installer.py 找不到的问题；缺文件时明确指引便携包/源码包的正确用法；
+3. **版本自报**（v1.6.12）：启动时打印代码版本号，用户截图即可自证代码新旧；
+4. **cmd AutoRun 防御**（v1.6.13）：部分国产软件往 cmd AutoRun 注册码页切换，子进程入口再强制 chcp 65001；
+5. **.bat 行尾总根因**（v1.6.14）：仓库内 .bat/.cmd/.ps1 此前以 LF 行尾存储，zip 下载不转换行尾，cmd 解析 LF 批处理会错乱（碎片命令/乱码/闪退的总根源）。新增 .gitattributes 强制 .bat/.cmd/.ps1 CRLF 检出；
+6. 完整版 compose 补 cap_add NET_BIND_SERVICE（S7/IEC61850 特权端口 102）；install.bat 增加"以管理员运行导致个人目录 Python 不可见"提示。
+
 ## v1.6.8 / v1.6.9 — 2026-10-12
 
 ### Fixed — AB (EtherNet/IP) 与 Kepware 深度兼容（用户 raw_frames 帧捕获定位，实测闭环）
