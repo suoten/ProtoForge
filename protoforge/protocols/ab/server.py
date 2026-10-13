@@ -12,7 +12,9 @@ from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer,
 
 logger = logging.getLogger(__name__)
 
-_READ_TIMEOUT = 30  # FIXED-P0: 模块级常量，_handle_connection中timeout=_READ_TIMEOUT引用的是模块变量而非self
+_READ_TIMEOUT = 300  # FIXED-P0: 原 30s 会踢掉空闲客户端 —— 汇川 HMI 仿真模式轮询停顿
+# 超过 30s 即被断开（真实 PLC 永不主动踢空闲连接，用户实测“连实物稳定、连仿真掉线”）。
+# 改为 300s，且可通过启动配置 read_timeout 调整
 
 _CIP_TYPE_MAP = {
     "bool": (0xC1, 1),
@@ -165,13 +167,22 @@ class AbServer(ProtocolServer):
         addr = writer.get_extra_info("peername")
         logger.debug("AB connection from %s", addr)
         try:
+            # FIXED: 空闲超时可配置 + TCP keepalive 兜底死连接
+            read_timeout = int(getattr(self, '_start_config', {}).get('read_timeout', _READ_TIMEOUT))
+            try:
+                import socket as _socket
+                sock = writer.get_extra_info('socket')
+                if sock is not None:
+                    sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
+            except Exception:
+                pass
             while self._server_running:
                 # FIXED-C04: 先读EIP头24字节获取length，再读剩余数据，避免大报文截断
-                header = await asyncio.wait_for(reader.readexactly(24), timeout=_READ_TIMEOUT)
+                header = await asyncio.wait_for(reader.readexactly(24), timeout=read_timeout)
                 eip_length = struct.unpack("<H", header[2:4])[0]
                 payload = b""
                 if eip_length > 0:
-                    payload = await asyncio.wait_for(reader.readexactly(eip_length), timeout=_READ_TIMEOUT)
+                    payload = await asyncio.wait_for(reader.readexactly(eip_length), timeout=read_timeout)
                 data = header + payload
                 # FIXED: 支持 raw_frames 调试开关 —— 16 进制记录 Kepware 等客户端
                 # 的原始收发帧，用于兼容性问题定位
@@ -189,9 +200,14 @@ class AbServer(ProtocolServer):
                                         detail={"hex": response[:256].hex(" "), "length": len(response)})
                     writer.write(response)
                     await writer.drain()
-        except (ConnectionResetError, asyncio.CancelledError, asyncio.TimeoutError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
+        except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
             self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉
+        except asyncio.TimeoutError:
+            # FIXED: 空闲超时踢线必须留下可见痕迹 —— 否则用户只看到“掉线”不知道原因
+            self._log_debug("system", "connection_idle_timeout",
+                            f"Client idle for {read_timeout}s, connection closed (read_timeout configurable in advanced config)")
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, f"idle timeout {read_timeout}s")
         except Exception as e:  # FIXED-P1: 兜底捕获所有其他异常，避免单个帧处理错误导致整个连接崩溃
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("AB connection handler unexpected error: %s", e)
@@ -1154,5 +1170,6 @@ class AbServer(ProtocolServer):
                 # FIXED: 高级配置界面暴露 raw_frames 开关 —— 排查客户端兼容性时
                 # 可在网页直接打开 16 进制帧日志（此前只能通过 API 传参设置）
                 "raw_frames": {"type": "boolean", "default": False, "description": "Log raw frames in hex (debug client compatibility issues)"},
+                "read_timeout": {"type": "integer", "default": 300, "description": "Idle client timeout in seconds (HMI simulation may pause polling; real PLC never drops idle clients)"},
             },
         }
