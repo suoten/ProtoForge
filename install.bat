@@ -11,6 +11,8 @@ cmd /s /c ""%~f0" __utf8"
 exit /b %errorlevel%
 
 :main
+REM FIXED: 防御 cmd AutoRun 干扰（部分国产软件会改码页），子进程再强制一次 UTF-8
+chcp 65001 >nul
 REM FIXED: 必须先切到脚本所在目录 —— 双击"以管理员身份运行"或从其他目录
 REM 调用时 cwd 不在这里，相对路径 protoforge\installer.py 会找错位置，
 REM 报 "can't open file ... installer.py"
