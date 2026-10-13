@@ -30,6 +30,10 @@ exit /b %PFQS_EC%
 
 :main
 title ProtoForge Quick Start
+REM FIXED: 部分国产软件会往 cmd 的 AutoRun 注册表项写入 chcp 936 等代码，
+REM 导致子进程重启后码页被改回 GBK，UTF-8 脚本再次解析错乱（用户实测）。
+REM 因此子进程入口处再强制一次 65001。
+chcp 65001 >nul
 cd /d "%~dp0"
 set "PFQS_LOG=%TEMP%\protoforge_quickstart.log"
 type nul > "%PFQS_LOG%"
