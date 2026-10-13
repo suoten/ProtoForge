@@ -11,11 +11,28 @@ REM NOTE: keep every line ABOVE `chcp 65001` pure ASCII.
 if "%~1"=="__utf8" goto main
 chcp 65001 >nul
 cmd /s /c ""%~f0" __utf8"
-exit /b %errorlevel%
+REM FIXED: 子进程异常退出（含解析崩溃导致的"一闪而过"）时，父窗口必须
+REM 停下来显示日志，绝不允许闪退。Ctrl+C 正常停止服务时错误码为负数，
+REM 仅提示不当作错误。
+set "PFQS_EC=%errorlevel%"
+echo 1 2>%TEMP%\pfqs_flag.txt
+if %PFQS_EC% LSS 0 goto parent_done
+if "%PFQS_EC%"=="0" goto parent_done
+echo.
+echo   [错误] 启动脚本异常退出（错误码 %PFQS_EC%）。
+echo   详细日志: %TEMP%\protoforge_quickstart.log
+echo   （如果刚才是你手动 Ctrl+C 停止服务，可直接关闭本窗口）
+echo.
+if exist "%TEMP%\protoforge_quickstart.log" type "%TEMP%\protoforge_quickstart.log"
+pause
+:parent_done
+exit /b %PFQS_EC%
 
 :main
 title ProtoForge Quick Start
 cd /d "%~dp0"
+set "PFQS_LOG=%TEMP%\protoforge_quickstart.log"
+type nul > "%PFQS_LOG%"
 
 echo.
 echo   ======================================================
@@ -24,7 +41,7 @@ echo         物联网协议仿真与测试平台
 echo   ======================================================
 echo.
 
-REM Step 1: 检查 Python
+REM Step 1: 检查 Python（含 Microsoft Store 假别名检测）
 echo [1/5] 检查 Python ...
 where python >nul 2>&1
 if errorlevel 1 (
@@ -36,7 +53,22 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-python --version
+python --version >"%TEMP%\pf_pyver.txt" 2>&1
+findstr /B /C:"Python 3" "%TEMP%\pf_pyver.txt" >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo   [错误] 检测到的 python 不是真实的 Python 安装（可能是 Microsoft Store 占位程序）。
+    echo   当前输出:
+    type "%TEMP%\pf_pyver.txt"
+    echo.
+    echo   请从 https://www.python.org/downloads/ 安装 Python 3.10+，
+    echo   安装时勾选 "Add Python to PATH"，并可在
+    echo   "设置 - 应用 - 高级应用设置 - 应用执行别名" 中关闭 python 别名。
+    echo.
+    pause
+    exit /b 1
+)
+type "%TEMP%\pf_pyver.txt"
 echo.
 
 REM Step 2: 创建/检查虚拟环境
@@ -45,9 +77,11 @@ if exist "venv\Scripts\python.exe" (
     echo       虚拟环境已存在，跳过创建
 ) else (
     echo       创建虚拟环境 ...
-    python -m venv venv
+    python -m venv venv >> "%PFQS_LOG%" 2>&1
     if errorlevel 1 (
-        echo   [错误] 创建虚拟环境失败
+        echo   [错误] 创建虚拟环境失败，详细原因:
+        type "%PFQS_LOG%"
+        echo.
         pause
         exit /b 1
     )
@@ -61,19 +95,14 @@ venv\Scripts\python.exe -c "import protoforge" >nul 2>&1
 if errorlevel 1 (
     echo       首次运行，正在安装依赖（可能需要几分钟）...
 
-    REM FIXED: ensure pip is available and up-to-date in fresh venv
-    venv\Scripts\python.exe -m ensurepip --default-pip >nul 2>&1
-    venv\Scripts\python.exe -m pip install --quiet --upgrade pip
+    venv\Scripts\python.exe -m ensurepip --default-pip >> "%PFQS_LOG%" 2>&1
+    venv\Scripts\python.exe -m pip install --quiet --upgrade pip >> "%PFQS_LOG%" 2>&1
 
-    REM FIXED: install core deps first (guarantees server can start),
-    REM then try [all] extras (grpcio, asyncua, etc.) as best-effort.
-    REM This way if [all] fails on a slow network or missing C build tools,
-    REM the server still starts with core protocols (Modbus, HTTP, GB28181, etc.)
     echo       安装核心依赖...
     venv\Scripts\pip.exe install -e .
     if errorlevel 1 (
         echo.
-        echo   [错误] 核心依赖安装失败，请检查网络连接
+        echo   [错误] 核心依赖安装失败，详细日志: %PFQS_LOG%
         echo   可尝试设置国内镜像后重新运行:
         echo   pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
         echo.
@@ -83,7 +112,7 @@ if errorlevel 1 (
     echo       核心依赖安装成功
 
     echo       安装扩展协议依赖（可选，失败不影响核心功能）...
-    venv\Scripts\pip.exe install -e ".[all]" >nul 2>&1
+    venv\Scripts\pip.exe install -e ".[all]" >> "%PFQS_LOG%" 2>&1
     if errorlevel 1 (
         echo       [提示] 扩展协议依赖安装失败，核心协议仍可正常使用
         echo       缺失的协议（OPC-UA/MQTT/BACnet/S7等）可通过以下命令单独安装:
@@ -97,12 +126,27 @@ if errorlevel 1 (
 )
 echo.
 
+REM Step 3.5: 导入预检 —— 服务"一闪而过"的最大嫌疑是导入即崩，
+REM 此处直接展示真实堆栈，窗口停住
+venv\Scripts\python.exe -c "import protoforge.cli" > "%TEMP%\pf_import_check.txt" 2>&1
+if errorlevel 1 (
+    echo   [错误] 核心模块导入失败，真实错误如下（截图发群里即可定位）:
+    echo.
+    type "%TEMP%\pf_import_check.txt"
+    echo.
+    echo   详细日志: %PFQS_LOG%
+    pause
+    exit /b 1
+)
+echo       核心模块导入检查通过
+echo.
+
 REM Step 4: 确保 .env 配置正确
 echo [4/5] 检查配置文件 ...
 
 set "JWT_SECRET_GEN="
 venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))" > "%TEMP%\pf_jwt_tmp" 2>nul
-set /p JWT_SECRET_GEN=<"%TEMP%\pf_jwt_tmp"
+set /p JWT_SECRET_GEN=<"%TEMP%\pf_jwt_tmp" 2>nul
 del "%TEMP%\pf_jwt_tmp" >nul 2>&1
 
 if exist ".env" goto check_env
@@ -137,11 +181,9 @@ echo.
 REM Step 5: 数据库迁移 + 启动
 echo [5/5] 初始化数据库 ...
 
-REM 确保 data 目录存在
 if not exist "data" mkdir data
 
-REM 运行数据库迁移（失败不阻止启动，首次运行 SQLite 会自动建表）
-venv\Scripts\python.exe -m alembic upgrade head 2>nul
+venv\Scripts\python.exe -m alembic upgrade head >> "%PFQS_LOG%" 2>&1
 if errorlevel 1 (
     echo       [提示] 数据库迁移未执行或失败，系统将自动创建数据库
 ) else (
@@ -149,7 +191,6 @@ if errorlevel 1 (
 )
 echo.
 
-REM 显示启动信息
 echo ======================================================
 echo.
 echo   ProtoForge 正在启动...
@@ -163,20 +204,21 @@ echo.
 echo ======================================================
 echo.
 
-REM 启动服务（演示模式）
 venv\Scripts\python.exe -m protoforge.cli demo
 
 if errorlevel 1 (
     echo.
-    echo   [错误] 服务启动失败，请检查上方错误信息
+    echo   [错误] 服务启动失败，请检查上方错误信息（截图发群里可快速定位）
     echo.
     echo   常见原因:
     echo   1. 端口 8000 被占用 - 修改 .env 中的 PROTOFORGE_PORT
     echo   2. 依赖未装全 - 运行: venv\Scripts\pip install -e ".[all]"
     echo   3. 数据库损坏 - 删除 data\protoforge.db 后重试
+    echo   4. 详细日志: %PFQS_LOG%
     echo.
 )
 echo.
 echo   ProtoForge 已停止
 echo.
 pause
+exit /b 0
