@@ -128,7 +128,7 @@ echo.
 
 REM Step 3.5: 导入预检 —— 服务"一闪而过"的最大嫌疑是导入即崩，
 REM 此处直接展示真实堆栈，窗口停住
-venv\Scripts\python.exe -c "import protoforge.cli" > "%TEMP%\pf_import_check.txt" 2>&1
+venv\Scripts\python.exe -c "import protoforge.cli, protoforge; print('      ProtoForge 代码版本: v' + protoforge.__version__)" > "%TEMP%\pf_import_check.txt" 2>&1
 if errorlevel 1 (
     echo   [错误] 核心模块导入失败，真实错误如下（截图发群里即可定位）:
     echo.
@@ -138,6 +138,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+type "%TEMP%\pf_import_check.txt"
 echo       核心模块导入检查通过
 echo.
 
