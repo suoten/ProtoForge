@@ -235,6 +235,8 @@ class OpcUaServer(ProtocolServer):
         self._device_configs: dict[str, DeviceConfig] = {}
         self._device_nodes: dict[str, Any] = {}
         self._point_nodes: dict[str, Any] = {}
+        # FIXED(v1.6.23): 地址即路径 —— 地址标识符含 '/' 时自动创建分级文件夹节点
+        self._device_folder_cache: dict[tuple, Any] = {}
         self._point_types: dict[str, str] = {}  # FIXED: 存储每个点位的数据类型
         self._device_namespaces: dict[str, str] = {}
         self._point_qualities: dict[str, int] = {}  # 点位质量码: key="{device_id}.{point_name}" → QualityCode int
@@ -433,6 +435,25 @@ class OpcUaServer(ProtocolServer):
             logger.info("OPC-UA server stopped")
             self._log_debug("system", "server_stop", msg("opcua", "service_stopped"))
 
+    async def _ensure_folder_path(self, device_folder: Any, device_id: str,
+                                  segments: list[str], ns_index: int) -> Any:
+        """FIXED(v1.6.23): 地址即路径 —— 按路径逐级创建/复用 Folder 节点。
+
+        地址标识符含 '/' 时（如 CPU/State、AI/Channel0/Temp），在设备文件夹下
+        自动创建中间模块文件夹，变量挂在末级文件夹下，实现节点分级。
+        """
+        parent = device_folder
+        walked: list[str] = []
+        for seg in segments:
+            walked.append(seg)
+            key = (device_id, tuple(walked))
+            node = self._device_folder_cache.get(key)
+            if node is None:
+                node = await parent.add_folder(ns_index, seg)
+                self._device_folder_cache[key] = node
+            parent = node
+        return parent
+
     async def create_device(self, device_config: DeviceConfig) -> str:
         behavior = OpcUaDeviceBehavior(device_config.points)
         async with self._behaviors_lock:
@@ -459,6 +480,9 @@ class OpcUaServer(ProtocolServer):
             self._behaviors.pop(device_id, None)
             self._device_configs.pop(device_id, None)
             self._device_namespaces.pop(device_id, None)
+            # FIXED(v1.6.23): 同步清理分级文件夹缓存
+            for _ck in [k for k in self._device_folder_cache if k[0] == device_id]:
+                self._device_folder_cache.pop(_ck, None)
             nodes = self._device_nodes.pop(device_id, None)
             if nodes:
                 point_nodes = nodes.get("points", {})
@@ -752,26 +776,38 @@ class OpcUaServer(ProtocolServer):
                 if variant_type:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
+                    # FIXED(v1.6.23): 地址即路径 —— 标识符含 '/' 时按层级自动创建
+                    # 模块文件夹节点（如 CPU/State → 设备文件夹/CPU/State），
+                    # 支持 PLC 下再分不同模块的多级节点结构
+                    _id_str = str(parsed_id)
+                    _var_parent = device_folder
+                    _bname_text = _id_str if node_id_str.startswith('ns=') else point.name
+                    if '/' in _id_str:
+                        _segs = [s for s in _id_str.split('/') if s]
+                        if len(_segs) > 1:
+                            _var_parent = await self._ensure_folder_path(
+                                device_folder, config.id, _segs[:-1], parsed_ns)
+                            _bname_text = _segs[-1]
                     # FIX: NodeId 唯一化 - 仅对非 ns= 格式的地址加设备ID前缀避免多设备冲突。
                     # 当用户显式指定 ns=X;s=Y 时，直接使用该 NodeId，不加前缀，
                     # 确保 EdgeLite 等外部客户端可以用模板中配置的地址直接访问节点。
                     if not node_id_str.startswith('ns='):
                         unique_id = f"{config.id}.{point.name}"
                         ua_node_id = ua.NodeId(unique_id, parsed_ns, ua.NodeIdType.String)
-                        ua_bname = ua.QualifiedName(point.name, parsed_ns)
+                        ua_bname = ua.QualifiedName(_bname_text, parsed_ns)
                     else:
                         if is_numeric:
                             ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
                         else:
                             ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
-                        ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
+                        ua_bname = ua.QualifiedName(_bname_text, parsed_ns)
                     try:
                         if variant_type:
-                            node = await device_folder.add_variable(
+                            node = await _var_parent.add_variable(
                                 ua_node_id, ua_bname, ua.Variant(value, VariantType=variant_type)
                             )
                         else:
-                            node = await device_folder.add_variable(
+                            node = await _var_parent.add_variable(
                                 ua_node_id, ua_bname, value
                             )
                     except Exception as create_err:
@@ -784,13 +820,23 @@ class OpcUaServer(ProtocolServer):
                 else:
                     node_id_str = point.address if point.address else point.name
                     parsed_ns, parsed_id, is_numeric = _parse_node_id(node_id_str, device_idx)
+                    # FIXED(v1.6.23): 字符串数据类型同样支持地址即路径分级
+                    _id_str = str(parsed_id)
+                    _var_parent = device_folder
+                    _bname_text = _id_str if node_id_str.startswith('ns=') else point.name
+                    if '/' in _id_str:
+                        _segs = [s for s in _id_str.split('/') if s]
+                        if len(_segs) > 1:
+                            _var_parent = await self._ensure_folder_path(
+                                device_folder, config.id, _segs[:-1], parsed_ns)
+                            _bname_text = _segs[-1]
                     if is_numeric:
                         ua_node_id = ua.NodeId(int(parsed_id), parsed_ns, ua.NodeIdType.Numeric)
                     else:
                         ua_node_id = ua.NodeId(str(parsed_id), parsed_ns, ua.NodeIdType.String)
-                    ua_bname = ua.QualifiedName(str(parsed_id), parsed_ns)
+                    ua_bname = ua.QualifiedName(_bname_text, parsed_ns)
                     try:
-                        node = await device_folder.add_variable(
+                        node = await _var_parent.add_variable(
                             ua_node_id, ua_bname, value
                         )
                     except Exception as create_err:
