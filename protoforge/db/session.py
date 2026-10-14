@@ -1,6 +1,7 @@
 """Module: session."""
 
 import json
+import asyncio
 import logging
 import shutil
 from pathlib import Path
@@ -42,6 +43,7 @@ class Database:
         self._db: aiosqlite.Connection | None = None
         self._is_postgres = False
         self._pg_pool = None
+        self._checkpoint_task: asyncio.Task | None = None
 
     def _is_postgresql_url(self, url: str) -> bool:
         parsed = urlparse(url)
@@ -68,6 +70,10 @@ class Database:
             await self._db.execute("PRAGMA journal_mode=WAL")
             await self._db.execute("PRAGMA synchronous=NORMAL")
             await self._db.execute(f"PRAGMA busy_timeout={_BUSY_TIMEOUT_MS}")
+            # FIXED(严重数据丢失 Bug): 周期性被动 checkpoint —— 桌面模式 checkpoint 少，
+            # WAL 会远大于主库（曾触发“删 WAL 防损坏”的错误逻辑导致用户设备全丢），
+            # 且主库长期不更新会误导用户判断。每 60s 被动 checkpoint 保持 WAL 有界。
+            self._checkpoint_task = asyncio.create_task(self._periodic_checkpoint())
             await self._create_tables_sqlite()
             logger.info("SQLite database connected: %s", self._db_path)
         except Exception as e:
@@ -150,16 +156,18 @@ class Database:
                 wal_size = db_file.stat().st_size
                 if wal_size > 0:
                     wal_size_ratio = Path(wal_path).stat().st_size / wal_size
+                    # FIXED(严重数据丢失 Bug): 原实现在 WAL > 主库 10 倍时直接删除 WAL ——
+                    # 但本项目写入模式下 WAL 大于主库是正常状态（checkpoint 少，主库长期
+                    # 只有几 KB），删除 WAL 会毁灭所有未 checkpoint 的已提交数据。
+                    # 用户实测：建设备→关进程→重启，WAL 被删，设备全部丢失。
+                    # SQLite 打开时自带 WAL 重放与损坏帧处理，删除 WAL 永远是错的。
+                    # 正确做法：正常打开 + 下方 checkpoint 把 WAL 合并进主库。
                     if wal_size_ratio > 10:
-                        logger.warning("WAL file is %dx larger than database, removing corrupted WAL", wal_size_ratio)
-                        try:
-                            Path(wal_path).unlink()
-                        except OSError as e:
-                            logger.debug("Failed to remove WAL file: %s", e)
-                        try:
-                            Path(shm_path).unlink()
-                        except OSError as e:
-                            logger.debug("Failed to remove SHM file: %s", e)
+                        logger.info(
+                            "WAL file is %dx larger than main database (normal for write-heavy "
+                            "workloads with few checkpoints); merging via checkpoint instead of deleting",
+                            wal_size_ratio,
+                        )
             except Exception as e:
                 logger.debug("WAL size check failed: %s", e)
 
@@ -250,11 +258,27 @@ class Database:
             logger.exception("Failed to connect to PostgreSQL database: %s", e)
             raise RuntimeError(f"PostgreSQL connection failed: {e}") from e
 
+    async def _periodic_checkpoint(self) -> None:
+        """周期性 WAL 被动 checkpoint：保持 WAL 体积有界、主库数据实时。"""
+        try:
+            while True:
+                await asyncio.sleep(60)
+                try:
+                    if self._db:
+                        await self._db.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                except Exception as e:
+                    logger.debug("Periodic WAL checkpoint failed: %s", e)
+        except asyncio.CancelledError:
+            pass
+
     async def close(self) -> None:
         if self._is_postgres and self._pg_pool:
             await self._pg_pool.close()
             self._pg_pool = None
         elif self._db:
+            if self._checkpoint_task:
+                self._checkpoint_task.cancel()
+                self._checkpoint_task = None
             # FIXED: 关闭前执行 WAL checkpoint，确保数据完整落盘，避免下次启动时损坏
             try:
                 await self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
