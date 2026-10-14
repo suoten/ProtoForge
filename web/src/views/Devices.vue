@@ -226,7 +226,7 @@
         <div v-if="!editDevice.points || editDevice.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="1160" style="margin-top:8px" />
+        <n-data-table v-else :columns="editDevicePointColumns" :data="editDevice.points" :bordered="false" size="small" :scroll-x="1250" style="margin-top:8px" />
         <template #action>
           <n-space>
             <n-button @click="showEditModal = false">{{ t('common.cancel') }}</n-button>
@@ -1186,7 +1186,7 @@ function makeDevSelectRenderer(key, options) {
 const editDevicePointColumns = computed(() => [
   { type: 'expand', renderExpand: renderDevGenConfigExpand },
   { title: t('common.name'), key: 'name', width: 110, render: makeDevEditRenderer('name', NInput) },
-  { title: t('common.address'), key: 'address', width: 80, render: makeDevEditRenderer('address', NInput) },
+  { title: t('common.address'), key: 'address', width: 170, render: makeDevEditRenderer('address', NInput) },  // FIXED: 80 太窄，HTTP 路径类地址（如 /sensor/temperature）被截断
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeDevSelectRenderer('data_type', devDataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeDevSelectRenderer('access', devAccessModeOptions) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeDevSelectRenderer('generator_type', devGeneratorOptions) },
