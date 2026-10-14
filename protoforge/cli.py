@@ -78,7 +78,7 @@ def main():
 
     desktop_parser = subparsers.add_parser(
         "desktop", help="Desktop mode: start server and auto-open the web UI (v1.6.0)")
-    desktop_parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
+    desktop_parser.add_argument("--host", default=None, help="Bind address (default: PROTOFORGE_HOST env or 127.0.0.1; set 0.0.0.0 for LAN access)")
     desktop_parser.add_argument("--port", type=int, default=18080, help="HTTP port (default: 18080)")
     desktop_parser.add_argument("--native", action="store_true",
                                 help="Prefer native window (requires pywebview; falls back to browser)")
