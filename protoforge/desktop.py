@@ -234,7 +234,8 @@ class _Tray:
 # 主入口
 # ---------------------------------------------------------------------------
 
-def run_desktop(host: str = "127.0.0.1", port: int | None = None,
+def run_desktop(host: str | None = None,
+                port: int | None = None,
                 prefer_native: bool = False, use_tray: bool = True,
                 check_updates: bool = True, log_level: str = "info") -> int:
     """桌面模式主流程。返回进程退出码。
@@ -246,11 +247,30 @@ def run_desktop(host: str = "127.0.0.1", port: int | None = None,
     """
     from protoforge import __version__
 
+    # FIXED(v1.6.19): host 解析顺序 = 命令行参数 > PROTOFORGE_HOST 环境变量
+    # > exe 旁 .env 文件 > 默认 127.0.0.1。原实现硬编码 127.0.0.1，便携包用户
+    # 无法让局域网其他设备访问界面（用户实测反馈）。
+
     # 冻结模式：数据落 exe 旁（配置随目录走）。开发模式不动 CWD。
     if getattr(sys, "frozen", False):
         exe_dir = str(Path(sys.executable).resolve().parent)
         os.chdir(exe_dir)
         os.environ.setdefault("PROTOFORGE_IN_DESKTOP", "1")
+
+    host = (host or "").strip() or os.environ.get("PROTOFORGE_HOST", "").strip()
+    if not host:
+        # .env 由 pydantic-settings 加载且不导出到进程环境变量，这里直接解析文件
+        env_file = Path(".env")
+        if env_file.is_file():
+            try:
+                for _line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+                    _line = _line.strip()
+                    if _line.startswith("PROTOFORGE_HOST="):
+                        host = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                        break
+            except Exception:
+                pass
+    host = host or "127.0.0.1"
 
     target_port = port or DEFAULT_DESKTOP_PORT
 
