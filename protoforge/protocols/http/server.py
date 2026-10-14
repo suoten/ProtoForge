@@ -226,12 +226,14 @@ class HttpSimulatorServer(ProtocolServer):
         if path == "/" or path == "/points":
             if method == "GET":
                 values = behavior.get_all_values()
+                ts = time.time()
+                time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))  # FIXED: 人类可读时间字段
                 points = []
                 for p in config.points:
                     points.append({
                         "name": p.name, "value": values.get(p.name, 0),
                         "unit": p.unit, "data_type": p.data_type.value,
-                        "access": p.access, "timestamp": time.time(),
+                        "access": p.access, "timestamp": ts, "time": time_str,
                     })
                 return self._json_response(200, {"device_id": device_id, "points": points}, keep_alive)
             elif method == "POST" and body:
@@ -252,6 +254,8 @@ class HttpSimulatorServer(ProtocolServer):
             if p.name == point_name:
                 if method == "GET":
                     value = behavior.get_value(p.name)
+                    ts = time.time()
+                    time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
                     # FIXED-P1: 支持?format=simple查询参数，直接返回值
                     if query_params and query_params.get("format") == "simple":
                         return self._raw_response(200, str(value), "text/plain", keep_alive)
@@ -261,7 +265,8 @@ class HttpSimulatorServer(ProtocolServer):
                             rendered = tpl.format_map({
                                 "name": p.name, "value": value,
                                 "unit": p.unit, "data_type": p.data_type.value,
-                                "access": p.access, "timestamp": time.time(),
+                                "access": p.access, "timestamp": ts,
+                                "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)),
                                 "device_id": device_id,
                             })
                             return self._raw_response(200, rendered, "application/json", keep_alive)
@@ -270,7 +275,7 @@ class HttpSimulatorServer(ProtocolServer):
                     return self._json_response(200, {
                         "name": p.name, "value": value,
                         "unit": p.unit, "data_type": p.data_type.value,
-                        "access": p.access, "timestamp": time.time(),
+                        "access": p.access, "timestamp": ts, "time": time_str,
                     }, keep_alive)
                 elif method in ("PUT", "POST") and body:
                     try:
