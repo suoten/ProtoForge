@@ -611,6 +611,22 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     if config.get("host") in ("0.0.0.0", ""):
         config["host"] = get_protoforge_host()
 
+    # FIXED(用户实测): 指南必须展示协议服务器的实际运行端口和已注册 API 前缀，
+    # 而非配置默认值 —— 用户实测 HTTP 设备指南 port 显示成管理界面端口(18080)、
+    # api_prefix 显示成 /api/（缺设备路径），照着拼 URL 全部 404
+    try:
+        _server = engine.get_protocol_server(device.protocol)
+        if _server and hasattr(_server, 'status') and _server.status.value == 'running':
+            _running_port = _server.get_running_port() if hasattr(_server, 'get_running_port') else None
+            if _running_port is not None:
+                config["port"] = _running_port
+            if device.protocol == 'http':
+                _prefix = getattr(_server, '_device_prefixes', {}).get(device_id)
+                if _prefix:
+                    config["api_prefix"] = _prefix
+    except Exception:
+        logger.debug("读取协议服务器运行时端口/前缀失败", exc_info=True)
+
     # Docker 容器内部署时，自动探测到的 host 是容器内网 IP（如 172.17.x.x），
     # 宿主机/外部客户端无法直达，明确提示改用宿主机 IP + 端口映射
     host_warning = ""
