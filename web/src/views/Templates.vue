@@ -86,7 +86,7 @@
         <div v-if="newTemplate.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" :scroll-x="1120" />
+        <n-data-table v-else :columns="pointEditColumns" :data="newTemplate.points" :bordered="false" size="small" :scroll-x="1210" />
       </n-space>
       <template #action>
         <n-space>
@@ -129,7 +129,7 @@
         <div v-if="editForm.points.length === 0" style="text-align:center;padding:20px">
           <n-text depth="3">{{ t('templates.noPointsHint') }}</n-text>
         </div>
-        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" :scroll-x="1120" />
+        <n-data-table v-else :columns="editPointColumns" :data="editForm.points" :bordered="false" size="small" :scroll-x="1210" />
       </n-space>
       <template #action>
         <n-space>
@@ -284,7 +284,7 @@ function renderGenConfigExpand(row) {
 const pointEditColumns = computed(() => [
   { type: 'expand', renderExpand: renderGenConfigExpand },
   { title: t('common.name'), key: 'name', width: 110, render: makeEditRenderer('name', newTemplate, NInput) },
-  { title: t('common.address'), key: 'address', width: 80, render: makeEditRenderer('address', newTemplate, NInput) },
+  { title: t('common.address'), key: 'address', width: 170, render: makeEditRenderer('address', newTemplate, NInput) },  // FIXED: 同 Devices 页，路径类地址不再截断
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', newTemplate, dataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', newTemplate, accessModeOpts) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', newTemplate, generatorOptions) },
@@ -299,7 +299,7 @@ const pointEditColumns = computed(() => [
 const editPointColumns = computed(() => [
   { type: 'expand', renderExpand: renderGenConfigExpand },
   { title: t('common.name'), key: 'name', width: 110, render: makeEditRenderer('name', editForm, NInput) },
-  { title: t('common.address'), key: 'address', width: 80, render: makeEditRenderer('address', editForm, NInput) },
+  { title: t('common.address'), key: 'address', width: 170, render: makeEditRenderer('address', editForm, NInput) },  // FIXED: 同上
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeSelectRenderer('data_type', editForm, dataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeSelectRenderer('access', editForm, accessModeOpts) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeSelectRenderer('generator_type', editForm, generatorOptions) },
