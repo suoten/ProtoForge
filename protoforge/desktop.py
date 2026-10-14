@@ -257,6 +257,29 @@ def run_desktop(host: str | None = None,
         os.chdir(exe_dir)
         os.environ.setdefault("PROTOFORGE_IN_DESKTOP", "1")
 
+    # FIXED(v1.6.20): 便携包不带 .env，用户想改局域网绑定/管理员密码时无从
+    # 下手（用户实测反馈"没有这个文件"）。首次运行自动生成带注释的模板，
+    # 去掉行首 # 即生效。
+    _env_file = Path(".env")
+    if not _env_file.is_file():
+        try:
+            _env_file.write_text(
+                "# ProtoForge 桌面模式配置\n"
+                "# 去掉行首 # 即生效，修改后重启 ProtoForge.exe\n"
+                "\n"
+                "# 管理界面绑定地址：0.0.0.0 = 允许局域网其他设备访问；127.0.0.1 = 仅本机\n"
+                "# PROTOFORGE_HOST=127.0.0.1\n"
+                "\n"
+                "# 管理界面端口（默认 18080，被占用自动顺延）\n"
+                "# PROTOFORGE_PORT=18080\n"
+                "\n"
+                "# 管理员登录密码（不设置则首次启动随机生成，见 data\\.admin_password 文件）\n"
+                "# PROTOFORGE_ADMIN_PASSWORD=admin\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass  # 只读目录等场景静默跳过，不影响启动
+
     host = (host or "").strip() or os.environ.get("PROTOFORGE_HOST", "").strip()
     if not host:
         # .env 由 pydantic-settings 加载且不导出到进程环境变量，这里直接解析文件
