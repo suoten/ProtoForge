@@ -16,16 +16,24 @@ logger = logging.getLogger(__name__)
 
 
 def _get_version() -> str:
-    try:
-        from importlib.metadata import version as pkg_version
-        return pkg_version("protoforge")
-    except Exception as e:
-        logger.debug("Failed to get package version: %s", e)
+    # FIXED(v1.6.23): 源码内 __version__ 是单一事实源（installed dist-info 可能是
+    # 陈旧的 editable 元数据，如 0.1.0）；importlib.metadata 仅作兜底。
+    # 与 scripts/build_desktop.py 的 get_version() 逻辑保持一致。
     try:
         import protoforge
-        return getattr(protoforge, "__version__", "0.1.0")
+        v = getattr(protoforge, "__version__", None)
+        if v and v != "0.1.0":
+            return v
     except Exception:
-        return "0.1.0"  # FIXED: 内联fallback版本号，删除冗余_FALLBACK_VERSION常量
+        pass
+    try:
+        from importlib.metadata import version as pkg_version
+        v = pkg_version("protoforge")
+        if v and v != "0.1.0":
+            return v
+    except Exception as e:
+        logger.debug("Failed to get package version: %s", e)
+    return "0.1.0"
 
 
 @router.post("/setup/demo")
