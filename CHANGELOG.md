@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.6.24 — 2026-10-14
+
+### Added — 点位自动化控制 API 文档（社区反馈）
+
+社区用户反馈"自动化控制 PLC 点位没啥文档"。新增 docs/点位自动化控制.md：登录鉴权、点位读写（含 bool 落线圈区、类型钳制、错误码表）、写入 / Force / Reset 三者区别对照、故障注入 API、状态机控制、control-loops 自动回路、pytest/CI 集成示例、定时变化脚本、常见坑速查。文档中全部 API 示例均经真实调用验证，并修正三处易踩坑细节（quick-create 须传 template_id、引擎启动预热期返回 503、点位元数据在 /config 而运行值在 /points）。另：README 新增二维码图（推广用）与文档入口链接；docker-compose.simple.yml 镜像 tag 同步至 1.6.24。
+
+### Fixed — 版本检查显示"当前 0.1.0"而非实际版本（用户反馈）
+
+用户反馈界面版本检查弹窗显示"发现新版本 v1.6.23（当前 0.1.0）"，但左下角正确显示 v1.6.23。根因：`system_routes.py` 的 `_get_version()` 优先使用 `importlib.metadata.version("protoforge")`，而 editable install（`pip install -e .`）的 dist-info 元数据可能是陈旧的 `0.1.0`（hatchling 已知问题）。修复：**优先使用 `protoforge.__version__`（单一事实源），`importlib.metadata` 仅作兜底**，与 `scripts/build_desktop.py` 的 `get_version()` 逻辑保持一致。
+
 ## v1.6.22 — 2026-10-14
 
 ### Fixed — 严重数据丢失 Bug：启动时删除大 WAL 导致设备丢失（便携包用户实测定位）
