@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.27 — 2026-10-17
+
+### Added — GitHub Release 正文自动携带 CHANGELOG 内容
+
+此前 tag 推送后自动创建的 Release 正文只有一行 "Full Changelog" 对比链接。现在 Desktop Portable Build 工作流在挂载便携包前，会从 CHANGELOG.md 自动截取对应版本段落（含中文更新说明）写入 Release 正文，未匹配到版本段落时回退为 CHANGELOG 链接。截取逻辑已用 v1.6.24 / v1.6.26 / 不存在版本三种情况本地验证。
+
 ## v1.6.26 — 2026-10-17
 
 ### Added — 全局弹窗拖拽（用户反馈）
