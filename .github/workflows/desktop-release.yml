@@ -65,11 +65,29 @@ jobs:
           path: build.log
           retention-days: 14
 
+      - name: Extract changelog section for release body
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          # 从 CHANGELOG.md 截取 "## vX.Y.Z ..."（标题可带日期后缀）到下一个 "## " 之间的段落
+          awk -v ver="${GITHUB_REF_NAME#v}" '
+            BEGIN { h = "## v" ver }
+            index($0, h) == 1 && ($0 == h || substr($0, length(h) + 1, 1) == " ") { flag = 1; next }
+            flag && /^## / { exit }
+            flag { print }
+          ' CHANGELOG.md > release_body.md
+          # 截取失败/为空时回退，避免空正文
+          if [ ! -s release_body.md ]; then
+            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/master/CHANGELOG.md) for details." > release_body.md
+          fi
+          cat release_body.md
+
       - name: Attach zip to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/ProtoForge-*.zip
+          body_path: release_body.md
           generate_release_notes: true
 
       - name: Upload workflow artifact (manual runs)
