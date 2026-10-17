@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.6.26 — 2026-10-17
+
+### Added — 全局弹窗拖拽（用户反馈）
+
+用户反馈"所有弹出的窗口不支持拖动，影响视线"。naive-ui 的 Modal 原生不支持拖拽，本次在 App.vue 增加全局委托监听：按住任意弹窗的头部标题区域即可拖动，关闭按钮/按钮/输入控件不误触；位移用 position:relative + left/top 实现，不碰 transform，不破坏 naive-ui 的进出场缩放动画。头部显示抓手光标提示可拖。已用真实浏览器验证：拖拽位移生效、弹窗关闭无回归。
+
+### Fixed — HTTP 协议 404 排查指引澄清（用户反馈）
+
+用户用 HslCommunication 客户端 POST HTTP 设备返回 404 误以为"不支持 POST/PUT"。实际 HTTP 协议完整支持 GET/POST/PUT/DELETE/OPTIONS，404 的原因是 URL 拼接规则：**完整路径 = 设备的 API Path Prefix + 点位地址**（如 prefix=/api/v1、点位地址=/sensor/temperature，则完整路径为 /api/v1/sensor/temperature）。设备编辑弹窗中 API Path Prefix 为灰色占位符时表示未显式设置，实际前缀以模板自带配置或设备详情页示例 URL 为准，勿以占位符猜测。
+
 ## v1.6.25 — 2026-10-17
 
 ### Fixed — 协议服务卡片与高级配置弹窗端口显示不一致（用户反馈）
