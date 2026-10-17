@@ -362,6 +362,30 @@ class SimulationEngine:
         result = []
         for name, server in self._protocol_servers.items():
             port_info = port_map.get(name, {})
+            # FIXED(用户反馈 502/5020 不一致): 合成"实际生效配置"供高级配置弹窗回显。
+            # 此前 running_config 只记录显式传入的启动配置 —— 空配置一键启动时为空字典，
+            # 弹窗回退到 schema 默认值；而卡片显示注册表默认端口，一旦用户自定义过端口
+            # （或协议内部自动换端口），卡片与弹窗必然各说各话。
+            # 现统一为：schema 默认打底 → 用户启动配置覆盖 → 实际监听端口(actual_port)最终权威。
+            try:
+                props = (server.get_config_schema() or {}).get("properties") or {}
+                effective = {
+                    k: v.get("default")
+                    for k, v in props.items()
+                    if isinstance(v, dict) and v.get("default") is not None
+                }
+            except Exception:
+                effective = {}
+            effective.update({
+                k: v for k, v in self._last_protocol_configs.get(server.protocol_name, {}).items()
+                if v is not None and v != ""
+            })
+            try:
+                actual_port = getattr(server, "actual_port", None)
+            except Exception:
+                actual_port = None
+            if actual_port:
+                effective["port"] = actual_port
             result.append({
                 "name": server.protocol_name,
                 "display_name": server.protocol_display_name,
@@ -369,8 +393,9 @@ class SimulationEngine:
                 "version": getattr(server, 'protocol_version', '1.0.0'),
                 "status": server.status.value,
                 "default_port": port_info.get("port", 0),
+                "effective_port": effective.get("port") or port_info.get("port", 0),
                 "config_schema": server.get_config_schema(),
-                "running_config": self._last_protocol_configs.get(server.protocol_name, {}),
+                "running_config": effective,
             })
         return result
 

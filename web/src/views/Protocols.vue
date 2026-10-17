@@ -43,7 +43,7 @@
             </template>
             <n-space justify="space-between" align="center">
               <n-space size="small" align="center">
-                <n-text depth="3" style="font-size:12px">{{ p.default_port ? t('common.port') + ' ' + p.default_port : '' }}</n-text>
+                <n-text depth="3" style="font-size:12px">{{ p.status === 'running' && p.effective_port ? t('common.port') + ' ' + p.effective_port : (p.default_port ? t('common.port') + ' ' + p.default_port : '') }}</n-text>
                 <n-tooltip trigger="hover">
                   <template #trigger>
                     <n-tag size="tiny" :type="protocolModes[p.name] === 'Broker' || protocolModes[p.name] === 'SIP' || protocolModes[p.name] === 'Agent' ? 'warning' : 'info'" :bordered="false" style="cursor:help">
