@@ -327,8 +327,50 @@ function onGlobalKeydown(e) {
   }
 }
 
+// ===== 全局弹窗拖拽（用户反馈：所有弹窗不支持拖动，影响视线）=====
+// 委托监听：按住任意 n-modal 卡片头部即可拖动；用 position:relative + left/top 偏移，
+// 不碰 transform，避免破坏 naive-ui 的进出场缩放动画。
+let modalDrag = null
+function isModalDragHandle(el) {
+  if (!el || !el.closest) return false
+  // 头部标题区域可拖；关闭按钮/图标/输入控件不触发
+  if (el.closest('.n-base-close, .n-button, input, textarea, select, .n-switch')) return false
+  const header = el.closest('.n-card-header__main, .n-card-header__text, .n-card-header')
+  if (!header) return false
+  return !!header.closest('.n-modal')
+}
+function onModalDragStart(e) {
+  if (e.button !== 0 || !isModalDragHandle(e.target)) return
+  const modal = e.target.closest('.n-modal')
+  e.preventDefault()
+  modalDrag = {
+    modal,
+    sx: e.clientX, sy: e.clientY,
+    dx: parseFloat(modal.dataset.dragX || '0'),
+    dy: parseFloat(modal.dataset.dragY || '0'),
+  }
+  modal.classList.add('pf-modal-dragging')
+}
+function onModalDragMove(e) {
+  if (!modalDrag) return
+  const { modal, sx, sy, dx, dy } = modalDrag
+  const nx = dx + e.clientX - sx
+  const ny = dy + e.clientY - sy
+  modal.dataset.dragX = String(nx)
+  modal.dataset.dragY = String(ny)
+  modal.style.position = 'relative'
+  modal.style.left = nx + 'px'
+  modal.style.top = ny + 'px'
+}
+function onModalDragEnd() {
+  if (modalDrag) { modalDrag.modal.classList.remove('pf-modal-dragging'); modalDrag = null }
+}
+
 onMounted(async () => {
   window.addEventListener('keydown', onGlobalKeydown)
+  document.addEventListener('mousedown', onModalDragStart)
+  document.addEventListener('mousemove', onModalDragMove)
+  document.addEventListener('mouseup', onModalDragEnd)
   // 拉取版本号（/health 为公开端点，未登录也可用）
   fetchAppVersion().then(v => { appVersion.value = v }).catch(() => {})
   const token = localStorage.getItem('token')
@@ -352,6 +394,9 @@ onUnmounted(() => {
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   if (searchRefreshTimer) { clearInterval(searchRefreshTimer); searchRefreshTimer = null }
   if (ws) { ws.close(); ws = null }
+  document.removeEventListener('mousedown', onModalDragStart)
+  document.removeEventListener('mousemove', onModalDragMove)
+  document.removeEventListener('mouseup', onModalDragEnd)
 })
 
 function onSearchInput(query) {
@@ -454,6 +499,11 @@ async function loadSearchData() {
 </script>
 
 <style>
+/* 全局弹窗拖拽：头部显示抓手光标，拖动中禁用选中 */
+.n-modal .n-card-header { cursor: grab; user-select: none; }
+.n-modal.pf-modal-dragging { cursor: grabbing; }
+.n-modal.pf-modal-dragging .n-card-header { cursor: grabbing; }
+
 /* FIXED: removed external CDN font import (fonts.loli.net), Inter falls back to system fonts */
 
 :root {
