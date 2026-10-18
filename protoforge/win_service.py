@@ -121,8 +121,8 @@ def is_admin() -> bool:
 
 def execute(plan: ServicePlan, runner: Callable[[list[str]], int] | None = None) -> int:
     """按计划顺序执行命令；任何一步非 0 退出即中止。"""
-run = runner or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").returncode)
-for cmd in plan.commands():
+    run = runner or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").returncode)
+    for cmd in plan.commands():
         code = run(cmd)
         if code != 0:
             print(f"! 命令失败（exit {code}）: {' '.join(cmd)}")
@@ -131,8 +131,8 @@ for cmd in plan.commands():
 
 
 def execute_uninstall(plan: ServicePlan, runner: Callable[[list[str]], int] | None = None) -> int:
-run = runner or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").returncode)
-for cmd in plan.uninstall_commands():
+    run = runner or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").returncode)
+    for cmd in plan.uninstall_commands():
         run(cmd)  # stop/remove 失败不致命（服务可能本就不存在）
     return 0
 
