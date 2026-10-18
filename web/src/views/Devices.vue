@@ -341,6 +341,14 @@
           <n-space vertical size="large">
             <n-alert v-if="guideData.host_warning" type="warning" :bordered="false">
               <div>{{ guideData.host_warning }}</div>
+              <template v-if="guideData.docker_port_hint">
+                <div style="margin-top:6px">{{ t('devices.dockerPortHint', { port: guideData.docker_port_hint.port }) }}</div>
+                <pre style="margin:6px 0 0;padding:8px 10px;border-radius:6px;background:rgba(128,128,128,0.12);font-size:12px;line-height:1.6;font-family:Consolas,Monaco,monospace;white-space:pre-wrap">docker run ... {{ guideData.docker_port_hint.docker_run_flags }} ...
+
+# 或 docker-compose.yml:
+# ports:
+#   {{ guideData.docker_port_hint.compose_line }}</pre>
+              </template>
             </n-alert>
             <n-alert v-if="guideData.protocol_status !== 'running'" type="warning" :bordered="false">
               <div style="font-weight:600;margin-bottom:4px">{{ t('devices.protocolNotRunning') }}</div>

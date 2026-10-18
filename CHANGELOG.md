@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.6.29 — 2026-10-18
+
+### Added — Docker 部署"连不上协议端口"自诊断提示（社区反馈，同类咨询第 3 次）
+
+用户在 Docker 中部署后内置诊断全绿，但外部上位机工具连接协议端口超时——根因是诊断在后端（容器内）执行，只能证明容器内可达，无法验证宿主机端口映射（-p / ports）。本次让平台自己把这类坑提示出来：
+
+- **连接诊断新增警示项**：后端检测到容器内运行时（/.dockerenv、/run/.containerenv、PROTOFORGE_IN_CONTAINER 环境变量、/proc/1/cgroup），诊断结果追加「检测到 Docker 容器内运行」琥珀色 ⚠ 提示，说明端口检查均在容器内执行、外部连不上时需确认 -p 端口发布与宿主机防火墙；总体横幅同步区分「全部通过 / 通过但有提示 / 有未通过」三态
+- **连接指南附端口发布片段**：容器内部署时设备连接指南在容器提示下方直接给出可复制的参数——`docker run ... -p 102:102` 与 docker-compose ports 写法，UDP 协议（BACnet/FINS/CoAP）自动带 /udp 后缀，GB28181 同时给出 TCP+UDP 两条
+- 新增 `protoforge.core.netutils.in_docker()` 检测函数（Windows 宿主机恒为 False）与配套单元测试
+
 ## v1.6.28 — 2026-10-17
 
 ### Fixed — HTTP 协议：编辑设备后全部 404 + PUT 写值 404（用户实测反馈）

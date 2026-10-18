@@ -91,6 +91,28 @@ def is_local_bind_host(host: str) -> bool:
     return lowered in list_local_ips()
 
 
+def in_docker() -> bool:
+    """检测当前进程是否运行在 Docker/OCI 容器内。
+
+    依据（按序）：/.dockerenv 与 /run/.containerenv 标记文件、
+    PROTOFORGE_IN_CONTAINER 环境变量、/proc/1/cgroup 中的容器驱动关键字。
+    Windows 宿主机上无这些标记，恒为 False。
+    """
+    import os
+    from pathlib import Path
+
+    if os.environ.get("PROTOFORGE_IN_CONTAINER", "").lower() in ("1", "true", "yes"):
+        return True
+    if Path("/.dockerenv").exists() or Path("/run/.containerenv").exists():
+        return True
+    try:
+        with open("/proc/1/cgroup", encoding="utf-8", errors="replace") as f:
+            content = f.read(64 * 1024)
+        return any(k in content for k in ("docker", "containerd", "kubepods", "lxc"))
+    except OSError:
+        return False
+
+
 def detect_lan_ip() -> str:
     """探测本机局域网 IP，自动跳过 VPN/FakeIP 虚拟网卡地址。
 

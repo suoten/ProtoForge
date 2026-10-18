@@ -18,7 +18,7 @@ from fastapi import APIRouter, Body, Depends
 
 from protoforge.api.v1._helpers import _get_engine
 from protoforge.api.v1.auth import require_viewer
-from protoforge.core.netutils import is_local_bind_host, list_local_ips
+from protoforge.core.netutils import in_docker, is_local_bind_host, list_local_ips
 from protoforge.protocols.base import ProtocolStatus
 
 router = APIRouter()
@@ -45,8 +45,8 @@ async def diagnose_protocol(protocol_name: str, _user: dict[str, Any] = Depends(
     server = engine.get_protocol_server(protocol_name) if engine else None
     checks: list[dict[str, Any]] = []
 
-    def add(key: str, ok: bool, detail: str = "", suggestion: str | None = None, params: dict | None = None):
-        checks.append({"key": key, "ok": ok, "detail": detail, "suggestion": suggestion, "params": params or {}})
+    def add(key: str, ok: bool, detail: str = "", suggestion: str | None = None, params: dict | None = None, warn: bool = False):
+        checks.append({"key": key, "ok": ok, "detail": detail, "suggestion": suggestion, "params": params or {}, "warn": warn})
 
     # 1. 协议已注册
     add("registered", server is not None,
@@ -95,8 +95,16 @@ async def diagnose_protocol(protocol_name: str, _user: dict[str, Any] = Depends(
     add("devices_registered", device_count > 0, detail=f"count={device_count}",
         suggestion=None if device_count > 0 else "diag_s_devices")
 
+    # 6. Docker 容器内运行提示（FIXED 用户实测 v1.6.29）
+    # 诊断在后端执行 —— 容器内部署时 port_listening 仅证明容器内可达，
+    # 无法验证宿主机端口映射（-p / ports），外部工具仍可能连接超时。
+    # ok=True 不影响总体判定，但带 warn 标记，前端用琥珀色提示而非绿色。
+    if in_docker():
+        add("docker_port_map", True, detail="docker", suggestion="diag_s_docker", warn=True)
+
     overall = all(c["ok"] for c in checks)
-    return {"protocol": protocol_name, "ok": overall, "checks": checks}
+    has_warn = any(c.get("warn") for c in checks)
+    return {"protocol": protocol_name, "ok": overall, "has_warn": has_warn, "checks": checks}
 
 
 @router.post("/diagnostics/outbound")

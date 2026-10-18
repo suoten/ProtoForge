@@ -207,14 +207,14 @@
         <n-spin :show="diagLoading">
           <n-space vertical size="small">
             <template v-if="diagResult">
-              <n-alert :type="diagResult.ok ? 'success' : 'error'" :bordered="false">
-                {{ diagResult.ok ? t('protocols.diagAllPass') : t('protocols.diagHasFail') }}
+              <n-alert :type="diagResult.ok ? (diagHasWarn ? 'warning' : 'success') : 'error'" :bordered="false">
+                {{ diagResult.ok ? (diagHasWarn ? t('protocols.diagAllPassWarn') : t('protocols.diagAllPass')) : t('protocols.diagHasFail') }}
               </n-alert>
               <div v-for="c in diagResult.checks" :key="c.key" style="display:flex;align-items:flex-start;gap:8px;padding:6px 10px;border-radius:6px;background:rgba(128,128,128,0.08)">
-                <span :style="{ color: c.ok ? '#18a058' : '#d03050', fontWeight: 700, minWidth: '14px' }">{{ c.ok ? '✓' : '✗' }}</span>
+                <span :style="{ color: c.warn ? '#f0a020' : (c.ok ? '#18a058' : '#d03050'), fontWeight: 700, minWidth: '14px' }">{{ c.warn ? '⚠' : (c.ok ? '✓' : '✗') }}</span>
                 <div>
                   <div style="font-size:13px">{{ t('protocols.diag_' + c.key) }}<n-text depth="3" style="font-size:12px;margin-left:8px">{{ c.detail }}</n-text></div>
-                  <n-text v-if="!c.ok && c.suggestion" type="warning" style="font-size:12px">{{ t('protocols.' + c.suggestion) }}</n-text>
+                  <n-text v-if="(c.warn || !c.ok) && c.suggestion" type="warning" style="font-size:12px;white-space:pre-wrap">{{ t('protocols.' + c.suggestion) }}</n-text>
                 </div>
               </div>
             </template>
@@ -278,6 +278,7 @@ const showDiag = ref(false)
 const diagProtocol = ref('')
 const diagLoading = ref(false)
 const diagResult = ref(null)
+const diagHasWarn = computed(() => !!(diagResult.value?.has_warn || (diagResult.value?.checks || []).some(c => c.warn)))
 const diagOutHost = ref('')
 const diagOutPort = ref(1883)
 const diagOutLoading = ref(false)

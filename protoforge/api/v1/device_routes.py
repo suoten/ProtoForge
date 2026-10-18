@@ -630,9 +630,35 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
     # Docker 容器内部署时，自动探测到的 host 是容器内网 IP（如 172.17.x.x），
     # 宿主机/外部客户端无法直达，明确提示改用宿主机 IP + 端口映射
     host_warning = ""
-    if Path("/.dockerenv").exists() or os.environ.get("PROTOFORGE_IN_CONTAINER"):
+    docker_port_hint = None
+    from protoforge.core.netutils import in_docker as _in_docker
+    if Path("/.dockerenv").exists() or os.environ.get("PROTOFORGE_IN_CONTAINER") or _in_docker():
         from protoforge.observability.messages import desc as _desc
         host_warning = _desc("guide.container_host_warning", lang, "")
+
+    # FIXED(用户实测 v1.6.29): 容器内部署时给出可直接复制的端口发布参数片段，
+    # 避免用户漏掉 -p 映射导致"Web 正常但协议端口连不上"（如 S7 未发布 102）
+    if host_warning or _in_docker():
+        _udp_only = {"bacnet", "fins", "coap"}          # 纯 UDP 协议
+        _tcp_and_udp = {"gb28181"}                       # TCP+UDP 双栈协议
+        _port = config.get("port")
+        if isinstance(_port, int) and _port > 0:
+            _proto = device.protocol
+            if _proto in _udp_only:
+                run_flags = f"-p {_port}:{_port}/udp"
+                compose_line = f'- "{_port}:{_port}/udp"'
+            elif _proto in _tcp_and_udp:
+                run_flags = f"-p {_port}:{_port} -p {_port}:{_port}/udp"
+                compose_line = f'- "{_port}:{_port}"\n#   - "{_port}:{_port}/udp"'
+            else:
+                run_flags = f"-p {_port}:{_port}"
+                compose_line = f'- "{_port}:{_port}"'
+            docker_port_hint = {
+                "port": _port,
+                "docker_run_flags": run_flags,
+                "compose_line": compose_line,
+                "protocol": _proto,
+            }
 
     # Filter connection_info to only show relevant connection parameters
     _irrelevant_keys = {"display_name", "description", "icon", "config"}
@@ -679,6 +705,7 @@ async def get_device_connection_guide(device_id: str, request: Request, _user: d
         "connection_info": connection_info,
         "protocol_status": protocol_status,
         "host_warning": host_warning,
+        "docker_port_hint": docker_port_hint,
     }
 
 
