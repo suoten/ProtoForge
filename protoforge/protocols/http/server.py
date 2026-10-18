@@ -159,6 +159,11 @@ class HttpSimulatorServer(ProtocolServer):
                     content_length = int(headers.get("content-length", "0"))
                 except (ValueError, TypeError):
                     content_length = 0
+                # FIXED(用户实测 v1.6.28): 兼容 Expect: 100-continue（.NET HttpWebRequest 等
+                # 客户端 PUT/POST 带 body 时默认发送），否则客户端等待中间响应后行为异常
+                if headers.get("expect", "").lower() == "100-continue":
+                    writer.write(b"HTTP/1.1 100 Continue\r\n\r\n")
+                    await writer.drain()
                 if content_length > 10 * 1024 * 1024:  # FIXED-P0: 限制请求体大小为10MB，防止OOM攻击
                     writer.write(self._json_response(413, {"error": "Payload too large"}))
                     await writer.drain()
@@ -202,6 +207,13 @@ class HttpSimulatorServer(ProtocolServer):
         for device_id, prefix in dict(self._device_prefixes).items():
             if path == prefix or path.startswith(prefix + "/"):
                 rel_path = path[len(prefix):] or "/"
+                # FIXED(用户实测 v1.6.28): 前缀不含设备ID段时（如编辑设备后被配置默认值覆盖成 /api），
+                # 兼容 /api/{device_id}/... 形式 —— 剥离设备ID段，避免编辑设备后按旧 URL 访问全部 404
+                seg = f"/{device_id}"
+                if rel_path == seg:
+                    rel_path = "/"
+                elif rel_path.startswith(seg + "/"):
+                    rel_path = rel_path[len(seg):]
                 behavior = self._behaviors.get(device_id)
                 config = self._device_configs.get(device_id)
                 if behavior and config:
@@ -250,50 +262,95 @@ class HttpSimulatorServer(ProtocolServer):
                 return self._json_response(200, {"ok": True}, keep_alive)
 
         point_name = path.lstrip("/")
+        # FIXED(用户实测 v1.6.28): 同时支持按测点名称与地址匹配 URL —— 此前只认 name，
+        # 测点列表里展示的地址（如 /sensor/temperature）按 URL 访问永远 404，误导用户
         for p in config.points:
-            if p.name == point_name:
-                if method == "GET":
-                    value = behavior.get_value(p.name)
-                    ts = time.time()
-                    time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
-                    # FIXED-P1: 支持?format=simple查询参数，直接返回值
-                    if query_params and query_params.get("format") == "simple":
-                        return self._raw_response(200, str(value), "text/plain", keep_alive)
-                    tpl = self._response_templates.get(device_id)  # FIXED-P1: 支持自定义响应模板
-                    if tpl:
-                        try:
-                            rendered = tpl.format_map({
-                                "name": p.name, "value": value,
-                                "unit": p.unit, "data_type": p.data_type.value,
-                                "access": p.access, "timestamp": ts,
-                                "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)),
-                                "device_id": device_id,
-                            })
-                            return self._raw_response(200, rendered, "application/json", keep_alive)
-                        except (KeyError, ValueError, IndexError) as e:
-                            logger.warning("HTTP response_template render error for %s.%s: %s", device_id, p.name, e)
-                    return self._json_response(200, {
-                        "name": p.name, "value": value,
-                        "unit": p.unit, "data_type": p.data_type.value,
-                        "access": p.access, "timestamp": ts, "time": time_str,
-                    }, keep_alive)
-                elif method in ("PUT", "POST") and body:
+            addr = (getattr(p, "address", "") or "").lstrip("/")
+            if p.name != point_name and (not addr or addr != point_name):
+                continue
+            if method == "GET":
+                value = behavior.get_value(p.name)
+                ts = time.time()
+                time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts))
+                # FIXED-P1: 支持?format=simple查询参数，直接返回值
+                if query_params and query_params.get("format") == "simple":
+                    return self._raw_response(200, str(value), "text/plain", keep_alive)
+                tpl = self._response_templates.get(device_id)  # FIXED-P1: 支持自定义响应模板
+                if tpl:
+                    try:
+                        rendered = tpl.format_map({
+                            "name": p.name, "value": value,
+                            "unit": p.unit, "data_type": p.data_type.value,
+                            "access": p.access, "timestamp": ts,
+                            "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(ts)),
+                            "device_id": device_id,
+                        })
+                        return self._raw_response(200, rendered, "application/json", keep_alive)
+                    except (KeyError, ValueError, IndexError) as e:
+                        logger.warning("HTTP response_template render error for %s.%s: %s", device_id, p.name, e)
+                return self._json_response(200, {
+                    "name": p.name, "value": value,
+                    "unit": p.unit, "data_type": p.data_type.value,
+                    "access": p.access, "timestamp": ts, "time": time_str,
+                }, keep_alive)
+            elif method in ("PUT", "POST"):
+                # FIXED(用户实测 v1.6.28): PUT/POST 空请求体时原实现直接落到循环外兑底 404
+                # "Point not found"，误导排查方向。现支持三种写值方式：
+                # 1) JSON 请求体 {"value": x}（标准） 2) URL 查询参数 ?value=x（HslCommunication 等）
+                # 3) 均缺失时返回 400 明确提示，而非误导性的 404
+                value = None
+                parse_error = False
+                if body:
                     try:
                         data = json.loads(body)
                     except (json.JSONDecodeError, TypeError):
-                        return self._json_response(400, {"error": "Invalid JSON body"}, keep_alive)
-                    value = data.get("value", data.get(p.name))
-                    if value is not None:
-                        behavior.set_value(p.name, value)
-                        self._log_debug("recv", "http_write",
-                                        msg("http", "point_written", detail=f"{p.name}={value}"),
-                                        device_id=device_id)
-                    return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)}, keep_alive)
-                elif method == "DELETE":
-                    behavior.set_value(p.name, 0)
-                    return self._json_response(200, {"ok": True}, keep_alive)
+                        parse_error = True
+                    else:
+                        if isinstance(data, dict):
+                            value = data.get("value", data.get(p.name))
+                        else:
+                            value = data
+                if value is None and not parse_error and query_params:
+                    qv = query_params.get("value", query_params.get(p.name))
+                    if qv is not None:
+                        value = self._coerce_query_value(qv, p)
+                if parse_error:
+                    return self._json_response(400, {"error": "Invalid JSON body"}, keep_alive)
+                if value is None:
+                    return self._json_response(400, {
+                        "error": f"Missing write value for point '{p.name}': "
+                                 "send JSON body {\"value\": x} or query parameter ?value=x"}, keep_alive)
+                behavior.set_value(p.name, value)
+                self._log_debug("recv", "http_write",
+                                msg("http", "point_written", detail=f"{p.name}={value}"),
+                                device_id=device_id)
+                return self._json_response(200, {"ok": True, "name": p.name, "value": behavior.get_value(p.name)}, keep_alive)
+            elif method == "DELETE":
+                behavior.set_value(p.name, 0)
+                return self._json_response(200, {"ok": True}, keep_alive)
 
         return self._json_response(404, {"error": f"Point not found: {point_name}"}, keep_alive)
+
+    @staticmethod
+    def _coerce_query_value(raw: str, point: PointConfig) -> Any:
+        """FIXED(用户实测 v1.6.28): URL 查询参数写值时按测点类型做安全转换。
+
+        优先按 JSON 解析（25.5 -> float、true -> bool、null -> None），
+        失败则保留原始字符串（如 status=normal）。转换失败回退为原字符串，避免 500。
+        """
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        dtype = getattr(point.data_type, "value", str(point.data_type)) if hasattr(point, "data_type") else ""
+        try:
+            if dtype in ("float32", "float64", "double", "float"):
+                return float(raw)
+            if dtype in ("int16", "int32", "int64", "int", "uint16", "uint32", "uint64"):
+                return int(float(raw))
+        except (ValueError, TypeError):
+            pass
+        return raw
 
     def _cors_preflight_response(self, keep_alive: bool = True) -> bytes:
         # FIXED: P4 - W23 使用配置的 CORS origin，而非硬编码 *

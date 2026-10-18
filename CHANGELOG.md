@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.28 — 2026-10-17
+
+### Fixed — HTTP 协议：编辑设备后全部 404 + PUT 写值 404（用户实测反馈）
+
+用户实测两个问题：① 只要编辑一次设备，HTTP 接口全部 404——根因是设备编辑弹窗保存时协议配置被 schema 默认值覆盖（api_prefix 从 `/api/{设备ID}` 变为 `/api`），而服务端不剥离路径中的设备 ID 段；② GET 正常但 PUT 404——空请求体时错误落到"Point not found"兜底，误导排查方向。修复：
+
+- **路由容错**：前缀不含设备 ID 段时自动剥离路径中的 `{设备ID}` 段，`/api/{设备ID}/temperature` 与 `/api/temperature` 两种形式均可用，编辑设备不再破坏旧 URL
+- **按测点地址匹配**：URL 同时支持测点名称与地址（此前测点列表展示的地址 `/sensor/temperature` 按访问永远 404，只认名称）
+- **PUT/POST 写值兼容**：除 JSON 请求体 `{"value": x}` 外，新增 URL 查询参数写值 `?value=x`（兼容 HslCommunication 等 .NET 客户端）；支持 `Expect: 100-continue` 中间响应；均缺失时返回 400 明确提示而非误导性 404；查询参数按测点类型安全转换，非法 JSON 返回 400
+- **附带修复**：`protoforge/win_service.py` 两处函数体缩进缺失导致的 IndentationError（Windows 服务安装功能模块无法导入，属既有问题）
+
+修复后以真实 HTTP 请求验证 14 项场景（创建/编辑前后路由、名称与地址匹配、五种写值方式、错误码），全部通过；全量测试套件 1266 通过无回归。
+
 ## v1.6.27 — 2026-10-17
 
 ### Added — GitHub Release 正文自动携带 CHANGELOG 内容
