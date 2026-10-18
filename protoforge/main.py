@@ -158,7 +158,10 @@ def _check_startup_security(settings: Any) -> None:
             "SECURITY: Authentication is DISABLED (PROTOFORGE_NO_AUTH=true). "
             "Never use this in production."
         )
-    if settings.admin_password in ("admin", "admin123", ""):
+    # FIXED(用户实测 v1.6.30): 空配置密码实际走 auth.py 的随机强密码生成路径，
+    # 并已单独输出 SECURITY 提示（含密码文件位置），此处再报"weak or default"
+    # 会与随机生成提示自相矛盾、误导用户；仅对显式弱密码告警。
+    if settings.admin_password in ("admin", "admin123"):
         logger.warning(
             "SECURITY: Admin password is weak or default. "
             "Set PROTOFORGE_ADMIN_PASSWORD to a strong password for production."

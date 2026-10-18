@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.30 — 2026-10-18
+
+### Fixed — 未配置密码时启动日志出现自相矛盾的"弱密码"告警（用户实测反馈）
+
+用户首次 Docker 启动后日志先提示「已生成随机密码并保存到 data/.admin_password」，紧接着又报「Admin password is weak or default」，自相矛盾、误以为密码没生效。根因是启动安全检查把"配置密码为空"也当作弱密码告警，但空配置实际走的是随机强密码生成路径（token_urlsafe(16)）。现仅对显式设置的 admin/admin123 弱密码告警；随机生成路径提示不变。随机密码本身出于安全考虑不会出现在日志中，仍保存在 `data/.admin_password` 文件（容器内可 `docker exec protoforge cat /app/data/.admin_password` 读取）。
+
 ## v1.6.29 — 2026-10-18
 
 ### Added — Docker 部署"连不上协议端口"自诊断提示（社区反馈，同类咨询第 3 次）
