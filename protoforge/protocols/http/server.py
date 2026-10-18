@@ -405,6 +405,12 @@ class HttpSimulatorServer(ProtocolServer):
         behavior = HttpDeviceBehavior(device_config.points)
         proto_config = device_config.protocol_config or {}
         api_prefix = proto_config.get("api_prefix", f"/api/{device_config.id}")
+        # FIXED(用户实测 v1.6.31): 兼容历史污染数据 —— v1.6.30 及之前编辑设备时前端会把
+        # usage 默认值 /api/v1 固化进 protocol_config，导致按 /api/{设备ID}/... 访问全部
+        # 兜底 404。精确匹配 "/api/v1" 视为该历史默认值，重映射为标准兜底前缀；
+        # 用户自定义的其它前缀不受影响。
+        if api_prefix == "/api/v1":
+            api_prefix = f"/api/{device_config.id}"
         response_template = proto_config.get("response_template", "")  # FIXED-P1: 读取自定义响应模板
         async with self._behaviors_lock:
             self._behaviors[device_config.id] = behavior

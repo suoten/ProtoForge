@@ -204,10 +204,10 @@
           <n-form :model="editProtocolConfig" label-placement="left" label-width="140">
             <n-form-item v-for="f in editConfigFields" :key="f.key" :label="f.label">
               <template v-if="f.type === 'select'">
-                <n-select v-model:value="editProtocolConfig[f.key]" :options="f.options.map(o => ({ label: String(o), value: o }))" />
+                <n-select v-model:value="editProtocolConfig[f.key]" :options="f.options.map(o => ({ label: String(o), value: o }))" :placeholder="f.default ? t('devices.defaultHint', { value: String(f.default) }) : ''" clearable />
               </template>
               <template v-else-if="f.type === 'number'">
-                <n-input-number v-model:value="editProtocolConfig[f.key]" :min="f.min" :max="f.max" style="width:100%" />
+                <n-input-number v-model:value="editProtocolConfig[f.key]" :min="f.min" :max="f.max" style="width:100%" :placeholder="f.default != null ? t('devices.defaultHint', { value: String(f.default) }) : ''" />
               </template>
               <template v-else>
                 <n-input v-model:value="editProtocolConfig[f.key]" :placeholder="f.default || ''" />
@@ -682,6 +682,8 @@ const currentViewProtocol = ref('')
 const selectedTemplate = ref(null)
 const editDevice = ref({ id: '', name: '', protocol: '', protocol_config: {} })
 const editProtocolConfig = ref({})
+let editOriginalProtocolConfig = {} // FIXED(v1.6.31): 编辑保存时与默认值比对，防止默认值固化
+let editConfigDefaults = {} // FIXED(v1.6.31): 编辑弹窗加载的 defaults 快照
 const editConfigFields = ref([])
 const newDevice = ref({ id: '', name: '', protocol: defaultProtocol, points: [] })
 const advancedProtocolConfig = ref({})
@@ -1713,7 +1715,14 @@ async function openEditDevice(row) {
     }
     const { fields, defaults } = await loadDeviceConfig(row.protocol)
     editConfigFields.value = fields
-    editProtocolConfig.value = { ...defaults, ...(config.protocol_config || {}) }
+    editConfigDefaults = { ...(defaults || {}) }
+    // FIXED(用户实测 v1.6.31): 编辑弹窗不再把 defaults 预填进待保存对象 —— 此前
+    // {...defaults, ...protocol_config} 会把 schema/usage 默认值（如 http api_prefix
+    // 的 /api/v1）固化进 protocol_config 一起保存，与后端创建时的兜底值（/api/{id}）
+    // 不一致，导致编辑后原 URL 全部 404。改为仅回显设备已有配置，未设置的字段用
+    // placeholder 提示默认值，不设置则保持缺省由后端兑底。
+    editOriginalProtocolConfig = { ...(config.protocol_config || {}) }
+    editProtocolConfig.value = { ...(config.protocol_config || {}) }
     showEditModal.value = true
   } catch (e) {
     message.error(t('devices.getConfigFailed') + ': ' + (e.response?.data?.detail || e.message))
@@ -1726,10 +1735,19 @@ async function saveEditDevice() {
   } catch { return }
   saving.value = true
   try {
+    // FIXED(用户实测 v1.6.31): 丢弃与默认值相同且原配置中不存在的键，避免默认值被固化；
+    // 用户手动改成与默认值相同的值也一并丢弃（与后端兑底语义一致，无副作用）
+    const saved = {}
+    for (const [k, v] of Object.entries(editProtocolConfig.value || {})) {
+      const wasOriginal = Object.prototype.hasOwnProperty.call(editOriginalProtocolConfig, k)
+      const isDefaultPreset = Object.prototype.hasOwnProperty.call(editConfigDefaults, k) && editConfigDefaults[k] === v
+      if (isDefaultPreset && !wasOriginal) continue
+      saved[k] = v
+    }
     await api.updateDevice(editDevice.value.id, {
       id: editDevice.value.id, name: editDevice.value.name,
       protocol: editDevice.value.protocol, points: editDevice.value.points || [],
-      protocol_config: editProtocolConfig.value,
+      protocol_config: saved,
     })
     showEditModal.value = false
     message.success(t('devices.deviceUpdated'))

@@ -207,7 +207,7 @@ PROTOCOL_DEVICE_CONFIG = {
         {"key": "client_id", "label": "Client ID (optional)", "type": "string", "default": "", "description": "MQTT Client ID used when connecting to the custom server, must be unique per broker; default: protoforge_{device_id}"},
     ],
     "http": [
-        {"key": "api_prefix", "label": "API Path Prefix", "type": "string", "default": "/api/v1", "description": "RESTful API path prefix, e.g. /api/v1"},
+        {"key": "api_prefix", "label": "API Path Prefix", "type": "string", "default": "/api", "description": "RESTful API path prefix, e.g. /api"},
     ],
     "gb28181": [
         {"key": "sip_server_id", "label": "Upstream SIP Server ID", "type": "string", "default": "34020000002000000001", "description": "National standard upstream platform 20-digit code (center code 8 digits + industry code 2 digits + type code 3 digits + network ID 7 digits)"},
