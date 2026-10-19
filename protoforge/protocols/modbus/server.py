@@ -140,13 +140,21 @@ class ModbusTcpServer(ProtocolServer):
             logger.exception("Modbus native frame server error: %s", e)
             self._status = ProtocolStatus.ERROR
 
-    _CONN_TIMEOUT = 30  # FIXED: 连接读取超时秒数，防止Slowloris攻击
+    _CONN_TIMEOUT = 30  # FIXED: 首包读取超时秒数，防止Slowloris攻击
+    _IDLE_TIMEOUT = 3600  # FIXED(用户反馈 v1.6.32): 已建立连接的请求间空闲上限（1小时）
 
     async def _handle_native_modbus(self, reader: asyncio.StreamReader,
                                      writer: asyncio.StreamWriter) -> None:
+        first_request = True
         try:
             while self._server_running:
-                header = await asyncio.wait_for(reader.readexactly(7), timeout=self._CONN_TIMEOUT)  # FIXED: 添加读取超时
+                # FIXED(用户实测 v1.6.32): 此前每个请求间的空闲等待都套 30s 超时，扫描周期
+                # 长于 30s 的客户端（如 Kepware 低速扫描）会被周期性断连 —— 采集端表现为
+                # 标签质量周期性 BAD（OPC UA 订阅读到 None），重连后恢复，反复交替。
+                # 现改为：仅首个首包用 30s 防慢速攻击，后续请求空闲上限放宽到 1 小时。
+                timeout = self._CONN_TIMEOUT if first_request else self._IDLE_TIMEOUT
+                header = await asyncio.wait_for(reader.readexactly(7), timeout=timeout)
+                first_request = False
                 tx_id = struct.unpack(">H", header[0:2])[0]
                 proto_id = struct.unpack(">H", header[2:4])[0]
                 if proto_id != 0:  # FIXED-P2: MBAP Protocol ID必须为0(Modbus规范)
