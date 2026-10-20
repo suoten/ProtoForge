@@ -55,7 +55,7 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 - **Multi-language SDK** — Python (sync/async), Java, Go, C#
 - **gRPC Remote Management** — 15 RPC methods, cross-language support
 - **Database Backup & Restore** — One-click JSON export/import
-- **K8s/Helm Deployment** — Full Kubernetes deployment + Helm Chart
+- **K8s Deployment** — Full Kubernetes deployment (one-command YAML)
 - **High Availability** — Primary/standby health checks, auto-promotion
 - **i18n** — Chinese/English bilingual, one-click switch
 - **Multi-arch Docker** — amd64/arm64 images pushed to Docker Hub
@@ -473,7 +473,7 @@ docker run -d --name protoforge \
 | Web UI | ✅ Full | ✅ + branding |
 | REST API | ✅ Full | ✅ + gRPC batch |
 | Python SDK | ✅ Sync+Async | ✅ + Java/Go SDK |
-| Docker | ✅ | ✅ + Helm/K8s Operator |
+| Docker | ✅ | ✅ + K8s Operator |
 | ARM Support | ✅ | ✅ |
 | CSV Import/Export | ✅ | ✅ |
 | Test Plans | ✅ | ✅ + CI/CD plugins |

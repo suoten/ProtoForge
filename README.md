@@ -184,7 +184,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 - **录制回放压缩** — Gzip 压缩存储，节省磁盘空间
 - **数据库备份恢复** — 一键导出/导入全库数据 JSON
 - **协议安全增强** — OPC-UA 证书自动生成、MQTT TLS 加密、GB28181 SRTP、录制报文加密
-- **K8s/Helm 部署** — 完整 Kubernetes 部署方案 + Helm Chart
+- **K8s 部署** — 完整 Kubernetes 部署方案（YAML 一键部署）
 - **IoT 测试平台** — 测试计划管理（版本化/克隆/执行历史）、协议合规检测（5 协议合规规则+评分报告）、JUnit/JSON/HTML 报告导出、CI/CD 集成（`protoforge test run`）
 - **故障切换** — 主备健康检查，自动晋升，回调通知
 - **前端国际化** — 中英文双语，一键切换
@@ -1367,11 +1367,6 @@ ProtoForge/
 │   ├── deployment.yaml       # ProtoForge + PostgreSQL
 │   ├── ingress.yaml          # Ingress（WebSocket支持）
 │   └── secrets.yaml          # 密钥配置
-├── helm/                      # Helm Chart
-│   └── protoforge/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       └── templates/        # K8s 模板
 ├── tests/                     # 测试用例
 ├── migrations/                # Alembic 数据库迁移
 ├── grafana/                   # Grafana Dashboard 模板
@@ -1616,7 +1611,7 @@ protoc --csharp_out=. --grpc-csharp_out=. protoforge/grpc/protoforge.proto
 
 ***
 
-## ☸️ Kubernetes / Helm 部署
+## ☸️ Kubernetes 部署
 
 **方式一：直接使用 K8s YAML**
 
@@ -1630,34 +1625,6 @@ kubectl apply -f k8s/deployment.yaml
 # 3. 配置 Ingress（可选）
 kubectl apply -f k8s/ingress.yaml
 ```
-
-**方式二：使用 Helm Chart**
-
-```bash
-# 1. 修改配置
-helm show values helm/protoforge > my-values.yaml
-# 编辑 my-values.yaml：修改密码、域名、存储等
-
-# 2. 安装
-helm install protoforge helm/protoforge -f my-values.yaml
-
-# 3. 升级
-helm upgrade protoforge helm/protoforge -f my-values.yaml
-
-# 4. 卸载
-helm uninstall protoforge
-```
-
-**Helm values 主要配置**：
-
-| 参数                        | 默认值                 | 说明            |
-| ------------------------- | ------------------- | ------------- |
-| `replicaCount`            | `1`                 | 副本数           |
-| `image.repository`        | `suoten/protoforge` | 镜像仓库          |
-| `ingress.enabled`         | `false`             | 启用 Ingress    |
-| `postgresql.enabled`      | `true`              | 内置 PostgreSQL |
-| `persistence.size`        | `5Gi`               | 数据持久化大小       |
-| `resources.limits.memory` | `1Gi`               | 内存限制          |
 
 ***
 
