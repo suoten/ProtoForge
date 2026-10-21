@@ -95,7 +95,8 @@
         </n-alert>
         <n-form :model="advancedConfig" label-placement="left" label-width="120">
           <n-form-item v-for="(info, key) in advancedConfigSchema" :key="key" :label="key">
-            <n-input-number v-if="info.type === 'number' || info.type === 'integer'" v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" style="width:100%" />
+            <n-select v-if="info.type === 'boolean'" v-model:value="advancedConfig[key]" :options="booleanSelectOptions" style="width:100%" />
+            <n-input-number v-else-if="info.type === 'number' || info.type === 'integer'" v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" style="width:100%" />
             <n-input v-else v-model:value="advancedConfig[key]" :placeholder="String(info.default ?? '')" />
             <template #feedback v-if="info.description"><n-text depth="3" style="font-size:12px">{{ info.description }}</n-text></template>
           </n-form-item>
@@ -268,6 +269,12 @@ const advancedConfigSchema = computed(() => {
   const properties = schema.properties || {}
   return properties
 })
+// FIXED(用户反馈 v1.6.33): schema 的 boolean 字段（如 ab/fanuc 的 raw_frames）
+// 渲染为真开关而非文本框，避免用户填 "false" 字符串被非空判断误判为开启
+const booleanSelectOptions = computed(() => [
+  { label: t('common.true'), value: true },
+  { label: t('common.false'), value: false },
+])
 
 const showInfoModal = ref(false)
 const protocolInfoName = ref('')
@@ -737,7 +744,16 @@ function openAdvanced(p) {
     for (const [key, info] of Object.entries(properties)) {
       if (info !== null && info !== undefined && typeof info === 'object' && info.type) {
         const actual = last ? last[key] : undefined
-        advancedConfig.value[key] = (actual !== undefined && actual !== null && actual !== '') ? actual : (info.default ?? '')
+        // FIXED(用户反馈 v1.6.33): boolean 字段归一为真正的布尔值 —— 历史 running_config
+        // 里可能是 "true"/"false" 字符串（旧版文本框），需转换后才能正确回显开关
+        if (info.type === 'boolean') {
+          const s = typeof actual === 'string' ? actual.trim().toLowerCase() : actual
+          advancedConfig.value[key] = s === true || s === 'true' || s === 1 || s === '1'
+            ? true
+            : (s === false || s === 'false' || s === 0 || s === '0' ? false : (info.default ?? false))
+        } else {
+          advancedConfig.value[key] = (actual !== undefined && actual !== null && actual !== '') ? actual : (info.default ?? '')
+        }
       }
     }
   } catch (e) {
@@ -750,8 +766,14 @@ async function startWithConfig() {
   starting.value = true
   try {
     const config = {}
+    const schemaProps = advancedConfigSchema.value || {}
     for (const [key, value] of Object.entries(advancedConfig.value)) {
       if (value !== '' && value !== null && value !== undefined) {
+        // FIXED(用户反馈 v1.6.33): boolean 字段强制归一为真布尔值，不再落入数字转换
+        if (schemaProps[key]?.type === 'boolean') {
+          config[key] = value === true || value === 'true' || value === 1 || value === '1'
+          continue
+        }
         config[key] = (String(value).trim() !== '' && !isNaN(Number(value))) ? Number(value) : value
       }
     }

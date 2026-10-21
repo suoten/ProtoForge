@@ -186,7 +186,10 @@ class AbServer(ProtocolServer):
                 data = header + payload
                 # FIXED: 支持 raw_frames 调试开关 —— 16 进制记录 Kepware 等客户端
                 # 的原始收发帧，用于兼容性问题定位
-                raw = bool(getattr(self, '_start_config', {}).get("raw_frames"))
+                # FIXED(用户反馈 v1.6.33): 兼容 boolean 与 UI 文本输入 —— 高级配置
+                # 文本框填 "false" 非空字符串会被 bool() 误判为开启，与 FANUC 相同容错
+                _raw = getattr(self, '_start_config', {}).get("raw_frames", False)
+                raw = _raw.strip().lower() in ("true", "1", "on", "yes") if isinstance(_raw, str) else bool(_raw)
                 if raw:
                     self._log_debug("recv", "frame_rx",
                                     f"RX frame cmd=0x{struct.unpack('<H', data[0:2])[0]:04x} len={len(data)}",
