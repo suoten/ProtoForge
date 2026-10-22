@@ -395,6 +395,14 @@ class AbServer(ProtocolServer):
         elif cip_service == 0x53:
             # Write Tag Fragmented —— 按普通写处理
             return self._handle_cip_write_tag(session, cip_data, sender_context)
+        elif cip_service == 0x0E:
+            # FIXED: Get_Attribute_Single —— 汇川 Demo 启动即发（Message Router 查询），
+            # 原实现落入兜底通用错误；现返回规范的"属性不支持"错误帧
+            return self._make_cip_error_response(session, 0x0E, 0x14, sender_context)
+        elif cip_service == 0x4B:
+            # FIXED: Execute_PCCC —— 汇川 Demo 标签访问（见 _build_cip_pccc_execute）
+            return self._wrap_cip_response(session, self._build_cip_pccc_execute(cip_data),
+                                           sender_context)
 
         return self._make_cip_error_response(session, cip_service, 0x01, sender_context)
 
@@ -473,6 +481,11 @@ class AbServer(ProtocolServer):
             return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
                                                  sender_context)
         service = cip_data[0]
+        if service == 0x00:
+            # FIXED: I/O 型连接的周期数据/心跳（无服务码，实测仅 2 字节 0x0000）——
+            # 原实现按服务 0x00 回"服务不支持"错误帧；真实从站对 I/O 数据不作应答，
+            # 现静默丢弃（返回 None 则 _process_eip 不发送任何帧）
+            return None
         # FIXED-P0: 已连接消息必须返回裸 CIP 数据，原实现调用 _handle_cip_read_tag/
         # _handle_cip_write_tag（返回完整 EIP SendRRData 帧）导致双重封装，
         # 客户端解析失败
@@ -488,11 +501,84 @@ class AbServer(ProtocolServer):
             cip_resp = self._build_cip_get_attribute_list(cip_data)
         elif service == 0x0A:
             cip_resp = self._build_cip_multiple_service(cip_data)
+        elif service == 0x4B:
+            # FIXED: Execute_PCCC —— 汇川 EIP Demo 的标签访问服务（读/写均走此服务），
+            # 原实现在兜底分支回"服务不支持"导致 Demo 报"读取请求 失败 标签名:xxx"
+            cip_resp = self._build_cip_pccc_execute(cip_data)
+        elif service == 0x0E:
+            # FIXED: Get_Attribute_Single —— 汇川 Demo 扫描阶段查询，返回规范的
+            # "属性不支持"错误帧而非畸形应答
+            cip_resp = self._make_bare_cip_error(0x0E, 0x14)
         else:
             # FIXED-P0: 已连接通道不支持的服务也必须通过 _wrap_unit_data_response 返回
             cip_resp = self._make_bare_cip_error(service, 0x08)
         return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
                                              sender_context)
+
+    def _build_cip_pccc_execute(self, cip_data: bytes) -> bytes:
+        """Execute_PCCC (0x4B) —— 汇川 EIP Demo 的标签访问方式
+
+        实测报文（用户 2026-10-22 导出，汇川 EIP Demo → ProtoForge）：
+          [0x4B][path_size][20 6A 24 00][载荷长度 UINT][载荷][可选写值]
+          载荷 = 标签名 UTF-8（如 "允许放货" 12 字节）——非标准 PCCC 命令帧，
+          是汇川简化格式：直接携带标签名。载荷后若还有剩余字节视为写操作
+          （对齐补齐，取前 4 字节小端）。标准 CIP 符号化客户端（Kepware 等）
+          不走此服务，行为不受影响。
+        响应格式无公开规范可依，按请求镜像应答（待真实抓包校准）：
+          [0xCB][Reserved][Status][AddStatusSize] + [长度 UINT][标签名]
+          + [类型码 UINT] + 值（读）/ 无值（写）
+        """
+        path_end = self._get_path_end_offset(cip_data)
+        if path_end + 2 > len(cip_data):
+            return self._make_bare_cip_error(0x4B, 0x05)
+        dlen = struct.unpack("<H", cip_data[path_end:path_end + 2])[0]
+        payload = cip_data[path_end + 2:path_end + 2 + dlen]
+        extra = cip_data[path_end + 2 + dlen:]
+        if dlen == 0 or not payload:
+            return self._make_bare_cip_error(0x4B, 0x04)
+        tag_name = payload.decode("utf-8", errors="replace")
+        device_id, behavior = self._find_behavior_by_tag(tag_name)
+        self._log_debug("recv", "pccc_execute",
+                        f"Execute_PCCC tag={tag_name!r} write={len(extra) >= 4}",
+                        detail={"hex": cip_data[:128].hex(" ")})
+        if behavior is None:
+            return self._make_bare_cip_error(0x4B, 0x04)
+        resolved = self._resolve_behavior_key(behavior, tag_name)
+        # FIXED: 标签未命中时显式拒绝 —— _find_behavior_by_tag 未命中也返回默认
+        # behavior，不检查会把未知标签读成 0（与 CIP Read 的 0xCC/0x04 行为不一致）
+        if resolved not in behavior._tags and resolved not in behavior._data_types:
+            return self._make_bare_cip_error(0x4B, 0x04)
+        name_bytes = tag_name.encode("utf-8")
+        # 写操作：载荷后带值
+        if len(extra) >= 4:
+            write_value = struct.unpack("<I", extra[:4])[0]
+            behavior.set_tag(resolved, write_value)
+            # 与 CIP Write 同源：通知引擎须用 point 名，否则写入冻结建不起来
+            point_name = behavior._tag_reverse.get(resolved, resolved)
+            self._notify_engine_write(device_id, point_name, write_value)
+            return (bytes([0xCB, 0x00, 0x00, 0x00])
+                    + struct.pack("<H", len(name_bytes)) + name_bytes)
+        # 读操作
+        tag_value = behavior.get_tag(resolved)
+        if tag_value is None:
+            tag_value = behavior.get_value(resolved)
+        data_type = behavior.get_data_type(resolved)
+        type_code, _ = _CIP_TYPE_MAP.get(data_type, (0xC4, 4))
+        resp = bytearray()
+        resp += bytes([0xCB, 0x00, 0x00, 0x00])   # Service|0x80 + Reserved + Status + AddStatusSize
+        resp += struct.pack("<H", len(name_bytes)) + name_bytes
+        resp += struct.pack("<H", type_code)
+        try:
+            if data_type == "string":
+                s = str(tag_value).encode("utf-8")
+                resp += struct.pack("<H", len(s)) + s
+            elif data_type in ("float32", "float64"):
+                resp += struct.pack("<f", float(tag_value))
+            else:
+                resp += struct.pack("<I", int(float(tag_value)) & 0xFFFFFFFF)
+        except (ValueError, TypeError):
+            resp += struct.pack("<I", 0)
+        return bytes(resp)
 
     def _wrap_unit_data_response(self, session: int, conn_id: int, seq_num: int,
                                  cip_resp: bytes,
@@ -1017,8 +1103,8 @@ class AbServer(ProtocolServer):
         resp += data_area
         return bytes(resp)
 
-    _UCMM_INNER_SERVICES = {0x01, 0x02, 0x03, 0x04, 0x0A, 0x0E, 0x10, 0x4C, 0x4D,
-                            0x4E, 0x52, 0x53, 0x54, 0x55, 0x5B}
+    _UCMM_INNER_SERVICES = {0x01, 0x02, 0x03, 0x04, 0x0A, 0x0E, 0x10, 0x4B, 0x4C,
+                            0x4D, 0x4E, 0x52, 0x53, 0x54, 0x55, 0x5B}
 
     def _is_unconnected_send(self, cip_data: bytes) -> bool:
         """判断 0x52 是 Unconnected Send 还是 Read Tag Fragmented
@@ -1077,6 +1163,10 @@ class AbServer(ProtocolServer):
             return self._build_cip_forward_open(inner, large=True)
         if svc == 0x4E:
             return self._build_cip_forward_close()
+        if svc == 0x4B:
+            return self._build_cip_pccc_execute(inner)
+        if svc == 0x0E:
+            return self._make_bare_cip_error(0x0E, 0x14)
         return self._make_bare_cip_error(svc, 0x08)
 
     def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
