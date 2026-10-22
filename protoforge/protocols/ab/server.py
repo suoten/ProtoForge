@@ -568,17 +568,25 @@ class AbServer(ProtocolServer):
         if tag_value is None:
             tag_value = behavior.get_value(resolved)
         data_type = behavior.get_data_type(resolved)
-        type_code, _ = _CIP_TYPE_MAP.get(data_type, (0xC4, 4))
+        type_code, type_size = _CIP_TYPE_MAP.get(data_type, (0xC4, 4))
         resp = bytearray()
         resp += bytes([0xCB, 0x00, 0x00, 0x00])   # Service|0x80 + Reserved + Status + AddStatusSize
         resp += struct.pack("<H", len(name_bytes)) + name_bytes
         resp += struct.pack("<H", type_code)
+        # FIXED(v1.6.39): 值按类型码对应尺寸打包 —— 原实现 BOOL(0xC1,1 字节) 等
+        # 也固定打 4 字节，客户端按类型码取值会错位
         try:
             if data_type == "string":
                 s = str(tag_value).encode("utf-8")
                 resp += struct.pack("<H", len(s)) + s
-            elif data_type in ("float32", "float64"):
+            elif data_type == "float64":
+                resp += struct.pack("<d", float(tag_value))
+            elif data_type == "float32":
                 resp += struct.pack("<f", float(tag_value))
+            elif type_size == 1:
+                resp += struct.pack("<B", int(float(tag_value)) & 0xFF)
+            elif type_size == 2:
+                resp += struct.pack("<H", int(float(tag_value)) & 0xFFFF)
             else:
                 resp += struct.pack("<I", int(float(tag_value)) & 0xFFFFFFFF)
         except (ValueError, TypeError):
@@ -1187,6 +1195,16 @@ class AbServer(ProtocolServer):
         for k in behavior._data_types:
             if k.lower() == lower:
                 return k
+        # FIXED(v1.6.39): 点位名回退匹配 —— AB 行为的 tag 键是 address（addr or
+        # name），用户习惯性把地址填成数字（如 0）时，tag 全部注册成 "0"，
+        # 汇川 Demo 等按点名称寻址的客户端读 point_1 会全部 miss（0x04）。
+        # 追加按 _tag_alias（point name -> tag）匹配，命中返回真实 tag 键。
+        alias = behavior._tag_alias.get(tag_name)
+        if alias is not None and (alias in behavior._tags or alias in behavior._data_types):
+            return alias
+        for name, tag in behavior._tag_alias.items():
+            if name.lower() == lower:
+                return tag
         return tag_name
 
     def _make_cip_error_response(self, session: int, service: int, error: int,
