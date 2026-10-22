@@ -482,11 +482,15 @@ class AbServer(ProtocolServer):
             return self._wrap_unit_data_response(session, t_o_conn_id, seq_num, cip_resp,
                                                  sender_context)
         service = cip_data[0]
-        # FIXED(v1.6.36): 撤销 v1.6.34 的静默丢弃 —— 实测汇川 Demo 建立连接后先发
-        # seq=1 的 2 字节空帧（01 00 00 00）作为连接握手，收到 T→O 上的任何应答
-        # 才会继续发送标签读请求；静默丢弃会让 Demo 卡在握手阶段重试 12 秒后放弃，
-        # 永远发不出读请求（用户实测日志对比：应答→发出 0x4B 读，静默→无任何读）。
-        # 恢复为按未知服务 0x08 错误应答。
+        # FIXED(v1.6.38): 空帧/心跳握手（服务码 0x00 的 2 字节空数据帧）——
+        # 汇川 Demo 建连后先发 seq=N 空帧并等待目标站回送同类空帧
+        # （标准 null/null 心跳交换）确认连接活跃，之后才进入"扫描"阶段发标签读。
+        # 历史演变：v1.6.34 静默丢弃 → Demo 卡握手；v1.6.36 改回错误应答 80 08 →
+        # 用户实测仍卡死（"扫描失败"，仅 DLL 残留标签缓存时能跳过握手直接读）。
+        # 现按标准 I/O 心跳应答：同连接同 seq 回送空数据帧 00 00。
+        if service == 0x00 and len(cip_data) <= 2:
+            return self._wrap_unit_data_response(session, t_o_conn_id, seq_num,
+                                                 b"\x00\x00", sender_context)
         # FIXED-P0: 已连接消息必须返回裸 CIP 数据，原实现调用 _handle_cip_read_tag/
         # _handle_cip_write_tag（返回完整 EIP SendRRData 帧）导致双重封装，
         # 客户端解析失败
