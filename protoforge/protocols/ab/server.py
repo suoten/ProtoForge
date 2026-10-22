@@ -396,9 +396,10 @@ class AbServer(ProtocolServer):
             # Write Tag Fragmented —— 按普通写处理
             return self._handle_cip_write_tag(session, cip_data, sender_context)
         elif cip_service == 0x0E:
-            # FIXED: Get_Attribute_Single —— 汇川 Demo 启动即发（Message Router 查询），
-            # 原实现落入兜底通用错误；现返回规范的"属性不支持"错误帧
-            return self._make_cip_error_response(session, 0x0E, 0x14, sender_context)
+            # FIXED(v1.6.37): 状态码回退 0x14→0x01 —— 实测对照两份汇川 Demo 抓包：
+            # 0x0E 回 01 时 Demo 重连后直接发 0x4B 标签读（可用）；回 14（属性不支持）
+            # 时 Demo 进入空帧握手分支并卡死（重试 ForwardOpen 后仅重发心跳然后放弃）。
+            return self._make_cip_error_response(session, 0x0E, 0x01, sender_context)
         elif cip_service == 0x4B:
             # FIXED: Execute_PCCC —— 汇川 Demo 标签访问（见 _build_cip_pccc_execute）
             return self._wrap_cip_response(session, self._build_cip_pccc_execute(cip_data),
@@ -506,9 +507,9 @@ class AbServer(ProtocolServer):
             # 原实现在兜底分支回"服务不支持"导致 Demo 报"读取请求 失败 标签名:xxx"
             cip_resp = self._build_cip_pccc_execute(cip_data)
         elif service == 0x0E:
-            # FIXED: Get_Attribute_Single —— 汇川 Demo 扫描阶段查询，返回规范的
-            # "属性不支持"错误帧而非畸形应答
-            cip_resp = self._make_bare_cip_error(0x0E, 0x14)
+            # FIXED(v1.6.37): 同 RRData 路径 —— 0x0E 回 01 而非 14，
+            # 14 会让汇川 Demo 卡在空帧握手分支
+            cip_resp = self._make_bare_cip_error(0x0E, 0x01)
         else:
             # FIXED-P0: 已连接通道不支持的服务也必须通过 _wrap_unit_data_response 返回
             cip_resp = self._make_bare_cip_error(service, 0x08)
@@ -1166,7 +1167,8 @@ class AbServer(ProtocolServer):
         if svc == 0x4B:
             return self._build_cip_pccc_execute(inner)
         if svc == 0x0E:
-            return self._make_bare_cip_error(0x0E, 0x14)
+            # FIXED(v1.6.37): 0x0E 回 01 而非 14（同上，汇川 Demo 实测兼容）
+            return self._make_bare_cip_error(0x0E, 0x01)
         return self._make_bare_cip_error(svc, 0x08)
 
     def _resolve_behavior_key(self, behavior, tag_name: str) -> str:
