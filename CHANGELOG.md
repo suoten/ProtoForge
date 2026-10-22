@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.35 — 2026-10-22
+
+### Fixed — Windows 安装器/快速启动：venv 存在但已损坏时自动重建（用户实测反馈）
+
+用户关机重启后重新运行安装脚本报 `did not find executable at ...WindowsApps\PythonSoftwareFoundation.Python.3.13_...\python.exe`，"[错误] Python 核心依赖安装失败"。根因：venv 最初由 Microsoft Store 版 Python 创建，商店版自动更新/卸载后基础解释器路径失效，venv 的 python.exe 启动器指向不存在的解释器（报 "did not find executable / No Python at ..."）。原 install.bat（installer.py）与 quickstart.bat 都只判断 venv 目录是否存在、从不验证可用性，损坏的 venv 让后续 ensurepip / pip install 全部失败且永远无法自愈。本次：
+
+- **installer.py**：确定 venv 路径后先探测 `python.exe -c "import sys"`，失败（含不可执行异常）即删除 venv 并用当前 Python 重建，重建失败给出明确指引
+- **quickstart.bat**：Step 2 增加同样的健康检查，损坏时先删后建
+- **检测陷阱修复**：实测损坏的 venv 启动器在 cmd 下把输出重定向到 nul 设备时返回码会变成 0（检测失效），探测输出必须写入日志文件才返回真实非零码；Python subprocess 路径不受此影响
+
+以复刻用户故障的损坏 venv（pyvenv.cfg home 指向已卸载的 Store Python）实测：损坏场景自动检测→重建→依赖可用；健康场景不误重建。
+
 ## v1.6.34 — 2026-10-22
 
 ### Added — AB/EIP：支持汇川 EIP Demo 的 Execute_PCCC（0x4B）标签读写（用户实测报文分析）

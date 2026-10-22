@@ -119,6 +119,30 @@ def main():
     # Determine venv python path
     venv_python = venv_dir / "Scripts" / "python.exe"
 
+    # FIXED: venv 可能存在但已损坏 —— 典型场景：venv 由 Microsoft Store Python
+    # 创建，商店版自动更新/卸载后基础解释器路径失效，venv\Scripts\python.exe
+    # 启动即报 "did not find executable at ...WindowsApps\...python.exe"，
+    # 后续 ensurepip/pip install 全部失败（用户实测：关机重启后打不开）。
+    # 原实现只判断目录存在，从不验证可用性。现探测失败即删除重建。
+    try:
+        probe = subprocess.run([str(venv_python), "-c", "import sys"], capture_output=True)
+        venv_ok = probe.returncode == 0
+    except OSError:
+        venv_ok = False  # python.exe 不可执行/损坏也视为需要重建
+    if not venv_ok:
+        print("       检测到虚拟环境已损坏（基础 Python 被卸载或更新），正在重建 ...")
+        shutil.rmtree(venv_dir, ignore_errors=True)
+        if venv_dir.exists():
+            print("  [错误] venv 目录无法删除（可能被占用），请手动删除 venv 文件夹后重试")
+            input("按回车退出 ...")
+            sys.exit(1)
+        result = run(f'"{sys.executable}" -m venv venv')
+        if result.returncode != 0:
+            print("  [错误] 重建虚拟环境失败")
+            input("按回车退出 ...")
+            sys.exit(1)
+        print("       虚拟环境重建成功")
+
     # Step 3: Install Python dependencies
     print()
     print("[3/5] 安装 Python 依赖（可能需要几分钟）...")
