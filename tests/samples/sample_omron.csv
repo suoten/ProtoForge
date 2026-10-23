@@ -1,0 +1,8 @@
+名称,地址,数据类型,单位,读写,说明
+tank_level,DM100,float32,mm,r,水箱液位
+tank_temp,DM102,float32,℃,r,水箱温度
+heater_on,CIO0.00,bool,,rw,加热器
+pump1_run,W10.00,bool,,rw,1号泵运行
+pump2_run,W10.01,bool,,rw,2号泵运行
+flow_rate,DM104,uint16,L/min,r,流量
+valve_pos,DM106,float32,%,rw,阀位反馈

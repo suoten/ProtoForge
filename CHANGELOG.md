@@ -1,5 +1,50 @@
 # Changelog
 
+## v1.7.0 — 2026-10-23
+
+### 📋 点表导入（升级规划 v1.7.0 头条：从客户 Excel 到设备）
+
+**新增 — 点表导入引擎 + 导入向导（`protoforge/core/point_table.py` + API + 前端）：**
+
+国内项目的起点几乎都是客户给的点表 Excel。本版本把"逐行手敲"变成"粘贴 → 预览 → 确认"：
+
+- **厂商地址风格自动识别（15 类）**：西门子 DB 块/DBX/DBB/DBW/DBD、M 区、I/Q 区（E/A 同义）、三菱 D/R/ZR/SD 与 X/Y、欧姆龙 CIO/W/DM、DL/T 645 数据标识、Modbus 0x/1x/3x/4x 前缀与 5 位/6 位 PLC 编址、IEC 104 IOA、通用数字；
+- **协议兼容性校验**：主导风格与目标协议寻址不一致时逐点警告（地址原样传给协议自身的解析器——它们才是权威，本引擎不做有损转换）；
+- **冲突显式暴露**：Modbus 复用寄存器重叠检测（float32 相邻覆盖类问题导入期即拦截）；其余协议做同地址多点检测；重复点名提示——预览可见，绝不静默导入；
+- **数据类型归一化**：Real/WORD/BIT/DWORD/组态常见写法 → 规范类型；未知写法降级 float32 并逐行提示；
+- **中英文表头映射**：点名/数据项/位号/名称、地址/数据标识/寄存器地址等常见表头自动识别；
+- **API** `POST /devices/import-point-table`：`dry_run=true` 返回映射/冲突/警告预览，`dry_run=false` 建设备（冲突 422 拒绝）；
+- **前端向导**：设备管理页新增「点表」入口——选协议 → 粘贴/上传（CSV/TSV/XLSX）→ 风格统计 + 逐点预览 + 冲突/警告 → 确认导入；
+- **Excel 支持为可选依赖** `[pointtable]`（openpyxl，懒加载；CSV/TSV 无需任何额外依赖）；
+- **样例点表**：`tests/samples/` 内 5 份厂商风格样例（西门子/三菱/欧姆龙/Modbus/DL-T645），导入成功率 100%（规划验收 >95%）；1000 点解析 <10 秒（实测 <1s）。
+- 协议槽位 #1（用户投票选协议）本版悬置：当前用户基数下投票样本不足，继续以 issue/群反馈热度替代。
+
+### 🛡️ 合规检测扩容（5 → 7 协议）
+
+- **BACnet**（BC-001~005）：BVLC 版本/功能码、NPDU 版本、APDU 类型、确认服务选择码；
+- **IEC 61850 / MMS**（MMS-001~004）：PDU tag、BER 长度编码（short/long form）、Confirmed PDU invoke ID、LD 域名约定。
+
+### 🧪 Wire 级黄金用例铺开（13 → 25 协议，+12）
+
+新增 9 个测试文件、25 个用例进 CI `wire-golden-gate` 门禁（真实 socket 收发 + 字节级断言）：custom_tcp（raw/template 两模式）、custom_udp、toledo（稳定/负称重 ASCII 帧）、opcda（PFDA browse/read/write 回读）、s7plus（COTP CC/setup/read）、fanuc（DBP connect/acts）、coap（RFC 7252 CON GET→ACK 2.05，MID/token 回显 + Content-Format 12）、http（/health 状态行/头/JSON 全断言）、mtconnect（/probe XML 契约）、profinet（DCP identify xid 回显 + IP block）、ethercat（BRD 寄存器读 + working counter）、iec61850（MMS Identify 往返）。
+
+**尚未覆盖 3 个**（均有明确原因）：gb28181（SIP Digest 注册需假 SIP 服务器闭环，下批次）、dds（UDP publish 模式无响应帧，无法请求-响应断言）、opcua_client（客户端模式，无本地服务端可测）。
+
+**黄金用例上线即抓到并修复 2 个真实 wire 缺陷：**
+
+1. **OPC-DA 桥接写往返数据损坏**：`_pack_typed_value` 打包带 1 字节类型前缀，`_unpack_typed_value` 解包未跳过前缀——外部客户端写入 21.0 读回 5e-239。全部类型统一跳过前缀并补 string 分支；
+2. **PROFINET DCP identify 配置真实 IP 必崩**：IP block 的 struct 格式串 `>BHIHII` 把 4 字节子网掩码塞进 H(2B)——默认空 IP 走 ValueError 全 0 兜底掩盖了缺陷。改为标准布局 `>BHIIIH`（block_len=14 = IP4+Mask4+GW4+Reserved2）。
+
+### 修复 — 其余
+
+- 点表导入修复过程中发现 `_rows_from_csv` 多余列告警误报路径（多列 CSV 行提示语义修正）。
+
+### 升级提示
+
+- pip 用户：Excel 导入需 `pip install 'protoforge[pointtable]'`（或 `[all]`）；CSV/TSV 开箱即用；
+- Docker：`docker pull suoten/protoforge:1.7.0`；
+- 前端重新构建后设备管理页出现「点表」按钮。
+
 ## v1.6.40 — 2026-10-23
 
 ### Added — 连通性排查可自解释：厂商回归测试 + 标签未命中自解释日志 + 表单协议化引导

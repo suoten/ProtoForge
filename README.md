@@ -162,7 +162,8 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 ## ✨ 核心特性
 
 - **28 种工业协议** — Modbus TCP/RTU、OPC-UA（Server/Client）、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP
-- **协议黄金用例门禁** — 10 个核心协议 43 组字节级黄金帧回归（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **协议黄金用例门禁** — 25/28 协议字节级黄金帧回归（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **点表导入（v1.7.0）** — 客户点表 Excel/CSV 粘贴或上传，自动识别西门子/三菱/欧姆龙/Modbus/DL-T645 等 15 类厂商地址风格，冲突与类型疑点预览确认后一键建设备
 - **桌面版（v1.6.0）** — `protoforge desktop` 或双击便携包 exe：自动起服务 + 自动打开界面 + 可选系统托盘 + 新版本气泡提示；数据随 exe 目录走，解压即用
 - **`protoforge doctor` 一键自检** — 端口冲突、特权端口、依赖完整、数据库可写、容器网络拓扑逐项体检，部署类问题发 issue 前先自诊（支持 `--json`）
 - **全链路仿真** — 不只是模拟数据，完整模拟协议交互过程（如 GB28181：SIP注册→目录查询→INVITE→RTP视频推流→BYE）

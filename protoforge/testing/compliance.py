@@ -390,6 +390,143 @@ class MQTTComplianceChecker(BaseComplianceChecker):
         return None
 
 
+class BACnetComplianceChecker(BaseComplianceChecker):
+    """BACnet (ASHRAE 135) protocol compliance checker (v1.7.0)."""
+
+    protocol_name = "bacnet"
+
+    rules = [
+        ComplianceRule("BC-001", "BVLC Version",
+                       "BVLC version must be 0x81", Severity.ERROR),
+        ComplianceRule("BC-002", "BVLC Function Code",
+                       "BVLC function must be 0x00-0x0B (result/B_register/F_register/DistributeBroadcastToNetwork/orig-unicast/orig-broadcast/forward)", Severity.ERROR),
+        ComplianceRule("BC-003", "NPDU Version",
+                       "NPDU version must be 0x01", Severity.ERROR),
+        ComplianceRule("BC-004", "APDU PDU Type",
+                       "APDU type must be 0-7 (confirmed/unconfirmed/simpleack/complexack/segmentack/error/reject/abort)", Severity.ERROR),
+        ComplianceRule("BC-005", "Confirmed Service Choice",
+                       "Confirmed service choice must be a valid BACnet service (0-30)", Severity.WARNING),
+    ]
+
+    VALID_BVLC_FUNCTIONS = set(range(0x00, 0x0C))
+    VALID_APDU_TYPES = set(range(0, 8))
+    VALID_CONFIRMED_SERVICES = set(range(0, 31))
+
+    def _check_rule(self, rule, msg, idx, all_messages):
+        detail = msg.get("detail", {})
+
+        if rule.id == "BC-001":
+            version = detail.get("bvlc_version")
+            if version is not None:
+                try:
+                    if int(version) != 0x81:
+                        return self._make_violation(rule, f"BVLC version {version} != 0x81", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "BC-002":
+            func = detail.get("bvlc_function")
+            if func is not None:
+                try:
+                    f = int(func)
+                    if f not in self.VALID_BVLC_FUNCTIONS:
+                        return self._make_violation(rule, f"Invalid BVLC function: 0x{f:02X}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "BC-003":
+            version = detail.get("npdu_version")
+            if version is not None:
+                try:
+                    if int(version) != 0x01:
+                        return self._make_violation(rule, f"NPDU version {version} != 0x01", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "BC-004":
+            apdu_type = detail.get("apdu_type")
+            if apdu_type is not None:
+                try:
+                    t = int(apdu_type)
+                    if t not in self.VALID_APDU_TYPES:
+                        return self._make_violation(rule, f"Invalid APDU type: {t}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "BC-005":
+            svc = detail.get("service_choice")
+            if svc is not None:
+                try:
+                    s = int(svc)
+                    if s not in self.VALID_CONFIRMED_SERVICES:
+                        return self._make_violation(rule, f"Invalid service choice: {s}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        return None
+
+
+class IEC61850ComplianceChecker(BaseComplianceChecker):
+    """IEC 61850 (MMS mapping) protocol compliance checker (v1.7.0)."""
+
+    protocol_name = "iec61850"
+
+    rules = [
+        ComplianceRule("MMS-001", "PDU Tag Validity",
+                       "MMS PDU tag must be 0xA0-0xA8 (ConfirmedRequest/Response, UnconfirmedPDU, RejectPDU, AbortPDU, etc.)", Severity.ERROR),
+        ComplianceRule("MMS-002", "BER Length Encoding",
+                       "BER length must use short form (<=127) or long form with correct length-of-length", Severity.ERROR),
+        ComplianceRule("MMS-003", "Invoke ID Present",
+                       "ConfirmedRequest/Response must carry an invoke ID", Severity.WARNING),
+        ComplianceRule("MMS-004", "Domain Object Name Format",
+                       "Domain/LD names should follow LD0.. naming convention", Severity.INFO),
+    ]
+
+    VALID_PDU_TAGS = set(range(0xA0, 0xA9))
+
+    def _check_rule(self, rule, msg, idx, all_messages):
+        detail = msg.get("detail", {})
+
+        if rule.id == "MMS-001":
+            tag = detail.get("pdu_tag")
+            if tag is not None:
+                try:
+                    t = int(tag)
+                    if t not in self.VALID_PDU_TAGS:
+                        return self._make_violation(rule, f"Invalid MMS PDU tag: 0x{t:02X}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "MMS-002":
+            length = detail.get("ber_length")
+            length_of_length = detail.get("length_of_length")
+            if length is not None and length_of_length is not None:
+                try:
+                    lol = int(length_of_length)
+                    total = int(length)
+                    if lol == 0 and total > 127:
+                        return self._make_violation(
+                            rule, f"Short-form length used for {total} bytes (>127)", idx)
+                    if not (0 <= lol <= 4):
+                        return self._make_violation(rule, f"Invalid length-of-length: {lol}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "MMS-003":
+            invoke_id = detail.get("invoke_id")
+            pdu_tag = detail.get("pdu_tag")
+            if pdu_tag in (0xA0, 0xA1) and invoke_id is None:
+                return self._make_violation(rule, "Confirmed PDU without invoke ID", idx)
+
+        elif rule.id == "MMS-004":
+            domain = detail.get("domain_name") or detail.get("ld_name")
+            if domain and not str(domain).upper().startswith("LD"):
+                return self._make_violation(
+                    rule, f"Domain name '{domain}' does not follow LD naming", idx)
+
+        return None
+
+
 # Registry of compliance checkers
 CHECKER_REGISTRY: dict[str, type[BaseComplianceChecker]] = {
     "modbus_tcp": ModbusComplianceChecker,
@@ -400,6 +537,9 @@ CHECKER_REGISTRY: dict[str, type[BaseComplianceChecker]] = {
     "iec104": IEC104ComplianceChecker,
     "iec_104": IEC104ComplianceChecker,
     "mqtt": MQTTComplianceChecker,
+    "bacnet": BACnetComplianceChecker,
+    "iec61850": IEC61850ComplianceChecker,
+    "iec_61850": IEC61850ComplianceChecker,
 }
 
 

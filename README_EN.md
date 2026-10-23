@@ -35,7 +35,8 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 ## ✨ Features
 
 - **28 Industrial Protocols** — Modbus TCP/RTU, OPC-UA (Server/Client), MQTT, HTTP, GB28181, BACnet, Siemens S7/S7Comm-Plus, Mitsubishi MC, Omron FINS, Rockwell AB, OPC-DA, FANUC FOCAS, MTConnect, Mettler-Toledo, PROFINET IO, EtherCAT, IEC 60870-5-104, IEC 61850, CoAP, DDS, DLT/T 645, CJ/T 188, Panasonic MEWTOCOL, Custom TCP/UDP
-- **Wire-Level Golden Test Gate** — 43 byte-exact golden frames across the 10 core protocols, verified against real sockets and enforced as a non-exemptable CI merge gate, so the simulator speaks the standard, not an approximation
+- **Wire-Level Golden Test Gate** — byte-exact golden frames across 25 of 28 protocols, verified against real sockets and enforced as a non-exemptable CI merge gate, so the simulator speaks the standard, not an approximation
+- **Point-Table Import (v1.7.0)** — paste or upload a customer point table (Excel/CSV); auto-detects 15 vendor addressing dialects (Siemens DB/Mitsubishi D/Omron DM/Modbus 4xxxx/DLT645...), flags conflicts for review, then creates the device in one click
 - **Desktop Edition (v1.6.0)** — `protoforge desktop` or double-click the portable exe: starts the server and auto-opens the UI, optional system tray with new-version notifications; data lives next to the executable (unzip and go)
 - **`protoforge doctor` Self-Check** — One command to inspect port conflicts, privileged ports, dependencies, database writability and container networking, with actionable fixes (`--json` for issue reports)
 - **Full-chain Simulation** — Complete protocol interactions including GB28181 SIP registration, RTP video streaming, and more

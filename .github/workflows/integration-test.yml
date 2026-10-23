@@ -52,7 +52,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,all]" || pip install -e ".[dev]"
       - name: Run Unit Tests
-        run: python -m pytest tests/test_smoke.py tests/test_api.py -v --tb=short --override-ini="asyncio_mode=auto" --override-ini="addopts="
+        run: python -m pytest             tests/test_wire_golden_modbus.py             tests/test_wire_golden_s7.py             tests/test_iec104_wire.py             tests/test_wire_golden_dlt645.py             tests/test_wire_golden_cjt188.py             tests/test_wire_golden_mc.py             tests/test_wire_golden_fins.py             tests/test_wire_golden_mqtt.py             tests/test_wire_golden_bacnet.py             tests/test_wire_golden_opcua.py             tests/test_wire_golden_batch1.py             tests/test_wire_golden_batch2.py             tests/test_wire_golden_batch3.py             tests/test_mewtocol.py             tests/test_settings_chain_consistency.py             tests/test_point_table_import.py             tests/test_point_table_api.py             tests/test_compliance_v17.py             tests/test_doctor.py             -v --tb=short --override-ini="asyncio_mode=auto" --override-ini="addopts="
 
   # v1.5.0 wire-level golden protocol tests — merge gate (NOT exemptable).
   # Byte-level protocol correctness for the top-10 protocols plus the

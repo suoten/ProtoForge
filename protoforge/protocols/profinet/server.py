@@ -445,7 +445,11 @@ class ProfinetServer(ProtocolServer):
         except ValueError:
             ip_int = mask_int = gw_int = 0
 
-        resp += struct.pack(">BHIHII",
+        # FIXED(v1.7.0): 格式串原为 >BHIHII——4 字节 mask 被塞进 H(2B)，
+        # 配置真实 IP 后 DCP identify 必崩 struct.error（默认空 IP 走
+        # ValueError 全 0 兜底掩盖了缺陷）。标准布局 block_len=14 =
+        # IP(4) + Mask(4) + GW(4) + Reserved(2)。
+        resp += struct.pack(">BHIIIH",
                             DCP_BLOCK_IP, 14,
                             ip_int,
                             mask_int,

@@ -58,8 +58,12 @@
             </n-dropdown>
           </n-button-group>
 
-          <!-- CSV导入导出 -->
+          <!-- CSV导入导出 + 点表导入（v1.7.0） -->
           <n-button-group size="small">
+            <n-button @click="showPointTableImport = true" :title="'点表导入向导（Excel/CSV，自动识别厂商地址风格）'">
+              <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></template>
+              点表
+            </n-button>
             <n-button @click="exportCSV" :loading="csvLoading" :title="t('devices.exportCSV')">
               <template #icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></template>
               CSV
@@ -609,6 +613,9 @@
         </template>
       </n-modal>
 
+      <!-- 点表导入向导（v1.7.0） -->
+      <PointTableImport v-model:show="showPointTableImport" @imported="loadData" />
+
       <!-- CSV导入弹窗 -->
       <n-modal v-model:show="showCSVImport" preset="card" :title="t('devices.importCSV')" style="width:min(640px, 90vw)">
         <n-space vertical size="large">
@@ -650,6 +657,7 @@ import { protocolLabels, deviceStatusMap, popularTemplateIds, defaultPointConfig
   dataTypeOptions as _dataTypeOptions, generatorTypeOptions as _generatorTypeOptions, accessModeOptions as _accessModeOptions,
   generatorConfigSchema as _generatorConfigSchema } from '../constants.js'
 import EmptyState from '../components/EmptyState.vue'
+import PointTableImport from '../components/PointTableImport.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -660,6 +668,7 @@ const selectedIds = ref([])
 const batchLoading = ref(false)
 const csvLoading = ref(false)
 const showCSVImport = ref(false)
+const showPointTableImport = ref(false)
 const csvText = ref('')
 const csvAutoStart = ref(true)
 const dataLoading = ref(false)

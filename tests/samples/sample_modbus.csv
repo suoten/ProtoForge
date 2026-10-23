@@ -1,0 +1,8 @@
+point_name,address,data_type,unit,access,description
+grid_voltage,4x0001,uint16,V,r,电网电压
+grid_current,4x0002,uint16,A,r,电网电流
+grid_power,4x0003,uint16,kW,r,有功功率
+breaker,0x0001,bool,,rw,断路器分合
+remote_lock,1x0001,bool,,r,远方锁定
+frequency,3x0001,uint16,0.01Hz,r,电网频率
+energy_total,40010,uint32,kWh,r,正向有功电能

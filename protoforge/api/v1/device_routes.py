@@ -530,6 +530,126 @@ async def import_devices_csv(req: CSVImportRequest, _user: dict[str, Any] = Depe
     }
 
 
+class PointTableImportRequest(BaseModel):
+    """v1.7.0 点表导入请求：客户点表 Excel/CSV → 预览 → 建设备。"""
+    content: str = Field(..., description="CSV/TSV 文本，或 base64 编码的 xlsx（format=excel）")
+    file_format: str = Field(default="csv", description="csv | excel")
+    protocol: str = Field(default="modbus_tcp", description="目标协议")
+    device_id: str = Field(default="", description="目标设备 ID（留空自动生成）")
+    device_name: str = Field(default="", description="设备名（留空用 '导入点表-<时间戳>'）")
+    style_hint: str = Field(default="", description="强制指定地址风格（留空自动识别）")
+    dry_run: bool = Field(default=True, description="true=仅返回预览（映射/冲突/警告），不建设备")
+    auto_start: bool = Field(default=False, description="建设备后自动启动")
+    generator_type: str = Field(default="fixed", description="导入点位的默认生成器类型")
+
+
+@router.post("/devices/import-point-table")
+async def import_point_table(req: PointTableImportRequest, _user: dict[str, Any] = Depends(require_operator)):
+    """v1.7.0 点表导入：厂商地址风格自动识别 → 预览（dry_run）→ 建设备。
+
+    dry_run=true 返回解析结果（风格统计/逐点映射/冲突/警告），前端向导据此
+    交互确认；dry_run=false 按 DeviceConfig 落库（冲突存在时 422 拒绝）。
+    """
+    from protoforge.core.point_table import parse_point_table
+    from protoforge.core.paths import app_root
+    import time as _time
+
+    try:
+        parsed = parse_point_table(
+            content=req.content,
+            file_format=req.file_format,
+            protocol=req.protocol,
+            style_hint=req.style_hint,
+        )
+    except ImportError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    def _preview_payload() -> dict[str, Any]:
+        return {
+            "status": "preview",
+            "ok": parsed.ok,
+            "detected_styles": parsed.detected_styles,
+            "style_counts": parsed.style_counts,
+            "total_points": len(parsed.points),
+            "points": [
+                {
+                    "row": p.row, "name": p.name, "address": p.address,
+                    "data_type": p.data_type, "unit": p.unit,
+                    "description": p.description, "access": p.access,
+                    "style": p.style, "warnings": p.warnings,
+                }
+                for p in parsed.points
+            ],
+            "errors": parsed.errors,
+            "warnings": parsed.warnings,
+            "conflicts": parsed.conflicts,
+            "duplicate_names": parsed.duplicate_names,
+        }
+
+    if req.dry_run:
+        return _preview_payload()
+
+    if parsed.errors:
+        payload = _preview_payload()
+        payload["status"] = "rejected"
+        raise HTTPException(status_code=422, detail=payload)
+    if parsed.conflicts:
+        payload = _preview_payload()
+        payload["status"] = "rejected"
+        raise HTTPException(status_code=422, detail=payload)
+    if not parsed.points:
+        raise HTTPException(status_code=400, detail="点表为空：未解析到任何可导入的点位")
+
+    engine = _get_engine()
+    db = _get_database()
+    device_id = req.device_id.strip() or f"imported-{int(_time.time())}"
+    device_name = req.device_name.strip() or f"导入点表-{_time.strftime('%Y%m%d-%H%M%S')}"
+
+    try:
+        gt_raw = (req.generator_type or "fixed").strip()
+        points = []
+        for p in parsed.points:
+            point = {
+                "name": p.name,
+                "address": p.address,
+                "data_type": p.data_type,
+                "unit": p.unit,
+                "description": p.description,
+                "access": p.access,
+                "generator_type": gt_raw,
+            }
+            points.append(point)
+        config = DeviceConfig(
+            id=device_id,
+            name=device_name,
+            protocol=req.protocol,
+            points=points,  # type: ignore[arg-type]
+        )
+        ensure_no_point_overlap(config.protocol, config.points)
+        await engine.create_device(config)
+        if db is not None:
+            try:
+                await db.save_device(config)
+            except Exception as db_err:
+                logger.warning("Failed to save imported device %s to DB: %s", device_id, db_err)
+        if req.auto_start:
+            with contextlib.suppress(Exception):
+                await engine.start_device(config.id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"创建设备失败: {e}") from e
+
+    await _trigger_webhook_safe("point_table_imported", {"device_id": device_id, "points": len(parsed.points)})
+    payload = _preview_payload()
+    payload.update({
+        "status": "created",
+        "device_id": device_id,
+        "device_name": device_name,
+    })
+    return payload
+
+
 @router.get("/devices/{device_id}")
 async def get_device(device_id: str, _user: dict[str, Any] = Depends(require_viewer)):
     engine = _get_engine()

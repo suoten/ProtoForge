@@ -1,0 +1,11 @@
+位号,地址,数据类型,单位,读写,描述
+reactor_temp,DB1.DBD0,float32,℃,rw,反应釜温度
+reactor_pressure,DB1.DBD4,float32,kPa,r,反应釜压力
+agitator_run,DB1.DBX8.0,bool,,rw,搅拌机运行
+agitator_speed,DB1.DBW10,uint16,rpm,rw,搅拌机转速
+inlet_valve,M0.0,bool,,rw,进料阀
+outlet_valve,M0.1,bool,,rw,出料阀
+pump_freq,MD20,float32,Hz,rw,泵频率
+level_switch,I0.0,bool,,r,液位开关
+drain_valve,Q0.2,bool,,rw,排污阀
+batch_counter,DB1.DBD12,uint32,个,r,批次计数

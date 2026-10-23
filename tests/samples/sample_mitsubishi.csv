@@ -1,0 +1,9 @@
+点名,地址,数据类型,单位,读写,备注
+line_speed,D100,uint16,m/min,rw,产线速度
+line_tension,D102,float32,N,r,张力
+main_motor,D104,bool,,rw,主电机启停
+cooling_fan,Y10,bool,,rw,冷却风扇
+feeder,D200,int16,mm,rw,送料长度
+recipe_no,D210,uint16,,,r,当前配方号
+alarm_code,D220,uint16,,,r,报警代码
+output_count,D230,uint32,件,r,产量计数

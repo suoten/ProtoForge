@@ -324,21 +324,28 @@ class OpcDaServer(ProtocolServer):
 
     @staticmethod
     def _unpack_typed_value(data_type: str, data: bytes) -> Any:
+        # FIXED(v1.7.0): wire 格式带 1 字节类型前缀（与 _pack_typed_value 的
+        # <Bt 对应），解包必须跳过前缀——原实现把前缀当数值字节，写入
+        # 21.0 读回 5e-239（黄金用例 wire 回归抓到的数据损坏缺陷）。
         try:
-            if data_type == "bool" and len(data) >= 1:
-                return bool(data[0])
-            elif data_type == "int16" and len(data) >= 2:
-                return struct.unpack("<h", data[:2])[0]
-            elif data_type == "uint16" and len(data) >= 2:
-                return struct.unpack("<H", data[:2])[0]
-            elif data_type == "int32" and len(data) >= 4:
-                return struct.unpack("<i", data[:4])[0]
-            elif data_type == "uint32" and len(data) >= 4:
-                return struct.unpack("<I", data[:4])[0]
-            elif data_type == "float32" and len(data) >= 4:
-                return struct.unpack("<f", data[:4])[0]
-            elif data_type == "float64" and len(data) >= 8 or len(data) >= 8:
-                return struct.unpack("<d", data[:8])[0]
+            payload = data[1:] if data else b""
+            if data_type == "bool" and len(payload) >= 1:
+                return bool(payload[0])
+            elif data_type == "int16" and len(payload) >= 2:
+                return struct.unpack("<h", payload[:2])[0]
+            elif data_type == "uint16" and len(payload) >= 2:
+                return struct.unpack("<H", payload[:2])[0]
+            elif data_type == "int32" and len(payload) >= 4:
+                return struct.unpack("<i", payload[:4])[0]
+            elif data_type == "uint32" and len(payload) >= 4:
+                return struct.unpack("<I", payload[:4])[0]
+            elif data_type == "float32" and len(payload) >= 4:
+                return struct.unpack("<f", payload[:4])[0]
+            elif data_type == "string" and len(payload) >= 2:
+                slen = struct.unpack("<H", payload[:2])[0]
+                return payload[2:2 + slen].decode("utf-8", errors="replace")
+            elif len(payload) >= 8:
+                return struct.unpack("<d", payload[:8])[0]
         except (struct.error, IndexError) as e:
             logger.warning("OPC-DA value unpack error: %s", e)
         return 0.0

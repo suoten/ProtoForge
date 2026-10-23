@@ -235,6 +235,8 @@ resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   // CSV import/export
   exportDevicesCSV: (protocol) => api.get('/devices/export-csv', { params: { protocol }, responseType: 'blob' }).then(r => r.data),
   importDevicesCSV: (csvText, protocol = '', autoStart = true) => d(api.post('/devices/import-csv', { csv_text: csvText, protocol, auto_start: autoStart })),
+  // v1.7.0: 点表导入（Excel/CSV，厂商地址风格识别 + 冲突预览）
+  importPointTable: (payload) => d(api.post('/devices/import-point-table', payload)),
 
   // Device/Scenario clone
   cloneDevice: (id, params) => d(api.post(`/devices/${id}/clone`, params || {})),
