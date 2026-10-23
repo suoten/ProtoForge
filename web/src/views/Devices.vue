@@ -1172,15 +1172,26 @@ function renderDevGenConfigExpand(row) {
   ])
 }
 
-function makeDevEditRenderer(key, Component) {
+function makeDevEditRenderer(key, Component, placeholder) {
   return (_row, idx) => h(Component, {
     value: editDevice.value.points?.[idx]?.[key],
     size: 'tiny',
-    placeholder: key,
+    placeholder: placeholder || key,
     style: 'width:100%',
     onUpdateValue: (v) => { const p = editDevice.value.points?.[idx]; if (p) p[key] = v },
   })
 }
+
+// FIXED(v1.6.40): 地址语义按协议差异化 —— AB/CIP 按标签名寻址（如 point_1），
+// Modbus/汇川按寄存器号（如 40001），三菱按软元件（如 D100）。
+// 实测用户在 AB 设备里把地址习惯性填成数字 0，导致按名寻址的客户端全 miss。
+const devAddressPlaceholder = computed(() => {
+  const proto = (editDevice.value.protocol || '').toLowerCase()
+  if (proto === 'ab') return t('devices.addressPlaceholderAB')
+  if (['mitsubishi', 'mc', 'yaskawa', 'keyence', 'panasonic', 'fatek'].includes(proto)) return t('devices.addressPlaceholderMitsubishi')
+  if (['modbus_tcp', 'modbus_rtu', 'modbus', 'inovance', 'delta', 'xinje'].includes(proto)) return t('devices.addressPlaceholderModbus')
+  return ''
+})
 
 function makeDevSelectRenderer(key, options) {
   return (_row, idx) => h(NSelect, {
@@ -1196,7 +1207,7 @@ function makeDevSelectRenderer(key, options) {
 const editDevicePointColumns = computed(() => [
   { type: 'expand', renderExpand: renderDevGenConfigExpand },
   { title: t('common.name'), key: 'name', width: 110, render: makeDevEditRenderer('name', NInput) },
-  { title: t('common.address'), key: 'address', width: 170, render: makeDevEditRenderer('address', NInput) },  // FIXED: 80 太窄，HTTP 路径类地址（如 /sensor/temperature）被截断
+  { title: t('common.address'), key: 'address', width: 170, render: makeDevEditRenderer('address', NInput, devAddressPlaceholder.value) },  // FIXED: 80 太窄，HTTP 路径类地址（如 /sensor/temperature）被截断；占位符按协议差异化
   { title: t('common.dataType'), key: 'data_type', width: 100, render: makeDevSelectRenderer('data_type', devDataTypeOptions) },
   { title: t('common.accessMode'), key: 'access', width: 90, render: makeDevSelectRenderer('access', devAccessModeOptions) },
   { title: t('common.generator'), key: 'generator_type', width: 100, render: makeDevSelectRenderer('generator_type', devGeneratorOptions) },
@@ -1211,9 +1222,15 @@ const editDevicePointColumns = computed(() => [
 
 function addEditDevicePoint() {
   if (!editDevice.value.points) editDevice.value.points = []
+  // FIXED(v1.6.40): 新增点位的默认地址按协议差异化 —— AB/CIP 按标签名寻址，
+  // 默认地址直接用点名（与名称一致，客户端按名读即命中）；否则沿用原有的
+  // Modbus 寄存器避让逻辑（实测 AB 设备默认寄存器地址误导用户填数字）
+  const proto = (editDevice.value.protocol || '').toLowerCase()
+  const name = nextPointName(editDevice.value.points)
+  const address = proto === 'ab' ? name : nextFreeModbusAddress(editDevice.value.points, 'float32')
   // 默认地址自动避开已占用寄存器（多字节类型占多个，与后端重叠校验规则一致），
   // 否则保存时会被 400 "检测到同设备点位地址重叠" 拦截，表现为"更新失败"
-  editDevice.value.points.push({ name: nextPointName(editDevice.value.points), address: nextFreeModbusAddress(editDevice.value.points, 'float32'), data_type: 'float32', access: 'rw', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
+  editDevice.value.points.push({ name, address, data_type: 'float32', access: 'rw', generator_type: 'random', gen_interval: 0, min_value: 0, max_value: 100, fixed_value: null, unit: '', description: '', generator_config: {} })
 }
 
 async function simpleCloneDevice(row) {

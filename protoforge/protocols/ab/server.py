@@ -552,6 +552,17 @@ class AbServer(ProtocolServer):
         # FIXED: 标签未命中时显式拒绝 —— _find_behavior_by_tag 未命中也返回默认
         # behavior，不检查会把未知标签读成 0（与 CIP Read 的 0xCC/0x04 行为不一致）
         if resolved not in behavior._tags and resolved not in behavior._data_types:
+            # FIXED(v1.6.40): 未命中时输出自解释日志（含设备已有点位名），
+            # 用户在调试视图即可自助定位"标签名与点位对不上"，无需导日志外发分析。
+            # 汇川 Demo DLL 收到 cb 04 会进入不再发读的中毒状态，此日志尤其关键。
+            available = sorted(set(behavior._tag_alias.keys()) | set(behavior._tags.keys()))
+            self._log_debug(
+                "system", "tag_miss",
+                f"标签未命中: {tag_name!r} —— 设备({device_id or '默认'})已注册点位/地址: "
+                f"{', '.join(available) if available else '(无)'}。"
+                f"请让客户端标签名与点位名称或地址一致，保存后重连。",
+                device_id=device_id or "",
+                detail={"tag": tag_name, "available": available})
             return self._make_bare_cip_error(0x4B, 0x04)
         name_bytes = tag_name.encode("utf-8")
         # 写操作：载荷后带值
