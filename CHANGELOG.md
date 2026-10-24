@@ -1,5 +1,33 @@
 # Changelog
 
+## v1.8.3 — 2026-10-24
+
+### 🐛 修复 — IEC 61850 Identify 服务从未被分发到（黄金用例抓到的第 5 个真缺陷）
+
+`TAG_IDENTIFY_REQ` 与 `TAG_CONCLUDE_REQ` 常量同为 0x82，分发链中 Conclude
+在前——Identify 请求永远被当作 Conclude 处理、返回空的 Conclude-Con。
+MMS Identify（客户端获取服务器厂商/型号/版本）功能自实现以来不可用。
+修复：TAG_IDENTIFY_REQ 改为未占用的 0x85。回归：PDU 级黄金用例
+（Identify 响应含 vendor/model/revision + Conclude 往返 + 非法 tag 静默丢弃）。
+
+### 🔧 测试基建 — stop() 取消传播语义统一（外部取消不再被吞）
+
+全部 22 个协议服务器的 stop() 用 suppress(CancelledError) 一律吞掉取消——
+无法区分"服务任务自身的取消"与"外部取消"（wait_for 超时/事件循环关闭），
+后者被吞后 wait_for 的 TimeoutError 一并被抑制、调用方在 Python 3.12.0 上
+永久挂起（全量回归间歇挂起的根因，协程级栈转储实测定位；干净 master 同样
+复现，属预存问题）。修复：
+
+- base.py 新增共享 helper `shutdown_server_task(task)`（吞掉任务自身的
+  取消；`Task.cancelling() > 0` 即外部取消时继续传播，3.10 降级为旧行为）
+  与 `externally_cancelled()`；22 个协议 stop() 机械替换（modbus/opcua
+  嵌套结构手工修复）
+- wire_golden_harness：free_tcp_port 取号后验证无监听者（端口碰撞导致
+  连接打到错误服务器）；open_conn 带超时；golden 批次 teardown 统一
+  shield 包裹（超时必然触发）+ except 分支关闭 writer
+- tests/test_stop_cancellation.py：取消传播语义 4 用例
+- tests/_hangdump_plugin.py 诊断插件（协程级 await 链转储，按需 -p 加载）
+
 ## v1.8.2 — 2026-10-24
 
 ### Fixed — AB/EIP：Execute_PCCC 写标签按点位类型解析，修复"写入了但值不变"（用户实测反馈）
