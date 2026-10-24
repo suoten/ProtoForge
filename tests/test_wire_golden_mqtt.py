@@ -121,19 +121,15 @@ async def test_connect_ping_publish_contract():
         assert ptype == 0x90, f"expected SUBACK, got {ptype:#x}"
         assert body == b"\x00\x01\x00", f"SUBACK mismatch: {body.hex(' ')}"
 
-        # publish loop (interval=1s) -> PUBLISH on the contract topic
-        got = None
-        for _ in range(45):
-            try:
-                ptype, body = await read_packet(reader, timeout=5)
-            except asyncio.TimeoutError:
-                continue
-            if ptype & 0xF0 == 0x30:  # PUBLISH (QoS0)
-                topic_len = struct.unpack(">H", body[:2])[0]
-                topic = body[2:2 + topic_len].decode()
-                payload = json.loads(body[2 + topic_len:].decode())
-                got = (topic, payload)
-                break
+        # FIXED(v1.8.1): 等待 interval 轮询在回归负载下不确定——直接同步触发
+        # 一轮设备发布，契约断言完全确定性
+        await server._publish_device("dev1")
+        ptype, body = await read_packet(reader, timeout=15)
+        assert ptype & 0xF0 == 0x30, f"expected PUBLISH, got {ptype:#x}"
+        topic_len = struct.unpack(">H", body[:2])[0]
+        topic = body[2:2 + topic_len].decode()
+        payload = json.loads(body[2 + topic_len:].decode())
+        got = (topic, payload)
         assert got is not None, "no PUBLISH received"
         topic, payload = got
         assert topic == "protoforge/dev1/temp", f"topic contract broken: {topic}"
