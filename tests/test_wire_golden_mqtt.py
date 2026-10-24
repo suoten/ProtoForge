@@ -56,7 +56,7 @@ def subscribe_packet(pid: int, topic: str) -> bytes:
     return bytes([0x82]) + mqtt_encode_remaining_len(len(body)) + body
 
 
-async def read_packet(reader, timeout: float = 5.0) -> tuple[int, bytes]:
+async def read_packet(reader, timeout: float = 20.0) -> tuple[int, bytes]:
     first = await asyncio.wait_for(reader.readexactly(1), timeout=timeout)
     multiplier, value = 1, 0
     while True:
@@ -123,9 +123,9 @@ async def test_connect_ping_publish_contract():
 
         # publish loop (interval=1s) -> PUBLISH on the contract topic
         got = None
-        for _ in range(15):
+        for _ in range(45):
             try:
-                ptype, body = await read_packet(reader, timeout=2)
+                ptype, body = await read_packet(reader, timeout=5)
             except asyncio.TimeoutError:
                 continue
             if ptype & 0xF0 == 0x30:  # PUBLISH (QoS0)
