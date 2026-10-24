@@ -46,13 +46,22 @@ async def _teardown_tcp(server, writer=None):
             await asyncio.wait_for(writer.wait_closed(), timeout=3)
         except (asyncio.TimeoutError, ConnectionError):
             pass
-    await asyncio.wait_for(server.stop(), timeout=10)
+    # FIXED(v1.8.1): shield 保证 10s 超时必然触发（部分协议 stop() 吞掉
+    # 外部取消，裸 wait_for 的超时被吞后调用方永久挂起）
+    stop_task = asyncio.ensure_future(server.stop())
+    try:
+        await asyncio.wait_for(asyncio.shield(stop_task), timeout=10)
+    except asyncio.TimeoutError:
+        pass
+    except Exception:
+        stop_task.cancel()
 
 
 @pytest.mark.asyncio
 async def test_custom_tcp_raw_mode_all_points_exact():
     """Raw mode: response = uint16 BE(0x1234) + float32 BE(1.5), nothing else."""
     server, port = await _start_custom_tcp()
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(b"\x01")  # any request byte
@@ -62,7 +71,7 @@ async def test_custom_tcp_raw_mode_all_points_exact():
         assert resp == expected, f"got {resp.hex(' ')} exp {expected.hex(' ')}"
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
@@ -70,6 +79,7 @@ async def test_custom_tcp_raw_mode_all_points_exact():
 async def test_custom_tcp_template_echo_and_point_exact():
     """Template "AA 55 {echo} {level}": magic + request echo + uint16 BE point."""
     server, port = await _start_custom_tcp({"response_template": "AA 55 {echo} {level}"})
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(b"\xDE\xAD")
@@ -79,7 +89,7 @@ async def test_custom_tcp_template_echo_and_point_exact():
         assert resp == expected, f"got {resp.hex(' ')} exp {expected.hex(' ')}"
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
@@ -198,6 +208,7 @@ async def _start_opcda():
 @pytest.mark.asyncio
 async def test_opcda_browse_exact():
     server, port = await _start_opcda()
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(_pfda(struct.pack("<I", 0x01)))  # browse
@@ -212,7 +223,7 @@ async def test_opcda_browse_exact():
         assert body == expected, f"got {body.hex(' ')} exp {expected.hex(' ')}"
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
@@ -222,6 +233,7 @@ async def test_opcda_read_float_value_exact_prefix():
     Pinned to current behavior: get_data_type dispatches to float64 (type 0x06)
     and OPC-DA good quality = 0xC0 (192). Everything except timestamp asserted."""
     server, port = await _start_opcda()
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         tag = b"tank_level"
@@ -238,13 +250,14 @@ async def test_opcda_read_float_value_exact_prefix():
         assert len(resp) == 17 + 8  # + timestamp
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
 @pytest.mark.asyncio
 async def test_opcda_write_then_readback():
     server, port = await _start_opcda()
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         # float64 value: _handle_write requires body >= 16 bytes
@@ -273,7 +286,7 @@ async def test_opcda_write_then_readback():
         assert resp2[4:13] == struct.pack("<B", 6) + struct.pack("<d", 21.0), f"readback mismatch: {resp2.hex(' ')}"
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
@@ -323,7 +336,7 @@ async def test_s7plus_cotp_connect_confirm():
         reader, writer = await _s7p_handshake(port)
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise
 
 
@@ -363,5 +376,5 @@ async def test_s7plus_setup_and_read_exact():
         assert s72 == expected2, f"read rsp mismatch:\n got {s72.hex(' ')}\n exp {expected2.hex(' ')}"
         await _teardown_tcp(server, writer)
     except Exception:
-        await _teardown_tcp(server)
+        await _teardown_tcp(server, writer)
         raise

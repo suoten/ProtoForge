@@ -28,6 +28,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.observability.messages import desc, msg
+from protoforge.protocols.base import externally_cancelled, shutdown_server_task
 from protoforge.protocols.behavior import (  # FIXED: W11 - 改继承StandardDeviceBehavior，与其他15个协议一致
     ProtocolErrorCategory,
     ProtocolServer,
@@ -89,10 +90,7 @@ class HttpSimulatorServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    logger.debug("HTTP task cancelled")
+                await shutdown_server_task(self._server_task)
         except Exception as e:
             logger.warning("HTTP server stop error: %s", e)
         finally:

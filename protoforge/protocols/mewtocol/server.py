@@ -55,6 +55,7 @@ import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
+from protoforge.protocols.base import externally_cancelled, shutdown_server_task
 from protoforge.protocols.behavior import (
     ProtocolErrorCategory,
     ProtocolServer,
@@ -399,8 +400,7 @@ class MewtocolServer(ProtocolServer):
         try:
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._server_task
+                await shutdown_server_task(self._server_task)
             for writer in list(self._connections.keys()):
                 with contextlib.suppress(Exception):
                     writer.close()

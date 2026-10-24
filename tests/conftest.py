@@ -1,21 +1,16 @@
 """Shared test fixtures and configuration for ProtoForge test suite."""
 
-import asyncio
 import os
-import sys
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 
-# FIXED(v1.7.1): Windows 本机全量回归中 wire-golden 批次测试偶发"事件循环
-# 漏唤醒"（ProactorEventLoop 的 IOCP _poll 永久睡眠——Python 3.12.0 已知
-# 缺陷，3.12.1+ 修复；表现为挂起测试的所有定时器/回调同时失效）。测试套件
-# 统一切换 SelectorEventLoop（EdgeLite 在 Windows 同样如此选择），规避该类
-# 缺陷；生产服务器不受影响（run 仍用默认 Proactor）。
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# NOTE(v1.8.1): 曾尝试切换 SelectorEventLoopPolicy 规避全量回归偶发挂起，
+# 实测 Selector 下 iec61850 黄金用例响应丢失（写入不落盘），已回退到默认
+# Proactor；挂起的真正根因是 free_tcp_port 端口碰撞 + pytest-timeout 兜底
+# （见 wire_golden_harness.py 与 pyproject timeout 配置）。
 
 # Disable auth by default for testing; use the 'auth_enabled' fixture to opt-in
 os.environ["PROTOFORGE_NO_AUTH"] = "1"

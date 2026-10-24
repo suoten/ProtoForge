@@ -272,3 +272,33 @@ class DeviceBehavior(ABC):
     @abstractmethod
     def on_write(self, point_name: str, value: Any) -> bool:
         raise NotImplementedError
+
+
+def externally_cancelled() -> bool:
+    """当前任务是否正被外部取消（asyncio.wait_for 超时 / 事件循环关闭）。
+
+    依赖 Python 3.11+ 的 Task.cancelling()；3.10 及更早版本恒返回 False
+    （这些版本没有取消计数，调用方退回旧行为）。
+    """
+    current = asyncio.current_task()
+    getter = getattr(current, "cancelling", None)
+    return bool(getter and getter() > 0)
+
+
+async def shutdown_server_task(task: asyncio.Task | None) -> None:
+    """等待服务任务结束（供各协议 stop() 统一使用）。
+
+    吞掉**任务自身的**取消（正常 stop 语义：cancel 后等待退出）；
+    但若当前任务本身也被外部取消（asyncio.wait_for 超时 / 事件循环关闭），
+    必须继续传播——否则 wait_for 的 TimeoutError 被 suppress 吞掉，
+    调用方在 Python 3.12.0 上会永久挂起（黄金用例全量回归实测触发）。
+
+    :param task: stop() 要等待的服务主任务；None 直接返回。
+    """
+    if task is None:
+        return
+    try:
+        await task
+    except asyncio.CancelledError:
+        if externally_cancelled():
+            raise  # 外部取消（wait_for/loop 关闭）——继续传播

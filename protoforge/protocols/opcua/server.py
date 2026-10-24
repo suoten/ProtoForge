@@ -35,7 +35,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.observability.messages import desc, msg
-from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+from protoforge.protocols.base import ProtocolServer, ProtocolStatus, externally_cancelled, shutdown_server_task
 from protoforge.protocols.behavior import StandardDeviceBehavior
 from protoforge.simulation.quality import QualityCode, QualitySystem
 
@@ -421,6 +421,8 @@ class OpcUaServer(ProtocolServer):
                     await self._server_task
                 except asyncio.CancelledError:
                     logger.debug("OPC-UA task cancelled")
+                    if externally_cancelled():
+                        raise
                 except Exception as e:
                     logger.warning("OPC-UA server task error: %s", e)
             if self._server:

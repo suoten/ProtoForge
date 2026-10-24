@@ -9,6 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue
 from protoforge.observability.messages import desc, msg
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.base import shutdown_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -277,10 +278,7 @@ class EtherCATServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    logger.debug("EtherCAT task cancelled")
+                await shutdown_server_task(self._server_task)
         except Exception as e:
             logger.warning("EtherCAT server stop error: %s", e)
         finally:

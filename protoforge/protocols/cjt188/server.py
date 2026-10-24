@@ -30,6 +30,7 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.base import shutdown_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -212,8 +213,7 @@ class CJT188Server(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await self._server_task
+                await shutdown_server_task(self._server_task)
             for writer in list(self._connections.keys()):
                 with contextlib.suppress(Exception):
                     writer.close()

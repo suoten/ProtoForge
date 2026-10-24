@@ -18,7 +18,17 @@ async def _teardown(server, writer=None):
             await asyncio.wait_for(writer.wait_closed(), timeout=3)
         except (asyncio.TimeoutError, ConnectionError):
             pass
-    await asyncio.wait_for(server.stop(), timeout=10)
+    # FIXED(v1.8.1): shield 保证 10s 超时必然触发——部分协议 stop() 会吞掉
+    # 外部取消（suppress CancelledError），裸 wait_for 的超时被吞后调用方
+    # 永久挂起（黄金用例全量回归实测）。超时后 stop_task 遗弃给事件循环，
+    # 测试收尾时由 asyncio.run 的取消逻辑兜底。
+    stop_task = asyncio.ensure_future(server.stop())
+    try:
+        await asyncio.wait_for(asyncio.shield(stop_task), timeout=10)
+    except asyncio.TimeoutError:
+        pass
+    except Exception:
+        stop_task.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -38,6 +48,7 @@ async def test_profinet_dcp_identify_exact():
         id="dev-pn", name="PN Golden", protocol="profinet",
         points=[PointConfig(name="v", address="0", data_type="uint16")],
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         xid = 0xDEADBEEF
@@ -57,7 +68,7 @@ async def test_profinet_dcp_identify_exact():
         assert b"\xc0\xa8\x01\x32" in resp and b"\xff\xff\xff\x00" in resp, "IP block from start config"
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise
 
 
@@ -76,6 +87,7 @@ async def test_ethercat_brd_register_read_exact():
         id="dev-ec", name="EC Golden", protocol="ethercat",
         points=[PointConfig(name="v", address="0", data_type="uint16")],
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         # BRD (cmd 0x07): cmd + idx + addr u32 LE + len_flags u16 LE + irq u16 + payload
@@ -97,7 +109,7 @@ async def test_ethercat_brd_register_read_exact():
         assert wck >= 0, "working counter present"
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise
 
 
@@ -137,6 +149,7 @@ async def test_iec61850_identify_roundtrip():
         id="dev-61850", name="61850 Golden", protocol="iec61850",
         points=[PointConfig(name="brk_pos", address="LD0/LLN0.brk_pos.stVal", data_type="bool")],
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(_mms_over_cotp(_mms_identify_request()))
@@ -153,5 +166,5 @@ async def test_iec61850_identify_roundtrip():
         assert idx >= 2 and body[idx - 2] == 0x83, "Identify-Con tag 0x83 expected"
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise

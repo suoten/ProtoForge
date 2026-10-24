@@ -9,6 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.observability.messages import desc
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.base import shutdown_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -128,10 +129,7 @@ class ToledoServer(ProtocolServer):
             self._continuous_writers.clear()
             if self._server_task:
                 self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    logger.debug("Toledo task cancelled")
+                await shutdown_server_task(self._server_task)
         except Exception as e:
             logger.warning("Toledo server stop error: %s", e)
         finally:

@@ -10,6 +10,7 @@ from xml.sax.saxutils import escape
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.observability.messages import desc
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.base import shutdown_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +73,7 @@ class MtConnectServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    logger.debug("MTConnect task cancelled")
+                await shutdown_server_task(self._server_task)
         except Exception as e:
             logger.warning("MTConnect server stop error: %s", e)
         finally:

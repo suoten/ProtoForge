@@ -23,7 +23,17 @@ async def _teardown(server, writer=None):
             await asyncio.wait_for(writer.wait_closed(), timeout=3)
         except (asyncio.TimeoutError, ConnectionError):
             pass
-    await asyncio.wait_for(server.stop(), timeout=10)
+    # FIXED(v1.8.1): shield 保证 10s 超时必然触发——部分协议 stop() 会吞掉
+    # 外部取消（suppress CancelledError），裸 wait_for 的超时被吞后调用方
+    # 永久挂起（黄金用例全量回归实测）。超时后 stop_task 遗弃给事件循环，
+    # 测试收尾时由 asyncio.run 的取消逻辑兜底。
+    stop_task = asyncio.ensure_future(server.stop())
+    try:
+        await asyncio.wait_for(asyncio.shield(stop_task), timeout=10)
+    except asyncio.TimeoutError:
+        pass
+    except Exception:
+        stop_task.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +57,7 @@ async def test_fanuc_dbp_connect_and_acts_exact():
         id="dev-fanuc", name="Fanuc Golden", protocol="fanuc",
         points=[PointConfig(name="spindle_speed", address="0", data_type="int16")],
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
 
@@ -70,7 +81,7 @@ async def test_fanuc_dbp_connect_and_acts_exact():
         assert payload2 == expected2, f"acts: {payload2.hex(' ')} exp {expected2.hex(' ')}"
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise
 
 
@@ -150,6 +161,7 @@ async def test_http_health_exact():
         id="dev-http", name="HTTP Golden", protocol="http",
         points=[PointConfig(name="v", address="v", data_type="float32")],
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(b"GET /health HTTP/1.1\r\nHost: t\r\n\r\n")
@@ -164,7 +176,7 @@ async def test_http_health_exact():
         assert data == {"status": "ok", "protocol": "http", "devices": 1}, data
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise
 
 
@@ -187,6 +199,7 @@ async def test_mtconnect_probe_xml_contract():
         ],
         protocol_config={"device_uuid": "pf-golden-uuid"},
     ))
+    reader = writer = None
     try:
         reader, writer = await open_conn(port)
         writer.write(b"GET /probe HTTP/1.1\r\nHost: t\r\n\r\n")
@@ -207,5 +220,5 @@ async def test_mtconnect_probe_xml_contract():
         assert re.search(r'instanceId="\d+"', body)
         await _teardown(server, writer)
     except Exception:
-        await _teardown(server)
+        await _teardown(server, writer)
         raise

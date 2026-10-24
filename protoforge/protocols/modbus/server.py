@@ -10,7 +10,13 @@ from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointConfig, PointValue, normalize_point_value
 from protoforge.observability.messages import desc, msg  # FIXED: i18n消息常量
-from protoforge.protocols.base import ProtocolErrorCategory, ProtocolServer, ProtocolStatus
+from protoforge.protocols.base import (
+    ProtocolErrorCategory,
+    ProtocolServer,
+    ProtocolStatus,
+    externally_cancelled,
+    shutdown_server_task,
+)
 from protoforge.protocols.modbus._common import (
     WRITE_FC_AREA_MAP,
     ModbusDataStore,
@@ -593,6 +599,8 @@ class ModbusTcpServer(ProtocolServer):
                     await self._server_task
                 except asyncio.CancelledError:
                     logger.debug("Modbus TCP task cancelled")
+                    if externally_cancelled():
+                        raise
                 except Exception as e:
                     logger.warning("Modbus TCP server task error: %s", e)
         except Exception as e:

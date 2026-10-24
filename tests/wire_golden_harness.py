@@ -17,10 +17,25 @@ import socket
 
 
 def free_tcp_port() -> int:
-    """Grab a free TCP port from the OS (small TOCTOU race is acceptable)."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+    """Grab a free TCP port from the OS.
+
+    FIXED(v1.8.1): 取号后必须验证"无监听者"——长回归里前面的测试若泄漏了
+    监听 socket，裸 bind(0) 取号可能命中被泄漏的端口，后续测试的连接会
+    打到错误的服务器上（实测：iec61850 黄金用例收到 HTTP 服务器的响应，
+    断言错位 + reader 状态损坏引发连锁挂起）。重试 20 次仍失败则抛错。
+    """
+    for _ in range(20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        probe.settimeout(0.3)
+        try:
+            if probe.connect_ex(("127.0.0.1", port)) != 0:
+                return port  # 无人监听 → 可用
+        finally:
+            probe.close()
+    raise RuntimeError("free_tcp_port: 20 次取号均与既有监听冲突（疑似测试泄漏监听 socket）")
 
 
 def free_udp_port() -> int:
