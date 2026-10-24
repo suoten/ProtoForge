@@ -16,7 +16,7 @@ import struct
 import pytest
 
 from protoforge.models.device import DeviceConfig, PointConfig
-from tests.wire_golden_harness import free_tcp_port
+from tests.wire_golden_harness import free_tcp_port, is_port_serving
 
 HOST = "127.0.0.1"
 
@@ -74,7 +74,14 @@ async def start_broker():
     server = MqttBroker()
     port = free_tcp_port()
     await server.start({"host": HOST, "port": port, "publish_interval": 1})
-    await asyncio.sleep(0.2)
+    # FIXED(v1.8.1): 全量回归负载下 amqtt 启动可能超过固定 sleep——
+    # 轮询等待端口可连接（复用 harness 的探活语义）
+    for _ in range(50):
+        if is_port_serving(port):
+            break
+        await asyncio.sleep(0.2)
+    else:
+        raise TimeoutError(f"MQTT broker did not start on {port}")
     await server.create_device(DeviceConfig(
         id="dev1",
         name="MQTT Golden",

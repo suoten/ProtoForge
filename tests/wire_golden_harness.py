@@ -75,3 +75,14 @@ async def expect_eof(reader: asyncio.StreamReader, timeout: float = 3.0) -> None
     except asyncio.TimeoutError:
         raise AssertionError("expected EOF, but connection stayed open")
     assert data == b"", f"expected EOF, got {data!r}"
+
+
+def is_port_serving(port: int, host: str = "127.0.0.1", timeout: float = 0.5) -> bool:
+    """端口上是否已有服务在监听（TCP 可连即视为有服务）。"""
+    af = socket.AF_INET6 if ":" in host else socket.AF_INET
+    try:
+        with socket.socket(af, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            return s.connect_ex((host, port)) == 0
+    except OSError:
+        return False
