@@ -78,6 +78,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.3.0",
     "ruff>=0.6.0,<1.0.0",
     "mypy>=1.8.0",
     "alembic>=1.13.0",
@@ -174,6 +175,11 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# v1.7.1: Windows 本机全量回归中，wire-golden 批次测试偶发被系统代理 TUN 吞
+# 回环 SYN 导致事件循环无限等待（间歇性环境阻塞）。pytest-timeout 的 thread
+# 方法把"无限挂起"转换为"全栈转储 + 快速失败"，任何单测不超过 120s。
+timeout = 120
+timeout_method = "thread"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::pytest.PytestCollectionWarning",

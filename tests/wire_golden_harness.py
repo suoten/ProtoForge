@@ -33,6 +33,17 @@ async def recv_exactly(reader: asyncio.StreamReader, n: int, timeout: float = 5.
     return await asyncio.wait_for(reader.readexactly(n), timeout=timeout)
 
 
+async def open_conn(port: int, host: str = "127.0.0.1", timeout: float = 5.0
+                    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """带超时的 TCP 连接（FIXED v1.8.0）。
+
+    裸 ``asyncio.open_connection`` 无超时——在全量回归等长跑场景下，若目标
+    端口被防火墙/代理 TUN 吞包（SYN 无应答），连接会无限挂起并把整个测试
+    会话拖死。这里统一加超时，把"挂起"降级为"快速失败"。
+    """
+    return await asyncio.wait_for(asyncio.open_connection(host, port), timeout=timeout)
+
+
 async def expect_silence(reader: asyncio.StreamReader, timeout: float = 0.4) -> None:
     """Assert the server sends nothing within ``timeout`` (rejects bad frames silently)."""
     try:

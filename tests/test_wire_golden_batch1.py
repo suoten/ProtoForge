@@ -9,7 +9,7 @@ import struct
 import pytest
 
 from protoforge.models.device import DeviceConfig, PointConfig
-from tests.wire_golden_harness import free_tcp_port, free_udp_port
+from tests.wire_golden_harness import free_tcp_port, free_udp_port, open_conn
 
 HOST = "127.0.0.1"
 
@@ -25,7 +25,7 @@ async def _start_custom_tcp(config_extra: dict | None = None):
     config = {"host": HOST, "port": port}
     if config_extra:
         config.update(config_extra)
-    await server.start(config)
+    await asyncio.wait_for(server.start(config), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-ctcp", name="CustomTCP Golden", protocol="custom_tcp",
@@ -54,7 +54,7 @@ async def test_custom_tcp_raw_mode_all_points_exact():
     """Raw mode: response = uint16 BE(0x1234) + float32 BE(1.5), nothing else."""
     server, port = await _start_custom_tcp()
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(b"\x01")  # any request byte
         await writer.drain()
         resp = await asyncio.wait_for(reader.readexactly(6), timeout=5)
@@ -71,7 +71,7 @@ async def test_custom_tcp_template_echo_and_point_exact():
     """Template "AA 55 {echo} {level}": magic + request echo + uint16 BE point."""
     server, port = await _start_custom_tcp({"response_template": "AA 55 {echo} {level}"})
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(b"\xDE\xAD")
         await writer.drain()
         resp = await asyncio.wait_for(reader.readexactly(6), timeout=5)
@@ -124,7 +124,7 @@ async def test_toledo_stable_weight_exact():
     from protoforge.protocols.toledo.server import ToledoServer
     server = ToledoServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port, "unit": "kg"})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port, "unit": "kg"}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-toledo", name="Toledo Golden", protocol="toledo",
@@ -132,7 +132,7 @@ async def test_toledo_stable_weight_exact():
     ))
     await server.write_point("dev-toledo", "weight", 1234.5)
 
-    reader, writer = await asyncio.open_connection(HOST, port)
+    reader, writer = await open_conn(port)
     try:
         writer.write(b"S")
         await writer.drain()
@@ -150,7 +150,7 @@ async def test_toledo_negative_weight_and_su():
     from protoforge.protocols.toledo.server import ToledoServer
     server = ToledoServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port, "unit": "kg"})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port, "unit": "kg"}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-toledo2", name="Toledo Golden 2", protocol="toledo",
@@ -158,7 +158,7 @@ async def test_toledo_negative_weight_and_su():
     ))
     await server.write_point("dev-toledo2", "weight", -2.5)
 
-    reader, writer = await asyncio.open_connection(HOST, port)
+    reader, writer = await open_conn(port)
     try:
         writer.write(b"SU")
         await writer.drain()
@@ -182,7 +182,7 @@ async def _start_opcda():
     from protoforge.protocols.opcda.server import OpcDaServer
     server = OpcDaServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-da", name="OpcDa Golden", protocol="opcda",
@@ -199,7 +199,7 @@ async def _start_opcda():
 async def test_opcda_browse_exact():
     server, port = await _start_opcda()
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(_pfda(struct.pack("<I", 0x01)))  # browse
         await writer.drain()
         head = await asyncio.wait_for(reader.readexactly(8), timeout=5)
@@ -223,7 +223,7 @@ async def test_opcda_read_float_value_exact_prefix():
     and OPC-DA good quality = 0xC0 (192). Everything except timestamp asserted."""
     server, port = await _start_opcda()
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         tag = b"tank_level"
         body = struct.pack("<I", 0x02) + struct.pack("<H", len(tag)) + tag
         writer.write(_pfda(body))
@@ -246,7 +246,7 @@ async def test_opcda_read_float_value_exact_prefix():
 async def test_opcda_write_then_readback():
     server, port = await _start_opcda()
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         # float64 value: _handle_write requires body >= 16 bytes
         # (cmd4+taglen2+tag5+bool2=13 is rejected 0x8002 - pinned limit)
         await server.create_device(DeviceConfig(
@@ -289,7 +289,7 @@ async def _start_s7plus():
     from protoforge.protocols.s7plus.server import S7PlusServer
     server = S7PlusServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-s7p", name="S7Plus Golden", protocol="s7plus",
@@ -304,7 +304,7 @@ async def _start_s7plus():
 
 
 async def _s7p_handshake(port):
-    reader, writer = await asyncio.open_connection(HOST, port)
+    reader, writer = await open_conn(port)
     cr = _s7p_tpkt(bytes([0x0A, 0xE0, 0x00, 0x01, 0x00, 0x01, 0x00, 0xC0, 0x01, 0x07]))
     writer.write(cr)
     await writer.drain()

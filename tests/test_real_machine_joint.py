@@ -71,7 +71,7 @@ def _free_port() -> int:
 async def _wait_http_ok(url: str, timeout: float = 45.0) -> bool:
     """轮询直到目标 HTTP 服务响应任意非 5xx（含 401/404 均视为已就绪）。"""
     deadline = time.time() + timeout
-    async with httpx.AsyncClient(timeout=3.0) as c:
+    async with httpx.AsyncClient(trust_env=False, timeout=3.0) as c:
         while time.time() < deadline:
             try:
                 r = await c.get(url)
@@ -84,7 +84,7 @@ async def _wait_http_ok(url: str, timeout: float = 45.0) -> bool:
 
 
 async def _el_login(base: str, password: str = EDGELITE_ADMIN_PW) -> str:
-    async with httpx.AsyncClient(timeout=10.0) as c:
+    async with httpx.AsyncClient(trust_env=False, timeout=10.0) as c:
         r = await c.post(
             f"{base}/api/v1/auth/login",
             json={"username": "admin", "password": password},
@@ -97,7 +97,7 @@ async def _el_login(base: str, password: str = EDGELITE_ADMIN_PW) -> str:
 
 
 async def _el_get(base: str, token: str, path: str) -> tuple[int, dict]:
-    async with httpx.AsyncClient(timeout=10.0) as c:
+    async with httpx.AsyncClient(trust_env=False, timeout=10.0) as c:
         r = await c.get(f"{base}{path}", headers={"Authorization": f"Bearer {token}"})
         try:
             body = r.json()
@@ -193,6 +193,12 @@ async def real_edgelite():
         "EDGELITE_DATABASE__SQLITE_PATH": db_path,
         # 抑制 influxdb 健康检查延迟（未部署 influx 时避免连接等待）
         "EDGELITE_INFLUXDB__URL": "",
+        # FIXED(v1.7.1): InfluxDB 降级模式的 SQLite 时序库默认是仓库内相对路径
+        # data/edgelite_ts.db（与主库的临时路径无关），联合测试多次运行后已膨胀到
+        # 3.2GB+1.8GB WAL——EdgeLite 启动降级模式时对其执行 PRAGMA
+        # integrity_check（全库扫描）远超 120s 就绪窗口，真机联调必然失败。
+        # 指向临时目录后 integrity_check 对空库瞬间完成。
+        "EDGELITE_INFLUXDB__SQLITE_TS_PATH": os.path.join(tmpdir, "edgelite_ts.db"),
         # SecretManager 主密钥（测试环境固定值，生产环境必须使用随机密钥）
         "EDGELITE_MASTER_KEY": "test-master-key-for-real-machine-verification-only",
     }
@@ -420,7 +426,7 @@ async def test_1_edgelite_real_collects_protoforge_data(real_edgelite):
 
         # 也尝试 debug read（绕过缓存，直接驱动读取）
         try:
-            async with httpx.AsyncClient(timeout=30.0) as dc:
+            async with httpx.AsyncClient(trust_env=False, timeout=30.0) as dc:
                 dr = await dc.post(
                     f"{base}/api/v1/debug/read",
                     params={"protocol": "modbus_tcp", "device_id": "real-edgelite-modbus", "points": "temperature"},

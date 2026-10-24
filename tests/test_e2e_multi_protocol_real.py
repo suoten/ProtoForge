@@ -135,7 +135,7 @@ async def test_http_get_points_returns_values(http_server):
     import httpx
 
     _engine, _device, port = http_server
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=False, ) as client:
         resp = await client.get(f"http://127.0.0.1:{port}/api/e2e-http/points")
     assert resp.status_code == 200
     data = resp.json()
@@ -151,7 +151,7 @@ async def test_http_post_writes_value(http_server):
     import httpx
 
     _engine, _device, port = http_server
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=False, ) as client:
         # Write a new temperature value
         resp = await client.post(
             f"http://127.0.0.1:{port}/api/e2e-http/points",
@@ -172,7 +172,7 @@ async def test_http_health_endpoint(http_server):
     import httpx
 
     _engine, _device, port = http_server
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(trust_env=False, ) as client:
         resp = await client.get(f"http://127.0.0.1:{port}/health")
     assert resp.status_code == 200
     data = resp.json()

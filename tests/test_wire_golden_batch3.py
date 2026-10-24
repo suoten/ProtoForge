@@ -6,7 +6,7 @@ import struct
 import pytest
 
 from protoforge.models.device import DeviceConfig, PointConfig
-from tests.wire_golden_harness import free_tcp_port
+from tests.wire_golden_harness import free_tcp_port, open_conn
 
 HOST = "127.0.0.1"
 
@@ -39,7 +39,7 @@ async def test_profinet_dcp_identify_exact():
         points=[PointConfig(name="v", address="0", data_type="uint16")],
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         xid = 0xDEADBEEF
         # DCP identify: msg_type(0x01) + service_id(0x05) + xid(u32 BE) + len u16 + reserved
         body = bytes([0x01, 0x05]) + struct.pack(">I", xid) + struct.pack(">H", 0) + b"\x00\xff"
@@ -70,14 +70,14 @@ async def test_ethercat_brd_register_read_exact():
     from protoforge.protocols.ethercat.server import EtherCATServer
     server = EtherCATServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-ec", name="EC Golden", protocol="ethercat",
         points=[PointConfig(name="v", address="0", data_type="uint16")],
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         # BRD (cmd 0x07): cmd + idx + addr u32 LE + len_flags u16 LE + irq u16 + payload
         idx = 0x42
         addr = 0x0000
@@ -131,14 +131,14 @@ async def test_iec61850_identify_roundtrip():
     from protoforge.protocols.iec61850.server import IEC61850Server
     server = IEC61850Server()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.2)
     await server.create_device(DeviceConfig(
         id="dev-61850", name="61850 Golden", protocol="iec61850",
         points=[PointConfig(name="brk_pos", address="LD0/LLN0.brk_pos.stVal", data_type="bool")],
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(_mms_over_cotp(_mms_identify_request()))
         await writer.drain()
         head = await asyncio.wait_for(reader.readexactly(4), timeout=5)

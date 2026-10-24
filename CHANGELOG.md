@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.8.1 — 2026-10-24
+
+### 🔧 真机联调与测试基建修复（三风险清零专项）
+
+**修复 — EdgeLite 真机联调用例"120s 未就绪"（v1.5.0 起间歇失败的根因闭环）：**
+
+- **主因（测试侧）**：EdgeLite 的 InfluxDB 降级时序库 `sqlite_ts_path` 默认是
+  仓库内相对路径 `data/edgelite_ts.db`——联合测试多次运行后已膨胀到
+  **3.2GB 主库 + 1.8GB WAL**，EdgeLite 启动降级模式时对其执行
+  `PRAGMA integrity_check`（全库扫描）远超 120s 就绪窗口。fixture 现将
+  `EDGELITE_INFLUXDB__SQLITE_TS_PATH` 一并指向临时目录（integrity_check
+  对空库瞬间完成）。真机联调 3/3 全绿（采集/回放/协同）。
+- **次因（环境侧，有 Issue #15 先例）**：httpx 默认 `trust_env=True` 会读取
+  Windows 注册表系统代理——本机 Clash Verge 运行时对回环临时端口返回 502。
+  real_machine_joint 与 e2e_multi_protocol_real 共 7 个 httpx 客户端全部
+  显式 `trust_env=False`（与 version_check 的既有做法一致）。
+
+**修复 — 全量回归偶发挂起（本地 Python 3.12.0 的 asyncio 唤醒缺陷）：**
+
+- 定性：挂起时事件循环空转于 select/_poll、被挂协程的定时器与回调**全部
+  失效**（自制的协程级栈转储证实），Selector 与 Proactor 循环均可复现，
+  单独运行永远不复现——与本机 Python 3.12.0 的 asyncio 唤醒缺陷画像一致
+  （3.12.1+ 已修；CI 的 3.12 最新补丁版从不复现）。
+- 缓解（仓库侧可做的全部）：
+  1. **pytest-timeout**（dev 依赖 + `timeout=120/thread` 全局配置）：任何单测
+     超 120s 自动全栈转储并快速失败，套件永不无限挂起；
+  2. tests/conftest 统一 Windows 下使用 `WindowsSelectorEventLoopPolicy`
+     （与 EdgeLite 生产选择一致）；
+  3. wire-golden 批次测试的 `open_connection`（14 处）与 `server.start`
+     （10 处）全部加超时护栏（harness 新增 `open_conn`）；
+  4. `tests/_hangdump_plugin.py` 诊断插件入库（`-p tests._hangdump_plugin`
+     按需加载，转储协程级 await 链）。
+- 根治需本机升级 Python ≥3.12.1（CI 不受影响）。
+
+### 升级提示
+
+无 API 变更；本版本主要为测试基建修复。Docker：`docker pull suoten/protoforge:1.8.1`。
+
 ## v1.8.0 — 2026-10-24
 
 ### 🎭 告警行为学（升级规划 v1.8.0"数据不再假"专项）

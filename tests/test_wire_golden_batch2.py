@@ -11,7 +11,7 @@ import struct
 import pytest
 
 from protoforge.models.device import DeviceConfig, PointConfig
-from tests.wire_golden_harness import free_tcp_port, free_udp_port
+from tests.wire_golden_harness import free_tcp_port, free_udp_port, open_conn
 
 HOST = "127.0.0.1"
 
@@ -41,14 +41,14 @@ async def test_fanuc_dbp_connect_and_acts_exact():
     from protoforge.protocols.fanuc.server import FanucServer
     server = FanucServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-fanuc", name="Fanuc Golden", protocol="fanuc",
         points=[PointConfig(name="spindle_speed", address="0", data_type="int16")],
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
 
         # connect
         writer.write(_dbp(0x0016))
@@ -99,7 +99,7 @@ async def test_coap_get_point_ack_exact():
     from protoforge.protocols.coap.server import CoAPServer
     server = CoAPServer()
     port = free_udp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     # address becomes the uri (uri = addr if addr else sensor/<name>)
     await server.create_device(DeviceConfig(
@@ -144,14 +144,14 @@ async def test_http_health_exact():
     from protoforge.protocols.http.server import HttpSimulatorServer
     server = HttpSimulatorServer()
     port = free_tcp_port()
-    await server.start({"host": HOST, "port": port})
+    await asyncio.wait_for(server.start({"host": HOST, "port": port}), timeout=15)
     await asyncio.sleep(0.1)
     await server.create_device(DeviceConfig(
         id="dev-http", name="HTTP Golden", protocol="http",
         points=[PointConfig(name="v", address="v", data_type="float32")],
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(b"GET /health HTTP/1.1\r\nHost: t\r\n\r\n")
         await writer.drain()
         raw = await asyncio.wait_for(reader.read(4096), timeout=5)
@@ -188,7 +188,7 @@ async def test_mtconnect_probe_xml_contract():
         protocol_config={"device_uuid": "pf-golden-uuid"},
     ))
     try:
-        reader, writer = await asyncio.open_connection(HOST, port)
+        reader, writer = await open_conn(port)
         writer.write(b"GET /probe HTTP/1.1\r\nHost: t\r\n\r\n")
         await writer.drain()
         raw = await asyncio.wait_for(reader.read(16384), timeout=5)
