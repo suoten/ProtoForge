@@ -9,6 +9,7 @@ from typing import Any
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.observability.messages import desc
 from protoforge.protocols.behavior import ProtocolErrorCategory, ProtocolServer, ProtocolStatus, StandardDeviceBehavior
+from protoforge.protocols.base import shutdown_server_task
 
 logger = logging.getLogger(__name__)
 
@@ -138,10 +139,7 @@ class AbServer(ProtocolServer):
             self._server_running = False
             if self._server_task:
                 self._server_task.cancel()
-                try:
-                    await self._server_task
-                except asyncio.CancelledError:
-                    logger.debug("AB task cancelled")
+                await shutdown_server_task(self._server_task)
         except Exception as e:
             logger.warning("AB server stop error: %s", e)
         finally:
@@ -543,8 +541,12 @@ class AbServer(ProtocolServer):
             return self._make_bare_cip_error(0x4B, 0x04)
         tag_name = payload.decode("utf-8", errors="replace")
         device_id, behavior = self._find_behavior_by_tag(tag_name)
+        # FIXED(v1.6.41): 写判定放宽为"载荷后有任意剩余字节"——原条件 len>=4 导致
+        # Demo 对 BOOL(1 字节)/INT16(2 字节) 的最小编码写请求被当读请求忽略，
+        # 表现为"写入了但值不变"（实测 BOOL 写 0x01 无效）。读请求无尾部字节。
+        is_write = len(extra) >= 1
         self._log_debug("recv", "pccc_execute",
-                        f"Execute_PCCC tag={tag_name!r} write={len(extra) >= 4}",
+                        f"Execute_PCCC tag={tag_name!r} write={is_write}",
                         detail={"hex": cip_data[:128].hex(" ")})
         if behavior is None:
             return self._make_bare_cip_error(0x4B, 0x04)
@@ -565,13 +567,23 @@ class AbServer(ProtocolServer):
                 detail={"tag": tag_name, "available": available})
             return self._make_bare_cip_error(0x4B, 0x04)
         name_bytes = tag_name.encode("utf-8")
-        # 写操作：载荷后带值
-        if len(extra) >= 4:
-            write_value = struct.unpack("<I", extra[:4])[0]
+        # 写操作：载荷后带值（FIXED(v1.6.41): 按点位数据类型解析，不再一律 <I）
+        if is_write:
+            data_type = behavior.get_data_type(resolved)
+            write_value = self._unpack_pccc_write_value(data_type, extra)
             behavior.set_tag(resolved, write_value)
             # 与 CIP Write 同源：通知引擎须用 point 名，否则写入冻结建不起来
             point_name = behavior._tag_reverse.get(resolved, resolved)
             self._notify_engine_write(device_id, point_name, write_value)
+            # FIXED(v1.6.41): 外部写入自解释日志 —— 用户在调试页可直接看到
+            # "哪个客户端把哪个点写成了什么值"，不再需要导日志人工逐帧分析
+            self._log_debug(
+                "recv", "tag_write",
+                f"外部写入: 设备({device_id or '默认'}) 点位 {point_name} = {write_value} "
+                f"(标签 {tag_name!r})，30 秒内动态生成暂停，设备页\"值\"列可查看",
+                device_id=device_id or "",
+                detail={"tag": tag_name, "point": point_name, "value": write_value,
+                        "raw_extra": extra.hex(" ")})
             return (bytes([0xCB, 0x00, 0x00, 0x00])
                     + struct.pack("<H", len(name_bytes)) + name_bytes)
         # 读操作
@@ -603,6 +615,42 @@ class AbServer(ProtocolServer):
         except (ValueError, TypeError):
             resp += struct.pack("<I", 0)
         return bytes(resp)
+
+    @staticmethod
+    def _unpack_pccc_write_value(data_type: str, extra: bytes) -> Any:
+        """FIXED(v1.6.41): Execute_PCCC 写值按点位数据类型解析。
+
+        原实现对任意类型一律 struct <I 取前 4 字节：BOOL 写 1 字节值被当读请求
+        忽略（len(extra)>=4 才算写）、INT16 2 字节值同样被忽略、float32 写 1.5
+        被解析成 1069547520。现按类型取最小足够字节：
+          bool → 首字节非零（1 字节或 4 字节小端编码都兼容，低位字节即值）；
+          int16/uint16 → 前 2 字节 <H（4 字节小端编码的低位半字同为原值）；
+          int32/uint32 → 前 4 字节 <I；float32 → <f；float64 → <d。
+        """
+        try:
+            dt = (data_type or "").lower()
+            if dt == "bool" or dt == "boolean":
+                return extra[0] != 0
+            if dt in ("int16", "uint16"):
+                if len(extra) >= 2:
+                    return struct.unpack("<H" if dt == "uint16" else "<h", extra[:2])[0]
+                return extra[0]
+            if dt in ("int32", "uint32", "dint", "int", "uint"):
+                if len(extra) >= 4:
+                    return struct.unpack("<I" if dt.startswith("u") or dt == "dint" else "<i", extra[:4])[0]
+                if len(extra) >= 2:
+                    return struct.unpack("<H", extra[:2])[0]
+                return extra[0]
+            if dt == "float64" and len(extra) >= 8:
+                return struct.unpack("<d", extra[:8])[0]
+            if dt == "float32" and len(extra) >= 4:
+                return struct.unpack("<f", extra[:4])[0]
+            # 未知类型：沿用旧版 4 字节小端整数（len<4 时退化为可用字节）
+            if len(extra) >= 4:
+                return struct.unpack("<I", extra[:4])[0]
+            return extra[0]
+        except (struct.error, IndexError):
+            return extra[0] if extra else 0
 
     def _wrap_unit_data_response(self, session: int, conn_id: int, seq_num: int,
                                  cip_resp: bytes,
@@ -930,7 +978,17 @@ class AbServer(ProtocolServer):
 
     async def _fire_write_callback(self, device_id: str, point_name: str, value: Any) -> None:
         try:
-            await self._on_write(device_id, point_name, value)
+            ok = await self._on_write(device_id, point_name, value)
+            # FIXED(v1.6.41): 引擎拒绝外部写入（点位只读/不存在/设备 ERROR 状态等）
+            # 原先只进后端 logger.warning，用户在调试页完全看不到，表现为"写入了但
+            # 设备页值不变"。现在拒绝也输出自解释日志。
+            if ok is False:
+                self._log_debug(
+                    "system", "tag_write_rejected",
+                    f"外部写入被拒绝: 设备({device_id}) 点位 {point_name} = {value} —— "
+                    f"常见原因: 点位访问权限为只读(需改为 rw)、点位名不存在、设备处于停止/错误状态。",
+                    device_id=device_id,
+                    detail={"point": point_name, "value": value})
         except Exception as e:
             logger.debug("AB external write callback error for %s.%s: %s", device_id, point_name, e)
 

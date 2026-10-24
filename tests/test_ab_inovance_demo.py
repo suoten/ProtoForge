@@ -73,6 +73,11 @@ def _pccc_read(tag: str) -> bytes:
     return b"\x4b\x02\x20\x6a\x24\x00" + struct.pack("<H", len(name)) + name
 
 
+def _pccc_write(tag: str, value_bytes: bytes) -> bytes:
+    """Execute_PCCC 写请求：载荷(标签名)后携带写值字节（汇川简化格式）。"""
+    return _pccc_read(tag) + value_bytes
+
+
 class TestInovanceEipDemoChain:
     def setup_method(self):
         self.server = AbServer()
@@ -142,3 +147,53 @@ class TestInovanceEipDemoChain:
         resp = self.server._process_eip(
             _unitdata(_pccc_read("run_status"), conn, seq=2, session=self.session))
         assert resp is not None and resp[-4:] == bytes.fromhex("cb040000")
+
+    # -- 环节 7：Execute_PCCC 写（v1.6.41） --------------------------------
+    # 背景：用户 10-24 反馈"写入了但标签值不变"。原实现写判定要求载荷后
+    # len>=4 字节且一律 <I 整数解析：BOOL(1 字节)/INT16(2 字节) 最小编码写
+    # 请求被当读请求忽略，float32 写 1.5 被解析成 1069547520。
+    def _write_and_check(self, tag, value_bytes, expect_value=None, seq=10):
+        self.server._process_eip(_rrdata(_LFO, self.session))
+        conn = bytes.fromhex("65126232")
+        resp = self.server._process_eip(
+            _unitdata(_pccc_write(tag, value_bytes), conn, seq=seq, session=self.session))
+        assert resp is not None and b"\xcb" in resp, "写应答不能是错误帧"
+        name = tag.encode("utf-8")
+        # 写应答 = [CB 00 00 00][名字长度 UINT][标签名]，不含值
+        assert resp.endswith(struct.pack("<H", len(name)) + name), \
+            f"写应答格式异常: {resp.hex()}"
+        assert b"\xcb\x04" not in resp, "写请求不得被拒绝（未命中）"
+        return resp
+
+    def test_pccc_write_bool_1byte(self):
+        """BOOL 最小编码写（1 字节 0x01）必须生效，不再被当读忽略（场景 A）。"""
+        self._write_and_check("point_1", b"\x01")
+        assert self.server._behaviors["ab-inovance-test"]._values.get("point_1") is True \
+            or self.server._behaviors["ab-inovance-test"]._values.get("point_1") == 1, \
+            "BOOL 写 0x01 后行为层值必须变 true"
+
+    def test_pccc_write_int16_2byte_and_4byte(self):
+        """INT16 最小编码写（2 字节 <H）与 4 字节小端写都要生效。"""
+        self._write_and_check("cpu_load", struct.pack("<H", 1234))
+        v = self.server._behaviors["ab-inovance-test"]._values.get("cpu_load")
+        assert v == 1234, f"INT16 写 2 字节 1234 后值必须为 1234, 实际 {v}"
+        self._write_and_check("cpu_load", struct.pack("<I", 4321))
+        v = self.server._behaviors["ab-inovance-test"]._values.get("cpu_load")
+        assert v == 4321, f"INT16 写 4 字节 4321 后值必须为 4321, 实际 {v}"
+
+    def test_pccc_write_float32(self):
+        """FLOAT32 写必须按 <f 解析（1.5 不再变成 1069547520）。"""
+        self._write_and_check("f_val", struct.pack("<f", 1.5))
+        v = self.server._behaviors["ab-inovance-test"]._values.get("f_val")
+        assert abs(float(v) - 1.5) < 1e-6, f"FLOAT32 写 1.5 后值必须为 1.5, 实际 {v}"
+
+    def test_pccc_write_then_read_back(self):
+        """写后读回：0x4B 读必须拿到刚写入的值（含 30 秒写入冻结）。"""
+        self._write_and_check("cpu_load", struct.pack("<H", 2000))
+        conn = bytes.fromhex("65126232")
+        resp = self.server._process_eip(
+            _unitdata(_pccc_read("cpu_load"), conn, seq=20, session=self.session))
+        cip = resp[resp.find(b"\xcb"):] if resp else b""
+        want = (bytes([0xCB, 0, 0, 0]) + struct.pack("<H", 8) + b"cpu_load"
+                + b"\xc3\x00" + struct.pack("<H", 2000))
+        assert cip == want, f"写后读必须返回写入值 2000: {cip.hex()}"
