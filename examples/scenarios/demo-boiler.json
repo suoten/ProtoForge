@@ -1,0 +1,107 @@
+{
+  "id": "demo-boiler",
+  "name": "演示场景 — 锅炉房",
+  "description": "汽包锅炉仿真：水位/汽压/炉温正弦波动，压力超高自动停炉（阈值联动演示）。可直接 /scenarios/import 导入。",
+  "devices": [
+    {
+      "id": "boiler-1",
+      "name": "1号锅炉",
+      "protocol": "modbus_tcp",
+      "points": [
+        {
+          "name": "drum_level",
+          "address": "40001",
+          "data_type": "float32",
+          "unit": "mm",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 180,
+            "max": 260,
+            "period": 60
+          }
+        },
+        {
+          "name": "steam_pressure",
+          "address": "40003",
+          "data_type": "float32",
+          "unit": "MPa",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 0.6,
+            "max": 0.95,
+            "period": 90
+          }
+        },
+        {
+          "name": "furnace_temp",
+          "address": "40005",
+          "data_type": "float32",
+          "unit": "℃",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 780,
+            "max": 880,
+            "period": 120
+          }
+        },
+        {
+          "name": "feed_pump_run",
+          "address": "00001",
+          "data_type": "bool",
+          "unit": "",
+          "access": "rw",
+          "generator_type": "fixed",
+          "description": ""
+        },
+        {
+          "name": "burner_on",
+          "address": "00002",
+          "data_type": "bool",
+          "unit": "",
+          "access": "rw",
+          "generator_type": "fixed",
+          "description": ""
+        }
+      ],
+      "protocol_config": {
+        "slave_id": 1
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "r-boiler-hp",
+      "name": "汽压超高→停炉",
+      "rule_type": "threshold",
+      "source_device_id": "boiler-1",
+      "source_point": "steam_pressure",
+      "condition": {
+        "operator": ">",
+        "value": 0.92
+      },
+      "target_device_id": "boiler-1",
+      "target_point": "burner_on",
+      "target_value": 0
+    },
+    {
+      "id": "r-boiler-ll",
+      "name": "水位过低→启泵",
+      "rule_type": "threshold",
+      "source_device_id": "boiler-1",
+      "source_point": "drum_level",
+      "condition": {
+        "operator": "<",
+        "value": 190
+      },
+      "target_device_id": "boiler-1",
+      "target_point": "feed_pump_run",
+      "target_value": 1
+    }
+  ]
+}

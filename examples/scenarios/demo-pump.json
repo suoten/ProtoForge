@@ -1,0 +1,107 @@
+{
+  "id": "demo-pump",
+  "name": "演示场景 — 泵站",
+  "description": "供水泵站仿真：集水井液位周期涨落，液位高启1号泵、更高启2号泵（一用一备联动）。",
+  "devices": [
+    {
+      "id": "pump-station",
+      "name": "供水泵站",
+      "protocol": "modbus_tcp",
+      "points": [
+        {
+          "name": "wet_well_level",
+          "address": "40020",
+          "data_type": "float32",
+          "unit": "m",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 1.2,
+            "max": 3.4,
+            "period": 100
+          }
+        },
+        {
+          "name": "pump1_run",
+          "address": "00020",
+          "data_type": "bool",
+          "unit": "",
+          "access": "rw",
+          "generator_type": "fixed",
+          "description": ""
+        },
+        {
+          "name": "pump2_run",
+          "address": "00021",
+          "data_type": "bool",
+          "unit": "",
+          "access": "rw",
+          "generator_type": "fixed",
+          "description": ""
+        },
+        {
+          "name": "outflow_pressure",
+          "address": "40022",
+          "data_type": "float32",
+          "unit": "MPa",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 0.25,
+            "max": 0.4,
+            "period": 60
+          }
+        }
+      ],
+      "protocol_config": {
+        "slave_id": 3
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "r-pump1",
+      "name": "液位高→启1号泵",
+      "rule_type": "threshold",
+      "source_device_id": "pump-station",
+      "source_point": "wet_well_level",
+      "condition": {
+        "operator": ">",
+        "value": 2.6
+      },
+      "target_device_id": "pump-station",
+      "target_point": "pump1_run",
+      "target_value": 1
+    },
+    {
+      "id": "r-pump2",
+      "name": "液位过高→启2号泵",
+      "rule_type": "threshold",
+      "source_device_id": "pump-station",
+      "source_point": "wet_well_level",
+      "condition": {
+        "operator": ">",
+        "value": 3.1
+      },
+      "target_device_id": "pump-station",
+      "target_point": "pump2_run",
+      "target_value": 1
+    },
+    {
+      "id": "r-pump-stop",
+      "name": "液位低→停泵",
+      "rule_type": "threshold",
+      "source_device_id": "pump-station",
+      "source_point": "wet_well_level",
+      "condition": {
+        "operator": "<",
+        "value": 1.5
+      },
+      "target_device_id": "pump-station",
+      "target_point": "pump1_run",
+      "target_value": 0
+    }
+  ]
+}

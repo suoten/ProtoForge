@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.8.0 — 2026-10-24
+
+### 🎭 告警行为学（升级规划 v1.8.0"数据不再假"专项）
+
+测告警系统是 SCADA/组态 QA 的独立需求——此前故障注入能制造"设备故障"，但制造不了"告警行为学"。新增 `protoforge/simulation/alarm_behavior.py` 三个模型，与既有物理行为模型（thermal/motor/pressure/flow/level/valve/pid）同构，继承 BaseBehavior 并接入 `create_behavior` 工厂（字典 + 字符串两种配置格式，惰性分发避免循环导入）：
+
+- **AlarmStormBehavior 告警风暴**：持续（条/秒恒定）与突发（burst/idle 周期）两种模式，消息池循环取用、全局序号连续不丢失、总数上限精确截断——测告警处理链路的吞吐与不丢能力；
+- **ChatteringBehavior 告警抖动（chattering）**：阈值附近快速翻转的方波，周期/占空比/随机抖动可配，`flip_count` 暴露翻转次数——测被测系统的防抖/死区/告警抑制逻辑；
+- **SOESequenceBehavior SOE 事件序列**：毫秒时标有序事件流，乱序输入自动排序、`time_scale` 支持倍速回放、`repeat_interval` 循环重播（lap 轮次递增）、`to_dict/from_dict` 断点续播——测 SOE/顺序记录系统的分辨率与排序正确性。
+
+**行为模型库现状（规划验收 ≥10 达标，共 13 个）**：物理 7 个（热传导/电机/压力/流量/液位/调节阀/PID）+ 设备状态机 + 告警行为学 3 个 + 时间序列模式（日/周/季节/批次/老化）。
+
+### ⏱️ 传感器漂移时间单位（SENSOR_DRIFT 增强）
+
+`drift_unit` 参数支持 `"second"`（缺省，完全兼容旧行为）/ `"hour"` / `"day"`——按天语义下 drift_rate 即"每天漂移量"，测能管/资产管理系统的周月级传感器老化场景无需再手工换算秒。
+
+### 🏭 官方演示场景（规划验收 3 个，随版本发布）
+
+`examples/scenarios/` 新增 3 个可直接 `/scenarios/import` 导入的完整场景（设备 + 生成器 + 阈值联动规则，全部通过 ScenarioConfig 校验并有资产测试防回退）：
+
+- **demo-boiler 锅炉房**：汽包水位/汽压/炉温正弦波动，汽压超高自动停炉、水位过低启泵；
+- **demo-line 产线**：卷绕线速度三角波、张力正弦越限报警、批次计数累加；
+- **demo-pump 泵站**：集水井液位涨落，一用一备双泵联动启停。
+
+### 升级提示
+
+- 告警行为模型可按既有方式挂接：`create_behavior({"behavior": "alarm_storm", "params": {...}})` 或字符串 `"chattering:period=0.5"`；
+- Docker：`docker pull suoten/protoforge:1.8.0`；
+- 演示场景：`POST /api/v1/scenarios/import` 导入 `examples/scenarios/*.json` 后一键启动。
+
 ## v1.7.0 — 2026-10-23
 
 ### 📋 点表导入（升级规划 v1.7.0 头条：从客户 Excel 到设备）

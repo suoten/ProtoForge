@@ -999,6 +999,14 @@ BEHAVIOR_REGISTRY: MappingProxyType[str, type[BaseBehavior]] = MappingProxyType(
     "pid": PIDController,
 })
 
+# v1.8.0 告警行为学：惰性分发（alarm_behavior 反向依赖本模块的 BaseBehavior，
+# 顶层 import 会形成循环导入）
+_ALARM_BEHAVIOR_CLASSES: dict[str, tuple[str, str]] = {
+    "alarm_storm": ("protoforge.simulation.alarm_behavior", "AlarmStormBehavior"),
+    "chattering": ("protoforge.simulation.alarm_behavior", "ChatteringBehavior"),
+    "soe_sequence": ("protoforge.simulation.alarm_behavior", "SOESequenceBehavior"),
+}
+
 
 def create_behavior(config: dict[str, Any] | str) -> BaseBehavior | None:
     """根据配置创建行为模型实例。
@@ -1024,9 +1032,16 @@ def create_behavior(config: dict[str, Any] | str) -> BaseBehavior | None:
         return None
 
     behavior_type = config.get("behavior", "").lower()
-    cls = BEHAVIOR_REGISTRY.get(behavior_type)
+    if behavior_type in _ALARM_BEHAVIOR_CLASSES:
+        # 告警行为学：惰性 import 避免循环依赖
+        import importlib
+        module_name, class_name = _ALARM_BEHAVIOR_CLASSES[behavior_type]
+        cls = getattr(importlib.import_module(module_name), class_name)
+    else:
+        cls = BEHAVIOR_REGISTRY.get(behavior_type)
     if cls is None:
-        logger.warning("Unknown behavior type: '%s'. Available: %s", behavior_type, list(BEHAVIOR_REGISTRY.keys()))
+        logger.warning("Unknown behavior type: '%s'. Available: %s", behavior_type,
+                       sorted(list(BEHAVIOR_REGISTRY.keys()) + list(_ALARM_BEHAVIOR_CLASSES)))
         return None
 
     params = config.get("params", {})
@@ -1049,7 +1064,13 @@ def _create_from_string(config_str: str) -> BaseBehavior | None:
     try:
         parts = config_str.split(":", 1)
         behavior_type = parts[0].strip().lower()
-        cls = BEHAVIOR_REGISTRY.get(behavior_type)
+        if behavior_type in _ALARM_BEHAVIOR_CLASSES:
+            # 告警行为学：与 create_behavior 相同的惰性分发
+            import importlib
+            module_name, class_name = _ALARM_BEHAVIOR_CLASSES[behavior_type]
+            cls = getattr(importlib.import_module(module_name), class_name)
+        else:
+            cls = BEHAVIOR_REGISTRY.get(behavior_type)
         if cls is None:
             logger.warning("Unknown behavior type in string: '%s'", behavior_type)
             return None

@@ -1,0 +1,84 @@
+{
+  "id": "demo-line",
+  "name": "演示场景 — 产线",
+  "description": "卷绕产线仿真：主电机转速三角波、张力正弦波动，张力越限报警、批次计数累加。",
+  "devices": [
+    {
+      "id": "line-plc",
+      "name": "卷绕产线PLC",
+      "protocol": "modbus_tcp",
+      "points": [
+        {
+          "name": "main_speed",
+          "address": "40010",
+          "data_type": "uint16",
+          "unit": "m/min",
+          "access": "r",
+          "generator_type": "triangle",
+          "description": "",
+          "generator_config": {
+            "min": 200,
+            "max": 800,
+            "period": 45
+          }
+        },
+        {
+          "name": "tension",
+          "address": "40011",
+          "data_type": "float32",
+          "unit": "N",
+          "access": "r",
+          "generator_type": "sine",
+          "description": "",
+          "generator_config": {
+            "min": 210,
+            "max": 290,
+            "period": 30
+          }
+        },
+        {
+          "name": "batch_count",
+          "address": "40013",
+          "data_type": "uint32",
+          "unit": "件",
+          "access": "r",
+          "generator_type": "increment",
+          "description": "",
+          "generator_config": {
+            "start": 1200,
+            "step": 1,
+            "interval": 5
+          }
+        },
+        {
+          "name": "line_alarm",
+          "address": "00010",
+          "data_type": "bool",
+          "unit": "",
+          "access": "rw",
+          "generator_type": "fixed",
+          "description": ""
+        }
+      ],
+      "protocol_config": {
+        "slave_id": 2
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "r-line-tension",
+      "name": "张力越限→报警",
+      "rule_type": "threshold",
+      "source_device_id": "line-plc",
+      "source_point": "tension",
+      "condition": {
+        "operator": ">",
+        "value": 285
+      },
+      "target_device_id": "line-plc",
+      "target_point": "line_alarm",
+      "target_value": 1
+    }
+  ]
+}

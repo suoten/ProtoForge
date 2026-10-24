@@ -506,9 +506,20 @@ class FaultInjector:
 
     @staticmethod
     def _apply_drift(rt: _FaultRuntime, value: Any, params: dict[str, Any]) -> Any:
-        """SENSOR_DRIFT：传感器漂移，value + drift_rate * elapsed_time。"""
+        """SENSOR_DRIFT：传感器漂移。
+
+        v1.8.0 支持 drift_unit 参数（"second" 默认兼容旧行为 / "day" 按天）：
+        drift_unit="day" 时 drift_rate 语义为"每天漂移量"——测能管/资产
+        管理系统的周月级传感器老化场景（真实秒级仿真里按 elapsed/86400
+        折算），也支持 drift_unit="hour"。
+        """
         drift_rate = params.get("drift_rate", 0.1)
+        drift_unit = str(params.get("drift_unit", "second")).lower()
         elapsed = time.time() - rt.drift_start
+        if drift_unit == "day":
+            elapsed = elapsed / 86400.0
+        elif drift_unit == "hour":
+            elapsed = elapsed / 3600.0
         if isinstance(value, (int, float)):
             return value + drift_rate * elapsed
         return value
