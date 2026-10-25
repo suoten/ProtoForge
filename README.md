@@ -83,6 +83,9 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 ![仪表盘](docs/images/1.png)
 
+<details>
+<summary><b>📖 🎬 功能预览 — 其余 11 张实机截图（点击展开）</b></summary>
+
 ### 🔧 设备管理 — 所有仿真设备集中管控
 
 支持按协议筛选、批量启停、快速创建。每台设备显示协议类型、在线状态、测点数量，支持测点读写、链路追踪、编辑配置。
@@ -158,6 +161,9 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 ![备份恢复](docs/images/12.png)
 
 ---
+
+
+</details>
 
 ## ✨ 核心特性
 
@@ -262,6 +268,9 @@ python scripts/build_desktop.py    # PyInstaller 构建 + 产出 dist/*.zip（�
 
 **源码运行桌面模式**：`python -m protoforge desktop`（默认端口 18080，被占用自动顺延；
 重复启动直接打开已运行实例的界面）。可选托盘：`pip install 'protoforge[desktop]'`。
+
+<details>
+<summary><b>📖 ⚙️ Windows 开机自启动与数据保存（点击展开）</b></summary>
 
 ### 开机自启动与数据保存（Windows）
 
@@ -419,6 +428,9 @@ pip install -e ".[s7]"        # Siemens S7
 
 ***
 
+
+</details>
+
 ## 🧭 三大寻址哲学对照（选协议必读）
 
 不同协议的"地址"概念完全不同，按你的主站/客户端会说哪种来选协议：
@@ -471,6 +483,9 @@ OPC-UA 设备的每个测点 = 一个自定义节点，**测点的 address 就�
 > 📖 **需要更详细的操作指引？** 请阅读完整的 [操作手册](docs/USER_GUIDE.md)，涵盖设备创建、协议连接、场景编排、故障注入、数据转发、调试排障等全流程。想用脚本 / CI **程序化驱动点位**（自动写值、Force 钉值、故障注入、状态机控制）？请看 [点位自动化控制指南](docs/点位自动化控制.md)。
 
 ***
+
+<details>
+<summary><b>📖 🔗 与第三方系统对接 & PLC 地址映射（精确到每个测点）（点击展开）</b></summary>
 
 ## 🔗 与第三方系统对接
 
@@ -846,6 +861,12 @@ result = client.read_holding_registers(address=0, count=2, slave_id=2)
 
 ***
 
+
+</details>
+
+<details>
+<summary><b>📖 🔗 EdgeLite 网关对接 & 联合一键部署（点击展开）</b></summary>
+
 ## 🔗 EdgeLite 网关对接
 
 ProtoForge 支持将模拟设备自动注册到 [EdgeLite](https://github.com/suoten/EdgeLiteGateway) 物联网网关，和 GB28181 填「上级SIP服务器地址」一样的体验：
@@ -950,6 +971,9 @@ A: `docker compose -f docker-compose.joint.yml down`（加 `-v` 会同时删除�
 
 ***
 
+
+</details>
+
 ## 🔗 全链路仿真
 
 ProtoForge 不只是模拟数据值，而是**完整模拟协议交互过程**，让你在开发时就能发现通信链路中的问题。
@@ -992,6 +1016,9 @@ ProtoForge 内置**实时协议调试日志**，帮你快速定位开发中的�
 8. 导出为 JSON → 离线分析或分享
 
 ***
+
+<details>
+<summary><b>📖 ⚙️ 配置说明 / Webhook / 仿真测试框架 / 场景规则引擎（点击展开）</b></summary>
 
 ## ⚙️ 配置说明
 
@@ -1222,6 +1249,9 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 
 ***
 
+
+</details>
+
 ## 🛠 CLI 命令
 
 | 命令                   | 说明                                                     |
@@ -1239,6 +1269,9 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 | `protoforge version` | 查看版本号                                                  |
 
 ***
+
+<details>
+<summary><b>📖 📊 性能基准 & 🔄 升级指南（点击展开）</b></summary>
 
 ## 📊 性能基准参考
 
@@ -1295,6 +1328,12 @@ curl -X POST -H "Authorization: Bearer $TOKEN" \
 ```
 
 ***
+
+
+</details>
+
+<details>
+<summary><b>📖 🛠 前端开发 / 测试 / 项目结构（点击展开）</b></summary>
 
 ## 🖥 前端开发
 
@@ -1378,6 +1417,12 @@ ProtoForge/
 ```
 
 ***
+
+
+</details>
+
+<details>
+<summary><b>📖 📡 API 文档 / Python SDK / 监控 / 安全 / 备份 / gRPC / K8s / 故障切换（点击展开）</b></summary>
 
 ## 📡 API 文档
 
@@ -1656,6 +1701,9 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 
 ***
 
+
+</details>
+
 ## 📊 竞品对比
 
 ### ProtoForge vs 同类工具
@@ -1696,6 +1744,9 @@ ProtoForge 严格遵循工业协议标准，确保你的采集程序对接真实
 > 💡 **设备状态→异常码映射**：ProtoForge 仿真设备的运行状态（stop/error/starting/stopping/maintenance/program）会自动映射为对应协议的异常码，就像真实设备在故障时会返回错误一样。例如 Modbus 设备处于 `error` 状态时返回异常码 `0x04` (Slave Device Failure)。
 
 ***
+
+<details>
+<summary><b>📖 🍓 ARM / 树莓派部署（点击展开）</b></summary>
 
 ## 🍓 ARM / 树莓派部署
 
@@ -1747,6 +1798,9 @@ protoforge run --host 0.0.0.0 --port 8000
 
 ***
 
+
+</details>
+
 ## 📋 开源版 vs 企业版功能对比
 
 | 功能 | 开源版 (MIT) | 企业版 |
@@ -1771,6 +1825,9 @@ protoforge run --host 0.0.0.0 --port 8000
 > 💡 **开源版永久免费**：ProtoForge 开源版包含全部核心功能，没有任何功能限制、设备数量限制或协议限制。企业版提供组织级管理能力和专业服务支持。
 
 ***
+
+<details>
+<summary><b>📖 ❓ 常见问题排查（30+ 条）（点击展开）</b></summary>
 
 ## ❓ 常见问题排查
 
@@ -1981,6 +2038,9 @@ curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8000/api/v1/backup -
 Token 可以在浏览器开发者工具（F12）→ Application → Local Storage → token 中找到。
 
 ***
+
+
+</details>
 
 ## 🔗 相关项目
 
