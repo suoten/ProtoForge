@@ -514,13 +514,15 @@ docker run -d --name protoforge \
 
 > ProtoForge open-source is free forever. If your team needs deeper support, we offer:
 
-| Service | Description | Use Case |
-|---------|-------------|----------|
-| 🔧 **Protocol Debug Service** | Expert assistance for protocol integration testing | Pre-launch testing |
-| 🎨 **Custom Protocol Development** | Custom non-standard protocols, private extensions | When standard protocols aren't enough |
-| 🚀 **Private Deployment** | ProtoForge + EdgeLite private deployment & training | Enterprise intranet |
-| 📊 **Enterprise License** | SSO/LDAP, multi-tenant, audit log, SLA support | Production-grade use |
-| 🎓 **Technical Training** | Industrial protocol training + ProtoForge hands-on | Team skill building |
+| Service | Description | Reference Price | Use Case |
+|---------|-------------|------|----------|
+| 🔧 **Protocol Debug Service** | Expert assistance for protocol integration testing | From ¥3,000 / engagement | Pre-launch testing |
+| 🏭 **Vendor Protocol Assurance** | Device-specific simulation regression: passing simulation + byte-level golden test suite delivered | ¥20k–50k / project | Device & gateway vendors |
+| 🎨 **Custom Protocol Development** | Custom non-standard protocols, private extensions | ¥20k–50k / project | When standard protocols aren't enough |
+| 🚀 **Private Deployment** | ProtoForge + EdgeLite private deployment & training | ¥30k–80k / package | Enterprise intranet |
+| ⚡ **Paid Fast-Track** | Priority fix/delivery channel outside the public roadmap | From ¥1,000 / item | Delivery blocked, can't wait |
+| 📊 **Enterprise License** | SSO/LDAP, multi-tenant, audit log, SLA support | On inquiry | Production-grade use |
+| 🎓 **Technical Training** | Industrial protocol training + ProtoForge hands-on | From ¥5,000 / day | Team skill building |
 
 > 💬 Contact: [QQ Group](https://qm.qq.com/q/ProtoForge) (Group Owner) or email `suoten@163.com`
 
