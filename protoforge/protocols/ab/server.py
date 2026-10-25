@@ -631,6 +631,15 @@ class AbServer(ProtocolServer):
             dt = (data_type or "").lower()
             if dt == "bool" or dt == "boolean":
                 return extra[0] != 0
+            if dt == "string":
+                # FIXED(v1.8.3): 补上 0x4B 字符串写入解析 —— 原实现会落到 <I 整数分支，
+                # ASCII "9999" 被存成 960051513。优先按 [strlen UINT][字符] 解析
+                # （与 0x4D 标准格式一致），长度不符则回退按原始 ASCII 文本
+                if len(extra) >= 2:
+                    strlen = struct.unpack("<H", extra[:2])[0]
+                    if strlen <= len(extra) - 2:
+                        return extra[2:2 + strlen].decode("utf-8", errors="replace")
+                return extra.decode("utf-8", errors="replace") if extra else ""
             if dt in ("int16", "uint16"):
                 if len(extra) >= 2:
                     return struct.unpack("<H" if dt == "uint16" else "<h", extra[:2])[0]
@@ -998,6 +1007,16 @@ class AbServer(ProtocolServer):
             # FIXED: 数据从 Write Tag 请求的 type+count 字段之后开始，直接就是值字节
             if data_type == "bool" and len(data) >= 1:
                 return data[0] != 0
+            elif data_type == "string":
+                # FIXED(v1.8.3): 补上 CIP STRING 写入解析 —— 原实现无 string 分支，
+                # 会把 [长度UINT][字符] 当 4 字节小端整数存成垃圾值（如 "9999" →
+                # 0x39390004）。标准 CIP STRING 数据段 = strlen(UINT) + utf-8 字节；
+                # 若首 2 字节与实际长度不符则回退按原始 ASCII 解析（兼容不带头部的客户端）
+                if len(data) >= 2:
+                    strlen = struct.unpack("<H", data[:2])[0]
+                    if strlen <= len(data) - 2:
+                        return data[2:2 + strlen].decode("utf-8", errors="replace")
+                return data.decode("utf-8", errors="replace") if data else ""
             elif data_type == "int16" and len(data) >= 2:
                 return struct.unpack("<h", data[:2])[0]
             elif data_type == "uint16" and len(data) >= 2:

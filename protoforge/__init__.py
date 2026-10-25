@@ -1,3 +1,3 @@
 """ProtoForge - IoT Protocol Simulation & Testing Platform"""
 
-__version__ = "1.8.2"
+__version__ = "1.8.4"

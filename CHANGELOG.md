@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.8.4 — 2026-10-25
+
+### 🐛 修复 — AB/EIP 字符串写入被解析成整数垃圾值（0x4B / 0x4D 双路径）
+
+欧姆龙 NJ Demo（GcodeZuo/GcodeYou 标签）实测场景：客户端按标准 CIP STRING
+编码 `[长度 UINT][字符]` 写字符串标签时，服务端 `_unpack_cip_value`（0x4D
+Write Tag）与 `_unpack_pccc_write_value`（0x4B Execute_PCCC）都没有 string
+分支，ASCII 文本落进 4 字节小端整数分支——写入 `"9999"` 会被存成
+`0x39390004`（959254532）之类的垃圾整数。
+
+修复：两条写入路径补上字符串解析——优先按 `[strlen UINT][字符]` 标准编码，
+长度不符时回退按原始 ASCII 文本（兼容不带头部的简化客户端）。读回编码
+（`0xA0` + strlen + utf-8）不变。
+
+回归：0x4D 标准字符串写读回往返、裸 ASCII 回退、0x4B 双编码字符串写
+（tests/test_ab_inovance_demo.py，共 14 用例）。
+
+> 说明：本次用户反馈的"写入 9999 读出 99990"经逐字节核对，ProtoForge
+> 服务端存值正确（9999/456 稳定返回），Demo 显示 ×10 为其标签显示配置
+> 问题；但排查中发现上述字符串写入解析缺陷为真实 bug，一并修复。
+
 ## v1.8.3 — 2026-10-24
 
 ### 🐛 修复 — IEC 61850 Identify 服务从未被分发到（黄金用例抓到的第 5 个真缺陷）
