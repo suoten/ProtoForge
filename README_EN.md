@@ -19,6 +19,7 @@
 ProtoForge is an open-source IoT protocol simulation and testing platform. No hardware required — simulate PLCs, sensors, cameras, and other industrial devices right on your computer to test whether your SCADA, gateway, or data acquisition systems communicate correctly.
 
 **Simply put: Install it, click a few buttons, and get real-time simulated device data.**
+> ⚠️ **Official repo notice**: The only official repository of ProtoForge is [suoten/ProtoForge](https://github.com/suoten/ProtoForge). Other same-name or renamed repos on GitHub (e.g. sim-foundry) are third-party snapshots of an old version — **no updates, no new protocols, no support**. Always use this repository for the latest release.
 
 ## 🔥 Real Developer Pain Points
 

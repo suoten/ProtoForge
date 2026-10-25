@@ -21,6 +21,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 > 浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录
 
 **28 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · ✅ Windows / Linux / macOS
+> ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（28+ 协议 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
 
 ![仪表盘](docs/images/1.png)
 
