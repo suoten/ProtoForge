@@ -88,6 +88,21 @@ async function handleLogin() {
     }
     if (res.username) localStorage.setItem('username', res.username)
     if (res.role) localStorage.setItem('role', res.role)
+    // FIXED(IKQA71): 登录时检测本机与服务器时钟偏差（iat = 签发时的服务器时间）。
+    // 本机时钟偏差过大会导致 token 在浏览器侧被误判过期、登录后即被踢回登录页。
+    try {
+      const parts = res.access_token.split('.')
+      if (parts.length === 3) {
+        const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(decodeURIComponent(atob(base64).split('').map(c =>
+          '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+        ).join('')))
+        const skewMin = Math.round((Date.now() / 1000 - (payload.iat || 0)) / 6) / 10
+        if (Math.abs(skewMin) > 2) {
+          message.warning(t('login.clockSkewWarning', { minutes: skewMin }), { duration: 8000 })
+        }
+      }
+    } catch { /* 时钟检测失败不影响登录 */ }
     message.success(t('login.loginSuccess'))
     emit('login-success', res)
   } catch (e) {
