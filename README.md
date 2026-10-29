@@ -2104,5 +2104,5 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 > 💝 感谢每一位支持者！如果在企业项目中使用了 ProtoForge，欢迎反馈使用场景，也欢迎在 [GitHub Issues](https://github.com/suoten/ProtoForge/issues) 留言。
 >
-> 🙏 **2026-10 已收到 3 位朋友的打赏支持**——每一笔都记在心里，是项目继续维护下去的真实动力。
+> 🙏 **2026-10 已收到 4 位朋友的打赏支持**——每一笔都记在心里，是项目继续维护下去的真实动力。
 
