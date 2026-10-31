@@ -97,8 +97,8 @@ class ModbusMasterServer(MasterBase):
             # FIXED: 让 pymodbus 内部的 reconnect 任务处理取消，避免事件循环
             # 关闭时残留 "Task was destroyed but it is pending"
             await asyncio.sleep(0)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("%s close conn error: %s", tag, e)
 
     # -- 轮询 ------------------------------------------------------------
 

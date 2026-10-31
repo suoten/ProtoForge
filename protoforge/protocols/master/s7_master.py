@@ -15,6 +15,7 @@ DB1.DBD0 / DB1.DBX0.0 / M0.0 / MW2 / IW4 / Q0.0 …
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 from typing import Any
 
@@ -31,6 +32,8 @@ _DATA_TYPE_SIZE = {
     "float32": 4, "float64": 8, "string": 32,
 }
 
+
+logger = logging.getLogger(__name__)
 
 class _S7Conn:
     """S7 主站连接：流读写 + PDU 引用计数 + 协商结果。"""
@@ -103,8 +106,8 @@ class S7MasterServer(MasterBase):
         try:
             conn.writer.close()
             await asyncio.wait_for(conn.writer.wait_closed(), timeout=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("%s close conn error: %s", tag, e)
 
     async def _cotp_cr(self, conn: _S7Conn, rack: int, slot: int) -> None:
         # snap7 风格 CR（与 wire golden 用例一致）：

@@ -925,7 +925,8 @@ async def get_device_points(device_id: str, _user: dict[str, Any] = Depends(requ
             if server is not None and hasattr(server, "get_master_status"):
                 try:
                     master_status = server.get_master_status(device_id)
-                except Exception:
+                except Exception as e:
+                    logger.debug("master_status read failed for %s: %s", device_id, e)
                     master_status = None
         return {
             "points": points,

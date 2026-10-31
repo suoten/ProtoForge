@@ -23,6 +23,7 @@ TESTFR_ACT(0x43) 到达时回 TESTFR_CON(0x83)，收到 S-格式跳过。
 from __future__ import annotations
 
 import asyncio
+import logging
 import struct
 from typing import Any
 
@@ -47,6 +48,8 @@ TI_INTERROGATION = 100
 COT_ACTCONFIRM = 7
 COT_ACTTERM = 10
 
+
+logger = logging.getLogger(__name__)
 
 class _IEC104Conn:
     """104 主站连接：I-格式序号维护 + APDU 收发。"""
@@ -158,8 +161,8 @@ class IEC104MasterServer(MasterBase):
         try:
             conn.writer.close()
             await asyncio.wait_for(conn.writer.wait_closed(), timeout=2)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("%s close conn error: %s", tag, e)
 
     # -- 轮询 ------------------------------------------------------------
 

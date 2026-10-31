@@ -24,11 +24,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
 from protoforge.models.device import DeviceConfig, PointValue
 from protoforge.protocols.base import ProtocolServer, ProtocolStatus
+
+logger = logging.getLogger(__name__)
 
 
 class MasterBase(ProtocolServer):
@@ -88,8 +91,8 @@ class MasterBase(ProtocolServer):
         for device_id, conn in list(self._conns.items()):
             try:
                 await self._close_conn(conn)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Master stop: close conn error for %s: %s", device_id, e)
         self._poll_tasks.clear()
         self._conns.clear()
         self._status = ProtocolStatus.STOPPED
@@ -126,8 +129,8 @@ class MasterBase(ProtocolServer):
         if conn is not None:
             try:
                 await self._close_conn(conn)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Master remove_device: close conn error: %s", e)
         self._values.pop(device_id, None)
         self._quality.pop(device_id, None)
         self._stats.pop(device_id, None)
@@ -162,12 +165,14 @@ class MasterBase(ProtocolServer):
         point = next((p for p in device_cfg.points if p.name == point_name), None)
         if point is None:
             return False
+        ok = False
         try:
-            return await self._write_remote(
+            ok = await self._write_remote(
                 conn, device_id, dict(device_cfg.protocol_config or {}), point_name, value)
         except Exception as e:
+            logger.debug("Master write_point %s/%s failed: %s", device_id, point_name, e)
             self._stats[device_id]["last_error"] = f"write: {e}"
-            return False
+        return ok
 
     def get_master_status(self, device_id: str) -> dict[str, Any]:
         """主站轮询状态（API/前端展示用）：连通性、轮询统计、最后错误。"""
@@ -216,6 +221,7 @@ class MasterBase(ProtocolServer):
             except asyncio.CancelledError:
                 raise
             except Exception as e:
+                logger.debug("Master poll loop %s error: %s", device_id, e)
                 st = self._stats.setdefault(device_id, {})
                 st["poll_err"] = st.get("poll_err", 0) + 1
                 # TimeoutError 的 str() 为空——补类型名保证 last_error 可读
@@ -230,8 +236,8 @@ class MasterBase(ProtocolServer):
                 if conn is not None:
                     try:
                         await self._close_conn(conn)
-                    except Exception:
-                        pass
+                    except Exception as ce:
+                        logger.debug("Master poll: close conn error: %s", ce)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60.0)
                 continue
