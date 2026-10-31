@@ -53,8 +53,10 @@ async def start_tcp_server():
 async def start_rtu_bridge_server():
     server = ModbusRtuServer()
     port = free_tcp_port()
-    # serial port does not exist -> TCP bridge mode on `tcp_bridge_port`
+    # FIXED(Issue#36): 串口模式不再静默回退——桥接改为显式 mode=tcp_bridge
+    # （旧依赖"不存在的串口路径自动 fallback"的行为已按 issue 移除）
     await server.start({
+        "mode": "tcp_bridge",
         "port": "/dev/ttyPF_GOLDEN0",
         "baudrate": 9600,
         "tcp_bridge_port": port,

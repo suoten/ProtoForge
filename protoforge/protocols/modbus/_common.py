@@ -293,3 +293,20 @@ class ModbusDataStore:
             elif fc == 4:
                 result.append(self._input_regs.get(addr, 0))
         return result
+
+
+# ---------------------------------------------------------------------------
+#  CRC16-Modbus（RTU 帧校验，串口服务器/主站共用）
+# ---------------------------------------------------------------------------
+
+def crc16_modbus(data: bytes) -> int:
+    """Modbus RTU CRC16（多项式 0xA001 反射），返回低字节在前的 16 位校验。"""
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            if crc & 1:
+                crc = (crc >> 1) ^ 0xA001
+            else:
+                crc >>= 1
+    return crc & 0xFFFF

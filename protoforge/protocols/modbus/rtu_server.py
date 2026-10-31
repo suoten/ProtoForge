@@ -1,9 +1,7 @@
 """Module: rtu server."""
 
 import asyncio
-import contextlib
 import logging
-import os
 import socket
 import struct
 import sys
@@ -16,6 +14,7 @@ from protoforge.protocols.modbus._common import (
     WRITE_FC_AREA_MAP,
     ModbusDataStore,
     ModbusDeviceBehavior,
+    crc16_modbus,
     parse_modbus_address,
     point_area,
     point_reg_count,
@@ -23,25 +22,12 @@ from protoforge.protocols.modbus._common import (
 
 logger = logging.getLogger(__name__)
 
-SIMDATA_AVAILABLE = False
 try:
-    from pymodbus.simulator import DataType, SimData, SimDevice
-    SIMDATA_AVAILABLE = True
-except ImportError:
-    DataType = None  # type: ignore[assignment,misc]
-
-OLD_API_AVAILABLE = False
-try:
-    import importlib.util as _importlib_util
-    if _importlib_util.find_spec("pymodbus.datastore") is not None:
-        OLD_API_AVAILABLE = True
-except Exception as e:
-    logger.debug("<module>: ignored exception: %s", e)
-    pass
-
-StartAsyncSerialServer = None  # type: ignore[assignment]
-with contextlib.suppress(ImportError):
-    from pymodbus.server import StartAsyncSerialServer  # type: ignore[assignment]
+    import serial  # pyserial（FIXED(Issue#36): 显式依赖，见 pyproject dependencies）
+    _SERIAL_AVAILABLE = True
+except ImportError:  # pragma: no cover - 环境缺依赖时给出明确报错
+    serial = None  # type: ignore[assignment]
+    _SERIAL_AVAILABLE = False
 
 
 class ModbusRtuServer(ProtocolServer):
@@ -55,7 +41,7 @@ class ModbusRtuServer(ProtocolServer):
     def __init__(self):
         super().__init__()
         self._server_task: asyncio.Task | None = None
-        self._context: Any = None
+        self._serial: Any = None  # pyserial Serial 实例（串口模式）
         self._behaviors: dict[str, ModbusDeviceBehavior] = {}
         self._device_configs: dict[str, DeviceConfig] = {}
         self._port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
@@ -66,9 +52,6 @@ class ModbusRtuServer(ProtocolServer):
         self._slave_map: dict[str, int] = {}
         self._next_slave_id = 1
         self._data_stores: dict[int, ModbusDataStore] = {}
-        # FIXED(Issue#8): pymodbus 3.13+ 中 ModbusServerContext.async_setValues 返回 ExcCodes.DEVICE_BUSY
-        #        而非执行写入，OldAPI 路径静默失效。强制使用原生帧处理器（与 TCP server 一致）。
-        self._use_simdata = False
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
@@ -79,50 +62,20 @@ class ModbusRtuServer(ProtocolServer):
             logger.exception("Modbus RTU server task failed: %s", e)
             self._status = ProtocolStatus.ERROR
 
-    def _add_slave_to_context(self, slave_id: int, device_context: Any) -> None:
-        if self._context is None:
-            return
-        try:
-            if hasattr(self._context, '__setitem__'):
-                self._context[slave_id] = device_context
-            elif hasattr(self._context, 'slave'):
-                self._context.slave(slave_id, device_context)
-            else:
-                logger.debug("No supported method to add slave %d to context", slave_id)
-        except Exception as e:
-            logger.warning("Failed to add slave %d to context: %s", slave_id, e)
-
     def _get_data_store(self, slave_id: int) -> ModbusDataStore:
         if slave_id not in self._data_stores:
             self._data_stores[slave_id] = ModbusDataStore()
         return self._data_stores[slave_id]
 
-    def _build_sim_devices(self) -> list[Any]:
-        devices = []
-        all_slave_ids = set(self._slave_map.values())
-        if not all_slave_ids:
-            all_slave_ids = {1}
-
-        for slave_id in all_slave_ids:
-            store = self._get_data_store(slave_id)
-            simdata = [
-                SimData(1, values=[store.coils.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
-                SimData(10001, values=[store.discrete_inputs.get(i, 0) for i in range(1, 101)], datatype=DataType.BITS),
-                SimData(40001, values=[store.holding_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
-                SimData(30001, values=[store.input_regs.get(i, 0) for i in range(1, 101)], datatype=DataType.REGISTERS),
-            ]
-            devices.append(SimDevice(slave_id, simdata=simdata))
-        return devices
-
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
         default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
         raw_port = config.get("port", default_port)
+        mode = str(config.get("mode", "serial")).lower()
         if isinstance(raw_port, int):
             # Integration clients (edgelite push) send an int `port` meaning
-            # "serve RTU-over-TCP on this TCP port" -- route it to the bridge
-            # and fall back to the platform's nominal serial path, which then
-            # takes the TCP-bridge branch below when it does not exist.
+            # "serve RTU-over-TCP on this TCP port" — explicit bridge mode.
+            mode = "tcp_bridge"
             config.setdefault("tcp_bridge_port", raw_port)
             self._port = default_port
         else:
@@ -137,72 +90,167 @@ class ModbusRtuServer(ProtocolServer):
             raise ValueError(f"Parity must be N (None), E (Even), or O (Odd) (got '{self._parity}')")
         self._stopbits = config.get("stopbits", 1)
         if self._stopbits not in (1, 1.5, 2):
-            raise ValueError(f"Stop bits must be 1, 1.5, or 2 (got {self._stopbits})")
+            raise ValueError(f"Stop bits must be 1, 1.5, or 2 (got '{self._stopbits}')")
         self._bytesize = config.get("bytesize", 8)
         if self._bytesize not in (5, 6, 7, 8):
             raise ValueError(f"Data bits (bytesize) must be 5, 6, 7, or 8 (got {self._bytesize})")
 
-        if not StartAsyncSerialServer:
-            raise RuntimeError("pymodbus is not installed. Install with: pip install protoforge[modbus]")
-
-        if not self._port.startswith("/dev/") and not self._port.startswith("COM"):
-            logger.info("Non-standard serial port path %s, attempting direct connection", self._port)
-        elif not os.path.exists(self._port):
-            # 从配置中获取 TCP bridge 端口，默认 5021，但会自动检测可用端口
+        if mode == "tcp_bridge":
+            # 显式桥接模式：MBAP(TCP 帧) 直连原生帧处理器，不占用串口
             tcp_bridge_port = config.get("tcp_bridge_port", 5021)
             self._validate_port(tcp_bridge_port)
             tcp_bridge_port = self._find_available_port(tcp_bridge_port)
-            logger.warning("Serial port %s does not exist, starting in TCP bridge mode on port %d", self._port, tcp_bridge_port)
-            self._status = ProtocolStatus.RUNNING
+            logger.info("Modbus RTU starting in explicit TCP bridge mode on port %d", tcp_bridge_port)
             self._server_task = asyncio.create_task(self._serve_datastore_only(tcp_bridge_port))
+            self._server_task.add_done_callback(self._on_server_task_done)
+            self._status = ProtocolStatus.RUNNING
             self._log_debug("system", "server_start",
-                            f"Modbus RTU serial port {self._port} not found, falling back to TCP bridge mode on port {tcp_bridge_port}")
+                            f"Modbus RTU TCP bridge started on port {tcp_bridge_port}",
+                            detail={"mode": "tcp_bridge", "port": tcp_bridge_port})
             return
 
+        # FIXED(Issue#36): 串口模式——真正打开并占用串口。
+        # 旧实现因 pymodbus 3.13 OldAPI 失效而静默回退 TCP bridge（串口永不
+        # 被打开，用户在串口监视工具里看到 COM 口"空闲"）。现改为自持串口
+        # IO + 原生帧处理器（与 TCP server 共用 _process_modbus_frame），
+        # 不再依赖 pymodbus 的串口 server 端；打开失败直接报明确错误，
+        # 不做任何静默回退。
+        if not _SERIAL_AVAILABLE:
+            self._status = ProtocolStatus.ERROR
+            raise RuntimeError(
+                "pyserial is not installed — cannot open serial port. "
+                "Install with: pip install protoforge (pyserial is a core dependency)"
+            )
         try:
-            if self._use_simdata:
-                devices = self._build_sim_devices()
-                self._server_task = asyncio.create_task(
-                    StartAsyncSerialServer(
-                        context=devices,
-                        port=self._port,
-                        baudrate=self._baudrate,
-                        parity=self._parity,
-                        stopbits=self._stopbits,
-                        bytesize=self._bytesize,
-                    )
-                )
-            elif OLD_API_AVAILABLE:
-                # FIXED(Issue#8): pymodbus 3.13+ 中 ModbusServerContext.async_setValues 返回
-                # ExcCodes.DEVICE_BUSY 而非执行写入，OldAPI 路径静默失效。
-                # 强制走原生帧处理器路径（与 TCP server 保持一致）。
-                logger.warning(
-                    "Modbus RTU: pymodbus OldAPI path has compatibility issues with pymodbus 3.13+, "
-                    "using native frame handler instead. Serial port %s will use TCP bridge mode.", self._port
-                )
-                fallback_port = self._find_available_port(config.get("tcp_bridge_port", 5021))
-                self._server_task = asyncio.create_task(
-                    self._serve_datastore_only(fallback_port)
-                )
-            else:
-                logger.warning("Neither SimData nor old API available, Modbus RTU server starting in data-store-only mode")
-                fallback_port = self._find_available_port(config.get("tcp_bridge_port", 5021))
-                self._server_task = asyncio.create_task(
-                    self._serve_datastore_only(fallback_port)
-                )
+            self._open_serial()
+        except Exception as e:
+            self._serial = None
+            self._status = ProtocolStatus.ERROR
+            logger.error("Modbus RTU: failed to open serial port %s: %s", self._port, e)
+            raise RuntimeError(
+                f"无法打开串口 {self._port}（{type(e).__name__}: {e}）。"
+                f"请确认：①串口存在且未被其他程序占用；②Windows 上设备管理器中有该 COM 口。"
+                f"若仅需 TCP 测试，可将模式切换为 tcp_bridge。"
+            ) from e
 
-            if self._server_task:
-                self._server_task.add_done_callback(self._on_server_task_done)
-
+        try:
+            self._server_task = asyncio.create_task(self._serve_serial_native())
+            self._server_task.add_done_callback(self._on_server_task_done)
             self._status = ProtocolStatus.RUNNING
-            logger.info("Modbus RTU server starting on %s @ %d (simdata=%s)", self._port, self._baudrate, self._use_simdata)
+            logger.info("Modbus RTU server listening on %s @ %d baud (native serial)",
+                        self._port, self._baudrate)
             self._log_debug("system", "server_start",
                             f"Modbus RTU service started: {self._port} @ {self._baudrate}",
-                            detail={"port": self._port, "baudrate": self._baudrate, "simdata": self._use_simdata})
+                            detail={"port": self._port, "baudrate": self._baudrate, "mode": "serial"})
         except Exception as e:
             self._status = ProtocolStatus.ERROR
             logger.exception("Failed to start Modbus RTU server: %s", e)
             raise
+
+    def _open_serial(self) -> None:
+        """打开串口（真正占用 COM 口）。测试可覆写/patch 此方法注入假串口。"""
+        ser = serial.Serial(  # type: ignore[union-attr]
+            port=self._port,
+            baudrate=self._baudrate,
+            bytesize=self._bytesize,
+            parity=self._parity,
+            stopbits=self._stopbits,
+            timeout=0.05,   # 阻塞读上限，保证 stop 时 executor 线程及时退出
+            write_timeout=1.0,
+        )
+        self._serial = ser
+
+    async def _serve_serial_native(self) -> None:
+        """自持串口 RTU 帧循环：idle 分帧 → CRC 校验 → 复用 _process_modbus_frame。
+
+        FIXED(Issue#36): pymodbus 3.13 的串口 server 端（SimData/OldAPI）在
+        写值路径失效（async_setValues 返回 DEVICE_BUSY），旧代码因此整体放弃
+        串口改为静默 TCP bridge。此实现绕开 pymodbus server 端，值通路与
+        TCP 模式完全一致（behaviors/_data_stores）。
+        """
+        loop = asyncio.get_running_loop()
+
+        def _read_some() -> bytes:
+            ser = self._serial
+            if ser is None or not ser.is_open:
+                return b""
+            n = ser.in_waiting
+            return ser.read(n if n > 0 else 1)
+
+        try:
+            buf = bytearray()
+            while True:
+                chunk = await loop.run_in_executor(None, _read_some)
+                if chunk:
+                    buf.extend(chunk)
+                    # RTU 帧间隔（3.5 字符 @9600bps≈4ms）——再给一拍静默时间
+                    # 让整帧到齐；in_waiting 已含整帧时无需额外等待
+                    tail = await loop.run_in_executor(None, _read_some)
+                    if tail:
+                        buf.extend(tail)
+                if not buf:
+                    await asyncio.sleep(0.02)
+                    continue
+                frame = self._extract_rtu_frame(buf)
+                if frame is None:
+                    # 半帧等待更多字节；连续无新数据时由上层 timeout 机制兜底
+                    if not chunk:
+                        await asyncio.sleep(0.02)
+                    continue
+                addr, resp_pdu = frame
+                # Modbus 规范：广播（addr=0）只执行不响应
+                if addr != 0 and resp_pdu is not None:
+                    resp_frame = bytes([addr]) + resp_pdu
+                    resp_frame += struct.pack("<H", crc16_modbus(resp_frame))
+                    ser = self._serial
+                    if ser is not None and ser.is_open:
+                        await loop.run_in_executor(None, ser.write, bytes(resp_frame))
+                await asyncio.sleep(0.005)
+        except asyncio.CancelledError:
+            logger.debug("Modbus RTU serial task cancelled")
+            raise
+        except Exception as e:
+            logger.exception("Modbus RTU serial loop error: %s", e)
+            self._status = ProtocolStatus.ERROR
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
+
+    def _extract_rtu_frame(self, buf: bytearray) -> tuple[int, bytes | None] | None:
+        """从缓冲中提取一个完整 RTU 帧：[addr][fc][data...][crc16 lo hi]。
+
+        返回 (addr, PDU响应或None) 并消耗缓冲；帧不完整返回 None（保留缓冲）。
+        """
+        if len(buf) < 4:
+            return None
+        addr = buf[0]
+        fc = buf[1]
+        # 期望长度按功能码推导（请求帧）；异常/未知结构交给 CRC 兜底
+        if fc in (5, 6, 0x0F, 0x10):
+            if fc in (0x0F, 0x10) and len(buf) < 7:
+                return None
+            if len(buf) < 8:
+                return None
+            if fc in (0x0F, 0x10):
+                byte_count = buf[6]
+                expect = 7 + byte_count + 2
+            else:
+                expect = 8
+        elif fc in (1, 2, 3, 4):
+            expect = 8
+        else:
+            expect = 4  # 未知 fc：至少 addr+fc+crc2，交给 CRC 判定
+        if len(buf) < expect:
+            return None
+        frame = bytes(buf[:expect])
+        recv_crc = struct.unpack("<H", frame[-2:])[0]
+        if crc16_modbus(frame[:-2]) != recv_crc:
+            # CRC 不符：丢弃首字节（字节流错位恢复），等待重同步
+            logger.debug("Modbus RTU frame CRC mismatch, resync (addr=%s fc=%s)", addr, fc)
+            self.record_protocol_error(ProtocolErrorCategory.FRAME_PARSE, "RTU CRC mismatch")
+            buf.pop(0)
+            return None
+        del buf[:expect]
+        resp_pdu = self._process_modbus_frame(addr, fc, frame[2:-2])
+        return addr, resp_pdu
 
     @staticmethod
     def _find_available_port(start_port: int, max_tries: int = 10) -> int:
@@ -555,6 +603,14 @@ class ModbusRtuServer(ProtocolServer):
         except Exception as e:
             logger.warning("Modbus RTU server stop error: %s", e)
         finally:
+            # FIXED(Issue#36): 串口模式下释放 COM 口（读线程 timeout=0.05 保证及时退出）
+            ser = self._serial
+            self._serial = None
+            if ser is not None:
+                try:
+                    ser.close()
+                except Exception as e:
+                    logger.debug("Modbus RTU serial close error: %s", e)
             self._status = ProtocolStatus.STOPPED
             logger.info("Modbus RTU server stopped")
             self._log_debug("system", "server_stop", "Modbus RTU service stopped")
@@ -702,7 +758,6 @@ class ModbusRtuServer(ProtocolServer):
         for point in config.points:
             value = behavior.get_value(point.name) if behavior else 0
             self._write_point_to_store(point, value, store)
-        self._sync_to_pymodbus_context(slave_id, store)
 
     async def sync_point_value(self, device_id: str, point_name: str, value: Any) -> None:
         """内部同步：直接更新 Modbus 数据存储，绕过访问控制检查。"""
@@ -715,51 +770,6 @@ class ModbusRtuServer(ProtocolServer):
         slave_id = self._slave_map.get(device_id, 1)
         store = self._get_data_store(slave_id)
         self._write_point_to_store(point, value, store)
-        self._sync_to_pymodbus_context(slave_id, store)
-
-    def _sync_to_pymodbus_context(self, slave_id: int, store: ModbusDataStore) -> None:
-        """同步 ProtoForge 数据存储到 pymodbus 上下文（仅 OldAPI 路径有效）。
-
-        FIXED(Issue#8): pymodbus 3.13+ 中 ModbusSequentialDataBlock 已移除 setValues 方法，
-        ModbusServerContext.async_setValues 对非 ModbusSimulatorContext 设备返回 ExcCodes.DEVICE_BUSY。
-        此方法在 pymodbus 3.13+ 下为空操作（self._context 始终为 None），保留用于兼容旧版。
-        """
-        if not self._context:
-            return
-        try:
-            if OLD_API_AVAILABLE:
-                slave_ctx = self._context[slave_id]
-                if hasattr(slave_ctx, 'get'):
-                    for fx_name, store_data in [
-                        ('h', store.holding_regs),
-                        ('i', store.input_regs),
-                        ('c', store.coils),
-                        ('d', store.discrete_inputs),
-                    ]:
-                        block = slave_ctx.get(fx_name)
-                        # FIXED(Issue#8): pymodbus 3.13+ 移除了 ModbusSequentialDataBlock.setValues
-                        if block and hasattr(block, 'setValues') and store_data:
-                            fc = {'h': 3, 'i': 4, 'c': 1, 'd': 2}.get(fx_name, 3)
-                            is_bool = fc in (1, 2)
-                            for addr in sorted(store_data.keys()):
-                                val = bool(store_data[addr]) if is_bool else store_data[addr]
-                                try:
-                                    result = block.setValues(fc, addr, [val])
-                                    if result is not None and hasattr(result, 'value') and result.value >= 1:
-                                        logger.warning(
-                                            "pymodbus setValues returned error code %s for fc=%d addr=%d "
-                                            "(pymodbus 3.13+ incompatible, consider downgrading)",
-                                            result, fc, addr
-                                        )
-                                except Exception as exc:
-                                    logger.debug("pymodbus setValues failed for fc=%d addr=%d: %s", fc, addr, exc)
-                        elif block and store_data:
-                            logger.debug(
-                                "pymodbus block has no setValues method (pymodbus 3.13+ incompatible), "
-                                "skipping sync for slave_id=%d fx=%s", slave_id, fx_name
-                            )
-        except Exception as e:
-            logger.debug("Failed to sync to pymodbus context: %s", e)
 
     def _read_register(self, point: PointConfig, slave_id: int = 1) -> Any | None:
         store = self._get_data_store(slave_id)
