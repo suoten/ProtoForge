@@ -35,7 +35,7 @@
 
 services:
   protoforge:
-    image: suoten/protoforge:1.9.0
+    image: suoten/protoforge:1.9.1
     container_name: protoforge
     command:
       - sh

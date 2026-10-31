@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.9.1 — 2026-10-31
+
+### 🐛 修复 — Modbus RTU 串口模式从不打开 COM 口（GitHub issue #36）
+
+用户报告（Windows 11）：启动 Modbus RTU 指定 COM1 后，串口监视工具显示 COM1 一直空闲，怀疑"是从 TCP 做的桥接"——完全正确。pymodbus 3.13 下写值 API 失效（Issue#8）的规避代码把串口模式整体放弃：无论串口是否存在都**静默回退 TCP bridge，串口永不打开**，协议状态仍显示 RUNNING 且无任何提示。
+
+修复：串口模式改为**自持串口 IO**（不再依赖 pymodbus 串口 server 端）——真正打开并占用 COM 口、RTU 3.5 字符分帧 + CRC16 校验、值通路与 TCP 模式完全一致（同一套原生帧处理器）；广播（addr=0）只执行不回包；打开串口失败置 ERROR 并抛出含串口名的明确错误，不再静默回退。TCP bridge 改为显式 `mode=tcp_bridge`（edgelite 集成兼容保留）。另补上此前**漏声明的 pyserial 核心依赖**。已在本机真实 COM1 上验证占用/释放，CI 全矩阵回归通过。
+
+### 🐛 修复 — BACnet 在 Python 3.10 / Windows ≤3.11 下不可用（CI unit-tests 3.10 长期红）
+
+BACnet 服务器的 UDP 收发用了 `loop.sock_recvfrom/sock_sendto`——Python **3.11 才加入**的 asyncio API，3.10 上每次 AttributeError 被宽 except 吞掉后进入 10ms 重试死循环，UDP 请求永无响应（CI `unit-tests (3.10)` 自基线起持续失败；Windows + Python ≤3.11 上 BACnet 服务器完全不可用）。修复：按 API 能力分支——3.11+ 保持原路径，3.10 走线程池桥接（带超时可停止）；对 3.11+ 行为零变化。顺带使 Windows 低版本 Python 下 BACnet 恢复可用。
+
 ## v1.9.0 — 2026-10-31
 
 ### ✨ 新增 — 主站模式第一批（Modbus TCP/RTU、S7、IEC 104）：拨出轮询真实设备，协议转换免费获得
