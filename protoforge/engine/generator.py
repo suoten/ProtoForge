@@ -263,6 +263,16 @@ class DataGenerator:
 
         elapsed = time.time() - self._start_time[key]
 
+        # FIXED(用户实测): 布尔点位的动态生成器（随机/正弦/三角等）统一为随机
+        # 0/1 翻转 —— 原实现 random.uniform(min,max) 经 bool() 转换后恒为 True
+        # （min≥1 时值永远是 1，报警位永远不变化，用户误以为"读不到"）。
+        # 固定值/脚本/递增生成器仍按原逻辑精确输出。
+        if point.data_type == DataType.BOOL and point.generator_type not in (
+            GeneratorType.FIXED, GeneratorType.CONSTANT, GeneratorType.SCRIPT,
+            GeneratorType.INCREMENT,
+        ):
+            return random.choice([True, False])
+
         if point.generator_type in (GeneratorType.FIXED, GeneratorType.CONSTANT):  # FIXED-P1: constant合并到fixed分支
             value = self._generate_fixed(point)
         elif point.generator_type == GeneratorType.RANDOM:
