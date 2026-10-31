@@ -108,14 +108,41 @@ class BACnetServer(ProtocolServer):
             logger.info("BACnet server stopped")
             self._log_debug("system", "server_stop", "BACnet service stopped")
 
+    def _udp_send(self, data: bytes, addr: tuple) -> None:
+        """跨版本 UDP 发送：loop.sock_sendto 是 Python 3.11+ API，
+        3.10 直接同步 sendto（UDP 发送不阻塞事件循环）。"""
+        sock = self._sock
+        if sock is None:
+            return
+        sock.sendto(data, addr)
+
     async def _serve_udp(self) -> None:
         loop = asyncio.get_running_loop()
+        # FIXED(v1.9.1): loop.sock_recvfrom/sock_sendto 是 Python 3.11 才加入的
+        # asyncio API——3.10 上每次 AttributeError 被 except 吞掉进 10ms 重试死循环，
+        # UDP 永不响应（CI unit-tests (3.10) 失败根因；3.11/3.12 均正常）。
+        # 3.10 走线程池桥接阻塞 recvfrom（settimeout(0.5) 保证 stop 可及时退出）。
+        use_native = hasattr(loop, "sock_recvfrom")
+        if not use_native and self._sock is not None:
+            self._sock.settimeout(0.5)
         while True:
             try:
-                data, addr = await loop.sock_recvfrom(self._sock, 2048)  # type: ignore[attr-defined]
+                if use_native:
+                    data, addr = await loop.sock_recvfrom(self._sock, 2048)  # type: ignore[attr-defined]
+                else:
+                    sock = self._sock
+                    if sock is None:
+                        break
+                    try:
+                        data, addr = await loop.run_in_executor(None, sock.recvfrom, 2048)
+                    except TimeoutError:
+                        continue  # 0.5s 无数据——回环检查停止标志
                 response = self._handle_bacnet_packet(data, addr)
                 if response:
-                    await loop.sock_sendto(self._sock, response, addr)  # type: ignore[attr-defined]
+                    if use_native:
+                        await loop.sock_sendto(self._sock, response, addr)  # type: ignore[attr-defined]
+                    else:
+                        self._udp_send(response, addr)
                 # FIXED: BBMD转发针对Original-Broadcast-NPDU (ASHRAE 135: BVLC Type=0x0B)
                 if self._bbmd_enabled and data[0] == 0x81 and len(data) >= 2 and data[1] == 0x0B:
                     self._bbmd_forward(data, addr)
@@ -703,7 +730,7 @@ class BACnetServer(ProtocolServer):
                         self._finalize_bvlc_length(resp)
                         if self._sock:
                             try:
-                                await loop.sock_sendto(self._sock, bytes(resp), addr)  # type: ignore[attr-defined]
+                                self._udp_send(bytes(resp), addr)
                             except Exception as e:
                                 logger.debug("_cov_notification_loop: ignored exception: %s", e)
                                 dead_subs.append(sub_id)
