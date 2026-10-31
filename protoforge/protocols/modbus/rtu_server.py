@@ -35,7 +35,8 @@ try:
     import importlib.util as _importlib_util
     if _importlib_util.find_spec("pymodbus.datastore") is not None:
         OLD_API_AVAILABLE = True
-except Exception:
+except Exception as e:
+    logger.debug("<module>: ignored exception: %s", e)
     pass
 
 StartAsyncSerialServer = None  # type: ignore[assignment]
@@ -213,7 +214,8 @@ class ModbusRtuServer(ProtocolServer):
                     result = s.connect_ex(("127.0.0.1", port))
                     if result != 0:
                         return port  # 端口未被占用
-            except Exception:
+            except Exception as e:
+                logger.debug("_find_available_port: ignored exception: %s", e)
                 return port  # 无法检测，假设可用
         return start_port  # 全部被占用，返回原始端口让后续报错
 

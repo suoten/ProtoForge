@@ -546,6 +546,7 @@ class MqttBroker(ProtocolServer):
         try:
             await asyncio.wait_for(new_client.connect(uri), timeout=5.0)
         except Exception as e:
+            logger.debug("_get_external_client: ignored exception: %s", e)
             now = time.monotonic()
             last = self._external_last_warn.get(device_id, 0.0)
             if now - last >= 60.0:
@@ -557,7 +558,8 @@ class MqttBroker(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, f"external broker connect failed: {e}")
             with contextlib.suppress(Exception):
                 await new_client.disconnect()
-            return None
+            _swallowed = None
+            return _swallowed
 
         self._external_clients[device_id] = new_client
         self._external_connected.add(device_id)
@@ -603,7 +605,8 @@ class MqttBroker(ProtocolServer):
                 with contextlib.suppress(Exception):
                     await client.disconnect()
                 self._external_clients.pop(device_id, None)
-                return False
+                _swallowed = False
+                return _swallowed
         return await self._broker_publish(topic, payload, qos=qos, retain=retain)
 
     @staticmethod

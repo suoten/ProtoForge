@@ -32,7 +32,8 @@ def parse_node_id(address: str):
     try:
         from asyncua import NodeId
         return NodeId.from_string(address)
-    except Exception:
+    except Exception as e:
+        logger.debug("parse_node_id: ignored exception: %s", e)
         try:
             from opcua import NodeId
             return NodeId.from_string(address)
@@ -272,7 +273,8 @@ class OpcUaClientProtocol(ProtocolServer):
         except Exception as e:
             logger.warning("Failed to write node %s: %s", node_id, e)
             self._mark_disconnected()
-            return False
+            _swallowed = False
+            return _swallowed
 
     def _mark_disconnected(self) -> None:
         if self._connected:

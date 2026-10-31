@@ -172,7 +172,8 @@ class AbServer(ProtocolServer):
                 sock = writer.get_extra_info('socket')
                 if sock is not None:
                     sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_KEEPALIVE, 1)
-            except Exception:
+            except Exception as e:
+                logger.debug("_handle_connection: ignored exception: %s", e)
                 pass
             while self._server_running:
                 # FIXED-C04: 先读EIP头24字节获取length，再读剩余数据，避免大报文截断

@@ -581,6 +581,7 @@ class GB28181Server(ProtocolServer):
                 self._log_debug("in", "sip_unknown",
                                 f"Unhandled SIP message: {first_line[:60]}")
         except Exception as e:
+            logger.debug("handle_message: ignored exception: %s", e)
             self._log_debug("in", "sip_error", msg("gb28181", "sip_error", error=e))
 
     def _handle_message(self, message: str, addr: tuple) -> None:
@@ -702,6 +703,7 @@ class GB28181Server(ProtocolServer):
                                     detail={"realm": realm, "nonce": nonce[:16]})
                     logger.info("Sent authenticated REGISTER for %s", gb_device.device_id)
             except Exception as e:
+                logger.debug("_handle_401: ignored exception: %s", e)
                 self._log_debug("out", "sip_register_auth_error",
                                 msg("gb28181", "auth_register_failed", error=e),
                                 device_id=pf_id)
@@ -882,6 +884,7 @@ class GB28181Server(ProtocolServer):
                                                 "resolution": "352x288",
                                                 "fps": 25})
                     except Exception as e:
+                        logger.debug("_handle_ack: ignored exception: %s", e)
                         self._log_debug("out", "rtp_stream_error",
                                         msg("gb28181", "rtp_start_failed", error=e),
                                         device_id=pf_id)

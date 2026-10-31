@@ -19,7 +19,8 @@ def _load_dotenv_to_environ():
     try:
         from protoforge.core.paths import app_root as _app_root
         env_file = _app_root() / ".env"
-    except Exception:
+    except Exception as e:
+        logger.debug("_load_dotenv_to_environ: ignored exception: %s", e)
         env_file = Path(__file__).parent.parent / ".env"
     if not env_file.exists():
         return
@@ -276,7 +277,8 @@ def _win_terminate(pid: int) -> bool:
             ctypes.windll.kernel32.CloseHandle(handle)
     except Exception as e:  # noqa: BLE001 — 兑底路径，任何异常都不能阻断 stop 流程
         logger.warning("TerminateProcess fallback failed for PID %s: %s", pid, e)
-        return False
+        _swallowed = False
+        return _swallowed
 
 
 def _find_pid_by_port(port: int) -> int | None:

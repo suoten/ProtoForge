@@ -23,6 +23,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 各协议的可选依赖（与 pyproject extras 对应）
 _PROTOCOL_DEPENDENCIES: dict[str, str] = {
@@ -330,7 +333,8 @@ def _get_version() -> str:
     try:
         from protoforge import __version__
         return __version__
-    except Exception:
+    except Exception as e:
+        logger.debug("_get_version: ignored exception: %s", e)
         return "unknown"
 
 

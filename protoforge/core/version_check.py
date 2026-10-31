@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import time
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 与 Docker 部署文档一致的默认引导
 RELEASES_URL = "https://github.com/suoten/ProtoForge/releases"
@@ -85,7 +88,8 @@ async def fetch_release_info(current: str, timeout: float = 6.0) -> dict[str, An
                     data["check_failed"] = True
             else:
                 data["check_failed"] = True
-    except Exception:
+    except Exception as e:
+        logger.debug("fetch_release_info: ignored exception: %s", e)
         data["check_failed"] = True
     return data
 

@@ -195,6 +195,7 @@ async def audit_schema(db) -> SchemaAuditResult:
         try:
             db_columns = await get_db_columns(db, table_name)
         except Exception as e:
+            logger.debug("audit_schema: ignored exception: %s", e)
             result.warnings.append(
                 f"Could not introspect DB table '{table_name}': {e}"
             )

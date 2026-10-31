@@ -155,7 +155,8 @@ class Scenario:
                 return bool(result)
             except Exception as e:
                 logger.warning("Collaboration write via engine failed for %s.%s: %s", device_id, point_name, e)
-                return False
+                _swallowed = False
+                return _swallowed
         return await device.write_point(point_name, value)
 
     async def _collab_inject_fault(self, device_id: str, fault_cfg: dict[str, Any]) -> str | None:
@@ -191,7 +192,8 @@ class Scenario:
             return fault_id
         except Exception as e:
             logger.warning("inject_fault failed on device %s: %s", device_id, e)
-            return None
+            _swallowed = None
+            return _swallowed
 
     def stop(self) -> None:
         self._status = ScenarioStatus.STOPPED

@@ -167,7 +167,8 @@ class ProtocolServer(ABC):
             return "run"
         try:
             return self._device_state_provider(device_id)
-        except Exception:
+        except Exception as e:
+            logger.debug("get_device_state_string: ignored exception: %s", e)
             return "run"
 
     # -- 连接追踪 -----------------------------------------------------------

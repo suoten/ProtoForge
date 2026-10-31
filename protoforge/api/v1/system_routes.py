@@ -24,7 +24,8 @@ def _get_version() -> str:
         v = getattr(protoforge, "__version__", None)
         if v and v != "0.1.0":
             return v
-    except Exception:
+    except Exception as e:
+        logger.debug("_get_version: ignored exception: %s", e)
         pass
     try:
         from importlib.metadata import version as pkg_version

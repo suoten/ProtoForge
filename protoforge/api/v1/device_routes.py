@@ -291,6 +291,7 @@ async def batch_start_devices(device_ids: list[str] = Body(..., embed=True), _us
             await engine.start_device(device_id)
             started += 1
         except Exception as e:
+            logger.debug("batch_start_devices: ignored exception: %s", e)
             errors.append({"id": device_id, "error": str(e)})
 
     return {"status": "ok", "started": started, "errors": errors}
@@ -306,6 +307,7 @@ async def batch_stop_devices(device_ids: list[str] = Body(..., embed=True), _use
             await engine.stop_device(device_id)
             stopped += 1
         except Exception as e:
+            logger.debug("batch_stop_devices: ignored exception: %s", e)
             errors.append({"id": device_id, "error": str(e)})
 
     return {"status": "ok", "stopped": stopped, "errors": errors}

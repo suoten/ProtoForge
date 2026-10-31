@@ -1100,7 +1100,8 @@ def _create_from_string(config_str: str) -> BaseBehavior | None:
         return cls(**params)
     except Exception as e:
         logger.warning("Failed to parse behavior config string '%s': %s", config_str, e)
-        return None
+        _swallowed = None
+        return _swallowed
 
 
 def get_behavior_input(config: dict[str, Any]) -> tuple[Any, float]:

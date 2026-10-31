@@ -176,7 +176,8 @@ class IntegrationAuth:
             else:
                 try:
                     err_detail = change_resp.text[:300]
-                except Exception:
+                except Exception as e:
+                    logger.debug("_handle_must_change_password: ignored exception: %s", e)
                     err_detail = ""
                 logger.warning(
                     "EdgeLite change-password failed: HTTP %d (%s), API access may be restricted",

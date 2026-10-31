@@ -279,7 +279,8 @@ class RuleChainEngine:
 
         except Exception as e:
             logger.warning("Chain node %s execution error: %s", node.id, e)
-            return None
+            _swallowed = None
+            return _swallowed
 
     @staticmethod
     def _compare(value: Any, operator: str, threshold: Any) -> bool:

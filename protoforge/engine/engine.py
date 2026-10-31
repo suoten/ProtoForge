@@ -338,7 +338,8 @@ class SimulationEngine:
             return await instance.write_point(point_name, value)
         except Exception as e:
             logger.warning("on_protocol_write error for %s/%s: %s", device_id, point_name, e)
-            return False
+            _swallowed = False
+            return _swallowed
 
     def setup_debug_callbacks(self, log_bus) -> None:
         for name, server in self._protocol_servers.items():
@@ -374,7 +375,8 @@ class SimulationEngine:
                     for k, v in props.items()
                     if isinstance(v, dict) and v.get("default") is not None
                 }
-            except Exception:
+            except Exception as e:
+                logger.debug("get_protocols: ignored exception: %s", e)
                 effective = {}
             effective.update({
                 k: v for k, v in self._last_protocol_configs.get(server.protocol_name, {}).items()
@@ -382,7 +384,8 @@ class SimulationEngine:
             })
             try:
                 actual_port = getattr(server, "actual_port", None)
-            except Exception:
+            except Exception as e:
+                logger.debug("get_protocols: ignored exception: %s", e)
                 actual_port = None
             if actual_port:
                 effective["port"] = actual_port
@@ -541,6 +544,7 @@ class SimulationEngine:
                     ))
                 return  # SUCCESS
             except Exception as e:
+                logger.debug("start_protocol: ignored exception: %s", e)
                 error_str = str(e).lower()
                 is_retryable = any(err in error_str for err in self._RETRYABLE_ERRORS)
                 if is_retryable and attempt < self._MAX_START_RETRIES:
@@ -770,7 +774,7 @@ class SimulationEngine:
         try:
             await server.remove_device(device_id)
             await server.create_device(new_config)
-        except Exception:
+        except Exception as e:
             # 重建失败时回滚注册旧配置，避免设备从协议服务器丢失
             logger.exception("Failed to resync device %s to protocol %s", device_id, new_config.protocol)
             with contextlib.suppress(Exception):
@@ -779,7 +783,8 @@ class SimulationEngine:
                 with contextlib.suppress(Exception):
                     await server.create_device(old_config)
             logger.warning("Device %s protocol resync failed (old registration restored)", device_id)
-            return
+            _swallowed = None
+            return _swallowed
         # 把引擎当前值写回协议服务器（重建后的 behavior 从初始值开始）
         try:
             for pv in instance.read_all_points():
@@ -981,7 +986,8 @@ class SimulationEngine:
                     return False
             except Exception as e:
                 logger.warning("Protocol write error for %s/%s: %s", device_id, point_name, e)
-                return False
+                _swallowed = False
+                return _swallowed
         else:
             # 协议 server 未运行：直接写入 DeviceInstance 内存
             # FIXED: 添加 try-except 保护，防止 instance.write_point() 抛出异常导致 500
@@ -989,7 +995,8 @@ class SimulationEngine:
                 success = await instance.write_point(point_name, value)
             except Exception as e:
                 logger.warning("Instance write error for %s/%s: %s", device_id, point_name, e)
-                return False
+                _swallowed = False
+                return _swallowed
             if success:
                 logger.warning(
                     "Write to device %s/%s succeeded in memory, but protocol %s is not running - change not visible to external clients",

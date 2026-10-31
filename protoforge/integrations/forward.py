@@ -62,6 +62,7 @@ def _is_url_allowed(url: str, allow_private: bool = True) -> tuple[bool, str]:  
                         return False, f"URL resolves to internal IP {ip} (network {network})"
         return True, ""
     except Exception as e:
+        logger.debug("_is_url_allowed: ignored exception: %s", e)
         return False, f"URL validation error: {e}"
 
 
@@ -385,6 +386,7 @@ class ForwardEngine:
                             self._sent_count += len(records)
                             break
                         except Exception as e:
+                            logger.debug("_forward_loop: ignored exception: %s", e)
                             if attempt < self._retry_count - 1:
                                 await asyncio.sleep(min(0.5 * (2 ** attempt), 30.0))
                             else:

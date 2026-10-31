@@ -92,6 +92,7 @@ class RetryPolicy:
                 self.reset()
                 return result
             except Exception as e:
+                logger.debug("execute: ignored exception: %s", e)
                 if not self.should_retry(e):
                     raise
                 elapsed = time.monotonic() - start_time

@@ -381,7 +381,8 @@ class Recorder:
                 await self._database.delete_recording(rec_id)
             except Exception as e:
                 logger.warning("Failed to delete recording from db: %s", e)
-                return False
+                _swallowed = False
+                return _swallowed
         return True
 
     async def restore_from_db(self) -> None:

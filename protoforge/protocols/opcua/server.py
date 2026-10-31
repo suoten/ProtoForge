@@ -286,7 +286,8 @@ class OpcUaServer(ProtocolServer):
             return []
         except Exception as e:
             logger.warning("read_point_history failed for %s/%s: %s", device_id, point_name, e)
-            return []
+            _swallowed = []
+            return _swallowed
 
     def _on_server_task_done(self, task: asyncio.Task) -> None:
         try:
@@ -576,7 +577,8 @@ class OpcUaServer(ProtocolServer):
                     await node.set_value(asyncua_ua.Variant(value, VariantType=variant_type))
                 except Exception as e:
                     logger.warning("OPC-UA write node value error for %s.%s: %s", device_id, point_name, e)
-                    return False
+                    _swallowed = False
+                    return _swallowed
 
             # 通过 on_write 回调传播到 DeviceInstance，确保内部状态一致
             if self._on_write:
@@ -626,6 +628,7 @@ class OpcUaServer(ProtocolServer):
                             dv = _make_datavalue(value, variant_type, qcode_int, datetime.datetime.now(datetime.timezone.utc))
                             await node.set_value(dv)
                         except Exception as e:
+                            logger.debug("_sync_values_loop: ignored exception: %s", e)
                             _report_sync_error(f"sync-loop:{device_id}.{point.name}",
                                                f"OPC-UA sync value error for {device_id}.{point.name}: {e}")
             except Exception as e:
@@ -687,6 +690,7 @@ class OpcUaServer(ProtocolServer):
                 dv = _make_datavalue(value, variant_type, qcode_int, datetime.datetime.now(datetime.timezone.utc))
                 await node.set_value(dv)
             except Exception as e:
+                logger.debug("sync_point_value: ignored exception: %s", e)
                 _report_sync_error(f"sync-point:{device_id}.{point_name}",
                                    f"OPC-UA sync_point_value error for {device_id}.{point_name}: {e}")
 
@@ -755,7 +759,8 @@ class OpcUaServer(ProtocolServer):
             )
         except Exception as e:
             logger.exception("Failed to create OPC-UA device folder for %s: %s", config.id, e)
-            return
+            _swallowed = None
+            return _swallowed
         point_nodes = {}
         if not ASYNCUA_AVAILABLE:
             logger.warning("asyncua not available, cannot create OPC-UA device nodes")
@@ -849,7 +854,8 @@ class OpcUaServer(ProtocolServer):
                             node = await device_folder.add_variable(
                                 ua_node_id, ua_bname_fb, value
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.debug("_create_opcua_device: ignored exception: %s", e)
                             node = await device_folder.add_variable(
                                 device_idx, point.name, value
                             )

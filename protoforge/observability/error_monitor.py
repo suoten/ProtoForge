@@ -211,5 +211,6 @@ class ErrorMonitorMiddleware(BaseHTTPMiddleware):
             if len(text) > _MAX_BODY_LOG_LEN:
                 return text[:_MAX_BODY_LOG_LEN] + "...(truncated)"
             return text
-        except Exception:
+        except Exception as e:
+            logger.debug("_safe_body: ignored exception: %s", e)
             return f"(binary, {len(body_bytes)} bytes)"

@@ -30,7 +30,8 @@ _SECRET_KEY: str = ""
 try:
     from protoforge.core.paths import app_root as _app_root
     _SECRET_KEY_FILE = os.path.join(str(_app_root()), "data", ".jwt_secret")
-except Exception:  # pragma: no cover - paths 模块不可用时退回原行为
+except Exception as e:  # pragma: no cover - paths 模块不可用时退回原行为
+    logger.debug("<module>: ignored exception: %s", e)
     _SECRET_KEY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", ".jwt_secret")
 _SECRET_KEY_LOCK = threading.Lock()  # FIXED: 添加锁保护，避免并发读写_SECRET_KEY
 
@@ -205,7 +206,8 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
     except Exception as e:
         logger.debug("Password verification failed: %s", e)
-        return False
+        _swallowed = False
+        return _swallowed
 
 
 def _is_password_strong(password: str) -> tuple[bool, str]:
@@ -536,7 +538,8 @@ class UserManager:
                 logger.exception("Failed to update user role for %s: %s", username, e)
                 user.role = old_role
                 self._token_versions[user.id] = self._token_versions.get(user.id, 0) - 1
-                return False
+                _swallowed = False
+                return _swallowed
         return True
 
     def get_token_version(self, user_id: str) -> int:

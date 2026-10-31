@@ -59,7 +59,8 @@ def ensure_no_point_overlap(protocol: str, points: Any) -> None:
             try:
                 normalized.append(PointConfig(**{k: v for k, v in pt.items()
                                                  if k in PointConfig.model_fields}))
-            except Exception:
+            except Exception as e:
+                logger.debug("ensure_no_point_overlap: ignored exception: %s", e)
                 continue
         else:
             normalized.append(pt)

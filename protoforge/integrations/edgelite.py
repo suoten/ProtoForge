@@ -366,7 +366,8 @@ def _get_protocol_status(protocol: str) -> str:
         from protoforge.engine.registry import get_engine
         engine = get_engine()
         return "running" if engine.is_protocol_running(protocol) else "stopped"
-    except Exception:
+    except Exception as e:
+        logger.debug("_get_protocol_status: ignored exception: %s", e)
         return "unknown"
 
 
@@ -986,6 +987,7 @@ async def _get_auth_headers(
     except EdgeLiteError as e:
         return {}, e
     except Exception as e:
+        logger.debug("_get_auth_headers: ignored exception: %s", e)
         return {}, EdgeLiteError("unknown", str(e), desc("edgelite.suggestion.check_network"))
     headers = {"Authorization": f"Bearer {token}"}
     csrf_token = _get_cached_csrf_token(url)
@@ -1026,7 +1028,8 @@ async def _try_refresh_token(client: httpx.AsyncClient, url: str) -> str | None:
         return None
     except Exception as e:
         logger.debug("refresh_token request failed: %s", e)
-        return None
+        _swallowed = None
+        return _swallowed
     if resp.status_code != 200:
         logger.debug("refresh_token failed: HTTP %d, falling back to login", resp.status_code)
         return None
@@ -1034,7 +1037,8 @@ async def _try_refresh_token(client: httpx.AsyncClient, url: str) -> str | None:
         data = resp.json()
     except Exception as e:
         logger.debug("refresh_token response JSON parse failed: %s", e)
-        return None
+        _swallowed = None
+        return _swallowed
     inner = data.get("data") if isinstance(data, dict) else None
     if not isinstance(inner, dict):
         inner = data if isinstance(data, dict) else {}
@@ -1145,6 +1149,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
     except httpx.TimeoutException:
         return {"ok": False, "error": "Device creation request timed out", "error_type": "timeout"}
     except Exception as e:
+        logger.debug("push_device_to_edgelite: ignored exception: %s", e)
         return {"ok": False, "error": f"Device creation request exception: {e}", "error_type": "unknown"}
 
     # FIXED: 缓存 token 失效时自动重新登录重试
@@ -1160,6 +1165,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
         except httpx.TimeoutException:
             return {"ok": False, "error": "Device creation retry timed out", "error_type": "timeout"}
         except Exception as e:
+            logger.debug("push_device_to_edgelite: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
         if create_resp.status_code in (200, 201):
@@ -1250,6 +1256,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                     except httpx.TimeoutException:
                         return {"ok": False, "error": "Re-create request timed out", "error_type": "timeout"}
                     except Exception as e:
+                        logger.debug("push_device_to_edgelite: ignored exception: %s", e)
                         return {"ok": False, "error": str(e), "error_type": "unknown"}
                     if create_resp2.status_code in (200, 201):
                         logger.info("Device %s re-created on EdgeLite", payload["device_id"])
@@ -1258,7 +1265,8 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
                     try:
                         err_data = create_resp2.json()
                         err_detail = err_data.get("detail", str(create_resp2.text[:200]))
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("push_device_to_edgelite: ignored exception: %s", e)
                         err_detail = str(create_resp2.text[:200])
                     return {"ok": False, "error": f"Re-create failed: HTTP {create_resp2.status_code} - {err_detail}", "error_type": "create_failed"}
                 elif dev_resp.status_code == 200:
@@ -1286,6 +1294,7 @@ async def push_device_to_edgelite(device: Any, protoforge_host: str = "") -> dic
             except httpx.TimeoutException:
                 return {"ok": False, "error": "Update request timed out, EdgeLite responded too slowly", "error_type": "timeout"}
             except Exception as e:
+                logger.debug("push_device_to_edgelite: ignored exception: %s", e)
                 return {"ok": False, "error": f"Update request exception: {e}", "error_type": "unknown"}
             if update_resp.status_code == 200:
                 logger.info("Device %s updated on EdgeLite", payload["device_id"])
@@ -1343,6 +1352,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
     except httpx.TimeoutException:
         return {"ok": False, "error": "Removal request timed out", "error_type": "timeout"}
     except Exception as e:
+        logger.debug("remove_device_from_edgelite: ignored exception: %s", e)
         return {"ok": False, "error": f"Removal request exception: {e}", "error_type": "unknown"}
 
     # FIXED: 缓存 token 失效时自动重新登录重试
@@ -1358,6 +1368,7 @@ async def remove_device_from_edgelite(device: Any) -> dict[str, Any]:
         except httpx.TimeoutException:
             return {"ok": False, "error": "Removal retry timed out", "error_type": "timeout"}
         except Exception as e:
+            logger.debug("remove_device_from_edgelite: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code in (200, 204, 404):
@@ -1405,6 +1416,7 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
     except httpx.TimeoutException:
         return {"ok": False, "error": "Status query timed out", "error_type": "timeout"}
     except Exception as e:
+        logger.debug("get_edgelite_device_status: ignored exception: %s", e)
         return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code == 401:
@@ -1415,12 +1427,14 @@ async def get_edgelite_device_status(device: Any) -> dict[str, Any]:
                 headers=headers,
             )
         except Exception as e:
+            logger.debug("get_edgelite_device_status: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code == 200:
         try:
             raw = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("get_edgelite_device_status: ignored exception: %s", e)
             return {"ok": False, "error": "Invalid JSON response", "error_type": "parse_error"}
         data = raw.get("data", raw)
         return {"ok": True, "device_id": device_id, "status": data.get("status", "unknown"), "data": data}
@@ -1463,6 +1477,7 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
     except httpx.TimeoutException:
         return {"ok": False, "error": "Read points request timed out", "error_type": "timeout"}
     except Exception as e:
+        logger.debug("read_edgelite_device_points: ignored exception: %s", e)
         return {"ok": False, "error": f"Read points request exception: {e}", "error_type": "unknown"}
 
     # FIXED: 缓存 token 失效时自动重新登录重试
@@ -1478,12 +1493,14 @@ async def read_edgelite_device_points(device: Any) -> dict[str, Any]:
         except httpx.TimeoutException:
             return {"ok": False, "error": "Read points retry timed out", "error_type": "timeout"}
         except Exception as e:
+            logger.debug("read_edgelite_device_points: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     if resp.status_code == 200:
         try:
             raw = resp.json()
         except Exception as e:
+            logger.debug("read_edgelite_device_points: ignored exception: %s", e)
             return {"ok": False, "error": f"EdgeLite returned invalid JSON: {e}", "error_type": "parse_error"}
         data = raw.get("data", raw)
         # FIXED: 归一化 EdgeLite 返回的 PointValue 嵌套结构为标量值
@@ -1701,6 +1718,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["ok"] = False
         return result
     except Exception as e:
+        logger.debug("verify_edgelite_pipeline: ignored exception: %s", e)
         result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.query_device_exception").format(error=e)}
         result["ok"] = False
         return result
@@ -1720,6 +1738,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
             result["ok"] = False
             return result
         except Exception as e:
+            logger.debug("verify_edgelite_pipeline: ignored exception: %s", e)
             result["steps"]["register"] = {"ok": False, "error": str(e)}
             result["ok"] = False
             return result
@@ -1736,6 +1755,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
     try:
         dev_data_raw = dev_resp.json()
     except Exception as e:
+        logger.debug("verify_edgelite_pipeline: ignored exception: %s", e)
         result["steps"]["register"] = {"ok": False, "error": desc("edgelite.error.response_not_json").format(error=e)}
         result["ok"] = False
         return result
@@ -1781,6 +1801,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         result["ok"] = False
         return result
     except Exception as e:
+        logger.debug("verify_edgelite_pipeline: ignored exception: %s", e)
         result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.read_points_exception").format(error=e)}
         result["ok"] = False
         return result
@@ -1788,6 +1809,7 @@ async def verify_edgelite_pipeline(device: Any) -> dict[str, Any]:
         try:
             raw_points = points_resp.json()
         except Exception as e:
+            logger.debug("verify_edgelite_pipeline: ignored exception: %s", e)
             result["steps"]["collect"] = {"ok": False, "error": desc("edgelite.error.invalid_json").format(error=e)}
             result["ok"] = False
             return result
@@ -1839,12 +1861,14 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
     except httpx.TimeoutException:
         return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
     except Exception as e:
+        logger.debug("test_edgelite_connection: ignored exception: %s", e)
         return {"ok": False, "error": str(e)}
 
     if resp.status_code == 200:
         try:
             raw = resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("test_edgelite_connection: ignored exception: %s", e)
             return {"ok": False, "error": "EdgeLite returned non-JSON response"}
         data = raw.get("data", raw)
         return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
@@ -1881,7 +1905,8 @@ async def test_edgelite_connection(url: str, username: str = "", password: str =
         if status_resp.status_code == 200:
             try:
                 raw = status_resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("test_edgelite_connection: ignored exception: %s", e)
                 return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
             data = raw.get("data", raw)
             return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}

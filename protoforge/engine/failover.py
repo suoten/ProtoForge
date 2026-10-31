@@ -101,7 +101,8 @@ class FailoverManager:
                 return resp.status_code == 200
         except Exception as e:
             logger.debug("Health check failed for %s: %s", url, e)
-            return False
+            _swallowed = False
+            return _swallowed
 
     async def _promote_to_primary(self) -> None:
         logger.warning("Primary peer unreachable, promoting to primary")

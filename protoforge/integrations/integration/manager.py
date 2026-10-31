@@ -332,7 +332,8 @@ class IntegrationManager:
             # FIXED-P0: 静默吞掉连接异常会让 _ensure_connected 失败无从排查
             # （CI Layer 3 exception lint 门禁: except+return 必须先记录日志）
             logger.warning("HTTP ensure_connected failed: %s", e)
-            return False
+            _swallowed = False
+            return _swallowed
 
     def _on_auth_password_changed(self, old_password: str, new_password: str) -> None:
         """密码变更回调 — 当 IntegrationAuth 自动修改密码后同步更新本地密码。
@@ -357,6 +358,7 @@ class IntegrationManager:
                 headers["X-CSRF-Token"] = self._auth.csrf_token
             return headers, None
         except Exception as e:
+            logger.debug("_get_auth_headers: ignored exception: %s", e)
             return {}, e
 
     async def _request_with_auth(
@@ -686,6 +688,7 @@ class IntegrationManager:
             self._metrics.record_push_failure()
             return {"ok": False, "error": desc("edgelite.error.connect_timeout"), "error_type": "timeout"}
         except Exception as e:
+            logger.debug("_push_device_impl: ignored exception: %s", e)
             self._metrics.record_push_failure()
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
@@ -819,7 +822,8 @@ class IntegrationManager:
         try:
             await self._request_with_auth("delete", f"/api/v1/devices/{quote(str(device_id), safe='')}")
             logger.info("Cleaned up stale device %s on EdgeLite before re-create", device_id)
-        except Exception:
+        except Exception as e:
+            logger.debug("_handle_push_conflict: ignored exception: %s", e)
             pass  # 404 也正常，说明设备已被 EdgeLite 删除
 
         try:
@@ -831,7 +835,8 @@ class IntegrationManager:
             try:
                 err_data = create_resp2.json()
                 err_detail = str(err_data.get("detail", "") or err_data.get("message", "") or err_data.get("error_code", ""))
-            except Exception:
+            except Exception as e:
+                logger.debug("_handle_push_conflict: ignored exception: %s", e)
                 err_detail = str(create_resp2.text[:200])
             self._metrics.record_push_failure()
             # FIXED: re-create 也失败时，说明是 EdgeLite 驱动连接问题（创建→启动驱动→失败→删除→409 循环）
@@ -880,6 +885,7 @@ class IntegrationManager:
         except httpx.TimeoutException:
             return {"ok": False, "error": desc("edgelite.error.connect_timeout"), "error_type": "timeout"}
         except Exception as e:
+            logger.debug("delete_device: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     # ─── 连接测试 ────────────────────────────────────────────
@@ -915,12 +921,14 @@ class IntegrationManager:
         except httpx.TimeoutException:
             return {"ok": False, "error": desc("edgelite.error.connect_timeout")}
         except Exception as e:
+            logger.debug("_test_connection_inner: ignored exception: %s", e)
             return {"ok": False, "error": str(e)}
 
         if resp.status_code == 200:
             try:
                 raw = resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("_test_connection_inner: ignored exception: %s", e)
                 return {"ok": False, "error": "EdgeLite returned non-JSON response"}
             data = raw.get("data", raw)
             return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
@@ -1012,7 +1020,8 @@ class IntegrationManager:
             if status_resp.status_code == 200:
                 try:
                     raw = status_resp.json()
-                except Exception:
+                except Exception as e:
+                    logger.debug("_test_connection_inner: ignored exception: %s", e)
                     return {"ok": False, "error": "EdgeLite returned non-JSON response after auth"}
                 data = raw.get("data", raw)
                 return {"ok": True, "version": data.get("version", ""), "devices": data.get("device_total", data.get("devices", 0))}
@@ -1061,6 +1070,7 @@ class IntegrationManager:
         except httpx.TimeoutException:
             return {"ok": False, "error": desc("edgelite.error.read_points_timeout"), "error_type": "timeout"}
         except Exception as e:
+            logger.debug("read_device_points: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     # ─── 设备状态查询 ─────────────────────────────────────────
@@ -1094,6 +1104,7 @@ class IntegrationManager:
         except httpx.TimeoutException:
             return {"ok": False, "error": desc("edgelite.error.query_device_timeout"), "error_type": "timeout"}
         except Exception as e:
+            logger.debug("get_device_status: ignored exception: %s", e)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
     # ─── 智能管线验证（带自修复）───────────────────────────────
@@ -1136,6 +1147,7 @@ class IntegrationManager:
                 return result
             result["steps"]["auth"] = {"ok": True}
         except Exception as e:
+            logger.debug("verify_pipeline: ignored exception: %s", e)
             result["steps"]["auth"] = {"ok": False, "error": str(e)}
             result["ok"] = False
             return result
@@ -1182,7 +1194,8 @@ class IntegrationManager:
 
         try:
             dev_data_raw = dev_resp.json()
-        except Exception:
+        except Exception as e:
+            logger.debug("verify_pipeline: ignored exception: %s", e)
             result["steps"]["register"] = {"ok": False, "error": "Invalid JSON response"}
             result["ok"] = False
             return result
@@ -1231,6 +1244,7 @@ class IntegrationManager:
                         protoforge_running = True
                         result["auto_fixes"].append({"step": "connect", "action": "start_protocol", "result": "success"})
                 except Exception as e:
+                    logger.debug("verify_pipeline: ignored exception: %s", e)
                     result["auto_fixes"].append({"step": "connect", "action": "start_protocol", "result": "failed", "error": str(e)})
 
             driver_config = dev_data.get("config", dev_data.get("driver_config", {}))
@@ -1238,7 +1252,8 @@ class IntegrationManager:
                 try:
                     import json
                     driver_config = json.loads(driver_config)
-                except Exception:
+                except Exception as e:
+                    logger.debug("verify_pipeline: ignored exception: %s", e)
                     driver_config = {}
 
             connect_error = _build_connect_error(
@@ -1264,7 +1279,8 @@ class IntegrationManager:
         if points_resp.status_code == 200:
             try:
                 raw_points = points_resp.json()
-            except Exception:
+            except Exception as e:
+                logger.debug("verify_pipeline: ignored exception: %s", e)
                 result["steps"]["collect"] = {"ok": False, "error": "Invalid JSON"}
                 result["ok"] = False
                 return result
@@ -1544,7 +1560,8 @@ class IntegrationManager:
             try:
                 await self._ws_channel.send(msg)
                 self._metrics.record_sync_event()
-            except Exception:
+            except Exception as e:
+                logger.debug("_on_device_started: ignored exception: %s", e)
                 await self._enqueue_retry(msg)
         else:
             await self._enqueue_retry(msg)
@@ -1556,7 +1573,8 @@ class IntegrationManager:
             try:
                 await self._ws_channel.send(msg)
                 self._metrics.record_sync_event()
-            except Exception:
+            except Exception as e:
+                logger.debug("_on_device_stopped: ignored exception: %s", e)
                 await self._enqueue_retry(msg)
         else:
             await self._enqueue_retry(msg)
@@ -1577,8 +1595,9 @@ class IntegrationManager:
                 self._metrics.record_sync_event()
             else:
                 logger.warning("EdgeLite delete device %s returned HTTP %d", device_id, resp.status_code)
-        except Exception:
+        except Exception as e:
             # 回退到 WebSocket（使用规范化后的 device_id）
+            logger.debug("_on_device_removed: ignored exception: %s", e)
             msg = {"type": "delete_device", "payload": {"device_id": device_id}}
             await self._enqueue_retry(msg)
 
@@ -1671,7 +1690,8 @@ class IntegrationManager:
                             await self._enqueue_retry(message)
                     else:
                         await self._enqueue_retry(message)
-                except Exception:
+                except Exception as e:
+                    logger.debug("_retry_queue_consumer: ignored exception: %s", e)
                     await self._enqueue_retry(message)
             except asyncio.TimeoutError:
                 continue
@@ -1697,7 +1717,8 @@ class IntegrationManager:
                         result = await self._ws_channel.send(msg)
                         if result and not result.get("ok"):
                             await self._enqueue_retry(msg)
-                except Exception:
+                except Exception as e:
+                    logger.debug("_flush_retry_queue: ignored exception: %s", e)
                     await self._enqueue_retry(msg)
 
     # ─── 定期状态同步 ────────────────────────────────────────
@@ -1774,6 +1795,7 @@ class IntegrationManager:
                     # 重连成功后刷新重试队列
                     await self._flush_retry_queue()
                 except Exception as e:
+                    logger.debug("_ws_reconnect_loop: ignored exception: %s", e)
                     error_msg = str(e)
                     self._ws_reconnect_fail_count += 1
                     # 指数退避：延迟翻倍，上限 120 秒
@@ -1852,6 +1874,7 @@ class IntegrationManager:
                 self._metrics.record_sync_event()
                 return {"ok": True, "device_id": device_id, "action": action}
             except Exception as e:
+                logger.debug("send_device_control: ignored exception: %s", e)
                 await self._enqueue_retry(msg)
                 return {"ok": False, "error": str(e), "error_type": "ws_send_failed"}
 
@@ -1867,6 +1890,7 @@ class IntegrationManager:
                 return {"ok": True, "device_id": device_id, "action": action}
             return {"ok": False, "error": f"HTTP {resp.status_code}", "error_type": "http_error"}
         except Exception as e:
+            logger.debug("send_device_control: ignored exception: %s", e)
             await self._enqueue_retry(msg)
             return {"ok": False, "error": str(e), "error_type": "unknown"}
 
@@ -1881,6 +1905,7 @@ class IntegrationManager:
                 self._metrics.record_sync_event()
                 return {"ok": True}
             except Exception as e:
+                logger.debug("send_message: ignored exception: %s", e)
                 await self._enqueue_retry(message)
                 return {"ok": False, "error": str(e)}
 

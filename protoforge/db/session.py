@@ -28,7 +28,8 @@ try:
     # FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 data/），配置随目录走
     from protoforge.core.paths import app_root as _app_root
     _DEFAULT_DB_PATH = _app_root() / "data" / "protoforge.db"
-except Exception:
+except Exception as e:
+    logger.debug("<module>: ignored exception: %s", e)
     _DEFAULT_DB_PATH = Path(__file__).parent.parent / "data" / "protoforge.db"
 
 _BUSY_TIMEOUT_MS = 5000

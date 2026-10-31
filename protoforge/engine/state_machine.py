@@ -360,7 +360,8 @@ class DeviceStateMachine:
                                 return False
                         except Exception as e:
                             logger.warning("Transition condition error for '%s': %s", event, e)
-                            return False
+                            _swallowed = False
+                            return _swallowed
                     return True
             return False
 
@@ -404,7 +405,8 @@ class DeviceStateMachine:
                                 return False
                         except Exception as e:
                             logger.warning("Transition condition error for '%s': %s", event, e)
-                            return False
+                            _swallowed = False
+                            return _swallowed
                     matched = t
                     break
 

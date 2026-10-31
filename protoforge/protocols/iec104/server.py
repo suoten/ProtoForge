@@ -338,7 +338,8 @@ class IEC104Server(ProtocolServer):
                         self._write_apdu(writer, bytes([U_TESTFR_ACT, 0, 0, 0]))
                         await writer.drain()
                         probing = True
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("_handle_connection: ignored exception: %s", e)
                         break
                     continue
                 probing = False

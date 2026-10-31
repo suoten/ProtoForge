@@ -209,7 +209,8 @@ async def clone_scenario(scenario_id: str, params: dict[str, Any] = Body(default
         if db:
             try:
                 original = await db.load_scenario(scenario_id)
-            except Exception:
+            except Exception as e:
+                logger.debug("clone_scenario: ignored exception: %s", e)
                 pass
     if not original:
         raise HTTPException(status_code=404, detail=f"Scenario not found: {scenario_id}")

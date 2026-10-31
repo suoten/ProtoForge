@@ -203,7 +203,8 @@ async def get_test_run(run_id: str, _user: dict[str, Any] = Depends(require_view
             if data:
                 from protoforge.testing.plan import TestRun
                 run = TestRun.from_dict(data)
-        except Exception:
+        except Exception as e:
+            logger.debug("get_test_run: ignored exception: %s", e)
             pass
     if not run:
         raise HTTPException(status_code=404, detail=f"Test run not found: {run_id}")
@@ -226,7 +227,8 @@ async def get_test_run_report(
             if data:
                 from protoforge.testing.plan import TestRun
                 run = TestRun.from_dict(data)
-        except Exception:
+        except Exception as e:
+            logger.debug("get_test_run_report: ignored exception: %s", e)
             pass
     if not run:
         raise HTTPException(status_code=404, detail=f"Test run not found: {run_id}")

@@ -170,6 +170,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
                 ok=True,
             )
         except Exception as e:
+            logger.debug("CreateDevice: ignored exception: %s", e)
             return pb2.DeviceResponse(ok=False, error=str(e))
 
     async def DeleteDevice(self, request, context):
@@ -181,6 +182,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.remove_device(request.device_id)
             return pb2.DeleteDeviceResponse(ok=True)
         except Exception as e:
+            logger.debug("DeleteDevice: ignored exception: %s", e)
             return pb2.DeleteDeviceResponse(ok=False, error=str(e))
 
     async def StartDevice(self, request, context):
@@ -192,6 +194,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.start_device(request.device_id)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("StartDevice: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def StopDevice(self, request, context):
@@ -203,6 +206,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.stop_device(request.device_id)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("StopDevice: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def ReadPoints(self, request, context):
@@ -221,6 +225,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
                 ))
             return pb2.ReadPointsResponse(points=pb_points)
         except Exception as e:
+            logger.debug("ReadPoints: ignored exception: %s", e)
             return pb2.ReadPointsResponse(error=str(e))
 
     async def WritePoint(self, request, context):
@@ -232,6 +237,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.write_device_point(request.device_id, request.point_name, request.value)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("WritePoint: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def ListScenarios(self, request, context):
@@ -323,6 +329,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.start_scenario(request.scenario_id)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("StartScenario: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def StopScenario(self, request, context):
@@ -334,6 +341,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
             await engine.stop_scenario(request.scenario_id)
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("StopScenario: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
     async def GetSettings(self, _request, context):
@@ -364,6 +372,7 @@ class ProtoForgeServicer(pb2_grpc.ProtoForgeServiceServicer if PB2_AVAILABLE els
                 return pb2.OperationResponse(ok=False, error=result.get("error", "Invalid settings"))
             return pb2.OperationResponse(ok=True)
         except Exception as e:
+            logger.debug("UpdateSettings: ignored exception: %s", e)
             return pb2.OperationResponse(ok=False, error=str(e))
 
 

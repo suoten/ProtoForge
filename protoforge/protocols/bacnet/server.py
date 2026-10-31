@@ -704,7 +704,8 @@ class BACnetServer(ProtocolServer):
                         if self._sock:
                             try:
                                 await loop.sock_sendto(self._sock, bytes(resp), addr)  # type: ignore[attr-defined]
-                            except Exception:
+                            except Exception as e:
+                                logger.debug("_cov_notification_loop: ignored exception: %s", e)
                                 dead_subs.append(sub_id)
                 for sid in dead_subs:
                     self._cov_subscriptions.pop(sid, None)

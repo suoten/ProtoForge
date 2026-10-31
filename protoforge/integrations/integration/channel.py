@@ -183,7 +183,8 @@ class HttpChannel(ChannelBase):
             return resp.json()
         except Exception as e:
             logger.debug("Failed to parse JSON response: %s", e)
-            return None
+            _swallowed = None
+            return _swallowed
 
     async def _safe_refresh_token(self) -> bool:
         try:
@@ -191,7 +192,8 @@ class HttpChannel(ChannelBase):
             return True
         except Exception as e:
             logger.warning("Token refresh failed: %s", e)
-            return False
+            _swallowed = False
+            return _swallowed
 
     async def close(self) -> None:
         if self._client:

@@ -90,7 +90,8 @@ async def diagnose_protocol(protocol_name: str, _user: dict[str, Any] = Depends(
     # 5. 设备注册数量
     try:
         device_count = len(server._device_configs)
-    except Exception:
+    except Exception as e:
+        logger.debug("diagnose_protocol: ignored exception: %s", e)
         device_count = 0
     add("devices_registered", device_count > 0, detail=f"count={device_count}",
         suggestion=None if device_count > 0 else "diag_s_devices")
@@ -141,4 +142,5 @@ async def _tcp_probe(host: str, port: int, timeout: float = 3.0) -> tuple[bool, 
         writer.close()
         return True, latency, None
     except Exception as e:
+        logger.debug("_tcp_probe: ignored exception: %s", e)
         return False, None, str(e)

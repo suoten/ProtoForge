@@ -151,7 +151,8 @@ class PlanRunner:
         """Collect execution environment info."""
         try:
             from protoforge import __version__ as pf_version
-        except Exception:
+        except Exception as e:
+            logger.debug("_collect_environment: ignored exception: %s", e)
             pf_version = "unknown"
 
         return {

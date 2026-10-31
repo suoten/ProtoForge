@@ -82,7 +82,8 @@ def wait_until_healthy(port: int, timeout: float = HEALTH_TIMEOUT_SECONDS,
             with urllib.request.urlopen(url, timeout=2) as resp:  # noqa: S310 本机回环
                 if resp.status == 200:
                     return True
-        except Exception:
+        except Exception as e:
+            logger.debug("wait_until_healthy: ignored exception: %s", e)
             pass
         time.sleep(0.4)
     return False
@@ -149,7 +150,8 @@ def check_update_once(timeout: float = 6.0) -> dict[str, Any] | None:
         return asyncio.run(fetch_release_info(__version__, timeout=timeout))
     except Exception as e:  # noqa: BLE001 — 更新检查绝不影响主流程
         logger.debug("Desktop update check failed: %s", e)
-        return None
+        _swallowed = None
+        return _swallowed
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +228,8 @@ class _Tray:
         if self.icon is not None:
             try:
                 self.icon.stop()
-            except Exception:
+            except Exception as e:
+                logger.debug("stop: ignored exception: %s", e)
                 pass
 
 
@@ -277,7 +280,8 @@ def run_desktop(host: str | None = None,
                 "# PROTOFORGE_ADMIN_PASSWORD=admin\n",
                 encoding="utf-8",
             )
-        except Exception:
+        except Exception as e:
+            logger.debug("run_desktop: ignored exception: %s", e)
             pass  # 只读目录等场景静默跳过，不影响启动
 
     host = (host or "").strip() or os.environ.get("PROTOFORGE_HOST", "").strip()
@@ -291,7 +295,8 @@ def run_desktop(host: str | None = None,
                     if _line.startswith("PROTOFORGE_HOST="):
                         host = _line.split("=", 1)[1].strip().strip('"').strip("'")
                         break
-            except Exception:
+            except Exception as e:
+                logger.debug("run_desktop: ignored exception: %s", e)
                 pass
     host = host or "127.0.0.1"
 

@@ -79,7 +79,8 @@ class SafeEval:
             return self._eval_node(tree.body)
         except Exception as e:
             logger.warning("SafeEval error for expression '%s': %s", expr[:100], e)
-            return None
+            _swallowed = None
+            return _swallowed
 
     def exec_stmts(self, code: str) -> dict[str, Any]:
         try:

@@ -655,7 +655,8 @@ class FanucServer(ProtocolServer):
         for p in device_config.points:
             try:
                 val = behavior.get_value(p.name)
-            except Exception:
+            except Exception as e:
+                logger.debug("create_device: ignored exception: %s", e)
                 continue
             if val is None:
                 continue

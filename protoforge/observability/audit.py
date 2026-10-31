@@ -149,7 +149,8 @@ class AuditLogger:
             return await self._database.delete_audit_entry(entry_id)
         except Exception as e:
             logger.warning("Failed to delete audit entry %d: %s", entry_id, e)
-            return False
+            _swallowed = False
+            return _swallowed
 
     async def clear_entries(self, before_timestamp: float | None = None) -> int:
         if before_timestamp:

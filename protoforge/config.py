@@ -20,7 +20,8 @@ _ENV_FILE = Path(__file__).parent.parent / ".env"
 try:
     from protoforge.core.paths import app_root as _app_root
     _ENV_FILE = _app_root() / ".env"
-except Exception:  # pragma: no cover - paths 模块不可用时退回原行为
+except Exception as e:  # pragma: no cover - paths 模块不可用时退回原行为
+    logger.debug("<module>: ignored exception: %s", e)
     pass
 
 

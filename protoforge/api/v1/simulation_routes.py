@@ -350,6 +350,7 @@ async def test_generator_script(
             "context": context,
         }
     except Exception as e:
+        logger.debug("test_generator_script: ignored exception: %s", e)
         return {
             "result": None,
             "error": str(e),

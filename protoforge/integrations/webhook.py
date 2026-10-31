@@ -76,7 +76,8 @@ class WebhookManager:
     try:
         from protoforge.core.paths import app_root as _app_root
         _PERSIST_DIR = os.path.join(str(_app_root()), "data")
-    except Exception:
+    except Exception as e:
+        logger.debug("<module>: ignored exception: %s", e)
         _PERSIST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
     _PERSIST_FILE = None
 
@@ -100,7 +101,8 @@ class WebhookManager:
                     rate_limit_seconds = settings.webhook_rate_limit_seconds
                 if auto_disable_threshold <= 0:
                     auto_disable_threshold = settings.webhook_auto_disable_threshold
-            except Exception:
+            except Exception as e:
+                logger.debug("__init__: ignored exception: %s", e)
                 queue_maxsize = queue_maxsize or 5000
                 rate_limit_seconds = rate_limit_seconds or 5.0
                 auto_disable_threshold = auto_disable_threshold or 50
@@ -322,6 +324,7 @@ class WebhookManager:
             try:
                 await self._send_single(webhook, body)
             except Exception as e:
+                logger.debug("_dispatch: ignored exception: %s", e)
                 err_str = str(e)
                 # Client errors (4xx) mean misconfiguration - auto-disable after just 3 failures
                 if "client error" in err_str.lower() and webhook.error_count >= 3:

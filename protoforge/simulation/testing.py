@@ -533,6 +533,7 @@ class AssertionEngine:
                 result["message"] = tmsg("ae_unknown_assertion", type=assertion.type)
 
         except Exception as e:
+            logger.debug("evaluate: ignored exception: %s", e)
             result["passed"] = False
             result["message"] = tmsg("ae_assertion_error", error=str(e))
 
@@ -782,6 +783,7 @@ class TestRunner:
                     await self._run_hook(step.post_hook, var_store, api_client)
 
             except Exception as e:
+                logger.debug("run_test: ignored exception: %s", e)
                 step.status = TestStatus.ERROR
                 step.error = str(e)
                 step.duration = time.time() - step_start
