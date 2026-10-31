@@ -917,11 +917,20 @@ async def get_device_points(device_id: str, _user: dict[str, Any] = Depends(requ
         points = await engine.read_device_points(device_id)
         instance = engine.get_device_instance(device_id)
         protocol_active = False
+        master_status = None
         if instance:
             protocol_active = engine.is_protocol_running(instance.protocol)
+            # v1.9.0 主站模式：拨出轮询状态（连通性/成功/失败/最后错误）
+            server = engine._protocol_servers.get(instance.protocol)
+            if server is not None and hasattr(server, "get_master_status"):
+                try:
+                    master_status = server.get_master_status(device_id)
+                except Exception:
+                    master_status = None
         return {
             "points": points,
             "protocol_active": protocol_active,
+            "master_status": master_status,
         }
     except HTTPException:
         raise  # FIXED: 防止 HTTPException 被 except Exception 吞掉重新包装为 500

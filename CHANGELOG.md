@@ -1,5 +1,60 @@
 # Changelog
 
+## v1.9.0 — 2026-10-31
+
+### ✨ 新增 — 主站模式第一批（Modbus TCP/RTU、S7、IEC 104）：拨出轮询真实设备，协议转换免费获得
+
+此前 ProtoForge 只能做从站侧（设备仿真）。v1.9.0 新增主站（Master/Client）方向：
+**主动拨出**连接真实从站设备，按扫描周期轮询点位。远端值进入本地点位存储——
+主站设备出现在设备列表、点位显示真实设备实时值、SCADA 可经 ProtoForge 自身任意
+协议服务器读取这些值（协议转换/透传能力随之免费获得）、测试引擎的既有断言体系
+可直接对主站设备做"读从站 → 断言 → 记录"（固件回归自动化无需新增测试步骤类型）。
+
+**三种主站协议**（`protoforge/protocols/master/`，统一 MasterBase 轮询框架）：
+
+- **modbus_master**：pymodbus 3.13 客户端，支持 TCP / RTU-over-TCP / 串口 RTU 三种
+  链路；地址记法与从站完全一致（HR/IR/C/DI、4x/3x/0x/1x、40001 等PLC 记法）；
+  同区连续地址自动合并批量读取；float32/int32 等多寄存器类型大端序解码，
+  与 ProtoForge 从站存储规则一致；支持写远端寄存器/线圈
+- **s7_master**：原生 TPKT/COTP/S7 帧客户端（snap7 兼容序列：CR→CC→Setup F0→
+  Read/Write Var），支持 DB1.DBD0/DBX0.0/M/I/Q 全地址记法，机架/槽号经 TSAP
+  配置，支持写 DB 值与位
+- **iec104_master**：STARTDT→总召（C_IC_NA_1 QOI=20）→逐帧收集遥测遥信直到
+  ACTTERM；支持 M_SP/M_DP/M_ME_NA/NB/NC 监视方向解码；遥控 C_SC、遥调 C_SE
+  （标度化/浮点）直接执行等 ACTCON+ACTTERM 双确认；TESTFR 自动应答
+
+**主站通用能力**（MasterBase）：扫描周期可配（0.1~3600s 钳制）、连接/IO 超时、
+断线指数退避重连（3s→60s 封顶）、点位质量标记（轮询失败 quality=bad）、轮询
+统计（成功/失败/最后错误，API 可查）、优雅停止（沿 v1.8.1 取消传播语义）。
+
+### ✨ 新增 — 报文字段级解析器（Wireshark 式逐字段展开，9 协议）
+
+`POST /api/v1/compliance/decode-frame`：输入协议名 + 报文 hex（或 base64），
+输出字段树（名称/偏移/长度/原文/可读值/语义注解/子字段），用于联调排障、
+驱动开发、教学演示。覆盖 **modbus_tcp / modbus_rtu / s7 / iec104 / dlt645 /
+cjt188 / fins / mc / mewtocol** 九种协议；CRC16、CS、BCC 等校验字段自动重算
+比对，不符记入 errors；截断帧容错（能解多少解多少）。Modbus 请求/响应按
+帧长无歧义判定。
+
+### ✨ 新增 — 合规检测 +2（累计 9 协议）
+
+- **FINS**（FINS-001~004）：TCP magic、MRC 合法性、成功类消息 end code、
+  数据报头完整性
+- **DL/T 645**（D645-001~005）：帧定界符、地址 BCD 校验、控制码合法性、
+  数据域长度、CS 校验和
+
+### 🧪 测试
+
+新增 4 个测试文件共 51 用例：主站回环集成（三协议主站 → 本机从站全链路 +
+引擎级读写 + RTU-over-TCP 字节级 stub）、帧解码（9 协议黄金帧 + 校验失败
+检出 + 截断容错）、合规扩容、decode-frame API。
+
+### 📝 升级说明
+
+- 新协议名 `modbus_master` / `s7_master` / `iec104_master`，协议列表自动出现，
+  设备级配置含拨出目标（host/port）、扫描周期、超时
+- 对既有从站仿真、API、配置无任何行为变更——纯新增能力
+
 ## v1.8.6 — 2026-10-31
 
 ### 🐛 修复 — 布尔点位"随机"生成器恒为 True（报警位永远不变化）

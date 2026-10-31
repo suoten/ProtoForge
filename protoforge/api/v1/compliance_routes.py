@@ -29,6 +29,56 @@ async def get_compliance_rules(protocol: str, _user: dict[str, Any] = Depends(re
     return {"protocol": protocol, "rules": rules}
 
 
+@router.post("/compliance/decode-frame")
+async def decode_frame(body: dict[str, Any], _user: dict[str, Any] = Depends(require_viewer)):
+    """报文字段级解析（v1.9.0，Wireshark 式逐字段展开）。
+
+    Request body::
+
+        {"protocol": "modbus_tcp", "hex": "01 02 03...", "data_base64": "..."}
+
+    ``hex``（空格/冒号/无分隔均可）或 ``data_base64`` 二选一。
+    返回字段树（name/offset/length/raw/value/note/children）与解析告警。
+    """
+    import base64
+    import binascii
+
+    from protoforge.testing.frame_decoder import decode_frame, supported_protocols
+
+    protocol = body.get("protocol", "")
+    if not protocol:
+        raise HTTPException(status_code=400, detail="protocol is required")
+    raw: bytes | None = None
+    hex_text = body.get("hex", "")
+    if hex_text:
+        cleaned = "".join(ch for ch in str(hex_text) if ch not in " \t\r\n:-")
+        try:
+            raw = binascii.unhexlify(cleaned)
+        except (binascii.Error, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"hex 解析失败: {e}") from e
+    elif body.get("data_base64"):
+        try:
+            raw = base64.b64decode(body["data_base64"])
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"base64 解析失败: {e}") from e
+    if not raw:
+        raise HTTPException(status_code=400, detail="hex 或 data_base64 必须提供其一")
+    try:
+        return decode_frame(protocol, raw)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:  # 解码器兜底：单帧解析失败不炸服务
+        logger.exception("decode_frame unexpected error: %s", e)
+        raise HTTPException(status_code=500, detail=f"解码器内部错误: {e}") from e
+
+
+@router.get("/compliance/decode-frame/protocols")
+async def list_decodable_protocols(_user: dict[str, Any] = Depends(require_viewer)):
+    """列出支持字段级解析的协议（v1.9.0）。"""
+    from protoforge.testing.frame_decoder import supported_protocols
+    return {"protocols": supported_protocols()}
+
+
 @router.post("/compliance/check")
 async def run_compliance_check(
     body: dict[str, Any],

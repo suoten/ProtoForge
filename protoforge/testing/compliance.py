@@ -527,6 +527,161 @@ class IEC61850ComplianceChecker(BaseComplianceChecker):
         return None
 
 
+class FinsComplianceChecker(BaseComplianceChecker):
+    """Omron FINS protocol compliance checker（v1.9.0）."""
+
+    protocol_name = "fins"
+
+    rules = [
+        ComplianceRule("FINS-001", "TCP Magic",
+                       "FINS/TCP frames must start with magic 'FINS'", Severity.ERROR),
+        ComplianceRule("FINS-002", "Main Response Code Valid",
+                       "MRC/SRC must be valid memory-area / status codes", Severity.ERROR),
+        ComplianceRule("FINS-003", "End Code Zero on Success",
+                       "Successful responses must carry end code 0x0000", Severity.WARNING),
+        ComplianceRule("FINS-004", "Datagram Header Length",
+                       "FINS datagram must be at least 10 bytes (ICF..SID)", Severity.ERROR),
+    ]
+
+    # 合法 MRC 主码（内存区/控制器状态/时钟等常用范围）
+    VALID_MRC = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0C, 0x22}
+
+    def _check_rule(self, rule, msg, idx, all_messages):
+        detail = msg.get("detail", {})
+        summary = msg.get("summary", "").lower()
+        msg_type = msg.get("message_type", "").lower()
+
+        if rule.id == "FINS-001":
+            magic = detail.get("magic")
+            if magic is not None and str(magic).upper() != "FINS":
+                return self._make_violation(rule, f"Bad TCP magic: {magic!r}", idx)
+
+        elif rule.id == "FINS-002":
+            mrc = detail.get("mrc")
+            if mrc is not None:
+                try:
+                    mrc_int = int(str(mrc), 0) if isinstance(mrc, str) else int(mrc)
+                    if mrc_int not in self.VALID_MRC:
+                        return self._make_violation(rule, f"Invalid MRC: 0x{mrc_int:02X}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "FINS-003":
+            end_code = detail.get("end_code")
+            if end_code is not None and "error" not in summary and "error" not in msg_type:
+                try:
+                    ec = int(str(end_code), 0) if isinstance(end_code, str) else int(end_code)
+                    if ec != 0:
+                        return self._make_violation(
+                            rule, f"Non-zero end code 0x{ec:04X} in success-class message", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "FINS-004":
+            dg_len = detail.get("datagram_length")
+            if dg_len is not None:
+                try:
+                    n = int(dg_len)
+                    if n < 10:
+                        return self._make_violation(
+                            rule, f"Datagram length {n} < 10 (ICF..SID header incomplete)", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        return None
+
+
+class DLT645ComplianceChecker(BaseComplianceChecker):
+    """DL/T 645-2007 protocol compliance checker（v1.9.0）."""
+
+    protocol_name = "dlt645"
+
+    rules = [
+        ComplianceRule("D645-001", "Frame Delimiters",
+                       "Frame must start with 0x68 and end with 0x16", Severity.ERROR),
+        ComplianceRule("D645-002", "Address Field Valid",
+                       "Address A0~A5 must be BCD digits", Severity.ERROR),
+        ComplianceRule("D645-003", "Control Code Valid",
+                       "Control code must be 0x01-0x12 (request) or response-masked", Severity.ERROR),
+        ComplianceRule("D645-004", "Data Length Limit",
+                       "Data field must not exceed 200 bytes", Severity.WARNING),
+        ComplianceRule("D645-005", "Checksum Correct",
+                       "CS must equal sum of address..data fields mod 256", Severity.ERROR),
+    ]
+
+    VALID_CTRL = set(range(0x01, 0x13))
+    VALID_EXCEPTION = {0xC1, 0xC2, 0xC4, 0xC8, 0xD1, 0xD2, 0xD4, 0xD8}
+
+    def _check_rule(self, rule, msg, idx, all_messages):
+        detail = msg.get("detail", {})
+
+        if rule.id == "D645-001":
+            start = detail.get("start_byte")
+            end = detail.get("end_byte")
+            if start is not None and int(start) != 0x68:
+                return self._make_violation(rule, f"Start byte 0x{int(start):02X} ≠ 0x68", idx)
+            if end is not None and int(end) != 0x16:
+                return self._make_violation(rule, f"End byte 0x{int(end):02X} ≠ 0x16", idx)
+
+        elif rule.id == "D645-002":
+            address = detail.get("address")
+            if address:
+                addr_text = str(address)
+                if not addr_text.isdigit() or len(addr_text) != 12:
+                    return self._make_violation(
+                        rule, f"Address '{addr_text}' is not 12 BCD digits", idx)
+
+        elif rule.id == "D645-003":
+            ctrl = detail.get("control_code")
+            if ctrl is not None:
+                try:
+                    c = int(str(ctrl), 0) if isinstance(ctrl, str) else int(ctrl)
+                    resp = bool(c & 0x80)
+                    base = c & 0x1F
+                    if resp and c not in self.VALID_EXCEPTION and base not in self.VALID_CTRL:
+                        return self._make_violation(rule, f"Invalid control code 0x{c:02X}", idx)
+                    if not resp and base not in self.VALID_CTRL:
+                        return self._make_violation(rule, f"Invalid control code 0x{c:02X}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "D645-004":
+            length = detail.get("data_length")
+            if length is not None:
+                try:
+                    n = int(length)
+                    if n > 200:
+                        return self._make_violation(rule, f"Data length {n} > 200", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        elif rule.id == "D645-005":
+            calc = detail.get("checksum_calc")
+            recv = detail.get("checksum")
+            if calc is not None and recv is not None:
+                try:
+                    ci = int(str(calc), 0) if isinstance(calc, str) else int(calc)
+                    ri = int(str(recv), 0) if isinstance(recv, str) else int(recv)
+                    if ci != ri:
+                        return self._make_violation(
+                            rule, f"CS mismatch: calc 0x{ci:02X} ≠ recv 0x{ri:02X}", idx)
+                except (ValueError, TypeError):
+                    pass
+
+        return None
+
+
+def get_compliance_checker(protocol: str) -> BaseComplianceChecker | None:
+    """Get a compliance checker for the given protocol.
+
+    Returns None if no checker is available for the protocol.
+    """
+    checker_cls = CHECKER_REGISTRY.get(protocol.lower())
+    if checker_cls:
+        return checker_cls()
+    return None
+
+
 # Registry of compliance checkers
 CHECKER_REGISTRY: dict[str, type[BaseComplianceChecker]] = {
     "modbus_tcp": ModbusComplianceChecker,
@@ -540,18 +695,10 @@ CHECKER_REGISTRY: dict[str, type[BaseComplianceChecker]] = {
     "bacnet": BACnetComplianceChecker,
     "iec61850": IEC61850ComplianceChecker,
     "iec_61850": IEC61850ComplianceChecker,
+    "fins": FinsComplianceChecker,
+    "dlt645": DLT645ComplianceChecker,
+    "dlt_645": DLT645ComplianceChecker,
 }
-
-
-def get_compliance_checker(protocol: str) -> BaseComplianceChecker | None:
-    """Get a compliance checker for the given protocol.
-
-    Returns None if no checker is available for the protocol.
-    """
-    checker_cls = CHECKER_REGISTRY.get(protocol.lower())
-    if checker_cls:
-        return checker_cls()
-    return None
 
 
 def get_supported_protocols() -> list[str]:

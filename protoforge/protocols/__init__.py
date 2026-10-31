@@ -31,6 +31,10 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "custom_tcp": "protoforge.protocols.custom_tcp:CustomTcpServer",
     "custom_udp": "protoforge.protocols.custom_udp:CustomUdpServer",
     "s7plus": "protoforge.protocols.s7plus:S7PlusServer",
+    # v1.9.0 主站模式：主动拨出连接真实从站（Master/Client 侧）
+    "modbus_master": "protoforge.protocols.master.modbus_master:ModbusMasterServer",
+    "s7_master": "protoforge.protocols.master.s7_master:S7MasterServer",
+    "iec104_master": "protoforge.protocols.master.iec104_master:IEC104MasterServer",
 }
 
 PROTOCOL_REGISTRY: dict[str, type[ProtocolServer]] = {}

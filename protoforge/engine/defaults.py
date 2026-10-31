@@ -176,6 +176,22 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "Panasonic MEWTOCOL-COM Protocol - MEWTOCOL-COM ASCII frames (%RD/%WD/%RC/%WC etc.), supports DT/WR/LD/FL word areas and X/Y/R/T/C/L contact areas, BCC checksum",
         "icon": "🟡",
     },
+    # v1.9.0 主站模式（Master/Client 侧，主动拨出连接真实从站）
+    "modbus_master": {
+        "display_name": "Modbus Master (TCP/RTU)",
+        "description": "Modbus Master Mode - Proactively connects OUT to a real Modbus slave (TCP/RTU-over-TCP/serial), polls points by scan interval, values visible in device list and readable via any ProtoForge server (protocol conversion), supports writing remote registers",
+        "icon": "🔗",
+    },
+    "s7_master": {
+        "display_name": "S7 Master (Client)",
+        "description": "S7 Master Mode - Proactively connects OUT to a real S7-300/400/1200/1500 PLC (native TPKT/COTP/S7 frames, snap7-compatible), polls DB/M/I/Q areas by scan interval, supports writing DB values and bits",
+        "icon": "🔗",
+    },
+    "iec104_master": {
+        "display_name": "IEC 104 Master",
+        "description": "IEC 60870-5-104 Master Mode - Proactively connects OUT to a real telecontrol slave/RTU, STARTDT + periodic general interrogation (C_IC_NA_1) collects telemetry/signals, supports single command (C_SC) and setpoint (C_SE) control",
+        "icon": "🔗",
+    },
 }
 
 PROTOCOL_DEVICE_CONFIG = {
@@ -282,6 +298,32 @@ PROTOCOL_DEVICE_CONFIG = {
     "dds": [
         {"key": "push_interval", "label": "Push Interval (s)", "type": "number", "default": 1.0, "min": 0.1, "max": 60, "description": "Periodic data push interval for subscribers"},
         {"key": "use_tcp", "label": "Use TCP Transport", "type": "select", "default": "true", "options": ["true", "false"], "description": "Use TCP transport (true) or UDP (false)"},
+    ],
+    # v1.9.0 主站模式：设备级配置（拨出目标 + 轮询策略）
+    "modbus_master": [
+        {"key": "mode", "label": "Link Mode", "type": "select", "default": "tcp", "options": ["tcp", "rtu_over_tcp", "rtu"], "description": "tcp=Modbus TCP; rtu_over_tcp=RTU frames over TCP (serial server); rtu=serial port"},
+        {"key": "host", "label": "Slave Host", "type": "string", "default": "192.168.1.100", "description": "Target Modbus slave IP address (dial-out destination)"},
+        {"key": "port", "label": "Slave Port", "type": "number", "default": 502, "min": 1, "max": 65535, "description": "Target Modbus slave TCP port (default 502)"},
+        {"key": "serial_port", "label": "Serial Port (rtu mode)", "type": "string", "default": "", "description": "Serial device for rtu mode, e.g. COM3 or /dev/ttyUSB0"},
+        {"key": "baudrate", "label": "Baud Rate (rtu mode)", "type": "number", "default": 9600, "description": "Serial baud rate for rtu mode"},
+        {"key": "slave_id", "label": "Slave Address (Unit ID)", "type": "number", "default": 1, "min": 1, "max": 247, "description": "Modbus slave address (Unit ID) to poll"},
+        {"key": "scan_interval", "label": "Scan Interval (s)", "type": "number", "default": 1.0, "min": 0.1, "max": 3600, "description": "Polling cycle in seconds (0.1-3600); failed connections retry with exponential backoff"},
+        {"key": "timeout", "label": "Timeout (s)", "type": "number", "default": 3.0, "min": 0.5, "max": 60, "description": "Connection/IO timeout in seconds"},
+    ],
+    "s7_master": [
+        {"key": "host", "label": "PLC Host", "type": "string", "default": "192.168.1.100", "description": "Target PLC IP address (dial-out destination)"},
+        {"key": "port", "label": "PLC Port", "type": "number", "default": 102, "min": 1, "max": 65535, "description": "Target PLC ISO-on-TCP port (default 102)"},
+        {"key": "rack", "label": "Rack", "type": "number", "default": 0, "min": 0, "max": 7, "description": "Target PLC rack number (TSAP: 01{rack<<5|slot})"},
+        {"key": "slot", "label": "Slot", "type": "number", "default": 0, "min": 0, "max": 31, "description": "Target PLC slot number (S7-1200/1500 usually 0 or 1)"},
+        {"key": "scan_interval", "label": "Scan Interval (s)", "type": "number", "default": 1.0, "min": 0.1, "max": 3600, "description": "Polling cycle in seconds (0.1-3600)"},
+        {"key": "timeout", "label": "Timeout (s)", "type": "number", "default": 3.0, "min": 0.5, "max": 60, "description": "Connection/IO timeout in seconds"},
+    ],
+    "iec104_master": [
+        {"key": "host", "label": "Slave Host", "type": "string", "default": "192.168.1.100", "description": "Target IEC 104 slave/RTU IP address (dial-out destination)"},
+        {"key": "port", "label": "Slave Port", "type": "number", "default": 2404, "min": 1, "max": 65535, "description": "Target IEC 104 TCP port (default 2404)"},
+        {"key": "common_address", "label": "Common Address (CA)", "type": "number", "default": 1, "min": 1, "max": 65535, "description": "ASDU common address of the controlled station"},
+        {"key": "scan_interval", "label": "Scan Interval (s)", "type": "number", "default": 5.0, "min": 0.5, "max": 3600, "description": "General interrogation cycle in seconds (0.5-3600)"},
+        {"key": "timeout", "label": "Timeout (s)", "type": "number", "default": 3.0, "min": 0.5, "max": 60, "description": "Connection/IO/GI timeout in seconds"},
     ],
 }
 

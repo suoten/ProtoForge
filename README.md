@@ -3,7 +3,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <h1>🖥️ ProtoForge</h1>
-<p><b>一台电脑 = 28 种工业设备</b></p>
+<p><b>一台电脑 = 31 种工业设备</b></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
 [![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
@@ -20,8 +20,8 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 > 浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录
 
-**28 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · ✅ Windows / Linux / macOS
-> ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（28+ 协议 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
+**31 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · ✅ Windows / Linux / macOS
+> ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（31 种协议 / 主站模式 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
 
 ![仪表盘](docs/images/1.png)
 
@@ -42,7 +42,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 | 3 | **测试全靠手点，回归一下午** | 每次改完代码：手动建设备→启动→读数据→验证，一个回归搞一下午 | 自动化测试引擎：13种断言、变量提取、测试套件、HTML报告+趋势分析，SDK一行代码跑全部测试 |
 | 4 | **客户现场出问题，没法复现** | 客户说昨天下午3点数据不对，没有录制，没法回放，只能猜 | 协议录制回放：录制通信报文→按需回放→验证修复，Gzip压缩存储 |
 | 5 | **新人不懂协议，教1周才干活** | 地址偏移、功能码、字节序全搞混，手把手教还是出错 | 每个协议内置4语言代码示例(Python/C#/Java/Go)，133个模板即用型配置，照着抄就能干 |
-| 6 | **多协议联调，环境搭1周** | 同时测 Modbus+S7+MQTT，找3台不同厂商设备，配3套参数 | 28种协议一台电脑全搞定，Docker 30秒启动，一键生成100台虚拟设备 |
+| 6 | **多协议联调，环境搭1周** | 同时测 Modbus+S7+MQTT，找3台不同厂商设备，配3套参数 | 31种协议一台电脑全搞定，Docker 30秒启动，一键生成100台虚拟设备 |
 | 7 | **协议安全不敢测** | OPC-UA证书/TLS加密/GB28181 SRTP，生产不敢动，测试又没有 | 证书自动生成、TLS加密、SRTP全支持，安全场景随便测 |
 
 ### 💰 硬件成本对比
@@ -51,7 +51,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 |------|---------|------------|
 | 测 Modbus | 买 PLC（￥3000+） | 1 条命令启动虚拟设备 |
 | GB28181 联调 | 买摄像头（￥500+） | 自动注册、自动推流 |
-| 测 28 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
+| 测 31 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
 | 压力测试 | 部署几十台物理设备 | 一键生成 100 台虚拟设备 |
 | 给客户演示 | 带一堆硬件出差 | 笔记本上完整演示 |
 
@@ -93,11 +93,21 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 ![设备管理](docs/images/2.png)
 
-### 🌐 协议服务 — 28 种工业协议一键启停
+### 🌐 协议服务 — 28 种从站仿真 + 3 种主站模式
 
 Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS，全部支持独立配置端口和高级参数。
 
 ![协议服务](docs/images/3.png)
+
+### 🔗 主站模式（v1.9.0 新增）— 不只有仿真，还能连真实设备
+
+除了模拟从站，ProtoForge 现在可以**主动拨出**连接现场真实设备——Modbus Master（TCP/RTU-over-TCP/串口）、S7 Master（DB/M/I/Q 全地址）、IEC 104 Master（总召遥测遥信 + 遥控遥调）。远端数据进入本地点位存储：
+
+- **协议转换免费获得** — SCADA 走 Modbus 采、上位机走 S7 读、调度走 104 遥信，同一个真实设备的数据随取随用
+- **测试引擎直接断言** — "读真实从站 → 断言响应值 → 记录报告"自动回归，无需新增任何测试步骤类型
+- **工程排障可靠** — 断线指数退避重连、点位质量标记（good/bad）、轮询统计与最后错误可查
+
+另配套**报文字段级解析器**：粘贴一帧报文 hex，按协议逐字段展开（Wireshark 式），CRC/CS/BCC 自动校验，9 种协议覆盖——联调排障、驱动开发、教学演示一步到位。
 
 ### 🏭 仿真场景 — 组合多设备定义联动规则
 
@@ -168,8 +178,8 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 ## ✨ 核心特性
 
-- **28 种工业协议** — Modbus TCP/RTU、OPC-UA（Server/Client）、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP
-- **协议黄金用例门禁** — 25/28 协议字节级黄金帧回归（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **31 种工业协议** — 28 种从站仿真（Modbus TCP/RTU、OPC-UA Server、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP）+ 3 种主站模式（Modbus Master、S7 Master、IEC 104 Master）
+- **协议黄金用例门禁** — 25/28 服务端协议字节级黄金帧回归 + 3 主站协议回环集成（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
 - **点表导入（v1.7.0）** — 客户点表 Excel/CSV 粘贴或上传，自动识别西门子/三菱/欧姆龙/Modbus/DL-T645 等 15 类厂商地址风格，冲突与类型疑点预览确认后一键建设备
 - **告警行为学（v1.8.0）** — 告警风暴（突发/持续）、抖动 chattering、SOE 毫秒时标事件序列三大行为模型；配套官方演示场景（锅炉房/产线/泵站，`examples/scenarios/` 一键导入）；传感器漂移支持按天粒度——测告警系统的数据不再是"假"的
 - **桌面版（v1.6.0）** — `protoforge desktop` 或双击便携包 exe：自动起服务 + 自动打开界面 + 可选系统托盘 + 新版本气泡提示；数据随 exe 目录走，解压即用
@@ -394,7 +404,7 @@ protoforge demo
 `pip install -e .` 只安装核心协议（Modbus TCP/RTU、HTTP、GB28181、MC、FINS、AB、OPC-DA、FANUC、MTConnect、Toledo、PROFINET、EtherCAT、IEC 104、IEC 61850、CoAP、DDS、松下 MEWTOCOL 共 17 种，开箱即用）。以下 4 种协议需要额外依赖：
 
 ```bash
-pip install -e ".[all]"        # 安装全部 28 种协议
+pip install -e ".[all]"        # 安装全部 31 种协议
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -506,7 +516,7 @@ OPC-UA 设备的每个测点 = 一个自定义节点，**测点的 address 就�
                     │  MQTT Broker        ←─ 端口 1883  │
                     │  HTTP Server        ←─ 端口 8080  │
                     │  GB28181 SIP        ←─ 端口 5060  │
-                    │  ...（28 种协议服务端）              │
+                    │  ...（28 种协议服务端 + 3 主站）      │
                     └──────────┬──────────────────────┘
                                │ 标准 TCP/UDP 协议通信
                                │（和真实设备一模一样）
@@ -1389,7 +1399,7 @@ ProtoForge/
 │   ├── config.py             # 配置管理
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
-│   ├── protocols/            # 28 种协议服务端实现
+│   ├── protocols/            # 28 种从站服务端 + master/ 主站实现
 │   ├── testing/              # IoT 测试平台（计划/执行/合规检测）
 │   ├── sdk/                  # Python SDK（同步/异步）
 │   └── templates/            # 133 设备模板（JSON）
