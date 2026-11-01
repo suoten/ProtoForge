@@ -145,6 +145,14 @@ class PlanRunner:
 
         await self._plan_manager.save_run(run)
         self._plan_manager.clear_abort(run.id)
+
+        # v1.10.0: 测试完成后推送通知（Webhook/钉钉/企业微信/邮件）——
+        # 通知失败只记日志，绝不影响执行结果
+        try:
+            from protoforge.testing.notify import notify_test_run
+            await notify_test_run(run.to_dict())
+        except Exception as notify_err:
+            logger.warning("test run notify failed: %s", notify_err)
         return run
 
     def _collect_environment(self) -> dict[str, Any]:

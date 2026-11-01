@@ -76,6 +76,7 @@ for _uv_logger_name in ("uvicorn.access", "uvicorn.error"):
 _LOG_MAX_BYTES = 10 * 1024 * 1024  # FIXED: P4 - Q5 日志文件最大字节数(10MB)，提取为模块级常量
 
 _engine: SimulationEngine | None = None
+_test_scheduler = None  # v1.10.0 定时测试调度器
 _template_manager: TemplateManager | None = None
 _database: Database | None = None
 _log_bus: LogBus | None = None
@@ -425,7 +426,7 @@ async def _shutdown_services(grpc_server: Any, integration_manager: Any, engine:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Application lifespan context manager for startup and shutdown."""
-    global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager
+    global _engine, _template_manager, _database, _log_bus, _event_bus, _integration_manager, _test_scheduler
 
     from protoforge.config import get_settings
     settings = get_settings()
@@ -460,6 +461,23 @@ async def lifespan(_app: FastAPI):
 
     _suppress_noisy_loggers()
 
+    # v1.10.0 定时测试调度器（cron 触发测试计划 + 完成后通知）
+    global _test_scheduler
+    try:
+        from protoforge.api.v1.test_plan_routes import _get_plan_manager
+        from protoforge.testing.scheduler import TestPlanScheduler
+
+        def _make_runner():
+            from protoforge.api.v1.test_plan_routes import _get_plan_runner
+            return _get_plan_runner()
+
+        _test_scheduler = TestPlanScheduler(
+            _get_plan_manager(), _make_runner,
+            server_url=f"http://localhost:{settings.port}")
+        _test_scheduler.start()
+    except Exception as e:
+        logger.warning("Test plan scheduler failed to start: %s", e)
+
     await _run_schema_audit(_database)
 
     if restore_errors:
@@ -473,6 +491,11 @@ async def lifespan(_app: FastAPI):
     _bg_task.cancel()
     with contextlib.suppress(_asyncio.CancelledError):
         await _bg_task
+
+    # v1.10.0: 停止测试计划调度器
+    if _test_scheduler is not None:
+        with contextlib.suppress(Exception):
+            await _test_scheduler.stop()
 
     await _shutdown_services(_grpc_server, _integration_manager, _engine, _database)
 

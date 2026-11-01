@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.10.0 — 2026-11-01
+
+### ✨ 新增 — 测试数据闭环：可复现、可对比（v1.10.0 五件套）
+
+**① 环境即代码** — 声明式 YAML 定义整套环境（设备/协议/协议配置/点位/生成器），
+`protoforge env export / apply / diff` 三命令 + `/api/v1/env/*` 端点。环境文件
+天然进 Git、可 review：`export` 从运行环境导出快照，`apply` 一条命令重建
+（单设备失败不中断其余，dry-run 支持），`diff` 发现漂移（新增/缺失/字段级变更）。
+新建环境到起设备 ≤1 分钟（100 设备级批量 create+start）。
+
+**② 数据基线与回归对比** — `protoforge baseline capture/compare` +
+`/api/v1/baselines/*`。基线快照（点位当前值 + 逐点/默认容差）存 JSON 文件
+（`data/baselines/`，可进 Git）；compare 逐点判定（数值容差 / 布尔字符串精确
+相等 / missing / type_mismatch），产出含通过率与超差清单的回归结论报告
+（可直接作附件）。
+
+**③ 报告体系升级** — 每次测试执行可导出：
+- **Allure2 results**（`GET /api/v1/test-runs/{id}/allure`）：`allure generate`
+  直接可用（result/container/environment.properties/categories 全套），接入
+  QA 看板生态
+- **归档 HTML**（`GET /api/v1/test-runs/{id}/archive-report`）：自包含单文件
+  （内联样式、无外链脚本、打印友好 CSS——浏览器"打印→另存为 PDF"即得企业
+  归档 PDF 件）
+
+**④ 定时测试 + 通知** — 测试计划 `schedule.cron`（标准 5 字段）由服务端调度器
+落地（整分钟命中只触发一次、停机补跑防风暴、schedule_last_run 持久化防重启
+重复）；执行完成自动推送 **Webhook / 钉钉 / 企业微信 / 邮件（SMTP）** 四渠道
+（`PUT /api/v1/notifiers` 管理、敏感字段脱敏、`POST /api/v1/notifiers/test`
+实测送达）。事件语义精确：test.completed=通过时发，test.failed=失败时发，
+通知失败绝不影响测试结果。
+
+**⑤ 测试计划对比视图** — `GET /api/v1/test-runs/compare?a=&b=`：两次执行的
+套件级状态迁移（passed→failed 标记 regression）+ 汇总数字增减，定位引入
+回归的变更。
+
+### 🧪 测试
+
+新增 tests/test_data_closure.py 12 用例：manifest 导出/重建/漂移发现、基线
+容差三态（超差/类型失配/缺失）+ 持久化、Allure 结构与归档 HTML 自包含断言、
+cron 匹配（含越界/字段数校验）与调度不重复触发、对比回归判定方向性、四通知
+渠道分发与事件过滤、API 往返与脱敏。全量回归 1411+ passed。
+
 ## v1.9.1 — 2026-10-31
 
 ### 🐛 修复 — Modbus RTU 串口模式从不打开 COM 口（GitHub issue #36）

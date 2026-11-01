@@ -20,7 +20,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 > 浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录
 
-**31 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · ✅ Windows / Linux / macOS
+**31 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · **测试数据闭环** · ✅ Windows / Linux / macOS
 > ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（31 种协议 / 主站模式 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
 
 ![仪表盘](docs/images/1.png)
@@ -180,6 +180,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 - **31 种工业协议** — 28 种从站仿真（Modbus TCP/RTU、OPC-UA Server、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP）+ 3 种主站模式（Modbus Master、S7 Master、IEC 104 Master）
 - **协议黄金用例门禁** — 25/28 服务端协议字节级黄金帧回归 + 3 主站协议回环集成（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
+- **测试数据闭环（v1.10.0）** — 环境即代码（YAML manifest 进 Git，`protoforge env apply/diff/export`）、数据基线容差对比（回归结论直接出报告）、Allure2/归档 PDF 报告、测试计划 cron 定时执行 + 钉钉/企业微信/邮件/Webhook 通知、两次执行对比定位回归
 - **点表导入（v1.7.0）** — 客户点表 Excel/CSV 粘贴或上传，自动识别西门子/三菱/欧姆龙/Modbus/DL-T645 等 15 类厂商地址风格，冲突与类型疑点预览确认后一键建设备
 - **告警行为学（v1.8.0）** — 告警风暴（突发/持续）、抖动 chattering、SOE 毫秒时标事件序列三大行为模型；配套官方演示场景（锅炉房/产线/泵站，`examples/scenarios/` 一键导入）；传感器漂移支持按天粒度——测告警系统的数据不再是"假"的
 - **桌面版（v1.6.0）** — `protoforge desktop` 或双击便携包 exe：自动起服务 + 自动打开界面 + 可选系统托盘 + 新版本气泡提示；数据随 exe 目录走，解压即用

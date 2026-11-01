@@ -115,6 +115,34 @@ def main():
     audit_parser.add_argument("--web-dir", default="web", help="Path to web/ directory for Layer 2")
     audit_parser.add_argument("--openapi-file", default="", help="Path to openapi.json for Layer 2")
 
+    env_parser = subparsers.add_parser("env", help="Environment-as-code commands (v1.10.0)")
+    env_sub = env_parser.add_subparsers(dest="env_command", help="Env commands")
+    for sub_name, sub_help in (("export", "Export current environment to YAML manifest"),
+                               ("apply", "Apply a YAML manifest to the running server"),
+                               ("diff", "Diff current environment against a manifest")):
+        sp = env_sub.add_parser(sub_name, help=sub_help)
+        if sub_name == "export":
+            sp.add_argument("output", nargs="?", default="-", help="Output YAML path (default: stdout)")
+            sp.add_argument("--name", default="exported-env", help="Manifest metadata.name")
+        else:
+            sp.add_argument("manifest", help="YAML manifest file path")
+            sp.add_argument("--dry-run", action="store_true", help="apply: report only, change nothing")
+        sp.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
+        sp.add_argument("--token", default="", help="Authentication token")
+
+    baseline_parser = subparsers.add_parser("baseline", help="Data baseline commands (v1.10.0)")
+    baseline_sub = baseline_parser.add_subparsers(dest="baseline_command", help="Baseline commands")
+    cap_p = baseline_sub.add_parser("capture", help="Capture current point values as a baseline")
+    cap_p.add_argument("name", help="Baseline name")
+    cap_p.add_argument("--devices", default="", help="Comma-separated device IDs (default: all)")
+    cap_p.add_argument("--tolerance", type=float, default=0.0, help="Default numeric tolerance")
+    cmp_p = baseline_sub.add_parser("compare", help="Compare current values against a baseline")
+    cmp_p.add_argument("name", help="Baseline name")
+    cmp_p.add_argument("--output", "-o", default="", help="Save JSON report to file")
+    for sp in (cap_p, cmp_p):
+        sp.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
+        sp.add_argument("--token", default="", help="Authentication token")
+
     test_parser = subparsers.add_parser("test", help="CI/CD test execution commands")
     test_sub = test_parser.add_subparsers(dest="test_command", help="Test commands")
     test_run_parser = test_sub.add_parser("run", help="Run a test plan")
@@ -177,6 +205,14 @@ def main():
 
     if args.command == "test":
         _test_command(args)
+        return
+
+    if args.command == "env":
+        _env_command(args)
+        return
+
+    if args.command == "baseline":
+        _baseline_command(args)
         return
 
     if args.command == "demo":
@@ -590,6 +626,129 @@ def _audit_command(args):
 
     if has_errors:
         sys.exit(1)
+
+
+def _api_request(server: str, method: str, path: str, token: str = "",
+                 payload=None, timeout: int = 60):
+    import requests
+
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    url = f"{server.rstrip('/')}{path}"
+    try:
+        r = requests.request(method, url, json=payload, headers=headers, timeout=timeout)
+        r.raise_for_status()
+        return r
+    except requests.exceptions.ConnectionError:
+        print(f"! Cannot connect to ProtoForge server at {server}")
+        print("  Make sure the server is running: protoforge run")
+        sys.exit(1)
+    except requests.exceptions.HTTPError as e:
+        print(f"! API error: {e}")
+        if e.response is not None:
+            print(f"  Response: {e.response.text[:500]}")
+        sys.exit(1)
+
+
+def _env_command(args):
+    """env export/apply/diff — 环境即代码（v1.10.0）。"""
+    from pathlib import Path
+
+    cmd = getattr(args, "env_command", None)
+    server = args.server.rstrip("/")
+
+    if cmd == "export":
+        r = _api_request(server, "POST", "/api/v1/env/export", args.token,
+                         {"name": args.name})
+        yaml_text = r.json()["yaml"]
+        if args.output == "-":
+            print(yaml_text)
+        else:
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output).write_text(yaml_text, encoding="utf-8")
+            print(f"+ Manifest saved to: {args.output}")
+        return
+
+    if cmd == "apply":
+        manifest_path = Path(args.manifest)
+        if not manifest_path.exists():
+            print(f"! Manifest not found: {manifest_path}")
+            sys.exit(1)
+        yaml_text = manifest_path.read_text(encoding="utf-8")
+        r = _api_request(server, "POST", "/api/v1/env/apply", args.token,
+                         {"yaml_text": yaml_text, "dry_run": args.dry_run}, timeout=300)
+        report = r.json()
+        tag = "(dry run) " if report.get("dry_run") else ""
+        print(f"+ {tag}Created: {len(report.get('created', []))}"
+              f"  Updated: {len(report.get('updated', []))}"
+              f"  Failed: {len(report.get('failed', []))}")
+        for d in report.get("created", []):
+            print(f"  + {d}")
+        for d in report.get("updated", []):
+            print(f"  ~ {d}")
+        for f in report.get("failed", []):
+            print(f"  ! {f.get('device_id')}: {f.get('error')}")
+        sys.exit(0 if not report.get("failed") else 1)
+
+    if cmd == "diff":
+        manifest_path = Path(args.manifest)
+        if not manifest_path.exists():
+            print(f"! Manifest not found: {manifest_path}")
+            sys.exit(1)
+        yaml_text = manifest_path.read_text(encoding="utf-8")
+        r = _api_request(server, "POST", "/api/v1/env/diff", args.token,
+                         {"yaml_text": yaml_text})
+        data = r.json()
+        if data.get("in_sync"):
+            print("+ Environment is in sync with the manifest.")
+            sys.exit(0)
+        print(f"! {data['total']} difference(s):")
+        for e in data.get("entries", []):
+            print(f"  [{e['kind']:7}] {e['device_id']}: {e.get('detail', '')}")
+        sys.exit(1)
+
+    print("Usage: protoforge env {export|apply|diff} ...")
+    sys.exit(1)
+
+
+def _baseline_command(args):
+    """baseline capture/compare — 数据基线与回归对比（v1.10.0）。"""
+    import json as _json
+    from pathlib import Path
+
+    cmd = getattr(args, "baseline_command", None)
+    server = args.server.rstrip("/")
+
+    if cmd == "capture":
+        payload = {"name": args.name, "default_tolerance": args.tolerance}
+        if args.devices:
+            payload["device_ids"] = [d.strip() for d in args.devices.split(",") if d.strip()]
+        r = _api_request(server, "POST", "/api/v1/baselines", args.token, payload)
+        data = r.json()
+        print(f"+ Baseline '{data['name']}' saved: "
+              f"{data['device_count']} device(s), {data['point_count']} point(s)")
+        return
+
+    if cmd == "compare":
+        r = _api_request(server, "POST", f"/api/v1/baselines/{args.name}/compare",
+                         args.token, {}, timeout=120)
+        data = r.json()
+        print(f"+ Baseline comparison '{data['baseline_name']}': "
+              f"{data['passed']}/{data['total']} passed ({data['pass_rate']:.1%})")
+        for v in data.get("violations", []):
+            print(f"  ! {v['device_id']}/{v['point']}: "
+                  f"baseline={v['baseline']} actual={v['actual']} "
+                  f"delta={v['delta']} tol={v['tolerance']} ({v['reason']})")
+        if args.output:
+            Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.output).write_text(
+                _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"+ Report saved to: {args.output}")
+        sys.exit(0 if data.get("ok") else 1)
+
+    print("Usage: protoforge baseline {capture|compare} ...")
+    sys.exit(1)
 
 
 def _test_command(args):

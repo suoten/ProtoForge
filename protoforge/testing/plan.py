@@ -44,6 +44,8 @@ class TestPlan:
     protocol_configs: list[dict[str, Any]] = field(default_factory=list)
     fault_scenarios: list[dict[str, Any]] = field(default_factory=list)
     schedule: dict[str, Any] = field(default_factory=dict)
+    # v1.10.0 定时测试：上次 cron 触发时刻（防重启重复触发，由调度器写回）
+    schedule_last_run: float = 0.0
     created_by: str = "admin"
     created_at: float = 0.0
     updated_at: float = 0.0
@@ -68,6 +70,7 @@ class TestPlan:
             "protocol_configs": self.protocol_configs,
             "fault_scenarios": self.fault_scenarios,
             "schedule": self.schedule,
+            "schedule_last_run": self.schedule_last_run,
             "created_by": self.created_by,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -86,6 +89,7 @@ class TestPlan:
             protocol_configs=data.get("protocol_configs", []),
             fault_scenarios=data.get("fault_scenarios", []),
             schedule=data.get("schedule", {}),
+            schedule_last_run=float(data.get("schedule_last_run", 0.0) or 0.0),
             created_by=data.get("created_by", "admin"),
             created_at=data.get("created_at", 0.0),
             updated_at=data.get("updated_at", 0.0),
