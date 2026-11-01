@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.11.1 — 2026-11-01
+
+### ✨ 改进 — Modbus RTU 高级配置暴露 TCP 桥接模式（RTU over TCP）
+
+用户询问"支持 modbus rtu over tcp 嘛"——TCP 桥接能力早已存在（`mode=tcp_bridge` 时 RTU 数据区通过以太网口对外提供服务，客户端以 Modbus TCP/MBAP 帧连接，默认端口 5021），但高级配置界面没有暴露该开关，只能通过 API 手工设置。本次将 `mode`（serial/tcp_bridge）与 `tcp_bridge_port` 两个字段加入 Modbus RTU 的高级配置。
+
+> 说明：桥接端口使用 Modbus TCP（MBAP）帧；严格的"RTU 帧 + CRC 直走 TCP（无 MBAP）"帧格式暂不支持，如有需求欢迎反馈。
+
 ## v1.11.0 — 2026-11-01
 
 ### ✨ 新增 — 性能基准与大规模仿真：给出官方数字（v1.11.0）

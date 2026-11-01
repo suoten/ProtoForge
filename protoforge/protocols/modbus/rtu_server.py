@@ -713,6 +713,12 @@ class ModbusRtuServer(ProtocolServer):
         return {
             "type": "object",
             "properties": {
+                # FIXED(用户反馈): 暴露 TCP 桥接模式 —— 此前能力存在但 UI 无处配置，
+                # 只能通过 API 手工传 protocol_config（用户问"支持 modbus rtu over tcp 嘛"）
+                "mode": {"type": "string", "default": "serial",
+                         "description": "serial = 串口 RTU 从站；tcp_bridge = RTU over TCP 以太网桥接（数据与串口模式相同）"},
+                "tcp_bridge_port": {"type": "integer", "default": 5021,
+                                    "description": "TCP bridge listen port (mode=tcp_bridge 时生效；客户端以 Modbus TCP/MBAP 帧连接)"},
                 "port": {"type": "string", "default": "/dev/ttyUSB0", "description": "Serial port path (Linux: /dev/ttyUSB0, Windows: COM1)"},
                 "baudrate": {"type": "integer", "default": 9600, "description": "Baud rate"},
                 "parity": {"type": "string", "default": "N", "description": "Parity (N/E/O)"},
