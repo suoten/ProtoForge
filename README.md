@@ -67,6 +67,8 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 > 💡 第一次使用？这就是最简单的方式，不需要安装 Python、Node.js、Git。
 >
+> 📦 **NAS 部署**（飞牛 OS / 群晖等带 Docker 的 NAS）：不用上传代码，直接用镜像——图形界面 / 一条命令 / compose 三种方式见 [docs/飞牛OS部署指南.md](docs/飞牛OS部署指南.md)
+>
 > 🌐 **http://localhost:8000 就是 Web 界面**，不是只有 API。ProtoForge 的后端（FastAPI）会自动托管前端页面，不需要单独的 Nginx 或前端服务器。API 文档在 `/docs`，前端页面直接访问根路径 `/`。
 >
 > 🔐 **密码说明**：
