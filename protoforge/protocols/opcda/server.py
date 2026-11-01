@@ -94,6 +94,7 @@ class OpcDaServer(ProtocolServer):
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
+        self._apply_connection_limit(config)
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 51340)
         self._validate_port(self._port)
@@ -152,6 +153,11 @@ class OpcDaServer(ProtocolServer):
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
+
+        # v1.11.0 连接数上限门
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
         addr = writer.get_extra_info("peername")
         logger.debug("OPC-DA connection from %s", addr)
         client_sub_ids = []
@@ -180,6 +186,7 @@ class OpcDaServer(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("OPC-DA connection handler unexpected error: %s", e)
         finally:
+            self.on_client_disconnect()
             async with self._subs_lock:  # FIXED-P0: 保护_subscriptions/_sub_clients并发pop
                 for sid in client_sub_ids:
                     self._sub_clients.pop(sid, None)

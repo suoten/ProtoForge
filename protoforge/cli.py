@@ -115,6 +115,21 @@ def main():
     audit_parser.add_argument("--web-dir", default="web", help="Path to web/ directory for Layer 2")
     audit_parser.add_argument("--openapi-file", default="", help="Path to openapi.json for Layer 2")
 
+    bench_parser = subparsers.add_parser("benchmark", help="Performance benchmark commands (v1.11.0)")
+    bench_sub = bench_parser.add_subparsers(dest="bench_command", help="Benchmark commands")
+    bench_sub.add_parser("scenarios", help="List built-in benchmark scenarios")
+    bench_list = bench_sub.add_parser("list", help="List saved benchmark results")
+    bench_list.add_argument("--scenario", default="", help="Filter by scenario name")
+    bench_run = bench_sub.add_parser("run", help="Run a benchmark scenario (CI-able)")
+    bench_run.add_argument("--scenario", required=True, help="Scenario name (see: protoforge benchmark scenarios)")
+    bench_run.add_argument("--params", default="{}", help="Scenario params as JSON, e.g. '{\"devices\": 500}'")
+    bench_run.add_argument("--label", default="", help="Optional label for the result")
+    bench_run.add_argument("--compare-to", default="", help="Result id to compare against (regression >10%% -> exit 1)")
+    bench_run.add_argument("--wait", type=int, default=600, help="Max seconds to wait for completion")
+    for sp in (bench_run, bench_list):
+        sp.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
+        sp.add_argument("--token", default="", help="Authentication token")
+
     env_parser = subparsers.add_parser("env", help="Environment-as-code commands (v1.10.0)")
     env_sub = env_parser.add_subparsers(dest="env_command", help="Env commands")
     for sub_name, sub_help in (("export", "Export current environment to YAML manifest"),
@@ -205,6 +220,10 @@ def main():
 
     if args.command == "test":
         _test_command(args)
+        return
+
+    if args.command == "benchmark":
+        _benchmark_command(args)
         return
 
     if args.command == "env":
@@ -649,6 +668,83 @@ def _api_request(server: str, method: str, path: str, token: str = "",
         if e.response is not None:
             print(f"  Response: {e.response.text[:500]}")
         sys.exit(1)
+
+
+def _benchmark_command(args):
+    """benchmark scenarios/list/run — 性能基准（v1.11.0，可进 CI）。"""
+    import json as _json
+    import time as _time
+
+    cmd = getattr(args, "bench_command", None)
+    server = args.server.rstrip("/")
+
+    if cmd == "scenarios":
+        r = _api_request(server, "GET", "/api/v1/benchmarks/scenarios", args.token)
+        for sc in r.json()["scenarios"]:
+            print(f"{sc['name']:24} {sc['description']}")
+            print(f"{'':24} params: {_json.dumps(sc['params'])}")
+        return
+
+    if cmd == "list":
+        path = "/api/v1/benchmarks" + (f"?scenario={args.scenario}" if args.scenario else "")
+        r = _api_request(server, "GET", path, args.token)
+        for b in r.json()["benchmarks"]:
+            m = b.get("metrics", {})
+            key = next((k for k in ("latency_p95_ms", "tick_avg_ms", "throughput_rps")
+                        if k in m), "")
+            print(f"{b['id']}  {b['scenario']:24} {key}={m.get(key, '-')}  "
+                  f"ts={_time.strftime('%Y-%m-%d %H:%M', _time.localtime(b.get('timestamp') or 0))}"
+                  + (f"  label={b['label']}" if b.get("label") else ""))
+        return
+
+    if cmd == "run":
+        try:
+            params = _json.loads(args.params)
+        except _json.JSONDecodeError as e:
+            print(f"! --params is not valid JSON: {e}")
+            sys.exit(1)
+        payload = {"scenario": args.scenario, "params": params, "label": args.label}
+        r = _api_request(server, "POST", "/api/v1/benchmarks/run", args.token,
+                         payload, timeout=30)
+        bench_id = r.json()["id"]
+        print(f"+ Benchmark queued: {bench_id}")
+
+        deadline = _time.time() + args.wait
+        while _time.time() < deadline:
+            _time.sleep(2)
+            r2 = _api_request(server, "GET", f"/api/v1/benchmarks/{bench_id}",
+                              args.token, timeout=15)
+            data = r2.json()
+            if data.get("status") == "running":
+                continue
+            if data.get("status") == "failed":
+                print(f"! Benchmark failed: {data.get('error')}")
+                sys.exit(1)
+            result = data["result"]
+            print(f"+ Completed in {result.get('duration_seconds')}s")
+            for k, v in result.get("metrics", {}).items():
+                print(f"  {k:24} {v}")
+            env = result.get("env", {})
+            print(f"  env: python={env.get('python')} {env.get('platform')} "
+                  f"cpu={env.get('cpu_count')}")
+            if args.compare_to:
+                rc = _api_request(server, "GET",
+                                  f"/api/v1/benchmarks/compare?a={args.compare_to}&b={bench_id}",
+                                  args.token)
+                cmp_data = rc.json()
+                for reg in cmp_data.get("regressions", []):
+                    print(f"  ! REGRESSION {reg['metric']}: "
+                          f"{reg['before']} -> {reg['after']} (+{reg['delta_pct']:.1%})")
+                if not cmp_data.get("ok"):
+                    print("! Performance regression detected (>10% on latency/duration)")
+                    sys.exit(1)
+                print("+ No regression above threshold.")
+            sys.exit(0)
+        print(f"! Timed out waiting for benchmark {bench_id}")
+        sys.exit(1)
+
+    print("Usage: protoforge benchmark {scenarios|list|run} ...")
+    sys.exit(1)
 
 
 def _env_command(args):

@@ -54,6 +54,25 @@ class MetricsCollector:
             protocols_running = sum(1 for p in protocols.values()
                                     if getattr(getattr(p, 'status', None), 'value', None) == "running")
             self.set_gauge("protoforge_protocols_running", protocols_running)
+            # v1.11.0 内存/连接可观测：进程 RSS + 各协议活跃连接数
+            try:
+                import psutil
+                proc = psutil.Process()
+                mem = proc.memory_info()
+                self.set_gauge("protoforge_process_rss_mb", round(mem.rss / 1024 / 1024, 2))
+                self.set_gauge("protoforge_process_vms_mb", round(mem.vms / 1024 / 1024, 2))
+                self.set_gauge("protoforge_process_threads", proc.num_threads())
+                self.set_gauge("protoforge_process_fds", proc.num_handles() if hasattr(proc, "num_handles") else 0)
+            except Exception as mem_err:
+                logger.debug("process memory metrics unavailable: %s", mem_err)
+            for proto_name, server in (protocols or {}).items():
+                try:
+                    conns = getattr(server, "active_connections", 0) or 0
+                    if conns:
+                        self.set_gauge("protoforge_protocol_connections", conns,
+                                       labels={"protocol": proto_name})
+                except Exception as conn_err:
+                    logger.debug("connection metric for %s failed: %s", proto_name, conn_err)
         except Exception as e:
             logger.debug("Failed to collect engine metrics: %s", e)
 

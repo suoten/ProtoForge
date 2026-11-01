@@ -244,6 +244,7 @@ class McServer(ProtocolServer):
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
+        self._apply_connection_limit(config)
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 5000)
         self._validate_port(self._port)
@@ -291,6 +292,11 @@ class McServer(ProtocolServer):
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
+
+        # v1.11.0 连接数上限门
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
         addr = writer.get_extra_info("peername")
         logger.debug("MC connection from %s", addr)
         try:
@@ -326,6 +332,7 @@ class McServer(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("MC connection handler unexpected error: %s", e)
         finally:
+            self.on_client_disconnect()
             writer.close()
             try:
                 await writer.wait_closed()

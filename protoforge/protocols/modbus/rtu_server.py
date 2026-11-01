@@ -69,6 +69,7 @@ class ModbusRtuServer(ProtocolServer):
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
+        self._apply_connection_limit(config)
         default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
         raw_port = config.get("port", default_port)
         mode = str(config.get("mode", "serial")).lower()
@@ -283,6 +284,11 @@ class ModbusRtuServer(ProtocolServer):
 
     async def _handle_native_modbus_rtu(self, reader: asyncio.StreamReader,
                                           writer: asyncio.StreamWriter) -> None:
+
+        # v1.11.0 连接数上限门
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
         _RTU_CONN_TIMEOUT = 30  # FIXED-P0: TCP桥接模式添加读取超时，防止恶意客户端挂起连接
         try:
             while True:
@@ -315,6 +321,7 @@ class ModbusRtuServer(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("Modbus RTU connection handler unexpected error: %s", e)
         finally:
+            self.on_client_disconnect()
             writer.close()
             try:
                 await writer.wait_closed()

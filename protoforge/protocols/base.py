@@ -83,6 +83,7 @@ class ProtocolServer(ABC):
         self._device_state_provider: Callable[[str], str] | None = None
         # 连接计数器
         self._active_connections: int = 0
+        self._max_connections: int = 0  # v1.11.0 连接数上限（0=不限）
 
     def set_debug_callback(self, callback: Callable) -> None:
         self._debug_callback = callback
@@ -185,6 +186,40 @@ class ProtocolServer(ABC):
     def on_client_disconnect(self) -> None:
         """客户端断开时的回调，递减连接计数。"""
         self._active_connections = max(0, self._active_connections - 1)
+
+    # -- 连接数上限（v1.11.0 大规模仿真）----------------------------------
+    # 各 TCP 服务器在 start() 里调用 _apply_connection_limit(config) 启用
+    # （protocol_config 的 max_connections 字段，0 = 不限）；在连接处理入口
+    # 调用 _connection_gate(writer) 执行检查，超限立即关闭新连接。
+
+    def _apply_connection_limit(self, config: dict) -> None:
+        """从启动配置读取 max_connections（0=不限），供 _connection_gate 使用。"""
+        try:
+            v = int((config or {}).get("max_connections", 0) or 0)
+        except (TypeError, ValueError):
+            v = 0
+        self._max_connections = max(0, v)
+
+    def _connection_gate(self, writer) -> bool:
+        """连接数上限门：未超限返回 True；超限记录并关闭连接返回 False。
+
+        默认 _max_connections 为 0（不限）——未启用的服务器零行为变化。
+        """
+        limit = getattr(self, "_max_connections", 0)
+        if limit and self._active_connections >= limit:
+            self.record_protocol_error(
+                ProtocolErrorCategory.NETWORK,
+                f"connection limit reached ({self._active_connections}/{limit})")
+            logger.warning(
+                "%s: connection limit reached (%d/%d), rejecting new connection",
+                getattr(self, "protocol_name", type(self).__name__),
+                self._active_connections, limit)
+            try:
+                writer.close()
+            except Exception as e:
+                logger.debug("connection gate close error: %s", e)
+            return False
+        return True
 
     @property
     def status(self) -> ProtocolStatus:

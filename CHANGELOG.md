@@ -1,5 +1,46 @@
 # Changelog
 
+## v1.11.0 — 2026-11-01
+
+### ✨ 新增 — 性能基准与大规模仿真：给出官方数字（v1.11.0）
+
+**① 性能基准模块**（`protoforge/benchmark/`）——三个内置场景，真实数字写入
+[docs/性能白皮书.md](docs/性能白皮书.md)：
+
+- `engine_tick_generation` 引擎生成吞吐：**1000 设备 × 10 万测点 tick 仅 1.1ms**
+  （P95 1.36ms，内存 ≈1.6KB/测点）；100 设备×50 点 tick 0.12ms
+- `modbus_wire_read` Modbus TCP 线级读延迟（真实 socket）：**P50 0.40ms /
+  P99 0.54ms，单客户端 2,458 读/秒，1000 次零错误**
+- `modbus_concurrent_read` 10 并发客户端：聚合 **1,913 读/秒**（P99 5.6ms）
+
+结果持久化 `data/benchmarks/`（含 python/平台/CPU 指纹）；API
+`/api/v1/benchmarks/*`（后台执行防事件循环阻塞）；**同场景对比回退 >10%
+判 REGRESSION（exit 1）——CI 性能门禁可直接落地**。
+
+**② 大规模仿真**：
+- 引擎 tick 分片（`tick_shard_size`，默认每 100 台设备让出事件循环）——
+  大批量设备不再拖慢同进程 API/协议响应；tick 平均/最大时长可观测
+  （`engine.tick_stats`）
+- **连接数上限可配**：`protocol_config.max_connections`（0=不限），
+  20 个 TCP 协议服务器统一接入连接门（超限拒绝 + network 错误计数）
+- 内存可观测：`/api/v1/integration/metrics` 补进程 RSS/虚拟内存/线程/
+  句柄 + 各协议活跃连接数（Prometheus gauge）；pyproject 显式声明 psutil
+
+**③ CLI**（可进 CI）：
+
+    protoforge benchmark scenarios            # 场景清单
+    protoforge benchmark run --scenario modbus_wire_read         --compare-to <baseline-id>            # 回退 >10% exit 1
+    protoforge benchmark list                 # 历史结果
+
+**④ 性能白皮书**（docs/性能白皮书.md）：实测数字 + 每场景一条复现命令 +
+容量规划表 + 方法论与边界诚实声明（24h 长跑方法给出、不声称已完成）。
+
+### 🧪 测试
+
+新增 tests/test_benchmark.py（场景注册/分位计算/三场景小参数实跑/对比门禁
+回归判定方向性）+ tests/test_scale_features.py（tick 分片行为等价、连接上限
+端到端拒绝、默认不限、内存 gauge）；全量回归 1423+ passed。
+
 ## v1.10.0 — 2026-11-01
 
 ### ✨ 新增 — 测试数据闭环：可复现、可对比（v1.10.0 五件套）

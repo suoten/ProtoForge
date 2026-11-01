@@ -151,6 +151,11 @@ class ModbusTcpServer(ProtocolServer):
 
     async def _handle_native_modbus(self, reader: asyncio.StreamReader,
                                      writer: asyncio.StreamWriter) -> None:
+
+        # v1.11.0 连接数上限门
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
         first_request = True
         try:
             while self._server_running:
@@ -186,6 +191,7 @@ class ModbusTcpServer(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("Modbus TCP connection handler unexpected error: %s", e)
         finally:
+            self.on_client_disconnect()
             writer.close()
             try:
                 await writer.wait_closed()
@@ -560,6 +566,7 @@ class ModbusTcpServer(ProtocolServer):
 
     async def start(self, config: dict[str, Any]) -> None:
         self._status = ProtocolStatus.STARTING
+        self._apply_connection_limit(config)
         self._host = config.get("host", "0.0.0.0")
         self._requested_port = config.get("port", 5020)
         self._validate_port(self._requested_port)

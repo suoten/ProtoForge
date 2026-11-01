@@ -134,6 +134,14 @@ class SimulationEngine:
         self._running = False
         self._event_bus = event_bus
         self._tick_interval = tick_interval
+
+        # v1.11.0 大规模仿真：tick 分片——每处理 tick_shard_size 台设备让出
+        # 一次事件循环（await asyncio.sleep(0)），避免 1000+ 设备时单 tick
+        # 长时间霸占循环导致 API/协议响应抖动。0 或 1 = 关闭分片。
+        self.tick_shard_size = 100
+        # v1.11.0 tick 时长观测（benchmark/白皮书与运行时可观测共用）
+        self.tick_stats: dict[str, float] = {
+            "tick_avg_ms": 0.0, "tick_max_ms": 0.0, "tick_count": 0.0}
         self._fault_propagation = FaultPropagation()
         # 调试 Force：device_id -> {point_name: value}，每个 tick 重新施加，压过生成器
         self._point_overrides: dict[str, dict[str, Any]] = {}
@@ -1213,9 +1221,16 @@ class SimulationEngine:
 
     async def _tick_loop(self) -> None:
         while self._running:
+            tick_started = time.perf_counter()
             async with self._devices_lock:  # FIXED: S7 - snapshot devices under lock
                 devices_snapshot = list(self._devices.values())
+            shard_counter = 0
+            shard_size = max(0, int(getattr(self, "tick_shard_size", 0) or 0))
             for instance in devices_snapshot:
+                # v1.11.0 分片让出：批次边界 sleep(0) 交还事件循环（行为等价）
+                shard_counter += 1
+                if shard_size and shard_counter % shard_size == 0:
+                    await asyncio.sleep(0)
                 try:
                     await instance.tick()
                     # 调试 Force：每 tick 把强制覆盖的测点重新钉回固定值（压过生成器）
@@ -1251,6 +1266,14 @@ class SimulationEngine:
                                     logger.debug("同步点位值到协议服务器失败 (device=%s, point=%s): %s", instance.id, pv.name, sync_err)
                 except Exception as e:
                     logger.warning("Tick error for device %s: %s", instance.id, e)
+            # v1.11.0 tick 时长观测
+            _tick_ms = (time.perf_counter() - tick_started) * 1000
+            _ts = self.tick_stats
+            _ts["tick_count"] = _ts.get("tick_count", 0.0) + 1
+            _n = _ts["tick_count"]
+            _ts["tick_avg_ms"] = round((_ts.get("tick_avg_ms", 0.0) * (_n - 1) + _tick_ms) / _n, 3)
+            _ts["tick_max_ms"] = round(max(_ts.get("tick_max_ms", 0.0), _tick_ms), 3)
+
             for scenario in list(self._scenario_instances.values()):
                 try:
                     await scenario.tick()

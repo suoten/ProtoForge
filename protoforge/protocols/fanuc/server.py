@@ -135,6 +135,7 @@ class FanucServer(ProtocolServer):
         else:
             self._raw_frames = bool(_raw)
         self._status = ProtocolStatus.STARTING
+        self._apply_connection_limit(config)
         self._host = config.get("host", "0.0.0.0")
         self._port = config.get("port", 8193)
         self._validate_port(self._port)
@@ -179,6 +180,11 @@ class FanucServer(ProtocolServer):
 
     async def _handle_connection(self, reader: asyncio.StreamReader,
                                   writer: asyncio.StreamWriter) -> None:
+
+        # v1.11.0 连接数上限门
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
         addr = writer.get_extra_info("peername")
         logger.debug("FANUC connection from %s", addr)
         _READ_TIMEOUT = 30
@@ -208,6 +214,7 @@ class FanucServer(ProtocolServer):
             self.record_protocol_error(ProtocolErrorCategory.INTERNAL, str(e))
             logger.exception("FANUC connection handler unexpected error: %s", e)
         finally:
+            self.on_client_disconnect()
             writer.close()
             try:
                 await writer.wait_closed()
