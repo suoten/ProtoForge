@@ -8,6 +8,24 @@
 
 > 说明：桥接端口使用 Modbus TCP（MBAP）帧；严格的"RTU 帧 + CRC 直走 TCP（无 MBAP）"帧格式暂不支持，如有需求欢迎反馈。
 
+### 🐛 修复 — admin/admin 登录失败（GitHub issue #6，多用户反馈的高频问题）
+
+**根因（两个叠加）**：
+
+1. **真缺陷**：未设置 `PROTOFORGE_ADMIN_PASSWORD` 时，每次启动都重新随机
+   生成密码并**覆盖** `data/.admin_password`——用户重启一次服务，上次记录
+   的密码就作废，admin/admin 又不可用（桌面便携包用户重灾区：黑窗口日志里
+   的提示根本看不到）。修复：已有密码文件则**沿用**（重启不再更换），
+   仅首次启动生成落盘。
+2. **提示不自解释**：登录失败只报 "Invalid username or password"。修复：
+   401 响应直接给出恢复路径（设环境变量 / 查 .admin_password 文件）；
+   桌面版首次生成密码时弹**托盘气泡**告知文件位置。
+
+**恢复方法**：设 `PROTOFORGE_ADMIN_PASSWORD=新密码` 环境变量（桌面版在
+.env）重启即生效——环境变量密码每次启动都会同步，一劳永逸。README 已补
+「登录不上排查」四步。新增 4 个密码语义回归用例（tests/test_admin_password_issue6.py），
+并修复 test_v18_realism 三个 drift 测试的跨秒时序 flake（冻结时钟）。
+
 ## v1.11.0 — 2026-11-01
 
 ### ✨ 新增 — 性能基准与大规模仿真：给出官方数字（v1.11.0）

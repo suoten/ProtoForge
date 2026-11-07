@@ -19,29 +19,45 @@ class _FakeRuntime:
         self.stuck_value_set = False
 
 
-def test_drift_day_unit():
+# FIXED(flake): drift 断言精度 1e-6，而 start=time.time()-N 与 _apply_drift
+# 内部的 time.time() 两次取样跨秒边界时 elapsed ≠ 整数 N（全量回归负载下
+# 实测复现）。三个测试统一用冻结时钟：elapsed 恒等于 N。
+class _FrozenClock:
+    def __init__(self, now: float):
+        self.now = now
+
+    def time(self) -> float:
+        return self.now
+
+
+def test_drift_day_unit(monkeypatch):
     """drift_unit="day"：drift_rate 语义为每天漂移量。86400 秒 = 精确 +rate。"""
     import time
+    frozen = _FrozenClock(1_800_000_000.0)
+    monkeypatch.setattr(time, "time", frozen.time)
     mgr = FaultInjector()
-    start = time.time() - 86400.0  # 恰好一天前
-    rt = _FakeRuntime(start)
+    rt = _FakeRuntime(frozen.now - 86400.0)  # 恰好一天前
     out = mgr._apply_drift(rt, 100.0, {"drift_rate": 2.5, "drift_unit": "day"})
     assert abs(out - 102.5) < 1e-6
 
 
-def test_drift_hour_unit():
+def test_drift_hour_unit(monkeypatch):
     import time
+    frozen = _FrozenClock(1_800_000_000.0)
+    monkeypatch.setattr(time, "time", frozen.time)
     mgr = FaultInjector()
-    rt = _FakeRuntime(time.time() - 3600.0)  # 一小时前
+    rt = _FakeRuntime(frozen.now - 3600.0)  # 一小时前
     out = mgr._apply_drift(rt, 10.0, {"drift_rate": 3.0, "drift_unit": "hour"})
     assert abs(out - 13.0) < 1e-6
 
 
-def test_drift_default_second_backcompat():
+def test_drift_default_second_backcompat(monkeypatch):
     """缺省（无 drift_unit）保持旧行为：drift_rate × 秒。"""
     import time
+    frozen = _FrozenClock(1_800_000_000.0)
+    monkeypatch.setattr(time, "time", frozen.time)
     mgr = FaultInjector()
-    rt = _FakeRuntime(time.time() - 10.0)
+    rt = _FakeRuntime(frozen.now - 10.0)
     out = mgr._apply_drift(rt, 100.0, {"drift_rate": 0.5})
     assert abs(out - 105.0) < 1e-6
 

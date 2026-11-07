@@ -344,6 +344,20 @@ def run_desktop(host: str | None = None,
                  on_quit=lambda: setattr(server, "should_exit", True))
     if healthy and use_tray:
         tray.start()
+        # FIXED(Issue#6): 桌面/便携包用户是登录失败重灾区——未设
+        # PROTOFORGE_ADMIN_PASSWORD 时密码是随机生成的，黑窗口日志里的
+        # 提示桌面用户根本看不到。就绪后用托盘气泡明确告知密码位置。
+        try:
+            from protoforge.core.auth import user_manager
+            if getattr(user_manager, "_admin_password_generated", False):
+                pw_file = getattr(user_manager, "_admin_password_file", "") or ""
+                tray.notify(
+                    "ProtoForge 初始管理员密码",
+                    f"本次启动生成了随机管理员密码（admin / 随机密码）。"
+                    f"密码保存在：{pw_file}（记事本打开查看）。"
+                    f"也可在 .env 里设置 PROTOFORGE_ADMIN_PASSWORD 固定密码。")
+        except Exception as e:
+            logger.debug("desktop password notify: %s", e)
 
     if not healthy:
         print("! 服务未能就绪（健康检查超时），请查看 logs/protoforge.log")

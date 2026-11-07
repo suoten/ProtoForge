@@ -67,7 +67,15 @@ async def login(credentials: LoginRequest):
             if isinstance(error_code, str) and error_code.startswith("account_locked:"):
                 remaining = error_code.split(":")[1] if ":" in error_code else ""
                 raise HTTPException(status_code=423, detail=f"Account locked, retry after {remaining}s")
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            # FIXED(Issue#6): 高频登录失败多因"未设 PROTOFORGE_ADMIN_PASSWORD
+            # 时密码为自动生成值（data/.admin_password）"。提示给出可操作的
+            # 恢复路径，而不是只报错让用户反复试 admin/admin。
+            raise HTTPException(
+                status_code=401,
+                detail="用户名或密码错误。若忘记密码：①设环境变量 "
+                       "PROTOFORGE_ADMIN_PASSWORD=新密码 后重启服务即生效；"
+                       "②未设该变量时，自动生成的密码存放在 data/.admin_password "
+                       "文件中（桌面版在程序旁 data 目录）。",)
         access_token = create_token(
             user.id, user.username, user.role,
             token_version=user_manager.get_token_version(user.id),

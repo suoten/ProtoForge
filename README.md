@@ -73,8 +73,15 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 >
 > 🔐 **密码说明**：
 > - 上面的命令通过 `-e PROTOFORGE_ADMIN_PASSWORD=admin` 指定了密码为 `admin`
-> - 如果不加这个参数，系统会自动生成随机密码，查看方式：`docker logs protoforge`（找 `Login:` 那一行）
+> - 如果不加这个参数，首次启动会自动生成随机密码并保存到容器的 `/app/data/.admin_password`（可用 `docker exec protoforge cat /app/data/.admin_password` 查看）；**重启不会更换该密码**（v1.11.1 起沿用）
+> - 桌面版（便携包 exe）：密码在程序旁的 `data\.admin_password` 文件，首次启动会有托盘气泡提示
 > - 生产环境请务必修改为强密码
+>
+> 🔧 **登录不上（Invalid username or password）排查**：
+> 1. 用上面说的 .admin_password 文件里的密码登录（不是 admin/admin）；
+> 2. 或设定固定密码后重启：docker 加 `-e PROTOFORGE_ADMIN_PASSWORD=新密码`（pip/裸启动设同名环境变量）——**环境变量密码每次启动都会生效**；
+> 3. 多次输错触发账户锁定时，等 5 分钟或重启服务自动解锁；
+> 4. 老版本（≤v1.11.0）升级后密码"变了"属于已知缺陷（每次重启重新随机），升级到 v1.11.1+ 后按上述方式设定固定密码即可一劳永逸。
 
 ---
 

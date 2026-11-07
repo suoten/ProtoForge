@@ -271,27 +271,50 @@ class UserManager:
         except Exception as e:
             logger.warning("Failed to load admin password from config: %s", e)
             default_password = None
+        self._admin_password_file: str | None = None
+        self._admin_password_generated = False
         if not default_password:
-            default_password = secrets.token_urlsafe(16)
+            # FIXED(Issue#6): 此前无 PROTOFORGE_ADMIN_PASSWORD 时**每次启动都重新
+            # 随机生成密码并覆盖 data/.admin_password**——用户重启一次服务，
+            # 上次记录的密码就作废，admin/admin 也不可用（高频登录失败根因）。
+            # 现改为：已有密码文件则沿用；首次启动才生成并落盘。
+            from protoforge.core.paths import app_root as _app_root
+            pw_file = os.path.join(str(_app_root()), "data", ".admin_password")
+            self._admin_password_file = pw_file
+            reused = False
             try:
-                # FIXED(v1.6.0): 走 app_root（冻结模式 = exe 旁 data/），
-                # 原包相对路径会写进只读的 _internal
-                from protoforge.core.paths import app_root as _app_root
-                pw_file = os.path.join(str(_app_root()), "data", ".admin_password")
-                os.makedirs(os.path.dirname(pw_file), exist_ok=True)
-                with open(pw_file, "w") as f:
-                    f.write(default_password)
-                try:
-                    os.chmod(pw_file, 0o600)
-                except OSError as chmod_err:
-                    logger.debug("Could not set admin password file permissions: %s", chmod_err)
-                logger.warning(
-                    "SECURITY: No admin password configured. A random password has been generated "
-                    "and saved to %s. Set PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control.",
-                    pw_file,
-                )
+                if os.path.exists(pw_file):
+                    with open(pw_file, "r", encoding="utf-8") as f:
+                        existing = f.read().strip()
+                    if existing:
+                        default_password = existing
+                        reused = True
+                        logger.warning(
+                            "SECURITY: No PROTOFORGE_ADMIN_PASSWORD configured. "
+                            "Reusing the existing admin password from %s "
+                            "(kept from a previous start).",
+                            pw_file,
+                        )
             except Exception as e:
-                logger.warning("Could not save admin password to file: %s. Check the file manually after startup.", e)  # FIXED: 不再明文打印密码到日志
+                logger.debug("Could not read existing admin password file: %s", e)
+            if not reused:
+                default_password = secrets.token_urlsafe(16)
+                try:
+                    os.makedirs(os.path.dirname(pw_file), exist_ok=True)
+                    with open(pw_file, "w", encoding="utf-8") as f:
+                        f.write(default_password)
+                    try:
+                        os.chmod(pw_file, 0o600)
+                    except OSError as chmod_err:
+                        logger.debug("Could not set admin password file permissions: %s", chmod_err)
+                    self._admin_password_generated = True
+                    logger.warning(
+                        "SECURITY: No admin password configured. A random password has been generated "
+                        "and saved to %s. Set PROTOFORGE_ADMIN_PASSWORD environment variable for explicit control.",
+                        pw_file,
+                    )
+                except Exception as e:
+                    logger.warning("Could not save admin password to file: %s. Check the file manually after startup.", e)
         elif default_password == "admin":  # noqa: S105
             logger.warning(
                 "SECURITY: Using default admin password 'admin'. "
