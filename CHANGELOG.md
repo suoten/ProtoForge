@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.13.0 — 2026-11-09
+
+### ✨ 新增 — MCP Server：AI 编程助手直接驱动仿真器
+
+ProtoForge 内置 **MCP（Model Context Protocol）Server**——Claude Desktop、Cursor、
+Cline 等 AI 助手可以直接操作仿真器：搜模板 → 建设备 → 读写点位 → 跑断言 →
+取连接指南。AI 帮用户写的采集/网关代码，当场在仿真器上闭环验证。
+
+- **21 个工具**覆盖 系统/协议/模板/设备/点位/场景/调试/测试/接入 全链路，
+  另有 `protoforge://info` 资源与 verify_loop 引导 prompt
+- `protoforge mcp` 一条命令拉起：默认 stdio（桌面客户端），`--transport
+  streamable-http` 供远程接入（默认 8808 端口，客户端连 `/mcp` 路径）
+- 实现为 **SDK 薄包装**（MCP 工具 → REST → 运行实例）：不内嵌引擎、不占
+  协议端口、权限完全复用 RBAC 四角色；连接参数走环境变量
+  `PROTOFORGE_MCP_URL / USERNAME / PASSWORD`
+- 健壮性：业务异常打包为 `{"ok": false, "error": ...}` 返回给 AI（不中断
+  会话）；token 失效自动重登并重试一次
+- mcp SDK 钉 `>=1.2,<2`：mcp 2.x 已把 FastMCP 更名为 MCPServer（API 有破坏性
+  变更），客户端生态仍以 v1 API 为主，待生态普遍迁移后再跟进
+- 安装：`pip install "protoforge-sim[mcp]"`（已并入 `[all]`），README 提供
+  Claude Desktop / Cursor 配置示例
+
+### 🧪 测试
+
+- 新增 `tests/test_mcp_server.py`（30 例）：Fake SDK 客户端覆盖全部 backend
+  方法、401 自动重登重试、列表截断、错误 JSON 打包、FastMCP 工具注册完整性
+
 ## v1.12.0 — 2026-11-09
 
 ### ✨ 新增 — PyPI 分发名启用 `protoforge-sim`，pip 安装通道恢复

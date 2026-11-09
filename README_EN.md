@@ -57,6 +57,7 @@ ProtoForge is an open-source IoT protocol simulation and testing platform. No ha
 - **EdgeLite Integration** — Auto-register devices with EdgeLite gateway
 - **Multi-language SDK** — Python (sync/async), Java, Go, C#
 - **gRPC Remote Management** — 15 RPC methods, cross-language support
+- **MCP Server (v1.13.0)** — AI assistants (Claude Desktop / Cursor) drive the simulator over MCP: `protoforge mcp` (install extra with `pip install "protoforge-sim[mcp]"`), 21 tools covering templates → devices → points → tests
 - **Database Backup & Restore** — One-click JSON export/import
 - **K8s Deployment** — Full Kubernetes deployment (one-command YAML)
 - **High Availability** — Primary/standby health checks, auto-promotion

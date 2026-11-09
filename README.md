@@ -210,6 +210,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 - **可视化系统设置** — 前端直接修改端口和配置，无需改代码
 - **多语言 SDK** — Python（同步/异步 90+ 方法，覆盖全部 API）、Java / Go / C#（核心方法：设备/场景/协议管理）
 - **gRPC 远程管理** — 15 个 RPC 方法，支持跨语言远程调用
+- **MCP Server（v1.13.0）** — Claude/Cursor 等 AI 编程助手经 MCP 直接操作仿真器：搜模板→建设备→读写点位→跑断言→取连接指南，`protoforge mcp` 一条命令拉起
 - **CSV 批量导入导出** — 设备配置一键导出 CSV，批量导入快速创建多台设备，跨环境迁移效率倍增
 - **录制回放压缩** — Gzip 压缩存储，节省磁盘空间
 - **数据库备份恢复** — 一键导出/导入全库数据 JSON
@@ -1289,6 +1290,7 @@ ProtoForge 内置完整的仿真测试框架，支持 14 种断言类型和 HTML
 | `protoforge uninstall-service` | 停止并卸载 Windows 服务（需管理员）                          |
 | `protoforge doctor`  | 环境自检：端口冲突/特权端口/依赖完整/数据库可写/容器拓扑逐项体检（`--json` 供 issue 附带） |
 | `protoforge version` | 查看版本号                                                  |
+| `protoforge mcp`     | MCP Server：AI 助手直连仿真器（stdio / streamable-http，v1.13.0） |
 
 ***
 
@@ -1679,6 +1681,60 @@ protoc --java_out=. --grpc-java_out=. protoforge/grpc/protoforge.proto
 # C#
 protoc --csharp_out=. --grpc-csharp_out=. protoforge/grpc/protoforge.proto
 ```
+
+***
+
+## 🤖 MCP Server — AI 助手直接驱动仿真器（v1.13.0 新增）
+
+[MCP（Model Context Protocol）](https://modelcontextprotocol.io) 是 AI 编程助手与工具之间的标准协议。ProtoForge 内置 MCP Server 后，**Claude Desktop、Cursor、Cline 等助手可以直接操作仿真器**：搜模板 → 建设备 → 读写点位 → 跑断言 → 取连接指南——AI 帮你写的采集/网关代码，当场在仿真器上闭环验证，不用再手工搭环境。
+
+### 快速开始
+
+```bash
+pip install "protoforge-sim[mcp]"     # 安装 MCP 扩展（mcp SDK 钉 <2，跟随生态通用 API）
+protoforge run                        # 仿真器跑起来
+protoforge mcp                        # 启动 MCP Server（stdio，供桌面客户端使用）
+```
+
+**Claude Desktop / Cursor 配置**（Claude Desktop：`claude_desktop_config.json`；Cursor：MCP 设置 → Add Server）：
+
+```json
+{
+  "mcpServers": {
+    "protoforge": {
+      "command": "protoforge",
+      "args": ["mcp"],
+      "env": {
+        "PROTOFORGE_MCP_URL": "http://localhost:8000",
+        "PROTOFORGE_MCP_USERNAME": "admin",
+        "PROTOFORGE_MCP_PASSWORD": "admin"
+      }
+    }
+  }
+}
+```
+
+> 💡 生产环境请把用户名/密码换成真实凭据（token 过期会自动重登）。远程接入用 `protoforge mcp --transport streamable-http --host 0.0.0.0 --port 8808`，客户端连 `http://<ip>:8808/mcp`。
+
+### 工具清单（21 个）
+
+| 类别 | 工具 | 说明 |
+| --- | --- | --- |
+| 系统 | `server_info` | 验证连通性、版本、设备数（AI 第一步先调它） |
+| 协议 | `list_protocols` `start_protocol` `stop_protocol` | 协议服务管理 |
+| 模板 | `list_templates` `search_templates` | 133 个模板按协议/关键词检索 |
+| 设备 | `create_device` `list_devices` `get_device` `start_device` `stop_device` `delete_device` | 模板一键建设备（默认自动启动） |
+| 点位 | `read_points` `write_point` | 读写仿真点位（等同写真实 PLC 寄存器） |
+| 场景 | `list_scenarios` `start_scenario` `stop_scenario` | 场景编排控制 |
+| 调试 | `get_logs` | 协议报文日志按协议/关键词过滤 |
+| 测试 | `quick_test` `get_test_report` | 跑内置断言套件、取报告 |
+| 接入 | `connection_guide` | 告诉 AI 你的客户端该连哪个 host:port、地址怎么写 |
+
+> 💡 典型指令：*"找一个西门子 PLC 模板，建一台叫'测试PLC'的设备，然后告诉我我的 S7 客户端应该连什么地址"*——AI 自动完成 search_templates → create_device → connection_guide 全链路。另有 `protoforge://info` 资源与 verify_loop 引导 prompt。
+
+### 设计说明
+
+实现为 **SDK 薄包装**（MCP 工具 → REST API → 运行中的实例）：不内嵌引擎、不占协议端口、权限完全复用 RBAC 四角色。所有工具返回 JSON 字符串并带 `ok` 字段——失败打包成 `{"ok": false, "error": ...}` 让 AI 自行决策，不中断会话。
 
 ***
 

@@ -169,6 +169,19 @@ def main():
     test_run_parser.add_argument("--output", "-o", default="", help="Output file path (default: stdout)")
     test_run_parser.add_argument("--timeout", type=int, default=300, help="Execution timeout in seconds (default: 300)")
 
+    mcp_parser = subparsers.add_parser(
+        "mcp", help="MCP server: let Claude/Cursor etc. drive the simulator (v1.13.0)")
+    mcp_parser.add_argument("--server", default="",
+                            help="ProtoForge server URL (default: PROTOFORGE_MCP_URL or http://localhost:8000)")
+    mcp_parser.add_argument("--username", default="",
+                            help="Login username (default: PROTOFORGE_MCP_USERNAME or admin)")
+    mcp_parser.add_argument("--password", default="",
+                            help="Login password (default: PROTOFORGE_MCP_PASSWORD or admin)")
+    mcp_parser.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio",
+                            help="MCP transport (default: stdio for desktop clients)")
+    mcp_parser.add_argument("--host", default="127.0.0.1", help="Bind address for streamable-http (default: 127.0.0.1)")
+    mcp_parser.add_argument("--port", type=int, default=8808, help="HTTP port for streamable-http (default: 8808)")
+
     args = parser.parse_args()
 
     if args.command == "version":
@@ -233,6 +246,11 @@ def main():
     if args.command == "baseline":
         _baseline_command(args)
         return
+
+    if args.command == "mcp":
+        from protoforge.mcp_server import run_mcp
+        return run_mcp(server_url=args.server, username=args.username, password=args.password,
+                       transport=args.transport, host=args.host, port=args.port)
 
     if args.command == "demo":
         _run_server(host=args.host, port=args.port, demo_mode=True, daemon=getattr(args, "daemon", False))
