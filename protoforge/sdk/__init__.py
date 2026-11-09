@@ -501,6 +501,22 @@ class ProtoForgeClient:
     def get_audit_stats(self) -> dict[str, Any]:
         return self._get("/audit/stats")
 
+    # ------ AI 点表导入（v1.13.1，LLM 默认本地 Ollama） ------
+
+    def ai_extract_points(self, text: str, protocol_hint: str = "") -> dict[str, Any]:
+        """LLM 解析说明书/寄存器表文本为设备配置 JSON（仅返回，不创建设备）。"""
+        return self._post("/ai/extract-points",
+                          json={"text": text, "protocol_hint": protocol_hint})
+
+    def ai_create_device_from_text(self, text: str, name: str = "",
+                                   device_id: str | None = None,
+                                   protocol_hint: str = "") -> dict[str, Any]:
+        """一步到位：LLM 解析文本 → 创建并自动启动仿真设备。"""
+        payload: dict[str, Any] = {"text": text, "name": name, "protocol_hint": protocol_hint}
+        if device_id:
+            payload["device_id"] = device_id
+        return self._post("/ai/create-device-from-text", json=payload)
+
 
 class AsyncProtoForgeClient:
     def __init__(self, base_url: str = "", timeout: float = 30.0,
@@ -994,3 +1010,19 @@ class AsyncProtoForgeClient:
 
     async def get_audit_stats(self) -> dict[str, Any]:
         return await self._get("/audit/stats")
+
+    # ------ AI 点表导入（v1.13.1，LLM 默认本地 Ollama） ------
+
+    async def ai_extract_points(self, text: str, protocol_hint: str = "") -> dict[str, Any]:
+        """LLM 解析说明书/寄存器表文本为设备配置 JSON（仅返回，不创建设备）。"""
+        return await self._post("/ai/extract-points",
+                                json={"text": text, "protocol_hint": protocol_hint})
+
+    async def ai_create_device_from_text(self, text: str, name: str = "",
+                                         device_id: str | None = None,
+                                         protocol_hint: str = "") -> dict[str, Any]:
+        """一步到位：LLM 解析文本 → 创建并自动启动仿真设备。"""
+        payload: dict[str, Any] = {"text": text, "name": name, "protocol_hint": protocol_hint}
+        if device_id:
+            payload["device_id"] = device_id
+        return await self._post("/ai/create-device-from-text", json=payload)

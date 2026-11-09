@@ -182,6 +182,23 @@ def main():
     mcp_parser.add_argument("--host", default="127.0.0.1", help="Bind address for streamable-http (default: 127.0.0.1)")
     mcp_parser.add_argument("--port", type=int, default=8808, help="HTTP port for streamable-http (default: 8808)")
 
+    ai_parser = subparsers.add_parser(
+        "ai", help="AI 点表导入：LLM 解析说明书/寄存器表 → 设备配置（v1.13.1，默认本地 Ollama）")
+    ai_sub = ai_parser.add_subparsers(dest="ai_command", help="AI commands")
+    ai_sub.add_parser("check", help="检查 LLM 服务连通性并列出可用模型")
+    ai_ext = ai_sub.add_parser("extract-points", help="解析文本文件为设备配置 JSON（不创建设备）")
+    ai_ext.add_argument("file", help="说明书/寄存器表文本文件路径（utf-8）")
+    ai_ext.add_argument("--protocol", default="", help="目标协议提示（如 modbus_tcp）")
+    ai_ext.add_argument("--output", "-o", default="", help="保存 JSON 到文件（默认 stdout）")
+    ai_create = ai_sub.add_parser("create-device", help="一步到位：解析文本并创建+自动启动仿真设备")
+    ai_create.add_argument("file", help="说明书/寄存器表文本文件路径（utf-8）")
+    ai_create.add_argument("--name", default="", help="设备名（默认用 LLM 提取的设备名）")
+    ai_create.add_argument("--device-id", default="", help="设备 ID（默认按名称自动生成）")
+    ai_create.add_argument("--protocol", default="", help="目标协议提示（如 modbus_tcp）")
+    for _sp in (ai_ext, ai_create):
+        _sp.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
+        _sp.add_argument("--token", default="", help="Authentication token")
+
     args = parser.parse_args()
 
     if args.command == "version":
@@ -251,6 +268,10 @@ def main():
         from protoforge.mcp_server import run_mcp
         return run_mcp(server_url=args.server, username=args.username, password=args.password,
                        transport=args.transport, host=args.host, port=args.port)
+
+    if args.command == "ai":
+        _ai_command(args)
+        return
 
     if args.command == "demo":
         _run_server(host=args.host, port=args.port, demo_mode=True, daemon=getattr(args, "daemon", False))
@@ -862,6 +883,89 @@ def _baseline_command(args):
         sys.exit(0 if data.get("ok") else 1)
 
     print("Usage: protoforge baseline {capture|compare} ...")
+    sys.exit(1)
+
+
+def _ai_command(args):
+    """ai check / extract-points / create-device —— AI 点表导入（v1.13.1）。"""
+    import json as _json
+    from pathlib import Path as _Path
+
+    cmd = getattr(args, "ai_command", None)
+
+    if cmd == "check":
+        from protoforge.ai_extract import AIClient, AIConfig
+        cfg = AIConfig()
+        print(f"+ LLM 服务: {cfg.base_url}  模型: {cfg.model}")
+        try:
+            models = AIClient(cfg).list_models()
+        except Exception as e:
+            print(f"! 连接失败: {type(e).__name__}: {e}")
+            print("  本地 Ollama 请确认：1) `ollama serve` 已运行  2) `ollama pull "
+                  + cfg.model + "` 已执行")
+            print("  或设置 PROTOFORGE_AI_BASE_URL / PROTOFORGE_AI_MODEL 指向其他 OpenAI 兼容服务")
+            sys.exit(1)
+        if not models:
+            print("! 服务可达但没有可用模型。执行：ollama pull " + cfg.model)
+            sys.exit(1)
+        print(f"+ 可用模型 {len(models)} 个:")
+        for m in models[:20]:
+            print(f"    {m}")
+        hit = " (当前配置)" if cfg.model in models else "  ! 当前配置的模型不在列表中"
+        print(f"+ 当前模型 {cfg.model}{hit}")
+        return
+
+    if cmd in ("extract-points", "create-device"):
+        path = _Path(args.file)
+        if not path.exists():
+            print(f"! 文件不存在: {path}")
+            sys.exit(1)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if cmd == "extract-points":
+            # 本地直调 LLM，无需起 ProtoForge 服务
+            from protoforge.ai_extract import extract_device_config
+            print(f"+ 请求 LLM 解析（{len(text)} 字符）...")
+            data = extract_device_config(text, protocol_hint=getattr(args, "protocol", ""))
+            if args.output:
+                _Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+                _Path(args.output).write_text(
+                    _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                print(f"+ 已保存: {args.output}")
+            else:
+                print(_json.dumps(data, ensure_ascii=False, indent=2))
+            if not data.get("ok"):
+                print("! " + str(data.get("error", "")))
+                if data.get("hint"):
+                    print("  hint: " + data["hint"])
+            sys.exit(0 if data.get("ok") else 1)
+        payload: dict = {"text": text, "protocol_hint": getattr(args, "protocol", "")}
+        payload["name"] = getattr(args, "name", "")
+        if getattr(args, "device_id", ""):
+            payload["device_id"] = args.device_id
+        print(f"+ 请求 LLM 解析（{len(text)} 字符）并创建设备...")
+        r = _api_request(args.server, "POST", "/ai/create-device-from-text",
+                         args.token, payload, timeout=600)
+        data = r.json()
+        if args.output:
+            _Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            _Path(args.output).write_text(
+                _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"+ 已保存: {args.output}")
+        else:
+            print(_json.dumps(data, ensure_ascii=False, indent=2))
+        if cmd == "create-device":
+            if data.get("ok"):
+                print(f"+ 设备已创建并启动: {data.get('device_id')}  "
+                      f"点位 {data.get('point_count')} 个  模型 {data.get('model')}")
+                for note in data.get("notes", [])[:5]:
+                    print(f"  ! note: {note}")
+            else:
+                sys.exit(1)
+        elif not data.get("ok"):
+            sys.exit(1)
+        return
+
+    print("Usage: protoforge ai {check|extract-points|create-device} ...")
     sys.exit(1)
 
 

@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1")
 
+from protoforge.api.v1.ai_routes import router as _ai_router
 from protoforge.api.v1.auth_routes import router as _auth_router
 from protoforge.api.v1.benchmark_routes import router as _benchmark_router
 from protoforge.api.v1.data_closure_routes import router as _data_closure_router
@@ -37,6 +38,7 @@ router.include_router(_log_router)
 router.include_router(_edgelite_router)
 router.include_router(_integration_router)
 router.include_router(_test_router)
+router.include_router(_ai_router)
 router.include_router(_auth_router)
 router.include_router(_benchmark_router)
 router.include_router(_data_closure_router)

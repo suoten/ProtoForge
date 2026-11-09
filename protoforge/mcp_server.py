@@ -165,6 +165,15 @@ class MCPBackend:
     def connection_guide(self, device_id: str) -> dict[str, Any]:
         return self.call("get_device_connection_guide", device_id)
 
+    def ai_extract_points(self, text: str, protocol_hint: str = "") -> dict[str, Any]:
+        return self.call("ai_extract_points", text, protocol_hint=protocol_hint)
+
+    def ai_create_device_from_text(self, text: str, name: str = "",
+                                   device_id: str | None = None,
+                                   protocol_hint: str = "") -> dict[str, Any]:
+        return self.call("ai_create_device_from_text", text, name=name,
+                         device_id=device_id, protocol_hint=protocol_hint)
+
 
 def build_mcp_server(backend: MCPBackend) -> "FastMCP":
     """把 backend 的业务方法注册为 MCP 工具（闭包保留函数名/文档串以生成 schema）。"""
@@ -284,6 +293,18 @@ def build_mcp_server(backend: MCPBackend) -> "FastMCP":
         """Get how a client should connect to this simulated device: protocol, host:port, addressing examples."""
         return _safe(backend.connection_guide, device_id)
 
+    @mcp.tool()
+    def ai_extract_points(text: str, protocol_hint: str = "") -> str:
+        """Parse unstructured datasheet/manual text into a structured point table via the configured LLM (local Ollama by default). Returns device name/protocol/slave_id/points[] + notes. Review before creating."""
+        return _safe(backend.ai_extract_points, text, protocol_hint)
+
+    @mcp.tool()
+    def ai_create_device_from_text(text: str, name: str = "", device_id: str = "",
+                                   protocol_hint: str = "") -> str:
+        """One-shot: LLM parses datasheet text into a point table, then creates + auto-starts the simulated device. Returns device info incl. point count and notes."""
+        return _safe(backend.ai_create_device_from_text, text, name, device_id or None,
+                     protocol_hint)
+
     @mcp.resource("protoforge://info")
     def protoforge_info() -> str:
         """Current ProtoForge instance info."""
@@ -324,7 +345,7 @@ def run_mcp(server_url: str = "", username: str = "", password: str = "",
 
     # stdio 传输复用 stdout 走协议帧，横幅必须打到 stderr
     print(f"+ ProtoForge MCP Server 就绪 -> {backend.base_url} (transport={transport})", file=sys.stderr)
-    print("  tools: 21 (system/protocols/templates/devices/points/scenarios/logs/tests/guide)", file=sys.stderr)
+    print("  tools: 23 (system/protocols/templates/devices/points/scenarios/logs/tests/guide/ai)", file=sys.stderr)
     if transport == "streamable-http":
         mcp.settings.host = host
         mcp.settings.port = port

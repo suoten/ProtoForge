@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.13.1 — 2026-11-09
+
+### ✨ 新增 — AI 点表/说明书导入（本地 Ollama 优先）
+
+把客户给的产品说明书/通信协议文档/寄存器表原文喂给 LLM，解析为结构化设备
+配置。**识别 ≠ 落库**：先返回可复核 JSON（歧义写入 notes），确认后一键建设备。
+
+- **本地优先**：默认连 Ollama（`http://localhost:11434/v1`，OpenAI 兼容），
+  点表数据不出机器；vLLM / LM Studio / DeepSeek 等兼容服务改
+  `PROTOFORGE_AI_BASE_URL / MODEL / API_KEY` 即可切换，无需改代码
+- 新 REST API：`POST /ai/extract-points`（仅解析复核）、
+  `POST /ai/create-device-from-text`（解析后走 /devices 同一管道创建并自动
+  启动——校验/落库/回滚/webhook 行为完全一致）
+- 新 CLI：`protoforge ai check`（诊断 LLM 连通性+列模型）、
+  `protoforge ai extract-points 说明书.txt`（本地直调 LLM，无需起服务）、
+  `protoforge ai create-device 说明书.txt --name X`（经 API 建设备）
+- 新 MCP 工具：`ai_extract_points`、`ai_create_device_from_text`
+  （工具总数 21 → 23）；Python SDK 同步/异步新增同名方法
+- 健壮性：markdown 围栏与前后杂文容错解析；JSON 解析失败自动修复重试一次；
+  未知 data_type 回落 float32、非法 access 回落 r、缺 name/address 的点丢弃
+  并全部记入 notes；文本超 6 万字符截断；LLM 不可达时给出可执行提示
+  （`ollama serve` / `ollama pull <model>`）
+- 产品语义：导入点位默认 `generator_type=fixed`——说明书提取的是"铭牌事实"，
+  不假装真实波动，用户可按需改成 random/sine
+
+### 🧪 测试
+
+- 新增 `tests/test_ai_extract.py`（11 例）：围栏容错、修复重试、协议提示
+  优先级、类型/access 回落、缺字段丢弃、超长截断、env 配置、LLM 不可达提示
+- MCP 测试扩充 AI 工具注册断言（`test_mcp_server.py` 累计 32 例）
+
 ## v1.13.0 — 2026-11-09
 
 ### ✨ 新增 — MCP Server：AI 编程助手直接驱动仿真器

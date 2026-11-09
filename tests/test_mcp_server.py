@@ -85,6 +85,13 @@ class FakeClient:
     def get_device_connection_guide(self, device_id):
         return {"device_id": device_id, "host": "127.0.0.1", "port": 5020}
 
+    def ai_extract_points(self, text, protocol_hint=""):
+        return {"ok": True, "device": {"name": "dev", "protocol": protocol_hint or "modbus_tcp",
+                                       "points": []}, "notes": []}
+
+    def ai_create_device_from_text(self, text, name="", device_id=None, protocol_hint=""):
+        return {"ok": True, "device_id": device_id or "ai-dev", "point_count": 4, "notes": []}
+
 
 @pytest.fixture
 def backend(monkeypatch):
@@ -113,6 +120,8 @@ BACKEND_METHODS = [
     ("quick_test", ()),
     ("get_test_report", ("r1",)),
     ("connection_guide", ("d1",)),
+    ("ai_extract_points", ("说明书文本",)),
+    ("ai_create_device_from_text", ("说明书文本",)),
 ]
 
 
@@ -196,5 +205,6 @@ def test_build_mcp_server_registers_tools(backend):
     except AttributeError:
         pytest.skip("FastMCP 内部 API 变化，跳过注册断言")
     assert {"server_info", "create_device", "write_point", "quick_test",
-            "connection_guide", "get_logs"} <= tools
-    assert len(tools) >= 20
+            "connection_guide", "get_logs", "ai_extract_points",
+            "ai_create_device_from_text"} <= tools
+    assert len(tools) >= 22
