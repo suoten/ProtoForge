@@ -5,6 +5,12 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 path = "protoforge/__init__.py"
 
+# v1.12.0: 分发名启用 protoforge-sim 后必须显式指定打包目录——
+# hatchling 默认按分发名自动探测包目录（会找 protoforge_sim/，实际目录是
+# protoforge/），探测不到会直接构建失败，导致 pip install 与全部 CI 挂掉。
+[tool.hatch.build.targets.wheel]
+packages = ["protoforge"]
+
 [project]
 # v1.12.0: PyPI 分发名启用 protoforge-sim——PyPI 上的 "protoforge" 自 2026-02 起
 # 被无关项目占用（owner: Okediya，单版本 0.1.0，无仓库无维护），发版必 403，
