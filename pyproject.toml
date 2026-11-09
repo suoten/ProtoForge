@@ -6,7 +6,11 @@ build-backend = "hatchling.build"
 path = "protoforge/__init__.py"
 
 [project]
-name = "protoforge"
+# v1.12.0: PyPI 分发名启用 protoforge-sim——PyPI 上的 "protoforge" 自 2026-02 起
+# 被无关项目占用（owner: Okediya，单版本 0.1.0，无仓库无维护），发版必 403，
+# README 的 pip install protoforge 会装到别人的包。导入包名与命令行仍为
+# protoforge（对所有用户零迁移成本），`pip install protoforge-sim` 即可。
+name = "protoforge-sim"
 # FIXED: 版本号单一来源 —— 动态读取 protoforge/__init__.py 的 __version__，
 # 升版本只需改一处（此前 pyproject 与 __init__ 双处维护，v1.6.5/1.6.6 漏改
 # __init__ 导致界面版本号停在 1.6.3 的显示 Bug）
@@ -88,7 +92,9 @@ dev = [
 ]
 
 [project.scripts]
+# protoforge 仍是主命令（全部文档/脚本/教程不变）；protoforge-sim 为等价别名
 protoforge = "protoforge.cli:main"
+protoforge-sim = "protoforge.cli:main"
 
 [project.urls]
 Homepage = "https://gitee.com/suoten/protoforge"

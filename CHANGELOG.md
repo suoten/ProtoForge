@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.12.0 — 2026-11-09
+
+### ✨ 新增 — PyPI 分发名启用 `protoforge-sim`，pip 安装通道恢复
+
+PyPI 上的 `protoforge` 名称自 2026-02 起被一个无关项目占用（单版本 0.1.0，
+无仓库、无维护），此前发版必然 403，README 的 `pip install protoforge`
+实际会装到别人的包。本次将 PyPI 分发名更改为 **`protoforge-sim`**：
+
+- `pip install protoforge-sim` 安装后，命令行仍是 `protoforge`——
+  `protoforge run / demo / doctor / desktop` 等全部命令、配置、数据格式零变化
+- 注册等价命令别名 `protoforge-sim`，两种写法随意
+- CI 恢复真实 PyPI 发布：在仓库配置 `PYPI_API_TOKEN` secret 后自动上传
+  （未配置时降级为仅构建验证，不再出现红色失败 job）
+- Docker 镜像（suoten/protoforge）、GitHub/Gitee 仓库地址完全不变，
+  存量用户无需任何操作
+
+### 📄 文档与品牌治理
+
+- README 安装指令全面校正为 `protoforge-sim`，并明确警示
+  "PyPI 上的 `protoforge` 是无关项目，勿误装"
+- 中英文数据一致性修复：设备模板数量统一为 133、协议数量统一为 31 种
+  （28 从站 + 3 主站）、开源版/企业版对比表与实际功能对齐（审计日志
+  开源版已有基础版）、竞品对比表同步更新、MQTT Broker 版本表述校准
+  （当前 3.1.1，5.0 排期中）
+- 新增 [TRADEMARK.md](TRADEMARK.md)：品牌归属、官方渠道清单、使用规范
+  与仿冒举报渠道
+- 新增 [docs/ROADMAP.md](docs/ROADMAP.md) 公开版本路线图（v1.12 → v2.0）
+
+### ⚠️ 升级注意
+
+- 从 PyPI 安装/引用的用户请改用 `pip install protoforge-sim`
+- 从源码（`pip install -e .`）/ Docker / 便携包安装的用户无需任何操作
+
 ## v1.11.1 — 2026-11-01
 
 ### ✨ 改进 — Modbus RTU 高级配置暴露 TCP 桥接模式（RTU over TCP）

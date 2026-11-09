@@ -56,16 +56,20 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-  # FIXED: 原 publish-pypi job 因 PyPI "protoforge" 包名被无关项目占用
-  # （owner: Okediya）必然 403，每次发版留一个红色 job。改为仅构建验证：
-  # 保留 "python -m build 能成功打包" 的 CI 信号，去掉上传步骤。
-  # 实际分发渠道：DockerHub（suoten/protoforge）+ GitHub Release 便携包。
-  # 若未来改用未占用名称（如 protoforge-iot）并配置 PYPI_API_TOKEN，
-  # 可参照 pypa/gh-action-pypi-publish 加回发布步骤。
-  package-build-check:
+  # v1.12.0: PyPI 分发名启用 protoforge-sim 后恢复真实发布。
+  # 历史：PyPI "protoforge" 名被无关项目占用（owner: Okediya，0.1.0 后无维护），
+  # 原 publish-pypi job 必然 403，曾降级为仅构建验证。
+  # 启用发布：repo Settings → Secrets and variables → Actions 配置 PYPI_API_TOKEN
+  # （pypi.org → Account settings → API tokens，scope 选 project: protoforge-sim）。
+  # 未配置时自动跳过上传，仅保留构建验证信号。
+  pypi-publish:
     needs: build-and-push
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: startsWith(github.ref, 'refs/tags/v')
+    env:
+      PYPI_TOKEN_SET: ${{ secrets.PYPI_API_TOKEN != '' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -86,3 +90,16 @@ jobs:
           ls -la dist/
           test -f dist/*.tar.gz || (echo "missing sdist" && exit 1)
           test -f dist/*.whl || (echo "missing wheel" && exit 1)
+
+      - name: Publish protoforge-sim to PyPI
+        if: env.PYPI_TOKEN_SET == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Build-only notice (PYPI_API_TOKEN not configured)
+        if: env.PYPI_TOKEN_SET != 'true'
+        run: |
+          echo "::notice::PYPI_API_TOKEN not configured - build check only, no upload."
+          echo "::notice::To enable PyPI publishing: Settings → Secrets and variables → Actions → New repository secret → PYPI_API_TOKEN"

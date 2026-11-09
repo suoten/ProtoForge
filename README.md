@@ -289,7 +289,7 @@ python scripts/build_desktop.py    # PyInstaller 构建 + 产出 dist/*.zip（�
 ```
 
 **源码运行桌面模式**：`python -m protoforge desktop`（默认端口 18080，被占用自动顺延；
-重复启动直接打开已运行实例的界面）。可选托盘：`pip install 'protoforge[desktop]'`。
+重复启动直接打开已运行实例的界面）。可选托盘：`pip install 'protoforge-sim[desktop]'`。
 
 <details>
 <summary><b>📖 ⚙️ Windows 开机自启动与数据保存（点击展开）</b></summary>
@@ -1464,8 +1464,10 @@ ProtoForge 提供同步和异步两种 Python SDK 客户端，覆盖全部 API �
 **安装**：
 
 ```bash
-pip install protoforge
+pip install protoforge-sim
 ```
+
+> ⚠️ **PyPI 包名说明（v1.12.0 起）**：PyPI 上的 `protoforge` 名称已被一个无关项目占用（2026-02 上传单版本后无维护）。本项目的 PyPI 分发名为 **`protoforge-sim`**——安装后命令行仍是 `protoforge`（`protoforge run` / `protoforge doctor` 等全部命令不变），Docker 镜像与源码安装方式不受影响。
 
 **快速上手**：
 
@@ -1732,11 +1734,11 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 
 | 特性 | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | 真实 PLC |
 | ---- | ---------- | ----------------- | ------- | ------------- | -------- |
-| **协议数量** | 28 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
+| **协议数量** | 31 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
 | **开源免费** | ✅ MIT | ❌ 付费 | ❌ 商业 | ✅ 但需自建 | ❌ |
-| **多协议同时仿真** | ✅ 28 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
+| **多协议同时仿真** | ✅ 31 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
 | **Web 管理界面** | ✅ 开箱即用 | ❌ 桌面软件 | ✅ | ❌ | 品牌专用 |
-| **设备模板库** | ✅ 122+ 模板 | ❌ 手动配置 | ✅ | ❌ | — |
+| **设备模板库** | ✅ 133 模板 | ❌ 手动配置 | ✅ | ❌ | — |
 | **批量设备生成** | ✅ 一键 100 台 | ❌ | ✅ (付费) | ❌ | ❌ |
 | **数据生成器** | ✅ 5 种 (随机/正弦/递增/渐变/固定) | ❌ 手动改值 | ❌ | ✅ 简单 | ✅ 真实数据 |
 | **异常码模拟** | ✅ 设备状态映射异常码 | ❌ | ❌ | ❌ | ✅ |
@@ -1746,7 +1748,7 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 | **中文支持** | ✅ 双语 | ❌ | ❌ | ❌ | — |
 | **成本** | **免费** | $69+ | $1,500+/驱动 | 免费 | $500+ |
 
-> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 28 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
+> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 31 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
 
 ### 协议一致性说明
 
@@ -1760,7 +1762,7 @@ ProtoForge 严格遵循工业协议标准，确保你的采集程序对接真实
 | **Mitsubishi MC** | SLMP 3E/4E 帧格式 | 子头 0x5000，大端序读写 |
 | **OPC-UA** | OPC 1.05 Part 6: Mappings | NodeId/QualifiedName/DataValue 完整 |
 | **IEC 60870-5-104** | IEC 60870-5-104 (TI/CI/CD 等 ASDU) | APDU/APCI 帧、IOA 地址完整 |
-| **MQTT** | MQTT 3.1.1 / 5.0 | QoS 0/1/2、Retain、Last Will |
+| **MQTT** | MQTT 3.1.1（5.0 排期中） | QoS 0/1/2、Retain、Last Will |
 | **BACnet** | BACnet/IP (ASHRAE 135) | ReadProperty/WriteProperty 服务 |
 
 > 💡 **设备状态→异常码映射**：ProtoForge 仿真设备的运行状态（stop/error/starting/stopping/maintenance/program）会自动映射为对应协议的异常码，就像真实设备在故障时会返回错误一样。例如 Modbus 设备处于 `error` 状态时返回异常码 `0x04` (Slave Device Failure)。
@@ -1827,8 +1829,8 @@ protoforge run --host 0.0.0.0 --port 8000
 
 | 功能 | 开源版 (MIT) | 企业版 |
 | ---- | ----------- | ------ |
-| **协议数量** | 28 种全支持 | 28 种 + 定制协议 |
-| **设备模板** | 122+ 模板 | 122+ + 行业定制模板 |
+| **协议数量** | 31 种全支持（28 从站 + 3 主站） | 31 种 + 定制协议 |
+| **设备模板** | 133 模板 | 133 + 行业定制模板 |
 | **同时仿真设备数** | 无限制 | 无限制 |
 | **Web 管理界面** | ✅ 完整功能 | ✅ + 品牌定制 |
 | **API 接口** | ✅ 完整 REST API | ✅ + gRPC 批量接口 |
@@ -1840,7 +1842,7 @@ protoforge run --host 0.0.0.0 --port 8000
 | **合规检查** | ✅ | ✅ + 行业标准包 |
 | **SSO / LDAP** | ❌ | ✅ |
 | **多租户** | ❌ | ✅ |
-| **审计日志** | ❌ | ✅ |
+| **审计日志** | ✅ 基础版（全操作留痕） | ✅ + 保留策略与合规导出 |
 | **SLA 支持** | ❌ | ✅ 7×24 |
 | **专业服务** | 社区支持 | 专属技术经理 |
 

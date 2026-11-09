@@ -256,7 +256,7 @@ protoforge demo
 Core protocols (Modbus TCP/RTU, HTTP, GB28181, MC, FINS, AB, OPC-DA, FANUC, MTConnect, Toledo, PROFINET, EtherCAT, IEC 104, IEC 61850, CoAP, DDS — 17 total) work out of the box. These 4 require extra deps:
 
 ```bash
-pip install -e ".[all]"        # All 26 protocols
+pip install -e ".[all]"        # All 31 protocols
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
