@@ -172,9 +172,7 @@
       "fixed_value": 0
     }
   ],
-  "protocol_config": {
-    "slave_id": 6
-  },
+  "protocol_config": {},
   "tags": [
     "CNC",
     "FANUC",

@@ -138,9 +138,7 @@
       "max_value": 999999.0
     }
   ],
-  "protocol_config": {
-    "slave_id": 9
-  },
+  "protocol_config": {},
   "tags": [
     "电力",
     "电能质量",

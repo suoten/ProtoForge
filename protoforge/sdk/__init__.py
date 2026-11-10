@@ -11,6 +11,30 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _enrich_status_error(e: "httpx.HTTPStatusError") -> "httpx.HTTPStatusError":
+    """FIXED(v1.13.2): HTTPStatusError 消息附带 API 响应体的 detail/message，
+    让 MCP/AI 与 SDK 用户拿到可执行的错误信息（如从站冲突的具体提示）。"""
+    detail = ""
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        try:
+            body = resp.json()
+        except Exception:
+            body = None
+        if isinstance(body, dict):
+            detail = str(body.get("detail") or body.get("message") or "")
+        elif body is not None:
+            detail = str(body)
+        if not detail:
+            detail = (resp.text or "")[:300]
+    if detail:
+        return httpx.HTTPStatusError(
+            f"{e.response.status_code}: {detail[:500]}",
+            request=e.request, response=e.response,
+        )
+    return e
+
+
 class ProtoForgeClient:
     def __init__(self, base_url: str = "", timeout: float = 30.0,
                  retries: int = 0, retry_delay: float = 1.0):
@@ -45,7 +69,13 @@ class ProtoForgeClient:
         for attempt in range(self._retries + 1):
             try:
                 resp = self._client.request(method, url, **kwargs)
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    # FIXED(v1.13.2): 把 API 响应体里的 detail 附进异常——此前 raise_for_status
+                    # 丢掉 body，调用方（尤其 MCP/AI）只能看到裸 400/409，
+                    # 拿不到"从站地址 4 已被占用…请改为 11"这类可执行信息
+                    raise _enrich_status_error(e) from None
                 return resp
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 last_error = e
@@ -557,12 +587,16 @@ class AsyncProtoForgeClient:
         for attempt in range(self._retries + 1):
             try:
                 resp = await self._client.request(method, url, **kwargs)
-                resp.raise_for_status()
+                try:
+                    resp.raise_for_status()
+                except httpx.HTTPStatusError as e:
+                    # FIXED(v1.13.2): 同步版一致——异常消息附带响应体 detail
+                    raise _enrich_status_error(e) from None
                 return resp
             except (httpx.ConnectError, httpx.TimeoutException) as e:
                 last_error = e
                 if attempt < self._retries:
-                    await asyncio.sleep(self._retry_delay)
+                    time.sleep(self._retry_delay)
         assert last_error is not None, "unreachable"
         raise last_error
 

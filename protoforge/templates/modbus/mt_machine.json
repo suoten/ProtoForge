@@ -119,9 +119,7 @@
       "fixed_value": 0
     }
   ],
-  "protocol_config": {
-    "slave_id": 5
-  },
+  "protocol_config": {},
   "tags": [
     "机床",
     "MT",

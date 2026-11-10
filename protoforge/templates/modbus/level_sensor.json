@@ -80,9 +80,7 @@
       "fixed_value": false
     }
   ],
-  "protocol_config": {
-    "slave_id": 8
-  },
+  "protocol_config": {},
   "tags": [
     "液位",
     "雷达",

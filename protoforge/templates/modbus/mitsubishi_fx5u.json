@@ -93,9 +93,7 @@
       "fixed_value": false
     }
   ],
-  "protocol_config": {
-    "slave_id": 2
-  },
+  "protocol_config": {},
   "tags": [
     "PLC",
     "三菱",

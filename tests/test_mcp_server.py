@@ -149,6 +149,18 @@ def test_create_device_auto_start(backend):
     assert data["started"]["ok"] is True
 
 
+def test_create_device_passes_protocol_config(backend, monkeypatch):
+    captured = {}
+
+    def _spy(self, template_id, name, device_id=None, protocol_config=None):
+        captured["protocol_config"] = protocol_config
+        return {"id": device_id or "d-new", "template": template_id, "name": name}
+
+    monkeypatch.setattr(FakeClient, "quick_create", _spy)
+    backend.create_device("tpl-1", "x", device_id="d10", protocol_config={"slave_id": 11})
+    assert captured["protocol_config"] == {"slave_id": 11}  # 冲突自愈：AI 可带新从站号重试
+
+
 def test_create_device_start_failure_still_returns_device(backend, monkeypatch):
     def _boom(self, device_id):
         raise RuntimeError("boom")

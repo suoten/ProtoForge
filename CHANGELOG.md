@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.13.2 — 2026-11-10
+
+### 🐛 修复 — 从站地址冲突静默创建"半残设备"（用户实测反馈）
+
+用户通过 MCP 用 AB MicroLogix 模板建设备后，所有点位写入都被拒
+（400 "protocol server rejected"）。根因：模板写死 `slave_id=4`，与已有
+设备冲突 → 协议层注册抛 ValueError → **engine 把异常吞成 WARNING**，
+设备照样"创建成功"但协议层从未注册——写入全部失败、外部 Modbus 客户端
+读不到这台设备，原因只存在于日志。
+
+- **fail-fast**：协议层注册返回 ValueError 时，engine 回滚刚创建的设备并
+  向上抛出——API 返回 400 携带冲突详情与建议的空闲从站号（如"请改为 11"），
+  设备不再以半残状态存在。非 ValueError 异常维持旧行为（warning + 保留），
+  不影响存量部署语义。
+- **模板自动分配**：24 个 modbus/modbus_rtu 模板移除写死的 `slave_id`，
+  改由协议层自动分配空闲从站号——模板 quick-create 开箱即不再互相冲突。
+  需要固定从站号的场景仍可在高级配置显式指定。
+- **SDK 错误带响应体**：`HTTPStatusError` 消息现在附带 API 响应体 detail——
+  此前 AI/SDK 只能看到裸 "400 Bad Request"，拿不到"从站地址 4 已被占用…
+  请改为 11"这类可执行信息（同步/异步一致）。
+- **MCP create_device 增加 `protocol_config` 参数**：冲突报错后 AI 可直接
+  带新从站号重试，形成"报错 → 读建议 → 自愈"闭环。
+
+### 🧪 测试
+
+- 新增 `tests/test_slave_conflict_fail_fast.py`（7 例）：协议层冲突抛出与
+  半注册防护、engine 回滚、非 ValueError 向后兼容、SDK 错误详情（同步/异步）
+- 实测闭环（本地 MCP stdio）：模板自动分配 → 写入成功 → 强制冲突报
+  fail-fast 详情 → 按建议改从站号重试成功
+
 ## v1.13.1 — 2026-11-09
 
 ### ✨ 新增 — AI 点表/说明书导入（本地 Ollama 优先）

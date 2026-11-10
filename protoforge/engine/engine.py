@@ -606,6 +606,16 @@ class SimulationEngine:
             try:
                 await server.create_device(config)
                 instance.start()
+            except ValueError as e:
+                # FIXED(v1.13.2): 协议层注册失败（典型：Modbus 从站地址冲突）绝不能静默吞掉——
+                # 否则设备"创建成功"但协议层半残：后续写入全部 400
+                # "protocol server rejected"、外部 Modbus 客户端也读不到这台设备。
+                # 回滚引擎内设备并向上一抛，让 API 返回 400 携带冲突详情
+                # （报错里含建议的空闲从站号，MCP/AI 可据此自动重试）。
+                async with self._devices_lock:
+                    self._devices.pop(config.id, None)
+                logger.warning("Device %s rejected by protocol server: %s", config.id, e)
+                raise
             except Exception as e:
                 logger.warning("Failed to sync device %s to protocol server: %s", config.id, e)
 

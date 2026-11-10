@@ -106,8 +106,9 @@ class MCPBackend:
         return items[: max(1, min(limit, MAX_LIST_LIMIT))]
 
     def create_device(self, template_id: str, name: str, device_id: str | None = None,
-                      start: bool = True) -> dict[str, Any]:
-        device = self.call("quick_create", template_id, name, device_id=device_id)
+                      start: bool = True, protocol_config: dict[str, Any] | None = None) -> dict[str, Any]:
+        device = self.call("quick_create", template_id, name, device_id=device_id,
+                           protocol_config=protocol_config)
         started: Any = None
         if start:
             try:
@@ -219,9 +220,11 @@ def build_mcp_server(backend: MCPBackend) -> "FastMCP":
         return _safe(backend.search_templates, query, limit)
 
     @mcp.tool()
-    def create_device(template_id: str, name: str, device_id: str = "", start: bool = True) -> str:
-        """Create a simulated device from a template (auto-started by default). Returns device id/protocol/points."""
-        return _safe(backend.create_device, template_id, name, device_id or None, start)
+    def create_device(template_id: str, name: str, device_id: str = "", start: bool = True,
+                      protocol_config: dict | None = None) -> str:
+        """Create a simulated device from a template (auto-started by default). Returns device id/protocol/points. If creation fails with a slave_id conflict, retry with protocol_config={\"slave_id\": <suggested>}."""
+        return _safe(backend.create_device, template_id, name, device_id or None, start,
+                     protocol_config)
 
     @mcp.tool()
     def list_devices(protocol: str = "", limit: int = 50) -> str:

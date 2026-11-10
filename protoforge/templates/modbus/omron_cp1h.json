@@ -84,9 +84,7 @@
       "fixed_value": 0
     }
   ],
-  "protocol_config": {
-    "slave_id": 3
-  },
+  "protocol_config": {},
   "tags": [
     "PLC",
     "欧姆龙",

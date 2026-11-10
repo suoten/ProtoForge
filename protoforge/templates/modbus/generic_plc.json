@@ -70,9 +70,7 @@
       "max_value": 0.99
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "PLC",
     "Modbus",

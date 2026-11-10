@@ -47,9 +47,7 @@
       "max_value": 50.0
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "气体探测器",
     "安全",

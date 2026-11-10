@@ -116,9 +116,7 @@
       "max_value": 999999
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "电力仪表",
     "Modbus",

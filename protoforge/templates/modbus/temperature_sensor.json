@@ -47,9 +47,7 @@
       "fixed_value": false
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "环境监控",
     "温度",

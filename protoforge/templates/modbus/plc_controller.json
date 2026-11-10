@@ -88,9 +88,7 @@
       "fixed_value": true
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "工业控制",
     "PLC",

@@ -68,9 +68,7 @@
       "fixed_value": false
     }
   ],
-  "protocol_config": {
-    "slave_id": 7
-  },
+  "protocol_config": {},
   "tags": [
     "流量计",
     "仪表",

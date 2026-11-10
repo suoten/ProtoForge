@@ -49,9 +49,7 @@
       "fixed_value": 0
     }
   ],
-  "protocol_config": {
-    "slave_id": 1
-  },
+  "protocol_config": {},
   "tags": [
     "传感器",
     "温湿度",

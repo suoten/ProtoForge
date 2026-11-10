@@ -41,7 +41,6 @@
     }
   ],
   "protocol_config": {
-    "slave_id": 1,
     "baudrate": 9600,
     "parity": "none",
     "stopbits": 1

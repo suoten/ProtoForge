@@ -90,9 +90,7 @@
       "fixed_value": false
     }
   ],
-  "protocol_config": {
-    "slave_id": 10
-  },
+  "protocol_config": {},
   "tags": [
     "振动",
     "传感器",

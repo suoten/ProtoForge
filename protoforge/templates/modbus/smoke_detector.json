@@ -57,9 +57,7 @@
       "max_value": 40.0
     }
   ],
-  "protocol_config": {
-    "slave_id": 11
-  },
+  "protocol_config": {},
   "tags": [
     "烟感",
     "消防",

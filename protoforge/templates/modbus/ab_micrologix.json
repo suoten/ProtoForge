@@ -84,9 +84,7 @@
       "fixed_value": 0
     }
   ],
-  "protocol_config": {
-    "slave_id": 4
-  },
+  "protocol_config": {},
   "tags": [
     "PLC",
     "AB",
