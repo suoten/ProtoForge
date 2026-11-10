@@ -1469,7 +1469,7 @@ ProtoForge 提供同步和异步两种 Python SDK 客户端，覆盖全部 API �
 pip install protoforge-sim
 ```
 
-> ⚠️ **PyPI 包名说明（v1.12.0 起）**：PyPI 上的 `protoforge` 名称已被一个无关项目占用（2026-02 上传单版本后无维护）。本项目的 PyPI 分发名为 **`protoforge-sim`**——安装后命令行仍是 `protoforge`（`protoforge run` / `protoforge doctor` 等全部命令不变），Docker 镜像与源码安装方式不受影响。
+> ⚠️ **PyPI 包名说明（v1.12.0 起）**：PyPI 上的 `protoforge` 名称已被一个无关项目占用（2026-02 上传单版本后无维护）。本项目的 PyPI 分发名为 **`protoforge-sim`**——安装后命令行仍是 `protoforge`（`protoforge run` / `protoforge doctor` 等全部命令不变），Docker 镜像与源码安装方式不受影响。PyPI 发布的启用配置见 [docs/pypi-setup.md](docs/pypi-setup.md)。
 
 **快速上手**：
 
@@ -2122,6 +2122,18 @@ docker run -d --name protoforge -p 8000:8000 suoten/protoforge:latest
 如果你必须从源码构建，最新 Dockerfile 已使用 NodeSource 安装 Node.js 20.x（LTS），确保版本可靠。
 
 #### 其他
+
+**Q: `pip install protoforge` 装出来的东西和文档完全不一样、啥功能都没有？**
+
+A: 你装到的是 **PyPI 上的同名假包**（一个无关的"AI 硬件原型 CLI"项目，0.1.0 后无维护）——这不是本项目（真实案例见 [issue #37](https://github.com/suoten/ProtoForge/issues/37)）。本项目的 PyPI 分发名是 **`protoforge-sim`**：
+
+```bash
+pip uninstall -y protoforge
+pip install --force-reinstall protoforge-sim
+protoforge doctor        # 会自动检测假包污染并给出修复命令
+```
+
+详见上方「📦 PyPI 包名说明」与 [docs/pypi-setup.md](docs/pypi-setup.md)。
 
 **Q: 忘记管理员密码怎么办？**
 

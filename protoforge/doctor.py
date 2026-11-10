@@ -279,6 +279,43 @@ def check_env_security(settings: Any) -> list[CheckResult]:
     return [CheckResult("env.no_auth", "ok", "API 认证已启用")]
 
 
+def check_poisoned_install() -> list[CheckResult]:
+    """FIXED(v1.13.3): 检测 PyPI 同名假包污染（GitHub issue #37 真实案例）。
+
+    PyPI 上的 `protoforge` 0.1.0（"AI 硬件原型 CLI"，owner: Okediya）与本项目
+    导入名冲突：用户 `pip install protoforge` 装到假包后，"啥也不是"——即便
+    再装 `protoforge-sim`，两个发行版都向顶层 `protoforge/` 模块写文件，
+    互相覆盖导致 import 异常。
+    """
+    results: list[CheckResult] = []
+    fake_version = ""
+    try:
+        from importlib.metadata import distributions
+        for dist in distributions():
+            name = (dist.metadata.get("Name") or "").strip().lower()
+            if name == "protoforge":
+                fake_version = dist.version or "0.1.0"
+                break
+    except Exception as e:  # 元数据扫描失败不阻断其他检查
+        logger.debug("poisoned-install check skipped: %s", e)
+        return results
+
+    if fake_version:
+        results.append(CheckResult(
+            "install.poisoned", "error",
+            f"检测到 PyPI 同名假包 protoforge=={fake_version}（'AI 硬件原型 CLI'，与本项目无关）——"
+            "它与本项目共用顶层 protoforge 模块路径，会互相覆盖导致 import/启动异常",
+            fixes=[
+                "pip uninstall -y protoforge && pip install --force-reinstall protoforge-sim",
+                "安装指引见 README「PyPI 包名说明」；背景见 GitHub issue #37",
+            ],
+        ))
+    else:
+        results.append(CheckResult("install.poisoned", "ok",
+                                   "未检测到 PyPI 同名假包 protoforge"))
+    return results
+
+
 def run_all_checks(settings: Any | None = None) -> list[CheckResult]:
     """执行全部自检（供 CLI 与测试复用）。"""
     if settings is None:
@@ -288,6 +325,7 @@ def run_all_checks(settings: Any | None = None) -> list[CheckResult]:
     results += check_environment()
     results += check_database(settings)
     results += check_dependencies()
+    results += check_poisoned_install()
     results += check_web_dist()
     results += check_http_port(settings)
     results += check_protocol_ports(settings)

@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.13.3 — 2026-11-10
+
+### 🐛 修复/防御 — PyPI 同名假包污染检测（GitHub issue #37 实锤案例）
+
+issue #37（"好多协议都是假的…用AI写了个壳"）实锤为 **PyPI 同名假包调包**：
+用户 `pip install protoforge` 装到的是 PyPI 上的无关项目（"AI 硬件原型 CLI"，
+0.1.0，无仓库无维护），其 wheel 安装**顶层 `protoforge/` 模块**——与本项目
+导入名冲突，"AI 写的壳"描述的正是那个假包，而不是本项目。
+
+- **`protoforge doctor` 新增 `install.poisoned` 检查**：检测环境中是否安装了
+  同名假包，命中时给出 error 级结果与一键修复命令
+  （`pip uninstall -y protoforge && pip install --force-reinstall protoforge-sim`）
+- 该检查失败只静默跳过自身，不阻断其他自检项
+- README FAQ 补充该案例的排查条目；背景与证据链见 issue #37
+
+### 📄 文档
+
+- README「PyPI 包名说明」交叉链接 `docs/pypi-setup.md`
+
 ## v1.13.2 — 2026-11-10
 
 ### 🐛 修复 — 从站地址冲突静默创建"半残设备"（用户实测反馈）
