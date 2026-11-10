@@ -356,15 +356,18 @@ async def test_global_broadcast_ee_no_response(env):
 
 @pytest.mark.asyncio
 async def test_station_conflict_rejected(env):
-    """两台设备占用相同站号：协议服务器拒绝注册第二台，原设备继续独占。"""
+    """两台设备占用相同站号：协议服务器拒绝注册第二台（v1.13.2 起 fail-fast
+    向上抛出并回滚引擎设备），原设备继续独占。"""
     engine, device, reader, writer = env
     conflict = build_device(stn=1, device_id="mewtocol-dup")
-    await engine.create_device(conflict)
+    with pytest.raises(ValueError):
+        await engine.create_device(conflict)
     await asyncio.sleep(0.1)
 
     server = engine.get_protocol_server("mewtocol")
     assert server._station_map.get(1) == device.id
     assert "mewtocol-dup" not in server._behaviors
+    assert "mewtocol-dup" not in engine._devices  # 引擎侧回滚，不留半残设备
 
 
 # ---------------------------------------------------------------------------
