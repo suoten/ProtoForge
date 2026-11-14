@@ -1,0 +1,10 @@
+{
+  "id": "water-pack-basic",
+  "name": "水务行业包（基础版）",
+  "version": "1.0.0",
+  "kind": "industry-pack",
+  "author": "suoten / 硕腾网络",
+  "description": "水务行业设备模板集：二次供水泵站、管网水质监测点（免费基础版，随开源版分发）。与内置 CJ/T 188 水表模板组合，覆盖 '水表→泵站→管网监测' 联调场景。定制版（行业专属黄金用例与演示场景）请联系作者。",
+  "templates": ["templates"],
+  "protocols": []
+}

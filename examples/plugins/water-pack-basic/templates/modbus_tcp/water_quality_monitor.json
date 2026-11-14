@@ -1,0 +1,133 @@
+{
+  "id": "plugin-water-quality-monitor",
+  "name": "管网水质监测点（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "供水管网水质监测终端：余氯、浊度、pH、ORP、水温——DMA 分区计量与水质预警联调配置。",
+  "manufacturer": "行业包示例",
+  "model": "WS-WQM-5ch",
+  "protocol_config": {},
+  "tags": [
+    "水务",
+    "水质",
+    "管网",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "residual_cl",
+      "address": "0",
+      "data_type": "float32",
+      "unit": "mg/L",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 0.3,
+      "max_value": 0.55,
+      "description": "余氯",
+      "generator_config": {
+        "period": 900
+      }
+    },
+    {
+      "name": "turbidity",
+      "address": "2",
+      "data_type": "float32",
+      "unit": "NTU",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 0.1,
+      "max_value": 0.6,
+      "description": "浊度",
+      "generator_config": {}
+    },
+    {
+      "name": "ph",
+      "address": "4",
+      "data_type": "float32",
+      "unit": "",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 6.9,
+      "max_value": 7.6,
+      "description": "酸碱度 pH",
+      "generator_config": {
+        "period": 600
+      }
+    },
+    {
+      "name": "orp",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "mV",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 550,
+      "max_value": 720,
+      "description": "氧化还原电位 ORP",
+      "generator_config": {}
+    },
+    {
+      "name": "water_temp",
+      "address": "8",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 12,
+      "max_value": 22,
+      "description": "水温",
+      "generator_config": {
+        "period": 3600
+      }
+    },
+    {
+      "name": "flow_rate",
+      "address": "10",
+      "data_type": "float32",
+      "unit": "m3/h",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 8,
+      "max_value": 45,
+      "description": "管道瞬时流量",
+      "generator_config": {
+        "period": 240
+      }
+    },
+    {
+      "name": "cum_flow",
+      "address": "12",
+      "data_type": "float64",
+      "unit": "m3",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "累计流量",
+      "generator_config": {
+        "step": 0.8,
+        "wrap": false
+      }
+    },
+    {
+      "name": "sample_pump",
+      "address": "16",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "采样泵启停（远程）",
+      "generator_config": {}
+    },
+    {
+      "name": "probe_fault",
+      "address": "17",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "探头故障告警",
+      "generator_config": {}
+    }
+  ]
+}

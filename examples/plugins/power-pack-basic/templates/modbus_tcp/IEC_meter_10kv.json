@@ -6,19 +6,161 @@
   "manufacturer": "行业包示例",
   "model": "DTZ341-10kV",
   "protocol_config": {},
-  "tags": ["电力", "电表", "行业包", "industry-pack"],
+  "tags": [
+    "电力",
+    "电表",
+    "行业包",
+    "industry-pack"
+  ],
   "points": [
-    {"name": "ua", "address": "0", "data_type": "float32", "unit": "V", "access": "r", "generator_type": "sine", "min_value": 9850, "max_value": 10150, "period": 300, "description": "A相电压"},
-    {"name": "ub", "address": "2", "data_type": "float32", "unit": "V", "access": "r", "generator_type": "sine", "min_value": 9850, "max_value": 10150, "period": 300, "description": "B相电压"},
-    {"name": "uc", "address": "4", "data_type": "float32", "unit": "V", "access": "r", "generator_type": "sine", "min_value": 9850, "max_value": 10150, "period": 300, "description": "C相电压"},
-    {"name": "ia", "address": "6", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 40, "max_value": 220, "description": "A相电流"},
-    {"name": "ib", "address": "8", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 40, "max_value": 220, "description": "B相电流"},
-    {"name": "ic", "address": "10", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 40, "max_value": 220, "description": "C相电流"},
-    {"name": "p_total", "address": "12", "data_type": "float32", "unit": "kW", "access": "r", "generator_type": "random", "min_value": 800, "max_value": 2400, "description": "三相有功功率"},
-    {"name": "q_total", "address": "14", "data_type": "float32", "unit": "kvar", "access": "r", "generator_type": "random", "min_value": 100, "max_value": 400, "description": "三相无功功率"},
-    {"name": "pf", "address": "16", "data_type": "float32", "unit": "", "access": "r", "generator_type": "random", "min_value": 0.85, "max_value": 0.99, "description": "功率因数"},
-    {"name": "ep_fwd", "address": "18", "data_type": "float64", "unit": "kWh", "access": "r", "generator_type": "increment", "step": 1.8, "description": "正向有功电能（底码累加）"},
-    {"name": "breaker_pos", "address": "22", "data_type": "bool", "unit": "", "access": "rw", "generator_type": "fixed", "fixed_value": true, "description": "断路器位置（合闸=true）"},
-    {"name": "meter_running", "address": "23", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": true, "description": "电表运行状态"}
+    {
+      "name": "ua",
+      "address": "0",
+      "data_type": "float32",
+      "unit": "V",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 9850,
+      "max_value": 10150,
+      "description": "A相电压",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "ub",
+      "address": "2",
+      "data_type": "float32",
+      "unit": "V",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 9850,
+      "max_value": 10150,
+      "description": "B相电压",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "uc",
+      "address": "4",
+      "data_type": "float32",
+      "unit": "V",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 9850,
+      "max_value": 10150,
+      "description": "C相电压",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "ia",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 40,
+      "max_value": 220,
+      "description": "A相电流",
+      "generator_config": {}
+    },
+    {
+      "name": "ib",
+      "address": "8",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 40,
+      "max_value": 220,
+      "description": "B相电流",
+      "generator_config": {}
+    },
+    {
+      "name": "ic",
+      "address": "10",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 40,
+      "max_value": 220,
+      "description": "C相电流",
+      "generator_config": {}
+    },
+    {
+      "name": "p_total",
+      "address": "12",
+      "data_type": "float32",
+      "unit": "kW",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 800,
+      "max_value": 2400,
+      "description": "三相有功功率",
+      "generator_config": {}
+    },
+    {
+      "name": "q_total",
+      "address": "14",
+      "data_type": "float32",
+      "unit": "kvar",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 100,
+      "max_value": 400,
+      "description": "三相无功功率",
+      "generator_config": {}
+    },
+    {
+      "name": "pf",
+      "address": "16",
+      "data_type": "float32",
+      "unit": "",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 0.85,
+      "max_value": 0.99,
+      "description": "功率因数",
+      "generator_config": {}
+    },
+    {
+      "name": "ep_fwd",
+      "address": "18",
+      "data_type": "float64",
+      "unit": "kWh",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "正向有功电能（底码累加）",
+      "generator_config": {
+        "step": 1.8,
+        "wrap": false
+      }
+    },
+    {
+      "name": "breaker_pos",
+      "address": "22",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "断路器位置（合闸=true）",
+      "generator_config": {}
+    },
+    {
+      "name": "meter_running",
+      "address": "23",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "电表运行状态",
+      "generator_config": {}
+    }
   ]
 }

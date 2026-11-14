@@ -1,0 +1,173 @@
+{
+  "id": "plugin-heat-exchange-station",
+  "name": "热力站换热机组（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "换热站机组：一二次网供回水温度、循环泵/补水泵状态、热量累计、气候补偿——城镇供热联调配置。",
+  "manufacturer": "行业包示例",
+  "model": "GH-HES-40",
+  "protocol_config": {},
+  "tags": [
+    "热力",
+    "换热站",
+    "供热",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "primary_supply_temp",
+      "address": "0",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 68,
+      "max_value": 82,
+      "description": "一次网供水温度",
+      "generator_config": {
+        "period": 1800
+      }
+    },
+    {
+      "name": "primary_return_temp",
+      "address": "2",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 42,
+      "max_value": 52,
+      "description": "一次网回水温度",
+      "generator_config": {
+        "period": 1800
+      }
+    },
+    {
+      "name": "secondary_supply_temp",
+      "address": "4",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 48,
+      "max_value": 56,
+      "description": "二次网供水温度",
+      "generator_config": {
+        "period": 1200
+      }
+    },
+    {
+      "name": "secondary_return_temp",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 38,
+      "max_value": 45,
+      "description": "二次网回水温度",
+      "generator_config": {
+        "period": 1200
+      }
+    },
+    {
+      "name": "outdoor_temp",
+      "address": "8",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": -8,
+      "max_value": 6,
+      "description": "室外温度（气候补偿输入）",
+      "generator_config": {
+        "period": 14400
+      }
+    },
+    {
+      "name": "heat_power",
+      "address": "10",
+      "data_type": "float32",
+      "unit": "MW",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 2.4,
+      "max_value": 4.2,
+      "description": "瞬时热功率",
+      "generator_config": {
+        "period": 900
+      }
+    },
+    {
+      "name": "heat_cum",
+      "address": "12",
+      "data_type": "float64",
+      "unit": "GJ",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "累计热量",
+      "generator_config": {
+        "step": 0.9,
+        "wrap": false
+      }
+    },
+    {
+      "name": "circ_pump_freq",
+      "address": "16",
+      "data_type": "float32",
+      "unit": "Hz",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 38,
+      "max_value": 48,
+      "description": "循环泵频率",
+      "generator_config": {
+        "period": 600
+      }
+    },
+    {
+      "name": "supply_pump_run",
+      "address": "18",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "补水泵运行",
+      "generator_config": {}
+    },
+    {
+      "name": "leak_alarm",
+      "address": "19",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "管网泄漏告警",
+      "generator_config": {}
+    },
+    {
+      "name": "temp_setpoint",
+      "address": "20",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": 52,
+      "description": "二次供水温度设定（气候补偿目标，远程可写）",
+      "generator_config": {}
+    },
+    {
+      "name": "station_enable",
+      "address": "22",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "机组投运（远程）",
+      "generator_config": {}
+    }
+  ]
+}

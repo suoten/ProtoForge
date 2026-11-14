@@ -5,18 +5,132 @@
   "description": "10kV 馈线终端单元（FTU）：遥测三相电流电压、遥信开关/接地/储能、遥控分合闸——配网自动化联调标准配置。IEC 104 信息对象地址按遥测遥信遥调分区。",
   "manufacturer": "行业包示例",
   "model": "FTU-DN2024",
-  "protocol_config": {"common_address": 1},
-  "tags": ["电力", "FTU", "配网", "行业包", "industry-pack"],
+  "protocol_config": {
+    "common_address": 1
+  },
+  "tags": [
+    "电力",
+    "FTU",
+    "配网",
+    "行业包",
+    "industry-pack"
+  ],
   "points": [
-    {"name": "ia_tm", "address": "4001", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 30, "max_value": 250, "description": "遥测：A相电流（IOA 4001）"},
-    {"name": "ib_tm", "address": "4002", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 30, "max_value": 250, "description": "遥测：B相电流"},
-    {"name": "ic_tm", "address": "4003", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "min_value": 30, "max_value": 250, "description": "遥测：C相电流"},
-    {"name": "uab_tm", "address": "4004", "data_type": "float32", "unit": "V", "access": "r", "generator_type": "sine", "min_value": 9800, "max_value": 10200, "period": 600, "description": "遥测：线电压 Uab"},
-    {"name": "breaker_status", "address": "6001", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": true, "description": "遥信：断路器合位（单点遥信）"},
-    {"name": "ground_fault", "address": "6002", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": false, "description": "遥信：接地故障标志"},
-    {"name": "spring_charged", "address": "6003", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": true, "description": "遥信：弹簧已储能"},
-    {"name": "remote_local", "address": "6004", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": false, "description": "遥信：远方/就地（true=远方）"},
-    {"name": "ctrl_close", "address": "7001", "data_type": "bool", "unit": "", "access": "rw", "generator_type": "fixed", "fixed_value": false, "description": "遥控：合闸命令（双点遥控，主站写入）"},
-    {"name": "ctrl_trip", "address": "7002", "data_type": "bool", "unit": "", "access": "rw", "generator_type": "fixed", "fixed_value": false, "description": "遥控：分闸命令"}
+    {
+      "name": "ia_tm",
+      "address": "4001",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 30,
+      "max_value": 250,
+      "description": "遥测：A相电流（IOA 4001）",
+      "generator_config": {}
+    },
+    {
+      "name": "ib_tm",
+      "address": "4002",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 30,
+      "max_value": 250,
+      "description": "遥测：B相电流",
+      "generator_config": {}
+    },
+    {
+      "name": "ic_tm",
+      "address": "4003",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 30,
+      "max_value": 250,
+      "description": "遥测：C相电流",
+      "generator_config": {}
+    },
+    {
+      "name": "uab_tm",
+      "address": "4004",
+      "data_type": "float32",
+      "unit": "V",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 9800,
+      "max_value": 10200,
+      "description": "遥测：线电压 Uab",
+      "generator_config": {
+        "period": 600
+      }
+    },
+    {
+      "name": "breaker_status",
+      "address": "6001",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "遥信：断路器合位（单点遥信）",
+      "generator_config": {}
+    },
+    {
+      "name": "ground_fault",
+      "address": "6002",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "遥信：接地故障标志",
+      "generator_config": {}
+    },
+    {
+      "name": "spring_charged",
+      "address": "6003",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "遥信：弹簧已储能",
+      "generator_config": {}
+    },
+    {
+      "name": "remote_local",
+      "address": "6004",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "遥信：远方/就地（true=远方）",
+      "generator_config": {}
+    },
+    {
+      "name": "ctrl_close",
+      "address": "7001",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "遥控：合闸命令（双点遥控，主站写入）",
+      "generator_config": {}
+    },
+    {
+      "name": "ctrl_trip",
+      "address": "7002",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "遥控：分闸命令",
+      "generator_config": {}
+    }
   ]
 }

@@ -1,0 +1,143 @@
+{
+  "id": "plugin-gas-regulator-station",
+  "name": "燃气调压站（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "燃气调压计量站：进出口压力/温度、瞬时/标况流量、燃气泄漏告警、紧急切断阀——城镇燃气场站联调配置。",
+  "manufacturer": "行业包示例",
+  "model": "GH-RS-200",
+  "protocol_config": {},
+  "tags": [
+    "燃气",
+    "调压站",
+    "场站",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "inlet_pressure",
+      "address": "0",
+      "data_type": "float32",
+      "unit": "kPa",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 380,
+      "max_value": 420,
+      "description": "进口压力（中压A）",
+      "generator_config": {
+        "period": 600
+      }
+    },
+    {
+      "name": "outlet_pressure",
+      "address": "2",
+      "data_type": "float32",
+      "unit": "kPa",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 2.2,
+      "max_value": 2.8,
+      "description": "出口压力（低压稳压目标）",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "gas_temp",
+      "address": "4",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 8,
+      "max_value": 18,
+      "description": "燃气温度",
+      "generator_config": {
+        "period": 3600
+      }
+    },
+    {
+      "name": "flow_rate",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "Nm3/h",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 60,
+      "max_value": 320,
+      "description": "瞬时标况流量",
+      "generator_config": {
+        "period": 900
+      }
+    },
+    {
+      "name": "cum_flow",
+      "address": "8",
+      "data_type": "float64",
+      "unit": "Nm3",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "累计标况流量",
+      "generator_config": {
+        "step": 2.5,
+        "wrap": false
+      }
+    },
+    {
+      "name": "filter_dp",
+      "address": "12",
+      "data_type": "float32",
+      "unit": "kPa",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "过滤器压差（增长提醒更换滤芯）",
+      "generator_config": {
+        "step": 0.05
+      }
+    },
+    {
+      "name": "gas_leak_alarm",
+      "address": "14",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "可燃气体泄漏告警",
+      "generator_config": {}
+    },
+    {
+      "name": "overspeed_alarm",
+      "address": "15",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "超压切断告警",
+      "generator_config": {}
+    },
+    {
+      "name": "emergency_valve",
+      "address": "16",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "紧急切断阀状态（true=开阀，远程可操作）",
+      "generator_config": {}
+    },
+    {
+      "name": "vent_valve",
+      "address": "17",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "放散阀（远程）",
+      "generator_config": {}
+    }
+  ]
+}

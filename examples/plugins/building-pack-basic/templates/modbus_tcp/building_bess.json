@@ -1,0 +1,153 @@
+{
+  "id": "plugin-building-bess",
+  "name": "楼宇储能柜（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "楼宇侧工商业储能柜：SOC/SOH、充放电功率、电池簇温度、并离网状态——光储充一体化联调配置。",
+  "manufacturer": "行业包示例",
+  "model": "BL-BESS-215",
+  "protocol_config": {},
+  "tags": [
+    "楼宇",
+    "储能",
+    "光储充",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "soc",
+      "address": "0",
+      "data_type": "float32",
+      "unit": "%",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 35,
+      "max_value": 92,
+      "description": "电池荷电状态 SOC",
+      "generator_config": {
+        "period": 7200
+      }
+    },
+    {
+      "name": "soh",
+      "address": "2",
+      "data_type": "float32",
+      "unit": "%",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 98.5,
+      "description": "电池健康状态 SOH",
+      "generator_config": {}
+    },
+    {
+      "name": "charge_power",
+      "address": "4",
+      "data_type": "float32",
+      "unit": "kW",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": -80,
+      "max_value": 80,
+      "description": "充放电功率（正=充电）",
+      "generator_config": {
+        "period": 3600
+      }
+    },
+    {
+      "name": "cluster_volt",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "V",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 680,
+      "max_value": 760,
+      "description": "电池簇总电压",
+      "generator_config": {
+        "period": 7200
+      }
+    },
+    {
+      "name": "cluster_current",
+      "address": "8",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": -110,
+      "max_value": 110,
+      "description": "电池簇总电流",
+      "generator_config": {
+        "period": 3600
+      }
+    },
+    {
+      "name": "max_cell_temp",
+      "address": "10",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 24,
+      "max_value": 33,
+      "description": "最高单体温度",
+      "generator_config": {}
+    },
+    {
+      "name": "max_cell_volt_diff",
+      "address": "12",
+      "data_type": "float32",
+      "unit": "mV",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 8,
+      "max_value": 45,
+      "description": "单体压差",
+      "generator_config": {}
+    },
+    {
+      "name": "fire_alarm",
+      "address": "14",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "消防告警",
+      "generator_config": {}
+    },
+    {
+      "name": "grid_tied",
+      "address": "15",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "并网状态",
+      "generator_config": {}
+    },
+    {
+      "name": "ems_mode",
+      "address": "16",
+      "data_type": "uint16",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": 2,
+      "description": "运行模式（1=手动 2=削峰填谷 3=需量控制）",
+      "generator_config": {}
+    },
+    {
+      "name": "charge_enable",
+      "address": "17",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "充放电使能（远程）",
+      "generator_config": {}
+    }
+  ]
+}

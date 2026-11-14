@@ -1,0 +1,141 @@
+{
+  "id": "plugin-pump-station",
+  "name": "二次供水泵站（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "二次供水增压泵站：2 台变频泵（运行/频率/电流）、出水压力、液位、进出口压力差——物业/水务公司二次供水联调标准配置。",
+  "manufacturer": "行业包示例",
+  "model": "WS-PUMP2-30kW",
+  "protocol_config": {},
+  "tags": [
+    "水务",
+    "泵站",
+    "二次供水",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "pump1_run",
+      "address": "0",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "1号泵运行状态",
+      "generator_config": {}
+    },
+    {
+      "name": "pump1_freq",
+      "address": "1",
+      "data_type": "float32",
+      "unit": "Hz",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 35,
+      "max_value": 50,
+      "description": "1号泵变频频率",
+      "generator_config": {
+        "period": 120
+      }
+    },
+    {
+      "name": "pump1_current",
+      "address": "3",
+      "data_type": "float32",
+      "unit": "A",
+      "access": "r",
+      "generator_type": "random",
+      "min_value": 28,
+      "max_value": 55,
+      "description": "1号泵电流",
+      "generator_config": {}
+    },
+    {
+      "name": "pump2_run",
+      "address": "5",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "2号泵运行状态（备用）",
+      "generator_config": {}
+    },
+    {
+      "name": "pump2_freq",
+      "address": "6",
+      "data_type": "float32",
+      "unit": "Hz",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 0,
+      "description": "2号泵变频频率",
+      "generator_config": {}
+    },
+    {
+      "name": "outlet_pressure",
+      "address": "8",
+      "data_type": "float32",
+      "unit": "MPa",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 0.28,
+      "max_value": 0.36,
+      "description": "出水总压力（恒压控制目标）",
+      "generator_config": {
+        "period": 60
+      }
+    },
+    {
+      "name": "inlet_pressure",
+      "address": "10",
+      "data_type": "float32",
+      "unit": "MPa",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 0.12,
+      "max_value": 0.18,
+      "description": "市政进水压力",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "tank_level",
+      "address": "12",
+      "data_type": "float32",
+      "unit": "%",
+      "access": "r",
+      "generator_type": "triangle",
+      "min_value": 20,
+      "max_value": 90,
+      "description": "水箱液位",
+      "generator_config": {
+        "period": 1800
+      }
+    },
+    {
+      "name": "pump1_start",
+      "address": "14",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "1号泵启停命令（远程）",
+      "generator_config": {}
+    },
+    {
+      "name": "system_auto",
+      "address": "15",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": true,
+      "description": "自动/手动模式（true=自动恒压）",
+      "generator_config": {}
+    }
+  ]
+}

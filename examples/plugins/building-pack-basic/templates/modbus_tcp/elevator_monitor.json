@@ -1,0 +1,138 @@
+{
+  "id": "plugin-elevator-monitor",
+  "name": "电梯运行监测（行业包）",
+  "protocol": "modbus_tcp",
+  "description": "乘客电梯运行监测终端：楼层、运行方向、开关门、故障码、困人告警——智慧楼宇/电梯物联网平台联调配置。",
+  "manufacturer": "行业包示例",
+  "model": "BL-ELEV-1000",
+  "protocol_config": {},
+  "tags": [
+    "楼宇",
+    "电梯",
+    "智慧楼宇",
+    "行业包",
+    "industry-pack"
+  ],
+  "points": [
+    {
+      "name": "current_floor",
+      "address": "0",
+      "data_type": "int16",
+      "unit": "",
+      "access": "r",
+      "generator_type": "triangle",
+      "min_value": 1,
+      "max_value": 18,
+      "description": "当前楼层（1-18 往返）",
+      "generator_config": {
+        "period": 45
+      }
+    },
+    {
+      "name": "run_direction",
+      "address": "1",
+      "data_type": "int16",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 1,
+      "description": "运行方向（1=上行 2=下行 0=停止）",
+      "generator_config": {}
+    },
+    {
+      "name": "door_state",
+      "address": "2",
+      "data_type": "int16",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 1,
+      "description": "门状态（0=关闭 1=开门中 2=全开）",
+      "generator_config": {}
+    },
+    {
+      "name": "run_count",
+      "address": "3",
+      "data_type": "uint32",
+      "unit": "",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "累计运行次数",
+      "generator_config": {
+        "step": 1,
+        "wrap": false
+      }
+    },
+    {
+      "name": "run_hours",
+      "address": "5",
+      "data_type": "float32",
+      "unit": "h",
+      "access": "r",
+      "generator_type": "increment",
+      "description": "累计运行小时",
+      "generator_config": {
+        "step": 0.01,
+        "wrap": false
+      }
+    },
+    {
+      "name": "motor_temp",
+      "address": "7",
+      "data_type": "float32",
+      "unit": "℃",
+      "access": "r",
+      "generator_type": "sine",
+      "min_value": 42,
+      "max_value": 58,
+      "description": "曳引机温度",
+      "generator_config": {
+        "period": 300
+      }
+    },
+    {
+      "name": "fault_code",
+      "address": "9",
+      "data_type": "uint16",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": 0,
+      "description": "故障码（0=正常）",
+      "generator_config": {}
+    },
+    {
+      "name": "trapped_alarm",
+      "address": "10",
+      "data_type": "bool",
+      "unit": "",
+      "access": "r",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "困人告警",
+      "generator_config": {}
+    },
+    {
+      "name": "maintenance_mode",
+      "address": "11",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "维保模式（远程可写）",
+      "generator_config": {}
+    },
+    {
+      "name": "floor_lock",
+      "address": "12",
+      "data_type": "bool",
+      "unit": "",
+      "access": "rw",
+      "generator_type": "fixed",
+      "fixed_value": false,
+      "description": "楼层锁定（远程）",
+      "generator_config": {}
+    }
+  ]
+}
