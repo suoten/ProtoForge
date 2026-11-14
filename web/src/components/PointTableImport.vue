@@ -34,13 +34,38 @@
       </n-grid>
 
       <n-space align="center">
-        <n-upload :show-file-list="false" accept=".csv,.txt,.tsv,.xlsx" @change="handleFileUpload">
-          <n-button size="small">选择文件（CSV / XLSX）</n-button>
-        </n-upload>
-        <span style="font-size:12px;color:#999">或直接粘贴到下方文本框</span>
+        <n-radio-group v-model:value="sourceMode" size="small">
+          <n-radio-button value="paste">结构化点表</n-radio-button>
+          <n-radio-button value="ai">🤖 AI 解析说明书</n-radio-button>
+        </n-radio-group>
+        <template v-if="sourceMode === 'ai'">
+          <span style="font-size:12px;color:#999">
+            粘贴说明书/寄存器表原文，LLM（默认本地 Ollama）提取点表后进入同一预览管线
+          </span>
+        </template>
+        <template v-else>
+          <n-upload :show-file-list="false" accept=".csv,.txt,.tsv,.xlsx" @change="handleFileUpload">
+            <n-button size="small">选择文件（CSV / XLSX）</n-button>
+          </n-upload>
+          <span style="font-size:12px;color:#999">或直接粘贴到下方文本框</span>
+        </template>
       </n-space>
 
-      <n-input v-model:value="content" type="textarea" :rows="8"
+      <template v-if="sourceMode === 'ai'">
+        <n-input v-model:value="aiText" type="textarea" :rows="10"
+                 placeholder="粘贴产品说明书 / 通信协议章节 / 寄存器表原文…&#10;AI 会提取其中的寄存器定义（点名/地址/类型/单位/读写），&#10;解析结果填入下方文本框并自动预览，确认后才创建设备。" />
+        <n-space align="center">
+          <n-button type="primary" size="small" :loading="aiParsing" :disabled="!aiText.trim()"
+                    @click="doAiParse">
+            🤖 AI 解析
+          </n-button>
+          <span style="font-size:12px;color:#999">识别 ≠ 落库：解析结果先预览复核，歧义写入 notes</span>
+        </n-space>
+        <n-alert v-if="aiNotes.length" type="warning" :bordered="false">
+          <div v-for="(n, i) in aiNotes" :key="i" style="font-size:12px">{{ n }}</div>
+        </n-alert>
+      </template>
+      <n-input v-else v-model:value="content" type="textarea" :rows="8"
                placeholder="粘贴点表内容，例如：&#10;位号,地址,数据类型,单位,读写&#10;reactor_temp,DB1.DBD0,float32,℃,rw&#10;pump_run,M0.0,bool,,rw" />
 
       <n-space align="center">
@@ -85,7 +110,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { NModal, NSpace, NAlert, NButton, NInput, NSelect, NUpload, NGrid, NGi,
-         NFormItem, NDataTable, NTag, useMessage } from 'naive-ui'
+         NFormItem, NDataTable, NTag, NRadioGroup, NRadioButton, useMessage } from 'naive-ui'
 import api from '../api.js'
 import { protocolLabels } from '../constants.js'
 
@@ -101,6 +126,53 @@ const content = ref('')
 const previewing = ref(false)
 const importing = ref(false)
 const preview = ref(null)
+
+// v1.14: AI 解析说明书模式——结果转 TSV 灌入同一预览/导入管线
+const sourceMode = ref('paste')
+const aiText = ref('')
+const aiParsing = ref(false)
+const aiNotes = ref([])
+
+async function doAiParse() {
+  aiParsing.value = true
+  aiNotes.value = []
+  try {
+    const res = await api.aiExtractPoints({ text: aiText.value, protocol_hint: protocol.value })
+    if (!res.ok) {
+      // FIXED: 失败信息持久显示在 notes 区（toast 3 秒即逝，用户看不到原因）
+      const detail = String(res.error || '未知错误')
+      aiNotes.value = [detail + (res.hint ? ' —— ' + res.hint : '')]
+      message.error('AI 解析失败: ' + res.error)
+      return
+    }
+    const dev = res.device || {}
+    // FIXED: 预览管线默认按 CSV（逗号）解析——AI 结果必须填 CSV 而非 TSV，
+    // 字段内的英文逗号替换为中文逗号避免破坏列结构
+    const rows = (dev.points || []).map(p => [
+      p.name, p.address, p.data_type, p.unit || '', p.access || 'r',
+    ].map(v => String(v ?? '').replace(/[\t\r\n,]/g, v === ',' ? '，' : ' ')).join(','))
+    if (!rows.length) {
+      message.warning('未能从文本中提取到点位，请检查文档内容')
+      aiNotes.value = ['未提取到点位'].concat(res.notes || [])
+      return
+    }
+    content.value = 'name,address,data_type,unit,access\n' + rows.join('\n')
+    isBase64.value = false
+    aiNotes.value = res.notes || []
+    if (dev.protocol && protocolOptions.value.some(o => o.value === dev.protocol)) {
+      protocol.value = dev.protocol
+    }
+    if (dev.name && !deviceName.value) deviceName.value = dev.name
+    message.success(`AI 提取 ${rows.length} 个点位，已填入文本框`)
+    doPreview()
+  } catch (e) {
+    const detail = e.response?.data?.detail || e.message
+    aiNotes.value = ['请求失败: ' + detail]
+    message.error('AI 解析失败: ' + detail)
+  } finally {
+    aiParsing.value = false
+  }
+}
 
 const protocolOptions = computed(() =>
   Object.entries(protocolLabels || {}).map(([v, label]) => ({ label: label || v, value: v })))

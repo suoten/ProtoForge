@@ -21,6 +21,9 @@
       </n-button>
       <n-button @click="clearAllLogs" type="error" size="small" ghost>{{ t('logs.clear') }}</n-button>
       <n-button @click="exportLogs" size="small" ghost>{{ t('common.export') }}</n-button>
+      <n-button size="small" type="primary" ghost :loading="aiDiagnosing" @click="runAiDiagnose">
+        🩺 AI 诊断
+      </n-button>
       <span style="color: #999; font-size: 12px">{{ t('common.total', { n: filteredLogs.length }) }}</span>
     </n-space>
 
@@ -70,12 +73,51 @@
         </n-descriptions-item>
       </n-descriptions>
     </n-modal>
+
+    <n-modal v-model:show="aiDiagVisible" preset="card" title="🩺 AI 调试诊断" style="width:min(760px, 94vw)">
+      <n-space vertical size="small">
+        <n-alert v-if="aiDiagError" type="error" :bordered="false">
+          <div style="font-size:13px">{{ aiDiagError }}</div>
+          <div v-if="aiDiagHint" style="font-size:12px;color:#999;margin-top:4px">{{ aiDiagHint }}</div>
+        </n-alert>
+        <div v-if="aiDiagnosing && !aiDiag" style="padding: 24px; text-align: center; color: #999; font-size: 13px">
+          LLM 正在分析调试日志（本地模型首次推理可能较慢）…
+        </div>
+        <template v-if="aiDiag">
+          <n-alert type="info" :bordered="false">
+            <div style="font-size:13px">{{ aiDiag.diagnosis?.summary || '（无摘要）' }}</div>
+            <div style="font-size:11px;color:#8b8bcd;margin-top:4px">
+              模型 {{ aiDiag.model }} · 分析日志 {{ aiDiag.log_count }} 条 · 每条结论均引用真实日志行
+            </div>
+          </n-alert>
+          <n-card v-for="(f, i) in (aiDiag.diagnosis?.findings || [])" :key="i" size="small">
+            <template #header>
+              <n-space align="center" :wrap="false">
+                <n-tag :type="f.confidence === 'high' ? 'success' : f.confidence === 'low' ? 'warning' : 'info'" size="tiny">
+                  {{ (f.confidence || 'medium').toUpperCase() }}
+                </n-tag>
+                <span style="font-size:13px">{{ f.issue }}</span>
+              </n-space>
+            </template>
+            <div v-if="f.likely_cause" style="font-size:12px;margin-bottom:4px"><b>根因：</b>{{ f.likely_cause }}</div>
+            <div v-if="f.suggested_fix" style="font-size:12px;margin-bottom:4px"><b>建议：</b>{{ f.suggested_fix }}</div>
+            <div style="font-size:11px;color:#8b8bcd">出处：{{ (f.evidence || []).join(' ｜ ') }}</div>
+          </n-card>
+          <div v-if="!(aiDiag.diagnosis?.findings || []).length" style="font-size:12px;color:#999">
+            未发现异常结论——链路看起来正常。
+          </div>
+          <div v-if="(aiDiag.notes || []).length" style="font-size:11px;color:#999">
+            notes: {{ aiDiag.notes.join('；') }}
+          </div>
+        </template>
+      </n-space>
+    </n-modal>
   </n-space>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, useMessage, useDialog } from 'naive-ui'
+import { NSpace, NSelect, NButton, NTag, NInput, NModal, NDescriptions, NDescriptionsItem, NCard, NAlert, useMessage, useDialog } from 'naive-ui'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
 import { directionTagTypeMap, directionLabelMap } from '../constants.js'
@@ -95,6 +137,38 @@ const wsConnected = ref(false)
 const paused = ref(false)
 const detailVisible = ref(false)
 const selectedLog = ref(null)
+// v1.13.4: AI 调试诊断（服务端按当前过滤条件拉日志 → LLM 结构化诊断）
+const aiDiagVisible = ref(false)
+const aiDiagnosing = ref(false)
+const aiDiag = ref(null)
+const aiDiagError = ref('')
+const aiDiagHint = ref('')
+
+async function runAiDiagnose() {
+  aiDiagVisible.value = true
+  aiDiagnosing.value = true
+  aiDiag.value = null
+  aiDiagError.value = ''
+  aiDiagHint.value = ''
+  try {
+    const res = await api.aiAnalyzeLogs({
+      question: '',
+      count: 300,
+      protocol: filterProtocol.value || '',
+      direction: filterDirection.value || '',
+    })
+    if (!res.ok) {
+      aiDiagError.value = res.error || '分析失败'
+      aiDiagHint.value = res.hint || ''
+      return
+    }
+    aiDiag.value = res
+  } catch (e) {
+    aiDiagError.value = e.response?.data?.detail || e.message
+  } finally {
+    aiDiagnosing.value = false
+  }
+}
 const logContainer = ref(null)
 let ws = null
 let reconnectTimer = null
