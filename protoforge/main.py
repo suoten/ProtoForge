@@ -192,8 +192,13 @@ async def _init_core_services(settings: Any) -> tuple[Any, Any, Any, Any, Any, A
 
     log_bus = LogBus()
     event_bus = EventBus()
+    # v1.15.0: 先加载插件（协议进 PROTOCOL_REGISTRY 懒加载映射、模板目录待装配），
+    # 再实例化内置+插件协议、装配插件模板
+    from protoforge.plugins import load_plugin_templates, load_plugins
+    load_plugins()
     template_manager = TemplateManager()
     template_manager.load_builtin_templates()
+    load_plugin_templates(template_manager)
 
     database = Database(db_path=settings.db_path)
     await database.connect()

@@ -1,0 +1,10 @@
+{
+  "id": "power-pack-basic",
+  "name": "电力行业包（基础版）",
+  "version": "1.0.0",
+  "kind": "industry-pack",
+  "author": "suoten / 硕腾网络",
+  "description": "电力行业设备模板集：智能电表、馈线终端 FTU、分布式光伏逆变器（免费基础版，随开源版分发）。定制版（DNP3/61850 GOOSE 黄金用例、行业专属演示场景）请联系作者。",
+  "templates": ["templates"],
+  "protocols": []
+}

@@ -203,6 +203,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 - **数据转发** — InfluxDB / HTTP Webhook / 文件，一键对接
 - **协议录制回放** — 记录通信报文，按需回放验证，支持加密存储
 - **Prometheus 指标** — 内置监控端点，对接 Grafana
+- **插件系统（v1.15.0）** — 第三方不改核心即可扩展：`data/plugins/<id>/plugin.json` 放置即用（自带协议/模板/端口），pip 分发走 entry_points；示例电力行业包（10kV 电表 + IEC 104 FTU）见 `examples/plugins/`，`GET /plugins` 查看已加载清单
 - **JWT 认证 + RBAC** — 4 种角色（admin/operator/user/viewer），100% API 端点权限覆盖，bcrypt 安全密码存储
 - **API 限流保护** — 内置速率限制，防止暴力破解和滥用
 - **双数据库支持** — SQLite 开箱即用，PostgreSQL 生产级支持

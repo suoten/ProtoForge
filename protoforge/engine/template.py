@@ -137,3 +137,25 @@ class TemplateManager:
                 self._templates[template.id] = template
             except Exception as e:
                 logger.warning("Failed to load template %s: %s", json_file, e)
+
+    def load_extra_dir(self, dir_path: Path) -> int:
+        """v1.15.0: 加载插件/行业包提供的额外模板目录。
+
+        目录内支持两种布局：
+        - 平铺 *.json（全部视为同一协议，由 JSON 内 protocol 字段决定归属）；
+        - 子目录分组（子目录名作为协议分组目录，递归走 _load_from_dir）。
+
+        :return: 成功载入的模板数（重复 id 覆盖内置同名模板，计数含覆盖）。
+        """
+        dir_path = Path(dir_path)
+        if not dir_path.exists():
+            return 0
+        before = len(self._templates)
+        for child in sorted(dir_path.iterdir()):
+            if child.is_dir():
+                self._load_from_dir(child)
+        self._load_from_dir(dir_path)  # 平铺 JSON
+        count = len(self._templates) - before
+        if count:
+            logger.info("Loaded %d templates from plugin dir %s", count, dir_path)
+        return max(0, count)

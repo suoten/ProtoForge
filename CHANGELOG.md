@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.15.0 — 2026-11-14
+
+### ✨ 新增 — 插件系统：协议插件 + 行业包的标准容器
+
+从"我们覆盖 31 种协议"走向"生态覆盖全部协议"：第三方无需改核心即可扩展
+ProtoForge（协议、模板、行业内容）。**容器完全开源（MIT）**——基础行业包
+随开源版免费分发，定制行业内容作为独立交付物。
+
+- **插件来源**：`data/plugins/<id>/plugin.json` 目录放置（拷贝即用）+
+  setuptools entry_points `protoforge.plugins`（pip 分发），两种方式等价
+- **manifest**：声明 kind（protocol / industry-pack / template-pack）、
+  自带协议（`module:Class` 懒加载字符串，与内置协议同一注册管道）、
+  默认端口（并入 PROTOCOL_DEFAULTS）、模板目录（支持子目录按协议分组）
+- **零侵入**：插件内容注入既有管道（PROTOCOL_REGISTRY / TemplateManager），
+  核心只加"加载"一个动作；插件协议名与内置冲突时保护内置、跳过该协议
+- **隔离失败**：单个插件损坏只记入 `GET /plugins` 的 errors 列表并打
+  warning，绝不拖垮主进程；`GET /plugins` 透明展示已加载清单与错误
+- **示例电力行业包**（`examples/plugins/power-pack-basic/`，免费）：
+  10kV 智能电能表（三相计量/需量/正弦负荷曲线）、馈线终端 FTU（IEC 104
+  遥测遥信遥控分区地址）——拷入 `data/plugins/` 重启即用
+- 加载器实现 `protoforge/plugins/`（~200 行）；`TemplateManager.load_extra_dir`
+  支持平铺与分组两种布局；重复模板 id 以插件侧覆盖内置
+
+### 🧪 测试与验证
+
+- 新增 `tests/test_plugins.py`（5 例）：目录插件全链路、manifest 校验、
+  失败隔离、协议名保护、分组目录装载
+- 真机 E2E：安装示例电力包 → 服务器日志 Plugin loaded → `/plugins` API
+  返回清单 → `search_templates("行业包")` 命中 → quick_create 建设备
+  （三相 10kV 正弦生成）→ 写入断路器位置 → 清理
+
 ## v1.14.0 — 2026-11-14
 
 ### ✨ 新增 — Web 界面 AI 入口：AI 闭环对浏览器用户补全

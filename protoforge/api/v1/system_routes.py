@@ -233,6 +233,13 @@ async def version_check(_user: dict[str, Any] = Depends(require_viewer)):
     return data
 
 
+@router.get("/plugins")
+async def list_plugins(_user: dict[str, Any] = Depends(require_viewer)):
+    """v1.15.0: 已加载插件/行业包清单与加载错误（透明度优先）。"""
+    from protoforge.plugins import get_plugin_status
+    return get_plugin_status()
+
+
 @router.get("/backup")
 async def export_backup(_user: dict[str, Any] = Depends(require_admin)):
     try:
