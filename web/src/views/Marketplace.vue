@@ -19,7 +19,41 @@
         <n-radio-button value="hvac">{{ t('marketplace.categoryBuilding') }}</n-radio-button>
       </n-radio-group>
       <n-select v-model:value="filterProtocol" :options="protocolOptions" :placeholder="t('common.protocol')" clearable style="width: 130px" />
+      <n-button size="small" type="primary" ghost @click="showContribModal = true">
+        📤 {{ t('marketplace.contribute') }}
+      </n-button>
     </n-space>
+
+    <n-modal v-model:show="showContribModal" preset="card" :title="t('marketplace.contributeTitle')" style="width:min(720px, 94vw)">
+      <n-space vertical size="small">
+        <n-alert type="info" :bordered="false">
+          <div style="font-size:12px">{{ t('marketplace.contributeDesc') }}</div>
+        </n-alert>
+        <n-input v-model:value="contribJson" type="textarea" :rows="12"
+                 :placeholder="t('marketplace.contributePlaceholder')" />
+        <n-grid :cols="2" :x-gap="12">
+          <n-gi>
+            <n-input v-model:value="contribSubmitter" size="small" :placeholder="t('marketplace.contributeSubmitter')" />
+          </n-gi>
+          <n-gi>
+            <n-input v-model:value="contribNote" size="small" :placeholder="t('marketplace.contributeNote')" />
+          </n-gi>
+        </n-grid>
+        <n-space>
+          <n-button type="primary" size="small" :loading="contributing" :disabled="!contribJson.trim()"
+                    @click="doContribute">
+            {{ t('marketplace.contributeSubmit') }}
+          </n-button>
+          <span v-if="contribResult" style="font-size:12px;color:#666">{{ contribResult }}</span>
+        </n-space>
+        <template v-if="contribPending.length">
+          <n-divider style="margin:4px 0" />
+          <div style="font-size:13px;font-weight:600">{{ t('marketplace.pendingList') }}（{{ contribPending.length }}）</div>
+          <n-data-table size="small" :columns="pendingColumns" :data="contribPending" :max-height="180"
+                        :row-key="r => r.id" />
+        </template>
+      </n-space>
+    </n-modal>
 
     <n-grid :cols="3" :x-gap="16" :y-gap="16">
       <n-gi v-for="tmpl in filteredTemplates" :key="tmpl.id">
@@ -73,7 +107,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { NSpace, NText, NInput, NRadioGroup, NRadioButton, NSelect, NGrid, NGi,
-  NButton, NTag, NModal, NCard, NAlert, useMessage } from 'naive-ui'
+  NButton, NTag, NModal, NCard, NAlert, NDataTable, NDivider, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import api from '../api.js'
 import { useI18n } from '../i18n.js'
@@ -89,6 +123,64 @@ const filterCategory = ref('all')
 const filterProtocol = ref(null)
 const showUseModal = ref(false)
 const creating = ref(false)
+
+// v1.16.1: 模板市场社区提交（API → 待审队列 → 管理员批准）
+const showContribModal = ref(false)
+const contributing = ref(false)
+const contribJson = ref('')
+const contribSubmitter = ref('')
+const contribNote = ref('')
+const contribResult = ref('')
+const contribPending = ref([])
+
+const pendingColumns = [
+  { title: '模板', key: 'template_name', width: 140 },
+  { title: '协议', key: 'protocol', width: 110 },
+  { title: '点位', key: 'point_count', width: 60 },
+  { title: '提交人', key: 'submitted_by', width: 100 },
+  {
+    title: '状态', key: 'status',
+    render(row) {
+      return h(NTag, { size: 'tiny', type: row.status === 'pending' ? 'warning' : row.status === 'approved' ? 'success' : 'error' },
+        { default: () => row.status })
+    },
+  },
+]
+
+async function refreshPending() {
+  try {
+    const res = await api.listContributions('pending')
+    contribPending.value = res.contributions || []
+  } catch { /* 静默：清单刷新失败不打扰提交主流程 */ }
+}
+
+async function doContribute() {
+  contributing.value = true
+  contribResult.value = ''
+  try {
+    let template
+    try {
+      template = JSON.parse(contribJson.value)
+    } catch {
+      message.error('JSON 格式错误，请检查模板定义')
+      return
+    }
+    const res = await api.contributeTemplate({
+      template, submitter: contribSubmitter.value, note: contribNote.value,
+    })
+    contribResult.value = `${t('marketplace.contribAccepted')} #${res.contribution_id}`
+    message.success(t('marketplace.contribAccepted'))
+    contribJson.value = ''
+    contribNote.value = ''
+    refreshPending()
+  } catch (e) {
+    message.error((e.response?.data?.detail || e.message).slice(0, 200))
+  } finally {
+    contributing.value = false
+  }
+}
+
+import { h } from 'vue'  // 模板列渲染用（pendingColumns）
 const selectedTemplate = ref(null)
 const useName = ref('')
 
@@ -164,5 +256,5 @@ async function loadData() {
   }
 }
 
-onMounted(loadData)
+onMounted(() => { loadData(); refreshPending() })
 </script>

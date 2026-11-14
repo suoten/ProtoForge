@@ -158,6 +158,11 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "DNP3 Distributed Network Protocol (IEEE 1815) outstation - power/water SCADA telecontrol, TCP, Class 0 integrity poll + Class 1/2/3 events, time sync, binary/analog output write (core subset)",
         "icon": "⚡",
     },
+    "dnp3_master": {
+        "display_name": "DNP3 Master",
+        "description": "DNP3 Master Mode (IEEE 1815) - Proactively connects OUT to a real DNP3 outstation/RTU, Class 0 integrity poll + Class 1/2 event polling collects telemetry/signals, supports binary output (G10) and analog output (G41) control",
+        "icon": "🔗",
+    },
     "custom_tcp": {
         "host": "0.0.0.0", "port": 38000,
         "display_name": "Custom TCP",
@@ -306,6 +311,19 @@ PROTOCOL_DEVICE_CONFIG = {
         {"key": "use_tcp", "label": "Use TCP Transport", "type": "select", "default": "true", "options": ["true", "false"], "description": "Use TCP transport (true) or UDP (false)"},
     ],
     # v1.9.0 主站模式：设备级配置（拨出目标 + 轮询策略）
+    "dnp3": [
+        {"key": "host", "label": "Listen Host", "type": "string", "default": "0.0.0.0", "description": "TCP listen address"},
+        {"key": "port", "label": "TCP Port", "type": "number", "default": 20000, "min": 1, "max": 65535, "description": "DNP3 TCP port (default 20000)"},
+        {"key": "outstation_addr", "label": "Outstation Address", "type": "number", "default": 1, "min": 1, "max": 65534, "description": "Outstation link address (1-65534)"},
+    ],
+    "dnp3_master": [
+        {"key": "host", "label": "Outstation Host", "type": "string", "default": "192.168.1.100", "description": "Target DNP3 outstation/RTU IP address (dial-out destination)"},
+        {"key": "port", "label": "Outstation Port", "type": "number", "default": 20000, "min": 1, "max": 65535, "description": "Target DNP3 TCP port (default 20000)"},
+        {"key": "outstation_addr", "label": "Outstation Address", "type": "number", "default": 1, "min": 1, "max": 65534, "description": "Target outstation link address"},
+        {"key": "master_addr", "label": "Master Address", "type": "number", "default": 1, "min": 1, "max": 65534, "description": "This master's link address"},
+        {"key": "scan_interval", "label": "Scan Interval (s)", "type": "number", "default": 2.0, "min": 0.5, "max": 3600, "description": "Class 0 integrity + event polling cycle in seconds"},
+        {"key": "timeout", "label": "Timeout (s)", "type": "number", "default": 3.0, "min": 0.5, "max": 60, "description": "Connection/IO/response timeout in seconds"},
+    ],
     "modbus_master": [
         {"key": "mode", "label": "Link Mode", "type": "select", "default": "tcp", "options": ["tcp", "rtu_over_tcp", "rtu"], "description": "tcp=Modbus TCP; rtu_over_tcp=RTU frames over TCP (serial server); rtu=serial port"},
         {"key": "host", "label": "Slave Host", "type": "string", "default": "192.168.1.100", "description": "Target Modbus slave IP address (dial-out destination)"},

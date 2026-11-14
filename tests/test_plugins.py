@@ -9,11 +9,33 @@ from protoforge import plugins as pf_plugins
 
 @pytest.fixture
 def fresh_state(monkeypatch):
-    """每个测试重置插件系统的模块级缓存。"""
+    """每个测试重置插件系统缓存，并快照/还原插件注入的全局注册表。
+
+    插件测试会把假协议写进 _PROTOCOL_CLASSES 与 PROTOCOL_DEFAULTS（真全局
+    单例）——不还原会泄漏到其他测试文件（settings_chain 一致性门禁会要求
+    Settings.plugin_test_proto_port 而误报）。
+    """
+    from protoforge.engine.defaults import PROTOCOL_DEFAULTS
+    from protoforge.protocols import PROTOCOL_REGISTRY, _PROTOCOL_CLASSES
+
     monkeypatch.setattr(pf_plugins, "_loaded_plugins", [])
     monkeypatch.setattr(pf_plugins, "_load_errors", [])
     monkeypatch.setattr(pf_plugins, "_plugins_loaded", False)
-    return pf_plugins
+    saved_classes = dict(_PROTOCOL_CLASSES)
+    saved_defaults = {k: dict(v) if isinstance(v, dict) else v for k, v in PROTOCOL_DEFAULTS.items()}
+    yield pf_plugins
+    _PROTOCOL_CLASSES.clear()
+    _PROTOCOL_CLASSES.update(saved_classes)
+    for k in list(PROTOCOL_DEFAULTS.keys()):
+        if k not in saved_defaults:
+            PROTOCOL_DEFAULTS.pop(k, None)
+    for k, v in saved_defaults.items():
+        if k in PROTOCOL_DEFAULTS:
+            PROTOCOL_DEFAULTS[k] = v
+    # 惰性加载过的类也清出 PROTOCOL_REGISTRY（load_plugins 测试可能触发）
+    for name in list(PROTOCOL_REGISTRY):
+        if name not in saved_classes:
+            PROTOCOL_REGISTRY.pop(name, None)
 
 
 def _write_plugin(root, pid="test-pack", protocols=None):

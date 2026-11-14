@@ -33,6 +33,7 @@ _PROTOCOL_CLASSES: dict[str, str] = {
     "s7plus": "protoforge.protocols.s7plus:S7PlusServer",
     # v1.16.0 DNP3：电力/水务 SCADA 远动协议（IEEE 1815），TCP 从站核心子集
     "dnp3": "protoforge.protocols.dnp3:Dnp3Server",
+    "dnp3_master": "protoforge.protocols.dnp3:Dnp3MasterServer",
     # v1.9.0 主站模式：主动拨出连接真实从站（Master/Client 侧）
     "modbus_master": "protoforge.protocols.master.modbus_master:ModbusMasterServer",
     "s7_master": "protoforge.protocols.master.s7_master:S7MasterServer",

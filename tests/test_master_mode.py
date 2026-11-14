@@ -357,6 +357,54 @@ async def test_iec104_master_loopback_gi_and_control():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+@pytest.mark.asyncio
+async def test_dnp3_master_loopback_class0_and_control():
+    """DNP3 主站自闭环：连接本地 DNP3 从站，Class 0 采集 + G10 遥控。"""
+    from protoforge.protocols.dnp3.server import Dnp3Server
+    from protoforge.protocols.dnp3.master import Dnp3MasterServer
+
+    slave = Dnp3Server()
+    port = free_tcp_port()
+    await slave.start({"host": HOST, "port": port, "outstation_addr": 7})
+    await slave.create_device(DeviceConfig(
+        id="ftu1", name="F", protocol="dnp3",
+        points=[
+            PointConfig(name="ia_tm", address="100", data_type="float32"),
+            PointConfig(name="breaker_status", address="200", data_type="bool"),
+            PointConfig(name="ctrl_trip", address="301", data_type="bool", access="rw"),
+        ],
+    ))
+    await slave.write_point("ftu1", "ia_tm", 111.5)
+    await slave.write_point("ftu1", "breaker_status", True)
+
+    master = Dnp3MasterServer()
+    await master.start({})
+    await master.create_device(DeviceConfig(
+        id="m1", name="M", protocol="dnp3_master",
+        protocol_config={"host": HOST, "port": port, "outstation_addr": 7,
+                         "master_addr": 2, "scan_interval": 0.5, "timeout": 2.0},
+        points=[
+            PointConfig(name="ia_tm", address="100", data_type="float32"),
+            PointConfig(name="breaker_status", address="200", data_type="bool"),
+            PointConfig(name="ctrl_trip", address="301", data_type="bool", access="rw"),
+        ],
+    ))
+    st = await _wait_first_poll(master, "m1", tries=60)
+    assert st["poll_ok"] >= 1 and not st["last_error"], st
+
+    pvs = {pv.name: pv for pv in await master.read_points("m1")}
+    assert pvs["ia_tm"].value == pytest.approx(111.5, abs=0.01)
+    assert pvs["breaker_status"].value is True
+
+    # 遥控（G10V2 二输出写）
+    assert await master.write_point("m1", "ctrl_trip", True) is True
+    await _wait_value(master, "m1", "ctrl_trip", True, tries=40)
+    slave_vals = {pv.name: pv.value for pv in await slave.read_points("ftu1")}
+    assert bool(slave_vals["ctrl_trip"]) is True
+    await _teardown(master, slave)
+
+
+@pytest.mark.asyncio
 async def test_engine_master_device_read_write():
     from protoforge.engine.engine import SimulationEngine
     from protoforge.protocols.master.modbus_master import ModbusMasterServer

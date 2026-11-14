@@ -227,14 +227,17 @@ def _parse_objects(apdu: bytes) -> list[dict[str, Any]]:
             objects.append(obj)
             continue
         if qcode in (0x00, 0x01):  # 数量前缀（1 字节） / 16 位索引+数量前缀
+            # FIXED(v1.16.1): 两种 qualifier 的 payload 都按 count × per 精确截取——
+            # 0x01 分支此前给"剩余全部"，多对象响应的后续对象块会丢进前一个
+            # payload（主站逐对象解析时错位丢点，黄金互证测试抓出）
+            per = _OBJ_SIZE.get((g, v), 0)
             if qcode == 0x00:
                 if i + 1 > len(apdu):
                     break
                 count = apdu[i]
                 i += 1
                 obj["count"] = count
-                obj["payload"] = apdu[i:i + count * _OBJ_SIZE.get((g, v), 0)]
-                i += count * _OBJ_SIZE.get((g, v), 0)
+                take = count * per if per else len(apdu) - i
             else:
                 if i + 2 > len(apdu):
                     break
@@ -242,22 +245,35 @@ def _parse_objects(apdu: bytes) -> list[dict[str, Any]]:
                 i += 2
                 obj["count"] = count
                 obj["start"] = 0
-                obj["payload"] = apdu[i:]
-                i = len(apdu)
+                take = count * per if per else len(apdu) - i
+            obj["payload"] = apdu[i:i + take]
+            i += take
         else:
             break
         objects.append(obj)
     return objects
 
 
-# 每点固定字节数（数量前缀解析用；索引前缀/变长对象走 payload 直读）
+# 每点固定字节数（Qualifier 0x01 索引前缀下 payload 精确截取用：
+# payload = count × per，否则多对象响应的后续对象块会丢进前一个 payload）
 _OBJ_SIZE: dict[tuple[int, int], int] = {
-    (G_TIME, 1): 6,
+    (G_BINARY_INPUT, 2): 3,  # IOA16 + flag
+    (G_BINARY_INPUT_EVENT, 1): 3,  # IOA16 + flag
+    (G_ANALOG_INPUT, 6): 7,  # IOA16 + flag + int32
+    (32, 1): 7,  # IOA16 + flag + int32（32 位模拟量事件）
+    (22, 2): 5,  # IOA16 + flag + int16
+    (G_ANALOG_OUTPUT, 2): 5,  # IOA16 + flag + int16
+    (G_CONTROL_OUTPUT, 2): 3,  # IOA16 + flag
+    (G_TIME, 1): 6,  # 48 位时间
 }
 
 
 def encode_static_points(points: list[tuple[int, bool | float | int, str]]) -> bytes:
-    """编码静态数据为对象序列（Group 20 Var 6 / Group 1 Var 2，Qualifier 0x01 索引前缀）。"""
+    """编码静态数据为对象序列（Group 20 Var 6 / Group 1 Var 2，Qualifier 0x01 索引前缀）。
+
+    模拟量采用 **×1000 定标** int32（DNP3 模拟量本质是定标整数——
+    v1.16.0 直接 int(v) 截断小数是 bug，黄金互证测试抓出）。
+    """
     analog, binary = [], []
     for ioa, value, dt in points:
         if dt == "bool":
@@ -274,12 +290,12 @@ def encode_static_points(points: list[tuple[int, bool | float | int, str]]) -> b
         out += bytes([G_ANALOG_INPUT, 6, QUAL_INDEX16])
         out += struct.pack("<H", len(analog))
         for ioa, v in analog:
-            out += struct.pack("<H", ioa) + bytes([_FLAG_ONLINE]) + struct.pack("<i", int(v))
+            out += struct.pack("<H", ioa) + bytes([_FLAG_ONLINE]) + struct.pack("<i", int(round(float(v) * 1000)))
     return bytes(out)
 
 
 def encode_events(events: list[tuple[int, bool | float | int, str]]) -> bytes:
-    """编码变化事件（Group 2 Var 1 / Group 20 Var 2，Qualifier 0x01 索引前缀）。"""
+    """编码变化事件（Group 2 Var 1 / Group 32 Var 1，Qualifier 0x01 索引前缀）。模拟量事件为 32 位组（16 位在 x1000 定标下溢出）。"""
     analog, binary = [], []
     for ioa, value, dt in events:
         if dt == "bool":
@@ -293,10 +309,12 @@ def encode_events(events: list[tuple[int, bool | float | int, str]]) -> bytes:
         for ioa, v in binary:
             out += struct.pack("<H", ioa) + bytes([_FLAG_ONLINE | (0x80 if v else 0)])
     if analog:
-        out += bytes([G_ANALOG_INPUT_EVENT, 2, QUAL_INDEX16])
+        # 模拟量事件用 Group 32 Var 1（32 位带标志）——16 位组在 x1000 定标下溢出
+        out += bytes([32, 1, QUAL_INDEX16])
         out += struct.pack("<H", len(analog))
         for ioa, v in analog:
-            out += struct.pack("<H", ioa) + bytes([_FLAG_ONLINE]) + struct.pack("<h", max(-32768, min(32767, int(v))))
+            out += struct.pack("<H", ioa) + bytes([_FLAG_ONLINE]) + struct.pack(
+                "<i", int(round(float(v) * 1000)))
     return bytes(out)
 
 

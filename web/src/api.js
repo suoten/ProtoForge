@@ -241,6 +241,10 @@ resetAllDevicePoints: (id) => d(api.post(`/devices/${id}/points/reset-all`)),
   aiExtractPoints: (payload) => d(api.post('/ai/extract-points', payload)),
   aiAnalyzeLogs: (payload) => d(api.post('/ai/analyze-logs', payload)),
 
+  // v1.16.x: 模板市场（社区提交 + 审核）
+  contributeTemplate: (payload) => d(api.post('/templates/contribute', payload)),
+  listContributions: (status = 'pending') => d(api.get('/templates/contributions', { params: { status } })),
+
   // Device/Scenario clone
   cloneDevice: (id, params) => d(api.post(`/devices/${id}/clone`, params || {})),
   cloneScenario: (id, params) => d(api.post(`/scenarios/${id}/clone`, params || {})),

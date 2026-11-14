@@ -131,10 +131,14 @@ def test_encode_static_points_golden():
     # 模拟量：G20V6 索引前缀
     i = body.index(bytes([G_ANALOG_INPUT, 6, 0x01]))
     assert struct.unpack("<H", body[i + 3:i + 5])[0] == 2  # count
-    # 第一点：IOA=100 + flag(0x01) + int32(1)
+    # 第一点：IOA=100 + flag(0x01) + int32 定标 ×1000（1.0 → 1000）
     assert body[i + 5:i + 7] == struct.pack("<H", 100)
     assert body[i + 7] == 0x01
-    assert struct.unpack("<i", body[i + 8:i + 12])[0] == 1
+    assert struct.unpack("<i", body[i + 8:i + 12])[0] == 1000
+    # 第二点：2.5 → 2500（定标保留小数精度）
+    j = i + 12
+    assert struct.unpack("<H", body[j:j + 2])[0] == 101
+    assert struct.unpack("<i", body[j + 3:j + 7])[0] == 2500
 
 
 def test_encode_events_golden():
@@ -144,12 +148,12 @@ def test_encode_events_golden():
     assert struct.unpack("<H", body[3:5])[0] == 1
     assert body[5:7] == struct.pack("<H", 200)
     assert body[7] == 0x81
-    # 模拟量事件 G22V2（16 位带标志）
-    i = body.index(bytes([22, 2, 0x01]))
+    # 模拟量事件 G32V1（32 位带标志）——16 位组在 ×1000 定标下溢出
+    i = body.index(bytes([32, 1, 0x01]))
     assert struct.unpack("<H", body[i + 3:i + 5])[0] == 1
     assert body[i + 5:i + 7] == struct.pack("<H", 100)
     assert body[i + 7] == 0x01
-    assert struct.unpack("<h", body[i + 8:i + 10])[0] == 66
+    assert struct.unpack("<i", body[i + 8:i + 12])[0] == 66600  # 66.6 × 1000 定标
 
 
 def test_parse_objects_class0_poll():
@@ -184,3 +188,48 @@ def test_build_response_golden():
     assert apdu[0] == 0xC3  # FIR|FIN|SEQ=3
     assert apdu[1] == 0x81  # Read Response
     assert apdu[2:5] == bytes([G_ANALOG_INPUT, 6, 0x01])  # G20V6 索引前缀
+
+
+# ---------------------------------------------------------------------------
+# 主站解析互证：从站 encode ↔ 主站 parse_objects_data roundtrip（v1.16.1）
+# ---------------------------------------------------------------------------
+
+def test_master_parse_static_roundtrip():
+    from protoforge.protocols.dnp3.master import parse_objects_data
+    from protoforge.protocols.dnp3.server import _parse_objects
+    pts = [(100, 1.0, "float32"), (101, -2.5, "float32"), (200, True, "bool"), (201, False, "bool")]
+    body = encode_static_points(pts)
+    # 完整互证：_parse_objects 精确切分各对象 → parse_objects_data 解析数据段
+    parsed = []
+    for obj in _parse_objects(body):
+        if obj["qualifier"] == 0x01 and obj["count"]:
+            parsed += parse_objects_data(obj["group"], obj["variation"], obj["payload"])
+    assert len(parsed) == 4
+    d = {ioa: v for ioa, v, _dt in parsed}
+    assert d[100] == pytest.approx(1.0)
+    assert d[101] == pytest.approx(-2.5)
+    assert d[200] is True and d[201] is False
+
+
+def test_master_parse_events_roundtrip():
+    from protoforge.protocols.dnp3.master import parse_objects_data
+    from protoforge.protocols.dnp3.server import _parse_objects
+    events = [(200, True, "bool"), (100, 66.6, "float32")]
+    body = encode_events(events)
+    parsed = []
+    for obj in _parse_objects(body):
+        if obj["qualifier"] == 0x01 and obj["count"]:
+            parsed += parse_objects_data(obj["group"], obj["variation"], obj["payload"])
+    assert len(parsed) == 2
+    d = {ioa: v for ioa, v, _dt in parsed}
+    assert d[200] is True
+    assert d[100] == pytest.approx(66.6)
+
+
+def test_master_class0_request_golden():
+    """主站 Class 0 完整性读请求帧：C0 01 3C 01 06，链路层黄金断言。"""
+    from protoforge.protocols.dnp3.master import Dnp3MasterServer  # noqa: F401 确认可导入
+    frame = build_link_frame(1, 100, 0xC4, b"\xC0\x01\x3C\x01\x06")
+    parsed, _ = parse_link_frame(frame)
+    assert parsed["dest"] == 1 and parsed["src"] == 100
+    assert parsed["user_data"] == b"\xC0\x01\x3C\x01\x06"
