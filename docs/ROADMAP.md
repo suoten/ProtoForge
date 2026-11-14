@@ -45,7 +45,9 @@
 
 ### v1.16 「协议纵深」
 
-- DNP3（北美与水务/电力刚需，也是国际化敲门砖）。
+- ✅ **DNP3 从站**（v1.16.0，2026-11-14）：TCP 核心子集（Class 0 完整性读/Class 1/2/3 事件/时间同步/G10/G41 控制输出写），分块 CRC 链路层 + FIR/FIN 伪传输层纯函数化，13 例黄金用例门禁；内置 FTU-DNP3 模板。DNP3 master 排期 v1.16.x。
+- ✅ **模板市场 v1**（v1.16.0，2026-11-14）：社区提交 → 管理员审核 → 批准模板复用插件机制持久加载；`/templates/contribute|contributions` API 完整，Web 提交界面排 v1.16.x。
+- IEC 61850 GOOSE/SV（继保测试场景）。
 - IEC 61850 GOOSE/SV（继保测试场景）。
 - MQTT Broker 升级支持 5.0（当前仅 3.1.1，README 已知最常踩的坑）。
 - HART / 更多家用仪表协议；主站矩阵补全（BACnet client、DNP3 master）。

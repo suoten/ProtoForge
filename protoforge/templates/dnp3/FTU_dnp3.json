@@ -1,0 +1,21 @@
+{
+  "id": "plugin-FTU-dnp3",
+  "name": "馈线终端 FTU-DNP3（行业包）",
+  "protocol": "dnp3",
+  "description": "10kV 馈线终端单元 DNP3 版：遥测电流电压（模拟量 Group 20）、遥信开关/接地/储能（二输入 Group 1）、遥控分合闸（控制输出 Group 10）——address 字段即 DNP3 IOA。配网自动化 SCADA 联调（IEEE 1815）。",
+  "manufacturer": "行业包示例",
+  "model": "FTU-DNP3-2024",
+  "protocol_config": {"outstation_addr": 1},
+  "tags": ["电力", "FTU", "DNP3", "配网", "行业包", "industry-pack"],
+  "points": [
+    {"name": "ia_tm", "address": "100", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "generator_config": {"min": 30, "max": 250}, "min_value": 0, "max_value": 400, "description": "遥测：A相电流 IOA=100"},
+    {"name": "ib_tm", "address": "101", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "generator_config": {"min": 30, "max": 250}, "min_value": 0, "max_value": 400, "description": "遥测：B相电流 IOA=101"},
+    {"name": "ic_tm", "address": "102", "data_type": "float32", "unit": "A", "access": "r", "generator_type": "random", "generator_config": {"min": 30, "max": 250}, "min_value": 0, "max_value": 400, "description": "遥测：C相电流 IOA=102"},
+    {"name": "uab_tm", "address": "103", "data_type": "float32", "unit": "V", "access": "r", "generator_type": "sine", "generator_config": {"min": 9800, "max": 10200, "period": 600}, "min_value": 9000, "max_value": 11000, "description": "遥测：线电压 Uab IOA=103"},
+    {"name": "breaker_status", "address": "200", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": true, "description": "遥信：断路器合位 IOA=200（Class 1 事件源）"},
+    {"name": "ground_fault", "address": "201", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": false, "description": "遥信：接地故障 IOA=201"},
+    {"name": "spring_charged", "address": "202", "data_type": "bool", "unit": "", "access": "r", "generator_type": "fixed", "fixed_value": true, "description": "遥信：弹簧已储能 IOA=202"},
+    {"name": "ctrl_close", "address": "300", "data_type": "bool", "unit": "", "access": "rw", "generator_type": "fixed", "fixed_value": false, "description": "遥控：合闸命令 IOA=300（G10V2 写）"},
+    {"name": "ctrl_trip", "address": "301", "data_type": "bool", "unit": "", "access": "rw", "generator_type": "fixed", "fixed_value": false, "description": "遥控：分闸命令 IOA=301"}
+  ]
+}

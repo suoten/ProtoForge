@@ -152,6 +152,12 @@ PROTOCOL_DEFAULTS: dict[str, dict[str, Any]] = {
         "description": "CJ/T 188-2004 Data Transmission Protocol for Metering Instruments - China urban construction industry standard, supports water/gas/heat meters, BCD encoding, type-code addressing",
         "icon": "💧",
     },
+    "dnp3": {
+        "host": "0.0.0.0", "port": 20000,
+        "display_name": "DNP3",
+        "description": "DNP3 Distributed Network Protocol (IEEE 1815) outstation - power/water SCADA telecontrol, TCP, Class 0 integrity poll + Class 1/2/3 events, time sync, binary/analog output write (core subset)",
+        "icon": "⚡",
+    },
     "custom_tcp": {
         "host": "0.0.0.0", "port": 38000,
         "display_name": "Custom TCP",

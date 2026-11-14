@@ -49,6 +49,7 @@ class TemplateManager:
         self._load_from_dir(_TEMPLATES_DIR / "custom_tcp")
         self._load_from_dir(_TEMPLATES_DIR / "custom_udp")
         self._load_from_dir(_TEMPLATES_DIR / "s7plus")
+        self._load_from_dir(_TEMPLATES_DIR / "dnp3")
         self._loaded = True
         logger.info("Loaded %d built-in templates", len(self._templates))
 

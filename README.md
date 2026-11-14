@@ -3,7 +3,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <h1>🖥️ ProtoForge</h1>
-<p><b>一台电脑 = 31 种工业设备</b></p>
+<p><b>一台电脑 = 32 种工业设备</b></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
 [![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
@@ -20,8 +20,8 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 > 浏览器打开 **http://localhost:8000**，用 `admin` / `admin` 登录
 
-**31 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · **测试数据闭环** · **性能基准** · ✅ Windows / Linux / macOS
-> ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（31 种协议 / 主站模式 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
+**32 种协议** · **133 设备模板** · **9 种故障注入** · **协议录制回放** · **自动化测试引擎** · **测试数据闭环** · **性能基准** · ✅ Windows / Linux / macOS
+> ⚠️ **唯一官方仓库声明**：ProtoForge 的唯一官方仓库是 [suoten/ProtoForge](https://github.com/suoten/ProtoForge)（Gitee 同步：[gitee.com/suoten/ProtoForge](https://gitee.com/suoten/ProtoForge)）。GitHub 上其他同名或改名的仓库（如 sim-foundry 等）均为第三方搬运的旧版本快照，**不提供更新、新协议与支持**，最新版本（32 种协议 / 主站模式 / 桌面版 / 点表导入）以本仓库为准。发现疑似搬运仓库欢迎举报。
 
 ![仪表盘](docs/images/1.png)
 
@@ -51,7 +51,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 |------|---------|------------|
 | 测 Modbus | 买 PLC（￥3000+） | 1 条命令启动虚拟设备 |
 | GB28181 联调 | 买摄像头（￥500+） | 自动注册、自动推流 |
-| 测 31 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
+| 测 32 种协议 | 买各种厂商设备（￥50000+） | 一台电脑全部模拟 |
 | 压力测试 | 部署几十台物理设备 | 一键生成 100 台虚拟设备 |
 | 给客户演示 | 带一堆硬件出差 | 笔记本上完整演示 |
 
@@ -102,7 +102,7 @@ docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin 
 
 ![设备管理](docs/images/2.png)
 
-### 🌐 协议服务 — 28 种从站仿真 + 3 种主站模式
+### 🌐 协议服务 — 29 种从站仿真 + 3 种主站模式
 
 Modbus TCP/RTU、OPC-UA、MQTT、HTTP、GB28181、BACnet、Siemens S7、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS，全部支持独立配置端口和高级参数。
 
@@ -187,7 +187,7 @@ WebSocket 零延迟推送，按协议/方向筛选，关键词搜索，支持暂
 
 ## ✨ 核心特性
 
-- **31 种工业协议** — 28 种从站仿真（Modbus TCP/RTU、OPC-UA Server、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP）+ 3 种主站模式（Modbus Master、S7 Master、IEC 104 Master）
+- **32 种工业协议** — 29 种从站仿真（Modbus TCP/RTU、OPC-UA Server、MQTT、HTTP、GB28181、BACnet、Siemens S7/S7Comm-Plus、Mitsubishi MC、Omron FINS、Rockwell AB、OPC-DA、FANUC FOCAS、MTConnect、Mettler-Toledo、PROFINET IO、EtherCAT、IEC 60870-5-104、IEC 61850、CoAP、DDS、DLT/T 645、CJ/T 188、松下 MEWTOCOL、自定义 TCP/UDP、DNP3）+ 3 种主站模式（Modbus Master、S7 Master、IEC 104 Master）
 - **协议黄金用例门禁** — 25/28 服务端协议字节级黄金帧回归 + 3 主站协议回环集成（真实 socket 收发、CI 强制门禁），协议实现对照标准原文逐字节验证，杜绝"模拟器不像真设备"
 - **测试数据闭环（v1.10.0）** — 环境即代码（YAML manifest 进 Git，`protoforge env apply/diff/export`）、数据基线容差对比（回归结论直接出报告）、Allure2/归档 PDF 报告、测试计划 cron 定时执行 + 钉钉/企业微信/邮件/Webhook 通知、两次执行对比定位回归
 - **性能基准与大规模（v1.11.0）** — 1000 设备/10 万测点实测 tick 1.1ms；Modbus 线级读 P99 0.54ms、2458 读/秒；`protoforge benchmark` 一条命令复现官方数字，回退 >10% CI 门禁；性能白皮书随版本发布
@@ -417,7 +417,7 @@ protoforge demo
 `pip install -e .` 只安装核心协议（Modbus TCP/RTU、HTTP、GB28181、MC、FINS、AB、OPC-DA、FANUC、MTConnect、Toledo、PROFINET、EtherCAT、IEC 104、IEC 61850、CoAP、DDS、松下 MEWTOCOL 共 17 种，开箱即用）。以下 4 种协议需要额外依赖：
 
 ```bash
-pip install -e ".[all]"        # 安装全部 31 种协议
+pip install -e ".[all]"        # 安装全部 32 种协议
 pip install -e ".[opcua]"     # OPC-UA
 pip install -e ".[mqtt]"      # MQTT
 pip install -e ".[bacnet]"    # BACnet
@@ -1413,7 +1413,7 @@ ProtoForge/
 │   ├── config.py             # 配置管理
 │   ├── db/                   # 数据库层（SQLite + PostgreSQL）
 │   ├── models/               # 数据模型
-│   ├── protocols/            # 28 种从站服务端 + master/ 主站实现
+│   ├── protocols/            # 29 种从站服务端 + master/ 主站实现
 │   ├── testing/              # IoT 测试平台（计划/执行/合规检测）
 │   ├── sdk/                  # Python SDK（同步/异步）
 │   └── templates/            # 133 设备模板（JSON）
@@ -1824,9 +1824,9 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 
 | 特性 | ProtoForge | Modbus Slave/Poll | Kepware | Node-RED Mock | 真实 PLC |
 | ---- | ---------- | ----------------- | ------- | ------------- | -------- |
-| **协议数量** | 31 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
+| **协议数量** | 32 种 | 仅 Modbus | 150+ (需付费驱动) | 仅 MQTT/HTTP | 单一品牌 |
 | **开源免费** | ✅ MIT | ❌ 付费 | ❌ 商业 | ✅ 但需自建 | ❌ |
-| **多协议同时仿真** | ✅ 31 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
+| **多协议同时仿真** | ✅ 32 种同时 | ❌ | ✅ (需购买驱动) | ❌ | ❌ |
 | **Web 管理界面** | ✅ 开箱即用 | ❌ 桌面软件 | ✅ | ❌ | 品牌专用 |
 | **设备模板库** | ✅ 133 模板 | ❌ 手动配置 | ✅ | ❌ | — |
 | **批量设备生成** | ✅ 一键 100 台 | ❌ | ✅ (付费) | ❌ | ❌ |
@@ -1838,7 +1838,7 @@ PROTOFORGE_FAILOVER_STANDBY=http://standby:8000
 | **中文支持** | ✅ 双语 | ❌ | ❌ | ❌ | — |
 | **成本** | **免费** | $69+ | $1,500+/驱动 | 免费 | $500+ |
 
-> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 31 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
+> 💡 **ProtoForge 的独特价值**：一台电脑同时仿真 32 种协议设备，零硬件成本。不是替代真实 PLC，而是让你在**没有硬件**时也能开发、测试、联调。
 
 ### 协议一致性说明
 
@@ -1919,7 +1919,7 @@ protoforge run --host 0.0.0.0 --port 8000
 
 | 功能 | 开源版 (MIT) | 企业版 |
 | ---- | ----------- | ------ |
-| **协议数量** | 31 种全支持（28 从站 + 3 主站） | 31 种 + 定制协议 |
+| **协议数量** | 32 种全支持（29 从站 + 3 主站） | 32 种 + 定制协议 |
 | **设备模板** | 133 模板 | 133 + 行业定制模板 |
 | **同时仿真设备数** | 无限制 | 无限制 |
 | **Web 管理界面** | ✅ 完整功能 | ✅ + 品牌定制 |
