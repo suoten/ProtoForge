@@ -200,7 +200,7 @@ class ProtoForgeClient:
         return self._post("/templates", json=template)
 
     def search_templates(self, q: str = "", protocol: str | None = None,
-                         tag: str | None = None) -> list[Any]:
+                         tag: str | None = None, limit: int | None = None) -> list[Any]:
         params: dict[str, Any] = {}
         if q:
             params["q"] = q
@@ -208,6 +208,8 @@ class ProtoForgeClient:
             params["protocol"] = protocol
         if tag:
             params["tag"] = tag
+        if limit:
+            params["limit"] = limit  # FIXED(v1.13.4): 服务端已支持 limit，SDK 补齐
         return self._unwrap_list("/templates/search", "templates", params=params)
 
     def list_template_tags(self) -> list[Any]:
@@ -547,6 +549,16 @@ class ProtoForgeClient:
             payload["device_id"] = device_id
         return self._post("/ai/create-device-from-text", json=payload)
 
+    def ai_analyze_logs(self, question: str = "", count: int = 200,
+                        protocol: str | None = None, device_id: str | None = None,
+                        direction: str | None = None,
+                        message_type: str | None = None) -> dict[str, Any]:
+        """AI 调试排障（v1.13.4）：调试日志 → LLM 结构化诊断（每条结论带日志出处）。"""
+        payload: dict[str, Any] = {"question": question, "count": count,
+                                   "protocol": protocol or "", "device_id": device_id or "",
+                                   "direction": direction or "", "message_type": message_type or ""}
+        return self._post("/ai/analyze-logs", json=payload)
+
 
 class AsyncProtoForgeClient:
     def __init__(self, base_url: str = "", timeout: float = 30.0,
@@ -691,7 +703,7 @@ class AsyncProtoForgeClient:
         return await self._unwrap_list("/templates", "templates", params=params)
 
     async def search_templates(self, q: str = "", protocol: str | None = None,
-                               tag: str | None = None) -> list[Any]:
+                               tag: str | None = None, limit: int | None = None) -> list[Any]:
         params: dict[str, Any] = {}
         if q:
             params["q"] = q
@@ -699,6 +711,8 @@ class AsyncProtoForgeClient:
             params["protocol"] = protocol
         if tag:
             params["tag"] = tag
+        if limit:
+            params["limit"] = limit  # FIXED(v1.13.4): 服务端已支持 limit，SDK 补齐
         return await self._unwrap_list("/templates/search", "templates", params=params)
 
     async def create_scenario(self, scenario_id: str, name: str,
@@ -1060,3 +1074,13 @@ class AsyncProtoForgeClient:
         if device_id:
             payload["device_id"] = device_id
         return await self._post("/ai/create-device-from-text", json=payload)
+
+    async def ai_analyze_logs(self, question: str = "", count: int = 200,
+                              protocol: str | None = None, device_id: str | None = None,
+                              direction: str | None = None,
+                              message_type: str | None = None) -> dict[str, Any]:
+        """AI 调试排障（v1.13.4）：调试日志 → LLM 结构化诊断（每条结论带日志出处）。"""
+        payload: dict[str, Any] = {"question": question, "count": count,
+                                   "protocol": protocol or "", "device_id": device_id or "",
+                                   "direction": direction or "", "message_type": message_type or ""}
+        return await self._post("/ai/analyze-logs", json=payload)

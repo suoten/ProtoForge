@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.13.4 — 2026-11-14
+
+### ✨ 新增 — AI 调试排障：调试日志 → 结构化诊断（每条结论带日志出处）
+
+v1.13 AI 闭环的最后一块：**AI 导入 → AI 仿真验证 → AI 排障**。调试日志喂给
+LLM（默认本地 Ollama，OpenAI 兼容可切），返回结构化诊断——按数据红线设计：
+**没有引用真实日志行的结论直接丢弃**，禁止编造出处。
+
+- 新 REST：`POST /ai/analyze-logs`——服务端拉取调试日志（支持
+  count/protocol/device_id/direction/message_type 过滤）后送 LLM 分析
+- 诊断结构：`summary` + `findings[]`（issue/evidence 出处/likely_cause/
+  suggested_fix/confidence）+ notes；confidence 非法回落 medium，
+  超过 10 条截断
+- 新 CLI：`protoforge ai diagnose --device X --question "为什么通讯中断"`
+  人类可读输出（摘要/根因/建议/出处）
+- 新 MCP 工具：`ai_analyze_logs`（工具总数 23 → 24）；SDK 同步/异步新增
+  `ai_analyze_logs`
+- prompt 内置协议语义（Modbus 异常码表/S7 拒绝/OPC-UA BadXxx/MQTT 认证失败等）
+- 顺带修复：`GET /templates/search` 与 SDK `search_templates` 补上一直缺的
+  `limit` 参数（此前文档声明支持但服务端未实现）
+
+### 🧪 测试
+
+- 新增 `tests/test_ai_analyze.py`（8 例）：证据红线丢弃、置信度回落、截断、
+  修复重试、LLM 不可达提示；MCP 套件扩至 33 例
+
 ## v1.13.3 — 2026-11-10
 
 ### 🐛 修复/防御 — PyPI 同名假包污染检测（GitHub issue #37 实锤案例）

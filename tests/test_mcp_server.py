@@ -92,6 +92,10 @@ class FakeClient:
     def ai_create_device_from_text(self, text, name="", device_id=None, protocol_hint=""):
         return {"ok": True, "device_id": device_id or "ai-dev", "point_count": 4, "notes": []}
 
+    def ai_analyze_logs(self, question="", count=200, protocol=None, device_id=None,
+                        direction=None):
+        return {"ok": True, "diagnosis": {"summary": "链路正常", "findings": []}, "notes": []}
+
 
 @pytest.fixture
 def backend(monkeypatch):
@@ -122,6 +126,7 @@ BACKEND_METHODS = [
     ("connection_guide", ("d1",)),
     ("ai_extract_points", ("说明书文本",)),
     ("ai_create_device_from_text", ("说明书文本",)),
+    ("ai_analyze_logs", ()),
 ]
 
 
@@ -218,5 +223,5 @@ def test_build_mcp_server_registers_tools(backend):
         pytest.skip("FastMCP 内部 API 变化，跳过注册断言")
     assert {"server_info", "create_device", "write_point", "quick_test",
             "connection_guide", "get_logs", "ai_extract_points",
-            "ai_create_device_from_text"} <= tools
-    assert len(tools) >= 22
+            "ai_create_device_from_text", "ai_analyze_logs"} <= tools
+    assert len(tools) >= 24

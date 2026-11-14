@@ -175,6 +175,12 @@ class MCPBackend:
         return self.call("ai_create_device_from_text", text, name=name,
                          device_id=device_id, protocol_hint=protocol_hint)
 
+    def ai_analyze_logs(self, question: str = "", count: int = 200,
+                        protocol: str | None = None, device_id: str | None = None,
+                        direction: str | None = None) -> dict[str, Any]:
+        return self.call("ai_analyze_logs", question=question, count=count,
+                         protocol=protocol, device_id=device_id, direction=direction)
+
 
 def build_mcp_server(backend: MCPBackend) -> "FastMCP":
     """把 backend 的业务方法注册为 MCP 工具（闭包保留函数名/文档串以生成 schema）。"""
@@ -308,6 +314,13 @@ def build_mcp_server(backend: MCPBackend) -> "FastMCP":
         return _safe(backend.ai_create_device_from_text, text, name, device_id or None,
                      protocol_hint)
 
+    @mcp.tool()
+    def ai_analyze_logs(question: str = "", count: int = 200, protocol: str = "",
+                        device_id: str = "", direction: str = "") -> str:
+        """AI troubleshoot (v1.13.4): analyze recent protocol debug logs with the configured LLM (local Ollama by default). Returns a diagnosis where every finding cites real log lines as evidence. Filters: protocol / device_id / direction (inbound|outbound|system)."""
+        return _safe(backend.ai_analyze_logs, question, count, protocol or None,
+                     device_id or None, direction or None)
+
     @mcp.resource("protoforge://info")
     def protoforge_info() -> str:
         """Current ProtoForge instance info."""
@@ -348,7 +361,7 @@ def run_mcp(server_url: str = "", username: str = "", password: str = "",
 
     # stdio 传输复用 stdout 走协议帧，横幅必须打到 stderr
     print(f"+ ProtoForge MCP Server 就绪 -> {backend.base_url} (transport={transport})", file=sys.stderr)
-    print("  tools: 23 (system/protocols/templates/devices/points/scenarios/logs/tests/guide/ai)", file=sys.stderr)
+    print("  tools: 24 (system/protocols/templates/devices/points/scenarios/logs/tests/guide/ai)", file=sys.stderr)
     if transport == "streamable-http":
         mcp.settings.host = host
         mcp.settings.port = port

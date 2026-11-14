@@ -25,7 +25,8 @@ async def list_templates(protocol: str | None = None, _user: dict[str, Any] = De
 
 
 @router.get("/templates/search")
-async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None, _user: dict[str, Any] = Depends(require_viewer)):
+async def search_templates(q: str = "", protocol: str | None = None, tag: str | None = None,
+                           limit: int | None = None, _user: dict[str, Any] = Depends(require_viewer)):
     tm = _get_template_manager()
     templates = tm.list_templates(protocol=protocol)
 
@@ -38,6 +39,9 @@ async def search_templates(q: str = "", protocol: str | None = None, tag: str | 
 
     if tag:
         templates = [t for t in templates if tag in (t.tags or [])]
+    # FIXED(v1.13.4): 补 limit 参数——SDK/文档此前声明支持但服务端未实现（issue 自查）
+    if limit is not None and limit > 0:
+        templates = templates[:limit]
     return {"templates": templates}
 
 

@@ -1716,7 +1716,7 @@ protoforge mcp                        # 启动 MCP Server（stdio，供桌面客
 
 > 💡 生产环境请把用户名/密码换成真实凭据（token 过期会自动重登）。远程接入用 `protoforge mcp --transport streamable-http --host 0.0.0.0 --port 8808`，客户端连 `http://<ip>:8808/mcp`。
 
-### 工具清单（23 个）
+### 工具清单（24 个）
 
 | 类别 | 工具 | 说明 |
 | --- | --- | --- |
@@ -1729,7 +1729,7 @@ protoforge mcp                        # 启动 MCP Server（stdio，供桌面客
 | 调试 | `get_logs` | 协议报文日志按协议/关键词过滤 |
 | 测试 | `quick_test` `get_test_report` | 跑内置断言套件、取报告 |
 | 接入 | `connection_guide` | 告诉 AI 你的客户端该连哪个 host:port、地址怎么写 |
-| AI | `ai_extract_points` `ai_create_device_from_text` | LLM 解析说明书→点表 / 解析+建设备一步到位（本地 Ollama） |
+| AI | `ai_extract_points` `ai_create_device_from_text` `ai_analyze_logs` | LLM 解析说明书→点表 / 解析+建设备 / 调试日志→结构化诊断（结论带出处，本地 Ollama） |
 
 > 💡 典型指令：*"找一个西门子 PLC 模板，建一台叫'测试PLC'的设备，然后告诉我我的 S7 客户端应该连什么地址"*——AI 自动完成 search_templates → create_device → connection_guide 全链路。另有 `protoforge://info` 资源与 verify_loop 引导 prompt。
 
@@ -1756,7 +1756,18 @@ protoforge ai create-device 电表说明书.txt --name 多功能电表 \
 | `PROTOFORGE_AI_API_KEY` | 空 | 本地模型留空 |
 | `PROTOFORGE_AI_TIMEOUT` | `180` | 秒（本地模型首次推理较慢） |
 
-MCP 对应两个工具：`ai_extract_points`（解析复核）与 `ai_create_device_from_text`（解析+建设备一步到位）——对着 Claude 说"把这份说明书建成仿真设备"即可。Web 界面集成（v1.7 点表页加"AI 解析"入口）排期 v1.14。
+MCP 对应工具：`ai_extract_points`（解析复核）、`ai_create_device_from_text`（解析+建设备一步到位）、`ai_analyze_logs`（调试日志→诊断）——对着 Claude 说"把这份说明书建成仿真设备"或"分析一下 modbus 日志为什么报通讯错误"即可。Web 界面集成（v1.7 点表页加"AI 解析"入口）排期 v1.14。
+
+#### 🩺 AI 调试排障（v1.13.4 新增）
+
+调试日志喂给 LLM，返回**每条结论都引用真实日志行作证据**的结构化诊断——没有出处的结论直接丢弃，禁止编造：
+
+```bash
+protoforge ai diagnose --device plc-1 --question "为什么 HMI 通讯中断"
+protoforge ai diagnose --protocol modbus_tcp --count 500 -o 诊断报告.json
+```
+
+诊断内置协议语义（Modbus 异常码 0x01-0x0A、S7 拒绝、OPC-UA BadXxx、MQTT 认证失败等），输出 `summary + findings[]（issue/出处/根因/建议/置信度）`。REST 端点 `POST /ai/analyze-logs` 供 CI/工单系统集成。
 
 ***
 

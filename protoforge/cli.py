@@ -195,7 +195,14 @@ def main():
     ai_create.add_argument("--name", default="", help="设备名（默认用 LLM 提取的设备名）")
     ai_create.add_argument("--device-id", default="", help="设备 ID（默认按名称自动生成）")
     ai_create.add_argument("--protocol", default="", help="目标协议提示（如 modbus_tcp）")
-    for _sp in (ai_ext, ai_create):
+    ai_diag = ai_sub.add_parser("diagnose", help="AI 调试排障：分析调试日志 → 结构化诊断（每条结论带日志出处，v1.13.4）")
+    ai_diag.add_argument("--device", default="", help="只分析指定设备的日志")
+    ai_diag.add_argument("--protocol", default="", help="只分析指定协议的日志（如 modbus_tcp）")
+    ai_diag.add_argument("--direction", default="", help="方向过滤（inbound/outbound/system）")
+    ai_diag.add_argument("--count", type=int, default=200, help="分析的日志条数（默认 200）")
+    ai_diag.add_argument("--question", default="", help="具体问题（如：为什么 HMI 通讯中断）")
+    ai_diag.add_argument("--output", "-o", default="", help="保存 JSON 到文件（默认 stdout）")
+    for _sp in (ai_ext, ai_create, ai_diag):
         _sp.add_argument("--server", default="http://localhost:8000", help="ProtoForge server URL")
         _sp.add_argument("--token", default="", help="Authentication token")
 
@@ -915,6 +922,38 @@ def _ai_command(args):
         print(f"+ 当前模型 {cfg.model}{hit}")
         return
 
+    if cmd == "diagnose":
+        payload = {"question": getattr(args, "question", ""), "count": args.count,
+                   "protocol": args.protocol, "device_id": args.device,
+                   "direction": args.direction}
+        print(f"+ 请求 LLM 分析最近 {args.count} 条调试日志...")
+        r = _api_request(args.server, "POST", "/ai/analyze-logs", args.token, payload,
+                         timeout=600)
+        data = r.json()
+        if args.output:
+            _Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+            _Path(args.output).write_text(
+                _json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            print(f"+ 已保存: {args.output}")
+        if data.get("ok"):
+            diag = data.get("diagnosis", {})
+            print("+ 摘要: " + diag.get("summary", ""))
+            for f in diag.get("findings", []):
+                print(f"  [{str(f.get('confidence', '?')).upper():6}] {f.get('issue', '')}")
+                if f.get("likely_cause"):
+                    print(f"           根因: {f['likely_cause']}")
+                if f.get("suggested_fix"):
+                    print(f"           建议: {f['suggested_fix']}")
+                for ev in f.get("evidence", [])[:3]:
+                    print(f"           出处: {ev[:120]}")
+            for note in data.get("notes", [])[:5]:
+                print(f"  ! note: {note}")
+        else:
+            print("! " + str(data.get("error", "")))
+            if data.get("hint"):
+                print("  hint: " + data["hint"])
+        sys.exit(0 if data.get("ok") else 1)
+
     if cmd in ("extract-points", "create-device"):
         path = _Path(args.file)
         if not path.exists():
@@ -933,6 +972,10 @@ def _ai_command(args):
                 print(f"+ 已保存: {args.output}")
             else:
                 print(_json.dumps(data, ensure_ascii=False, indent=2))
+            if not data.get("ok"):
+                print("! " + str(data.get("error", "")))
+                if data.get("hint"):
+                    print("  hint: " + data["hint"])
             if not data.get("ok"):
                 print("! " + str(data.get("error", "")))
                 if data.get("hint"):
@@ -965,7 +1008,7 @@ def _ai_command(args):
             sys.exit(1)
         return
 
-    print("Usage: protoforge ai {check|extract-points|create-device} ...")
+    print("Usage: protoforge ai {check|extract-points|create-device|diagnose} ...")
     sys.exit(1)
 
 
