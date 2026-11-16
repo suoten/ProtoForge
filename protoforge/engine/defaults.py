@@ -210,10 +210,12 @@ PROTOCOL_DEVICE_CONFIG = {
         {"key": "slave_id", "label": "Slave Address (Unit ID)", "type": "number", "default": 1, "min": 1, "max": 247, "description": "Modbus slave address, i.e. Unit ID in function codes (1-247)"},
     ],
     "modbus_rtu": [
+        {"key": "mode", "label": "Link Mode", "type": "select", "default": "serial", "options": ["serial", "tcp_bridge", "rtu_over_tcp"], "description": "serial=physical/virtual COM port; tcp_bridge=Modbus TCP (MBAP) frames over TCP; rtu_over_tcp=raw RTU frames (addr+PDU+CRC) over TCP for serial-server passthrough (v1.16.2)"},
         {"key": "slave_id", "label": "Slave Address (Unit ID)", "type": "number", "default": 1, "min": 1, "max": 247, "description": "Modbus slave address"},
         {"key": "baudrate", "label": "Baud Rate", "type": "select", "default": 9600, "options": [2400, 4800, 9600, 19200, 38400, 57600, 115200], "description": "Serial communication baud rate (bps)"},
         {"key": "parity", "label": "Parity", "type": "select", "default": "none", "options": ["none", "even", "odd"], "description": "Serial parity (N=None E=Even O=Odd)"},
         {"key": "stopbits", "label": "Stop Bits", "type": "select", "default": 1, "options": [1, 2], "description": "Serial stop bits"},
+        {"key": "rtu_over_tcp_port", "label": "RTU-over-TCP Port", "type": "number", "default": 5022, "min": 1, "max": 65535, "description": "TCP port for rtu_over_tcp mode (raw RTU frames, default 5022)"},
     ],
     "opcua": [
         {"key": "server_name", "label": "Server Application Name", "type": "string", "default": "ProtoForge OPC-UA Server", "description": "OPC-UA server ApplicationName, used for discovery service"},

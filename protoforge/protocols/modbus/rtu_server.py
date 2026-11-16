@@ -1,6 +1,7 @@
 """Module: rtu server."""
 
 import asyncio
+import contextlib
 import logging
 import socket
 import struct
@@ -73,9 +74,11 @@ class ModbusRtuServer(ProtocolServer):
         default_port = "/dev/ttyUSB0" if sys.platform != "win32" else "COM1"
         raw_port = config.get("port", default_port)
         mode = str(config.get("mode", "serial")).lower()
-        if isinstance(raw_port, int):
+        if isinstance(raw_port, int) and mode not in ("rtu_over_tcp", "tcp_bridge"):
             # Integration clients (edgelite push) send an int `port` meaning
             # "serve RTU-over-TCP on this TCP port" — explicit bridge mode.
+            # FIXED(v1.16.2): 显式指定 rtu_over_tcp/tcp_bridge 时不再覆盖——
+            # 这两种模式自身需要 int TCP 端口
             mode = "tcp_bridge"
             config.setdefault("tcp_bridge_port", raw_port)
             self._port = default_port
@@ -95,6 +98,27 @@ class ModbusRtuServer(ProtocolServer):
         self._bytesize = config.get("bytesize", 8)
         if self._bytesize not in (5, 6, 7, 8):
             raise ValueError(f"Data bits (bytesize) must be 5, 6, 7, or 8 (got {self._bytesize})")
+
+        if mode == "rtu_over_tcp":
+            # v1.16.2: 严格 RTU over TCP 从站——RTU 帧（addr+PDU+CRC16，无 MBAP 头）
+            # 直接走 TCP 字节流。串口服务器（NPort/USR-TCP232 等）透传场景、
+            # pymodbus framer=FramerType.RTU over TCP 客户端对接此模式。
+            rtu_tcp_port = int(config.get("rtu_over_tcp_port", 5022))
+            self._validate_port(rtu_tcp_port)
+            # 同步 await 创建 server：start() 返回时端口必已监听（消灭
+            # create_task 异步启动的端口就绪竞态——黄金互证/loopback 均依赖）
+            self._rtu_server = await asyncio.start_server(
+                self._handle_rtu_over_tcp_client, "0.0.0.0", rtu_tcp_port)
+            rtu_tcp_port = self._rtu_server.sockets[0].getsockname()[1]
+            self._rtu_over_tcp_port = rtu_tcp_port
+            logger.info("Modbus RTU starting in strict RTU-over-TCP mode on port %d", rtu_tcp_port)
+            self._server_task = asyncio.create_task(self._serve_rtu_forever(self._rtu_server))
+            self._server_task.add_done_callback(self._on_server_task_done)
+            self._status = ProtocolStatus.RUNNING
+            self._log_debug("system", "server_start",
+                            f"Modbus RTU over TCP started on port {rtu_tcp_port} (raw RTU frames, no MBAP)",
+                            detail={"mode": "rtu_over_tcp", "port": rtu_tcp_port})
+            return
 
         if mode == "tcp_bridge":
             # 显式桥接模式：MBAP(TCP 帧) 直连原生帧处理器，不占用串口
@@ -267,6 +291,54 @@ class ModbusRtuServer(ProtocolServer):
                 logger.debug("_find_available_port: ignored exception: %s", e)
                 return port  # 无法检测，假设可用
         return start_port  # 全部被占用，返回原始端口让后续报错
+
+    async def _serve_rtu_forever(self, server) -> None:
+        """RTU-over-TCP server 的 serve_forever 外壳（server 已在 start() 同步创建）。"""
+        try:
+            async with server:
+                await server.serve_forever()
+        except asyncio.CancelledError:
+            logger.debug("Modbus RTU-over-TCP server task cancelled")
+        except Exception as e:
+            logger.exception("Modbus RTU-over-TCP server error: %s", e)
+            self._status = ProtocolStatus.ERROR
+
+    async def _handle_rtu_over_tcp_client(self, reader: asyncio.StreamReader,
+                                           writer: asyncio.StreamWriter) -> None:
+        if not self._connection_gate(writer):
+            return
+        self.on_client_connect()
+        buf = bytearray()
+        peer = writer.get_extra_info("peername")
+        try:
+            self._log_debug("system", "client_connected",
+                            f"RTU-over-TCP client connected from {peer}")
+            while True:
+                chunk = await asyncio.wait_for(reader.read(4096), timeout=120)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                # 提取并处理缓冲中所有完整帧（一包可能粘多帧）
+                while True:
+                    frame = self._extract_rtu_frame(buf)
+                    if frame is None:
+                        break
+                    addr, resp_pdu = frame
+                    if addr != 0 and resp_pdu is not None:
+                        resp_frame = bytes([addr]) + resp_pdu
+                        resp_frame += struct.pack("<H", crc16_modbus(resp_frame))
+                        writer.write(resp_frame)
+                        await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionResetError, asyncio.CancelledError,
+                BrokenPipeError, ConnectionAbortedError, asyncio.TimeoutError) as e:
+            logger.debug("RTU-over-TCP client %s disconnected: %s", peer, e)
+        except Exception as e:
+            logger.exception("RTU-over-TCP handler error: %s", e)
+            self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
+        finally:
+            self.on_client_disconnect()
+            with contextlib.suppress(Exception):
+                writer.close()
 
     async def _serve_datastore_only(self, tcp_port: int = 5021) -> None:
         logger.info("Modbus RTU running in TCP bridge mode on port %d (pymodbus serial unavailable)", tcp_port)

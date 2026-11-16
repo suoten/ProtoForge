@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.16.2 — 2026-11-16
+
+### ✨ 新增 — Modbus RTU 从站支持严格 RTU over TCP（用户反馈 issue #37 系列场景）
+
+v1.11.1 的 tcp_bridge 说的是 **Modbus TCP（MBAP）帧**；串口服务器透传场景
+（NPort/USR-TCP232 等把 RTU 串口透传成 TCP）需要的是 **RTU 帧直走 TCP**
+（addr+PDU+CRC16，无 MBAP 头）——本版补上该模式：
+
+- Modbus RTU 高级配置新增 `mode=rtu_over_tcp`（TCP 端口默认 5022）：
+  pymodbus `framer=FramerType.RTU` over TCP 客户端、任何串口服务器透传
+  链路可直接对接
+- 帧处理复用串口模式（v1.9.1）的 `_extract_rtu_frame`（CRC 校验/字节流
+  错位重同步/广播不响应语义完全一致），传输层换 TCP
+- `port` 语义修正：显式指定 `mode=rtu_over_tcp/tcp_bridge` 时 int `port`
+  不再被旧兼容逻辑强制覆盖为 tcp_bridge
+- 高级配置面板暴露 mode 与 rtu_over_tcp_port
+
+### 🧪 测试（`tests/test_rtu_over_tcp.py` 2 例）
+
+- pymodbus RTU-framer 客户端直连从站：读保持寄存器（float32 精确 25.5）+
+  写线圈 → 从站反映
+- ProtoForge 主站（mode=rtu_over_tcp）↔ 从站互连：轮询采集 + 远端写
+- **测试方法学教训**：pymodbus 同步客户端必须跑在线程里（`asyncio.to_thread`）
+  ——直接在测试协程里调用会阻塞事件循环饿死从站协程（表现为 No response 假超时）
+
 ## v1.16.1 — 2026-11-14
 
 ### ✨ 新增 — DNP3 主站（拨出采集/遥控）+ 模板市场 Web 提交界面
@@ -317,7 +342,7 @@ PyPI 上的 `protoforge` 名称自 2026-02 起被一个无关项目占用（单�
 
 用户询问"支持 modbus rtu over tcp 嘛"——TCP 桥接能力早已存在（`mode=tcp_bridge` 时 RTU 数据区通过以太网口对外提供服务，客户端以 Modbus TCP/MBAP 帧连接，默认端口 5021），但高级配置界面没有暴露该开关，只能通过 API 手工设置。本次将 `mode`（serial/tcp_bridge）与 `tcp_bridge_port` 两个字段加入 Modbus RTU 的高级配置。
 
-> 说明：桥接端口使用 Modbus TCP（MBAP）帧；严格的"RTU 帧 + CRC 直走 TCP（无 MBAP）"帧格式暂不支持，如有需求欢迎反馈。
+> 说明：桥接端口使用 Modbus TCP（MBAP）帧；严格的"RTU 帧 + CRC 直走 TCP（无 MBAP）"已由 v1.16.2 的 mode=rtu_over_tcp 支持。
 
 ### 🐛 修复 — admin/admin 登录失败（GitHub issue #6，多用户反馈的高频问题）
 
