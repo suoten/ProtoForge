@@ -1945,6 +1945,12 @@ protoforge run --host 0.0.0.0 --port 8000
 
 ## ❓ 常见问题排查
 
+> 📚 **文档索引**：完整 FAQ（部署迁移/端口冲突/数据读写 23 问）见 [docs/FAQ.md](docs/FAQ.md) ·
+> 实测兼容性列表（每行都有真实联调来源）见 [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) ·
+> 协议对接实战文章：[汇川 HMI 对接 EtherNet/IP 全记录](docs/articles/inovance-eip-integration-notes.md) ·
+> [RTU over TCP：两种帧两个端口](docs/articles/rtu-over-tcp-two-framers.md) ·
+> [组态软件死值检测与仿真](docs/articles/scada-dead-value-detection.md)
+
 #### 数据与持久化
 
 **Q: 新建的设备在服务重启后消失了？**
