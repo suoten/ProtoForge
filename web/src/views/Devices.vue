@@ -1703,6 +1703,10 @@ async function createDevice() {
   creating.value = true
   try {
     let config = { ...newDevice.value, points: [], protocol_config: advancedProtocolConfig.value }
+    if (newDevice.value.protocol === 'modbus_rtu') {
+      // FIXED(v1.16.3): 创建路径同样按 mode 归一化，消除双 mode 字段歧义
+      config.protocol_config = normalizeModbusRtuConfig(config.protocol_config)
+    }
     if (selectedTemplate.value) {
       const tmplRes = await api.getTemplate(selectedTemplate.value)
       config.points = tmplRes?.points || []; config.protocol = tmplRes?.protocol || config.protocol
@@ -1755,6 +1759,26 @@ async function openEditDevice(row) {
   }
 }
 
+// FIXED(v1.16.3): modbus_rtu 三模式（serial/tcp_bridge/rtu_over_tcp）字段互斥——
+// 切换 Link Mode 后旧模式的端口字段残留在 protocol_config 里，会造成
+// "表单显示 rtu_over_tcp:5022 实际监听 tcp_bridge:5021" 的配置歧义
+// （群友实测：工具连 5022 被拒，从站其实监听在 5021）。
+function normalizeModbusRtuConfig(config) {
+  const mode = String(config.mode || 'serial').toLowerCase()
+  const out = { mode }
+  for (const [k, v] of Object.entries(config)) {
+    if (k === 'mode') continue
+    const isRtuTcpField = k === 'rtu_over_tcp_port'
+    const isBridgeField = k === 'tcp_bridge_port'
+    const isSerialField = ['baudrate', 'parity', 'stopbits', 'bytesize', 'port'].includes(k)
+    if (mode === 'rtu_over_tcp' && isRtuTcpField) out[k] = v
+    else if (mode === 'tcp_bridge' && isBridgeField) out[k] = v
+    else if (mode !== 'rtu_over_tcp' && mode !== 'tcp_bridge' && isSerialField) out[k] = v
+    else if (!isRtuTcpField && !isBridgeField && !isSerialField) out[k] = v  // 无关键（edgelite_url 等）保留
+  }
+  return out
+}
+
 async function saveEditDevice() {
   try {
     await editFormRef.value?.validate()
@@ -1770,10 +1794,12 @@ async function saveEditDevice() {
       if (isDefaultPreset && !wasOriginal) continue
       saved[k] = v
     }
+    const normalized = editDevice.value.protocol === 'modbus_rtu'
+      ? normalizeModbusRtuConfig(saved) : saved
     await api.updateDevice(editDevice.value.id, {
       id: editDevice.value.id, name: editDevice.value.name,
       protocol: editDevice.value.protocol, points: editDevice.value.points || [],
-      protocol_config: saved,
+      protocol_config: normalized,
     })
     showEditModal.value = false
     message.success(t('devices.deviceUpdated'))
