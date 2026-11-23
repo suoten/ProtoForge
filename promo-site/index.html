@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProtoForge — 一台电脑 = 32 种工业设备 | 开源工业协议仿真平台</title>
+<meta name="description" content="开源工业协议仿真平台：Modbus/S7/OPC-UA/IEC104/DNP3 等 32 种协议、136 设备模板、AI 点表提取与日志诊断、MCP 接入。零硬件仿真测试，MIT 开源。">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "ProtoForge",
+  "applicationCategory": "DeveloperApplication",
+  "applicationSubCategory": "Industrial Protocol Simulator",
+  "operatingSystem": "Windows, Linux, macOS, Docker",
+  "description": "开源工业协议仿真平台（open-source industrial protocol simulator）：一台电脑模拟 32 种工业协议设备（Modbus TCP/RTU、Siemens S7、OPC-UA、IEC 104/61850、DNP3、BACnet、FANUC、GB28181 等），零硬件测试上位机/网关/SCADA 软件。136+ 设备模板、AI 说明书点表提取、MCP Server、插件系统。",
+  "softwareVersion": "1.16.3",
+  "author": {"@type": "Organization", "name": "suoten / 硕腾网络"},
+  "url": "https://github.com/suoten/ProtoForge",
+  "codeRepository": "https://github.com/suoten/ProtoForge",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "featureList": "Modbus TCP/RTU, Siemens S7, OPC-UA Server/Client, IEC 104, IEC 61850, DNP3, BACnet, FANUC FOCAS, Mitsubishi MC, Omron FINS, Rockwell AB, GB28181, DL/T 645, CJ/T 188, fault injection, recording/replay, AI point-table extraction, MCP server, plugin system, 136 device templates",
+  "keywords": "industrial protocol simulator, Modbus simulator, DNP3 simulator, IEC 104 simulator, OPC-UA simulator, S7 simulator, SCADA testing, PLC simulator, 工业协议仿真, 上位机测试, 零硬件测试"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {"@type": "Question", "name": "什么是 ProtoForge？",
+     "acceptedAnswer": {"@type": "Answer", "text": "ProtoForge 是一个 MIT 开源的工业协议仿真平台：一台电脑模拟 32 种工业协议设备（Modbus TCP/RTU、西门子 S7、OPC-UA、IEC 104/61850、DNP3、BACnet 等），让上位机、网关、SCADA 软件在零硬件条件下完成开发与测试。136+ 设备模板、AI 点表提取、MCP Server。"}},
+    {"@type": "Question", "name": "如何在没有 PLC 的情况下测试 Modbus 上位机？",
+     "acceptedAnswer": {"@type": "Answer", "text": "使用 ProtoForge：docker run -d -p 8000:8000 suoten/protoforge 一行启动，浏览器创建虚拟 Modbus TCP 从站（自定义寄存器/异常码/故障注入），上位机按真实地址连接读写。支持 RTU over TCP（v1.16.2）与从站地址冲突检测。"}},
+    {"@type": "Question", "name": "ProtoForge 支持哪些协议？",
+     "acceptedAnswer": {"@type": "Answer", "text": "32 种：Modbus TCP/RTU、Siemens S7/S7Comm-Plus、OPC-UA Server/Client、IEC 60870-5-104、IEC 61850、DNP3、BACnet、FANUC FOCAS、三菱 MC、欧姆龙 FINS、Rockwell AB、OPC-DA、MTConnect、梅特勒-托利多、PROFINET IO、EtherCAT、GB28181、DL/T 645、CJ/T 188、松下 MEWTOCOL、CoAP、DDS、自定义 TCP/UDP，及 Modbus/S7/IEC104 三种主站模式。"}},
+    {"@type": "Question", "name": "ProtoForge 是免费开源的吗？",
+     "acceptedAnswer": {"@type": "Answer", "text": "是，MIT 开源协议，商用免费，无功能限制、无设备数限制。GitHub：github.com/suoten/ProtoForge，pip 安装名 protoforge-sim。"}}
+  ]
+}
+</script>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--txt:#e6edf3;--sub:#8b949e;--acc:#f97316;--acc2:#3b82f6;--ok:#22c55e}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--txt);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.7}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  .hero{padding:72px 0 48px;text-align:center;background:linear-gradient(180deg,#0d1117 0%,#111827 100%);border-bottom:1px solid var(--line)}
+  .badge{display:inline-block;background:#1f2937;border:1px solid var(--line);color:var(--acc);font-size:13px;padding:4px 14px;border-radius:999px;margin-bottom:18px;letter-spacing:2px}
+  h1{font-size:44px;line-height:1.25;margin-bottom:14px}
+  h1 .num{color:var(--acc)}
+  .sub{color:var(--sub);font-size:18px;max-width:720px;margin:0 auto 30px}
+  .cta{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;transition:.2s}
+  .btn-p{background:var(--acc);color:#0d1117}.btn-p:hover{filter:brightness(1.1)}
+  .btn-s{border:1px solid var(--line);color:var(--txt)}.btn-s:hover{border-color:var(--acc)}
+  .stats{display:flex;gap:36px;justify-content:center;margin-top:40px;flex-wrap:wrap}
+  .stat b{font-size:26px;color:var(--txt)} .stat span{display:block;color:var(--sub);font-size:13px}
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:28px;margin-bottom:10px;text-align:center}
+  .secsub{text-align:center;color:var(--sub);margin-bottom:36px;font-size:15px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px}
+  .card b{font-size:16px} .card p{color:var(--sub);font-size:14px;margin-top:6px}
+  .card .tag{color:var(--acc);font-weight:700;margin-right:6px}
+  .pain{border-left:3px solid var(--acc)}
+  code{background:#1f2937;color:#7dd3fc;padding:3px 8px;border-radius:6px;font-family:Consolas,monospace;font-size:13px}
+  pre{background:#0b0f14;border:1px solid var(--line);border-radius:12px;padding:20px;font-family:Consolas,monospace;font-size:14px;color:#a5d6ff;overflow-x:auto;margin:18px 0}
+  pre .c{color:#7d8590}
+  .shot{width:100%;border:1px solid var(--line);border-radius:12px;display:block}
+  .ind{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+  .ind span{background:var(--panel);border:1px solid var(--line);padding:10px 22px;border-radius:999px;font-size:15px}
+  footer{padding:40px 0;text-align:center;color:var(--sub);font-size:13px;border-top:1px solid var(--line)}
+  footer a{color:var(--acc2);text-decoration:none}
+  @media(max-width:640px){h1{font-size:30px}.stats{gap:20px}}
+</style>
+</head>
+<body>
+
+<div class="hero wrap">
+  <div class="badge">开源 · MIT · 中文文档 · QQ 群支持</div>
+  <h1>一台电脑 = <span class="num">32</span> 种工业设备</h1>
+  <div class="sub">零硬件仿真测试平台：Modbus / S7 / OPC-UA / IEC 104 / DNP3 / BACnet / FANUC…<br>
+  上位机、网关、SCADA 的开发与测试，不再等设备到货。</div>
+  <div class="cta">
+    <a class="btn btn-p" href="https://github.com/suoten/ProtoForge" target="_blank">GitHub → suoten/ProtoForge</a>
+    <a class="btn btn-s" href="https://protoforge.jjtt.net" target="_blank">在线体验</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>32</b><span>工业协议</span></div>
+    <div class="stat"><b>136+</b><span>设备模板</span></div>
+    <div class="stat"><b>4</b><span>行业包</span></div>
+    <div class="stat"><b>1100+</b><span>Commits</span></div>
+    <div class="stat"><b>MIT</b><span>开源协议</span></div>
+  </div>
+</div>
+
+<section class="wrap">
+  <h2>工控开发最长的等待，不是写代码</h2>
+  <div class="secsub">是等一台 PLC 到货、等客户安排联调窗口、等测试设备排期。</div>
+  <div class="grid">
+    <div class="card pain"><span class="tag">✕</span><b>买设备</b><p>一台 PLC ¥3000+，凑齐多协议测试环境 ¥50000+，项目结束吃灰。</p></div>
+    <div class="card pain"><span class="tag">✕</span><b>借设备</b><p>跨部门借调、客户现场排期，联调窗口永远在"下周"。</p></div>
+    <div class="card pain"><span class="tag">✓</span><b>ProtoForge</b><p>一条命令拉起全套虚拟设备，数据真实跳动，异常场景随便造。</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>30 秒启动，浏览器即用</h2>
+  <div class="secsub">不需要装 Python、Node.js、Git——Docker 一行，或 Windows 便携包双击。</div>
+  <pre><span class="c"># Docker：一条命令，全套虚拟设备拉起</span>
+docker run -d --name protoforge -p 8000:8000 suoten/protoforge:latest
+
+<span class="c"># 或 pip（v1.16 起分发名 protoforge-sim，避免 PyPI 同名假包）</span>
+pip install protoforge-sim
+
+<span class="c"># Windows 便携包：双击即用，配置随目录走</span></pre>
+  <img class="shot" loading="lazy" alt="ProtoForge 仪表盘" src="https://cdn.jsdelivr.net/gh/suoten/ProtoForge@master/docs/images/1.png">
+</section>
+
+<section class="wrap">
+  <h2>能力全景</h2>
+  <div class="secsub">每一个数字都来自真实交付，不是路线图。</div>
+  <div class="grid">
+    <div class="card"><span class="tag">32</span><b>工业协议</b><p>Modbus TCP/RTU、S7、OPC-UA、IEC 104/61850、DNP3、BACnet、FANUC、三菱/欧姆龙/AB、GB28181…每一项都有字节级黄金用例门禁。</p></div>
+    <div class="card"><span class="tag">136+</span><b>设备模板</b><p>PLC、电表、FTU、电梯、储能柜、泵站、冷机…开箱即建；4 个行业包（电力/水务/楼宇/燃气热力）成体系覆盖。</p></div>
+    <div class="card"><span class="tag">🤖</span><b>AI 原生</b><p>说明书粘贴 → AI 提取点表（本地 Ollama，数据不出机器）；调试日志 → AI 根因诊断（结论带日志出处）；MCP 让 Claude/Cursor 直接操作仿真器。</p></div>
+    <div class="card"><span class="tag">✓</span><b>双向读写</b><p>不只是"播数据"：完整读写、异常码模拟、故障注入、录制回放——上位机的每个边界场景都能测。</p></div>
+    <div class="card"><span class="tag">🧩</span><b>插件系统</b><p>第三方不改核心即可新增协议与行业包；模板市场社区贡献、管理员审核。</p></div>
+    <div class="card"><span class="tag">⚙</span><b>工程可信</b><p>1000 设备 tick 1.1ms（性能白皮书可复现）；JWT+RBAC；Docker 多架构（amd64/arm64）；Windows 服务化。</p></div>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>行业包：从"广"到"深"</h2>
+  <div class="secsub">与内置模板差异化互补，拼出完整行业场景。</div>
+  <div class="ind">
+    <span>⚡ 电力 · 10kV 电表 / FTU / DNP3</span>
+    <span>💧 水务 · 泵站 / 水质监测</span>
+    <span>🏢 楼宇 · 电梯 / 储能柜</span>
+    <span>🔥 燃气热力 · 调压站 / 换热机组</span>
+  </div>
+</section>
+
+<section class="wrap">
+  <h2>三步上手</h2>
+  <div class="secsub">第一次成功，目标 5 分钟内。</div>
+  <div class="grid">
+    <div class="card"><b>① 启动</b><p><code>docker run -d -p 8000:8000 suoten/protoforge</code></p></div>
+    <div class="card"><b>② 建设备</b><p>模板市场选一台（或粘贴说明书让 AI 提取点表）</p></div>
+    <div class="card"><b>③ 连接</b><p>你的采集程序按地址读写——和连真实 PLC 一模一样</p></div>
+  </div>
+</section>
+
+<section class="wrap" id="services">
+  <h2>服务与支持</h2>
+  <div class="secsub">开源免费之外，为企业和团队提供付费的专业服务——有人管、有 SLA、有定制能力。</div>
+  <div class="grid">
+    <div class="card"><b>🚀 部署支持</b><p>远程协助部署（Docker/便携包/企业内网）+ 环境调优 + 验收测试，开箱即用。</p></div>
+    <div class="card"><b>🏢 企业年度支持</b><p>专属答疑通道、问题优先修复、版本升级保障、定制模板与行业包交付。</p></div>
+    <div class="card"><b>🔧 定制开发</b><p>私有协议插件、行业设备模板、测试场景定制、与现有系统的对接开发。</p></div>
+  </div>
+  <p style="text-align:center;margin-top:24px;color:var(--sub);font-size:14px">
+    联系方式：QQ 群 866599071（联系群主）或 📧 <a href="mailto:suoten@163.com" style="color:var(--acc)">suoten@163.com</a>
+  </p>
+  <div class="card" style="margin-top:18px;border-color:#7f1d1d;background:#1a0f0f">
+    <p style="font-size:13px"><b style="color:#f87171">⚠️ 官方声明：</b>ProtoForge 永久免费开源（MIT），<b>不存在任何"软件授权费"</b>。任何以 ProtoForge 名义收取授权费、代理费的行为均与官方无关——开源版即可免费获取全部功能，请通过上方官方渠道获取与反馈。</p>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p>MIT 开源 · 由 <a href="https://github.com/suoten" target="_blank">suoten / 硕腾网络</a> 维护 ·
+  <a href="https://github.com/suoten/ProtoForge" target="_blank">GitHub</a> ·
+  <a href="https://protoforge.jjtt.net" target="_blank">在线体验</a> ·
+  <a href="https://github.com/suoten/ProtoForge/blob/master/docs/ROADMAP.md" target="_blank">路线图</a> ·
+  QQ 群：866599071</p>
+  <p style="margin-top:8px">觉得有用的话，去 GitHub 点个 ⭐ —— 这是开源作者最大的燃料。</p>
+</footer>
+
+</body>
+</html>

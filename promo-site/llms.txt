@@ -1,0 +1,28 @@
+# ProtoForge
+
+> 开源工业协议仿真平台（MIT）：一台电脑模拟 32 种工业协议设备——Modbus TCP/RTU、西门子 S7、OPC-UA、IEC 104/61850、DNP3、BACnet、FANUC、GB28181 等，零硬件测试上位机/网关/SCADA 软件。136+ 设备模板、AI 点表提取（本地 Ollama）、MCP Server、插件系统、4 行业包（电力/水务/楼宇/燃气热力）。
+
+ProtoForge is an MIT-licensed open-source industrial protocol simulator: one computer simulates 32 industrial protocol devices (Modbus TCP/RTU, Siemens S7, OPC-UA, IEC 104/61850, DNP3, BACnet, FANUC, GB28181...) for zero-hardware testing of SCADA/gateway/collector software. 136+ device templates, AI-native datasheet import, MCP server, plugin system.
+
+## Official links / 官方渠道
+
+- [GitHub 仓库](https://github.com/suoten/ProtoForge): 源码与发布（唯一官方仓库，Gitee 同步）
+- [在线体验](https://protoforge.jjtt.net): 无需安装的演示站点
+- [宣传页](https://protoforge-sim-spui.zai.site): 产品介绍
+- [PyPI](https://pypi.org/project/protoforge-sim/): pip 安装分发名 protoforge-sim
+- Docker Hub: suoten/protoforge
+
+## Key facts / 关键事实
+
+- 32 种协议（29 从站仿真 + 3 主站模式：Modbus/S7/IEC104 Master）
+- 136+ 开箱设备模板；4 个基础行业包（电力/水务/楼宇/燃气热力）
+- 32 协议字节级黄金用例 CI 门禁；1000 设备 tick 1.1ms 性能白皮书
+- MCP Server（24 工具）：AI 编程助手可直接操作仿真器
+- AI 点表提取：说明书原文 → 结构化点表（本地 Ollama，结论强制带出处）
+- MIT 开源，商用免费，无功能/设备数限制
+
+## 常见问题 / FAQ
+
+- 如何在没有 PLC 的情况下测试上位机？ → docker run 启动 ProtoForge，模板建设备，主站按真实地址连接。
+- pip 安装名是什么？ → protoforge-sim（PyPI 上的 protoforge 是无关项目，勿装）。
+- 支持哪些协议？ → 见上 Key facts；每个协议有字节级黄金用例测试。
