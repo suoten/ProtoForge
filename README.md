@@ -4,6 +4,7 @@
 <br />
 <h1>🖥️ ProtoForge</h1>
 <p><b>一台电脑 = 32 种工业设备</b></p>
+<p><sub>ProtoForge — an open-source (MIT) industrial protocol simulator: 32 protocols (Modbus/S7/OPC-UA/IEC 104/DNP3/BACnet...), 136+ device templates, AI datasheet import, MCP server. Zero-hardware testing for SCADA/gateway/collector software.</sub></p>
 <p>零成本模拟 PLC、传感器、摄像头，测试你的上位机和物联网网关</p>
 
 [![Python](https://img.shields.io/static/v1?label=Python&message=3.10%2B&color=blue&logo=python&logoColor=white)](https://python.org)
