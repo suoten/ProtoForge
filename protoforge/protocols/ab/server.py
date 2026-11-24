@@ -207,7 +207,19 @@ class AbServer(ProtocolServer):
                                         f"TX frame cmd=0x{struct.unpack('<H', response[0:2])[0]:04x} len={len(response)}",
                                         detail={"hex": response[:256].hex(" "), "length": len(response)})
                     writer.write(response)
-                    await writer.drain()
+                    # FIXED-P0: drain 无超时保护 —— 客户端(HMI 仿真)停止读取时
+                    # handler 在此处永久阻塞：socket 变 CLOSE_WAIT 僵尸连接、
+                    # on_client_disconnect 不执行导致连接计数虚高；配置了
+                    # max_connections 时后续重连被门控拒绝，实测表现为
+                    # "断开后连接不上"。加 10s 写超时，超时视为死连接主动断开。
+                    try:
+                        await asyncio.wait_for(writer.drain(), timeout=10)
+                    except asyncio.TimeoutError:
+                        self._log_debug("system", "write_drain_timeout",
+                                        "Peer stopped reading for 10s, closing stale connection")
+                        self.record_protocol_error(ProtocolErrorCategory.NETWORK,
+                                                   "write drain timeout (peer not reading)")
+                        break
         except (ConnectionResetError, asyncio.CancelledError, asyncio.IncompleteReadError, BrokenPipeError, ConnectionAbortedError) as e:
             self.record_protocol_error(ProtocolErrorCategory.NETWORK, str(e))
             logger.debug("Connection handler error: %s", e)  # FIXED: 添加日志记录，避免异常被静默吞掉

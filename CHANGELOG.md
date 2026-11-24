@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.16.4 — 2026-11-24
+
+### 🐛 修复 — AB/EIP 服务端写通道无超时导致僵尸连接、"断开后连接不上"（用户实测反馈）
+
+用户实测（汇川 HMI McgsPro 模拟器 + EIP 标签通讯，本机自连）反馈
+"时通时断、断开后连不上"，netstat 抓到 5 对 CLOSE_WAIT（服务端）+
+FIN_WAIT_2（客户端）：HMI 已主动断开，但服务端迟迟不完成关闭，僵尸连接
+堆积后连接计数虚高，配置了 max_connections 时后续重连被连接门直接拒绝。
+
+- `_handle_connection` 中应答发送的 `await writer.drain()` 无超时保护：
+  客户端停止读取（HMI 仿真轮询停顿/卡死）时 handler 永久阻塞在写通道上，
+  既不关 socket（CLOSE_WAIT 挂死）也不触发 `on_client_disconnect`
+  → 加 10s 写超时（`asyncio.wait_for`），超时记 NETWORK 类协议错误并
+  主动断开，走 finally 正常收尾
+- 排查结论同期归档：本机自连场景接口跃点（自动/手动 1）为重置效应假象；
+  客户端侧 TIME_WAIT 属正常收尾，无需处理
+
+### 📝 备注
+
+- v1.16.3 发版时 CHANGELOG 漏更（仅打 tag），本文件自此补齐节奏
+
 ## v1.16.2 — 2026-11-16
 
 ### ✨ 新增 — Modbus RTU 从站支持严格 RTU over TCP（用户反馈 issue #37 系列场景）
