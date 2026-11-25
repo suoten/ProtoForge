@@ -71,6 +71,11 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
         self._area_lock = threading.Lock()  # FIXED-C03: 保护Timer/Counter区域的并发读写
         # 存储点位的 (area, db_number, offset) 三元组，支持 I/Q/M/DB/T/C 全区域
         self._point_addresses: dict[str, tuple[int, int, int]] = {}
+        # FIXED-P1: 位寻址点位记录位号（M4.1/DB1.DBX3.1 → 1；字节/字/双字点为 None）。
+        # 旧实现位号在解析时被丢弃：位读返回整字节、布尔点值同步按整字节覆盖写，
+        # 同字节内的多个位（如 M4.0/M4.1）相互覆盖、读值错位——表现为
+        # "UI 显示 1、客户端读到 0"。
+        self._point_bits: dict[str, int | None] = {}
         # FIXED: db_header_size 参数保留但不再使用。
         # snap7 客户端库（以及大多数 S7 客户端）在内部已经处理了优化块的 2 字节系统头偏移，
         # ProtoForge 在网络协议层收到的地址就是用户地址（不含系统头），
@@ -83,6 +88,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 address = getattr(p, 'address', '0') or '0'
                 area, db_number, offset = self._parse_s7_address(str(address), 0)
                 self._point_addresses[name] = (area, db_number, offset)
+                self._point_bits[name] = self._parse_s7_bit(str(address))
                 if name in self._values:
                     self._sync_value_to_area(name, self._values[name])
 
@@ -231,6 +237,28 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
             logger.warning("S7 address parse failed for '%s': %s, defaulting to DB1 offset 0", address, e)
             return (S7DeviceBehavior.S7_AREA_DB, 1, db_header_size)
 
+    @staticmethod
+    def _parse_s7_bit(address: str) -> int | None:
+        """解析 S7 位寻址的位号（FIXED-P1）。
+
+        M4.1 / I0.0 / Q1.7 / DB1.DBX3.1 等位地址返回位号(0-7)；
+        MB/MW/MD、DBB/DBW/DBD、T、C 及纯数字等非位地址返回 None。
+        旧实现位号在 _parse_s7_address 中被丢弃，导致位读写按字节粒度处理。
+        """
+        addr_upper = address.upper().replace(' ', '')
+        try:
+            if addr_upper.startswith('DB'):
+                parts = addr_upper.split('.')
+                if len(parts) >= 3 and parts[1].startswith('DBX'):
+                    return int(parts[2])
+                return None
+            if (addr_upper[:1] in ('M', 'I', 'E', 'Q', 'A') and len(addr_upper) > 1
+                    and addr_upper[1] not in ('B', 'W', 'D') and '.' in addr_upper):
+                return int(addr_upper.split('.')[1])
+        except (ValueError, IndexError):
+            return None
+        return None
+
     def _sync_value_to_area(self, point_name: str, value: Any) -> None:
         """将点位值同步到对应的 S7 数据区域(DB/M/I/Q/T/C)。"""
         if point_name not in self._point_addresses:
@@ -261,6 +289,15 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 data = struct.pack("<?", value)
             else:
                 data = struct.pack(">i", int(value))
+            # FIXED-P1: 位寻址布尔点按位读-改-写，不能整字节覆盖
+            # （旧实现把 0x00/0x01 写进整个字节，同字节其他 7 个位全被清掉）
+            bit = self._point_bits.get(point_name)
+            if bit is not None and len(data) == 1:
+                cur = self.read_area(area, db_number, offset, 1)
+                cur_byte = cur[0] if cur else 0
+                mask = 1 << bit
+                new_byte = (cur_byte | mask) if data[0] & 0x01 else (cur_byte & (0xFF ^ mask))
+                data = bytes([new_byte])
             # 根据 area 写入对应的数据区域
             if area == self.S7_AREA_DB:
                 self.write_db_area(db_number, offset, data)
@@ -750,8 +787,9 @@ class S7Server(ProtocolServer):
             area = item_spec[8]  # FIXED-P0: Area 在偏移8，DB Number 之后
             full_addr = (item_spec[9] << 16) | (item_spec[10] << 8) | item_spec[11]
             offset = full_addr >> 3
-
-            # FIXED-P1: 请求 transport 0x01(BIT)/0x09(ODD) 的 Length 字段是位数(bit count)
+            # FIXED-P1: 位号不再丢弃——位读需要从整字节中提取对应位
+            bit_index = full_addr & 0x07
+            # FIXED-P1: 请求 transport 0x01(BIT)/0x09(ODD) 的 Length 字段是位数(bit count)；
             # 其余(0x03/0x04)的 Length 字段是元素个数
             if transport_size_code in (0x01, 0x09):
                 bit_count = length
@@ -768,6 +806,12 @@ class S7Server(ProtocolServer):
             behavior = self._behaviors.get(device_id or self._default_device_id or "")
             if behavior:
                 value_bytes = behavior.read_area(area, db_number, offset, read_size)
+
+            # FIXED-P1: 单位读(BIT)从整字节提取对应位，返回 0x00/0x01。
+            # 旧实现位号被丢弃、整字节直接作为位值返回——M4.1 读回的是字节4 原值，
+            # M4.0=1 时客户端把 M4.1 读成 1（或 M4.1=1、字节值 0x02 时读成非 0x01）。
+            if transport_size_code == 0x01 and bit_count == 1 and value_bytes:
+                value_bytes = bytes([(value_bytes[0] >> bit_index) & 0x01])
 
             item_results.append((0xFF, value_bytes, transport_size_code, bit_count))
 
@@ -894,42 +938,65 @@ class S7Server(ProtocolServer):
                 else:
                     behavior.write_area(area, db_number, offset, write_data)
                 for name, (p_area, p_db, p_offset) in behavior._point_addresses.items():
-                    if area == p_area and (area != behavior.S7_AREA_DB or db_number == p_db) and offset == p_offset:
-                        try:
-                            pt = behavior._points.get(name)
-                            # Same enum normalization as _sync_value_to_area: str(DataType.X) never
-                            # equals "float32", which silently degraded every write to int packing.
-                            raw_dt = pt.data_type if pt and hasattr(pt, 'data_type') else ""
-                            dt = str(getattr(raw_dt, "value", raw_dt) or "").lower()
-                            if dt in ("float32",):
-                                behavior._values[name] = struct.unpack(">f", write_data[:4])[0]  # S7 big-endian
-                            elif dt in ("float64",):
-                                behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
-                            elif dt in ("int16",):
-                                behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
-                            elif dt in ("uint16",):
-                                behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
-                            elif dt in ("int32", "dint"):
-                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
-                            elif dt in ("uint32",):
-                                behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
-                            elif dt in ("bool",):
+                    if area != p_area or (area == behavior.S7_AREA_DB and db_number != p_db):
+                        continue
+                    p_bit = behavior._point_bits.get(name)
+                    # FIXED-P1: 位写(BIT)只匹配位号完全一致的点——旧逻辑按字节偏移匹配，
+                    # 同字节的 M4.0/M4.1 会被一起改写
+                    if write_ts == 0x03:
+                        if p_bit is None or p_offset != offset or p_bit != bit_index:
+                            continue
+                    elif p_bit is None:
+                        # 字节/字/双字写：非位点按偏移精确匹配（行为同旧版）
+                        if p_offset != offset:
+                            continue
+                    else:
+                        # 位点被字节/字/双字写覆盖：写入完成后从内存回读对应位同步
+                        if not (offset <= p_offset < offset + max(len(write_data), 1)):
+                            continue
+                    try:
+                        pt = behavior._points.get(name)
+                        # Same enum normalization as _sync_value_to_area: str(DataType.X) never
+                        # equals "float32", which silently degraded every write to int packing.
+                        raw_dt = pt.data_type if pt and hasattr(pt, 'data_type') else ""
+                        dt = str(getattr(raw_dt, "value", raw_dt) or "").lower()
+                        if p_bit is not None:
+                            # FIXED-P1: 位点的值从位语义取——BIT 写取写入位值；
+                            # 覆盖写后回读内存提取对应位，避免整字节值被误当位值
+                            if write_ts == 0x03:
                                 behavior._values[name] = bool(write_data[0]) if write_data else False
                             else:
-                                behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
-                        except (struct.error, IndexError) as e:
-                            logger.warning("S7 write value sync error for %s: %s", name, e)
+                                cur = behavior.read_area(area, db_number, p_offset, 1)
+                                behavior._values[name] = bool((cur[0] >> p_bit) & 0x01) if cur else False
+                        elif dt in ("float32",):
+                            behavior._values[name] = struct.unpack(">f", write_data[:4])[0]  # S7 big-endian
+                        elif dt in ("float64",):
+                            behavior._values[name] = struct.unpack(">d", write_data[:8])[0]
+                        elif dt in ("int16",):
+                            behavior._values[name] = struct.unpack(">h", write_data[:2])[0]
+                        elif dt in ("uint16",):
+                            behavior._values[name] = struct.unpack(">H", write_data[:2])[0]
+                        elif dt in ("int32", "dint"):
+                            behavior._values[name] = struct.unpack(">i", write_data[:4])[0]
+                        elif dt in ("uint32",):
+                            behavior._values[name] = struct.unpack(">I", write_data[:4])[0]
+                        elif dt in ("bool",):
+                            behavior._values[name] = bool(write_data[0]) if write_data else False
+                        else:
+                            behavior._values[name] = struct.unpack(">i", write_data[:4])[0] if len(write_data) >= 4 else 0
+                    except (struct.error, IndexError) as e:
+                        logger.warning("S7 write value sync error for %s: %s", name, e)
 
-                        # 通过 on_write 回调将协议层写入传播到 DeviceInstance
-                        if self._on_write:
-                            resolved_id = device_id or self._default_device_id
-                            if resolved_id:
-                                try:
-                                    asyncio.ensure_future(
-                                        self._on_write(resolved_id, name, behavior._values.get(name))
-                                    )
-                                except Exception as cb_err:
-                                    logger.debug("S7 on_write callback schedule error: %s", cb_err)
+                    # 通过 on_write 回调将协议层写入传播到 DeviceInstance
+                    if self._on_write:
+                        resolved_id = device_id or self._default_device_id
+                        if resolved_id:
+                            try:
+                                asyncio.ensure_future(
+                                    self._on_write(resolved_id, name, behavior._values.get(name))
+                                )
+                            except Exception as cb_err:
+                                logger.debug("S7 on_write callback schedule error: %s", cb_err)
 
                 area_name = {0x84: "DB", 0x81: "I", 0x82: "Q", 0x83: "M"}.get(area, f"0x{area:02X}")
                 self._log_debug("recv", "s7_write",
