@@ -183,6 +183,28 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                         offset = int(rest or '0')
                 return (S7DeviceBehavior.S7_AREA_MARKERS, 0, offset)
 
+            # --- V 区域(S7-200 / S7-200 Smart 数据区，FIXED-P1) ---
+            # S7 协议层 V 区即 DB1（MicroWIN/Smart 客户端把 V10.0 映射为 DB1.DBX10.0）。
+            # 旧实现不识别 V 前缀，所有 V 点位落入"无法识别→DB1 offset 0"分支，
+            # 值全部堆在 offset 0，客户端按真实地址读到的全是 0（Gitee issue IKY3ME
+            # "S7-200 Smart Q区和V区都读不出数据" 的 V 区根因）。
+            # 格式: V10.0, VB10, VW20, VD100 —— 与 M 区语法一致
+            if addr_upper.startswith('V') and len(addr_upper) > 1:
+                rest = addr_upper[1:]
+                if rest[0] == 'B':
+                    offset = int(rest[1:] or '0')
+                elif rest[0] == 'W':
+                    offset = int(rest[1:] or '0')
+                elif rest[0] == 'D':
+                    offset = int(rest[1:] or '0')
+                else:
+                    if '.' in rest:
+                        byte_str, _ = rest.split('.')
+                        offset = int(byte_str or '0')
+                    else:
+                        offset = int(rest or '0')
+                return (S7DeviceBehavior.S7_AREA_DB, 1, offset)
+
             # --- I 区域(输入) ---
             # 格式: I0.0, IB0, IW0, ID4
             if addr_upper.startswith('I') or addr_upper.startswith('E'):
@@ -252,7 +274,7 @@ class S7DeviceBehavior(StandardDeviceBehavior):  # FIXED: 继承StandardDeviceBe
                 if len(parts) >= 3 and parts[1].startswith('DBX'):
                     return int(parts[2])
                 return None
-            if (addr_upper[:1] in ('M', 'I', 'E', 'Q', 'A') and len(addr_upper) > 1
+            if (addr_upper[:1] in ('M', 'I', 'E', 'Q', 'A', 'V') and len(addr_upper) > 1
                     and addr_upper[1] not in ('B', 'W', 'D') and '.' in addr_upper):
                 return int(addr_upper.split('.')[1])
         except (ValueError, IndexError):
