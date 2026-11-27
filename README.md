@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/static/v1?label=License&message=MIT&color=yellow&logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![Docker](https://img.shields.io/static/v1?label=Docker&message=%E6%9E%81%E9%80%9F%E9%83%A8%E7%BD%B2&color=blue&logo=docker&logoColor=white)](https://hub.docker.com/r/suoten/protoforge)
 
-[🚀 在线体验](https://protoforge.jjtt.net) · [📖 5分钟上手](#-5分钟上手) · [💬 加入QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) · [English](README_EN.md)
+[🚀 在线体验](https://protoforge.jjtt.net) · [📖 5分钟上手](#-5分钟上手) · [💬 QQ交流群 866599071](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) · [English](README_EN.md)
 
 ```bash
 docker run -d --name protoforge -p 8000:8000 -e PROTOFORGE_ADMIN_PASSWORD=admin -v protoforge-data:/app/data suoten/protoforge:latest
@@ -2209,6 +2209,8 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 
 [![QQ群](https://img.shields.io/badge/QQ%E7%BE%A4-866599071-eb1923?logo=tencentqq&logoColor=white)](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK&jump_from=webapi&authKey=efY0P+0PSa3KjkWLsg4Kt1M7+pQZPv7iBiwRkn6e5u8MbzK8cklSKSwvY3WGrnFa) **进群答案：ProtoForge**
 
+> 💡 上方加群链接在部分设备/环境打不开时，直接在 QQ 里**手动搜索群号 866599071** 申请加入即可（同样的进群答案）。
+
 ***
 
 ## 🏢 企业服务 & 专业支持
@@ -2227,7 +2229,7 @@ Token 可以在浏览器开发者工具（F12）→ Application → Local Storag
 | 🎓 **技术培训** | 工业协议体系化培训 + ProtoForge 实操 | ¥5,000 起/天 | 团队技能提升 |
 | ⚡ **付费加急** | 公共排期之外的优先修复/交付通道（含针对贵司场景的回归验证） | ¥1,000 起/项 | 交付卡住等不及公共排期 |
 
-> 💬 联系方式：[QQ群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK)（群主）或邮箱 `suoten@163.com`
+> 💬 联系方式：QQ群 **866599071**（[加群链接](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK)，群主）或邮箱 `suoten@163.com`
 
 **关于开源协议**：ProtoForge 开源版基于 MIT 协议发布，个人学习、企业内部使用、二次开发、甚至随硬件预装分发均为免费；上表付费服务针对的是定制开发、镜像/品牌定制、批量技术支持等增值内容。详询请通过上方联系方式沟通。
 

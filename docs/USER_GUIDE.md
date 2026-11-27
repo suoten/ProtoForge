@@ -676,4 +676,4 @@ docker compose -f docker-compose.joint.yml --env-file .env.joint up -d
 
 > 📖 更多技术文档：[README.md](../README.md) | [DEPLOYMENT.md](../DEPLOYMENT.md) | [SECURITY.md](../SECURITY.md)
 >
-> 💬 有问题？[加入 QQ 群](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK) 或 [提 Issue](https://github.com/suoten/ProtoForge/issues)
+> 💬 有问题？[加入 QQ 群 866599071](https://qm.qq.com/cgi-bin/qm/qr?k=8jGiq7UgneoOCuc5SV-FOFsb49mlmEhK)（链接打不开就在 QQ 里手动搜索群号，进群答案：ProtoForge）或 [提 Issue](https://github.com/suoten/ProtoForge/issues)

@@ -527,7 +527,7 @@ docker run -d --name protoforge \
 | 📊 **Enterprise License** | SSO/LDAP, multi-tenant, audit log, SLA support | On inquiry | Production-grade use |
 | 🎓 **Technical Training** | Industrial protocol training + ProtoForge hands-on | From ¥5,000 / day | Team skill building |
 
-> 💬 Contact: [QQ Group](https://qm.qq.com/q/ProtoForge) (Group Owner) or email `suoten@163.com`
+> 💬 Contact: QQ Group **866599071** ([join link](https://qm.qq.com/q/ProtoForge), group owner) or email `suoten@163.com`
 
 ---
 
