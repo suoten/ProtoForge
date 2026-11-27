@@ -66,6 +66,7 @@ def create_gitee_release(client: httpx.Client, repo: str, tag: str,
     resp = client.post(f"{GITEE_API}/repos/{repo}/releases", json={
         "access_token": token,
         "tag_name": tag,
+        "target_commitish": "master",  # Gitee 必填：发行版基于的分支
         "name": name or tag,
         "body": body or "",
         "prerelease": False,
@@ -100,6 +101,9 @@ def upload_attachment(client: httpx.Client, repo: str, release_id: int | str,
             data={"access_token": token},
             files={"file": (file_path.name, f, "application/zip")},
         )
+    if resp.status_code == 400 and "配额" in resp.text:
+        raise RuntimeError("Gitee 仓库附件总配额（免费版 1 GB）已用满，"
+                           "请删除不再需要的旧版本附件后重试")
     resp.raise_for_status()
 
 
@@ -123,6 +127,16 @@ def ensure_gitee_release(client: httpx.Client, repo: str, tag: str, name: str,
     return f"+ 附件 {asset_path.name} 上传完成"
 
 
+def _mirror_prefix() -> str:
+    """GitHub 附件下载镜像前缀（PROTOFORGE_UPDATE_MIRROR，如 ghproxy 类服务）。
+
+    仅作用于"从 GitHub 下载资产"这一步（国内直连常慢到不可用）；
+    上传到 Gitee 不受影响。
+    """
+    m = os.environ.get("PROTOFORGE_UPDATE_MIRROR", "").strip().rstrip("/")
+    return m + "/" if m else ""
+
+
 def sync_one(client: httpx.Client, gh_repo: str, gh_release: dict, token: str) -> None:
     tag = gh_release.get("tag_name") or ""
     if not tag.startswith("v"):
@@ -135,18 +149,28 @@ def sync_one(client: httpx.Client, gh_repo: str, gh_release: dict, token: str) -
         return
 
     print(f"=== 同步 {tag} ===")
-    # 下载 GitHub 附件到临时目录
+    # 下载 GitHub 附件到临时目录（镜像前缀可选，国内直连常慢到不可用）
     url = asset["browser_download_url"]
-    print(f"+ 下载 {url}")
+    mirror = _mirror_prefix()
+    if mirror:
+        url = mirror + url
+        print(f"+ 下载（经镜像 {mirror}）")
+    else:
+        print(f"+ 下载 {url}")
     tmp = Path(tempfile.gettempdir()) / asset["name"]
-    with httpx.stream("GET", url, headers=_headers_gh(), timeout=60,
-                      follow_redirects=True) as resp:
-        resp.raise_for_status()
-        with open(tmp, "wb") as f:
-            for chunk in resp.iter_bytes(1024 * 1024):
-                f.write(chunk)
+    # 缓存复用：上次运行已完整下载（大小一致）则跳过下载
+    expected_size = asset.get("size") or 0
+    if tmp.exists() and expected_size and tmp.stat().st_size == expected_size:
+        print(f"  复用已下载缓存 {tmp.name} ({expected_size / 1024 / 1024:.1f} MB)")
+    else:
+        with httpx.stream("GET", url, headers=_headers_gh(), timeout=60,
+                          follow_redirects=True) as resp:
+            resp.raise_for_status()
+            with open(tmp, "wb") as f:
+                for chunk in resp.iter_bytes(1024 * 1024):
+                    f.write(chunk)
     size_mb = tmp.stat().st_size / 1024 / 1024
-    print(f"  已下载 {size_mb:.1f} MB")
+    print(f"  已就绪 {size_mb:.1f} MB")
 
     result = ensure_gitee_release(client, _repo(), tag,
                                   gh_release.get("name") or tag,
