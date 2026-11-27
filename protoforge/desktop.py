@@ -372,9 +372,14 @@ def run_desktop(host: str | None = None,
     if check_updates:
         info = check_update_once()
         if info and info.get("update_available"):
-            msg = f"发现新版本 {info.get('latest')}（当前 v{__version__}），详情: {info.get('url')}"
-            print(f"! {msg}")
-            tray.notify("ProtoForge 有新版本", msg)
+            # v1.17.0: 用户跳过的版本不再打扰（当前版本好用可以不升级）
+            from protoforge.core.self_update import get_dismissed_version
+            if get_dismissed_version() != info.get("latest"):
+                msg = f"发现新版本 {info.get('latest')}（当前 v{__version__}），详情: {info.get('url')}"
+                print(f"! {msg}")
+                tray.notify("ProtoForge 有新版本", msg)
+            else:
+                print(f"! 发现新版本 {info.get('latest')}（已按偏好跳过提示）")
 
     try:
         while thread.is_alive() and not server.should_exit:

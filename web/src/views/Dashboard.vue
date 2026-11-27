@@ -1,17 +1,23 @@
 <template>
   <div>
-    <!-- 版本更新提示（UX：自动检查 GitHub 最新版本，提示更新内容与升级方式） -->
-    <n-alert v-if="updateInfo && updateInfo.update_available" type="info" :bordered="false" style="margin-bottom:16px" closable>
+    <!-- 版本更新提示（UX：自动检查 GitHub 最新版本；v1.17.0 支持一键升级与跳过版本） -->
+    <n-alert v-if="showUpdateBanner" type="info" :bordered="false" style="margin-bottom:16px" closable @close="closeUpdateBanner">
       <n-space align="center" justify="space-between">
         <span>
           🎉 {{ t('dashboard.updateAvailable', { latest: updateInfo.latest, current: updateInfo.current }) }}
           <n-button text size="tiny" @click="showUpdateNotes = !showUpdateNotes">{{ showUpdateNotes ? t('common.hide') : t('dashboard.viewNotes') }}</n-button>
         </span>
         <n-space size="small">
+          <n-button v-if="updateInfo.can_one_click" size="tiny" type="primary" :loading="upgradeRunning" @click="startOneClickUpgrade">{{ t('dashboard.upgradeNow') }}</n-button>
+          <n-button size="tiny" @click="dismissUpdateVersion">{{ t('dashboard.skipVersion') }}</n-button>
           <n-button size="tiny" @click="copyUpgradeCmd">{{ t('dashboard.copyUpgradeCmd') }}</n-button>
           <n-button v-if="updateInfo.url" size="tiny" tag="a" :href="updateInfo.url" target="_blank">{{ t('dashboard.viewRelease') }}</n-button>
         </n-space>
       </n-space>
+      <div v-if="upgradeRunning" style="margin-top:8px;font-size:12px">
+        <n-progress v-if="upgradeState === 'downloading'" type="line" :percentage="upgradeProgress" indicator-placement="inside" height="14" />
+        <span>{{ upgradeStageText }}</span>
+      </div>
       <div v-if="showUpdateNotes && updateInfo.notes" style="margin-top:8px;white-space:pre-wrap;font-size:12px;max-height:200px;overflow:auto;background:rgba(128,128,128,0.08);padding:8px;border-radius:6px">{{ updateInfo.notes }}</div>
     </n-alert>
     <template v-if="loading && devices.length === 0">
@@ -249,15 +255,96 @@ const { t } = useI18n()
 const message = useMessage()
 const dialog = useDialog()
 const devices = ref([])
-// 版本更新提示
+// 版本更新提示（v1.17.0: 一键升级 + 跳过此版本）
 const updateInfo = ref(null)
 const showUpdateNotes = ref(false)
+const upgradeRunning = ref(false)
+const upgradeState = ref('idle')
+const upgradeProgress = ref(0)
+const dismissedVersion = ref(null)
+
+// 横幅显示条件：有新版本 且 未跳过该版本（当前版本好用可以不升级）
+const showUpdateBanner = computed(() => {
+  const u = updateInfo.value
+  return u && u.update_available && u.latest !== dismissedVersion.value
+})
+const upgradeStageText = computed(() => {
+  if (upgradeState.value === 'downloading') {
+    return t('dashboard.upgradeDownloading', { pct: Math.round(upgradeProgress.value) })
+  }
+  if (upgradeState.value === 'applying') return t('dashboard.upgradeApplying')
+  return ''
+})
+
 function copyUpgradeCmd() {
   const cmd = updateInfo.value?.upgrade_command || 'docker pull suoten/protoforge:latest'
   navigator.clipboard?.writeText(cmd).then(
     () => message.success(t('common.copied')),
     () => message.info(cmd),
   )
+}
+
+function closeUpdateBanner() { updateInfo.value = null }
+
+async function dismissUpdateVersion() {
+  const v = updateInfo.value?.latest
+  try { await api.updateDismiss(v) } catch { /* 静默：偏好保存失败不阻塞 UI */ }
+  dismissedVersion.value = v
+  updateInfo.value = null
+}
+
+function startOneClickUpgrade() {
+  const target = updateInfo.value?.latest
+  if (!target) return
+  dialog.warning({
+    title: t('dashboard.upgradeConfirmTitle', { latest: target }),
+    content: t('dashboard.upgradeConfirmText'),
+    positiveText: t('dashboard.upgradeNow'),
+    negativeText: t('common.cancel'),
+    onPositiveClick: () => runUpgrade(target),
+  })
+}
+
+const _sleep = (ms) => new Promise(r => setTimeout(r, ms))
+
+async function runUpgrade(target) {
+  upgradeRunning.value = true
+  try {
+    // 1. 下载（后台任务，轮询状态机）
+    await api.updateDownload(target)
+    for (;;) {
+      await _sleep(1000)
+      const st = await api.updateStatus()
+      upgradeState.value = st.state
+      upgradeProgress.value = st.progress || 0
+      if (st.state === 'failed') throw new Error(st.error || st.message || 'download failed')
+      if (st.state === 'ready' || st.state === 'applying') break
+    }
+    // 2. 应用（便携包=换目录自动重启；pip=提示重启）
+    if (upgradeState.value !== 'applying') {
+      await api.updateApply()
+      upgradeState.value = 'applying'
+    }
+    // 3. 服务重启期间连接会断，轮询实时版本直到新版本生效（超时 3 分钟）
+    const deadline = Date.now() + 180000
+    while (Date.now() < deadline) {
+      await _sleep(3000)
+      try {
+        const d = await api.versionCheck()
+        if (d && d.current && String(d.current) === String(target)) {
+          message.success(t('dashboard.upgradeDone', { version: d.current }), { duration: 5000 })
+          setTimeout(() => window.location.reload(), 1500)
+          return
+        }
+      } catch { /* 重启期间连接失败属预期 */ }
+    }
+    throw new Error('timeout: service did not report the new version within 3 minutes')
+  } catch (e) {
+    message.error(t('dashboard.upgradeFailed', { error: e?.message || e }), { duration: 8000 })
+  } finally {
+    upgradeRunning.value = false
+    upgradeState.value = 'idle'
+  }
 }
 const protocols = ref([])
 const templates = ref([])
@@ -462,7 +549,11 @@ function openMetrics() {
 onMounted(() => {
   loadData()
   // 版本更新检查（静默失败，不影响页面）
-  api.versionCheck().then(d => { if (d && d.update_available) updateInfo.value = d }).catch(() => {})
+  api.versionCheck().then(d => {
+    if (!d) return
+    dismissedVersion.value = d.dismissed_version || null
+    if (d.update_available) updateInfo.value = d
+  }).catch(() => {})
   deviceConn = getConnection('devices', () => api.createDeviceWs())
   deviceConn.subscribe(deviceCallbacks)
   deviceConn.connect()

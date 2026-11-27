@@ -1,5 +1,6 @@
 """System management API routes (settings, backup, network status)."""
 
+import asyncio
 import json
 import logging
 import time
@@ -221,7 +222,11 @@ def _is_newer(latest: str, current: str) -> bool:
 
 @router.get("/system/version-check")
 async def version_check(_user: dict[str, Any] = Depends(require_viewer)):
-    """检查新版本（GitHub Releases），10 分钟内复用缓存；失败时静默降级。"""
+    """检查新版本（GitHub Releases），10 分钟内复用缓存；失败时静默降级。
+
+    v1.17.0: 响应追加 install_kind / dismissed_version / can_one_click，
+    供前端"一键升级"与"跳过此版本"使用（向后兼容，旧字段不变）。
+    """
     now = time.monotonic()
     cached = _version_check_cache.get("data")
     if cached and now - _version_check_cache["ts"] < 600:
@@ -230,7 +235,86 @@ async def version_check(_user: dict[str, Any] = Depends(require_viewer)):
     current = _get_version()
     data = await fetch_release_info(current)
     _version_check_cache.update(ts=now, data=data)
+    return _augment_update_info(data)
+
+
+@router.get("/system/version-check/live")
+async def version_check_live(_user: dict[str, Any] = Depends(require_viewer)):
+    """跳过缓存的实时版本检查（一键升级完成后前端用它确认新版本生效）。"""
+    from protoforge.core.self_update import get_dismissed_version
+    data = await fetch_release_info(_get_version())
+    data["install_kind"] = _install_kind()
+    data["dismissed_version"] = get_dismissed_version()
+    data["can_one_click"] = _can_one_click()
     return data
+
+
+def _install_kind() -> str:
+    from protoforge.core.self_update import install_kind as _impl
+    return _impl()
+
+
+def _can_one_click() -> bool:
+    from protoforge.core.self_update import can_one_click as _impl
+    return _impl()
+
+
+def _augment_update_info(data: dict[str, Any]) -> dict[str, Any]:
+    """为版本检查结果附加一键升级所需字段（缓存数据为 dict，可就地补充）。"""
+    if isinstance(data, dict) and "install_kind" not in data:
+        data["install_kind"] = _install_kind()
+        data["can_one_click"] = _can_one_click()
+        from protoforge.core.self_update import get_dismissed_version
+        data["dismissed_version"] = get_dismissed_version()
+    return data
+
+
+@router.get("/system/update/status")
+async def update_status(_user: dict[str, Any] = Depends(require_viewer)):
+    """v1.17.0: 一键升级状态机（idle/downloading/downloaded/applying/ready/failed）。"""
+    from protoforge.core.self_update import get_state
+    return get_state()
+
+
+@router.post("/system/update/download")
+async def update_download(payload: dict[str, Any] | None = None,
+                          _user: dict[str, Any] = Depends(require_admin)):
+    """v1.17.0: 开始下载新版本（后台任务），按安装形态自动选择升级路径。"""
+    from protoforge.core.self_update import start_download
+    version = ((payload or {}).get("version") or "").strip().lstrip("vV")
+    if not version:
+        # 未指定版本时取实时检查到的最新版本
+        data = await fetch_release_info(_get_version())
+        version = (data.get("latest") or "").lstrip("vV")
+    if not version:
+        raise HTTPException(status_code=502, detail="无法获取最新版本号，请稍后重试")
+    try:
+        return await asyncio.to_thread(start_download, version)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/system/update/apply")
+async def update_apply(_user: dict[str, Any] = Depends(require_admin)):
+    """v1.17.0: 应用已就绪的新版本（便携包=换目录自动重启；pip=提示重启服务）。"""
+    from protoforge.core.self_update import apply_portable_update
+    try:
+        return await asyncio.to_thread(apply_portable_update)
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/system/update/dismiss")
+async def update_dismiss(payload: dict[str, Any],
+                         _user: dict[str, Any] = Depends(require_admin)):
+    """v1.17.0: 跳过指定版本（不再弹横幅/托盘通知）；version=null 清除跳过。"""
+    from protoforge.core.self_update import set_dismissed_version
+    version = (payload or {}).get("version")
+    if version is not None and not isinstance(version, str):
+        raise HTTPException(status_code=422, detail="version 必须是字符串或 null")
+    set_dismissed_version(version)
+    _version_check_cache.update(ts=0.0, data=None)  # 让下次检查带上新 dismissed
+    return {"ok": True, "dismissed_version": version}
 
 
 @router.get("/plugins")

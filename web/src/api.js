@@ -201,6 +201,12 @@ export default {
   listNics: () => d(api.get('/diagnostics/nics')).then(r => r.addresses || []),
   versionCheck: () => d(api.get('/system/version-check')),
 
+  // 一键升级（v1.17.0）：状态机 / 下载 / 应用 / 跳过版本
+  updateStatus: () => d(api.get('/system/update/status')),
+  updateDownload: (version) => d(api.post('/system/update/download', { version })),
+  updateApply: () => d(api.post('/system/update/apply')),
+  updateDismiss: (version) => d(api.post('/system/update/dismiss', { version })),
+
   // 测点调试 Force（临时钉值，引擎重启后失效）
   forcePoint: (deviceId, pointName, value) =>
     d(api.post(`/devices/${deviceId}/points/${pointName}/force`, { value })),
