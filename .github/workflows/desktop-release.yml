@@ -90,6 +90,17 @@ jobs:
           body_path: release_body.md
           generate_release_notes: true
 
+      - name: Sync release to Gitee (发行版+便携包附件)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          # Gitee 发行版不是 git 对象（推送/tag 不会带过去），走 API 同步：
+          # 创建发行版（说明取自 GitHub Release）+ 上传便携包附件（幂等）。
+          # 未配置 GITEE_TOKEN secret 时优雅跳过，不影响 GitHub 发布。
+          python scripts/sync_gitee_releases.py --tag "${{ github.ref_name }}" \
+            --asset "$(ls dist/ProtoForge-*.zip | head -1)"
+
       - name: Upload workflow artifact (manual runs)
         if: '!startsWith(github.ref, ''refs/tags/'')'
         uses: actions/upload-artifact@v4
