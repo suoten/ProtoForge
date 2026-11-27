@@ -79,7 +79,8 @@ def _prefs_path() -> Path:
 def get_dismissed_version() -> str | None:
     try:
         return json.loads(_prefs_path().read_text(encoding="utf-8")).get("dismissed_version")
-    except Exception:
+    except Exception as e:  # 偏好读取失败按"未跳过"降级，不影响版本检查主流程
+        logger.debug("get_dismissed_version: ignored exception: %s", e)
         return None
 
 
